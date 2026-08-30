@@ -50,6 +50,12 @@ const TRANSITIONS = {
   'review-started': ({ at }) => `${REVIEW_CLAIM_NOTE} — a review pass started ${at}`,
   verified:  ({ at }) => `👀 verified — waiting on Dane to say "merge" (${at})`,
   'sent-back': sentBackNote,
+  // Lane A (task 86bbkw2au). The Loop note is what distinguishes "waiting on
+  // your word" from "merging shortly unless you object" — the ticket stays in
+  // Ready to launch either way, because statuses live on the ClickUp list and
+  // that dialog is hazardous to touch.
+  'auto-merge-armed': ({ deadline }) => `🤖 auto-merge at ${deadline} unless you say stop`,
+  'auto-merge-cancelled': ({ at }) => `✋ auto-merge stopped — back to waiting on your word (${at})`,
   merged:    ({ at }) => `✅ live ${at}`,
   escalated: ({ at }) => `🙋 needs Dane — a question is waiting (${at})`,
 };
@@ -64,6 +70,12 @@ function loopNote(transition, opts = {}) {
   if (transition === 'pr-open' && !opts.pr) {
     throw new Error('loop-note "pr-open" needs a PR number (--pr)');
   }
+  // A deadline is the entire content of this note. Without one it would read
+  // "auto-merge at undefined unless you say stop", which is worse than no note
+  // at all: it tells him something is coming and refuses to say when.
+  if (transition === 'auto-merge-armed' && !opts.deadline) {
+    throw new Error('loop-note "auto-merge-armed" needs a deadline (--deadline)');
+  }
   // A send-back with no round is the old, ambiguous line coming back. It is
   // refused rather than defaulted: the round is derived from the ticket's own
   // comments by the caller, and a derivation that quietly failed must not
@@ -74,6 +86,7 @@ function loopNote(transition, opts = {}) {
   return make({
     at: String(opts.at || '').trim() || 'just now',
     pr: opts.pr,
+    deadline: opts.deadline,
     round: Number(opts.round),
     reason: opts.reason,
   });

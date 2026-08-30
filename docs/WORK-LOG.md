@@ -1,3 +1,48 @@
+## 2026-08-26 — Test and documentation changes can now merge themselves, after giving you an hour to object (#438)
+
+You are the last step on every merge, and lately that has meant saying "merge"
+ninety-odd times a week. A word you say that often without pausing is not really
+a decision any more — it is a rubber stamp, and a rubber stamp is worse than no
+check at all, because it looks like oversight while providing none.
+
+So this hands one narrow slice of that word to the machine, and only where your
+answer was never in doubt: a piece of work that has already passed an
+independent review and whose changes are **nothing but tests and documentation**
+— nothing that runs on the site, nothing anybody can see. On work like that, the
+pipeline now posts a comment on the ticket saying *"merging this at 9:15pm
+unless you say otherwise"*, lists exactly which files earned it that treatment,
+waits a full hour, and only then merges.
+
+**To stop it, just comment on the ticket.** Anything — a word, a question, "hold
+on". It is not looking for a keyword; if you are talking about it, it stops. And
+once stopped it stays stopped: it will not raise the same thing again until a
+fresh review has looked at it. That asymmetry is on purpose — stopping it by
+accident costs you one word, whereas missing your objection would merge
+something you did not want.
+
+Two words turn the whole thing off wherever you are: **"stop auto-merging"** on
+the party line or on any ticket. **"resume auto-merging"** puts it back. And if
+the system cannot read those instructions for any reason — the chat is down, a
+file will not open — it treats that as OFF rather than assuming everything is
+fine, because "you never said stop" and "I could not find out whether you said
+stop" look identical from the inside and only one of them is safe.
+
+Four more brakes sit behind that: it will not do more than three in an hour or
+twelve in a day; it posts one summary a day of everything it merged, and says
+"none" on a quiet day so a silent day and a broken job never look alike; it
+switches itself off if a run reports anything it could not fully check or if the
+live site's build goes red; and it is allowed to undo its own merges without
+asking.
+
+What it will never touch: anything visual, anything that runs, any database
+change — and, deliberately, none of the files that set the rules for the
+machines themselves. It cannot merge a change to its own instructions, which
+means this change could not have merged itself. There is a test that says so.
+
+This is the smallest, safest slice on purpose. It is about a tenth of the weekly
+volume and close to none of the risk, which makes it the right place to find out
+whether the safety machinery actually works before anything larger is
+considered.
 ## 2026-08-26 — A check that asks "is anything moving?" rather than "is it switched on" (#439)
 
 Seven things went wrong in the pipeline last week, and here is the part worth

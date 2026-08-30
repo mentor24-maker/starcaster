@@ -764,7 +764,10 @@ that one file any day to read, in English, everything the loops have shipped.
 The popular "just wake up and hit merge" demos run on throwaway apps. Starcaster
 is different, so the loops have guardrails baked in:
 
-- **`main` auto-deploys to production.** So no loop ever merges on its own. The
+- **`main` auto-deploys to production.** So no loop merges on its own, with one
+  named exception you ratified on 2026-08-24: **Lane A**, where the change is
+  nothing but tests and documentation, and the machine announces itself and
+  gives you an hour to stop it (see "Lane A" below). Everywhere else the
   review loop can only mark a PR `Ready to launch`; **you** authorize the merge.
   Since 2026-08-21 that authorization can be a one-word comment on the ticket
   and the relay carries it out within 10 minutes (task 86bbjd5nn) — which
@@ -921,6 +924,153 @@ mode from "is the token present?" would have exactly that hole.
    the gate is advisory and **not** fine once it is required. Teaching the merge
    step to re-run a stale gate before merging is the follow-up that has to land
    first.
+
+## Lane A — when the machine supplies the word (2026-08-25, task 86bbkw2au)
+
+**Canon: vault `doctrine/AUTO-MERGE-LANES.md`, ratified 2026-08-24.** That
+document is binding; this section is how it is wired up here. If the two ever
+disagree, the vault is right and this file is the thing to fix.
+
+### What it is, in one paragraph
+
+Merge-on-comment already removed the *hands* from merging: you say "merge" and
+the relay does it. What was left was the *word* — and at ninety-odd merges a
+week that word is the ceiling. A rubber stamp is worse than a policy, because it
+looks like oversight while providing none. So the machine now supplies the word
+in exactly one place: a ticket that **passed review** and whose pull request
+touches **nothing but tests and documentation**. It announces itself on the
+ticket, waits **one hour**, and merges unless you say anything at all.
+
+Your ruling, 2026-08-24: *"Ship Lane A now. Give it a 1-hour window to start.
+Never for C."* Lane B was not ruled on and is not built. Lane C — anything
+visual, routes, migrations, auth, CI — is never automated.
+
+### What qualifies
+
+Every changed file must match one of:
+
+```
+*.test.js   *.test.ts   *.test.tsx   *.test.mjs
+docs/**     *.md
+```
+
+**One file outside that set disqualifies the whole pull request.** There is no
+partial credit and no "mostly tests": a mixed PR carries the risk of its
+riskiest file, not the average of them.
+
+Disqualified even though they match, because a machine never auto-merges the
+machinery that governs machines: any `CLAUDE.md`, `docs/DOCTRINE.md`, this file,
+anything under `.github/`, `.claude/` or `skills/` (the loop skills are the
+review gate's own instructions, and they are `.md` — review round 2 found them
+eligible), and the tests covering the merge step itself (`mergeOnComment`,
+`branchCatchUp`, `wipCap`, `busRelayPlan`, `autoMergeLane`, `reviewGate`). A
+test that governs merging is governance.
+
+Nothing else is loosened. A review PASS, an open PR, green checks and a clean
+merge are all still required, and are checked by the same gate your own
+authorizations go through.
+
+### How it looks on the ticket
+
+1. The relay posts one comment: **"Merging PR #123 at 9:15pm EDT unless you say
+   otherwise"**, listing the files that qualified it. The Loop note changes to
+   `🤖 auto-merge at 9:15pm unless you say stop`, so the queue tells the two
+   states apart at a glance. The ticket **stays in `Ready to launch`** — no new
+   status.
+2. **The hour runs from when that comment is confirmed posted**, read back from
+   ClickUp. An announcement that failed to post is not a window, and no clock
+   starts.
+3. **To stop it, comment on the ticket. Anything at all** — a word, a question,
+   "hold on". Not a keyword: if you are talking about it, the machine stops.
+   Stopping is final for that announcement; it will not announce itself again
+   until a fresh review pass has looked at it. A false stop costs you one word;
+   a missed stop costs an unwanted merge, so it is built to lean that way.
+4. If the hour passes in silence, it merges exactly as your own "merge" does —
+   same gate, same squash, same move to `Live` — and the record says it was
+   Lane A and which files qualified it.
+
+If the pull request gains a runtime file *during* the window, it does not merge:
+eligibility is re-checked against a fresh read at merge time, not trusted from
+the announcement.
+
+**An announcement goes stale after a day.** An armed ticket the relay finds
+more than 24 hours after its announcement is cancelled, not merged — the hour it
+promised you ended long ago. Without this, three PRs armed before a `stop
+auto-merging`, then a `resume` a fortnight later, would all merge on the next
+pass on windows that closed two weeks ago. Like any cancel, it takes a fresh
+review PASS to announce again.
+
+### Turning it off
+
+```
+stop auto-merging          # on the party line or any Loop Queue ticket
+resume auto-merging        # only from you, and it must be the whole message
+```
+
+`stop auto-merging` halts **every** lane immediately. It is matched loosely — it
+will fire if the phrase appears anywhere in your message. `resume auto-merging`
+is matched strictly, as the entire message, for the same asymmetry as above.
+
+**If the switch cannot be read for any reason, auto-merge is off.** Not "assume
+fine": "you never said stop" and "I could not find out whether you said stop"
+look identical from inside a pass, and only one of them is safe to act on. That
+means a party-line outage turns the lane off until the bus is back.
+
+`--no-merge` on the relay turns Lane A off along with merge-on-comment, and so
+does a paused pipeline (`npm run pipeline -- pause`). So does a stop recorded on
+an earlier pass: a stop is written down in the ledger (`.git/auto-merge-ledger.json`),
+so it cannot quietly expire when the ticket it was said on closes. **A ledger
+that cannot be read is never written over** — the pass halts, says so, and
+leaves the file for a hand to look at. Writing an empty ledger over a corrupt
+one would erase the stop and switch the lane back on a pass later, which is
+the direction a fail-safe must never fail in (review round 2, 2026-08-30).
+
+### The four things that keep it honest
+
+1. **Rate cap** — 3 an hour, 12 a rolling day. A burst is what a misbehaving
+   loop looks like, so the cap turns a runaway into a pause.
+2. **A daily digest** on the party line, listing every auto-merge with its lane,
+   its PR and the files that qualified it — **and saying "none" on a quiet day**,
+   because a silent day and a broken job must not look alike. Each digest
+   covers everything since the previous one, so nothing is listed twice.
+3. **It disables itself on trouble.** If a pass reports anything under "could
+   not fully verify", or `main`'s build is red after the last auto-merge, the
+   lane switches off and says why on the bus. `resume auto-merging` puts it back.
+4. **Reverting is pre-authorised.** An agent may revert its own auto-merge
+   without asking, and should say that it did.
+
+### Checking on it
+
+```bash
+npm run clickup -- auto-merge-status
+```
+
+Read-only. Prints whether the lane is running and, if not, exactly which of the
+four gates is holding it — the switch, the self-disable flag, the rate cap or an
+unreadable source — plus the auto-merges of the last day. Exit 0 means running,
+3 means held.
+
+To watch a real pass decide without it acting:
+
+```bash
+npm run clickup -- bus-relay --only-task <id> --dry-run
+```
+
+### Where the rules live
+
+Every decision — path eligibility, the window arithmetic, the cap, the switch,
+the self-disable — is a pure function in `scripts/builder/autoMergeLane.js`,
+break-tested in `scripts/builder/autoMergeLane.test.js` with no clock, no
+ClickUp and no GitHub. `scripts/clickup_direct.mjs` holds only the network and
+the ledger file. That split is deliberate: a rule that can only be exercised
+against live services is a rule nobody will break-test, and this is the one
+feature in the repo where an untested branch merges code by itself.
+
+The small amount of state that cannot live on a ticket — recent auto-merges for
+the cap, the self-disable flag, the last digest — is a JSON file in `.git/`
+(`auto-merge-ledger.json`). `.git/` because it is the one place in the repo that
+cannot be committed by accident. If that file cannot be read, the lane is off,
+for the same reason an unreadable switch is off.
 
 ## Pausing the pipeline — the sanctioned way to go fast (2026-08-25, task 86bbmfc15)
 
