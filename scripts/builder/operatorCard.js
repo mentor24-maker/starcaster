@@ -568,60 +568,195 @@ function cardSurvived(card, savedText) {
   );
 }
 
-/** The card as it will read in ClickUp's right-hand column. */
-function renderCard(card) {
-  const parts = [
-    "**DANE'S WORDS — the instruction behind this ticket**",
-    '',
+/**
+ * The colour of the banner. Dane's choice (2026-08-30, task 86bbq5ruz): the
+ * muted red he used to see (#d16464) was ClickUp's default code-block colour,
+ * not something anybody chose. Bold and #CC0000 are chosen.
+ */
+const BANNER_COLOR = '#CC0000';
+const BANNER_ATTRS = Object.freeze({ bold: true, color: BANNER_COLOR });
+
+/**
+ * The card as a list of blocks — the ONE description both renderers read.
+ *
+ *   { kind: 'heading', text }   a bold line
+ *   { kind: 'note', text }      an italic line (the @@WHEN stamp)
+ *   { kind: 'fence', text }     verbatim, in a code block
+ *   { kind: 'prose', text }     authored markdown (a small subset, see runs())
+ *   { kind: 'banner', lines }   the NEEDED FROM DANE banner
+ *
+ * ORDER (Dane, 2026-08-30, task 86bbq5ruz): his words, what is going on, the
+ * evidence if there is any, and the banner LAST. Nothing renders after the
+ * banner. Anything added to a card later that needs a new action from him
+ * goes at the bottom, which is where he has learned to look.
+ */
+function cardBlocks(card) {
+  const blocks = [
+    { kind: 'heading', text: "DANE'S WORDS — the instruction behind this ticket" },
     // Fenced, not blockquoted: see the note at the top of this file. A fence
     // is the only form ClickUp keeps that also leaves the contents
     // uninterpreted, and "verbatim" is the whole promise of this section.
-    '```',
-    card.asked,
-    '```',
+    { kind: 'fence', text: card.asked },
   ];
-  if (card.when) parts.push('', `*(${card.when})*`);
-  parts.push(
-    '',
-    "**WHAT'S GOING ON**",
-    '',
-    card.context,
-    '',
-    '```',
-    BANNER_RULE,
-    BANNER_LABEL,
-    BANNER_RULE,
-    '```',
-    '',
-    card.needed,
-    '',
+  if (card.when) blocks.push({ kind: 'note', text: `(${card.when})` });
+  blocks.push(
+    { kind: 'heading', text: "WHAT'S GOING ON" },
+    { kind: 'prose', text: card.context },
   );
   if (card.evidence) {
-    // Under the ask, not above it: he reads what is being asked of him first,
-    // then the proof it rests on. The measurement time goes in the HEADING
-    // rather than being left inside the paste, so a stale proof is visible at
-    // a glance instead of implied — that is the half of the 2026-08-23 failure
-    // that survives even when evidence is attached.
+    // The measurement time goes in the HEADING rather than being left inside
+    // the paste, so a stale proof is visible at a glance instead of implied —
+    // that is the half of the 2026-08-23 failure that survives even when
+    // evidence is attached.
     const when = evidenceTimestamp(card.evidence);
-    parts.push(
-      '',
-      `**THE CHECK BEHIND THIS ASK${when ? ` — measured at ${when}` : ''}**`,
-      '',
+    blocks.push(
+      { kind: 'heading', text: `THE CHECK BEHIND THIS ASK${when ? ` — measured at ${when}` : ''}` },
       // The @@MEASURED line itself is lifted out: its whole content is the
       // heading above, and leaving it in prints the time twice, the second
       // time in a spelling that is machine syntax and means nothing to him.
-      evidenceBody(card.evidence),
-      '',
+      { kind: 'prose', text: evidenceBody(card.evidence) },
     );
+  }
+  blocks.push({ kind: 'banner', lines: bannerLines(card.needed) });
+  return blocks;
+}
+
+/**
+ * The banner, three lines when the ask is one line: rule, label + ask, rule.
+ * The ask sits BETWEEN the label and the closing rule, on the label's own
+ * line, so the thing he has to do is the thing his eye lands on. A multi-line
+ * ask keeps its extra lines inside the rules.
+ */
+function bannerLines(needed) {
+  const askLines = String(needed || '').trim().split('\n');
+  return [BANNER_RULE, `${BANNER_LABEL}${askLines[0]}`, ...askLines.slice(1), BANNER_RULE];
+}
+
+/**
+ * Authored markdown → ClickUp runs. ClickUp's structured comment body
+ * (`comment: [{ text, attributes }]`) does NOT parse markdown — probed live
+ * on 2026-08-30 (task 86bbgm68r, comment 90140249373780): `**bold**` came
+ * back as literal asterisks. Colour is only available in that structured
+ * form, so the whole card has to be posted that way, and the small subset
+ * agents actually write into a card is converted here:
+ *
+ *   ``` fenced block ```   → a code-block run
+ *   **bold**               → bold
+ *   `inline code`          → code
+ *
+ * Anything else is carried as plain text, which is exactly what it would have
+ * been before: ClickUp shows unsupported markdown literally either way.
+ */
+function proseRuns(text) {
+  const runs = [];
+  const { blocks: fences } = splitFences(text);
+  let fenceIndex = 0;
+  let open = false;
+  let paragraph = [];
+  const flush = () => {
+    if (!paragraph.length) return;
+    runs.push(...inlineRuns(paragraph.join('\n') + '\n'));
+    paragraph = [];
+  };
+  for (const line of String(text || '').split('\n')) {
+    if (/^\s*```/.test(line)) {
+      if (!open) {
+        flush();
+        open = true;
+      } else {
+        open = false;
+        const body = (fences[fenceIndex++] || []).join('\n');
+        runs.push({ text: `${body}\n`, attributes: { 'code-block': 'plain' } });
+      }
+      continue;
+    }
+    if (open) continue; // inside a fence — emitted whole when it closes
+    paragraph.push(line);
+  }
+  if (open) {
+    // An unclosed fence still carried content; splitFences kept it.
+    const body = (fences[fenceIndex] || []).join('\n');
+    runs.push({ text: `${body}\n`, attributes: { 'code-block': 'plain' } });
+  }
+  flush();
+  return runs;
+}
+
+/** `**bold**` and `` `code` `` inside one paragraph; everything else plain. */
+function inlineRuns(text) {
+  const runs = [];
+  const pattern = /\*\*([^*\n]+)\*\*|`([^`\n]+)`/g;
+  let last = 0;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) runs.push({ text: text.slice(last, match.index) });
+    if (match[1] !== undefined) runs.push({ text: match[1], attributes: { bold: true } });
+    else runs.push({ text: match[2], attributes: { code: true } });
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) runs.push({ text: text.slice(last) });
+  return runs;
+}
+
+/**
+ * The card as ClickUp's structured comment body — what `ask` actually posts.
+ * Every banner line is bold and red; nothing follows it.
+ */
+function renderCardComment(card) {
+  const runs = [];
+  for (const block of cardBlocks(card)) {
+    switch (block.kind) {
+      case 'heading':
+        runs.push({ text: block.text, attributes: { bold: true } }, { text: '\n\n' });
+        break;
+      case 'note':
+        runs.push({ text: block.text, attributes: { italic: true } }, { text: '\n\n' });
+        break;
+      case 'fence':
+        runs.push({ text: `${block.text}\n`, attributes: { 'code-block': 'plain' } }, { text: '\n' });
+        break;
+      case 'prose':
+        runs.push(...proseRuns(block.text), { text: '\n' });
+        break;
+      case 'banner':
+        for (const line of block.lines) {
+          runs.push({ text: line, attributes: { ...BANNER_ATTRS } }, { text: '\n' });
+        }
+        break;
+      default:
+        throw new Error(`unknown card block "${block.kind}"`);
+    }
+  }
+  return runs;
+}
+
+/**
+ * The card as plain text — the same blocks, in markdown. This is what the
+ * transcript and the tests read, and what `comment_text` on the posted
+ * comment comes back as (minus the formatting), so `cardSurvived` and
+ * `waitingOnOperator` can keep reading the text form.
+ */
+function renderCard(card) {
+  const parts = [];
+  for (const block of cardBlocks(card)) {
+    switch (block.kind) {
+      case 'heading': parts.push(`**${block.text}**`, ''); break;
+      case 'note': parts.push(`*${block.text}*`, ''); break;
+      case 'fence': parts.push('```', block.text, '```', ''); break;
+      case 'prose': parts.push(block.text, ''); break;
+      case 'banner': parts.push(...block.lines); break;
+      default: throw new Error(`unknown card block "${block.kind}"`);
+    }
   }
   return parts.join('\n');
 }
 
 /**
  * Parse + validate + render in one call. Throws with every problem listed.
- * Returns both the rendered text and the parsed card, because the caller needs
- * the parsed `asked` again after posting, to run `cardSurvived` against what
- * ClickUp actually stored.
+ * Returns the parsed card, the text rendering (for the transcript and the
+ * read-back check) and the structured `comment` body (what is posted).
+ * The caller needs the parsed `asked` again after posting, to run
+ * `cardSurvived` against what ClickUp actually stored.
  */
 function buildCard(text) {
   const card = parseCard(text);
@@ -632,7 +767,7 @@ function buildCard(text) {
       'Nothing was posted and no status was moved.',
     );
   }
-  return { card, rendered: renderCard(card) };
+  return { card, rendered: renderCard(card), comment: renderCardComment(card) };
 }
 
 module.exports = {
@@ -656,6 +791,13 @@ module.exports = {
   parseCard,
   validateCard,
   cardSurvived,
+  BANNER_COLOR,
+  BANNER_ATTRS,
+  cardBlocks,
+  bannerLines,
+  proseRuns,
+  inlineRuns,
+  renderCardComment,
   renderCard,
   buildCard,
 };

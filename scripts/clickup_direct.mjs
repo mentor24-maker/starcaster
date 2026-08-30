@@ -2105,9 +2105,9 @@ if (cmd === 'whoami') {
 
   // Shape first, network second: a card that fails the check must not leave
   // a half-done handoff behind.
-  let rendered, card;
+  let rendered, card, commentBody;
   try {
-    ({ rendered, card } = buildCard(readBody(bodyFile)));
+    ({ rendered, card, comment: commentBody } = buildCard(readBody(bodyFile)));
   } catch (err) {
     console.error(`\n${err.message}\n`);
     process.exit(2);
@@ -2122,8 +2122,13 @@ if (cmd === 'whoami') {
     if (stop !== null) process.exit(stop);
   }
 
-  const posted = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: rendered });
+  // Posted in ClickUp's STRUCTURED shape, not as markdown text: the banner is
+  // bold and red (task 86bbq5ruz), and colour only exists in that shape. The
+  // text rendering is what the read-back below compares against, because
+  // `comment_text` on a structured comment is its plain text.
+  const posted = await call('POST', `/api/v2/task/${task}/comment`, { comment: commentBody });
   if (!posted.res.ok) die('post the operator card', posted);
+  void rendered;
   const cardId = String(posted.json.id ?? '');
 
   // Read the card back and confirm the operator's own words are in it. This
