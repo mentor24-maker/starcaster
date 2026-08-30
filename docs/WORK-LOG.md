@@ -34,6 +34,25 @@ updating, kept running old code, and mentioned it only in a log file nobody
 opens. The second: the report was dating itself using Greenwich time, so a run
 late in the evening stamped tomorrow's date on it and pulled the wrong week's
 figures. Both are fixed, and there are tests that fail if either creeps back.
+
+A review pass then caught three more of the same kind, and they are worth
+knowing about because all three broke the one promise this thing makes — that a
+number it could not fully look up says so. Asking GitHub "which pull requests
+merged" only ever gets an answer about recent ones, so when the report was asked
+to rebuild an older week it found two merges in a week that actually had
+forty-three, and printed the two as though that were the whole story. It now
+asks about each pull request it found by name, and anything GitHub will not
+vouch for is said out loud on the page in amber — "this count is incomplete,
+treat it as a floor" — rather than silently dropped. The same older-week rebuild
+was also measuring how much code changed from that week all the way up to today
+instead of stopping at the end of the week, which made one week look about fifty
+times bigger than it was. And the Monday job had a quiet trap in it: it left its
+own finished report sitting in the folder, then next Monday saw a folder with
+loose files in it, decided somebody was working there, and skipped updating
+itself — forever, since the files were never going to move on their own. It
+tidies up after itself now, and there is a test that sets up that exact mess and
+fails if the job goes back to sleep on it.
+
 ## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
 
 Earlier today a pull request went straight to the live site without anyone

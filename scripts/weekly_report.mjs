@@ -90,7 +90,7 @@ if (!/^\d{4}-\d{2}-\d{2}$/.test(AS_OF)) {
 }
 const WINDOW = R.windowRange(AS_OF, WINDOW_DAYS);
 const OUT_HTML = arg('out') ? path.resolve(arg('out')) : path.join(REPORTS_DIR, `${AS_OF}.html`);
-const OUT_JSON = OUT_HTML.replace(/\.html$/, '.data.json');
+const OUT_JSON = R.dataPathFor(OUT_HTML);
 
 // ── Running things ─────────────────────────────────────────────────────────
 
@@ -161,39 +161,109 @@ function gatherMerges() {
     candidates.push({ number: parsed.number, title: parsed.title, date: c.date, sha: c.sha, paths });
   }
 
-  // The merged set, in one call rather than one per PR.
+  // THE RECENT-MERGED SLICE IS A FAST PATH, NEVER THE ANSWER.
+  //
+  // `gh pr list --state merged --limit 300` returns the 300 most recently
+  // CREATED merged pull requests, which on this repo reaches back only as far
+  // as #128. Reading "absent from that slice" as "not merged" is the mistake
+  // that made `--as-of 2026-08-10 --window 7` report TWO merges for a week
+  // that had forty-three: forty-one real merges were classed NOT-MERGED and
+  // dropped, and the page printed the 2 with no hint anything was missing.
+  //
+  // So the slice may only ever CONFIRM. A number in it is merged, full stop.
+  // Anything it does not vouch for is asked about one at a time, and anything
+  // GitHub still will not answer for is counted as unconfirmed ON THE PAGE
+  // rather than quietly discarded. For a current window almost every candidate
+  // is inside the slice, so this stays one call in the ordinary case.
   const list = run('gh', ['pr', 'list', '--repo', GH_REPO, '--state', 'merged', '--limit', '300', '--json', 'number,state'], { timeout: 120000 });
-  let stated;
+  let vouched = new Set();
+  let sliceReason = null;
   if (!list.ok) {
-    // We know what landed on main but not what GitHub calls it. Saying "42
-    // merges" here would be exactly the guess this script refuses to make.
-    return {
-      merges: R.notAvailable(`${list.reason} — so merged state could not be confirmed for any pull request`),
-      candidates: [],
-    };
+    sliceReason = list.reason;
+  } else {
+    try {
+      vouched = new Set(JSON.parse(list.stdout).map((p) => Number(p.number)));
+    } catch (err) {
+      sliceReason = `GitHub's merged-PR list did not parse as JSON (${err.message})`;
+    }
   }
-  try {
-    const merged = new Set(JSON.parse(list.stdout).map((p) => Number(p.number)));
-    stated = candidates.map((c) => ({ ...c, state: merged.has(c.number) ? 'MERGED' : 'NOT-MERGED' }));
-  } catch (err) {
-    return { merges: R.notAvailable(`GitHub's merged-PR list did not parse as JSON (${err.message})`), candidates: [] };
+
+  const stated = [];
+  const unconfirmedReasons = [];
+  let unconfirmed = 0;
+  for (const c of candidates) {
+    if (vouched.has(c.number)) {
+      stated.push({ ...c, state: 'MERGED' });
+      continue;
+    }
+    const one = run('gh', ['pr', 'view', String(c.number), '--repo', GH_REPO, '--json', 'state'], { timeout: 60000 });
+    let state = null;
+    if (one.ok) {
+      try {
+        state = String(JSON.parse(one.stdout).state || '').toUpperCase() || null;
+      } catch (err) {
+        state = null;
+        if (unconfirmedReasons.length < 3) unconfirmedReasons.push(`#${c.number}: its state did not parse as JSON (${err.message})`);
+      }
+    } else if (unconfirmedReasons.length < 3) {
+      unconfirmedReasons.push(`#${c.number}: ${one.reason}`);
+    }
+    if (state === null) {
+      unconfirmed += 1;
+      stated.push({ ...c, state: 'UNCONFIRMED' });
+    } else {
+      stated.push({ ...c, state });
+    }
+  }
+
+  // Nothing at all could be checked — GitHub is unreachable, not quiet. There
+  // is no number to print here, and "0 merges" would read as a quiet week.
+  if (candidates.length && unconfirmed === candidates.length) {
+    const why = sliceReason || unconfirmedReasons[0] || 'GitHub did not answer';
+    return {
+      merges: R.notAvailable(`${why} — so merged state could not be confirmed for any pull request`),
+      candidates: [],
+      confirmable: false,
+    };
   }
 
   const confirmed = R.mergedOnly(stated).map((m) => ({ ...m, area: R.areaForMerge(m.paths) }));
-  const skipped = stated.length - confirmed.length;
+  const notMerged = stated.filter((m) => m.state !== 'MERGED' && m.state !== 'UNCONFIRMED').length;
   return {
     merges: R.ok(confirmed.length, {
       perDay: R.perDay(confirmed.map((m) => m.date), WINDOW.from, WINDOW.to),
-      notCountedBecauseNotMerged: skipped,
+      notCountedBecauseNotMerged: notMerged,
+      couldNotConfirm: unconfirmed,
+      couldNotConfirmReasons: unconfirmedReasons,
     }),
     candidates: confirmed,
+    confirmable: true,
   };
 }
 
-function gatherDiffstat(merges) {
+/**
+ * How much code moved INSIDE the window — both ends of it.
+ *
+ * The end of the window is not optional. Diffing `<oldest merge>^ .. origin/main`
+ * happens to be right for a window ending today and is wildly wrong for any
+ * other: `--as-of 2026-08-10 --window 7` reported 581 files and +113,964 lines
+ * for one week, because it was measuring everything merged SINCE that week.
+ * Both shas are already in hand, so use both.
+ *
+ * It also has to distinguish "nothing merged" from "we could not read what
+ * merged". Those produced the same sentence — "no merged pull requests in the
+ * window" — which reads as a quiet week when the truth is an unread source.
+ */
+function gatherDiffstat(mergesFigure, merges) {
+  if (!mergesFigure || mergesFigure.ok !== true) {
+    const why = mergesFigure && mergesFigure.reason ? mergesFigure.reason : 'no reason given';
+    return R.notAvailable(`the merge list could not be read, so there is nothing to diff from — ${why}`);
+  }
   if (!merges.length) return R.notAvailable('no merged pull requests in the window, so there is nothing to diff');
+  // `candidates` keeps git log's order, which is newest first.
+  const newest = merges[0].sha;
   const oldest = merges[merges.length - 1].sha;
-  const res = run('git', ['diff', '--shortstat', `${oldest}^`, 'origin/main']);
+  const res = run('git', ['diff', '--shortstat', `${oldest}^`, newest]);
   if (!res.ok) return R.notAvailable(res.reason);
   const text = res.stdout.trim();
   const files = /(\d+) files? changed/.exec(text);
@@ -516,10 +586,15 @@ try {
 const merges = mergeResult.merges;
 const confirmed = mergeResult.candidates;
 process.stderr.write(merges.ok ? `  merges: read (${merges.value})\n` : `  merges: not available — ${merges.reason}\n`);
+if (merges.ok && merges.couldNotConfirm) {
+  // Loudly, in the log as well as on the page: this count is a floor.
+  process.stderr.write(`  merges: ${merges.couldNotConfirm} could NOT be confirmed with GitHub and are not counted\n`);
+  for (const why of merges.couldNotConfirmReasons || []) process.stderr.write(`    ${why}\n`);
+}
 
 const figures = {
   merges,
-  diffstat: gather('diffstat', () => gatherDiffstat(confirmed)),
+  diffstat: gather('diffstat', () => gatherDiffstat(merges, confirmed)),
   tests: gather('tests', gatherTests),
   ciMedianSeconds: gather('CI median', gatherCiMedian),
   openPrs: gather('open PRs', gatherOpenPrs),

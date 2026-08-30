@@ -326,3 +326,185 @@ test('an edition identical to last week does not open an empty pull request', ()
   assert.match(src, /diff', '--cached', '--name-only'/, 'it checks whether anything actually changed');
   assert.match(src, /no changes/, 'and stops rather than filing a weekly no-op PR');
 });
+
+// ── The three defects the review pass found ────────────────────────────────
+//
+// All three broke the same rule, from three different places: a figure the
+// script could not fully read was printed as though it were complete.
+
+test('the data file can never be written over the page it belongs to', () => {
+  // `--out notes.txt` used to give the HTML and the JSON the same path. The
+  // JSON is written first, so the page silently destroyed the machine-readable
+  // copy every figure on it is supposed to be traceable to.
+  for (const out of ['/tmp/x.html', '/tmp/x.HTML', '/tmp/notes.txt', '/tmp/report', '/tmp/a.b.html']) {
+    assert.notEqual(R.dataPathFor(out), out, `${out} would overwrite itself`);
+    assert.match(R.dataPathFor(out), /\.data\.json$/);
+  }
+  assert.equal(R.dataPathFor('/tmp/2026-08-25.html'), '/tmp/2026-08-25.data.json');
+  assert.equal(R.dataPathFor('/tmp/notes.txt'), '/tmp/notes.txt.data.json');
+});
+
+test('a merge count that excludes unconfirmed work says so, right next to the number', () => {
+  // The week of 2026-08-04: 43 merges, 41 of them outside the slice GitHub was
+  // asked for, and the page printed "2" with nothing to say it was short.
+  const short = R.ok(2, { couldNotConfirm: 41, notCountedBecauseNotMerged: 0 });
+  assert.match(R.mergesNote(short), /41/);
+  assert.match(R.mergesNote(short), /could not be confirmed/i);
+
+  const clean = R.ok(43, { couldNotConfirm: 0, notCountedBecauseNotMerged: 0 });
+  assert.equal(R.mergesNote(clean), null, 'a fully-read week gets no small print to ignore');
+
+  assert.equal(R.mergesNote(R.notAvailable('gh is not installed')), null,
+    'an unreadable figure already prints its reason; a note would say it twice');
+});
+
+test('an incomplete merge count reaches the page as a warning, not as small print', () => {
+  const html = R.renderReportHtml({
+    repo: 'mentor24-maker/starcaster',
+    window: { from: '2026-08-04', to: '2026-08-10', days: 7 },
+    figures: { merges: R.ok(2, { perDay: [], couldNotConfirm: 41 }) },
+    merges: [],
+    groups: [],
+  });
+  assert.match(html, /41/, 'the number of unconfirmed merges is on the page');
+  assert.match(html, /incomplete/i, 'and the page says the count is incomplete');
+  assert.match(html, /class="unread"/, 'in the same amber box an unreadable figure gets');
+
+  // The control: a fully-confirmed week must NOT carry the warning, or the
+  // assertion above would pass on every page and prove nothing.
+  const cleanHtml = R.renderReportHtml({
+    repo: 'mentor24-maker/starcaster',
+    window: { from: '2026-08-04', to: '2026-08-10', days: 7 },
+    figures: { merges: R.ok(43, { perDay: [], couldNotConfirm: 0 }) },
+    merges: [],
+    groups: [],
+  });
+  assert.ok(!/incomplete/i.test(cleanHtml), 'a complete week must not cry wolf');
+});
+
+test('the merged check asks about the pull requests it actually found', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  // `gh pr list --state merged --limit 300` returns the 300 most recently
+  // CREATED merged PRs — it reaches back to #128 on this repo. It may confirm;
+  // it may never be the last word, or every older window silently loses merges.
+  assert.match(src, /'pr', 'view', String\(c\.number\)/,
+    'a candidate the recent slice does not vouch for is asked about by number');
+  assert.match(src, /couldNotConfirm/, 'and anything still unanswered is counted, not dropped');
+});
+
+test('the diffstat measures the window, not everything merged since', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const line = src.split('\n').find((l) => /'diff', '--shortstat'/.test(l));
+  assert.ok(line, 'it does take a diffstat, or this assertion proves nothing');
+  // Diffing against origin/main measured everything merged SINCE the window:
+  // 581 files and +113,964 lines for one week, roughly fifty times over.
+  assert.ok(!/origin\/main/.test(line), `the diffstat must end at the window, not at HEAD: ${line.trim()}`);
+  assert.match(line, /newest/, 'it ends at the newest merge inside the window');
+});
+
+test('an unreadable merge list does not make the diffstat report a quiet week', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  // With `gh` unavailable the tiles read "no merged pull requests in the
+  // window, so there is nothing to diff" — which is a sentence about a calm
+  // week, not about a source that could not be read.
+  assert.match(src, /the merge list could not be read/,
+    'the diffstat distinguishes "nothing merged" from "we could not tell"');
+});
+
+// ── The wrapper's self-update, exercised for real ──────────────────────────
+//
+// This one is not a text-shape assertion, because the failure it pins is
+// invisible in every log: the wrapper prints "update: skipped" both when it is
+// healthily leaving someone's work alone and when it has permanently disabled
+// itself. Only running it against a checkout carrying the residue can tell
+// those apart, so that is what this does — two throwaway git repos on disk, no
+// network, no doppler, no npm.
+
+const os = require('node:os');
+const { spawnSync } = require('node:child_process');
+
+const GIT_ID = ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false'];
+
+function git(cwd, ...args) {
+  const res = spawnSync('git', [...GIT_ID, ...args], { cwd, encoding: 'utf8' });
+  assert.equal(res.status, 0, `git ${args.join(' ')} failed: ${res.stderr || res.stdout}`);
+  return (res.stdout || '').trim();
+}
+
+test('the self-update survives the output the job itself leaves behind', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-report-wrapper-'));
+  try {
+    const origin = path.join(tmp, 'origin.git');
+    const work = path.join(tmp, 'work');
+    const other = path.join(tmp, 'other');
+
+    fs.mkdirSync(origin);
+    git(origin, 'init', '--bare', '-b', 'main', '.');
+
+    // A checkout with one commit on main, pushed. The wrapper is a TRACKED
+    // file in it, as it is in the real repo — an untracked copy would be dirt
+    // of its own and the test would be measuring its own fixture.
+    fs.mkdirSync(work);
+    git(work, 'init', '-b', 'main', '.');
+    git(work, 'remote', 'add', 'origin', origin);
+    fs.writeFileSync(path.join(work, 'README.md'), 'first\n');
+    fs.mkdirSync(path.join(work, 'scripts'), { recursive: true });
+    const wrapper = path.join(work, 'scripts', 'run_weekly_report.sh');
+    fs.copyFileSync(path.resolve(__dirname, '..', 'run_weekly_report.sh'), wrapper);
+    fs.chmodSync(wrapper, 0o755);
+    git(work, 'add', '-A');
+    git(work, 'commit', '-m', 'first');
+    git(work, 'push', '-u', 'origin', 'main');
+
+    // Somebody else moves main on, exactly as a merged pull request would —
+    // including the first published edition, which adds a file under
+    // docs/reports/ that this checkout is about to be sitting on untracked.
+    git(tmp, 'clone', '--quiet', origin, other);
+    fs.mkdirSync(path.join(other, 'docs', 'reports'), { recursive: true });
+    fs.writeFileSync(path.join(other, 'docs', 'reports', '2026-08-25.html'), '<!doctype html>published\n');
+    git(other, 'add', '-A');
+    git(other, 'commit', '-m', 'second');
+    git(other, 'push', 'origin', 'main');
+    const wanted = git(other, 'rev-parse', 'HEAD');
+
+    // Run 1's leftovers, exactly as the report writes them.
+    fs.mkdirSync(path.join(work, 'docs', 'reports'), { recursive: true });
+    for (const f of ['2026-08-25.html', '2026-08-25.data.json', 'index.html']) {
+      fs.writeFileSync(path.join(work, 'docs', 'reports', f), 'leftover\n');
+    }
+
+    // The control. If the fixture were not actually dirty, the assertions
+    // below would pass against the broken wrapper too and prove nothing.
+    assert.notEqual(
+      spawnSync('git', ['status', '--porcelain'], { cwd: work, encoding: 'utf8' }).stdout.trim(), '',
+      'the fixture has to reproduce the dirty checkout, or this test is theatre',
+    );
+
+    const res = spawnSync('bash', [wrapper], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...process.env, WEEKLY_REPORT_UPDATE_ONLY: '1' },
+    });
+    const out = `${res.stdout}\n${res.stderr}`;
+
+    assert.ok(!/update: skipped/.test(out), `the update disabled itself on run two:\n${out}`);
+    assert.match(out, /update: checkout is at/, `the update did not run:\n${out}`);
+    assert.equal(git(work, 'rev-parse', 'HEAD'), wanted, 'the checkout did not actually move');
+    assert.match(out, /cleanup: removing/, 'and it said what it removed');
+
+    // It removed its OWN output and nothing else — a background job may keep a
+    // checkout current, it may not throw away anyone's work.
+    fs.writeFileSync(path.join(work, 'README.md'), 'edited by a person\n');
+    const second = spawnSync('bash', [wrapper], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...process.env, WEEKLY_REPORT_UPDATE_ONLY: '1' },
+    });
+    assert.match(`${second.stdout}`, /update: skipped — uncommitted changes/,
+      'a real uncommitted edit still stops the update');
+    assert.equal(fs.readFileSync(path.join(work, 'README.md'), 'utf8'), 'edited by a person\n',
+      'and it must not have been touched');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

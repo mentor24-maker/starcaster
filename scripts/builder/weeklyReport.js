@@ -64,6 +64,44 @@ function figureText(figure, format = (v) => String(v)) {
   return format(figure.value);
 }
 
+/**
+ * Where the machine-readable copy of a report goes, given the page's path.
+ *
+ * `path.replace(/\.html$/, '.data.json')` looks equivalent and is not: given
+ * `--out notes.txt` it changes nothing, both files get the SAME path, and the
+ * HTML written second silently destroys the JSON written first. Every figure
+ * on the page is supposed to be traceable to that JSON (acceptance criterion
+ * 2), so losing it quietly is the worst available outcome.
+ *
+ * The suffix is therefore always ADDED, and only a real `.html` is taken off
+ * first. The answer can never equal the input.
+ */
+function dataPathFor(htmlPath) {
+  const p = String(htmlPath == null ? '' : htmlPath);
+  return `${p.replace(/\.html?$/i, '')}.data.json`;
+}
+
+/**
+ * What the merges tile has to admit underneath its number.
+ *
+ * A count of merges is only honest if the reader can tell it apart from a
+ * count of merges WE MANAGED TO CHECK. Those two were the same number until
+ * GitHub could not vouch for 41 of the 43 merges in the week of 2026-08-04 and
+ * the page printed a confident "2". So anything the gatherer could not confirm
+ * is said out loud, next to the figure, rather than living only in the JSON.
+ */
+function mergesNote(figure) {
+  if (!figure || figure.ok !== true) return null;
+  const parts = [];
+  const unconfirmed = Number(figure.couldNotConfirm || 0);
+  const notMerged = Number(figure.notCountedBecauseNotMerged || 0);
+  if (unconfirmed > 0) {
+    parts.push(`${unconfirmed} more could not be confirmed with GitHub and are NOT in this count`);
+  }
+  if (notMerged > 0) parts.push(`${notMerged} not merged`);
+  return parts.length ? parts.join('; ') : null;
+}
+
 // ── Only merged work counts ────────────────────────────────────────────────
 
 /**
@@ -235,16 +273,41 @@ function esc(value) {
  * One metric tile. `figure` is the {ok,...} shape above, so a tile physically
  * cannot be rendered without deciding what the unreadable case says.
  */
-function tile(label, figure, format, note) {
+function tile(label, figure, format, note, partial = false) {
   const unread = figure && figure.ok === false;
   const value = figureText(figure, format || ((v) => String(v)));
+  // `partial` is the middle case the page had no way to say: a figure that WAS
+  // read and is known to be short. It keeps the big number — the number is a
+  // real floor — but tints the card, because a reader who only skims the tiles
+  // must not come away with a total.
+  const cls = unread ? ' tile--unread' : (partial ? ' tile--partial' : '');
   return [
-    `      <div class="tile${unread ? ' tile--unread' : ''}">`,
+    `      <div class="tile${cls}">`,
     `        <div class="tile-label">${esc(label)}</div>`,
     `        <div class="tile-value">${esc(value)}</div>`,
     note ? `        <div class="tile-note">${esc(note)}</div>` : '',
     '      </div>',
   ].filter(Boolean).join('\n');
+}
+
+/**
+ * A visible warning when the merge count is known to be short.
+ *
+ * The tile note alone is small print. This is the same amber box an unreadable
+ * figure gets, because a count that quietly excludes work IS an unreadable
+ * figure wearing a number.
+ */
+function renderConfirmationCaution(figure) {
+  const unconfirmed = figure && figure.ok === true ? Number(figure.couldNotConfirm || 0) : 0;
+  if (!unconfirmed) return '';
+  return [
+    '    <p class="unread">',
+    `      This merge count is incomplete. ${esc(unconfirmed)} pull request(s) that landed on`,
+    '      <code>main</code> in this window could not be confirmed with GitHub, so they are',
+    '      NOT counted above — and every figure derived from the merge list is short by the',
+    '      same amount. Treat the number as a floor, not a total.',
+    '    </p>',
+  ].join('\n');
 }
 
 /** The per-day bar chart, as plain divs — no script, no library, no network. */
@@ -324,6 +387,9 @@ const STYLES = `    :root { color-scheme: light dark; }
     .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .75rem; }
     .tile { background: #fff; border: 1px solid #e4e2dd; border-radius: 8px; padding: .9rem 1rem; }
     .tile--unread { background: #fdf6ec; border-color: #e8d4b0; }
+    .tile--partial { background: #fdf6ec; border-color: #e8d4b0; }
+    .tile--partial .tile-value { color: #8a6a2f; }
+    .tile--partial .tile-note { color: #8a6a2f; }
     .tile-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #7a7a7a; }
     .tile-value { font-size: 1.5rem; font-weight: 600; margin-top: .25rem; line-height: 1.25; }
     .tile--unread .tile-value { font-size: .9rem; font-weight: 500; color: #8a6a2f; }
@@ -352,7 +418,8 @@ const STYLES = `    :root { color-scheme: light dark; }
       body { background: #16171a; color: #e8e6e1; }
       .tile, .stage, .narrative { background: #1e2024; border-color: #34363c; }
       h2 { border-color: #34363c; }
-      .tile--unread, .unread { background: #2a2317; border-color: #5a4a26; color: #d8b877; }
+      .tile--unread, .tile--partial, .unread { background: #2a2317; border-color: #5a4a26; color: #d8b877; }
+      .tile--partial .tile-value, .tile--partial .tile-note { color: #d8b877; }
       .bar-track { background: #2a2d33; }
       ul.merges li { border-color: #26282d; }
       .provenance code { background: #26282d; }
@@ -398,7 +465,7 @@ ${STYLES}
 
     <h2>The week in numbers</h2>
     <div class="tiles">
-${tile('Pull requests merged', f.merges, (v) => String(v))}
+${tile('Pull requests merged', f.merges, (v) => String(v), mergesNote(f.merges), Boolean(f.merges && f.merges.ok && f.merges.couldNotConfirm))}
 ${tile('Files touched', f.diffstat, (v) => String(v.filesChanged))}
 ${tile('Lines added', f.diffstat, (v) => `+${v.insertions}`)}
 ${tile('Lines removed', f.diffstat, (v) => `-${v.deletions}`)}
@@ -407,6 +474,7 @@ ${tile('Median CI run', f.ciMedianSeconds, (v) => formatDuration(v))}
 ${tile('Pull requests open now', f.openPrs, (v) => String(v))}
 ${tile('Unattended loop passes', f.loopPasses, (v) => String(v.total), 'a labelled proxy for machine time — quota itself is unreadable from the repo')}
     </div>
+${renderConfirmationCaution(f.merges)}
 
     <h2>Where the tickets are</h2>
 ${renderStages(f.stages)}
@@ -479,6 +547,7 @@ module.exports = {
   STAGE_ORDER,
   areaForMerge,
   areaForPath,
+  dataPathFor,
   daysBetween,
   esc,
   figureText,
@@ -486,12 +555,14 @@ module.exports = {
   groupMergesByArea,
   median,
   mergedOnly,
+  mergesNote,
   notAvailable,
   ok,
   parseMergeSubject,
   perDay,
   prUrl,
   renderChart,
+  renderConfirmationCaution,
   renderIndexHtml,
   renderReportHtml,
   renderStages,
