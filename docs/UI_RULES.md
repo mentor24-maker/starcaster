@@ -124,6 +124,32 @@ as a rule first, then gets a checker where one is possible.
   cards, because an empty manager measures nothing and passes.
   — **[browser-check]** `npm run check:panels`
 
+  **The declaration is not only for item managers — any block the check
+  cannot otherwise see wears it.** The trigger block
+  (`.builder-module-trigger-settings`: "Trigger", and "Button Label" on
+  Confetti) sits above the axis columns on Speech Bubble, Confetti and the two
+  Proximity Effect panels. `check_panels` reads axis columns, the chrome's own
+  strip, and groups carrying `data-lattice-pairs` — and that block is none of
+  the three, so for as long as it had existed its rows were skipped in
+  silence. Underneath, its rows were `BuilderSettingRow fullWidth`, whose base
+  rule sizes tracks PROPORTIONALLY (`minmax(0,1fr) minmax(0,2fr)`) against the
+  whole panel rather than against their own content: at 1440 the word
+  "Trigger" held a 414px label track while the control, correctly capped at
+  `--builder-field-long-max`, ended 268px short of the block's right edge.
+  A notch (L8) on four panels, passing green because nothing measured it.
+  Fixed 2026-08-29 by giving the block the same two `max-content` tracks every
+  lattice group uses, so the pair sizes itself to its own content instead of
+  taking a proportional share — **bounding the block rather than widening the
+  control**, which is what W9 and L8 ask for when they disagree — and by
+  declaring `data-lattice-pairs="1"` so it can never go unmeasured again.
+  Two things the fix had to get right, both found by looking at the panel
+  rather than at the check: the block's BOX stays full width (sizing it to
+  `max-content` too squeezed the game-trigger note from one line into a
+  five-line column, L7), and the pairs are pinned to the first two tracks
+  (a trailing filler track makes the note spannable, but auto-placement then
+  scattered Confetti's two rows across three columns).
+  *Panel sweep 8/15, ticket 86bbjt1b4.*
+
   **The OTHER shape is a titled-column grid, and it declares
   `data-lattice-columns="<n>"`.** L6a offers two shapes and the paragraphs
   above only describe one of them. A genuinely tabular manager — the

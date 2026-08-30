@@ -3959,6 +3959,83 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /*
+ * THE TRIGGER BLOCK JOINS THE LATTICE (2026-08-29, panel sweep 8/15).
+ *
+ * "Trigger" (and, on Confetti, "Button Label") sit above the axis columns on
+ * Speech Bubble, Confetti and the two Proximity Effect panels. They are
+ * `BuilderSettingRow fullWidth`, whose base rule is
+ * `grid-template-columns: minmax(0,1fr) minmax(0,2fr)` — PROPORTIONAL tracks
+ * measured against the whole panel rather than against their own content,
+ * which is the per-row sizing W0 replaced everywhere else on 8/13.
+ *
+ * Measured at 1440 before this rule: the label "Trigger" occupied a 414px
+ * track, and the control — correctly capped at `--builder-field-long-max` by
+ * W9 — ended at 1079 inside a block whose right edge was 1347. A 268px notch,
+ * on every panel that has a trigger.
+ *
+ * That is W9's ceiling and L8's block edge fighting, and the ticket names the
+ * winner: BOUND THE BLOCK, do not widen the control. So the block takes the
+ * same two `max-content` tracks every other lattice group uses. The rows then
+ * hug the left edge at their own content width — the 268px of dead space goes
+ * because the CONTROL stops being stretched to a 2fr share, not because
+ * anything was widened. The tracks come from the shared mechanism, never from
+ * a per-field width (W0); the control still stops at the 560px ceiling (W9).
+ *
+ * The block itself stays FULL WIDTH on purpose. Sizing the box to
+ * `max-content` as well was tried first and made the game-trigger note below
+ * it 235px wide — one readable line became a five-line ragged column on Speech
+ * Bubble, which is a worse panel than the one being fixed. The note spans both
+ * tracks, so the box has to stay wide enough for it to read (L7); the rows are
+ * compact either way, which is the part the eye was complaining about.
+ *
+ * `display: contents` on the rows is what makes the two rows share ONE pair of
+ * tracks — without it each row is its own formatting context and "Trigger" and
+ * "Button Label" measure separately, which is the original stagger in miniature.
+ */
+.builder-react-root .is-lattice .builder-module-trigger-settings {
+  display: grid;
+  /* Two content-measured tracks for the pairs, then a filler that soaks up
+     the leftover width. Without the third track a `1 / -1` item spans only
+     the two ~330px pair tracks, which is what squeezed the note. */
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+  column-gap: 0;
+}
+
+.builder-react-root .is-lattice .builder-module-trigger-settings .builder-setting-row,
+.builder-react-root .is-lattice .builder-module-trigger-settings .builder-setting-row-full {
+  display: contents;
+}
+
+/*
+ * The pairs are PINNED to the first two tracks. Auto-placement alone put
+ * Confetti's four flattened children across a three-track row — "Trigger",
+ * its select, then the words "Button Label" sitting in the filler — and the
+ * input dropped to a line of its own. Two items per row, two named columns.
+ */
+.builder-react-root .is-lattice .builder-module-trigger-settings .builder-setting-label {
+  grid-column: 1;
+}
+
+.builder-react-root .is-lattice .builder-module-trigger-settings .builder-setting-value {
+  grid-column: 2;
+}
+
+/*
+ * The game-trigger note is a sentence, not a row of the lattice — the same
+ * treatment as the offset hint below. `min-content` so a long sentence cannot
+ * widen the control track behind it; `min-width: 100%` so it fills the row
+ * once the tracks have resolved; spanning to `-1` so it reaches the filler
+ * track and reads on one line.
+ */
+.builder-react-root .is-lattice .builder-module-trigger-settings > .panel-copy {
+  grid-column: 1 / -1;
+  width: min-content;
+  min-width: 100%;
+}
+
+/*
  * A hint is a sentence, and the control track is `max-content`. Left in
  * that track the sentence would BE the track's width, dragging every
  * control in the column out to the length of "Positive moves right;
