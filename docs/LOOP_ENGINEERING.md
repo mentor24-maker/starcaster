@@ -1592,6 +1592,171 @@ a scratch ticket plus a comment of your own works too. Do **not** delete an
 existing `[bus-relay]` marker to manufacture one — that is destructive, and the
 run will then send his real answer to a dead channel.
 
+## The pulse — is anything actually moving? (2026-08-25, task 86bbm9h60)
+
+```
+npm run pulse                 # human-readable, exit 0 whatever it finds
+npm run pulse -- --json       # machine-readable
+npm run pulse -- --exit-code  # 0 clean / 1 findings / 2 could not look
+npm run pulse -- --job loop-review   # read a different loop's log
+```
+
+**Seven incidents in the week to 2026-08-25. Not one of them was a crash.**
+Every single one was a component that ran, exited 0, and accomplished nothing:
+a build loop that declined thirteen passes in a row on a deadlocked cap,
+tickets sitting seventy hours in `Building`, a pull request and its ticket
+linked in only one direction. A health check would have passed during all of
+them, because every process was alive and every exit code was 0.
+
+That is why the pulse measures **flow, never status**. "Is it running" is the
+question that failed; "is anything moving" is the question that works.
+
+It is **read-only** — three GET-only sources, no write path in the file at all,
+and a test that fails if one is ever added. The ClickUp read sends
+`include_closed=true`, and a test asserts the literal string: without it the
+list endpoint hides every closed-type status (47 tickets came back where 163
+existed, all 116 `Live` ones missing — measured 2026-08-30), which made the
+zombie shape below impossible to fire. Fourth reader in this repo to hit that
+trap; each one carries the same regression test. It reports and stops. Repairs live
+in `npm run reconcile`, deliberately: the fourth drift shape below has two
+valid fixes and only a person knows which one is right.
+
+### A1 — the no-op streak
+
+Consecutive loop passes that claimed nothing. A declining pass and a healthy
+quiet pass are byte-identical from outside, which is how fourteen hours of a
+dead build loop read as a quiet morning.
+
+| Number | Value | Where it came from |
+|---|---|---|
+| Streak threshold | **3 passes** | One claimless pass is normal, two is plausible. Eight happened; thirteen happened on 2026-08-25. Three is the first count that cannot be explained away. |
+| Gate | **only while `Queued > 0`** | A loop declining an empty queue is working perfectly. Alarming on that teaches the reader to ignore the alarm. |
+| Hung pass | **4 hours** | A pass is 10–15 minutes of work; the longest in a 580-pass sample was 38 minutes. |
+| Loop gone silent | **3 hours** since the loop was last seen alive | `loopInterval.js` sleeps at most 3600s between passes (the empty-queue cadence; 900–1800s with work queued). Three missed intervals at the *longest* cadence is 3h — past that no queue depth explains the silence. Measured from the newest END banner, or the START of a pass still running, so the pulse's own in-flight pass counts as a sign of life. |
+
+**Two shapes of a dead loop, and the streak only sees one.** A loop that runs
+and declines shows up as a streak. A loop that *stops emitting passes* does not:
+the streak walk stops at the newest claim, so a launchd job that died right
+after a claim read as `clear` with 36 tickets queued and the loop last seen
+five days earlier (caught in review, 2026-08-30). The silence check above is
+judged *before* the streak, and every A1 result carries `lastPassAt` whatever
+its verdict, so the JSON always answers "when did this last run".
+
+**An orphan `START` the loop has since recovered from is history, not news.**
+The log is append-only, so a pass that never printed its END banner stays in
+it forever; the 2026-08-23 orphan alarmed on every production run and pinned
+`--exit-code` at 1 permanently — the "same false note on every run" the 4h
+threshold guards against, at the other end. If any pass has *completed* since
+the orphan started, it is reported as `superseded` and counts as nothing.
+
+The source is `~/loop-logs/loop-build.log`, whose body is **the agent's own
+prose report, not tool output** — there is no structured claim record to read.
+So a pass is classified off the *deterministic strings the loop's own commands
+print* and a declining pass quotes verbatim: `wipCap.js`'s "WIP cap reached —
+N PR(s) open, cap M", `nodeRoles.js`'s "so it did nothing.", and the harness's
+own quota notice. Measured against 580 real passes, **90% classify; the other
+10% are reported as CANNOT TELL, never as a decline.** That asymmetry is the
+point — guessing "declined" invents an outage, guessing "claimed" hides one.
+
+An early draft matched `wip-check` and `exit 3` *anywhere* in the body and
+mislabelled a genuine claim, because `build-start` — a different command — had
+exited 3 for an unrelated reason. Requiring the quoted message is the fix.
+
+### A2 — stage residency
+
+How long each ticket has sat where it is.
+
+| Stage | Threshold | Where the number came from |
+|---|---|---|
+| Building | **2 h** | A build takes 10–15 minutes. Three tickets measured 65–72 hours on 2026-08-25. |
+| In review | **4 h** | A review takes about 10 minutes on an hourly poll, so 4 hours is already several missed polls. |
+| Ready to launch | **24 h** (notice, not alarm) | Operator-held. Surface it; do not alarm — only Dane moves a ticket out of it. |
+| Queued | **7 days** (notice) | Long is fine. Forgotten is not. |
+
+**`date_updated` is a proxy for stage entry, not a measurement of it.** ClickUp
+bumps it on any edit, so a comment or a Loop-note stamp resets the clock. The
+error runs one way — it makes a stuck ticket look *fresher* than it is — so the
+check under-reports, and every run says so rather than implying a precision the
+data does not have. A stage with no threshold (`Needs your input`, `Live`) is
+listed as **not measured**, never silently skipped.
+
+### B1 — ticket ↔ PR drift, in both directions
+
+| Shape | Meaning | Severity |
+|---|---|---|
+| 1 | Non-terminal ticket, PR **merged** — the work is live and the ticket did not follow | notice (`reconcile` repairs it) |
+| 2 | Terminal ticket, PR still **open** — a zombie branch | alarm |
+| 3 | In-flight ticket, **no PR on either side** — stranded | alarm |
+| 4 | A PR names a ticket, **the ticket has no record of that PR** | alarm |
+
+**Shape 4 is the dangerous one, and the reason this check reads both
+directions.** `build-start` decides whether a branch already exists by reading
+*the ticket*. A link that exists only on the PR side is invisible to it, so the
+next pass opens a second branch for work that already has one — exactly how
+duplicate PRs #407 and #408 were born. Real case: PR #373 ↔ 86bbjj6qb, found
+while writing the design and since repaired by hand.
+
+Two distinctions cost false positives on the first production run, and both are
+now guarded by tests:
+
+- **`Queued` is neither in-flight nor terminal.** A queued ticket with an open
+  PR is a **send-back** — the ordinary state of work a review handed back, and
+  the exact state `build-start` exists to recognise. Reading "not in flight" as
+  "finished" called two of them zombies.
+- **A PR *mentioning* a ticket is not a PR *claiming* one.** The link is the
+  ClickUp URL line the PR body is required to carry, not any id appearing in
+  prose. PR #435 discusses four other tickets — one of them the literal example
+  `86bbnonexistent` — while declaring exactly one.
+
+### The five rules, which matter more than the checks
+
+1. **Silence is never all-clear.** Every check prints a section whether or not
+   it found anything, so "all clear" and "the job died" can never look alike.
+2. **"Cannot tell" is its own state**, never folded into "fine" (DOCTRINE
+   3.11) — and it has its own exit code (2) so a caller can treat "I could not
+   look" differently from "I looked and it was fine".
+   In the report that means a **`CLEAR` line may only print when the check
+   both found nothing AND could read everything** — `whollyMeasured()` in
+   `pulse.js`, one predicate shared by every section. Guarding on findings
+   alone is how the two collapse: with `gh` unavailable, B1 compared 0 tickets
+   against 0 PRs, found nothing because it had seen nothing, and printed
+   "CLEAR every ticket and PR names the other" directly above its own CANNOT
+   line (caught in review, 2026-08-30). A CLEAR asserts something about
+   everything the check looked at, so a check that looked at nothing has
+   nothing to assert.
+   **The headline is bound by the same rule, and it is the line that
+   matters most.** A failed log read returns `verdict: 'cannot-tell'`
+   *alongside* its `sourceError`, and the sentence tests that state before
+   the REVIEW and OPERATOR branches — otherwise an unread log plus two stale
+   reviews read "Not the builder … the loop is claiming", steering the reader
+   away from the one stage nobody had looked at (the round-2 send-back,
+   2026-08-30). And when GitHub cannot be read, the CANNOT line carries `gh`'s
+   own first line of stderr, so auth, rate limit and wrong folder are told
+   apart instead of all reading as "failed".
+3. **Every count carries its breakdown.** `7 open, cap 5` was true and hid a
+   deadlock for four passes.
+4. **The bottleneck is named in a sentence** — "Bottleneck: BUILD (4
+   consecutive claimless passes, 26 queued). Ready to launch holds 1." A table
+   of rates makes the reader do arithmetic they will skip.
+5. **The pulse cannot fail silently either.** Every completed run ends with
+   `PULSE COMPLETE <timestamp>`, so a scheduled run that does not print that
+   line is itself the alert. It writes no heartbeat file, because the ticket's
+   non-goals forbid the pulse writing anything; a persisted heartbeat belongs
+   to phase 2 alongside the daily digest.
+
+### Where the code lives
+
+`scripts/builder/pulse.js` is **pure** — every threshold, every classification
+and every sentence, with no clock, no network and no disk (a test enforces
+that). `scripts/pulse.cjs` holds only the reads. That split is what makes a
+threshold break-testable, and a threshold nobody can break-test is one that
+gets tuned by whoever is annoyed that day.
+
+Phase 1 is deliberately only these three checks — the ones that would have
+caught real incidents — so the value is provable before the other nine in the
+design are written. **There is no dashboard, on purpose:** a screen nobody
+opens manufactures the feeling of oversight, which is the failure being
+designed against.
 ## The work-in-progress cap — and what it counts
 
 `loop-build` asks `npm run clickup -- wip-check` before claiming, and declines
