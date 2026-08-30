@@ -208,9 +208,14 @@ function latestMergeMarker(replies) {
  * re-planning costs no extra noise on the ticket. A different reason, or a
  * clean run through to 'merge', is new information and is acted on.
  */
-function mergeDecision({ status, comments, operatorId, handled, refused }) {
+function mergeDecision({ status, comments, operatorId, handled, refused, refusedAt }) {
   const seen = handled instanceof Set ? handled : new Set(handled || []);
   const priorRefusals = refused instanceof Map ? refused : new Map(Object.entries(refused || {}));
+  // WHEN the previous refusal was written, carried alongside WHY. A conflict
+  // hand-off that has been sitting for a day is news even though its reason
+  // has not changed (task 86bbq0fh8) — and the age can only come from the
+  // marker, which is the one record of when the pass actually said it.
+  const priorRefusalTimes = refusedAt instanceof Map ? refusedAt : new Map(Object.entries(refusedAt || {}));
   const all = byDateNewestFirst(comments);
 
   // Only Ready to launch. The same word on any other status does nothing —
@@ -239,6 +244,7 @@ function mergeDecision({ status, comments, operatorId, handled, refused }) {
     commentId: String(authorization.id),
     commentDate: commentDate(authorization),
     priorRefusal: priorRefusals.get(String(authorization.id)),
+    priorRefusalAt: priorRefusalTimes.get(String(authorization.id)) || '',
   };
 
   // A refusal we have already given, whose reason is still true, is not news.
@@ -477,6 +483,39 @@ const APPROVAL_CARRIES_OVER = '**Your approval is still standing — you do not 
 // not a merge, it needs that sentence written back, and the test at the
 // bottom of mergeOnComment.test.js is what will notice.
 
+/**
+ * WHAT THE APPROVAL PROMISE NOW ALSO DEPENDS ON (2026-08-30, task 86bbq0fh8).
+ *
+ * A re-decidable marker was treated as licence to say "it goes through on its
+ * own". That is only true if somebody is going to deal with the reason — and
+ * on a conflict, nobody was. The hand-off asked the bus for an agent session,
+ * nothing reads the bus, and PR #434 sat three days under a comment saying it
+ * was progressing.
+ *
+ * So every notice now declares its ACTOR as well as its marker, and the two
+ * together decide the promise:
+ *
+ *   'later-pass' — the reason can clear without anyone acting (CI goes green,
+ *                  a missing comment gets added). A later pass merges it.
+ *   'loop-queue' — resolving it is filed as a Queued ticket the build loop
+ *                  drains. A named actor, running on a timer today.
+ *   'nobody'     — nothing is going to pick this up. The body MUST say the
+ *                  work is stalled and MUST NOT promise a merge.
+ *   'none'       — already merged; there is no next actor and no promise.
+ *
+ * Passive voice is the tell (vault `doctrine/TERMINOLOGY.md`, 2026-08-29): a
+ * hand-off that cannot name a specific waiting actor does not get to imply
+ * one. `actor` is that name, made structural so a test can check it.
+ */
+const ACTOR_PROMISES = { 'later-pass': true, 'loop-queue': true, nobody: false, none: false };
+
+/** May this notice tell him the approval carries over? Only if the marker is
+ *  re-decidable AND a named actor is going to act on the reason. */
+function mayPromiseApproval({ marker, actor }) {
+  if (markerKind(marker) === 'terminal') return false;
+  return ACTOR_PROMISES[actor] === true;
+}
+
 /** The kind a marker string parses back as, without the timestamp tail. */
 function markerKind(what) {
   const parsed = parseMergeMarker(`${MERGE_MARKER} ${what}`);
@@ -491,6 +530,7 @@ function markerKind(what) {
 function refusalNotice({ commentId, why, plainEnglish }) {
   return {
     marker: `refused: ${why}`,
+    actor: 'later-pass',
     body: `Merge not performed. ${plainEnglish}\n\nWhy: ${why}.\n\n${APPROVAL_CARRIES_OVER}\n\n(Automatic: your comment ${commentId} on this ticket was read as a merge authorization. Nothing on GitHub or this ticket was changed. — bus-relay merge step)`,
   };
 }
@@ -509,8 +549,15 @@ function refusalNotice({ commentId, why, plainEnglish }) {
  *
  * (A third kind, 'needs-rebuild', existed while committed HTML carried
  * ?v= asset pins; retired 2026-08-24 with the pins themselves, task 86bbkh288.)
+ *
+ * `filed` is the NAMED ACTOR (2026-08-30, task 86bbq0fh8): `{ id, url }` for
+ * the Loop Queue ticket that will resolve the conflict, or null when no such
+ * ticket exists. Null is not a formatting detail — it means nothing is going
+ * to pick this up, and the body says exactly that instead of promising a
+ * merge. That promise, made with no actor behind it, is what left PR #434
+ * sitting for three days under a comment saying it was progressing.
  */
-function conflictHandOffNotice({ commentId, pr, localVerdict }) {
+function conflictHandOffNotice({ commentId, pr, localVerdict, filed }) {
   // Two different situations wear the same GitHub answer, and only one of them
   // retries usefully. Saying "it will merge next run" about a real overlap is
   // the same shape of untrue promise this whole ticket family exists to
@@ -526,12 +573,33 @@ function conflictHandOffNotice({ commentId, pr, localVerdict }) {
     : localVerdict
       ? `GitHub called it a conflict, and this machine could not check whether that is true — ${localVerdict.reason}`
       : 'GitHub reported that the branch conflicts with newer work on `main`';
-  const whatHappensNext = realOverlap
-    ? 'Sorting that overlap out is a code change rather than a decision, and a script must never resolve one blind, so it was not attempted. It will merge on a later run, once the branch is caught up and its checks are green.'
-    : 'It will be merged on the next run, unless something else is in the way by then — GitHub\'s answer about a branch is often minutes stale.';
+  // Who acts next, said out loud. A real overlap is a code change somebody
+  // has to make; the only honest sentence names who is going to make it. With
+  // a filed ticket that is the build loop, which drains the Loop Queue on a
+  // timer today. Without one it is nobody, and the body must say so rather
+  // than reach for the passive voice that hid the missing actor before.
+  const actor = realOverlap ? (filed ? 'loop-queue' : 'nobody') : 'later-pass';
+
+  let whatHappensNext;
+  if (!realOverlap) {
+    whatHappensNext = 'It will be merged on the next run, unless something else is in the way by then — GitHub\'s answer about a branch is often minutes stale.';
+  } else if (filed) {
+    whatHappensNext = `Sorting that overlap out is a code change rather than a decision, and a script must never resolve one blind, so it was not attempted. Resolving it is now ticket ${filed.id} (${filed.url}) in the Loop Queue, which the build loop drains every pass. Once that branch is caught up and its checks are green, this merges on a later run.`;
+  } else {
+    // The stalled sentence. It is deliberately blunt: this is the state that
+    // cost three days, and a reader must not be able to finish this paragraph
+    // thinking something is underway.
+    whatHappensNext = `Sorting that overlap out is a code change rather than a decision, and a script must never resolve one blind, so it was not attempted. **Nothing is currently working on it** — filing the resolution as a Loop Queue ticket did not succeed, so no build loop will pick this up and this PR will not merge on its own. It needs an agent session pointed at the branch, which means asking for one.`;
+  }
+
+  const marker = `refused: conflict hand-off on PR #${pr.number}`;
+  const promise = mayPromiseApproval({ marker, actor })
+    ? `${APPROVAL_CARRIES_OVER}\n\n`
+    : '';
   return {
-    marker: `refused: conflict hand-off on PR #${pr.number}`,
-    body: `This task was not able to merge on the last attempt, because ${because}.\n\n${whatHappensNext}\n\n${APPROVAL_CARRIES_OVER}\n\nNothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${commentId}.)`,
+    marker,
+    actor,
+    body: `This task was not able to merge on the last attempt, because ${because}.\n\n${whatHappensNext}\n\n${promise}Nothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${commentId}.)`,
   };
 }
 
@@ -543,6 +611,7 @@ function conflictHandOffNotice({ commentId, pr, localVerdict }) {
 function mergedNotice({ commentId, pr, mergedAt }) {
   return {
     marker: `merged PR #${pr.number} at ${mergedAt}`,
+    actor: 'none',
     body: `Merged: PR #${pr.number} (${pr.url}) squash-merged into main at ${mergedAt}, merged on operator comment ${commentId}. Checks were green and the branch was up to date at merge time; the branch has been deleted. main auto-deploys, so this is on its way live now.\n\n(Automatic — bus-relay merge step.)`,
   };
 }
@@ -566,6 +635,7 @@ module.exports = {
   checkState,
   githubGate,
   markerKind,
+  mayPromiseApproval,
   refusalNotice,
   conflictHandOffNotice,
   mergedNotice,
