@@ -10,6 +10,12 @@ const {
   CONTEXT_MAX_WORDS,
   BANNER_RULE,
   BANNER_LABEL,
+  BANNER_COLOR,
+  cardBlocks,
+  bannerLines,
+  proseRuns,
+  inlineRuns,
+  renderCardComment,
   countWords,
   findBlockquoteLines,
   parseCard,
@@ -125,14 +131,19 @@ test('"nothing needed" is a valid ask, but it has to be written down', () => {
 
 // -------------------------------------------------------------- rendering
 
-test('renders the banner exactly as the operator drew it', () => {
-  const out = renderCard(parseCard(card()));
+test('renders the banner exactly as the operator drew it, with the ask on the label line', () => {
+  const out = renderCard(parseCard(card({ needed: 'Your word to merge PR #444.' })));
   assert.equal(BANNER_RULE, '#############################');
   assert.equal(BANNER_LABEL, 'NEEDED FROM DANE: ', 'including the trailing space');
   assert.ok(
-    out.includes(['```', BANNER_RULE, BANNER_LABEL, BANNER_RULE, '```'].join('\n')),
-    'the banner is fenced so ClickUp renders the hashes literally instead of eating them',
+    out.endsWith([BANNER_RULE, `${BANNER_LABEL}Your word to merge PR #444.`, BANNER_RULE].join('\n')),
+    'rule, label + ask on ONE line, rule — and nothing after it',
   );
+  assert.ok(!out.includes('```\n' + BANNER_RULE), 'the banner is no longer inside a code block');
+});
+
+test('a multi-line ask keeps its lines between the two rules', () => {
+  assert.deepEqual(bannerLines('first\nsecond'), [BANNER_RULE, `${BANNER_LABEL}first`, 'second', BANNER_RULE]);
 });
 
 test('the three parts appear in the order the operator asked for', () => {
@@ -141,6 +152,61 @@ test('the three parts appear in the order the operator asked for', () => {
   const contextAt = out.indexOf("WHAT'S GOING ON");
   const bannerAt = out.indexOf(BANNER_LABEL);
   assert.ok(askedAt >= 0 && contextAt > askedAt && bannerAt > contextAt);
+});
+
+test('the banner is the last thing on the card, even when evidence is attached', () => {
+  const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence: GOOD_EVIDENCE })));
+  const evidenceAt = out.indexOf('THE CHECK BEHIND THIS ASK');
+  const bannerAt = out.indexOf(BANNER_LABEL);
+  assert.ok(evidenceAt >= 0 && bannerAt > evidenceAt, 'evidence renders ABOVE the banner');
+  assert.ok(out.trimEnd().endsWith(BANNER_RULE), 'nothing renders after the closing rule');
+  const blocks = cardBlocks(parseCard(card({ needed: COSTLY_ASK, evidence: GOOD_EVIDENCE })));
+  assert.equal(blocks[blocks.length - 1].kind, 'banner');
+});
+
+// ------------------------------------------ the structured (posted) form
+
+test('every banner line is bold and #CC0000 in the posted comment, and nothing follows it', () => {
+  const runs = renderCardComment(parseCard(card({ needed: 'Your word to merge PR #444.' })));
+  assert.equal(BANNER_COLOR, '#CC0000', "Dane's colour, 2026-08-30");
+  const bannerRuns = runs.filter((r) => r.attributes && r.attributes.color);
+  assert.deepEqual(
+    bannerRuns.map((r) => r.text),
+    [BANNER_RULE, `${BANNER_LABEL}Your word to merge PR #444.`, BANNER_RULE],
+  );
+  for (const r of bannerRuns) assert.deepEqual(r.attributes, { bold: true, color: '#CC0000' });
+  const firstBanner = runs.indexOf(bannerRuns[0]);
+  const after = runs.slice(firstBanner).filter((r) => !(r.attributes && r.attributes.color));
+  assert.ok(after.every((r) => r.text === '\n'), 'only line breaks sit between and after the banner lines');
+  assert.ok(runs.slice(firstBanner).every((r) => !r.attributes || !r.attributes['code-block']), 'not in a code block');
+});
+
+test('the posted form and the text form are two views of one block list', () => {
+  const parsed = parseCard(card({ when: 'yesterday', needed: COSTLY_ASK, evidence: GOOD_EVIDENCE }));
+  const text = renderCard(parsed);
+  const flat = renderCardComment(parsed).map((r) => r.text).join('');
+  const strip = (s) => s.replace(/[*`]/g, '').replace(/\s+/g, ' ').trim();
+  assert.equal(strip(flat), strip(text));
+});
+
+test('authored markdown becomes attributes: ClickUp does not parse markdown in a structured comment', () => {
+  const runs = proseRuns('plain **bold** `code`\n\n```\nout 1\nout 2\n```\nafter');
+  assert.deepEqual(runs, [
+    { text: 'plain ' },
+    { text: 'bold', attributes: { bold: true } },
+    { text: ' ' },
+    { text: 'code', attributes: { code: true } },
+    { text: '\n\n' },
+    { text: 'out 1\nout 2\n', attributes: { 'code-block': 'plain' } },
+    { text: 'after\n' },
+  ]);
+  assert.deepEqual(inlineRuns('no markup'), [{ text: 'no markup' }]);
+});
+
+test('buildCard hands back the structured comment alongside the text', () => {
+  const built = buildCard(card());
+  assert.ok(Array.isArray(built.comment));
+  assert.ok(built.comment.some((r) => r.attributes && r.attributes.color === '#CC0000'));
 });
 
 test("every line of the operator's words is carried, not just the first", () => {
@@ -337,13 +403,15 @@ test('fencedBlocks keeps the content of an unclosed fence', () => {
   assert.deepEqual(fencedBlocks('nothing fenced here'), []);
 });
 
-test('the card SHOWS the evidence, under the ask, with its measured-at time', () => {
+test('the card SHOWS the evidence, above the ask, with its measured-at time', () => {
   // Criterion 2 and the freshness half: a stale proof has to be visible
-  // rather than implied, so the time goes in the heading.
+  // rather than implied, so the time goes in the heading. The proof sits
+  // ABOVE the ask since 2026-08-30 (task 86bbq5ruz): the banner is the last
+  // thing on every card, so his eye lands on what he has to do.
   const out = renderCard(parseCard(card({ needed: COSTLY_ASK, evidence: GOOD_EVIDENCE })));
   assert.match(out, /\*\*THE CHECK BEHIND THIS ASK — measured at 8:04pm\*\*/);
-  assert.ok(out.indexOf(COSTLY_ASK) < out.indexOf('THE CHECK BEHIND THIS ASK'),
-    'the ask comes first, then the proof it rests on');
+  assert.ok(out.indexOf('THE CHECK BEHIND THIS ASK') < out.indexOf(COSTLY_ASK),
+    'the proof comes first, then the ask that rests on it, last');
   assert.ok(out.includes('{"plans":[{"plan_name":"Free Forever"}]} 200'),
     'the pasted output reaches the card verbatim');
 });

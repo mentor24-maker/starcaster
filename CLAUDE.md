@@ -308,6 +308,46 @@ person standing on it knows whether he is finished. A pause that outlives two
 hours announces itself on the bus and keeps saying so hourly, because a pause
 nobody remembers looks exactly like a pipeline that has broken.
 
+## The fast-track lane — "Let's fast track <ticket-id>"
+
+Said at the start of a session, that sentence is a **complete instruction**
+(Dane, 2026-08-30): run the human lane end to end, and end the session with a
+clean merge. It is the loop's job done by hand, not a way around the loop's
+guards — every check below is one the loops also run. Full version, with the
+incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
+
+1. `npm run pipeline -- check` — exit 3 means stop; say so once.
+2. Read the ticket **and its comments**. On a send-back, the review notes ARE
+   the job; the description is context.
+3. Claim it: `npm run clickup -- status --task <id> --status Building
+   --if-status Queued`. **Priority is not a guard** — only status is, and
+   only `--if-status` makes the claim atomic. Leave the priority alone.
+4. `npm run clickup -- build-start --task <id>` — exit 3 means a branch
+   already exists; work on THAT branch (`git worktree add
+   .claude/worktrees/<topic> -b <branch> origin/<branch>`, then `npm ci`,
+   `npm run build`, `npm run env:local`, and stamp
+   `git config branch.<branch>.clickup-task <id>`). Otherwise
+   `npm run thread <topic> <id>`.
+5. **On a send-back, merge `origin/main` in BEFORE touching a line.** The fix
+   review asked for may already have landed on `main` under another name —
+   on 2026-08-30 it had, and reworking first cost a conflict (`docs/DOCTRINE.md`
+   §6.7).
+6. Build. Every Definition-of-done gate, and break each fix on purpose —
+   revert it, watch the named test fail, restore it.
+7. `npm run ship`. **No pause to merge**: merges never collide with the
+   loops, `pause` drains for up to half an hour, and a pause older than two
+   hours nags the bus hourly. `ship` re-runs the gates, pushes, waits for CI,
+   merges and tidies; if it stops on a conflict, resolve by hand and run it
+   again.
+8. Ticket to Live with the closing note (gates, live probe, what was
+   break-tested); `npm run tidy`; one line on the bus.
+
+A ticket already **In review** with an open PR is the review half of this
+lane: skip the claim in step 3 (never drag it back to `Building`), do steps
+4–8 on the existing branch, re-run the gates on the *merged* code yourself, and
+close with `--if-status "in review"`. A job another machine owns (`bus-relay`)
+exits 0 here having tested nothing — rehearse it on the owning machine.
+
 ## One thread, one topic, one session
 
 A worktree keeps two threads from corrupting each other's files. It does
