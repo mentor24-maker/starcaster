@@ -250,6 +250,20 @@ function perDay(dates, from, to) {
   return [...counts.entries()].map(([date, count]) => ({ date, count }));
 }
 
+/**
+ * A date `days` away from `from`, as YYYY-MM-DD.
+ *
+ * Used to widen a range before asking GitHub for it: `--created` is dated in
+ * UTC and this report's window is the operator's local day, so the two can
+ * disagree by a few hours at each edge. Asking wide and deciding precisely on
+ * the timestamps afterwards is the cheap way to be right at the boundary.
+ */
+function shiftDate(from, days) {
+  const d = new Date(`${from}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) throw new Error(`shiftDate: "${from}" is not a YYYY-MM-DD date`);
+  return new Date(d.getTime() + Math.round(Number(days) || 0) * 86400000).toISOString().slice(0, 10);
+}
+
 /** The window a report covers: `days` days ending on `to`, inclusive. */
 function windowRange(to, days) {
   const n = Math.max(1, Math.round(Number(days) || 7));
@@ -306,6 +320,43 @@ function renderConfirmationCaution(figure) {
     '      <code>main</code> in this window could not be confirmed with GitHub, so they are',
     '      NOT counted above — and every figure derived from the merge list is short by the',
     '      same amount. Treat the number as a floor, not a total.',
+    '    </p>',
+  ].join('\n');
+}
+
+/**
+ * What the median CI figure is a median OF.
+ *
+ * A bare duration invites the reader to assume it covers the window. It only
+ * does when the slice reached the whole window, so the tile says which it is
+ * either way rather than only speaking up in the bad case.
+ */
+function ciMedianNote(figure) {
+  if (!figure || figure.ok !== true) return '';
+  if (figure.partial) {
+    return `median of the ${figure.limit} most recent runs GitHub would return — the window holds more`;
+  }
+  const n = Number(figure.sampleSize || 0);
+  return `across ${n} successful run${n === 1 ? '' : 's'}`;
+}
+
+/**
+ * A visible warning when the checkout's `main` was never refreshed.
+ *
+ * The merge count, the diffstat and the per-day chart are all read out of
+ * `origin/main` as this machine last saw it. If the fetch failed, all three are
+ * short by however much has landed since — and short in a way that looks
+ * exactly like a quiet week. Same amber box as an unread figure, because that
+ * is what these are.
+ */
+function renderStaleOriginCaution(fetchResult) {
+  if (!fetchResult || fetchResult.ok !== false) return '';
+  return [
+    '    <p class="unread">',
+    '      The local copy of <code>main</code> could not be refreshed before these figures were',
+    `      gathered (${esc(fetchResult.reason || 'no reason given')}). Anything merged since this`,
+    '      machine last fetched is missing from the merge count, the lines-changed figures and',
+    '      the chart. Treat all of them as a floor.',
     '    </p>',
   ].join('\n');
 }
@@ -470,11 +521,12 @@ ${tile('Files touched', f.diffstat, (v) => String(v.filesChanged))}
 ${tile('Lines added', f.diffstat, (v) => `+${v.insertions}`)}
 ${tile('Lines removed', f.diffstat, (v) => `-${v.deletions}`)}
 ${tile('Tests passing', f.tests, (v) => (v.fail ? `${v.pass} pass, ${v.fail} fail` : String(v.pass)), 'npm run test:builder')}
-${tile('Median CI run', f.ciMedianSeconds, (v) => formatDuration(v))}
+${tile('Median CI run', f.ciMedianSeconds, (v) => formatDuration(v), ciMedianNote(f.ciMedianSeconds), Boolean(f.ciMedianSeconds && f.ciMedianSeconds.ok && f.ciMedianSeconds.partial))}
 ${tile('Pull requests open now', f.openPrs, (v) => String(v))}
 ${tile('Unattended loop passes', f.loopPasses, (v) => String(v.total), 'a labelled proxy for machine time — quota itself is unreadable from the repo')}
     </div>
 ${renderConfirmationCaution(f.merges)}
+${renderStaleOriginCaution(d.originFetch)}
 
     <h2>Where the tickets are</h2>
 ${renderStages(f.stages)}
@@ -547,6 +599,7 @@ module.exports = {
   STAGE_ORDER,
   areaForMerge,
   areaForPath,
+  ciMedianNote,
   dataPathFor,
   daysBetween,
   esc,
@@ -566,5 +619,7 @@ module.exports = {
   renderIndexHtml,
   renderReportHtml,
   renderStages,
+  renderStaleOriginCaution,
+  shiftDate,
   windowRange,
 };

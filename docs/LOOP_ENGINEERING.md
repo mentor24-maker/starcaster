@@ -806,15 +806,52 @@ Two figures are honest in a particular way worth knowing about:
     still open. The check is GitHub's own state, and a test pins it with a
     fixture containing an open PR.
 
+### Two ways a figure can be short, and what the page does about it
+
+The honesty rule is easy to state and easy to break from a new direction. Every
+one of these was a number that *was* read, was incomplete, and printed as though
+it were whole — which is worse than a gap, because a gap is visible.
+
+*   **The window must be a week that has finished.** `--window 7` alone means
+    "the 7 days ending *today*". Fired Monday 07:00 that covers up to 07:00, and
+    the next edition starts Tuesday — so Monday daytime lands in **no edition at
+    all**, and nothing says so. On real history since 1 July that is 70 of 107
+    Monday merges. It also drew the last chart bar from 7 hours of Monday at the
+    same width as the six whole days beside it, which read as a slow Monday every
+    week. The wrapper therefore runs `--as-of yesterday`.
+*   **A slice must reach the whole window, or say that it did not.** The CI
+    median used to take the 200 most recent runs and median whatever fell inside
+    the window. On this repo 200 runs reaches back under six days: for the week
+    ending 2026-08-30 that was **190 of the 282** successful runs in the window,
+    printed as a bare `1m27s`. It now asks GitHub for the range itself
+    (`gh run list --created <from>..<to>`) and proves its own completeness —
+    fewer rows back than the limit means GitHub had no more to give. Hitting the
+    limit tints the tile and says so on it.
+*   **A count needs a ceiling as well as a floor.** `stage-counts --since` alone
+    counted tickets closed from the window start *until now*, so a report on an
+    older week credited itself with closures that happened days after it ended.
+    It takes `--until` now, and refuses a ceiling with no floor.
+*   **`origin/main` is fetched before anything is read out of it.** The merge
+    count, both lines-changed figures and the chart all come from it, and the
+    wrapper's self-update skips on four separate conditions — on every one of
+    those paths the local `origin/main` is however stale it happened to be. A
+    failed fetch is now an amber box on the page, not silence.
+
 ### Running it
 
 ```bash
 node scripts/weekly_report.mjs                 # 7 days ending today
 node scripts/weekly_report.mjs --window 14
 node scripts/weekly_report.mjs --as-of 2026-08-24   # reproduce an old edition
-node scripts/weekly_report.mjs --out /tmp/x.html
+node scripts/weekly_report.mjs --out /tmp/x.html    # just look at one
 node scripts/weekly_report.mjs --publish       # + branch, commit, PR, ticket
 ```
+
+**`--out` and `--publish` do not combine, and the script refuses the pair.**
+Publishing copies the report into a throwaway worktree by its path *relative to
+the repo*: an `--out` inside `docs/reports/` makes that a copy of the file onto
+itself, and an `--out` anywhere else makes it a relative path that climbs out of
+the worktree altogether. Use one or the other.
 
 Running it twice for the same window produces a byte-identical file — nothing
 on the page comes from a clock except the window it was asked for, which is an
@@ -827,6 +864,7 @@ input. That is a property of the renderer, pinned by a test, not luck.
 | Job | `weekly-report` in `lib/nodeRoles.js` |
 | Owner | **mac-mini** |
 | When | Mondays 07:00 local |
+| Window | the **finished** week — `--as-of yesterday --window 7`, i.e. Monday to Sunday |
 | Wrapper | `scripts/run_weekly_report.sh` |
 | Install | `./scripts/install_weekly_report.sh` (`--status`, `--uninstall`) |
 | Log | `~/Library/Logs/weekly-report.log` |

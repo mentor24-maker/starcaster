@@ -52,6 +52,39 @@ loose files in it, decided somebody was working there, and skipped updating
 itself — forever, since the files were never going to move on their own. It
 tidies up after itself now, and there is a test that sets up that exact mess and
 fails if the job goes back to sleep on it.
+
+A second review pass found six more, and five of them were the same promise
+broken from five new directions — a number that was short, printed as though it
+were the whole story. The worst was the schedule itself. Running "the last seven
+days" every Monday at 7am means each edition stops at 7am and the next one picks
+up from Tuesday, so everything that happened on Monday during the day fell into
+no report at all. Nobody would ever have noticed, because from the report's point
+of view that time simply never existed — and it is not a rounding error: since
+the start of July that is 70 of the 107 things that shipped on a Monday. It also
+drew Monday's bar on the chart from seven hours of the day at the same width as
+the six full days beside it, so every single week would have looked like it ended
+on a slow note. The report now covers the week that has actually finished,
+Monday through Sunday.
+
+The second was the "how long does the build take" figure. It was asking GitHub
+for the 200 most recent runs and measuring whichever of those fell inside the
+week — but this repo now runs so much more than it used to that 200 runs only
+reaches back about five and a half days. For the week just gone it was measuring
+190 of the 282 runs that actually happened and printing the answer as if it
+covered all seven days. It now asks GitHub for the week by date instead of taking
+whatever is recent, and it can tell when it has been given everything — if it
+ever cannot see far enough, it says so on the tile rather than printing a
+confident number. The other four are smaller and the same shape: a count of
+finished tickets that had a start date but no end date, so it kept crediting a
+week with things closed days later; two scratch files written into the project
+folder that, if a run were ever killed halfway, would have left the folder
+looking "in use" and quietly stopped the Monday job updating itself again; the
+report reading the project history without refreshing it first, which made three
+separate figures silently short; and two settings that could be combined to write
+the report somewhere nobody intended. Each one now has a test that fails if it
+comes back, and each of those tests was deliberately broken first to check it was
+capable of failing at all.
+
 ## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
 
 You said you needed an emergency shutdown that clears the decks so you can run

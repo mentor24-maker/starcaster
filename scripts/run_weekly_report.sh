@@ -73,11 +73,37 @@ if [ -n "${WEEKLY_REPORT_UPDATE_ONLY:-}" ]; then
   exit 0
 fi
 
+# THE WINDOW IS THE WEEK THAT HAS FINISHED, NOT THE ONE WE ARE STANDING IN.
+#
+# `--window 7` on its own means "the 7 days ending TODAY". Fired Monday 07:00
+# that covers up to Monday 07:00, and the next edition starts Tuesday — so
+# everything merged between Monday 07:00 and Monday midnight lands in no edition
+# at all, and nothing says so, because from the report's point of view that time
+# never existed. On real history since 1 July that is 70 of 107 Monday merges,
+# and Monday afternoon is not a quiet part of the week:
+#
+#   git log origin/main --since=2026-07-01 --format='%ad' \
+#     --date=format:'%u %H:%M' | awk '$1==1'
+#
+# It also drew the last bar of the per-day chart from 7 hours of Monday at the
+# same width as the six whole days beside it, which reads as a slow Monday every
+# single week.
+#
+# `--as-of yesterday` makes the window Monday-to-Sunday: a week that has
+# actually finished, nothing missed, no partial day on the chart.
+as_of="$(date -v-1d +%F 2>/dev/null || date -d 'yesterday' +%F)"
+if [ -z "$as_of" ]; then
+  echo "could not work out yesterday's date — refusing to report on a partial week"
+  echo "=== exit 1"
+  exit 1
+fi
+echo "window: the 7 days ending $as_of (the week that has finished)"
+
 # --publish is what makes this a scheduled job rather than a local command: it
 # commits the report to a branch, opens the pull request and files the ticket
 # for the narrative pass. It refuses on any machine that does not own the role,
 # which is why the schedule is harmless if it is ever installed in two places.
-node scripts/weekly_report.mjs --window 7 --publish
+node scripts/weekly_report.mjs --as-of "$as_of" --window 7 --publish
 status=$?
 echo "=== exit $status"
 exit $status

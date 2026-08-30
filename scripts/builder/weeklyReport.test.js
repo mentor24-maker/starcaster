@@ -508,3 +508,155 @@ test('the self-update survives the output the job itself leaves behind', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+// ── The six defects the second review pass found ───────────────────────────
+//
+// Five of them are one rule broken from five directions, and it is the same
+// rule as the round before: a number that is SHORT must never be printed as
+// though it were whole. The sixth is a flag combination that quietly writes
+// outside the folder it means to write in.
+
+test('the schedule reports on a week that has finished, not the one we are standing in', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'run_weekly_report.sh'), 'utf8');
+  // `--window 7` alone means "the 7 days ending TODAY". Fired Monday 07:00 it
+  // stops at 07:00 and the next edition starts Tuesday, so Monday daytime falls
+  // into no edition at all — 70 of 107 Monday merges since 1 July, silently.
+  const invocation = src.split('\n').find((l) => l.includes('weekly_report.mjs') && !l.trimStart().startsWith('#'));
+  assert.ok(invocation, 'the wrapper must actually run the report, or this proves nothing');
+  assert.match(invocation, /--as-of/, 'the scheduled run must pin the window to a finished day');
+  assert.ok(!/--as-of\s+"?\$\(date \+%F\)/.test(invocation), 'ending the window today is the defect itself');
+  // And the day it pins to has to be worked out, not assumed present.
+  assert.match(src, /date -v-1d \+%F/, 'yesterday is computed from the clock');
+  assert.match(src, /refusing to report on a partial week/, 'and a clock it cannot read stops the run rather than silently reporting a short week');
+});
+
+test('shiftDate moves a date by whole days, at the boundary too', () => {
+  assert.equal(R.shiftDate('2026-08-30', -1), '2026-08-29');
+  assert.equal(R.shiftDate('2026-08-30', 1), '2026-08-31');
+  assert.equal(R.shiftDate('2026-09-01', -1), '2026-08-31', 'across a month');
+  assert.equal(R.shiftDate('2026-01-01', -1), '2025-12-31', 'across a year');
+  assert.throws(() => R.shiftDate('not-a-date', 1), /not a YYYY-MM-DD date/);
+});
+
+test('the CI median asks GitHub for the window rather than trimming a recent slice', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const fn = src.slice(src.indexOf('function gatherCiMedian'), src.indexOf('function gatherOpenPrs'));
+  // The old version asked for the 200 most recent runs and medianed whatever
+  // fell inside the window. On this repo 200 runs reaches back under six days
+  // against a seven-day window: 466 runs in the window, 200 read, and the page
+  // printed a bare "1m27s" for it.
+  assert.match(fn, /'--created'/, 'the range is asked of GitHub, not trimmed afterwards');
+  assert.match(fn, /shiftDate/, 'and widened a day each side, because --created is UTC-dated');
+  // It must be able to tell a complete answer from a cut-off one.
+  assert.match(fn, /truncated/, 'it decides whether the slice covered the window');
+  assert.match(fn, /partial: truncated/, 'and carries that verdict onto the figure');
+});
+
+test('a CI median taken from a partial slice cannot print as a bare number', () => {
+  const partial = R.ok(87, { sampleSize: 200, partial: true, limit: 1000 });
+  const note = R.ciMedianNote(partial);
+  assert.match(note, /1000/, 'the note names how far it could see');
+  assert.match(note, /the window holds more/, 'and says plainly that it is short');
+
+  const whole = R.ok(87, { sampleSize: 466, partial: false, limit: 1000 });
+  assert.match(R.ciMedianNote(whole), /across 466 successful runs/);
+  assert.ok(!/holds more/.test(R.ciMedianNote(whole)), 'a complete median must not warn about nothing');
+
+  // And the tint reaches the page, not just the small print. Match the TILE,
+  // not the page: `tile--partial` is also in the stylesheet, so a page-wide
+  // search finds it whether or not anything is actually tinted — an assertion
+  // that cannot fail. It caught itself on the first run.
+  const w = { from: '2026-08-23', to: '2026-08-29', days: 7 };
+  const tinted = /<div class="tile tile--partial">/;
+  assert.match(R.renderReportHtml({ window: w, figures: { ciMedianSeconds: partial } }), tinted,
+    'a short median is tinted like the short merge count is');
+  assert.ok(!tinted.test(R.renderReportHtml({ window: w, figures: { ciMedianSeconds: whole } })),
+    'and a complete one is not, or the tint means nothing');
+});
+
+test('"nothing ran" and "we could not see that far back" are different sentences', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const fn = src.slice(src.indexOf('function gatherCiMedian'), src.indexOf('function gatherOpenPrs'));
+  // An empty median used to say "no successful CI runs finished inside the
+  // window" whether the week was quiet or the slice never reached it. One of
+  // those is a fact about the week; the other is a fact about the lookup.
+  assert.match(fn, /no successful CI runs finished inside the window/, 'the genuinely quiet week still says so');
+  const truncatedBranch = fn.slice(fn.indexOf('if (med === null)'));
+  assert.match(truncatedBranch, /may not cover the window/, 'and an unreachable window says THAT instead');
+});
+
+test('a checkout whose main was never refreshed says so on the page', () => {
+  const stale = R.renderStaleOriginCaution({ ok: false, reason: 'could not reach origin' });
+  assert.match(stale, /could not be refreshed/, 'the reader is told');
+  assert.match(stale, /could not reach origin/, 'and given the reason');
+  assert.match(stale, /class="unread"/, 'in the same amber box an unread figure gets');
+  assert.equal(R.renderStaleOriginCaution({ ok: true, reason: null }), '', 'a good fetch says nothing');
+  assert.equal(R.renderStaleOriginCaution(null), '', 'and a missing verdict does not invent a warning');
+
+  const page = R.renderReportHtml({
+    window: { from: '2026-08-23', to: '2026-08-29', days: 7 },
+    figures: {},
+    originFetch: { ok: false, reason: 'network is down' },
+  });
+  assert.match(page, /network is down/, 'and it reaches the rendered page, not just the helper');
+});
+
+test('the gatherer fetches origin/main before reading any figure out of it', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  // The merge count, both lines-changed figures and the chart all read
+  // origin/main. The wrapper's self-update skips on four separate conditions,
+  // and on every one of them origin/main is however stale it happened to be.
+  const fetchAt = src.indexOf("run('git', ['fetch', 'origin', 'main'");
+  assert.ok(fetchAt > 0, 'it fetches origin/main');
+  const gatherAt = src.indexOf('mergeResult = gatherMerges()');
+  assert.ok(gatherAt > 0 && fetchAt < gatherAt, 'and does it BEFORE gathering, or the fetch is decoration');
+  assert.match(src, /originFetch: \{ ok:/, 'the verdict is recorded in the data file');
+  assert.match(src, /NOT fetched/, 'and a failed fetch is loud in the log too');
+});
+
+test('the scratch files it writes cannot wedge the checkout', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  // These used to be written to the repo root and unlinked on the way out. A
+  // run killed mid-publish left one behind untracked, `git status --porcelain`
+  // was non-empty from then on, and the wrapper's self-update skipped every
+  // week after — the same deadlock the docs/reports/ cleanup was added to fix,
+  // arriving through a second door.
+  const writes = src.split('\n').filter((l) => /writeFileSync/.test(l) && !l.trimStart().startsWith('*'));
+  assert.ok(writes.length > 0, 'it does write files, or this assertion proves nothing');
+  for (const line of writes) {
+    assert.ok(!/path\.join\(REPO, '\./.test(line), `a scratch file at the repo root came back: ${line.trim()}`);
+  }
+  assert.match(src, /os\.tmpdir\(\)/, 'scratch files go somewhere the repo has no opinion about');
+  assert.ok(!/'\.weekly-report-ticket\.md'/.test(src), 'the old root ticket path is gone');
+  assert.ok(!/'\.weekly-report-bus\.md'/.test(src), 'the old root bus path is gone');
+});
+
+test('the closed-ticket count is bounded at BOTH ends', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const fn = src.slice(src.indexOf('function gatherStages'), src.indexOf('function gatherLoopPasses'));
+  // With only a floor, "closed in the window" ran from the window start until
+  // NOW — so a report for a week ending the 25th counted tickets closed on the
+  // 28th. Correct for a window ending today, wrong for every --as-of.
+  assert.match(fn, /'--since', WINDOW\.from/, 'the floor is the window start');
+  assert.match(fn, /'--until', WINDOW\.to/, 'and the ceiling is the window END, not today');
+
+  const cli = fs.readFileSync(path.resolve(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+  const cmd = cli.slice(cli.indexOf("cmd === 'stage-counts'"), cli.indexOf("cmd === 'get'"));
+  assert.match(cmd, /closedAt >= cutoff && closedAt <= ceiling/, 'and stage-counts honours both');
+  assert.match(cmd, /--until needs --since/, 'a ceiling with no floor is refused rather than ignored');
+  // The range is worked out before the fetch, so a typo costs no API budget.
+  assert.ok(cmd.indexOf('--until needs --since') < cmd.indexOf('await fetchAllTasks'), 'the dates are validated before ClickUp is called');
+});
+
+test('--out and --publish refuse to combine', () => {
+  // Publishing copies the report into a throwaway worktree by its path RELATIVE
+  // TO THE REPO. An --out inside docs/reports/ is a copy onto itself; an --out
+  // anywhere else is a relative path that climbs out of the worktree entirely.
+  const res = spawnSync(process.execPath, [
+    path.resolve(__dirname, '..', 'weekly_report.mjs'), '--out', path.join(os.tmpdir(), 'x.html'), '--publish',
+  ], { encoding: 'utf8', timeout: 60000 });
+  assert.equal(res.status, 2, `expected a refusal, got ${res.status}: ${res.stderr || res.stdout}`);
+  assert.match(res.stderr, /do not combine/, 'and it says why in words');
+  // It must refuse BEFORE doing any work — no branch, no PR, no ticket.
+  assert.ok(!/Pull request:/.test(res.stdout + res.stderr), 'it stopped before publishing anything');
+});

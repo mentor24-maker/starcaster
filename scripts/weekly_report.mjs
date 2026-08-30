@@ -39,6 +39,7 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -53,6 +54,11 @@ const REPORTS_DIR = path.join(REPO, 'docs', 'reports');
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 const GH_REPO = 'mentor24-maker/starcaster';
+// How many CI runs to ask GitHub for. Big enough that a normal week comes back
+// whole — this repo ran 466 in one seven-day window — and finite so that a
+// runaway range cannot hang the Monday job. Reaching it is not silently
+// tolerated: see gatherCiMedian.
+const CI_RUN_LIMIT = 1000;
 
 // ── Arguments ──────────────────────────────────────────────────────────────
 
@@ -76,6 +82,24 @@ if (flag('help')) {
 Figures only. The narrative is a person's job — see the ticket in the Loop Queue
 this run files, or write it straight onto the page.`);
   process.exit(0);
+}
+
+// --out AND --publish DO NOT COMBINE, and the reason is not tidiness.
+// Publishing copies the report into a throwaway worktree using its path
+// RELATIVE TO THE REPO. An --out inside docs/reports/ makes that a copy of the
+// file onto itself; an --out anywhere else makes it a relative path that climbs
+// out of the worktree entirely (`../../tmp/x.html`), writing who-knows-where or
+// failing with a message about a directory nobody asked for. Neither is a thing
+// to leave for a Monday morning. Use --out to look at a report, --publish to
+// ship one.
+if (flag('publish') && arg('out')) {
+  console.error('--out and --publish do not combine.\n');
+  console.error('Publishing copies the report into docs/reports/ on a branch of its own, so it has');
+  console.error('to know where inside the repo the file belongs. An --out path is somewhere else by');
+  console.error('definition. Run one or the other:');
+  console.error('  node scripts/weekly_report.mjs --out /tmp/look.html     # just look at it');
+  console.error('  node scripts/weekly_report.mjs --publish                # branch, PR, ticket');
+  process.exit(2);
 }
 
 const WINDOW_DAYS = Math.max(1, Number(arg('window', '7')) || 7);
@@ -113,6 +137,32 @@ function run(cmd, args, { cwd = REPO, timeout = 300000, allowFail = false } = {}
     return { ok: false, reason: `\`${shown}\` exited ${res.status}${detail ? `: ${detail}` : ''}`, stdout: res.stdout || '', stderr: res.stderr || '' };
   }
   return { ok: true, stdout: res.stdout || '', stderr: res.stderr || '', status: res.status };
+}
+
+/**
+ * A scratch file for a command that only takes `--body-file`, written OUTSIDE
+ * the repo.
+ *
+ * These used to be written to the repo root and unlinked on the way out. That
+ * works right up until a run is killed mid-publish, or `run()` throws before
+ * the unlink — and then an untracked `.weekly-report-ticket.md` sits at the
+ * root forever. `git status --porcelain` is non-empty from then on, so the
+ * wrapper's self-update skips every week, and the machine quietly runs frozen
+ * code: the exact deadlock the docs/reports/ cleanup was added to fix, coming
+ * back through a second door. A file the repo cannot see cannot wedge it, so
+ * the fix is to put them somewhere the repo has no opinion about rather than to
+ * remember to delete them.
+ */
+function scratchFile(name, contents) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-report-'));
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, contents);
+  return {
+    path: file,
+    cleanup() {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) { /* best effort */ }
+    },
+  };
 }
 
 /** A figure whose gathering threw rather than failing cleanly still says why. */
@@ -289,7 +339,15 @@ function gatherTests() {
 }
 
 function gatherCiMedian() {
-  const res = run('gh', ['run', 'list', '--repo', GH_REPO, '--limit', '200', '--json', 'startedAt,updatedAt,conclusion'], { timeout: 120000 });
+  const from = Date.parse(`${WINDOW.from}T00:00:00Z`);
+  const to = Date.parse(`${WINDOW.to}T23:59:59Z`);
+  // Ask GitHub for the WINDOW, do not trim a recent slice down to it. A day of
+  // slack each side because --created is dated in UTC while the window is the
+  // operator's local day; the exact in-or-out decision is made below, on the
+  // timestamps.
+  const created = `${R.shiftDate(WINDOW.from, -1)}..${R.shiftDate(WINDOW.to, 1)}`;
+  const res = run('gh', ['run', 'list', '--repo', GH_REPO, '--created', created,
+    '--limit', String(CI_RUN_LIMIT), '--json', 'startedAt,updatedAt,conclusion'], { timeout: 300000 });
   if (!res.ok) return R.notAvailable(res.reason);
   let runs;
   try {
@@ -297,16 +355,30 @@ function gatherCiMedian() {
   } catch (err) {
     return R.notAvailable(`GitHub's run list did not parse as JSON (${err.message})`);
   }
-  const from = Date.parse(`${WINDOW.from}T00:00:00Z`);
-  const to = Date.parse(`${WINDOW.to}T23:59:59Z`);
+  if (!Array.isArray(runs)) return R.notAvailable("GitHub's run list was not a list of runs");
+
+  // THE ANSWER PROVES ITS OWN COMPLETENESS. Fewer rows than the limit means
+  // GitHub had no more to give for this range, so the slice IS the window.
+  // Exactly the limit means it may have been cut off, and that gets said out
+  // loud rather than absorbed into a confident number.
+  const truncated = runs.length >= CI_RUN_LIMIT;
+
   const seconds = runs
     .filter((r) => r && r.conclusion === 'success')
     .map((r) => ({ start: Date.parse(r.startedAt), end: Date.parse(r.updatedAt) }))
     .filter((r) => Number.isFinite(r.start) && Number.isFinite(r.end) && r.start >= from && r.start <= to && r.end >= r.start)
     .map((r) => (r.end - r.start) / 1000);
   const med = R.median(seconds);
-  if (med === null) return R.notAvailable('no successful CI runs finished inside the window');
-  return R.ok(med, { sampleSize: seconds.length });
+  if (med === null) {
+    // "Nothing ran that week" and "we could not see that far back" are
+    // different answers and must never share a sentence. The old code gave
+    // both of them the same one, which read as a quiet week.
+    if (truncated) {
+      return R.notAvailable(`GitHub returned the full ${CI_RUN_LIMIT} runs it was asked for, so this slice may not cover the window — no median is reported rather than one taken from a partial view`);
+    }
+    return R.notAvailable('no successful CI runs finished inside the window');
+  }
+  return R.ok(med, { sampleSize: seconds.length, partial: truncated, limit: CI_RUN_LIMIT });
 }
 
 function gatherOpenPrs() {
@@ -320,7 +392,10 @@ function gatherOpenPrs() {
 }
 
 function gatherStages() {
-  const res = run('npm', ['run', '--silent', 'clickup', '--', 'stage-counts', '--list', LOOP_QUEUE_LIST, '--since', WINDOW.from], { timeout: 180000 });
+  // --until as well as --since. With only a floor, "closed in the window"
+  // counted everything closed from the window start UNTIL NOW, so a report for
+  // an older week credited itself with tickets closed days after it ended.
+  const res = run('npm', ['run', '--silent', 'clickup', '--', 'stage-counts', '--list', LOOP_QUEUE_LIST, '--since', WINDOW.from, '--until', WINDOW.to], { timeout: 180000 });
   if (!res.ok) return R.notAvailable(res.reason);
   try {
     const json = JSON.parse(res.stdout.slice(res.stdout.indexOf('{')));
@@ -520,12 +595,11 @@ Write the narrative sections onto the page — the parts a script must not inven
 The page reads as a report rather than a dashboard, and no figure was changed —
 the numbers are the script's, the words are yours.`;
 
-  const tmp = path.join(REPO, '.weekly-report-ticket.md');
-  fs.writeFileSync(tmp, body);
+  const scratch = scratchFile('ticket.md', body);
   const res = run('npm', ['run', '--silent', 'clickup', '--', 'task',
     '--list', LOOP_QUEUE_LIST, '--name', `Weekly report: ${WINDOW.from} to ${WINDOW.to} — write the narrative`,
-    '--body-file', tmp, '--status', 'Queued', '--priority', 'normal'], { timeout: 180000 });
-  try { fs.unlinkSync(tmp); } catch (_) { /* best effort */ }
+    '--body-file', scratch.path, '--status', 'Queued', '--priority', 'normal'], { timeout: 180000 });
+  scratch.cleanup();
   if (!res.ok) {
     bus(`Weekly report opened ${prUrl} but could not file the narrative ticket: ${res.reason}`);
     console.error(`Could not file the narrative ticket: ${res.reason}`);
@@ -540,15 +614,15 @@ the numbers are the script's, the words are yours.`;
  * down, that must not turn a partial success into a crash.
  */
 function bus(message) {
-  const tmp = path.join(REPO, '.weekly-report-bus.md');
+  let scratch = null;
   try {
-    fs.writeFileSync(tmp, `[CC-starcaster] ${message}`);
-    const res = run('npm', ['run', '--silent', 'clickup', '--', 'chat', '--channel', BUS_CHANNEL, '--body-file', tmp], { timeout: 120000, allowFail: true });
+    scratch = scratchFile('bus.md', `[CC-starcaster] ${message}`);
+    const res = run('npm', ['run', '--silent', 'clickup', '--', 'chat', '--channel', BUS_CHANNEL, '--body-file', scratch.path], { timeout: 120000, allowFail: true });
     if (!res.ok) console.error(`(could not reach the bus either: ${res.reason})`);
   } catch (err) {
     console.error(`(could not reach the bus either: ${err.message})`);
   } finally {
-    try { fs.unlinkSync(tmp); } catch (_) { /* best effort */ }
+    if (scratch) scratch.cleanup();
   }
 }
 
@@ -573,6 +647,20 @@ function writeIndex() {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 process.stderr.write(`Weekly figures for ${WINDOW.from} to ${WINDOW.to} (${WINDOW.days} days)\n`);
+
+// FETCH BEFORE READING origin/main, AND SAY SO IF IT FAILED.
+//
+// The merge count, both lines-changed figures and the per-day chart are all
+// read out of `origin/main` as this machine last saw it — and nothing used to
+// refresh it. The wrapper's self-update is deliberately timid and skips on any
+// of four conditions; on every one of those paths origin/main is however stale
+// it happened to be, and all four figures go short with nothing on the page
+// marked unread. That is the honesty rule's exact failure mode: a number that
+// is a floor, printed as a total.
+const originFetch = run('git', ['fetch', 'origin', 'main', '--quiet'], { timeout: 300000 });
+process.stderr.write(originFetch.ok
+  ? '  origin/main: fetched\n'
+  : `  origin/main: NOT fetched — ${originFetch.reason}\n`);
 
 // Merges are gathered apart from the rest because they produce two things:
 // the figure, and the list every other section is built from. Reporting on it
@@ -606,6 +694,7 @@ const data = {
   repo: GH_REPO,
   window: WINDOW,
   dataFile: path.basename(OUT_JSON),
+  originFetch: { ok: originFetch.ok === true, reason: originFetch.ok ? null : originFetch.reason },
   figures,
   merges: confirmed.map(({ number, title, date, sha, area }) => ({ number, title, date, sha, area })),
   groups: R.groupMergesByArea(confirmed).map((g) => ({
