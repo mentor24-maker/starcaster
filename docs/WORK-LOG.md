@@ -47,6 +47,409 @@ they are the failure this whole thing exists to prevent: a check that cries wolf
 gets skimmed past, and then the day it means something, it gets skimmed past
 then too.
 
+## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
+
+You said you needed an emergency shutdown that clears the decks so you can run
+a priority job through yourself. What was actually missing was a *lane*: there
+was the slow, careful one — spec, build, independent review, your merge, about
+a day — and there was nothing else. So whenever something was urgent, the only
+way to move was to step outside the whole system, into the one place where none
+of the safety rules apply.
+
+There is now a switch. `npm run pipeline -- pause` tells every machine to stop
+taking new work, and then **waits** for anything already half-built to finish
+before it tells you the decks are clear — it never just yanks the plug, because
+a job killed halfway through leaves its ticket stuck in a place nothing ever
+looks at again. That has already happened twice this month. If you do not want
+to wait, `--now` stops instantly and names exactly what it left running, and
+when you resume, anything that got stranded is put back in the line with a note
+for whoever picks it up.
+
+The important part is who listens. A pause the robots respected but people
+ignored would not have prevented the thing that caused this: that was an
+ordinary working session, not a robot, and it would never have thought to
+check. So the switch lives in ClickUp, where everything already looks, and the
+instruction to check it is written into the file every session reads when it
+starts. If the switch cannot be read at all — ClickUp down, network out — the
+answer is "paused", deliberately: working while you have the deck can wreck
+what you are doing, while stopping when you have not costs some idle time and a
+message on screen.
+
+Anyone can pause the line, because stopping is a safety move. Only you can
+start it again. And if a pause is still on after two hours it says so on the
+party line and keeps saying so every hour, because a pipeline that is paused
+and a pipeline that is broken look identical from the outside — which is
+exactly the confusion that cost most of today.
+
+The independent check on this work found two holes in it before it shipped, and
+both are worth knowing about because they are the same shape. The switch keeps
+its state as a note on a ClickUp ticket, and the hourly "still paused" reminder
+is *also* a note on that same ticket — and ClickUp only hands back the newest
+twenty-five. So after about a day of reminders, the reminders had pushed the
+original "PAUSED" note out of sight, the machines could no longer find it, and
+they would have quietly gone back to work while you still had the deck. The two
+best features cancelled each other out, overnight, in the one place that was
+supposed to be careful. It now reads the *whole* history, and separately, a
+reminder with no pause behind it is treated as "I could not read this properly"
+rather than "nothing to see" — because a reminder only ever gets written while
+the line is off, so seeing one alone proves something is missing.
+
+The second was smaller and would have hit you first: every command written down
+here was missing two characters. `npm run` quietly swallows anything starting
+with a dash unless you put `--` in front, so typing the resume command exactly
+as documented got you told off for leaving out the very word you had just
+typed. Every command in every document now has it, and there is a check that
+fails if one ever loses it again.
+## 2026-08-25 — An agent that asks you to spend money now has to show its work (#436)
+
+A few days ago one of the agents came to you with a confident recommendation:
+put the ClickUp workspace back on a paid plan. It had good-looking reasons. The
+chat channel had been refusing to accept messages for sixteen hours, a separate
+write had failed with an error mentioning plan limits, and the account did read
+back as being on the free tier. Three facts, one tidy story.
+
+The story was wrong. Checked again a few hours later — same account, same free
+plan, nothing changed — every one of those things worked fine. The outage had
+been temporary and had already cleared on its own. Paying would have fixed
+nothing.
+
+The bad guess is not really the problem; a guess like that is reasonable on a
+day when two things break at once. The problem is that it got all the way to
+your wallet without anybody re-running the thing that had been failing. That
+would have taken one command and about ten seconds, and the moment of coming to
+you is exactly when it is still cheap to check and already expensive to be
+wrong.
+
+So the request itself now demands the proof. When an agent writes you a card
+that asks you to spend, buy, subscribe, upgrade, change a plan, rotate a
+password or delete something, it simply will not post unless the card also
+carries the command it ran, what that command actually printed, and the time it
+ran it. Not a summary of the output — the output. And the time shows up in the
+heading you read, so evidence gathered before an outage cannot quietly pass
+itself off as evidence about right now.
+
+Ordinary questions are untouched. "Should this sort by name or by date?" posts
+exactly as it always did, and there is a test making sure it keeps doing so —
+because a rule that nags about everything is a rule people learn to go around,
+and then it protects nothing at all.
+
+Review caught two holes in the first version, both now closed. The time shown in
+the heading was taken from the first clock anywhere in the proof — including
+inside the pasted output — so an agent who wrote "measured at 9:40pm" under a log
+line from last Thursday got a card telling you the check was six days old. The
+heading now reads only what the agent wrote in its own words, and a proof whose
+only time is buried in the printout is refused with an explanation. Second, the
+list of words that trip the rule knew "delete" and "deleting" but not "deletes",
+so "this deletes all 550 rows" — the most natural way to describe what your yes
+would do — sailed straight through with no proof at all. Every verb now carries
+all three forms, and a test fails if a future one arrives missing any of them.
+
+A second review round found three more, all of the same kind — the rule quietly
+doing the wrong thing rather than complaining. The heading still took the first
+time it found, and proof usually tells the story before it shows the receipt
+("the outage started at 3:12pm; I re-ran it at 8:04pm"), so the card announced
+the outage time as the measurement. It now reads the time the agent says it ran
+the check at, and if there are two times and nothing says which is which, it
+refuses and asks rather than guessing. A hyphen also switched the whole rule
+off: "approve the hard-delete of those rows" was never checked at all, because
+of a bad assumption about how word matching works. And "this will cost about
+thirty dollars a month" slipped through while "it costs about thirty dollars a
+month" was caught, because the list had one spelling of the word and not the
+other.
+
+The last fix went the other way. Words like "billing", "invoice" and "deletion"
+were tripping the rule on cards that asked for nothing — "nothing needed, the
+deletion already happened last week" was being refused, which is exactly how a
+rule teaches people to route around it. Those words now only count when
+something in the same sentence actually proposes the act: "approve the
+deletion" still asks for proof, "the deletion already happened" does not.
+
+A third review round found the heading getting the time wrong for the third
+time, and it is worth saying why that one mattered more than the others.
+Everywhere else this rule REFUSES something, and being wrong costs a reword.
+The heading is the one place it TELLS you something — "measured at 8:04pm" —
+so being wrong there means the card states, in the machine's own voice, that a
+check was run at a time it was not. That is the same shape as the mistake the
+whole thing exists to prevent.
+
+Each of the three attempts had picked the time by where it sat in the sentence:
+the first one, then the first one outside the printout, then the last one. Each
+worked until somebody wrote the sentence a slightly different way. "I re-ran
+the chat call at 9:40pm, well after the outage that began at 3:12pm" got read
+as 3:12pm, because the words "re-ran" were allowed to claim every time later in
+the sentence. The rule now says something different in kind: the phrase that
+means "I ran this" belongs to the ONE time it introduces and no further. And if
+an agent genuinely marks two different times as the run, the card no longer
+picks a winner — it stops and asks which one to print.
+
+Three smaller holes went with it. A time written on its own next to a printout
+that carries its own timestamp is no longer trusted, because a bare time next
+to a log is usually the thing that broke rather than the check that was run. A
+command typed across two lines with a backslash was counting as "a command plus
+its output" when there was no output at all. And the short list of harmless
+phrases was being cut out of the text letter by letter rather than word by
+word, so "pays offshore contractors" lost the phrase "pays off" out of the
+middle of a word and stopped counting as money. Related: the words that turn a
+noun into a request only knew their plainest spelling, so "proceeding with the
+deletion", "performing the key rotation", "kicking off the migration" and
+"signing off on the invoice" all posted with no proof required — all of them
+ordinary English for exactly the things this rule is meant to catch.
+
+One thing was deliberately left alone, and it is yours to call rather than
+mine. Any dollar figure in a request trips the rule, even when the card is not
+asking for anything — so "nothing needed, the Vercel bill came to $30 last
+month" gets refused and has to be reworded. Requiring a request-word alongside
+the figure would fix that, but it would also let "$29/month for Business or $49
+for the tier above?" through silently, and that one is a real question about
+your money. Which way that should go is a judgment about how much plain English
+a word-matching rule ought to chase, and it seemed better to say so than to
+quietly pick.
+
+Then a fourth review round found the heading wrong a fourth time, and a fifth
+found it a fifth. The sentence that broke it this time put the run time first
+and the explanation after — "at 8:04pm I re-ran the failing call, well after
+the outage began at 3:12pm" — and the card came out headed 3:12pm, the moment
+things broke, presented as the moment they were checked. Five attempts, each
+one a different rule for working out which time in a sentence is the
+measurement, and each one correct until somebody wrote the next sentence.
+
+So it went to you instead of round the loop again, and you picked option A:
+stop guessing. The agent now writes the time on a line of its own —
+`@@MEASURED 8:04pm` — and every other time anywhere in the proof is ignored,
+narrated or printed. It costs an agent one extra line. What it buys is that
+this particular bug cannot come back, because there is no longer a sentence to
+misread: the five previous fixes were all answers to a question this version
+does not ask. If the line is missing, written twice, buried inside the printout
+or carrying something that is not a time, the card is refused and told exactly
+which of those it is.
+
+The same round fixed a smaller thing that needed no decision from you. Every
+one of these words worked in the singular and went silent in the plural, so
+"approve the deletion" demanded proof and "approve the deletions" did not —
+the rule declining on the more expensive version of the same request. Six words
+gained their plurals, with a test that now checks both spellings of each one
+and fails if a future word arrives with only half of itself.
+
+## 2026-08-26 — Somewhere to write down what footage exists (#422)
+
+The video Studio needs a filing cabinet before it can have a workshop: a record
+of which recording sessions exist and which files belong to each one. This is
+that cabinet, and nothing else — nothing downloads, nothing processes video,
+there is no screen to look at yet. Those come in the next seven pieces.
+
+The care here went into two mistakes that have already cost this project real
+money. The first is a table that forgets which client it belongs to: there are
+two columns that decide that, and if a table carries only one of them, the code
+that fills them in quietly gives up and fills in neither. Nothing errors. Rows
+just land belonging to nobody, and you find out weeks later — 550 rows sat that
+way in August. Both tables here carry both columns, and a test fails if anyone
+removes one.
+
+The second is deciding a file is a duplicate across every client at once. The
+same footage handed to two clients is genuinely two things, and a rule that says
+otherwise locks the second client out of their own file forever. That has
+happened here before, with topic names. So "we already have this one" is asked
+per client, never globally.
+
+The tests are unusual in a way worth mentioning: they read the database design
+straight out of the file that creates it, rather than keeping their own copy.
+A copy stays right while the original goes wrong, which is exactly how the
+forgotten-client bug survives being tested. To prove that works, the design was
+broken three separate ways on purpose and the right tests failed each time.
+
+Three rounds of review later, the same mistake had been found three times in
+three different places, so this round went after the pattern rather than the
+instances. The pattern is: you hand the system a value it cannot read, and
+instead of refusing, it throws away the good value that was already there and
+tells you it worked. A recording's length, its frame rate, its dimensions, how
+confident we are about the audio sync — every one of those would accept the
+word "N/A" from a piece of equipment that failed to read the file, wipe what
+was there, and report success. Now each of them says no and leaves the good
+value alone. That matters most because the very next pieces of this project are
+the ones that read video files and write those numbers back, and equipment that
+cannot read a file reports exactly that kind of nonsense.
+
+One of those numbers deserved more than a refusal. The sync offset says how far
+apart two recordings are in time, and it used to fall back to zero — but zero
+is not a blank, it is the confident claim "these two are already perfectly
+lined up." An unmeasured file was silently asserting something false about
+itself. It can now say "nobody has measured this yet," which is the truth.
+
+Also fixed: a database that was briefly unreachable used to be reported as
+"that recording session does not exist," which would send somebody looking for
+a problem that was not there. And the miniature stand-in database the tests run
+against was quietly ignoring three of the rules the real one enforces, so a
+future test could have proved something it was not actually checking. It now
+enforces them, and refuses out loud when it meets a rule it does not understand
+— which is what its own instructions had claimed all along.
+
+Every one of these was proved twice: once by breaking the fix on purpose and
+watching the right test fail, and once by running it against a real database.
+
+A fourth review found the same shape twice more, in the two places nobody had
+looked yet. Each recording session names one file as the one everybody else
+gets lined up against — and the code that set that name never checked the file
+belonged to the same client. One client could point at another client's
+footage and be told it worked. Then the other client deletes their file and the
+first one is pointing at nothing. There is no safety net underneath this in the
+database itself, deliberately, so this code was the only thing that could have
+caught it, and it was not looking. It looks now, and a test proves it both
+refuses the other client's file and still accepts your own.
+
+The second: every file gets a fingerprint so the same footage is not filed
+twice. If something handed over a fingerprint that was not text — a whole
+bundle of data instead of a line of it — it got quietly turned into the useless
+word "[object Object]" and stored. The next genuinely different file then came
+back as "we already have this one," which was simply untrue, about two files
+with nothing in common. Now anything that is not text is refused outright, and
+whatever was already recorded is left alone.
+
+Four smaller things came with them, the notable one being the miniature
+stand-in database the tests run against: it was reading the column types out of
+the real design and then never checking anything against them, so a test could
+hand it obvious nonsense and be told yes. It checks now — and, in keeping with
+how the rest of it already worked, it refuses out loud when it meets a type it
+does not know how to check, rather than waving it through.
+
+Proved the same way as before, and deliberately: each of the seven fixes was
+broken on purpose and the matching test failed each time, and both of the
+serious ones were reproduced against a real database on the old code before
+being confirmed fixed on the new.
+
+A fifth review found six more, and the first one is the plainest example of
+this whole pattern yet. There are two ways to spell the name of anything in
+this system — `durationS` if you are writing code, `duration_s` if you are
+looking at the database. Filing a new file accepted both spellings. Updating
+one accepted only the first. So a piece of equipment reporting "this video is
+99.5 seconds long" using the database's own spelling was told "saved" and the
+old wrong length stayed. Nothing about that input was wrong. It was correct
+data, in a correct field, dropped because of how it was spelled. And the only
+code that will ever write those numbers is the next three pieces of this
+project, which naturally use exactly that spelling. Both spellings now work
+everywhere, giving the same field twice with two different answers is refused
+rather than one being quietly picked, and a field name that is simply a typo is
+now turned away instead of being ignored inside an otherwise successful save.
+
+The session's chosen audio file got the same treatment one level deeper. Last
+round taught it to refuse another client's file; it turned out it would still
+accept a file belonging to a different session of your own. Delete that other
+session and the first one is left pointing at something that no longer exists.
+It now requires the file to belong to the session that is naming it.
+
+Dates were the last of it, and the worst behaved. Handing over the number zero
+where a date belongs stored "1 January 2000" — a real moment in time, invented
+out of something that was not a date at all, reported as success. Asking for
+the 30th of February stored the 2nd of March. And a time written without a time
+zone was read in whatever zone the computer happened to be in, so the same
+recording filed from the Mac Mini and from the laptop landed six hours apart.
+All three are now refused or made consistent, which matters because these dates
+are how footage gets lined up in the edit.
+
+The other three were in the miniature stand-in database the tests run against.
+It is going to be the test bench for the next seven pieces of this project, so
+a rule it pretends to enforce is a rule that gets broken seven more times. It
+was ignoring an instruction about what to send back — the exact mistake that
+would make new code work perfectly in tests and fail on the live site. It was
+only half-reading the rule about which client owns which row, in the direction
+that shows too much rather than too little. And it treated two blanks as
+identical to each other, inventing a restriction the real database does not
+have.
+
+All six were reproduced against a real database on the old code first, then
+confirmed gone on the new. Each fix was also broken on purpose to watch the
+right test fail — and that exercise caught something on its own: two of the
+safety checks covered each other so completely that either could be deleted
+with every test still passing. A check that cannot fail is not a check, so a
+test was added that tells them apart.
+
+A sixth review found five more, and two of them are the same story this whole
+entry keeps telling: an answer that is wrong, delivered as a success.
+
+The first is about how a name is spelled in capitals. Every recording session
+has an id, and the database treats `A115C635` and `a115c635` as the same id —
+it does not care about capitals. Our code did. So a session handed its own id
+in capital letters refused its own audio file, with the message "that file
+belongs to a different session." The file did belong to it. The session did
+exist. The refusal simply was not true. Ids get typed, pasted and copied out of
+logs by hand, and any of those can change the capitals without changing the id.
+
+The second is what happens when a fingerprint is too long. There is a limit on
+how much of one gets stored, and past that limit the system used to quietly cut
+it short and say "saved." Two completely different files that happen to match
+for the first stretch then look identical, and the second one is turned away as
+"we already have this one" — untrue, about two files with nothing in common.
+That is the same lie an earlier round fixed from the other end: the check that
+reports the duplicate was corrected, but the thing that manufactured the
+collision was not. Anything too long is now refused outright, saying which
+field and what the limit is. The same applies to the file paths, where a
+quietly shortened one is worse still — a shortened path points at nothing, and
+the pieces of this project that write those paths are the next ones to be built.
+
+The other three were in the miniature stand-in database again, and they matter
+for the same reason as last round: it is the test bench for the next seven
+pieces. It was matching genuinely empty values against the literal word "null"
+— the third time that exact confusion has been found in this branch, in a third
+place. It was accepting a misspelled column name and a malformed id by
+answering "no results found" where the real database refuses the question
+outright, which had already caused a test here to be checking for the wrong
+answer entirely. And it was silently unable to handle three of the column types
+it listed as supported, which today's design does not use — a trap set for
+whichever of the next seven pieces uses one first.
+
+Fixing the capitals problem turned up something the tests could never have
+found: the fake ids the tests use were made entirely of zeroes, so "the same id
+in capitals" was not a thing that could exist in a test. They have letters in
+them now, and that change alone immediately exposed a second copy of the
+capitals bug in the stand-in database itself.
+
+All five were reproduced against a real database on the old code before being
+fixed, and twenty-one checks against that real database confirm the new
+behaviour — each one reading the row back with a direct query rather than
+asking the code that wrote it. Every fix was then broken on purpose, nine
+different ways, to watch the right test fail each time.
+
+## 2026-08-25 — One command that answers what is actually waiting on you (#435)
+
+Twice on the evening of the 23rd an agent told you something needed you when it
+did not, and you went and dealt with it both times. Eleven of the "seventeen
+tickets waiting on your merge word" already had your approval on them — they
+were stuck on a machine that could not reach GitHub. And the YouTube worker
+question you were asked a second time, you had already answered "A" an hour
+before. Neither agent was lying or thinking badly. Both had stated something
+about how things stood right now while reading something that was not how
+things stood right now — an old terminal window in one case, a stale memory of
+a list in the other. In both cases the true answer was one lookup away.
+
+Writing down a rule would not have fixed it, because the problem is that asking
+"wait, is this really his?" takes a moment of doubt, and nobody had a quick way
+to settle it. So instead there is now a command that is faster to run than the
+sentence is to think about: `npm run clickup -- waiting`. With no arguments it
+sweeps every open ticket in both lists you watch and shows only the ones that
+genuinely need you. Point it at one ticket and it prints that ticket's status,
+whether your name is on it, who spoke last and what they said, and then its
+verdict.
+
+It works out that verdict from three things it has just looked up, and nothing
+else: which column the ticket is in, whether you are assigned, and whether the
+newest comment is yours. If the newest comment is yours, it is never waiting on
+you — you have spoken, something else owes the next move. And when it cannot
+establish one of those three facts it says "cannot tell" and names the reason,
+rather than picking the comfortable answer. Guessing "nothing needs you" is how
+a question you already answered sits unread for nine hours.
+
+The same rule now guards the other direction. The command that hands a ticket
+back to you refuses to do it when your own comment is already the newest one —
+that is the "please answer this a third time" failure, and it was arriving
+through the very thing built to stop it. There are two ways for a machine to
+put a ticket in your column, and review caught that the refusal was only
+standing across one of them; it now stands across both. A lock on one of two
+doors is worse than no lock, because everyone stops checking the handle.
+
+It proved itself on its first live run. Two tickets are sitting in Ready to
+launch with your name on them where you already typed "merge" — the exact shape
+that produced the wrong sentence on the 23rd. The old way of looking would call
+those two things waiting on you. The command says they are not: you did your
+part, a machine owes those merges.
 ## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
 
 Earlier today a pull request went straight to the live site without anyone
@@ -435,6 +838,43 @@ here — so a quiet stretch in this log means the loop was idle, not that nothin
 was built. The log starts when the loop did.
 
 ---
+
+## 2026-08-22 — Public forms can no longer file themselves under a made-up client (#373)
+
+Every StarCaster client site has a few pages that anyone can use without
+logging in: the contact form, the "forgot my password" box, the bug-report
+button. Each of those sends the site's client id along with the message, so we
+know whose inbox it belongs in.
+
+On a client's own web address that id is checked against the address — a form
+on brandonmarinoff.com cannot file into another client's records. But on our
+own addresses (starcaster.pro, a preview link, or your laptop while you are
+working) there is no client address to check against, so the id was simply
+believed. Anyone who typed a made-up id got a real submission filed under a
+client that does not exist: a row nobody owns, that shows up on nobody's
+screen and cannot be cleaned up because nobody knows it is there. Typing a
+*real* client's id was worse — it filed into their records.
+
+There is now one piece of code that answers "which client is this request
+allowed to act on", and every public form goes through it. A made-up id is
+turned away before anything is written. A real one still works, which is
+deliberate: those same forms are already open to the world on the client's own
+website, so refusing them here would protect nothing and would break both
+local testing and the Builder's own preview.
+
+The four remaining places that use the older, looser check were reviewed one
+by one — all of them only *read* pages that are public anyway — and a test now
+fails the build if anyone adds a fifth without making that call.
+
+While this was waiting to be checked, a seventh public form went live: the
+picture upload behind the new bug-report button. It had its own private copy
+of the "which client is this" check, which is exactly how two versions of the
+same rule start to drift apart. It now goes through the shared one, and the
+private copy is gone. The build check that is supposed to catch this had a
+blind spot — it trusted one whole file rather than each form inside it, and
+that file is where public forms live — so it now looks at every form
+individually. Run against the old code it correctly refuses to pass, which is
+how we know it is actually looking.
 
 ## 2026-08-23 — Parkour: the last of the four picture effects you asked for (#395)
 
