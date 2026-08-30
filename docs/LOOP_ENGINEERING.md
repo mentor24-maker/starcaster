@@ -1348,6 +1348,87 @@ a scratch ticket plus a comment of your own works too. Do **not** delete an
 existing `[bus-relay]` marker to manufacture one — that is destructive, and the
 run will then send his real answer to a dead channel.
 
+## The work-in-progress cap — and what it counts
+
+`loop-build` asks `npm run clickup -- wip-check` before claiming, and declines
+when too much is already in flight. Branch protection is `strict: true`, so
+every merge invalidates every other open branch: the catch-up cost is quadratic
+in open PRs, and building an eighth branch while seven rot ships nothing sooner.
+Exit 0 = room to claim, 3 = a normal decline, 1 = could not tell.
+
+**It counts work in flight, not open pull requests** (2026-08-25, task
+86bbm4zwd). A PR counts only when its ticket is `Building`, `In review`,
+`Ready to launch` or `Needs your input`. That last one is there deliberately:
+it is operator-held, exactly like `Ready to launch`. A ticket parked on Dane
+with an open PR is real work occupying the merge pipeline, its branch still
+needs catching up on every merge, and if his inbox is full then the pipeline
+genuinely is full — a cap that hid that would be lying in the more dangerous
+direction. The list lives in `IN_FLIGHT_STATUSES` (`scripts/builder/wipCap.js`).
+
+A PR counts **zero** when:
+
+* the ticket is **`Queued`** — that is rework the loop must be free to claim;
+* the ticket is **`Live`** — the work shipped by another route and the PR is a
+  leftover;
+* **no ticket can be found** for it — reported by number, never counted;
+* the ticket is in a status this list does not recognise — also reported, and
+  reported *as that*, quoting the status. It is deliberately NOT lumped in with
+  "no ticket found", which would send you hunting for a missing ClickUp link
+  that is not missing.
+
+The first version counted every open PR, and on the morning of 2026-08-25 that
+**deadlocked the build loop for four consecutive hourly passes**: seven PRs open
+against a cap of five, of which five should never have counted — three sent back
+to `Queued` for rework (so the cap blocked the only thing that could close them)
+and two zombies whose tickets were already `Live`. The queue sat at 33 while
+every pass exited 0 and did nothing.
+
+The message always names the split, never a bare total:
+
+```
+1 in flight, cap 5 — room to claim another.
+4 open PR(s) not counted: 4 queued for rework (#428, #426, #422, #419).
+```
+
+A bare "7 open, cap 5" is true and useless — it is what hid the deadlock for
+four passes.
+
+**If the queue cannot be read, it falls back to counting every open PR** — the
+older, *more* restrictive reading, and it says out loud which reading it used
+and why. Failing toward the cap costs idle time; failing away from it reinstates
+the churn the cap exists to prevent.
+
+"Cannot be read" covers every way that can happen, and getting there took two
+review rounds because each way arrived through a different door. ClickUp
+answering with an error (a routine 429 — the loops share a budget of about 100
+requests a minute) is one. The request never arriving at all — DNS, TLS, this
+machine offline, a connection timeout — is another, and it is the one that
+nearly shipped: `fetch` *rejects* rather than returning a response, so it was an
+unhandled crash and **exit 1**, which this skill reads as *"could not tell,
+proceed unbounded by the cap"*. A network blip would have uncapped the loop
+rather than capping it. A 200 carrying a junk body (a proxy's error page) was a
+third. All three now land in the same conservative fallback, and
+`scripts/builder/wipCapOutage.test.js` runs the real command with each failure
+underneath it — asserting the exit code is 0 or 3 and never 1, and asserting
+*which* guard produced the answer, because an outer catch swallowing an inner
+guard's bug is how one of those tests first passed when it should not have.
+
+The cap itself is 5, override `CLAUDE_LOOP_WIP_CAP` for an experiment. Five is a
+starting point, not a measurement.
+
+**The matching drift check.** `npm run reconcile` now also flags the reverse
+pair — a **terminal task with any linked PR still open**, which is how those two
+zombies survived. Every distinct PR the ticket links, not just the newest: the
+real 2026-08-25 shape is a `Live` ticket linking an open leftover *and* a later
+merged PR that actually shipped it, so a newest-only check would return silently
+on the exact case it was written for. The scan is bounded to the 25 most
+recently updated terminal tasks and says how many it skipped — there are already
+66 `Live` tickets and the set only grows, and an unbounded scan is a job that
+quietly gets slower until someone notices it timing out.
+
+It is never repaired automatically: "close the PR" and "the task was closed too
+early" are both plausible, and only a person can tell which.
+
 ## Reading the queue at a glance — the Loop note
 
 The Status column says which STAGE a ticket is in; the **Loop note** column
