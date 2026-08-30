@@ -1265,6 +1265,23 @@ produce its own, and to say what it could not reproduce — here, the
 per-comment verdict lines, which need a fresh operator comment that no ticket
 had at the time.
 
+**A review pass in flight keeps its claim** (2026-08-30, task 86bbq0fh8).
+"Fast track" can arrive while a loop-review pass is actively on the ticket —
+there the loop note read "being checked" for a pass that had started two
+minutes earlier. First confirm the claim is live, on the machine that owns
+the review: the Mini's `~/loop-logs/loop-review.log` says whether a pass is
+actually running, and a "review pass started" note with nothing running is a
+stranded claim for `pipeline -- resume` to unstick, not a reason to wait.
+While a live pass reads the branch, do not push to it, write a status, or
+post anything to the ticket — a push hands the reviewer a moving target.
+Everything local is fair game in the meantime: set up the worktree, merge
+`origin/main` in, resolve the conflict, run the gates, break-test. Then act
+on the verdict. A send-back drops the ticket to `Queued`, which is a clean
+step-3 claim and turns the review notes into the specification; a pass
+leaves the green-PR case above. On 86bbq0fh8 the verdict landed nine minutes
+in, the send-back's two findings were fixed on top of the already-resolved
+merge, and the whole round — verdict to Live — cost under an hour.
+
 ### What the first run of this lane found (2026-08-30, ticket 86bbmg2fb, PR #441)
 
 * **The Mini's runners took the change before the command existed.** The
