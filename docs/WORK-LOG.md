@@ -44,6 +44,36 @@ volume and close to none of the risk, which makes it the right place to find out
 whether the safety machinery actually works before anything larger is
 considered.
 
+## 2026-08-26 — The build loop stops jamming itself, and a dropped connection can no longer switch the brake off (#431)
+
+There is a rule that stops the robot builder taking on new work when too much
+is already half-finished. It was counting the wrong things. A job sent back for
+another go still had its pull request open, so the rule counted it as "busy" —
+even though the only way to finish that job was for the builder to pick it up
+again. The brake was jammed on by the very work it was blocking. One morning
+that left thirty-three jobs waiting and the builder doing nothing for four hours
+straight, while everything looked normal.
+
+It now counts jobs, not paperwork: only work somebody is genuinely moving
+counts, and it says the breakdown out loud — "one in flight, four not counted:
+two sent back, one already shipped" — instead of a bare number that told you
+nothing.
+
+The part that took three passes was the opposite failure. To count properly the
+rule now has to ask ClickUp what state each job is in, and something had to
+happen when ClickUp could not answer. If it cannot tell, it counts everything,
+which is the cautious answer. But a broken network connection did not reach that
+cautious answer at all — it crashed, and a crash was read further up as "carry
+on regardless", so a moment of bad wifi would have taken the brake off entirely.
+That is worse than the jam it was fixing. All three ways the answer can fail —
+ClickUp saying no, ClickUp saying nothing, and never reaching ClickUp at all —
+now land on the cautious answer, and there are tests that run the real command
+with each failure underneath it to prove it.
+
+Alongside it, the daily drift check learned to spot the matching mess: a job
+marked finished whose pull request is still sitting open. It reports those and
+leaves them for a person, because "close the leftover" and "that job was closed
+too early" both happen and only you can tell which.
 ## 2026-08-26 — The settings fields and the Layout fields finally line up (#440)
 
 Back on the 13th you looked at a two-column module editor and said the left
