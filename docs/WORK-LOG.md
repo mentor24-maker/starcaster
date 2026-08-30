@@ -1,3 +1,25 @@
+## 2026-08-30 — Tickets now end on what they need from you, in red (#457)
+
+You asked for three things while looking at a merge ticket: put the "NEEDED
+FROM DANE" block last, make it properly red and bold, and put the actual ask
+on the same line as the label instead of hiding below the banner. All three
+shipped the same day through the fast-track lane.
+
+Every card a machine puts in front of you now ends on the banner — your words
+first, then the explanation, then any proof, and the ask dead last, where your
+eye stops. The banner is bold and true red (#CC0000). The washed-out red you
+were seeing before was never a choice anybody made: it was ClickUp's standard
+colouring for "computer text", which the banner was wrapped in for safety.
+
+Getting the real red meant changing how cards are sent. ClickUp only allows
+coloured text through its structured format, and that format ignores the
+usual **bold** markup agents write — so the card builder now translates as it
+posts, and the tests prove the translation both ways: break the colour, a
+named test fails; move the banner up, another one fails.
+
+There is a living sample on the ticket itself (86bbq5ruz) — the newest card
+from Pulse ends exactly the way every future one will.
+
 ## 2026-08-30 — When a merge gets stuck, somebody is now actually told to fix it (#452)
 
 You found PR #434 sitting untouched for three days and asked why nothing had
