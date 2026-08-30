@@ -53,8 +53,10 @@ name **who** is going to act next, and if the answer is nobody it has to say so
 out loud — "Nothing is currently working on it" — rather than reaching for the
 comfortable phrasing that implies someone. And silence now expires: a conflict
 with no ticket behind it is flagged immediately, and one that has not been
-sorted within a day starts reporting itself by name on every single pass. Three
-days of nothing cannot happen again without something saying so.
+sorted within a day reports itself by name once a day until it is cleared —
+each report re-arms the clock, so a day of silence is the most it can buy
+(that cadence was the review's fix; as first built it nagged every pass).
+Three days of nothing cannot happen again without something saying so.
 ## 2026-08-26 — You can now stage a fake outage to check the backup plan works (#445)
 
 Back on the 23rd, ClickUp's group chat broke for about sixteen hours. The
