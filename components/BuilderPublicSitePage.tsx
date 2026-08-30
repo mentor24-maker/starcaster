@@ -27,6 +27,7 @@ import {
 } from "@/lib/public-admin-session";
 import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
+import { filterPublicSections } from "@/lib/public-site-sections";
 import { registerImageRenditionMap } from "@/lib/image-renditions";
 
 /**
@@ -158,24 +159,6 @@ async function fetchPrivatePages(projectId: string): Promise<SitePage[] | "unaut
   const data = await res.json() as { pages?: unknown[] };
   const pages = Array.isArray(data.pages) ? data.pages : [];
   return pages.map((p: unknown) => mapSitePageRecord(p as Record<string, unknown>));
-}
-
-// Strip admin-only modules from public pages (defense in depth).
-const PRIVATE_ONLY_MODULE_TYPES = new Set([
-  "blog-post-create",
-  "blog-post-manager",
-  "blog-category-manager",
-]);
-
-function filterPublicSections(
-  sections: SitePage["layoutSections"]
-): SitePage["layoutSections"] {
-  return sections.map((section) => ({
-    ...section,
-    modules: (section.modules || []).filter(
-      (m) => !PRIVATE_ONLY_MODULE_TYPES.has(m.type)
-    ),
-  }));
 }
 
 function findHomePage(pages: SitePage[]): SitePage | null {

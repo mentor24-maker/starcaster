@@ -169,7 +169,9 @@ test('the gate runs BEFORE anything is written, on both doors', () => {
   // task read that leads to the write. A refusal has to leave the ticket
   // exactly where it was.
   const askAt = SCRIPT.indexOf('if (!noMove && await readyToLaunchRefused');
-  const cardAt = SCRIPT.indexOf("call('POST', `/api/v2/task/${task}/comment`, { comment_text: rendered })");
+  // The card posts in ClickUp's structured shape since task 86bbq5ruz (the
+  // banner is bold and red, and colour only exists there).
+  const cardAt = SCRIPT.indexOf("call('POST', `/api/v2/task/${task}/comment`, { comment: commentBody })");
   assert.ok(askAt > 0 && cardAt > askAt, 'the ask gate must run before the card is posted');
 
   const statusAt = SCRIPT.indexOf('if (await readyToLaunchRefused(task, status)) process.exit(2)');

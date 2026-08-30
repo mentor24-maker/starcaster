@@ -66,6 +66,7 @@ import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
 import loopInterval from './builder/loopInterval.js';
 import branchCatchUp from './builder/branchCatchUp.js';
+import conflictWork from './builder/conflictWork.js';
 import wipCap from './builder/wipCap.js';
 import autoMergeLane from './builder/autoMergeLane.js';
 import autoMergeLedgerFile from './builder/autoMergeLedgerFile.js';
@@ -83,6 +84,10 @@ const {
   mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
   refusalNotice, conflictHandOffNotice, mergedNotice,
 } = mergeOnComment;
+const {
+  conflictTicketFiledComment, findConflictTicket, conflictTicketName,
+  conflictTicketBody, handOffStalled, stalledHandOffLine,
+} = conflictWork;
 const {
   prOpenedComment, verdictComment, prTrailLanded, prBodyCarriesTicket,
   readyToLaunchGate, isReadyToLaunch,
@@ -635,6 +640,71 @@ async function markMergeHandled(commentId, task, unchecked, what) {
 }
 
 /**
+ * File the conflict resolution as an ordinary Queued ticket in the Loop Queue
+ * (Dane's option C on task 86bbq0fh8, 2026-08-30), and record it on the
+ * waiting ticket in the one shape `findConflictTicket` reads back.
+ *
+ * Returns `{ id, url }` on success and **null** on any failure. Null is
+ * load-bearing: it is what tells the hand-off notice that no actor exists, so
+ * the comment says the work is stalled instead of promising a merge. Filing
+ * that half-succeeded — a task created but no trail comment — also returns
+ * null, because the next pass would not find it and would file a second one.
+ */
+async function fileConflictTicket({ task, pr, branch, localVerdict, commentId, unchecked }) {
+  // The conflict is in the same repo as the ticket that carries it, so the
+  // repo tag is copied rather than guessed from the GitHub name (they are not
+  // guaranteed to match, and an unrecognised repo:<name> tag makes the build
+  // loop escalate instead of build).
+  const inherited = (task.tags || [])
+    .map((t) => String(t.name || ''))
+    .filter((n) => /^repo:/i.test(n));
+  const tags = inherited.length
+    ? inherited
+    : (taskRepo.KNOWN_REPOS && Object.prototype.hasOwnProperty.call(taskRepo.KNOWN_REPOS, pr.repo)
+      ? [`repo:${pr.repo}`]
+      : []);
+
+  const out = await call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
+    name: conflictTicketName({ pr, branch }),
+    markdown_description: conflictTicketBody({ task, pr, branch, localVerdict, commentId }),
+    status: 'Queued',
+    // High, not Urgent: Urgent is the operator's lane (ratified 2026-08-18)
+    // and nothing here was asked for by him. High puts it above the ordinary
+    // queue, which is right — an approved merge is being held up by it.
+    priority: PRIORITY.high,
+    tags: tags.length ? tags : undefined,
+  });
+  if (!out.res.ok) {
+    unchecked.push(`${task.id}: could not file a conflict ticket for PR #${pr.number} (HTTP ${out.res.status}) — no actor exists for this conflict`);
+    return null;
+  }
+  const id = out.json.id;
+  const url = out.json.url || `https://app.clickup.com/t/${id}`;
+
+  // A 200 proves a write happened, not that the right thing landed — the same
+  // read-back the `task` command does, for the same reason. A shell of a
+  // ticket in the queue is worse than none: the build loop claims it and finds
+  // no instructions.
+  const check = await call('GET', `/api/v2/task/${id}`);
+  if (!check.res.ok || !(check.json.description || '').length) {
+    unchecked.push(`${task.id}: filed conflict ticket ${id} for PR #${pr.number} but could not verify its description — check it by hand`);
+    return null;
+  }
+
+  // The trail on the WAITING ticket. Without it the next pass cannot tell that
+  // this conflict is already filed and would file another one every hour.
+  const trail = await call('POST', `/api/v2/task/${task.id}/comment`, {
+    comment_text: conflictTicketFiledComment({ id, url, prNumber: pr.number }),
+  });
+  if (!trail.res.ok) {
+    unchecked.push(`${task.id}: filed conflict ticket ${id} but could NOT record it on this ticket — the next pass will file a duplicate. Add the line by hand: "CONFLICT TICKET FILED: PR #${pr.number} — ${url}"`);
+    return null;
+  }
+  console.error(`  FILED conflict ticket ${id} (${url}) for PR #${pr.number}`);
+  return { id, url, prNumber: pr.number };
+}
+
+/**
  * The merge path: the operator commented "merge" on a Ready-to-launch ticket
  * and this pass is his hands (task 86bbjd5nn). Every decision that can be
  * made without the network is made in scripts/builder/mergeOnComment.js and
@@ -683,7 +753,7 @@ async function waitForChecksInPass({ pr, repo, label, fields, budget }) {
   }
 }
 
-async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun, channel, unchecked, busSkipped, inPassBudget, lane }) {
+async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeRefusedAt, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget, lane }) {
   // ONE GATE, ONE MERGE COMMAND, ONE Live TRANSITION (task 86bbkw2au). Lane A
   // replaces the operator's WORD and nothing else, so it arrives here as a
   // decision of the same shape and takes the identical path afterwards:
@@ -703,6 +773,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
     operatorId: OPERATOR_ID,
     handled: mergeHandled,
     refused: mergeRefused,
+    refusedAt: mergeRefusedAt,
   });
   if (decision.act === 'ignore') return { outcome: 'none' };
 
@@ -837,30 +908,93 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
     // fixes, and reading one as the other is how a machine problem gets
     // diagnosed as a code problem.
     const verdict = gate.localVerdict;
+    const localVerdict = verdict
+      ? {
+          kind: verdict.code === branchCatchUp.CODES.REAL_CONFLICT ? 'real-conflict' : 'unknown',
+          reason: verdict.reason,
+        }
+      : null;
+    const branch = prJson.headRefName;
+
+    // OPTION C (Dane's answer on task 86bbq0fh8, 2026-08-30): the resolution
+    // becomes an ordinary Queued ticket in the Loop Queue the build loop
+    // already drains every pass. The bus post this replaces asked an empty
+    // room — nothing reads the bus — and PR #434 sat three days as a result.
+    // Filing FIRST matters: the hand-off comment's promise is decided by
+    // whether a ticket exists, so it must be settled before the body is built.
+    let filed = findConflictTicket(comments, pr.number);
+    const alreadyFiled = Boolean(filed);
+    if (!filed && !dryRun) {
+      filed = await fileConflictTicket({
+        task, pr, branch, localVerdict, commentId: decision.commentId, unchecked,
+      });
+    }
+
     const notice = conflictHandOffNotice({
       commentId: decision.commentId,
       pr,
-      localVerdict: verdict
-        ? {
-            kind: verdict.code === branchCatchUp.CODES.REAL_CONFLICT ? 'real-conflict' : 'unknown',
-            reason: verdict.reason,
-          }
-        : null,
+      localVerdict,
+      filed,
     });
     const handOffReason = notice.marker.replace(/^refused:\s*/, '');
     if (lane) return { outcome: 'lane-cancel', reason: gate.reason };
-    if (alreadySaid(handOffReason)) {
-      console.error(`  MERGE HANDED OFF (unchanged, nothing posted) on ${label}: ${gate.reason}`);
-      return { outcome: 'handed-off-quiet', reason: gate.reason };
+
+    // The quiet path — right on the merits, and exactly where three days of
+    // silence lived. It stays quiet only while a NAMED actor is plausibly
+    // still on it: a filed ticket, recent enough to believe. No ticket, or a
+    // day with no progress, and the pass says so instead (task 86bbq0fh8,
+    // criterion 4).
+    // A conflict ticket filed THIS pass is news even though the reason has not
+    // changed — the actor is new, and naming it is the whole fix. This is also
+    // the healing path for the hand-offs already sitting in the live record
+    // with no ticket behind them (PR #434 and its shape): the next pass files
+    // one and says so, with no command to remember to run by hand. Same
+    // reasoning as the marker migration in mergeOnComment.parseMergeMarker.
+    const freshlyFiled = Boolean(filed) && !alreadyFiled;
+    if (alreadySaid(handOffReason) && !freshlyFiled) {
+      const stalled = handOffStalled({
+        at: decision.priorRefusalAt, now: Date.now(), filed,
+      });
+      if (!stalled.stalled) {
+        console.error(`  MERGE HANDED OFF (unchanged, nothing posted) on ${label}: ${gate.reason}`);
+        return { outcome: 'handed-off-quiet', reason: gate.reason };
+      }
+      const line = stalledHandOffLine({ task, pr, filed, stalled });
+      console.error(`  MERGE HAND-OFF STALLED on ${label}: ${stalled.why}`);
+      stalledHandOffs.push(line);
+      if (dryRun) return { outcome: 'would-report-stalled', reason: stalled.why };
+      const busStall = await postToBus(channel, `[CC-starcaster bus-relay] CONFLICT STILL UNRESOLVED — ${line}\n\n${pr.url}`);
+      // "One pass of noise per day is the price" (conflictWork.js) — and the
+      // clock that meters it is the marker's timestamp, so a stall that has
+      // been ANNOUNCED re-stamps the marker and the next nag is a day away.
+      // An announcement that failed does not: leaving the old stamp is what
+      // makes the next pass try again instead of going quiet for a day on
+      // the strength of a post nobody saw (review round 1, task 86bbq0fh8).
+      if (!busStall.ok) reportBusFailure({ cosmetic: false, unchecked, busSkipped, line: `${task.id}: a stalled conflict hand-off could not be announced on the bus (${busStall.why})` });
+      else await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
+      return { outcome: 'handed-off-stalled', reason: stalled.why };
     }
-    console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}`);
-    if (dryRun) return { outcome: 'would-hand-off', reason: gate.reason };
+
+    console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}${filed ? ` — filed as ${filed.id}` : ' — NOT FILED, nothing will pick this up'}`);
+    if (dryRun) {
+      console.error(`  DRY RUN — would file a Loop Queue ticket to resolve the conflict on ${branch}, then post a hand-off naming it`);
+      return { outcome: 'would-hand-off', reason: gate.reason };
+    }
     const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
     if (!cOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} conflicts, but the hand-off comment FAILED to post`);
-    const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Dane authorized the merge; a session needs to resolve the conflict and push. His approval still stands — once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`);
-    if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})` });
+    // The bus post names the actor now instead of asking the room for one.
+    // It is a notification, not a request — the work is already filed.
+    const busBody = filed
+      ? `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Resolving it is filed as ${filed.url} in the Loop Queue, which the build loop drains — no session needs to claim this from here. Dane's approval still stands: once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`
+      : `[CC-starcaster bus-relay] MERGE BLOCKED AND UNFILED — ${label} (${task.url}): PR #${pr.number} conflicts with main and the Loop Queue ticket could NOT be filed. Nothing is going to pick this up on its own. An agent session must be pointed at branch ${branch}. Ticket left in Ready to launch.\n\n${pr.url}`;
+    const bus = await postToBus(channel, busBody);
+    // An unfiled hand-off is NOT cosmetic: the ticket comment says nothing is
+    // working on it, and if the bus post fails too, nobody has been told.
+    if (!bus.ok) reportBusFailure({ cosmetic: Boolean(filed), unchecked, busSkipped, line: `${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})` });
+    if (!filed) unchecked.push(`${task.id}: PR #${pr.number} conflicts and NO Loop Queue ticket could be filed for it — no actor exists for this conflict, and it will not merge on its own`);
+    if (alreadyFiled) console.error(`  (conflict ticket ${filed.id} was already on file — not filed twice)`);
     await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
-    return { outcome: 'handed-off', reason: gate.reason };
+    return { outcome: 'handed-off', reason: gate.reason, filed: filed ? filed.id : null };
   }
 
   // Not terminal: no marker, no comment, no noise. The next pass looks again.
@@ -2105,9 +2239,9 @@ if (cmd === 'whoami') {
 
   // Shape first, network second: a card that fails the check must not leave
   // a half-done handoff behind.
-  let rendered, card;
+  let rendered, card, commentBody;
   try {
-    ({ rendered, card } = buildCard(readBody(bodyFile)));
+    ({ rendered, card, comment: commentBody } = buildCard(readBody(bodyFile)));
   } catch (err) {
     console.error(`\n${err.message}\n`);
     process.exit(2);
@@ -2122,8 +2256,13 @@ if (cmd === 'whoami') {
     if (stop !== null) process.exit(stop);
   }
 
-  const posted = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: rendered });
+  // Posted in ClickUp's STRUCTURED shape, not as markdown text: the banner is
+  // bold and red (task 86bbq5ruz), and colour only exists in that shape. The
+  // text rendering is what the read-back below compares against, because
+  // `comment_text` on a structured comment is its plain text.
+  const posted = await call('POST', `/api/v2/task/${task}/comment`, { comment: commentBody });
   if (!posted.res.ok) die('post the operator card', posted);
+  void rendered;
   const cardId = String(posted.json.id ?? '');
 
   // Read the card back and confirm the operator's own words are in it. This
@@ -2409,11 +2548,17 @@ if (cmd === 'whoami') {
   // cap x budget, which is what keeps a pass from becoming unbounded
   // and stops one stuck PR starving the rest (task 86bbk2fb5).
   const inPassBudget = { used: 0, cap: mergeOnComment.MAX_IN_PASS_WAITS };
-  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0 };
+  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0, stalled: 0 };
   // Report what could not be checked rather than silently passing over it
   // (DOCTRINE 3.11) — a task this script could not read is a task whose
   // comments might be sitting unrelayed, not a clean zero.
   const unchecked = [];
+  // Conflicts that have been handed off and are STILL not resolved. Kept apart
+  // from `unchecked` on purpose: `unchecked` means "this pass could not verify
+  // something" and exits 1, which is a health signal about the pass itself. A
+  // stalled conflict is a healthy pass reporting an unhealthy ticket, so it is
+  // reported loudly and does not fail the run (task 86bbq0fh8).
+  const stalledHandOffs = [];
   // Bus posts that did not land but cost nothing, because the message reached
   // a durable surface anyway (task 86bbjxew2). Reported under their own
   // heading and deliberately NOT a run failure: on 2026-08-23 every chat
@@ -2482,6 +2627,11 @@ if (cmd === 'whoami') {
       // have been fixed since. The recorded reason is what keeps the
       // re-decide quiet — the same answer twice says nothing new.
       const mergeRefused = new Map();
+      // ...and WHEN each was written, off the marker's own ISO tail. The
+      // reason alone cannot tell a hand-off posted five minutes ago from one
+      // that has been sitting for three days, and only the second is news
+      // (task 86bbq0fh8).
+      const mergeRefusedAt = new Map();
 
       for (const c of fromOperator) {
         const repliesOut = await call('GET', `/api/v2/comment/${c.id}/reply`);
@@ -2495,7 +2645,10 @@ if (cmd === 'whoami') {
         // refused means "look again, and stay quiet only if the same reason
         // still holds".
         const marker = latestMergeMarker(replies);
-        if (marker && marker.kind === 'refused') mergeRefused.set(String(c.id), marker.reason);
+        if (marker && marker.kind === 'refused') {
+          mergeRefused.set(String(c.id), marker.reason);
+          mergeRefusedAt.set(String(c.id), marker.at || '');
+        }
         else if (marker) mergeHandled.add(String(c.id));
         const already = replies.some((r) => (r.comment_text || '').startsWith(BUS_RELAY_MARKER));
         if (already) { skipped++; continue; }
@@ -2573,13 +2726,17 @@ if (cmd === 'whoami') {
       // pass (or one whose bus post failed) is still an authorization. Its
       // own marker, checked above, is what stops it firing twice.
       if (mergingAllowed && mergeEnabled(watch)) {
-        const m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, dryRun, channel, unchecked, busSkipped, inPassBudget });
+        const m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, mergeRefusedAt, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget });
         if (m.outcome === 'merged' || m.outcome === 'would-merge') merges.merged++;
         else if (m.outcome === 'refused' || m.outcome === 'would-refuse') merges.refused++;
         else if (m.outcome === 'handed-off' || m.outcome === 'would-hand-off') merges.handedOff++;
         // Re-derived the same answer as last pass and posted nothing. Counted
         // separately so a silent pass is legibly "still stuck", not "clean".
         else if (m.outcome === 'refused-quiet' || m.outcome === 'handed-off-quiet') merges.unchanged++;
+        // Handed off before, still not resolved. NOT 'unchanged': that bucket
+        // means "nothing to say", and this is the one thing that most needs
+        // saying (task 86bbq0fh8).
+        else if (m.outcome === 'handed-off-stalled' || m.outcome === 'would-report-stalled') merges.stalled++;
         else if (m.outcome === 'waiting' || m.outcome === 'would-update-branch') merges.waiting++;
         // A merged ticket is now Live, which is not a status this watch
         // handles — skip the handback check rather than acting on a status
@@ -2785,6 +2942,7 @@ if (cmd === 'whoami') {
             channel,
             unchecked,
             busSkipped,
+            stalledHandOffs,
             inPassBudget,
             lane: { name: 'A', decision, files: decision.eligibility.files },
           });
@@ -2894,7 +3052,17 @@ if (cmd === 'whoami') {
     : pauseState.paused
       ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
       : ', merging disabled (--no-merge)';
-  console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}${laneLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? (simulateBusFailure ? ' (DRY RUN + SIMULATED PARTY-LINE OUTAGE — nothing was merged, posted or moved)' : ' (DRY RUN — nothing was merged, posted or moved)') : ''}`);
+  const stalledLine = stalledHandOffs.length ? `, ${stalledHandOffs.length} conflict(s) STILL UNRESOLVED` : '';
+  console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}${laneLine}${stalledLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? (simulateBusFailure ? ' (DRY RUN + SIMULATED PARTY-LINE OUTAGE — nothing was merged, posted or moved)' : ' (DRY RUN — nothing was merged, posted or moved)') : ''}`);
+
+  // Its own heading, and unmissable. The whole point of task 86bbq0fh8 is
+  // that `0 merged` on a quiet pass looked identical to progress for three
+  // days. A conflict that has been handed off and is still sitting there now
+  // says so on every pass, by name, until it clears.
+  if (stalledHandOffs.length) {
+    console.error(`\nCONFLICTS STILL UNRESOLVED — ${stalledHandOffs.length} approved merge(s) are blocked and not moving:`);
+    for (const line of stalledHandOffs) console.error(`  - ${line}`);
+  }
   // Its own heading, above the failures and visibly not one of them. A chat
   // outage is worth seeing; it is not worth stopping the pipeline for.
   if (busSkipped.length) {

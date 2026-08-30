@@ -6845,3 +6845,93 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ------------------------------------------------------------------ *
+ * Builder Preview strip (86bbq2y7x)
+ *
+ * The preview page renders the live-site markup (`.builder-public-site`) so
+ * it looks like starcaster.pro/<slug>; the only thing that says "this is a
+ * preview" is this thin yellow strip. It is sticky, not fixed, so it takes
+ * its own 32px and never covers the page's first row.
+ * ------------------------------------------------------------------ */
+.builder-react-root .builder-preview-strip {
+  position: sticky;
+  top: 0;
+  z-index: 10000;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--preview-strip-bg);
+  color: var(--preview-strip-ink);
+  font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+.builder-react-root .builder-preview-strip-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+
+.builder-react-root .builder-preview-strip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.builder-react-root .builder-preview-strip-toggle {
+  display: inline-flex;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.builder-react-root .builder-preview-strip button {
+  appearance: none;
+  margin: 0;
+  padding: 3px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--preview-strip-ink);
+  font: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-preview-strip-toggle button + button {
+  border-left: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.builder-react-root .builder-preview-strip-toggle button.is-active {
+  background: var(--preview-strip-ink);
+  color: var(--preview-strip-bg);
+}
+
+.builder-react-root .builder-preview-strip-close {
+  text-decoration: underline;
+}
+
+/* Browser mode has no wrapper, so the phone frame needs room of its own. */
+.builder-react-root.builder-public-site .builder-preview-device-mobile {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+.builder-react-root.builder-public-site .builder-preview-device-email {
+  padding: 24px 12px;
+}
+
+.builder-react-root .builder-preview-empty {
+  max-width: 640px;
+  margin: 15vh auto;
+  padding: 0 24px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-align: center;
+}
