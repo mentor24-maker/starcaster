@@ -44,7 +44,7 @@ does not land. Every agent working here must:
   never leave a production fix as a two-step for him — if a script has a dry
   run and an `--apply`, run both and report what changed. He has raised this
   three times (2026-08-07, 08-23, 08-30); the incident is
-  `docs/DOCTRINE.md` §6.7.
+  `docs/DOCTRINE.md` §6.9.
 
 - **A person is a human being. An agent is not.** `person` and `human` mean
   Dane, or another actual human. An agent session is an **agent session** —
