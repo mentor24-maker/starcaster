@@ -51,6 +51,9 @@
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import loopNoteLib from './builder/loopNote.js';
 const { loopNote, heartbeatNote } = loopNoteLib;
 import { spawnSync } from 'node:child_process';
@@ -61,6 +64,7 @@ import buildStart from './builder/buildStart.js';
 import operatorCard from './builder/operatorCard.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
+import loopInterval from './builder/loopInterval.js';
 import branchCatchUp from './builder/branchCatchUp.js';
 import wipCap from './builder/wipCap.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
@@ -308,6 +312,11 @@ function usage(code = 2) {
   console.error('  wip-check [--repo owner/name]              is the merge side already full? 0 = room to claim,');
   console.error('                                             3 = capped (a normal decline), 1 = could not tell.');
   console.error('                                             Reads only; a capped pass writes nothing.');
+  console.error('  next-interval --for <loop-build|loop-review> [--fallback <s>] [--list <id>] [--state-file <f>] [--repo owner/name]');
+  console.error('                                             how long to sleep before the next pass, from how much work');
+  console.error('                                             this loop could actually CLAIM. Prints one integer on stdout');
+  console.error('                                             and the reason on stderr; always exits 0 (an unreadable queue');
+  console.error('                                             answers with the configured fallback). Floor 900s.');
   console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->]');
   console.error('                                             record the PR on the ticket in the ONE shape the merge step');
   console.error('                                             can read. Refuses first if the PR body carries no link back');
@@ -1088,6 +1097,121 @@ if (cmd === 'whoami') {
   const decision = wipCap.wipDecision({ prs, cap, ticketStatusById });
   console.log(decision.message);
   process.exit(decision.code);
+
+} else if (cmd === 'next-interval') {
+  // How long should this loop sleep before its next pass? Prints ONE INTEGER
+  // (seconds) on stdout and the reason on stderr, so a runner can do
+  //   NEXT=$(npm run --silent clickup -- next-interval --for loop-build --fallback 3600)
+  // and still have the reason land in its log. Always exits 0: an unreadable
+  // queue is answered with the configured fallback, not with a failure the
+  // runner would have to interpret. (task 86bbmg2fb)
+  const loop = arg('for');
+  if (!loop || !loopInterval.LOOP_STATUS[loop]) {
+    console.error(`next-interval needs --for <${loopInterval.KNOWN_LOOPS.join('|')}>`);
+    usage();
+  }
+  const fallbackSeconds = arg('fallback', String(loopInterval.DEFAULT_FALLBACK_SECONDS));
+  const list = arg('list', LOOP_QUEUE_LIST);
+  const stateFile = arg('state-file')
+    || process.env.LOOP_INTERVAL_STATE
+    || path.join(os.homedir(), 'loop-logs', `${loop}.interval-state.json`);
+
+  // Answer and leave: one exit path, so no branch can forget to print the
+  // integer or to exit 0.
+  const answer = (decision, { writeState = true } = {}) => {
+    if (writeState && decision.state) {
+      try {
+        mkdirSync(path.dirname(stateFile), { recursive: true });
+        writeFileSync(stateFile, `${JSON.stringify(decision.state)}\n`);
+      } catch (err) {
+        // A state file we cannot write costs hysteresis, not correctness: the
+        // next pass simply reads no history and holds at the fallback, which
+        // is the safe direction. Say so rather than dying.
+        console.error(`  (could not save interval state to ${stateFile}: ${err.message} — hysteresis will restart next cycle)`);
+      }
+    }
+    console.error(`interval: ${decision.reason}`);
+    console.log(String(decision.seconds));
+    process.exit(0);
+  };
+
+  // Previous cycle's reading. A missing or corrupt file is simply no history.
+  let state = null;
+  try {
+    if (existsSync(stateFile)) state = JSON.parse(readFileSync(stateFile, 'utf8'));
+  } catch {
+    console.error(`  (interval state at ${stateFile} is unreadable — starting the hysteresis over)`);
+  }
+
+  // Is the merge side full? Only `loop-build` can be stopped by the cap, so
+  // only `loop-build` pays for asking.
+  let capReached = false;
+  if (loop === 'loop-build') {
+    // `--repo` pins the probe to a repository the way `wip-check` allows, so
+    // it is not silently cwd-dependent (review round 1).
+    const repo = arg('repo');
+    const capOut = gh(['pr', 'list', ...(repo ? ['--repo', repo] : []), '--state', 'open', '--limit', '200', '--json', 'number,state']);
+    let prs = null;
+    if (capOut.ok) { try { prs = JSON.parse(capOut.stdout); } catch { prs = null; } }
+    if (prs === null) {
+      // Unlike `wip-check`, this one assumes the cap IS full when it cannot
+      // count. `wip-check` fails open because refusing there would stop all
+      // work on a transient `gh` hiccup; here the pass has already run and the
+      // only question is how long to sleep, so the safe direction is the long
+      // one. Never silent.
+      capReached = true;
+      console.error(`  (could not count open PRs — assuming the WIP cap is full, which lengthens this sleep rather than shortening it)`);
+    } else {
+      capReached = wipCap.wipDecision({ prs, cap: wipCap.resolveCap(process.env) }).code === 3;
+    }
+  }
+
+  // The queue itself — EVERY page. The first version read page 0 only, on the
+  // argument that the curve saturates at 4; but ClickUp pages newest-first and
+  // the loops claim oldest-first, so the oldest `Queued` backlog is exactly
+  // what a one-page read drops (review round 1; DOCTRINE 5.12).
+  let tasks = null;
+  let res = null;
+  try {
+    const out = await fetchAllTasks(list, { fatal: false });
+    if (out.failed || !Array.isArray(out.tasks)) throw new Error(`ClickUp list read failed (${out.failed || 'no tasks'})`);
+    tasks = out.tasks;
+    res = out.res;
+    console.error(`  (read ${tasks.length} open task(s) in the list, every page)`);
+  } catch (err) {
+    answer(loopInterval.fallbackInterval({ fallbackSeconds, why: err.message }), { writeState: false });
+  }
+
+  // Blockers the list cannot show. The list read returns OPEN tasks only, so
+  // a blocker that has finished is precisely the one that is missing — and
+  // the one that must not keep its dependant looking blocked forever (review
+  // round 1: a ticket waiting on a Live blocker read as blocked on every
+  // cycle). Read each such id back once; one that cannot be read stays
+  // unseen, which the module treats as still blocking — the safe direction.
+  const blockers = [];
+  for (const id of loopInterval.outsideBlockerIds(tasks)) {
+    try {
+      const out = await call('GET', `/api/v2/task/${id}`);
+      if (out.res.ok && out.json?.id) blockers.push(out.json);
+      else console.error(`  (blocker ${id} could not be read — HTTP ${out.res.status}; treated as still open)`);
+    } catch (err) {
+      console.error(`  (blocker ${id} could not be read — ${err.message}; treated as still open)`);
+    }
+  }
+
+  const { depth, excluded, note } = loopInterval.claimableDepth({
+    loop,
+    tasks,
+    capReached,
+    resolveRepo: resolveTaskRepo,
+    blockers,
+  });
+  if (note) console.error(`  (${note})`);
+  for (const x of excluded) console.error(`  (not claimable: ${x.id} — ${x.why})`);
+
+  const decision = loopInterval.decideInterval({ depth, state, fallbackSeconds });
+  if (res) reportLimits(res);
+  answer(decision);
 
 } else if (cmd === 'queue') {
   const list = arg('list');
