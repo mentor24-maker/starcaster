@@ -1,3 +1,56 @@
+## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
+
+You said you needed an emergency shutdown that clears the decks so you can run
+a priority job through yourself. What was actually missing was a *lane*: there
+was the slow, careful one — spec, build, independent review, your merge, about
+a day — and there was nothing else. So whenever something was urgent, the only
+way to move was to step outside the whole system, into the one place where none
+of the safety rules apply.
+
+There is now a switch. `npm run pipeline -- pause` tells every machine to stop
+taking new work, and then **waits** for anything already half-built to finish
+before it tells you the decks are clear — it never just yanks the plug, because
+a job killed halfway through leaves its ticket stuck in a place nothing ever
+looks at again. That has already happened twice this month. If you do not want
+to wait, `--now` stops instantly and names exactly what it left running, and
+when you resume, anything that got stranded is put back in the line with a note
+for whoever picks it up.
+
+The important part is who listens. A pause the robots respected but people
+ignored would not have prevented the thing that caused this: that was an
+ordinary working session, not a robot, and it would never have thought to
+check. So the switch lives in ClickUp, where everything already looks, and the
+instruction to check it is written into the file every session reads when it
+starts. If the switch cannot be read at all — ClickUp down, network out — the
+answer is "paused", deliberately: working while you have the deck can wreck
+what you are doing, while stopping when you have not costs some idle time and a
+message on screen.
+
+Anyone can pause the line, because stopping is a safety move. Only you can
+start it again. And if a pause is still on after two hours it says so on the
+party line and keeps saying so every hour, because a pipeline that is paused
+and a pipeline that is broken look identical from the outside — which is
+exactly the confusion that cost most of today.
+
+The independent check on this work found two holes in it before it shipped, and
+both are worth knowing about because they are the same shape. The switch keeps
+its state as a note on a ClickUp ticket, and the hourly "still paused" reminder
+is *also* a note on that same ticket — and ClickUp only hands back the newest
+twenty-five. So after about a day of reminders, the reminders had pushed the
+original "PAUSED" note out of sight, the machines could no longer find it, and
+they would have quietly gone back to work while you still had the deck. The two
+best features cancelled each other out, overnight, in the one place that was
+supposed to be careful. It now reads the *whole* history, and separately, a
+reminder with no pause behind it is treated as "I could not read this properly"
+rather than "nothing to see" — because a reminder only ever gets written while
+the line is off, so seeing one alone proves something is missing.
+
+The second was smaller and would have hit you first: every command written down
+here was missing two characters. `npm run` quietly swallows anything starting
+with a dash unless you put `--` in front, so typing the resume command exactly
+as documented got you told off for leaving out the very word you had just
+typed. Every command in every document now has it, and there is a check that
+fails if one ever loses it again.
 ## 2026-08-25 — An agent that asks you to spend money now has to show its work (#436)
 
 A few days ago one of the agents came to you with a confident recommendation:

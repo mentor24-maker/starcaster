@@ -249,6 +249,53 @@ name is not recognised does not quietly skip; it refuses out loud**, because
 "another machine is doing it" and "nobody is doing it" look identical
 otherwise, and only one of them is safe.
 
+## The pipeline can be paused — ask before you claim or merge
+
+Sometimes Dane needs the deck: something is urgent, and the loop lane — spec,
+build, review, merge — is about a day end to end. Until 2026-08-25 the only way
+to go fast was to step outside the system entirely, into the one place where
+none of the guards apply. That is a missing lane, not a person being careless,
+so there is now a switch:
+
+```
+npm run pipeline -- status                    is it running? if not, since when, who, and why
+npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
+npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
+npm run pipeline -- resume --operator-asked   hand the deck back (Dane's call, never an agent's)
+```
+
+**Type the `--`.** It is not decoration: without it npm swallows every `--flag`
+before the command sees it. Leave it out and `resume --operator-asked` is
+refused for missing the very flag you just typed, and `pause --now` waits the
+full half hour instead of returning at once.
+
+**Every actor asks, not just the loops.** A pause only the loops respected
+would not have prevented the collision it was written for — the session that
+merged PR #432 was hand-driven and would never have looked. So: **before
+claiming a ticket, and before merging anything, run `npm run pipeline -- check`.**
+Exit 3 means claim nothing, merge nothing, write nothing to ClickUp; say so
+once and stop. That is a normal outcome, exactly like `node:owns` saying
+another machine owns the job.
+
+**It fails safe.** If the switch cannot be read, it counts as paused. Running
+while Dane has the deck collides with whatever he is doing on it; pausing when
+he does not costs idle machines and a loud message. Those are not symmetric.
+
+**It drains, it does not kill.** `pause` stops new claims the instant it writes
+the flag and then waits for anything already building, because killing a pass
+mid-build strands its ticket in `Building` forever — the loops only ever claim
+from `Queued`, and that happened twice in the week the switch was written.
+`--now` skips the wait and names exactly what it left running. `resume` also
+unsticks anything a dead pass left behind: a stranded build goes back to
+`Queued` with a note, while a stranded review stays in `In review` — its build
+is finished and its PR is open, so only the stale claim is cleared.
+
+**An agent may pause; only Dane resumes.** Anyone should be able to stop the
+line — it is a safety move. Handing the deck back is his, because only the
+person standing on it knows whether he is finished. A pause that outlives two
+hours announces itself on the bus and keeps saying so hourly, because a pause
+nobody remembers looks exactly like a pipeline that has broken.
+
 ## One thread, one topic, one session
 
 A worktree keeps two threads from corrupting each other's files. It does
