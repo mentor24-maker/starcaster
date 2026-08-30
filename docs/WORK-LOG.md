@@ -1,3 +1,39 @@
+## 2026-08-30 — When a merge gets stuck, somebody is now actually told to fix it (#452)
+
+You found PR #434 sitting untouched for three days and asked why nothing had
+happened. Here is what was going on, and it was not anybody forgetting.
+
+When two pieces of work change the same lines of the same file, the computer
+cannot safely guess which version wins — that is a "merge conflict", and it
+needs a pair of hands. The system knew that. On hitting one it did two things:
+it left a note on your ticket saying your approval still stood and you did not
+need to do anything, and it posted a message on the party line asking for a
+session to come and sort the branch out.
+
+The second half never worked. **Nothing reads the party line.** There is no
+watcher on that channel turning those requests into work, so the message went
+into an empty room — while the note on your ticket, sitting right next to it,
+described a process that was well underway. Both halves individually looked
+fine. Together they meant a job nobody had, under a message saying it was in
+hand. And it was quiet, so nothing looked wrong: every hourly check reported
+"handed off, nothing new to say" and "0 merged", which is exactly what a
+healthy system says when it has nothing to report.
+
+You picked the fix: instead of asking an empty room, **file it as an ordinary
+job in the queue**. The build loop already empties that queue every pass, on a
+timer, today — so the worker exists and is already running. Now a conflict
+creates a normal ticket ("Resolve the merge conflict on PR #N"), carrying the
+branch, what clashed, and a note telling whoever picks it up not to come back
+and ask you to approve a second time, because you already did.
+
+Two more things came with it. Every message the merge step writes now has to
+name **who** is going to act next, and if the answer is nobody it has to say so
+out loud — "Nothing is currently working on it" — rather than reaching for the
+comfortable phrasing that implies someone. And silence now expires: a conflict
+with no ticket behind it is flagged immediately, and one that has not been
+sorted within a day starts reporting itself by name on every single pass. Three
+days of nothing cannot happen again without something saying so.
+
 ## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
 
 You said you needed an emergency shutdown that clears the decks so you can run
