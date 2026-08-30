@@ -68,6 +68,7 @@ import loopInterval from './builder/loopInterval.js';
 import branchCatchUp from './builder/branchCatchUp.js';
 import wipCap from './builder/wipCap.js';
 import autoMergeLane from './builder/autoMergeLane.js';
+import autoMergeLedgerFile from './builder/autoMergeLedgerFile.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
 import sendBackRounds from './builder/sendBackRounds.js';
 import pipelinePause from './builder/pipelinePause.js';
@@ -90,10 +91,11 @@ const {
 const {
   laneADecision, laneAEligibility, laneGate, killSwitchState, switchCommand,
   rateCapState, selfDisableState, announcementNotice, cancellationNotice,
-  digestDue, digestBody, WINDOW_MS, DIGEST_WINDOW_MS,
-  asLedger, ledgerAfterMerge, ledgerAfterSwitch, ledgerAfterDisable,
+  digestDue, digestBody, digestSince, WINDOW_MS,
+  ledgerAfterMerge, ledgerAfterSwitch, ledgerAfterDisable,
   ledgerAfterDigest, switchSignalsFromLedger, mergesSince,
 } = autoMergeLane;
+const { readLedgerFile, saveLedgerIfReadable } = autoMergeLedgerFile;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
 const { resolveTaskRepo } = taskRepo;
 const {
@@ -676,6 +678,13 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
   });
   if (decision.act === 'ignore') return { outcome: 'none' };
 
+  // The comment the dedup marker threads under. For his word it is that
+  // comment; for a lane it is the ANNOUNCEMENT — a laneADecision has no
+  // commentId, and passing one through POSTed to /comment/undefined/reply,
+  // which failed and filed a false "could not write the dedup marker" under
+  // the very section the self-disable watches (2026-08-30, review round 2).
+  const authorizingComment = lane ? decision.announcementId : decision.commentId;
+
   const label = `"${task.name}" (${task.id})`;
 
   // Terminal answer: say why on the ticket and on the bus, then mark the
@@ -855,13 +864,13 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
   // two writes fail, the worst case is a ticket that needs a hand, not a
   // second merge attempt against an already-merged PR.
   const mergedRecord = mergedNotice({
-    commentId: decision.commentId,
+    commentId: authorizingComment,
     pr,
     mergedAt,
     lane: lane ? lane.name : undefined,
     files: lane ? lane.files : undefined,
   });
-  await markMergeHandled(decision.commentId, task, unchecked, mergedRecord.marker);
+  await markMergeHandled(authorizingComment, task, unchecked, mergedRecord.marker);
 
   const recOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: mergedRecord.body });
   if (!recOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} MERGED, but the record comment failed to post`);
@@ -914,33 +923,9 @@ function ledgerPath() {
   return `${dir}/auto-merge-ledger.json`;
 }
 
-/**
- * Read the ledger. A MISSING file is an empty ledger — that is a first run,
- * not a fault. An UNREADABLE or unparseable one is a different thing and must
- * not be waved through: the rate cap and the self-disable flag both live in
- * here, so "I could not read it" has to mean what an unreadable kill switch
- * means, which is OFF.
- */
-function readLedger() {
-  const file = ledgerPath();
-  if (!file) return { ok: false, ledger: asLedger(null), file: null, why: 'could not locate the git directory, so the auto-merge ledger could not be read' };
-  if (!existsSync(file)) return { ok: true, ledger: asLedger(null), file, fresh: true };
-  try {
-    return { ok: true, ledger: asLedger(JSON.parse(readFileSync(file, 'utf8'))), file };
-  } catch (e) {
-    return { ok: false, ledger: asLedger(null), file, why: `the auto-merge ledger could not be read (${e.message})` };
-  }
-}
-
-function writeLedger(ledger, file) {
-  if (!file) return { ok: false, why: 'no ledger path' };
-  try {
-    writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, why: e.message };
-  }
-}
+/** The ledger's IO lives in autoMergeLedgerFile.js so it can be tested;
+ *  these two only supply the path. */
+function readLedger() { return readLedgerFile(ledgerPath()); }
 
 /**
  * The kill switch's other half: the party line. A read failure here is NOT a
@@ -952,7 +937,14 @@ async function readBusSwitchSignals(channel) {
   if (!out.res.ok) {
     return { readable: false, signals: [], why: `the party line could not be read (HTTP ${out.res.status})` };
   }
-  const messages = out.json?.data || out.json?.messages || [];
+  // An HTTP 200 whose body is not the shape we know is NOT "he never said
+  // stop" — it is "we could not tell", which is the one place unreadable
+  // must not equal absent (2026-08-30, review round 2).
+  const messages = Array.isArray(out.json?.data) ? out.json.data
+    : Array.isArray(out.json?.messages) ? out.json.messages : null;
+  if (!messages) {
+    return { readable: false, signals: [], why: 'the party line answered, but not in a shape this relay recognises as a message list' };
+  }
   const signals = [];
   for (const m of messages) {
     // Only HIS words. An agent post quoting the phrase is a machine talking to
@@ -985,11 +977,18 @@ function mainBuildIsRed(repo) {
 
 /** The PR's changed files — the whole of criterion 1's evidence. */
 function prChangedFiles(prNumber, repo) {
-  const out = gh(['pr', 'view', String(prNumber), '--repo', repo, '--json', 'files']);
+  const out = gh(['pr', 'view', String(prNumber), '--repo', repo, '--json', 'files,changedFiles']);
   if (!out.ok) return { ok: false, files: [], why: out.stderr.slice(0, 200) };
   try {
     const json = JSON.parse(out.stdout);
-    return { ok: true, files: (json.files || []).map((f) => f.path) };
+    const files = (json.files || []).map((f) => f.path);
+    // `files` is capped at 100 by gh; `changedFiles` is the true count. A PR
+    // judged on a truncated list could be "tests only" in the first hundred
+    // and touch lib/ in the hundred-and-first. Refuse rather than judge.
+    if (Number.isFinite(Number(json.changedFiles)) && Number(json.changedFiles) !== files.length) {
+      return { ok: false, files: [], why: `gh listed ${files.length} files but the PR changes ${json.changedFiles} — the list is truncated, so eligibility cannot be judged` };
+    }
+    return { ok: true, files };
   } catch {
     return { ok: false, files: [], why: 'gh returned unparseable JSON for the file list' };
   }
@@ -2609,7 +2608,12 @@ if (cmd === 'whoami') {
     const selfDisable = selfDisableState({ unchecked, mainBuildRed: mainRed, persisted: ledger.disabled });
     if (selfDisable.disabled && selfDisable.fresh) {
       ledger = ledgerAfterDisable(ledger, selfDisable.why, now);
-      await postToBus(channel, `[CC-starcaster bus-relay] AUTO-MERGE DISABLED ITSELF: ${selfDisable.why}. No pull request will be auto-merged until a human says "resume auto-merging". Merges on your own word are unaffected.`);
+      const line = `[CC-starcaster bus-relay] AUTO-MERGE DISABLED ITSELF: ${selfDisable.why}. No pull request will be auto-merged until a human says "resume auto-merging". Merges on your own word are unaffected.`;
+      // A dry run says what it would post. Until 2026-08-30 this was the one
+      // Lane A write with no guard — and because the ledger write IS guarded,
+      // the flag never persisted and it re-posted on every dry run.
+      if (dryRun) console.error(`  DRY RUN — would post to the bus: ${line}`);
+      else await postToBus(channel, line);
     }
 
     const gate = laneGate({
@@ -2727,7 +2731,7 @@ if (cmd === 'whoami') {
             ledger = ledgerAfterMerge(ledger, {
               at: Date.now(), lane: 'A', pr: pr.number, url: pr.url, task: t.id, repo, files: decision.eligibility.files,
             }, Date.now());
-            const saved = writeLedger(ledger, led.file);
+            const saved = saveLedgerIfReadable(led, ledger);
             // The ledger IS the rate cap. If it cannot be written, the next
             // pass has no idea this merge happened and the cap stops
             // capping — which is exactly the runaway condition 2 exists for.
@@ -2756,9 +2760,10 @@ if (cmd === 'whoami') {
     // posts "none" on a quiet day — a silent day and a broken job must not
     // look alike.
     if (!dryRun && digestDue(ledger.lastDigestAt, now)) {
+      const since = digestSince(ledger, now);
       const body = digestBody({
-        entries: mergesSince(ledger, now - DIGEST_WINDOW_MS),
-        sinceLabel: 'the last 24 hours',
+        entries: mergesSince(ledger, since),
+        sinceLabel: ledger.lastDigestAt > 0 ? `the last digest (${clockAt(since)})` : 'the last 24 hours',
         clockLabel: clockAt(now),
       });
       const bus = await postToBus(channel, body);
@@ -2766,7 +2771,14 @@ if (cmd === 'whoami') {
       else reportBusFailure({ cosmetic: false, unchecked, busSkipped, line: `the daily auto-merge digest could not be posted (${bus.why}) — it will be retried next pass` });
     }
 
-    if (!dryRun && led.file) writeLedger(ledger, led.file);
+    // NEVER over a ledger that could not be read: the file may hold a stop
+    // this pass never saw, and an empty ledger written over it would lift
+    // that stop on the next pass (2026-08-30, review round 2).
+    if (!dryRun) {
+      const saved = saveLedgerIfReadable(led, ledger);
+      if (!saved.ok && !saved.skipped) unchecked.push(`the auto-merge ledger could not be written (${saved.why})`);
+      else if (saved.skipped && !led.ok) console.error(`  ${saved.why}`);
+    }
   }
 
   // A pause that has outlived its welcome announces itself (task 86bbmfc15,
@@ -2914,8 +2926,8 @@ if (cmd === 'whoami') {
   console.log(`window:  ${WINDOW_MS / 60000} minutes`);
   console.log(`digest:  ${digestDue(led.ledger.lastDigestAt, now) ? 'due' : `last posted ${clockAt(led.ledger.lastDigestAt)}`}`);
   console.log(`LANE A:  ${gate.allowed ? 'RUNNING' : `NOT RUNNING — ${gate.why}`}`);
-  const recent = mergesSince(led.ledger, now - DIGEST_WINDOW_MS);
-  console.log(`recent:  ${recent.length} auto-merge(s) in the last 24 hours`);
+  const recent = mergesSince(led.ledger, digestSince(led.ledger, now));
+  console.log(`recent:  ${recent.length} auto-merge(s) since the last digest (or the last 24 hours if none has posted)`);
   for (const m of recent) console.log(`  PR #${m.pr}  task ${m.task}  ${clockAt(m.at)}  ${(m.files || []).join(' ')}`);
   process.exit(gate.allowed ? 0 : 3);
 

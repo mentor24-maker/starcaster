@@ -960,9 +960,11 @@ riskiest file, not the average of them.
 
 Disqualified even though they match, because a machine never auto-merges the
 machinery that governs machines: any `CLAUDE.md`, `docs/DOCTRINE.md`, this file,
-anything under `.github/`, and the tests covering the merge step itself
-(`mergeOnComment`, `branchCatchUp`, `wipCap`, `busRelayPlan`, `autoMergeLane`,
-`reviewGate`). A test that governs merging is governance.
+anything under `.github/`, `.claude/` or `skills/` (the loop skills are the
+review gate's own instructions, and they are `.md` — review round 2 found them
+eligible), and the tests covering the merge step itself (`mergeOnComment`,
+`branchCatchUp`, `wipCap`, `busRelayPlan`, `autoMergeLane`, `reviewGate`). A
+test that governs merging is governance.
 
 Nothing else is loosened. A review PASS, an open PR, green checks and a clean
 merge are all still required, and are checked by the same gate your own
@@ -991,6 +993,13 @@ If the pull request gains a runtime file *during* the window, it does not merge:
 eligibility is re-checked against a fresh read at merge time, not trusted from
 the announcement.
 
+**An announcement goes stale after a day.** An armed ticket the relay finds
+more than 24 hours after its announcement is cancelled, not merged — the hour it
+promised you ended long ago. Without this, three PRs armed before a `stop
+auto-merging`, then a `resume` a fortnight later, would all merge on the next
+pass on windows that closed two weeks ago. Like any cancel, it takes a fresh
+review PASS to announce again.
+
 ### Turning it off
 
 ```
@@ -1007,9 +1016,14 @@ fine": "you never said stop" and "I could not find out whether you said stop"
 look identical from inside a pass, and only one of them is safe to act on. That
 means a party-line outage turns the lane off until the bus is back.
 
-`--no-merge` on the relay turns Lane A off along with merge-on-comment. So does
-a stop recorded on an earlier pass: a stop is written down, so it cannot quietly
-expire when the ticket it was said on closes.
+`--no-merge` on the relay turns Lane A off along with merge-on-comment, and so
+does a paused pipeline (`npm run pipeline -- pause`). So does a stop recorded on
+an earlier pass: a stop is written down in the ledger (`.git/auto-merge-ledger.json`),
+so it cannot quietly expire when the ticket it was said on closes. **A ledger
+that cannot be read is never written over** — the pass halts, says so, and
+leaves the file for a hand to look at. Writing an empty ledger over a corrupt
+one would erase the stop and switch the lane back on a pass later, which is
+the direction a fail-safe must never fail in (review round 2, 2026-08-30).
 
 ### The four things that keep it honest
 
@@ -1017,7 +1031,8 @@ expire when the ticket it was said on closes.
    loop looks like, so the cap turns a runaway into a pause.
 2. **A daily digest** on the party line, listing every auto-merge with its lane,
    its PR and the files that qualified it — **and saying "none" on a quiet day**,
-   because a silent day and a broken job must not look alike.
+   because a silent day and a broken job must not look alike. Each digest
+   covers everything since the previous one, so nothing is listed twice.
 3. **It disables itself on trouble.** If a pass reports anything under "could
    not fully verify", or `main`'s build is red after the last auto-merge, the
    lane switches off and says why on the bus. `resume auto-merging` puts it back.

@@ -10,6 +10,7 @@ const {
   governanceReason,
   GOVERNANCE_TEST_STEMS,
   WINDOW_MS,
+  STALE_MS,
   windowState,
   parseAutoMergeMarker,
   latestAutoMergeMarker,
@@ -28,7 +29,9 @@ const {
   cancellationNotice,
   digestDue,
   digestBody,
+  digestSince,
   DIGEST_EVERY_MS,
+  DIGEST_WINDOW_MS,
   asLedger,
   ledgerAfterMerge,
   ledgerAfterSwitch,
@@ -122,6 +125,14 @@ test('criterion 4: the machinery that governs machines is never auto-merged', ()
     'docs/LOOP_ENGINEERING.md',
     '.github/PULL_REQUEST_TEMPLATE.md',
     '.github/workflows/ci.yml',
+    // Review round 2 (2026-08-30): the loop's own instruction files are `.md`
+    // and were eligible — a PR rewriting the review gate would have merged
+    // itself. Agent configuration is governance, whichever folder it is in.
+    '.claude/skills/loop-review/SKILL.md',
+    '.claude/skills/loop-build/SKILL.md',
+    '.claude/skills/loop-spec/SKILL.md',
+    '.claude/settings.json',
+    'skills/reddit-channel-posting-operator/SKILL.md',
     'scripts/builder/mergeOnComment.test.js',
     'scripts/builder/branchCatchUp.test.js',
     'scripts/builder/wipCap.test.js',
@@ -442,6 +453,35 @@ test('an armed ticket waits out its hour, then merges', () => {
   assert.deepEqual(due.eligibility.files, DOCS_ONLY);
 });
 
+test('an armed announcement goes STALE after a day, and a stale one cancels rather than merges', () => {
+  // Review round 2 (2026-08-30): arm three PRs, say "stop auto-merging", come
+  // back a fortnight later and say "resume" — all three were past their
+  // deadline and would have merged on windows that closed two weeks ago,
+  // with no fresh notice and nothing on his screen.
+  assert.equal(STALE_MS, 24 * WINDOW_MS, 'a day is the shelf life, as a named multiple of the window');
+  const fresh = windowState({ announcedAt: T0, now: T0 + 2 * HOUR });
+  assert.equal(fresh.elapsed, true);
+  assert.equal(fresh.stale, false);
+  const old = windowState({ announcedAt: T0, now: T0 + STALE_MS });
+  assert.equal(old.stale, true);
+  assert.equal(windowState({ announcedAt: 0, now: T0 }).stale, false, 'no announcement is not a stale one');
+
+  const comments = readyTicket({ extra: [armed(42, T0 + 10)] });
+  const base = { status: 'Ready to launch', comments, operatorId: OPERATOR, files: DOCS_ONLY };
+  const d = laneADecision({ ...base, now: T0 + 10 + 14 * DAY });
+  assert.equal(d.act, 'cancel', 'a fortnight-old announcement must cancel, never merge');
+  assert.equal(d.stale, true);
+  assert.match(d.reason, /stale/);
+  assert.equal(d.announcementId, comments[2].id);
+
+  // And the cancel is terminal like any other: no re-announcement without a
+  // fresh PASS, which is the existing rule doing its job.
+  const after = [...comments, cancelled(42, T0 + 10 + 14 * DAY)];
+  const again = laneADecision({ ...base, comments: after, now: T0 + 10 + 14 * DAY + 1000 });
+  assert.equal(again.act, 'ignore');
+  assert.match(again.reason, /no fresh review PASS/);
+});
+
 test('ANY comment from Dane during the window cancels it — not a keyword', () => {
   const comments = readyTicket({ extra: [armed(42, T0 + 10), fromDane('hmm', T0 + 20)] });
   const d = laneADecision({
@@ -635,6 +675,21 @@ test('mergesSince and the digest window agree', () => {
   assert.deepEqual(mergesSince(l, T0 - DAY).map((m) => m.pr), [1]);
 });
 
+test('consecutive digests do not overlap — each one starts where the last one stopped', () => {
+  // Review round 2 (2026-08-30): digests were 20 hours apart and each covered
+  // a fixed 24, so every merge in the four-hour overlap was listed twice.
+  const never = asLedger(null);
+  assert.equal(digestSince(never, T0), T0 - DIGEST_WINDOW_MS, 'the first digest ever covers a day');
+  const posted = ledgerAfterDigest(never, T0 - 20 * HOUR);
+  assert.equal(digestSince(posted, T0), T0 - 20 * HOUR, 'a later digest starts at the previous one');
+
+  let l = posted;
+  l = ledgerAfterMerge(l, { at: T0 - 22 * HOUR, pr: 1 }, T0); // before the last digest: already reported
+  l = ledgerAfterMerge(l, { at: T0 - 3 * HOUR, pr: 2 }, T0);  // since it: report now
+  assert.deepEqual(mergesSince(l, digestSince(l, T0)).map((m) => m.pr), [2],
+    'a merge reported by the previous digest must not be reported again');
+});
+
 test('the digest stamp advances', () => {
   assert.equal(ledgerAfterDigest(asLedger(null), T0).lastDigestAt, T0);
 });
@@ -705,12 +760,49 @@ test('a paused pipeline turns Lane A off with the rest', () => {
     'the merge off-switch must include the pipeline pause, not just --no-merge');
 });
 
+test('a lane merge threads its marker under the ANNOUNCEMENT, not an undefined comment', () => {
+  // Review round 2 (2026-08-30): laneADecision sets announcementId, never
+  // commentId, so the marker POSTed to /comment/undefined/reply, failed, and
+  // filed a false "could not write the dedup marker" under the very section
+  // the self-disable watches. Every auto-merge would have disabled the lane.
+  assert.match(RELAY, /const authorizingComment = lane \? decision\.announcementId : decision\.commentId;/);
+  assert.match(RELAY, /markMergeHandled\(authorizingComment, task, unchecked, mergedRecord\.marker\)/);
+  assert.match(RELAY, /mergedNotice\(\{\n\s*commentId: authorizingComment,/);
+  const laneSection = RELAY.slice(RELAY.indexOf('async function runMergeStep'), RELAY.indexOf('function ledgerPath'));
+  assert.equal(/mergedRecord\.marker[\s\S]*decision\.commentId/.test(laneSection.slice(laneSection.indexOf('MERGED PR'))), false,
+    'nothing after the merge may reach for decision.commentId, which a lane never has');
+});
+
+test('a ledger that could not be read is never written over', () => {
+  // Review round 2 (2026-08-30): the end-of-pass write was `if (!dryRun &&
+  // led.file) writeLedger(...)`, so a corrupt ledger was replaced with an
+  // empty one and a persisted stop vanished on the next pass. The write now
+  // goes through saveLedgerIfReadable, which refuses unless the read was clean.
+  const laneSection = RELAY.slice(RELAY.indexOf('Lane A: announce, wait one hour, merge'));
+  assert.equal(/writeLedger(File)?\(/.test(laneSection), false, 'the lane must not write the ledger directly');
+  assert.match(laneSection, /saveLedgerIfReadable\(led, ledger\)/);
+  assert.equal(/readFileSync|writeFileSync/.test(RELAY.slice(RELAY.indexOf('function readLedger'), RELAY.indexOf('readBusSwitchSignals'))), false,
+    'ledger IO lives in autoMergeLedgerFile.js, where it is tested');
+});
+
+test('an unrecognised party-line body is UNREADABLE, not "he never said stop"', () => {
+  const fn = RELAY.slice(RELAY.indexOf('async function readBusSwitchSignals'), RELAY.indexOf('function mainBuildIsRed'));
+  assert.match(fn, /if \(!messages\) \{\n\s*return \{ readable: false/);
+});
+
+test('a truncated file list is refused rather than judged', () => {
+  const fn = RELAY.slice(RELAY.indexOf('function prChangedFiles'), RELAY.indexOf('async function postLaneNotice'));
+  assert.match(fn, /'files,changedFiles'/);
+  assert.match(fn, /json\.changedFiles\) !== files\.length/);
+});
+
 test('a dry run announces nothing, cancels nothing and merges nothing', () => {
   const laneSection = RELAY.slice(RELAY.indexOf('Lane A: announce, wait one hour, merge'));
   for (const phrase of [
     'DRY RUN — would announce Lane A',
     'DRY RUN — would cancel Lane A',
     'DRY RUN — would auto-merge PR',
+    'DRY RUN — would post to the bus',
   ]) {
     assert.ok(laneSection.includes(phrase), `dry run must cover: ${phrase}`);
   }
@@ -723,6 +815,8 @@ test('this very change could not have auto-merged itself', () => {
   const ownFiles = [
     'scripts/builder/autoMergeLane.js',
     'scripts/builder/autoMergeLane.test.js',
+    'scripts/builder/autoMergeLedgerFile.js',
+    'scripts/builder/autoMergeLedgerFile.test.js',
     'scripts/clickup_direct.mjs',
     'docs/LOOP_ENGINEERING.md',
   ];

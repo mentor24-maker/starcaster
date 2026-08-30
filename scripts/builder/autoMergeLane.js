@@ -113,8 +113,14 @@ const GOVERNANCE_TEST_STEMS = [
  * `.github/` is CI machinery, and it contains Markdown (issue and PR
  * templates) that the allow list would otherwise wave through. A workflow file
  * is already ineligible because it is not `.md` — the templates are the hole.
+ *
+ * `.claude/` and `skills/` (2026-08-30, review round 2) are the same class and
+ * were missed: `.claude/skills/loop-review/SKILL.md` IS the review gate's
+ * instructions, every one of them is `.md`, and a PR rewriting how the review
+ * loop gates work read as "documentation" and would have merged itself an hour
+ * after announcing. Agent configuration is not prose, whichever folder it is in.
  */
-const GOVERNANCE_PREFIXES = ['.github/'];
+const GOVERNANCE_PREFIXES = ['.github/', '.claude/', 'skills/'];
 
 function basenameOf(p) {
   const s = String(p || '');
@@ -138,8 +144,11 @@ function governanceReason(file) {
   if (GOVERNANCE_PATHS.includes(path)) {
     return `${path} is doctrine — a machine does not auto-merge the rules it is judged by`;
   }
-  if (GOVERNANCE_PREFIXES.some((p) => path.startsWith(p))) {
+  if (path.startsWith('.github/')) {
     return `${path} is CI machinery — a machine does not auto-merge what runs its own checks`;
+  }
+  if (GOVERNANCE_PREFIXES.some((p) => path.startsWith(p))) {
+    return `${path} is agent configuration — a machine does not auto-merge the instructions it runs on`;
   }
   const m = /(^|\/)([^/]+)\.test\.(js|ts|tsx|mjs)$/.exec(path);
   if (m && GOVERNANCE_TEST_STEMS.includes(m[2])) {
@@ -207,6 +216,16 @@ function laneAEligibility(files) {
 const WINDOW_MS = 60 * 60 * 1000;
 
 /**
+ * An announcement has a shelf life (2026-08-30, review round 2). Without one,
+ * three PRs armed before a "stop auto-merging" would all be past their
+ * deadline when he said "resume" a fortnight later, and would merge on the
+ * next pass on windows that closed two weeks ago, with no fresh notice and
+ * nothing on his screen. A day is generous: a pass runs every half hour, so an
+ * armed ticket that is a day old was not waited out, it was forgotten.
+ */
+const STALE_MS = 24 * WINDOW_MS;
+
+/**
  * How far into the window are we?
  *
  * `announcedAt` is ALWAYS the timestamp ClickUp put on the announcement
@@ -215,11 +234,11 @@ const WINDOW_MS = 60 * 60 * 1000;
  * from the send would run even when the comment never arrived, merging
  * something nobody was ever told about.
  */
-function windowState({ announcedAt, now, windowMs = WINDOW_MS } = {}) {
+function windowState({ announcedAt, now, windowMs = WINDOW_MS, staleMs = STALE_MS } = {}) {
   const started = Number(announcedAt);
   const at = Number(now);
   if (!Number.isFinite(started) || started <= 0) {
-    return { valid: false, elapsed: false, elapsedMs: 0, remainingMs: windowMs, deadlineAt: null };
+    return { valid: false, elapsed: false, stale: false, elapsedMs: 0, remainingMs: windowMs, deadlineAt: null };
   }
   const deadlineAt = started + windowMs;
   const elapsedMs = at - started;
@@ -229,6 +248,9 @@ function windowState({ announcedAt, now, windowMs = WINDOW_MS } = {}) {
     elapsedMs,
     remainingMs: Math.max(0, deadlineAt - at),
     elapsed: at >= deadlineAt,
+    // Past the deadline AND past its shelf life: the window closed long ago
+    // and nobody was watching when it did.
+    stale: elapsedMs >= staleMs,
   };
 }
 
@@ -467,6 +489,7 @@ function laneADecision({
   now,
   files = null,
   windowMs = WINDOW_MS,
+  staleMs = STALE_MS,
 } = {}) {
   const all = byDateNewestFirst(comments);
 
@@ -488,7 +511,21 @@ function laneADecision({
   const armed = marker && marker.kind === 'armed' && marker.pr === pr.number;
 
   if (armed) {
-    const win = windowState({ announcedAt: marker.at, now, windowMs });
+    const win = windowState({ announcedAt: marker.at, now, windowMs, staleMs });
+
+    // A stale announcement is cancelled, never merged: the hour it promised
+    // him ended long ago, and a merge now would land on nobody's watch. It
+    // takes a fresh review PASS to announce again, like any other cancel.
+    if (win.stale) {
+      return {
+        act: 'cancel',
+        pr,
+        announcementId: marker.commentId,
+        announcedAt: marker.at,
+        reason: `the announcement is ${Math.round(win.elapsedMs / HOUR_MS)} hours old — its window closed long ago, so it is stale rather than due`,
+        stale: true,
+      };
+    }
 
     // THE OBJECTION. Any comment from him during the window cancels it — any
     // comment, not a keyword. If he is talking about it, the machine stops.
@@ -648,8 +685,19 @@ function cancellationNotice({ pr, why, at }) {
  */
 const DIGEST_EVERY_MS = 20 * HOUR_MS;
 
-/** The span a digest covers, exported so the plumbing never spells it out. */
+/** The span a digest covers when it has never run before. */
 const DIGEST_WINDOW_MS = DAY_MS;
+
+/**
+ * Where this digest starts counting from. Consecutive digests are 20 hours
+ * apart and used to each cover a fixed 24 — so every merge in the four-hour
+ * overlap was reported twice (2026-08-30, review round 2). A digest now covers
+ * everything since the LAST digest, and only the first ever one covers a day.
+ */
+function digestSince(ledger, now, windowMs = DIGEST_WINDOW_MS) {
+  const last = Number(asLedger(ledger).lastDigestAt);
+  return last > 0 ? last : Number(now) - windowMs;
+}
 
 /** Due if it has never run, or if the interval has passed. */
 function digestDue(lastDigestAt, now, everyMs = DIGEST_EVERY_MS) {
@@ -766,6 +814,7 @@ module.exports = {
   laneAEligibility,
   // window
   WINDOW_MS,
+  STALE_MS,
   windowState,
   // ticket record
   AUTO_MERGE_MARKER,
@@ -793,6 +842,7 @@ module.exports = {
   // digest
   DIGEST_EVERY_MS,
   DIGEST_WINDOW_MS,
+  digestSince,
   digestDue,
   digestBody,
   // ledger
