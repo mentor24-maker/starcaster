@@ -236,6 +236,38 @@ And when you find one of these, look for the destructive twin: the same dialog
 that stops a duplicate is what stops an accidental overwrite of a section 40
 pages depend on.
 
+### 2.5 A person is a human being — an agent is not, and a hand-off must say which
+
+`person` and `human` mean a human being. In practice, Dane. An agent session is
+an **agent session** — never a person, a human, somebody, or anyone. Ratified in
+vault `doctrine/TERMINOLOGY.md` (2026-08-29), under the same rule that retired
+"banner" and "harness": doctrine states rules in words with exactly one referent.
+
+This is not house style. It is the answer to the only question that matters at a
+hand-off — *whose hands does this need, and are they Dane's?*
+
+Ticket 86bbmfc15 (PR #434) sat blocked for four days. The merge step hit a real
+conflict and behaved correctly, but its messages did not. It told Dane *"your
+approval is still standing — you do not have to say merge again"* and *"it will
+merge on a later run, once the branch is caught up."* Its log and help text
+called the actor it needed **a human**. An agent read that log and told Dane the
+system had "stopped and asked for a person," so he concluded he was the blocker
+and had missed a prompt. He was not the blocker, no prompt existed, and the
+actor actually requested — an agent session, asked for on the bus — was not
+listening, because nothing consumes those messages. The wrong word hid a missing
+actor for four days, and the conflict itself was three lines.
+
+**Do this:** at any hand-off, name which of the two it needs. A hand-off that
+cannot name a specific waiting actor does not get to imply one. Passive voice is
+the tell — *"once the branch is caught up"* reads as a process underway until you
+ask who is doing the catching up. If nothing is going to pick the work up, the
+message says so plainly.
+
+**And do not over-correct.** Most existing uses are right and must stay: *"a
+human eye is the only gate that exists"*, *"only a HUMAN exports a token by
+hand"*, *"an Urgent flag is a human override"*. The test is not the word, it is
+the referent — replace it only where the actor is genuinely an agent session.
+
 ---
 
 ## 3. Designing checks
@@ -1070,6 +1102,53 @@ Two lessons, and the second is the durable one:
 old. That is not the point. An unattended agent crossed a line the operator drew
 and the crossing was invisible; on a machine nobody is watching, "the guard has
 a hole" is the whole finding.*
+
+---
+
+### 6.7 On a send-back, merge `main` in before you rework — the fix may already be there
+
+**The incident (2026-08-30, ticket 86bbmg2fb, PR #441).** Review sent the
+branch back asking, among other things, for `next-interval` to survive an
+unreadable list without exiting non-zero. `fetchAllTasks` ended in `die()`, so
+the rework added a `soft` option that throws instead. Meanwhile — while the
+branch sat in review — a different ticket (86bbm4zwd) had added the same escape
+hatch to the same function on `main`, named `fatal: false`, returning
+`{ tasks: null, failed }`. `ship` stopped on the conflict. The resolution was
+to delete the rework and call `main`'s version: the correct code had existed
+before the rework started, and the only work the rework produced was the
+conflict.
+
+**Do this:** the first command on a sent-back branch is `git merge
+origin/main`, before reading the review notes against the code. A branch that
+has been in review for days is editing a file `main` has since changed; §6.2
+says the conflict is information, and this is the cheap time to receive it.
+Then look for the asked-for fix on `main` by *behaviour* — search for the
+function, not for the name you were about to give it.
+
+### 6.8 A fixture must be a shape the real source can produce, and the assertion must name the value
+
+**The incident (same ticket).** The test that pinned "a ticket waiting on a
+FINISHED blocker is claimable" put the finished blocker *in* the task list
+beside its dependant. ClickUp's list endpoint never returns closed tasks
+(`include_closed` defaults to false), so the fixture was a shape production
+cannot produce; the code path it exercised was real, and the path production
+took — blocker absent, treated as still open, ticket excluded forever — had no
+test and no failure, because it fails toward sleeping longer. Review found it
+only by probing the live endpoint (49 tasks without `include_closed`, 104
+with).
+
+Same ticket, second shape: `clampToFloor` was "deliberately total" and had a
+break-test — `assert.ok(result >= FLOOR)`. `Number(null)`, `Number('')`,
+`Number([])` and `Number(false)` are all `0`, finite, and raised to the floor:
+the SHORT end, which switched hysteresis off for a hand-edited state file. The
+assertion was true of the wrong answer.
+
+**Do this:** before writing a fixture for an external source, read one real
+response and build from *its* shape — what it omits matters as much as what it
+carries. And a break-test asserts the **value** the rule requires, not a bound
+the wrong answer also satisfies: `assert.equal(clampToFloor(null), 3600)`, not
+`>= 900`. A guard that only checks `isFinite` has not checked "is this a
+number" — `Number()` manufactures finite zeros from garbage.
 
 ---
 

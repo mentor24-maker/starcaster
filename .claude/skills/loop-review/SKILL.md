@@ -36,6 +36,33 @@ npm run node:owns -- loop-review
     safe. The message says exactly what to type to fix it (one line, once per
     machine). `npm run node:whoami` shows the whole picture.
 
+## Then: has the operator taken the deck?
+
+There is a sanctioned way for Dane to clear the decks and run something
+through fast, and it is a switch rather than an improvisation. While it is on,
+the machines stop taking new work so nothing lands under him while he is
+working.
+
+```bash
+npm run pipeline -- check
+```
+
+*   **exit 0** — the pipeline is running. Carry on.
+*   **exit 3** — **paused.** Claim nothing, review nothing, merge nothing,
+    and write NOTHING to ClickUp — no status, no comment, no Loop note. Report
+    the line it printed and finish the pass **successfully**. This is a normal
+    outcome, the same shape as another machine owning the job.
+
+It **fails safe**: if the switch cannot be read at all, it says so and still
+exits 3. That is deliberate. Running while the operator has the deck collides
+with whatever he is doing there; pausing when he does not costs idle machines
+and one loud message. Those are not symmetric, so the tie goes to stopping.
+
+**Never resume it.** An agent may pause the line — that is a safety move
+anyone should be able to make — but only Dane hands the deck back
+(`npm run pipeline -- resume --operator-asked`). `npm run pipeline -- status` says
+whether it is on, since when, who put it there and why.
+
 ## ClickUp access: use the direct script, not the connector
 
 Every ClickUp touch goes through **`npm run clickup -- <command>`** — a full
@@ -56,9 +83,37 @@ npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -   # 
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file -  # a judgment call only he can settle
 npm run clickup -- status --task <id> --status Queued --if-status "In review" # send back (assignees auto-cleared)
 npm run clickup -- comment --task <id> --body-file -                # a plain note
+npm run clickup -- waiting [--task <id>]                            # read-only: is this ACTUALLY waiting on Dane? run it before saying so
 npm run clickup -- describe --task <id> --body-file -               # REPLACE the description (left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -        # post to the bus
 ```
+
+## Never say something is waiting on Dane without checking
+
+**One command, run BEFORE the sentence leaves your mouth:**
+
+```bash
+npm run clickup -- waiting                    # what actually needs him, both lists
+npm run clickup -- waiting --task <id>        # one ticket: status, assignee, last word, verdict
+```
+
+Read-only, a couple of seconds, exit **0** nothing of his / **3** something IS
+his / **1** could not tell. It reports the verdict from three live facts — the
+status, whether he is assigned, and whether the newest comment is his — so a
+ticket he has already answered can never be handed back to him a second time.
+
+Twice on 2026-08-23 an agent told him something was waiting on him when it was
+not, and he acted on it both times: eleven of "seventeen tickets waiting on
+your merge word" already carried his approval, and the YouTube worker question
+he was asked again had been answered `A` an hour earlier. Him, that night:
+*"The issue is making assumptions and stating them with confidence. It has come
+up many times."* Every wrong claim that evening was a confident sentence with
+nothing attached; every right one carried its evidence. This is the evidence,
+and it is cheaper to run than the claim is to reason about.
+
+Applies to the run report as much as to a comment. `ask` enforces the same rule
+at its own end — it refuses to hand a ticket back when his comment is already
+the newest one on it (`--after-his-answer` overrides, on the record).
 
 ## The two columns — which one you are writing to
 
@@ -68,13 +123,18 @@ the loops' reasoning arrived as walls of text in ClickUp's narrow right column.
 
 Handing a ticket to Dane is one command, not two: `status` refuses to set
 `Ready to launch` or `Needs your input` on its own and points at `ask`. The card
-body is four sections, checked before anything is sent:
+body is four sections plus a fifth that costly asks must carry, all checked
+before anything is sent:
 
 ```
 @@ASKED     his own words that caused this ticket, verbatim — never invented
 @@WHEN      optional — when and where he said it
 @@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
 @@NEEDED    the specific ask, under a banner he can spot without reading
+@@EVIDENCE  required ONLY when the ask costs money or cannot be undone: the
+            command, its real output in a fence, and a "@@MEASURED 8:04pm"
+            line saying when you ran it — that line is the only thing that
+            dates the card; every other clock in the section is ignored
 ```
 
 ### A `Ready to launch` card must carry a link he can click

@@ -32,6 +32,18 @@ does not land. Every agent working here must:
   then say so immediately and completely. Everything else is a chore, and
   chores are silent.
 
+- **A person is a human being. An agent is not.** `person` and `human` mean
+  Dane, or another actual human. An agent session is an **agent session** —
+  never a person, a human, somebody, or anyone. He has raised this at least
+  three times and it is not a style note: it is the answer to *whose hands
+  does this need, and are they mine?* Saying an automation "asked a person"
+  when it posted a request for an agent session told him he was the blocker
+  when he was not, and hid the fact that nothing was listening — four days
+  on ticket 86bbmfc15. The rule and its guardrail (a hand-off names the
+  actor; passive voice implying an unnamed one is itself the defect) are
+  `docs/DOCTRINE.md` §2.5, ratified in vault `doctrine/TERMINOLOGY.md`.
+  Do not over-correct: most existing uses mean a human and are right.
+
 StarCaster (company: Alphire) is a multi-tenant platform: an admin SPA plus a
 visual site Builder whose published pages serve as tenant public sites on
 custom domains. Backend is Node with a shared dispatcher `routes/index.js`
@@ -248,6 +260,87 @@ which is a guess — rename the Mac and the guess changes. **A machine whose
 name is not recognised does not quietly skip; it refuses out loud**, because
 "another machine is doing it" and "nobody is doing it" look identical
 otherwise, and only one of them is safe.
+
+## The pipeline can be paused — ask before you claim or merge
+
+Sometimes Dane needs the deck: something is urgent, and the loop lane — spec,
+build, review, merge — is about a day end to end. Until 2026-08-25 the only way
+to go fast was to step outside the system entirely, into the one place where
+none of the guards apply. That is a missing lane, not a person being careless,
+so there is now a switch:
+
+```
+npm run pipeline -- status                    is it running? if not, since when, who, and why
+npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
+npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
+npm run pipeline -- resume --operator-asked   hand the deck back (Dane's call, never an agent's)
+```
+
+**Type the `--`.** It is not decoration: without it npm swallows every `--flag`
+before the command sees it. Leave it out and `resume --operator-asked` is
+refused for missing the very flag you just typed, and `pause --now` waits the
+full half hour instead of returning at once.
+
+**Every actor asks, not just the loops.** A pause only the loops respected
+would not have prevented the collision it was written for — the session that
+merged PR #432 was hand-driven and would never have looked. So: **before
+claiming a ticket, and before merging anything, run `npm run pipeline -- check`.**
+Exit 3 means claim nothing, merge nothing, write nothing to ClickUp; say so
+once and stop. That is a normal outcome, exactly like `node:owns` saying
+another machine owns the job.
+
+**It fails safe.** If the switch cannot be read, it counts as paused. Running
+while Dane has the deck collides with whatever he is doing on it; pausing when
+he does not costs idle machines and a loud message. Those are not symmetric.
+
+**It drains, it does not kill.** `pause` stops new claims the instant it writes
+the flag and then waits for anything already building, because killing a pass
+mid-build strands its ticket in `Building` forever — the loops only ever claim
+from `Queued`, and that happened twice in the week the switch was written.
+`--now` skips the wait and names exactly what it left running. `resume` also
+unsticks anything a dead pass left behind: a stranded build goes back to
+`Queued` with a note, while a stranded review stays in `In review` — its build
+is finished and its PR is open, so only the stale claim is cleared.
+
+**An agent may pause; only Dane resumes.** Anyone should be able to stop the
+line — it is a safety move. Handing the deck back is his, because only the
+person standing on it knows whether he is finished. A pause that outlives two
+hours announces itself on the bus and keeps saying so hourly, because a pause
+nobody remembers looks exactly like a pipeline that has broken.
+
+## The fast-track lane — "Let's fast track <ticket-id>"
+
+Said at the start of a session, that sentence is a **complete instruction**
+(Dane, 2026-08-30): run the human lane end to end, and end the session with a
+clean merge. It is the loop's job done by hand, not a way around the loop's
+guards — every check below is one the loops also run. Full version, with the
+incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
+
+1. `npm run pipeline -- check` — exit 3 means stop; say so once.
+2. Read the ticket **and its comments**. On a send-back, the review notes ARE
+   the job; the description is context.
+3. Claim it: `npm run clickup -- status --task <id> --status Building
+   --if-status Queued`. **Priority is not a guard** — only status is, and
+   only `--if-status` makes the claim atomic. Leave the priority alone.
+4. `npm run clickup -- build-start --task <id>` — exit 3 means a branch
+   already exists; work on THAT branch (`git worktree add
+   .claude/worktrees/<topic> -b <branch> origin/<branch>`, then `npm ci`,
+   `npm run build`, `npm run env:local`, and stamp
+   `git config branch.<branch>.clickup-task <id>`). Otherwise
+   `npm run thread <topic> <id>`.
+5. **On a send-back, merge `origin/main` in BEFORE touching a line.** The fix
+   review asked for may already have landed on `main` under another name —
+   on 2026-08-30 it had, and reworking first cost a conflict (`docs/DOCTRINE.md`
+   §6.7).
+6. Build. Every Definition-of-done gate, and break each fix on purpose —
+   revert it, watch the named test fail, restore it.
+7. `npm run ship`. **No pause to merge**: merges never collide with the
+   loops, `pause` drains for up to half an hour, and a pause older than two
+   hours nags the bus hourly. `ship` re-runs the gates, pushes, waits for CI,
+   merges and tidies; if it stops on a conflict, resolve by hand and run it
+   again.
+8. Ticket to Live with the closing note (gates, live probe, what was
+   break-tested); `npm run tidy`; one line on the bus.
 
 ## One thread, one topic, one session
 

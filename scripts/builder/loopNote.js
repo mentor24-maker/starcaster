@@ -30,6 +30,15 @@ function sentBackNote({ at, round, reason }) {
   return `↩ round ${round} — ${truncateReason(clause, LOOP_NOTE_MAX - shell.length)} (${at})`;
 }
 
+/**
+ * The stem of the review-claim note, exported because it is not only a
+ * wording: the pipeline drain identifies a review pass that is ACTUALLY
+ * RUNNING by this exact text (pipelinePause.classifyTicket), since "In review"
+ * is a resting status as well as a working one. Two copies of it would mean a
+ * live review going invisible to the drain the first time either was reworded.
+ */
+const REVIEW_CLAIM_NOTE = '\u{1F50D} being checked';
+
 const TRANSITIONS = {
   claimed:   ({ at }) => `🔨 building — claimed ${at}`,
   'pr-open': ({ at, pr }) => `🔀 PR #${pr} open — waiting for a review pass (${at})`,
@@ -38,7 +47,7 @@ const TRANSITIONS = {
   // one overwrote the faster one's verdict. This note IS the visible claim: it
   // carries the date as well as the clock, because "is that review still
   // running or did it die?" cannot be answered by a time of day alone.
-  'review-started': ({ at }) => `🔍 being checked — a review pass started ${at}`,
+  'review-started': ({ at }) => `${REVIEW_CLAIM_NOTE} — a review pass started ${at}`,
   verified:  ({ at }) => `👀 verified — waiting on Dane to say "merge" (${at})`,
   'sent-back': sentBackNote,
   merged:    ({ at }) => `✅ live ${at}`,
@@ -83,4 +92,4 @@ function heartbeatNote({ at, inLine, nextUp } = {}) {
 
 const KNOWN_TRANSITIONS = Object.keys(TRANSITIONS);
 
-module.exports = { loopNote, heartbeatNote, KNOWN_TRANSITIONS };
+module.exports = { loopNote, heartbeatNote, KNOWN_TRANSITIONS, REVIEW_CLAIM_NOTE };

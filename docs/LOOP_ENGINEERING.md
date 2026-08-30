@@ -65,6 +65,7 @@ The everyday commands (run `npm run clickup` bare for the full list):
 npm run clickup -- queue --list 901418546619 --status Queued   # first line = the task to claim
 npm run clickup -- get --task <id>                             # header + body
 npm run clickup -- comments --task <id>                        # where the PR URL lives
+npm run clickup -- waiting [--task <id>]                        # is this ACTUALLY waiting on Dane? read-only; run it BEFORE saying so
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
 npm run clickup -- pr-opened --task <id> --pr <pr-url>          # record the PR (loop-build step 7 — required)
@@ -74,6 +75,7 @@ npm run clickup -- comment --task <id> --body-file -           # a plain note (p
 npm run clickup -- describe --task <id> --body-file -          # REPLACE the description (the left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
 npm run clickup -- attach --task <id> --file a.png --file b.png             # before/after pictures
+npm run --silent clickup -- next-interval --for loop-build --fallback 3600  # how long to sleep next (one integer)
 ```
 
 `status` enforces the handoff rule by itself: moving into any machine status
@@ -255,8 +257,9 @@ npm run clickup -- ask --task <id> --status "Needs your input" --body-file -
 npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -
 ```
 
-The body is four sections. The check runs **before** the first network call, so
-a card that fails the shape leaves the ticket exactly where it was:
+The body is four sections, plus a fifth that some asks are required to carry.
+The check runs **before** the first network call, so a card that fails the
+shape leaves the ticket exactly where it was:
 
 ```
 @@ASKED
@@ -270,6 +273,17 @@ anything else; over 100 it becomes the wall of text this replaces.
 @@NEEDED
 The specific ask. "Nothing right now" is a good answer and a useful one, but it
 has to be written down rather than left blank.
+@@EVIDENCE
+Optional in general; REQUIRED when the ask costs money or cannot be undone.
+The command in runnable form, its actual output pasted in a ``` fence, and one
+line saying when you ran it:
+
+    @@MEASURED 8:04pm
+
+That line is the ONLY thing that dates the card. Every other clock in the
+section — narrated or inside the paste — is ignored. It goes in the prose,
+outside the fence, and carries the clock and nothing else (date it too if it
+was not today: `@@MEASURED 2026-08-23 8:04pm`).
 ```
 
 `@@NEEDED` renders under a banner he can find without reading:
@@ -285,6 +299,149 @@ The shape is a real module (`scripts/builder/operatorCard.js`) with real tests
 remember. `status --status "Needs your input"` refuses on its own and prints
 the `ask` form; `--no-card` is the escape hatch, and like `--operator-asked`
 above it is a written claim in the transcript, not a permission check.
+
+### An ask that costs money must carry the command that proves it
+
+On 2026-08-23 an agent escalated to Dane and asked him to spend money on a
+diagnosis that was wrong: the bus chat had refused every write for sixteen
+hours, a custom-field write failed with "Custom field usages exceeded for your
+plan", and `GET /team/{id}/plan` read back `Free Forever`, so it recommended
+putting the workspace on a paid plan. Re-measured hours later on the same token
+and the same unchanged Free plan, every one of those calls succeeded — the
+outage was transient and cleared itself, and paying would have fixed nothing.
+
+The mistake was not the hypothesis; it was that the hypothesis reached his
+wallet without anyone re-running the failing call. So `ask` now refuses a card
+whose `@@NEEDED` proposes spending, buying, subscribing, a plan change, a
+credential rotation or a deletion unless `@@EVIDENCE` carries the command, its
+real output in a fence, and the time it was run. The trigger words and the
+reason for each live in `scripts/builder/costlyAsk.js`; adding one is a
+one-line change with a test beside it.
+
+The gate is deliberately narrow rather than a general assumption-checker: a
+checking agent would add a round trip, make assertions of its own, and cost
+tokens continuously to catch a class a free rule catches — and the evidence for
+"assertions of its own" is this incident, where the agent that produced the
+wrong diagnosis was already the careful one. An ordinary escalation — a design
+question, a scope choice, an A-or-B with no cost — is untouched, and a test
+pins that, because a gate that fires on everything gets routed around and then
+protects nothing.
+
+The card also shows the measurement time in the heading it renders
+(**THE CHECK BEHIND THIS ASK — measured at 8:04pm**). Evidence gathered before
+a sixteen-hour outage is not evidence about now, so the freshness is stated
+rather than implied.
+
+**That time is DECLARED on its own line, not read out of your sentences.**
+Four versions of this gate each inferred it, and each inferred it differently —
+the first clock anywhere in the section (which is how a `2026-08-20 3:12pm` log
+line dated a card six days stale), then the first clock in the prose, then the
+last clock a measurement cue governed, then the clock a cue introduces. Every
+one was right on the sentences it was tested against and wrong on the next one
+somebody wrote. The last of them headed a card *measured at 3:12pm* — the
+moment the outage STARTED — off the sentence "At 8:04pm I re-ran the failing
+call, well after the outage began at 3:12pm". That is the exact half of the
+2026-08-23 incident the timestamp exists to close, arriving through the
+machinery meant to close it, and it did not refuse: it asserted it.
+
+Dane settled it on 2026-08-29 (option A on task 86bbk34ym): stop guessing, make
+the writer say so. `@@MEASURED 8:04pm` on its own line, everything else
+ignored. It costs an agent one line per costly ask, and it ends the class —
+there is no sentence shape left to get wrong. The reasoning is on the rule
+itself (`MEASURED_LINE` in `scripts/builder/operatorCard.js`), because the
+ticket's own Non-goals say this gate stays cheap, narrow and mechanical, and
+reading which clock an English sentence means is none of those.
+
+A card with no `@@MEASURED` line is refused; so are two of them, a line with
+something other than a clock on it, and one written inside the fence (where it
+reads as part of what the machine printed) or under the wrong section. Each of
+those gets its own sentence, because "add a time" is unhelpful to an author who
+wrote one in the wrong place.
+
+The same review found the trigger list carried base and gerund forms but no
+third-person ones, so "this deletes all 550 rows", "it rotates the key" and
+"approving this upgrades the workspace" all posted with no evidence at all —
+and third person is the most natural way to describe what the operator's yes
+will do. Every verb in the list now carries all three forms, with a test that
+fails if a future verb arrives with a form missing.
+
+**A second review round, the same day, found three more of the same shape** —
+the gate doing the wrong thing silently rather than refusing. (1) Reading the
+prose fixed the fence but kept *first clock wins*, and evidence narrates before
+it proves: "the outage began at 3:12pm. I re-ran the failing call at 8:04pm"
+rendered as *measured at 3:12pm*. Only a clock a measurement cue governs
+(`measured|ran|re-ran|checked at`…) counts as the run; two clocks with no cue
+are refused rather than guessed at, because the heading is load-bearing and a
+wrong time is worse than none. (2) Each trigger was bounded by "not a word character
+**or hyphen**", on the belief that `\b` would not fire beside a hyphen — it does,
+so the custom boundary only ever removed matches, and `hard-delete`,
+`force-delete`, `auto-purge` and `key re-rotation` were never checked at all.
+Plain `\b` now. (3) `costs` was listed and the base form `cost` was not, so "this
+will cost thirty dollars a month" was silent; the completeness test now names
+`cost` and twelve other verbs, so the rule it describes is actually held up.
+
+**And one correction in the other direction.** The bare nouns — `billing`,
+`invoice`, `deletion`, `rotation`, `migration`, `payment`, `subscription` —
+fired on any sentence that merely mentioned them, so "nothing needed, the
+deletion already happened last week" and "just confirm you saw the invoice
+screenshot" were both REFUSED and the agent could not hand the ticket off until
+it reworded a card that was already right. A noun now fires only where a
+proposal cue governs it in the same sentence (`approve the deletion`, `run the
+migration`, `go ahead with the rotation`); a verb needs no cue, because
+proposing is what a verb does here — which is also why past tense is
+deliberately absent from the list. The known limit, stated rather than hidden:
+a bare noun phrase with no verb at all ("the key rotation — yes or no?") does
+not fire, and the verb forms are the primary net.
+
+**A third round found the same mis-dating for the third time, and what
+actually fixed it.** Rounds 1, 2 and 3 each picked the run time by where it sat
+in the text — first clock, first clock in the prose, last clock a cue governs —
+and each was wrong on the next sentence shape somebody wrote. A cue was allowed
+to govern every clock later in its sentence, and authors narrate *after* the
+run time as readily as before it, so "I re-ran the chat POST at 9:40pm, well
+after the outage that began at 3:12pm" rendered as *measured at 3:12pm*. There
+is no position that means "this is the measurement": the cue does, and it is
+spent on the clock it introduces. A cue now reaches only from the previous
+clock to the next one, and **two times both marked as the run are refused
+rather than ranked** — this heading is the single place the gate asserts
+something to Dane instead of refusing something, so a wrong "measured at" is a
+false statement about a live system, which is the shape of the original
+incident. A wrong refusal costs a reword.
+
+**A fourth and fifth round found the same mis-dating again, and it went to
+Dane.** Round 4 scoped a cue to the clock it introduces; round 5 wrote the run
+time FIRST and the narration after it — "At 8:04pm I re-ran the failing call,
+well after the outage began at 3:12pm" — and the cue, sitting between the two
+clocks, reached forward to the wrong one. Five rounds, five positional rules,
+five sentence shapes. It was escalated as a product decision rather than sent
+back a fifth time, and Dane chose to stop inferring altogether: the run time is
+now the declared `@@MEASURED` line described above. The same round also found
+that every bare noun fired in the singular and was silent in the plural —
+"Approve the deletions" demanded no evidence while "Approve the deletion" did,
+which is the gate declining on the more costly spelling of the same ask. Each
+noun now carries its plural, with a completeness test that names the pairs in
+both directions.
+
+The same round closed three narrower holes: a lone bare clock in the prose is
+no longer taken at its word when the pasted output carries a clock too (a bare
+time beside a log is usually the thing that *broke*, not the check); a
+backslash-continued command counted as two pasted lines and so satisfied the
+"show me the output" rule with no output at all; and the innocent phrases were
+lifted out as raw characters rather than as whole words, so "pays offshore
+contractors" lost "pays off" out of the middle of a word. The cue list also got
+the all-forms rule the trigger list had already been given twice — "proceeding
+with the deletion", "performing the key rotation", "this executes the
+migration", "kicking off the migration", "signing off on the invoice" were all
+silent — with a completeness test that names the cue families in both
+directions, so a lone form cannot be added without its siblings.
+
+One item is left deliberately unchanged and is the operator's to settle: a bare
+dollar figure fires with no proposal cue, so a card that asks for nothing while
+mentioning a cost ("nothing right now, the Vercel bill came to $30 last month")
+is refused. A cue rule would fix that and would also silence "$29/month for
+Business or $49 for the tier above?", which is a real ask with no verb in it.
+That is a product question about how much natural language a keyword gate
+should chase, not a correctness one.
 
 ### ClickUp deletes `> ` blockquotes — from comments AND descriptions
 
@@ -467,6 +624,10 @@ applies to **building**: every piece of work gets its own folder and branch.
 That is what the loops do for each task. It was never about where a loop
 session is launched from.
 
+The unattended runner on the Mac Mini does not use a fixed number any more —
+it asks the queue how long to sleep after each pass. See **"How often the
+LOOPS wake"** below for the curve, the 900 s floor and why that floor exists.
+
 `/loop 30m X` means "run X, then run it again every 30 minutes." Build drains
 the `Queued` pile into PRs; review drains the `In review` pile into
 `Ready to launch` PRs that ping you.
@@ -505,6 +666,77 @@ offers every status in the workspace at once. Assignment sidesteps all of it.
 
 If you ever see a ticket assigned to you sitting in `Queued`, `Building`, or
 `In review`, that is a bug in a loop, not a job for you — tell CC.
+
+### No agent says something is waiting on you without running `waiting` first
+
+**The rule, in one line: an agent may not state that anything is waiting on
+Dane until `npm run clickup -- waiting` has said so.** It is one command, it
+takes a couple of seconds, and it is the only thing in the room that has
+actually read the ticket.
+
+Twice on the evening of 2026-08-23 an agent told him something needed him when
+it did not, and he acted on it both times:
+
+- *"Seventeen Ready-to-launch tickets are waiting on your merge word."* Eleven
+  already carried his approval and were stuck on a machine that could not push
+  to GitHub. He went looking for work that was not his.
+- *"The YouTube worker decision is the one thing waiting on you."* He had
+  answered `A` an hour earlier, and the relay had already cleared his name and
+  moved the ticket to `Queued`. He asked, reasonably, whether he had to answer
+  a third time.
+
+Neither was a lie and neither was a reasoning failure. Both were **a claim
+about current state, stated flatly, by an agent reading something other than
+the state** — a terminal buffer in one case, a stale impression of a list in
+the other. Him, that night: *"The issue is making assumptions and stating them
+with confidence. It has come up many times."*
+
+A rule alone would not have held. Every claim that was RIGHT that evening
+carried its evidence welded on ("854/854, verified by read-back"; "exit 0,
+here is the output"). Every claim that was WRONG was a confident sentence with
+nothing attached. So the command exists to make the cheapest path the correct
+one:
+
+```bash
+npm run clickup -- waiting                    # what actually needs him, both lists
+npm run clickup -- waiting --task 86bbjve6b   # one ticket, the whole picture
+```
+
+```
+86bbjve6b  Acquire YouTube slice 3/4
+  status:     queued
+  assignee:   (not Dane)
+  last word:  Dane, "A", 2026-08-23 8:11pm
+  VERDICT:    NOT waiting on Dane — his own comment is the newest word on it — a machine owes the next move, whatever the status says
+```
+
+The verdict is **derived, never guessed**, from three live facts and nothing
+else: the status (`needs your input` / `ready to launch` are his lane), whether
+he is assigned (assignment IS the handoff signal, above), and whether the
+newest comment is his. A ticket in his lane, assigned to him, whose newest
+comment is not his → **waiting on him**. A ticket whose newest comment IS his →
+waiting on a machine, whatever the status says. Anything the read cannot
+establish prints `CANNOT TELL` with the reason and exits non-zero — never a
+confident verdict either way, because a wrong "not waiting" is how an answered
+ticket sits for nine hours.
+
+Exit codes match the rest of the loop tooling: **0** nothing of his, **3**
+something IS his, **1** could not tell. It is read-only — it never moves a
+status, assigns anyone or comments anywhere.
+
+`ask` enforces the same rule at the other end: it **refuses** to hand a ticket
+back to him when his own comment is already the newest one on it, because that
+is the "answer this a third time" failure arriving through the mechanism built
+to prevent it. `--after-his-answer` overrides it, on the record, for a
+genuinely new question.
+
+**The refusal stands on both doors into his lane.** `ask` is one way in;
+`status --status "Needs your input" --no-card` is the other, and it assigns him
+just the same — so both go through one shared check rather than a copy that can
+drift. This is the same lesson the Ready-to-launch gate learned (task
+86bbjt18r): a guard covering one of two routes is worse than no guard, because
+it earns the belief that the failure has become impossible.
+
 
 ## Visual changes come to you as pictures
 
@@ -689,6 +921,143 @@ mode from "is the token present?" would have exactly that hole.
    the gate is advisory and **not** fine once it is required. Teaching the merge
    step to re-run a stale gate before merging is the follow-up that has to land
    first.
+
+## Pausing the pipeline — the sanctioned way to go fast (2026-08-25, task 86bbmfc15)
+
+The loop lane is deliberately slow: spec, build, independent review, your
+merge — about a day end to end. That is right for ordinary work and wrong for
+the day something is urgent. Until now the only way to go faster was to step
+outside the system entirely, into the one place where none of the guards apply,
+and that is a **missing lane** rather than anyone being careless.
+
+```bash
+npm run pipeline -- status                    is it running? if not, since when, who, and why
+npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
+npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
+npm run pipeline -- pause --now               ... or don't wait, and name exactly what was left running
+npm run pipeline -- resume --operator-asked   hand the deck back — yours, never an agent's
+```
+
+The `--` is required in every one of those. npm eats any `--flag` typed without
+it, which is silent and confusing: `resume --operator-asked` gets refused for
+missing the flag you just typed, and `pause --now` waits the full half hour.
+`pipelinePause.test.js` fails if a documented form ever loses it again.
+
+**It drains, it does not kill.** A pass killed mid-build leaves its ticket in
+`Building` forever, because the loops only ever claim from `Queued` — that
+happened twice in the week this was built. So `pause` writes the flag (which
+stops every new claim that instant) and then waits for whatever was already
+running. `resume` sweeps any ticket that was stranded back into `Queued` with a
+note telling the next builder to look for an existing branch first.
+
+**Every actor asks, not just the loops.** The flag is a comment trail on one
+ClickUp ticket — the *Pipeline pause switch*, created the first time `pause`
+runs — because ClickUp is the one place every actor already looks. `loop-build`
+and `loop-review` check it before claiming, `bus-relay` checks it before
+merging, and `CLAUDE.md` carries it so a hand-driven session reads it on
+arrival. That last one is the point: the collision this was written for came
+from a session that was not a loop and would never have looked anywhere else.
+
+**It fails safe.** A switch that cannot be read counts as paused. Running while
+you have the deck collides with what you are doing on it; pausing when you do
+not costs idle machines and one loud message. Those are not symmetric.
+
+**Only you resume.** An agent may pause the line — stopping is a safety move
+anyone should be able to make — but handing the deck back is yours, because
+only the person standing on it knows whether he is finished. A pause that
+outlives two hours announces itself on the party line and keeps saying so
+hourly, because a pause nobody remembers looks exactly like a pipeline that has
+broken.
+
+## The fast-track lane — the loop's job, done by hand (2026-08-30, task 86bbq5523)
+
+**Ruled by Dane on 2026-08-30:** *"Let's fast track \<ticket-id\>"*, said at
+the start of a new session, is a complete instruction. The agent runs the
+human lane end to end and the session ends with a clean merge. Until this
+section existed the procedure lived only in one machine's agent memory; it
+belongs here so every machine and every session runs the same lane.
+
+The lane is not an exemption. It exists because the loop lane — spec, build,
+review, merge — is about a day end to end, and sometimes a ticket cannot wait
+a day. Everything the loops check, the hand session checks too; the only thing
+it skips is the queue position.
+
+### The steps
+
+1. **`npm run pipeline -- check`.** Exit 3 = the deck is Dane's; claim
+   nothing, merge nothing, say so once. Exit 1 = could not tell; re-run it
+   before treating that as paused (one transient 1 was observed on
+   2026-08-30 from a background shell, and the re-run said running).
+2. **Read the ticket and every comment.** On a send-back, the review comment
+   is the specification — it names the defects, how they were proved, and
+   what it already verified so you do not redo it. The description is context.
+3. **Claim it, atomically.** `npm run clickup -- status --task <id> --status
+   Building --if-status Queued`. **Priority is not a guard** — an Urgent
+   ticket is still claimable by a loop pass; only the status is, and only
+   `--if-status` makes the write refuse if a pass got there first (the same
+   check-then-act guard the loops use). Leave the priority where it is.
+4. **Find the branch.** `npm run clickup -- build-start --task <id>`: exit 3
+   means a PR is already open, so the work continues on THAT branch, not a
+   fresh one. `npm run thread` only creates new branches, so for an existing
+   one it is by hand:
+
+   ```
+   git worktree add .claude/worktrees/<topic> -b <branch> origin/<branch>
+   cd .claude/worktrees/<topic> && npm ci && npm run build && npm run env:local
+   git config branch.<branch>.clickup-task <id>     # what tidy reads back
+   ```
+
+   Then hand over the command to open a session in that folder and stop
+   building in the current window (CLAUDE.md, "One thread, one topic, one
+   session", rule 2). A session that was opened by "fast track" with nothing
+   else in it may keep going from the worktree by absolute path — the rule's
+   purpose is that the folder and the topic stay one thing, and they do.
+5. **On a send-back, merge `origin/main` in FIRST.** Before touching a line.
+   The branch has been sitting in review while `main` moved; the fix review
+   asked for may already be there under another name. On 2026-08-30, ticket
+   86bbmg2fb's rework added a `soft` option to `fetchAllTasks` for exactly
+   what `main` had meanwhile added as `fatal: false` — a conflict `ship` had
+   to stop for, resolved by throwing the rework away and calling `main`'s
+   version. Merging first would have shown that before any code was written.
+   (`docs/DOCTRINE.md` §6.7.)
+6. **Build to the Definition of done**, and **break every fix on purpose**:
+   revert it, run the suite, name the test that failed, restore it. Say the
+   numbers ("reverted the clamp: tests 3 and 15 failed; restored: 0"). A fix
+   whose test passes both ways is not tested (§6.8).
+7. **`npm run ship`.** It catches up, rebuilds, runs the checks, pushes,
+   reuses the open PR, waits for CI, merges, and tidies. **No pause to merge.**
+   Dane's first instinct was to pause the pipeline so the merge would not
+   collide with a loop pass; it cannot — the loops never merge, and a merge
+   only re-dates their open branches, which `ship` handles by catching up.
+   `pause` costs up to a thirty-minute drain and, past two hours, an hourly
+   nag on the bus. If `ship` stops on a conflict, resolve it by hand, commit,
+   and run `ship` again — it picks up where it got to.
+   *Gotcha:* run from inside the worktree, and expect the shell to lose its
+   working directory afterwards — `ship`'s tidy removes the folder you ran it
+   from, so a trailing command in the same shell can report exit 1 for
+   `getcwd` after a successful merge. Read `ship`'s own last line.
+8. **Close it out.** Ticket to Live with a note that states the gates and
+   their numbers, what was probed live, and what was break-tested;
+   `npm run tidy` (ship already did); one line on the bus.
+
+### What the first run of this lane found (2026-08-30, ticket 86bbmg2fb, PR #441)
+
+* **The Mini's runners took the change before the command existed.** The
+  one-line change to `~/bin/loop-runner.sh` was on the Mini before
+  `next-interval` was on `main`, so both loops logged
+  `next-interval gave no usable answer ('') -- falling back to 900s` for a
+  day. That is the fallback working, not a fault: each loop pass
+  fast-forwards the Mini's `main` checkout (its reflog shows one merge per
+  pass), so the runners pick up a new CLI command on the pass after it
+  merges. If that line persists after a merge, the Mini's `main` is behind —
+  `git pull` there. No restart is needed while the runner already calls the
+  command; a runner that does NOT yet call it holds the old script's inode
+  and needs its screen restarted.
+* **A pipeline-side rework needs the Mini checked, not assumed.** The review
+  note said the runners held the old inode; the logs said they had already
+  been restarted and were calling the command. Thirty seconds over SSH
+  (`zsh -lc`, not a bare `ssh host cmd` — the login shell is what finds
+  Homebrew) settled it, and it changed what the closing step was.
 
 ## How often the relay wakes, and why that number (2026-08-23, task 86bbk2fuh)
 
@@ -895,6 +1264,155 @@ changes in six places or it is wrong in some of them.
 rotation. It is small (a few KB per pass) but unbounded, and belongs to a
 housekeeping ticket rather than this one.
 
+## How often the LOOPS wake — the queue decides, not a number (2026-08-25, task 86bbmg2fb)
+
+The relay's schedule above is fixed on purpose: it polls for something that
+either happened or didn't. The two build/review loops are different — how often
+they *should* wake depends entirely on how much work is waiting — so since
+2026-08-25 they **ask, each cycle, instead of being told once at startup**.
+
+```
+npm run --silent clickup -- next-interval --for loop-build --fallback 3600
+```
+
+It prints **one integer, seconds, on stdout** and the reason on stderr, and
+**always exits 0**. The decision itself is a pure, tested module —
+`scripts/builder/loopInterval.js`, `scripts/builder/loopInterval.test.js` —
+so the numbers below are testable claims, not lore.
+
+### The curve
+
+| Claimable queue | Interval | Why |
+|---|---|---|
+| 0 | 3600 s | Nothing to do; do not pay to find that out often. |
+| 1–3 | 1800 s | Shallow — the work will be gone soon anyway. |
+| 4+ | 900 s | Deep enough that idling is the dominant cost. |
+
+This is a **starting** curve, to be tuned against real data rather than
+defended as correct. The trade it encodes inverts on one thing: with a deep
+queue a short interval is nearly free *per unit of work* (a session's overhead
+is noise against a 14-minute build), and with an empty one it is pure waste —
+a whole Claude session every few minutes to learn there is nothing to do.
+
+The problem it replaces: the build loop worked ~14 minutes and then slept a
+flat 60, a **23% duty cycle**. Nothing was recovering or waiting in that gap.
+The hour was a quota throttle, picked as a safe default when the loops first
+ran unattended, and never revisited. On 2026-08-25 it was hand-retimed to 900 s
+(`~/loop-logs/retime.log`) — which is the same failure one rung up: right at
+the moment it was typed, wrong by the next morning.
+
+### The floor is 900 s, and here is why
+
+**Do not lower it without recording the decision here and on task 86bbmg2fb.**
+
+`loop-review` was left on a **2-minute** interval on 2026-08-24 and ran roughly
+**360 passes**, almost every one of them finding nothing. 900 s is the shortest
+cadence at which session overhead is still small against the ~14 minutes of
+real work a pass does; below it, the loop spends more on starting than on
+building. A number with no derivation gets tuned by whoever is annoyed that
+day — so the derivation lives beside the number, in the module and here.
+
+The floor is applied to *everything*: the curve's own rungs, the runner's
+argument, and the on-disk state file. A hand-edited `120` cannot get through.
+Nor can a hand-edited `null` get *under* the hysteresis: `Number(null)` is 0,
+which a floor-only clamp would raise to 900 and treat as the cadence already
+in force, so one deep reading would shorten it at once. Anything that is not
+actually a number resolves to the long fallback instead, and the test asserts
+that value rather than merely `>= floor`.
+
+### "Claimable", not "queued"
+
+A queue full of tickets the loop **cannot take** is not a reason to wake more
+often. The count excludes:
+
+* tickets whose `repo:` tag makes the loop escalate rather than build — wrong
+  repo, unknown repo, two repo tags, or a repo not checked out on this machine;
+* tickets blocked by a dependency that is not finished. **A finished blocker
+  is never in the list** — the list read returns open tasks only — so the
+  command reads each blocker the list cannot show back separately, once per
+  cycle, and only those. One that cannot be read stays unseen and counts as
+  still blocking, the safe direction. (Review round 1, 2026-08-29: without
+  that read, a ticket waiting on work that had already shipped read as
+  blocked on every cycle, forever — and the fixture that "covered" it put the
+  closed blocker in the list, a shape the endpoint cannot return. The fixture
+  now keeps it out.)
+* The list is read in full, every page — never page 0 alone. ClickUp pages
+  newest-first and the loops claim oldest-first, so a one-page read drops
+  exactly the oldest backlog (DOCTRINE 5.12).
+* **for `loop-build` only**, everything, when the work-in-progress cap is
+  already full: a capped pass claims nothing however deep the queue is.
+
+The cap deliberately does **not** throttle `loop-review`. Review drains the
+very PRs the cap is waiting on; pausing it because the cap is full would make
+the cap permanent.
+
+### Hysteresis, and which direction it protects
+
+**Shortening needs two consecutive readings. Lengthening is immediate.**
+
+One burst of tickets must not set a fast cadence for the rest of the night —
+the queue may be drained again before the loop next wakes. Going *slower*
+never waits, because that is the cheap mistake.
+
+With no state on disk at all, the cadence in force is taken to be the runner's
+configured argument, so a first pass against a deep queue holds one cycle and
+shortens on the next. That is the same rule every later pass follows, rather
+than a special case that skips the guard exactly when nothing is known.
+
+State is one small file per loop, beside the log the runner already writes:
+`~/loop-logs/<loop>.interval-state.json`. Deleting it is harmless — it costs
+one cycle of hysteresis, in the safe direction.
+
+### Every failure lengthens the sleep, and says so
+
+| What went wrong | Answer | Why not the floor |
+|---|---|---|
+| ClickUp unreadable | the runner's configured fallback (3600 s) | A short interval on unknown state is how quota gets burned invisibly. |
+| Open-PR count unreadable | assume the cap is full → 3600 s | Unlike `wip-check` (which fails *open*, because refusing there would stop all work), the pass has already run; the only question left is how long to sleep. |
+| Depth is absurd — `NaN`, `Infinity`, negative | read as 0 → 3600 s | `Infinity` reads like "wake often" and is in fact garbage. Garbage takes the cheap direction. |
+| The command itself fails | the runner's `$INTERVAL` argument | The runner never sleeps on a guess. |
+
+A failed read is **not a reading**: it leaves the hysteresis state untouched,
+so two outages in a row cannot masquerade as two consecutive short readings.
+
+And nothing is silent. Every cycle logs the number *and* its reason —
+
+```
+interval: 900s (12 claimable — deep enough that idling is the dominant cost)
+[loop-runner] 04:38:10 sleeping 900s before the next /loop-build
+```
+
+— because the WIP cap shipped with a bare total and nobody could tell why it
+had declined.
+
+### The runner side (unversioned — keep this copy)
+
+`~/bin/loop-runner.sh` lives on the Mac Mini only and is **in no repository**,
+so this is the recoverable copy of the change. It replaced the single line
+`sleep "$INTERVAL"` at the bottom of the `while` loop with:
+
+```bash
+  NEXT=$(PATH="/opt/homebrew/bin:/usr/local/bin:$PATH" npm run --silent clickup -- \
+           next-interval --for "$SKILL" --fallback "$INTERVAL" 2>>"$LOG" | tail -1)
+  if ! [[ "$NEXT" =~ ^[0-9]+$ ]]; then
+    echo "[loop-runner] next-interval gave no usable answer ('$NEXT') -- falling back to ${INTERVAL}s" >> "$LOG"
+    NEXT=$INTERVAL
+  fi
+  echo "[loop-runner] $(date "+%H:%M:%S") sleeping ${NEXT}s before the next /$SKILL" >> "$LOG"
+  sleep "$NEXT"
+```
+
+`PATH` is set inline because a detached `screen` session does not inherit
+Homebrew's. The `^[0-9]+$` test is the whole fallback: anything that is not a
+plain integer — no `npm`, no Doppler, a usage error, a checkout that predates
+the command — means the runner keeps using its configured argument.
+
+**A running runner keeps its old behaviour.** Bash reads a script as it goes,
+so the file was replaced with `mv` rather than edited in place; the live
+`screen` sessions hold the old inode. The new cadence starts when a runner is
+next restarted. Bringing that wrapper under version control is **NODES Slice B
+(86bbh9kh2)**, not this ticket.
+
 ## A build node must be able to make GitHub run its checks
 
 Every gate downstream of the build loop reads GitHub's checks. `ship` waits for
@@ -1073,6 +1591,87 @@ ticket; it costs him ten seconds. `CLICKUP_OPERATOR_ID` is an env override, so
 a scratch ticket plus a comment of your own works too. Do **not** delete an
 existing `[bus-relay]` marker to manufacture one — that is destructive, and the
 run will then send his real answer to a dead channel.
+
+## The work-in-progress cap — and what it counts
+
+`loop-build` asks `npm run clickup -- wip-check` before claiming, and declines
+when too much is already in flight. Branch protection is `strict: true`, so
+every merge invalidates every other open branch: the catch-up cost is quadratic
+in open PRs, and building an eighth branch while seven rot ships nothing sooner.
+Exit 0 = room to claim, 3 = a normal decline, 1 = could not tell.
+
+**It counts work in flight, not open pull requests** (2026-08-25, task
+86bbm4zwd). A PR counts only when its ticket is `Building`, `In review`,
+`Ready to launch` or `Needs your input`. That last one is there deliberately:
+it is operator-held, exactly like `Ready to launch`. A ticket parked on Dane
+with an open PR is real work occupying the merge pipeline, its branch still
+needs catching up on every merge, and if his inbox is full then the pipeline
+genuinely is full — a cap that hid that would be lying in the more dangerous
+direction. The list lives in `IN_FLIGHT_STATUSES` (`scripts/builder/wipCap.js`).
+
+A PR counts **zero** when:
+
+* the ticket is **`Queued`** — that is rework the loop must be free to claim;
+* the ticket is **`Live`** — the work shipped by another route and the PR is a
+  leftover;
+* **no ticket can be found** for it — reported by number, never counted;
+* the ticket is in a status this list does not recognise — also reported, and
+  reported *as that*, quoting the status. It is deliberately NOT lumped in with
+  "no ticket found", which would send you hunting for a missing ClickUp link
+  that is not missing.
+
+The first version counted every open PR, and on the morning of 2026-08-25 that
+**deadlocked the build loop for four consecutive hourly passes**: seven PRs open
+against a cap of five, of which five should never have counted — three sent back
+to `Queued` for rework (so the cap blocked the only thing that could close them)
+and two zombies whose tickets were already `Live`. The queue sat at 33 while
+every pass exited 0 and did nothing.
+
+The message always names the split, never a bare total:
+
+```
+1 in flight, cap 5 — room to claim another.
+4 open PR(s) not counted: 4 queued for rework (#428, #426, #422, #419).
+```
+
+A bare "7 open, cap 5" is true and useless — it is what hid the deadlock for
+four passes.
+
+**If the queue cannot be read, it falls back to counting every open PR** — the
+older, *more* restrictive reading, and it says out loud which reading it used
+and why. Failing toward the cap costs idle time; failing away from it reinstates
+the churn the cap exists to prevent.
+
+"Cannot be read" covers every way that can happen, and getting there took two
+review rounds because each way arrived through a different door. ClickUp
+answering with an error (a routine 429 — the loops share a budget of about 100
+requests a minute) is one. The request never arriving at all — DNS, TLS, this
+machine offline, a connection timeout — is another, and it is the one that
+nearly shipped: `fetch` *rejects* rather than returning a response, so it was an
+unhandled crash and **exit 1**, which this skill reads as *"could not tell,
+proceed unbounded by the cap"*. A network blip would have uncapped the loop
+rather than capping it. A 200 carrying a junk body (a proxy's error page) was a
+third. All three now land in the same conservative fallback, and
+`scripts/builder/wipCapOutage.test.js` runs the real command with each failure
+underneath it — asserting the exit code is 0 or 3 and never 1, and asserting
+*which* guard produced the answer, because an outer catch swallowing an inner
+guard's bug is how one of those tests first passed when it should not have.
+
+The cap itself is 5, override `CLAUDE_LOOP_WIP_CAP` for an experiment. Five is a
+starting point, not a measurement.
+
+**The matching drift check.** `npm run reconcile` now also flags the reverse
+pair — a **terminal task with any linked PR still open**, which is how those two
+zombies survived. Every distinct PR the ticket links, not just the newest: the
+real 2026-08-25 shape is a `Live` ticket linking an open leftover *and* a later
+merged PR that actually shipped it, so a newest-only check would return silently
+on the exact case it was written for. The scan is bounded to the 25 most
+recently updated terminal tasks and says how many it skipped — there are already
+66 `Live` tickets and the set only grows, and an unbounded scan is a job that
+quietly gets slower until someone notices it timing out.
+
+It is never repaired automatically: "close the PR" and "the task was closed too
+early" are both plausible, and only a person can tell which.
 
 ## Reading the queue at a glance — the Loop note
 
