@@ -41,13 +41,26 @@ const TEST_KEY = Buffer.alloc(32, 7).toString('base64');
 function withDb({ schemaOverride = null } = {}) {
   const schema = schemaOverride || parseSchemaFile(SQL_PATH);
   const db = createFakeDb(schema);
+  // One switch a test can throw to make the NEXT tenant-columns probe answer
+  // like a Vercel cold start: a 502 that says nothing about the table. That is
+  // the exact failure that made round 1's leak — projectScope cached it as
+  // "this table has no tenant columns" and dropped the project filter from
+  // every query for the life of the process.
+  const fault = { failNextProbe: false, probeFailures: 0 };
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({
       projectConnections: 'project_connections',
       projectConnectionHandoffs: 'project_connection_handoffs',
     }),
-    sbQuery: db.sbQuery,
+    sbQuery: async (args) => {
+      if (fault.failNextProbe && String(args?.query || '').includes('select=project_id,owner_user_id')) {
+        fault.failNextProbe = false;
+        fault.probeFailures += 1;
+        return { ok: false, status: 502, error: 'Bad Gateway (simulated cold start)' };
+      }
+      return db.sbQuery(args);
+    },
   };
 
   const realSupabase = require.cache[supabasePath];
@@ -75,7 +88,19 @@ function withDb({ schemaOverride = null } = {}) {
     else delete process.env.CHANNELS_ENCRYPTION_KEY;
   }
 
-  return { schema, db, projectScope, store, restore };
+  /**
+   * A process restart, in miniature: fresh projectScope (empty probe cache)
+   * and fresh store, over the SAME database with the same rows. This is how a
+   * test puts data in the table first and THEN meets a cold probe, which is
+   * the order the round-1 leak needed.
+   */
+  function reload() {
+    delete require.cache[projectScopePath];
+    delete require.cache[storePath];
+    return { projectScope: require(projectScopePath), store: require(storePath) };
+  }
+
+  return { schema, db, fault, projectScope, store, reload, restore };
 }
 
 /** The rows actually sitting in the fake's table — not what a store said. */
@@ -476,6 +501,160 @@ test('deleting removes only the scoped row, and says so once', async () => {
   }
 });
 
+test('a transient probe failure fails closed, and does not poison the process', async () => {
+  // Round 1, defect 1. supportsProjectColumns cached one failed probe — a 502,
+  // nothing to do with the table — as "no tenant columns", and every query
+  // after that ran with NO project filter: project B's getConnection returned
+  // project A's decrypted token under ok:true. Two locks now: the store
+  // refuses to run an unscoped query (fails closed), and projectScope no
+  // longer caches a transient failure (recovers on the next call).
+  const { db, fault, store: seedStore, reload, restore } = withDb();
+  try {
+    const key = { provider: GRANT.provider, accountId: GRANT.accountId };
+    await seedStore.saveConnection(GRANT, SCOPE_A);
+
+    // A new process wakes up with an empty probe cache and meets a 502.
+    let { store } = reload();
+    fault.failNextProbe = true;
+    const read = await store.getConnection(key, SCOPE_B);
+    assert.equal(fault.probeFailures, 1, 'the probe was supposed to fail here');
+    assert.equal(read.ok, false, "project B must not read project A's grant through a dead probe");
+    assert.equal(read.status, 503);
+    assert.match(read.error, /scoped to a project/);
+    assert.equal(
+      JSON.stringify(read).includes(GRANT.accessToken), false,
+      'the refusal itself must not carry the token'
+    );
+
+    // The 502 was NOT cached as a fact about the table: the very next call
+    // re-probes, succeeds, and answers the correctly scoped 404.
+    const recovered = await store.getConnection(key, SCOPE_B);
+    assert.equal(recovered.ok, false);
+    assert.equal(recovered.status, 404, 'after one good probe the scope is back');
+
+    // Same two properties on the other two read paths.
+    ({ store } = reload());
+    fault.failNextProbe = true;
+    const listed = await store.listConnections(50, SCOPE_B);
+    assert.equal(listed.ok, false, "an unscoped list is every client's grants");
+    assert.equal(listed.status, 503);
+
+    ({ store } = reload());
+    fault.failNextProbe = true;
+    const removed = await store.deleteConnection(key, SCOPE_B);
+    assert.equal(removed.ok, false, 'an unscoped delete removes the grant from EVERY project');
+    assert.equal(removed.status, 503);
+    assert.equal(storedRows(db).length, 1, "project A's connection survived the blind delete");
+  } finally {
+    restore();
+  }
+});
+
+test('recording an error on a grant cannot blank the grant', async () => {
+  // Round 1, defect 2. saveConnection PATCHes the whole row, so slice 6's
+  // "this token errored" call blanked the tokens, label and scopes under a
+  // 200 — and a refresh token is handed over once, so that row was gone for
+  // good. The narrow updater records the fact; the wide save now refuses to
+  // run without a token, so the destructive shape cannot be expressed.
+  const { store, restore } = withDb();
+  try {
+    const key = { provider: GRANT.provider, accountId: GRANT.accountId };
+    await store.saveConnection({ ...GRANT, refreshToken: 'refresh-me-later-9f8e7d' }, SCOPE_A);
+
+    const marked = await store.updateConnectionStatus(
+      { ...key, status: 'error', lastError: 'expired token' }, SCOPE_A
+    );
+    assert.equal(marked.ok, true, marked.error);
+    assert.equal(marked.data.status, 'error');
+    assert.equal(marked.data.lastError, 'expired token');
+
+    const read = await store.getConnection(key, SCOPE_A);
+    assert.equal(read.data.accessToken, GRANT.accessToken, 'the access token survived the status write');
+    assert.equal(read.data.refreshToken, 'refresh-me-later-9f8e7d', 'the refresh token survived it too');
+    assert.equal(read.data.accountLabel, GRANT.accountLabel);
+    assert.deepEqual(read.data.scopes, GRANT.scopes);
+
+    // A field left out is a field left alone, not a field reset.
+    const verified = await store.updateConnectionStatus({ ...key, status: 'connected' }, SCOPE_A);
+    assert.equal(verified.data.lastError, 'expired token', 'lastError was not supplied, so it was not touched');
+
+    // The updater cannot even be ASKED to touch a token.
+    const smuggled = await store.updateConnectionStatus({ ...key, accessToken: 'overwrite' }, SCOPE_A);
+    assert.equal(smuggled.ok, false);
+    assert.match(smuggled.error, /accessToken/);
+
+    // And the old road is closed: a tokenless save is a 400, not a wipe.
+    const blanking = await store.saveConnection({ ...key, status: 'error' }, SCOPE_A);
+    assert.equal(blanking.ok, false, 'a save with no token must refuse, not blank the row');
+    assert.equal(blanking.status, 400);
+    assert.match(blanking.error, /accessToken is required/);
+    const after = await store.getConnection(key, SCOPE_A);
+    assert.equal(after.data.accessToken, GRANT.accessToken);
+
+    // Scoped like everything else: project B cannot rewrite A's lifecycle.
+    const cross = await store.updateConnectionStatus({ ...key, status: 'revoked' }, SCOPE_B);
+    assert.equal(cross.ok, false);
+    assert.equal(cross.status, 404);
+    const untouched = await store.getConnection(key, SCOPE_A);
+    assert.equal(untouched.data.status, 'connected');
+  } finally {
+    restore();
+  }
+});
+
+test('a long token round-trips — the ciphertext is not squeezed through the plaintext cap', async () => {
+  // Round 1, defect 3. The read path ran the stored ciphertext through the
+  // 8000-character PLAINTEXT cap, and base64 is ~4/3 longer than what it
+  // encodes — so 6,100 characters saved as 201 and could never be decrypted
+  // again. 6,100 is the exact length the review proved unreadable.
+  const { store, restore } = withDb();
+  try {
+    const key = { provider: GRANT.provider, accountId: GRANT.accountId };
+    const longToken = 'x'.repeat(6100);
+    const saved = await store.saveConnection({ ...GRANT, accessToken: longToken }, SCOPE_A);
+    assert.equal(saved.ok, true, saved.error);
+    const read = await store.getConnection(key, SCOPE_A);
+    assert.equal(read.ok, true, read.error);
+    assert.equal(read.data.accessToken, longToken, 'what was written must come back whole');
+
+    // The cap itself still exists, and refuses rather than truncating: a token
+    // cut at 8000 characters would save fine and then fail at the provider as
+    // a 401 that looks like the client revoked the grant.
+    const over = await store.saveConnection({ ...GRANT, accessToken: 'x'.repeat(8001) }, SCOPE_A);
+    assert.equal(over.ok, false);
+    assert.equal(over.status, 400);
+    assert.match(over.error, /8000/);
+    assert.match(over.error, /truncated/);
+  } finally {
+    restore();
+  }
+});
+
+test('a dual-spelled field is the 400 it built, not an empty string under a 201', async () => {
+  // Round 1, defect 4. readField refuses a field supplied under both spellings
+  // with different values — but four fields never checked .ok, so the error
+  // branch (which has no .value) stored '' and reported success.
+  const { db, store, restore } = withDb();
+  try {
+    for (const [camel, snake] of [
+      ['accountLabel', 'account_label'],
+      ['accountAvatarUrl', 'account_avatar_url'],
+      ['connectedByUserId', 'connected_by_user_id'],
+      ['lastError', 'last_error'],
+    ]) {
+      const res = await store.saveConnection(
+        { ...GRANT, [camel]: 'one value', [snake]: 'another value' }, SCOPE_A
+      );
+      assert.equal(res.ok, false, `${camel} supplied twice with different values must refuse`);
+      assert.equal(res.status, 400);
+      assert.match(res.error, new RegExp(camel));
+      assert.equal(storedRows(db).length, 0, `the conflicted ${camel} save must write nothing`);
+    }
+  } finally {
+    restore();
+  }
+});
+
 test('every entry point refuses to run without a project scope', async () => {
   const { store, restore } = withDb();
   try {
@@ -483,6 +662,7 @@ test('every entry point refuses to run without a project scope', async () => {
     for (const [name, call] of [
       ['saveConnection', () => store.saveConnection(GRANT, null)],
       ['getConnection', () => store.getConnection(key, null)],
+      ['updateConnectionStatus', () => store.updateConnectionStatus({ ...key, status: 'error' }, null)],
       ['listConnections', () => store.listConnections(50, null)],
       ['deleteConnection', () => store.deleteConnection(key, null)],
     ]) {
