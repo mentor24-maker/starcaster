@@ -286,13 +286,22 @@ outside the fence, and carries the clock and nothing else (date it too if it
 was not today: `@@MEASURED 2026-08-23 8:04pm`).
 ```
 
-`@@NEEDED` renders under a banner he can find without reading:
+`@@NEEDED` renders as the LAST thing on the card, inside a banner he can find
+without reading — bold, `#CC0000`, with the ask on the label's own line
+(Dane, 2026-08-30, task 86bbq5ruz):
 
 ```
 #############################
-NEEDED FROM DANE: 
+NEEDED FROM DANE: Your word to merge PR #444.
 #############################
 ```
+
+Nothing renders after it: his words, what is going on, the evidence if any,
+then the banner. Anything a later edit adds that needs a new action from him
+goes at the bottom. The card is posted in ClickUp's structured comment shape
+(`comment: [{ text, attributes }]`), because colour exists only there and that
+shape does not parse markdown — `renderCardComment` converts the small subset
+agents write (`**bold**`, fences, `` `code` ``) into attributes.
 
 The shape is a real module (`scripts/builder/operatorCard.js`) with real tests
 (`scripts/builder/operatorCard.test.js`), not a convention an agent has to
