@@ -38,6 +38,12 @@
    */
   --mark-bg: #fff3b0;
 
+  /* Builder Preview strip — admin chrome, deliberately NOT tenant-themed:
+     the strip must read "this is a preview" on every site, whatever its
+     palette (86bbq2y7x). */
+  --preview-strip-bg: #ffe600;
+  --preview-strip-ink: #111111;
+
   /* Marketing chrome — the login screen and the /explore product tour.
      These are StarCaster's own brand surfaces, not tenant-themed UI, so they
      do not follow a project theme. Named here so the pages can reference

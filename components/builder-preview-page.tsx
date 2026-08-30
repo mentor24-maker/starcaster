@@ -19,6 +19,8 @@ import {
 } from "@/components/builder/builder-utils";
 import { BuilderViewportShellLayout } from "@/components/builder/builder-viewport-shell-layout";
 import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
+import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
+import { filterPublicSections } from "@/lib/public-site-sections";
 
 type PreviewDraft = {
   name: string;
@@ -146,6 +148,7 @@ export function BuilderPreviewPage() {
   const [themeShellBackground, setThemeShellBackground] = useState<ThemeShellBackgroundSource>(null);
   const [loaded, setLoaded] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile" | "email">("desktop");
+  const [targetSlug, setTargetSlug] = useState("");
   const isEmailPreview = previewDevice === "email";
 
   useEffect(() => {
@@ -158,6 +161,7 @@ export function BuilderPreviewPage() {
     const slugParam = urlParams.get("slug");
     const pathnameSlug = slugFromPathname(window.location.pathname);
     const targetSlug = slugParam || (pathnameSlug !== "builder-preview" ? pathnameSlug : "");
+    setTargetSlug(targetSlug);
 
     if (targetSlug) {
       fetchPageBySlug(targetSlug)
@@ -250,94 +254,111 @@ export function BuilderPreviewPage() {
 
   const effectiveThemeStyles = themeStyles ?? draft?.themeStyles;
 
-  return (
-    <main className="admin-page">
-      <section className="admin-shell admin-shell-wide">
-        <div className="admin-header">
-          <div className="admin-brand-copy">
-            <div className="page-eyebrow">Builder Preview</div>
-            <h1 className="admin-title">{draft?.name || "Unsaved Template Preview"}</h1>
-            <p className="page-copy admin-copy">
-              {isEmailPreview
-                ? "This is the 600px email pod preview for the current Builder draft."
-                : "This is the fully rendered page preview for the current Builder draft."}
-            </p>
-          </div>
-          <div className="admin-actions">
-            {isEmailPreview ? (
-              <span className="builder-email-preview-badge">Email · 600px</span>
-            ) : (
-              <div className="builder-device-toggle" role="group" aria-label="Preview device">
-                <button
-                  className={previewDevice === "desktop" ? "submit-button" : "secondary-button"}
-                  onClick={() => {
-                    setPreviewDevice("desktop");
-                    window.localStorage.setItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY, "desktop");
-                  }}
-                  type="button"
-                >
-                  Browser
-                </button>
-                <button
-                  className={previewDevice === "mobile" ? "submit-button" : "secondary-button"}
-                  onClick={() => {
-                    setPreviewDevice("mobile");
-                    window.localStorage.setItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY, "mobile");
-                  }}
-                  type="button"
-                >
-                  Mobile
-                </button>
-              </div>
-            )}
-            <button className="secondary-button" onClick={() => window.close()} type="button">
-              Close Preview
-            </button>
-          </div>
-        </div>
+  // The same rule the live site applies (BuilderPublicSitePage): admin-only
+  // modules never paint on a public page. Private slugs show everything.
+  const sections = draft
+    ? isPrivateSiteSlug(targetSlug)
+      ? draft.layoutSections
+      : filterPublicSections(draft.layoutSections)
+    : [];
 
-        {loaded && draft && draft.layoutSections.length > 0 ? (
-          <div className={`builder-preview-device-frame builder-preview-device-${previewDevice}`}>
-            {isEmailPreview ? (
-              <div className="builder-email-workspace-pod builder-email-preview-pod">
-                <BuilderTemplatePreview
-                  emailPreview
-                  layoutSections={draft.layoutSections}
-                  pageBackground={draft.pageBackground}
-                  showShell={false}
-                />
-              </div>
-            ) : (
-              <BuilderViewportShellLayout
-                pageBackground={draft.pageBackground}
-                themeShellBackground={themeShellBackground ?? draft.themeShellBackground}
-                themeStyles={effectiveThemeStyles}
+  const setDevice = (device: "desktop" | "mobile") => {
+    setPreviewDevice(device);
+    window.localStorage.setItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY, device);
+  };
+
+  /*
+   * Below the strip this renders EXACTLY what BuilderPublicSitePage renders —
+   * same layout wrapper, same class, same props — plus `previewMode` (nav links
+   * stay `/slug.html` so they resolve to this preview) and minus `liveSite`
+   * (Bug Report would post for real). The old admin card around it is what
+   * made the preview look nothing like the site (86bbq2y7x).
+   */
+  const pagePreview = draft ? (
+    <BuilderViewportShellLayout
+      className="builder-public-site-layout"
+      pageBackground={draft.pageBackground}
+      themeShellBackground={themeShellBackground ?? draft.themeShellBackground}
+      themeStyles={effectiveThemeStyles}
+    >
+      <BuilderTemplatePreview
+        layoutSections={sections}
+        pageBackground={draft.pageBackground}
+        theme={resolveRenderTheme(draft.theme, draft.themeRecord)}
+        themePalette={themePalette ?? draft.themePalette}
+        themeStyles={effectiveThemeStyles}
+        themeShellBackground={themeShellBackground ?? draft.themeShellBackground}
+        applyThemePageMargins={false}
+        suppressShellBackground
+        previewMode
+      />
+    </BuilderViewportShellLayout>
+  ) : null;
+
+  return (
+    <>
+      <div className="builder-preview-strip" role="banner">
+        <span className="builder-preview-strip-label">
+          PREVIEW · {draft?.name || "Unsaved draft"}
+          {isEmailPreview ? " · Email 600px" : ""}
+        </span>
+        <span className="builder-preview-strip-actions">
+          {isEmailPreview ? null : (
+            <span className="builder-preview-strip-toggle" role="group" aria-label="Preview device">
+              <button
+                aria-pressed={previewDevice === "desktop"}
+                className={previewDevice === "desktop" ? "is-active" : ""}
+                onClick={() => setDevice("desktop")}
+                type="button"
               >
-                <BuilderTemplatePreview
-                  layoutSections={draft.layoutSections}
-                  pageBackground={draft.pageBackground}
-                  theme={resolveRenderTheme(draft.theme, draft.themeRecord)}
-                  themePalette={themePalette}
-                  themeStyles={effectiveThemeStyles}
-                  themeShellBackground={themeShellBackground ?? draft.themeShellBackground}
-                  previewMode
-                  showShell={false}
-                  applyThemePageMargins={false}
-                  suppressShellBackground
-                />
-              </BuilderViewportShellLayout>
-            )}
+                Browser
+              </button>
+              <button
+                aria-pressed={previewDevice === "mobile"}
+                className={previewDevice === "mobile" ? "is-active" : ""}
+                onClick={() => setDevice("mobile")}
+                type="button"
+              >
+                Mobile
+              </button>
+            </span>
+          )}
+          <button className="builder-preview-strip-close" onClick={() => window.close()} type="button">
+            Close
+          </button>
+        </span>
+      </div>
+
+      {loaded && draft && draft.layoutSections.length > 0 ? (
+        isEmailPreview ? (
+          <div className="builder-preview-device-frame builder-preview-device-email">
+            <div className="builder-email-workspace-pod builder-email-preview-pod">
+              <BuilderTemplatePreview
+                emailPreview
+                layoutSections={draft.layoutSections}
+                pageBackground={draft.pageBackground}
+                showShell={false}
+              />
+            </div>
           </div>
-        ) : loaded ? (
-          <section className="admin-section">
-            <div className="panel-label">Preview</div>
-            <h2>No preview content found</h2>
-            <p className="page-copy admin-copy">
-              Open this page from the Builder using the `Preview` button so the current draft can be loaded here.
-            </p>
-          </section>
-        ) : null}
-      </section>
-    </main>
+        ) : previewDevice === "mobile" ? (
+          // The phone frame wrapper exists ONLY in Mobile mode: the mobile
+          // stacking CSS keys off `.builder-preview-device-mobile`, and in
+          // Browser mode any wrapper at all is what the live site does not have.
+          <div className="builder-preview-device-frame builder-preview-device-mobile">
+            {pagePreview}
+          </div>
+        ) : (
+          pagePreview
+        )
+      ) : loaded ? (
+        <div className="builder-preview-empty">
+          <h2>No preview content found</h2>
+          <p>
+            Open this page from the Builder using the Preview button so the current draft can be loaded here.
+          </p>
+        </div>
+      ) : null}
+    </>
   );
 }
