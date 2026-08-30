@@ -1,3 +1,133 @@
+## 2026-08-25 — An agent that asks you to spend money now has to show its work (#436)
+
+A few days ago one of the agents came to you with a confident recommendation:
+put the ClickUp workspace back on a paid plan. It had good-looking reasons. The
+chat channel had been refusing to accept messages for sixteen hours, a separate
+write had failed with an error mentioning plan limits, and the account did read
+back as being on the free tier. Three facts, one tidy story.
+
+The story was wrong. Checked again a few hours later — same account, same free
+plan, nothing changed — every one of those things worked fine. The outage had
+been temporary and had already cleared on its own. Paying would have fixed
+nothing.
+
+The bad guess is not really the problem; a guess like that is reasonable on a
+day when two things break at once. The problem is that it got all the way to
+your wallet without anybody re-running the thing that had been failing. That
+would have taken one command and about ten seconds, and the moment of coming to
+you is exactly when it is still cheap to check and already expensive to be
+wrong.
+
+So the request itself now demands the proof. When an agent writes you a card
+that asks you to spend, buy, subscribe, upgrade, change a plan, rotate a
+password or delete something, it simply will not post unless the card also
+carries the command it ran, what that command actually printed, and the time it
+ran it. Not a summary of the output — the output. And the time shows up in the
+heading you read, so evidence gathered before an outage cannot quietly pass
+itself off as evidence about right now.
+
+Ordinary questions are untouched. "Should this sort by name or by date?" posts
+exactly as it always did, and there is a test making sure it keeps doing so —
+because a rule that nags about everything is a rule people learn to go around,
+and then it protects nothing at all.
+
+Review caught two holes in the first version, both now closed. The time shown in
+the heading was taken from the first clock anywhere in the proof — including
+inside the pasted output — so an agent who wrote "measured at 9:40pm" under a log
+line from last Thursday got a card telling you the check was six days old. The
+heading now reads only what the agent wrote in its own words, and a proof whose
+only time is buried in the printout is refused with an explanation. Second, the
+list of words that trip the rule knew "delete" and "deleting" but not "deletes",
+so "this deletes all 550 rows" — the most natural way to describe what your yes
+would do — sailed straight through with no proof at all. Every verb now carries
+all three forms, and a test fails if a future one arrives missing any of them.
+
+A second review round found three more, all of the same kind — the rule quietly
+doing the wrong thing rather than complaining. The heading still took the first
+time it found, and proof usually tells the story before it shows the receipt
+("the outage started at 3:12pm; I re-ran it at 8:04pm"), so the card announced
+the outage time as the measurement. It now reads the time the agent says it ran
+the check at, and if there are two times and nothing says which is which, it
+refuses and asks rather than guessing. A hyphen also switched the whole rule
+off: "approve the hard-delete of those rows" was never checked at all, because
+of a bad assumption about how word matching works. And "this will cost about
+thirty dollars a month" slipped through while "it costs about thirty dollars a
+month" was caught, because the list had one spelling of the word and not the
+other.
+
+The last fix went the other way. Words like "billing", "invoice" and "deletion"
+were tripping the rule on cards that asked for nothing — "nothing needed, the
+deletion already happened last week" was being refused, which is exactly how a
+rule teaches people to route around it. Those words now only count when
+something in the same sentence actually proposes the act: "approve the
+deletion" still asks for proof, "the deletion already happened" does not.
+
+A third review round found the heading getting the time wrong for the third
+time, and it is worth saying why that one mattered more than the others.
+Everywhere else this rule REFUSES something, and being wrong costs a reword.
+The heading is the one place it TELLS you something — "measured at 8:04pm" —
+so being wrong there means the card states, in the machine's own voice, that a
+check was run at a time it was not. That is the same shape as the mistake the
+whole thing exists to prevent.
+
+Each of the three attempts had picked the time by where it sat in the sentence:
+the first one, then the first one outside the printout, then the last one. Each
+worked until somebody wrote the sentence a slightly different way. "I re-ran
+the chat call at 9:40pm, well after the outage that began at 3:12pm" got read
+as 3:12pm, because the words "re-ran" were allowed to claim every time later in
+the sentence. The rule now says something different in kind: the phrase that
+means "I ran this" belongs to the ONE time it introduces and no further. And if
+an agent genuinely marks two different times as the run, the card no longer
+picks a winner — it stops and asks which one to print.
+
+Three smaller holes went with it. A time written on its own next to a printout
+that carries its own timestamp is no longer trusted, because a bare time next
+to a log is usually the thing that broke rather than the check that was run. A
+command typed across two lines with a backslash was counting as "a command plus
+its output" when there was no output at all. And the short list of harmless
+phrases was being cut out of the text letter by letter rather than word by
+word, so "pays offshore contractors" lost the phrase "pays off" out of the
+middle of a word and stopped counting as money. Related: the words that turn a
+noun into a request only knew their plainest spelling, so "proceeding with the
+deletion", "performing the key rotation", "kicking off the migration" and
+"signing off on the invoice" all posted with no proof required — all of them
+ordinary English for exactly the things this rule is meant to catch.
+
+One thing was deliberately left alone, and it is yours to call rather than
+mine. Any dollar figure in a request trips the rule, even when the card is not
+asking for anything — so "nothing needed, the Vercel bill came to $30 last
+month" gets refused and has to be reworded. Requiring a request-word alongside
+the figure would fix that, but it would also let "$29/month for Business or $49
+for the tier above?" through silently, and that one is a real question about
+your money. Which way that should go is a judgment about how much plain English
+a word-matching rule ought to chase, and it seemed better to say so than to
+quietly pick.
+
+Then a fourth review round found the heading wrong a fourth time, and a fifth
+found it a fifth. The sentence that broke it this time put the run time first
+and the explanation after — "at 8:04pm I re-ran the failing call, well after
+the outage began at 3:12pm" — and the card came out headed 3:12pm, the moment
+things broke, presented as the moment they were checked. Five attempts, each
+one a different rule for working out which time in a sentence is the
+measurement, and each one correct until somebody wrote the next sentence.
+
+So it went to you instead of round the loop again, and you picked option A:
+stop guessing. The agent now writes the time on a line of its own —
+`@@MEASURED 8:04pm` — and every other time anywhere in the proof is ignored,
+narrated or printed. It costs an agent one extra line. What it buys is that
+this particular bug cannot come back, because there is no longer a sentence to
+misread: the five previous fixes were all answers to a question this version
+does not ask. If the line is missing, written twice, buried inside the printout
+or carrying something that is not a time, the card is refused and told exactly
+which of those it is.
+
+The same round fixed a smaller thing that needed no decision from you. Every
+one of these words worked in the singular and went silent in the plural, so
+"approve the deletion" demanded proof and "approve the deletions" did not —
+the rule declining on the more expensive version of the same request. Six words
+gained their plurals, with a test that now checks both spellings of each one
+and fails if a future word arrives with only half of itself.
+
 ## 2026-08-26 — Somewhere to write down what footage exists (#422)
 
 The video Studio needs a filing cabinet before it can have a workshop: a record

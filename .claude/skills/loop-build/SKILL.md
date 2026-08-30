@@ -106,16 +106,40 @@ spec. Dane could not tell what was being asked of him on either ticket.
 **Escalating is one command, not two.** `status --status "Needs your input"`
 refuses on its own now — a status move with no stated ask is a red badge in his
 inbox with no answerable question on it, which is exactly how 7/7 sat there for
-a day. Use `ask`, whose body is four sections, checked before anything is sent:
+a day. Use `ask`, whose body is four sections plus a fifth that costly asks must
+carry, all checked before anything is sent:
 
 ```
 @@ASKED     his own words that caused this ticket, verbatim — never invented
 @@WHEN      optional — when and where he said it
 @@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
 @@NEEDED    the specific ask; "Nothing right now" is fine, but say it out loud
+@@EVIDENCE  required ONLY when the ask costs money or cannot be undone
 ```
 
-`@@NEEDED` renders under a banner he can spot without reading. If the ticket
+`@@NEEDED` renders under a banner he can spot without reading.
+
+**An ask that spends money or cannot be undone is refused without
+`@@EVIDENCE`** — spend, buy, subscribe, upgrade, a plan change, a credential
+rotation, a deletion — and it reads third-person phrasings too ("this deletes
+all 550 rows"). That section carries the command in runnable form, its ACTUAL
+output pasted in a fence, and one line saying when you ran it:
+
+```
+@@MEASURED 8:04pm
+```
+
+That line is the only thing that dates the card — every other clock in the
+section, narrated or inside the paste, is ignored. Put it in the prose outside
+the fence, with the clock and nothing else on it (date it too if it was not
+today). It is declared rather than read out of your sentences because four
+earlier versions guessed which clock you meant and the last one dated a card by
+the outage it was reporting (Dane's call, 2026-08-29, task 86bbk34ym).
+
+On 2026-08-23 an agent asked Dane to pay for a plan upgrade on a
+diagnosis that was wrong, and re-running the one failing call would have
+settled it in seconds. Re-run it, paste what it says — do not summarise it.
+Ordinary escalations are untouched. If the ticket
 genuinely has no instruction behind it, say that in `@@ASKED` and name the
 standing decision it descends from.
 

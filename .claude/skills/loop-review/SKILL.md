@@ -95,13 +95,18 @@ the loops' reasoning arrived as walls of text in ClickUp's narrow right column.
 
 Handing a ticket to Dane is one command, not two: `status` refuses to set
 `Ready to launch` or `Needs your input` on its own and points at `ask`. The card
-body is four sections, checked before anything is sent:
+body is four sections plus a fifth that costly asks must carry, all checked
+before anything is sent:
 
 ```
 @@ASKED     his own words that caused this ticket, verbatim — never invented
 @@WHEN      optional — when and where he said it
 @@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
 @@NEEDED    the specific ask, under a banner he can spot without reading
+@@EVIDENCE  required ONLY when the ask costs money or cannot be undone: the
+            command, its real output in a fence, and a "@@MEASURED 8:04pm"
+            line saying when you ran it — that line is the only thing that
+            dates the card; every other clock in the section is ignored
 ```
 
 ### A `Ready to launch` card must carry a link he can click
