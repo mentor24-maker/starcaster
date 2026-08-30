@@ -37,6 +37,61 @@ being treated as out of date.
 Each of the four fixes was then deliberately un-done, one at a time, to watch
 the test that guards it actually fail — because a test that cannot fail proves
 nothing, and this is a lock we are about to start trusting.
+## 2026-08-30 — The rule about who runs the commands, put where it gets read (#453)
+
+Three times now you have had to say the same thing: when there is a command to
+run, I should run it, not hand it to you to paste. The most recent was the
+Delray header evening. Early on, one of my own safety gates refused a step —
+and instead of treating that as "this one call was blocked", I treated it as
+"I am not allowed to touch production tonight", and everything after that came
+back to you as something to copy. One of those was a script with two halves: a
+practice run that shows what it *would* change, and a second command that
+actually changes it. You ran the practice half. Nothing told you the real one
+was still sitting there waiting, so the fix was written but not applied, and
+most of an evening went on it.
+
+The reason it keeps coming back is dull and fixable: the rule was only written
+down in my memory and in the vault, and neither of those gets loaded when a
+session opens this repo. `CLAUDE.md` does — every session reads it. So the rule
+now lives there, in the "Coach the operator" section, with the full story and
+the incident behind it in `docs/DOCTRINE.md`.
+
+It says four things. I run the operational commands and tell you what happened
+in plain English. There are exactly four things I hand over instead — a real
+password or key, a billing screen, a login in your browser, and a decision
+that is genuinely yours — and when I hand something over I have to say which
+of the four it is, so "I need you" never arrives unexplained. A refusal applies
+to the one command it refused, not to the rest of the session. And a fix with
+a practice run and a real run is one job, not two: I run both and tell you what
+changed.
+
+Nothing about the app changed — this is a change to the instructions I read.
+## 2026-08-30 — Small, safe changes now merge themselves after an hour's notice (#438)
+
+Your ruling from the 24th is now running code: a pull request that touches
+nothing but tests and documentation, and has already passed review, announces
+itself on its ticket — "merging at 9:15pm unless you say otherwise" — waits
+one hour, and merges. Any comment from you during that hour stops it; not a
+keyword, anything at all. Everything riskier still waits for your word, and
+Lane C — anything visual, routes, data, sign-in — is never automated.
+
+It shipped the careful way: the first review pass sent it back because the
+branch had fallen behind the main line, and the second found six real holes
+before anyone was exposed to them. The two that mattered: the loop agents'
+own instruction files counted as "documentation", so a change rewriting the
+review rules could have merged itself — now anything that instructs an agent
+is on the never-auto-merge list; and a damaged memory file (the little ledger
+that records "Dane said stop") was being replaced with a blank one, which
+would have quietly lifted your stop order a pass later — now a ledger that
+cannot be read is never written over, it is left for a person to look at.
+
+Also from that review: an announcement that sat armed for more than a day
+goes stale and is cancelled instead of merged, the daily digest no longer
+lists the same merge twice, and a dry run truly writes nothing. Every one of
+those rules was broken on purpose to prove a named test catches it. The
+switch is `stop auto-merging` on the party line or any Loop Queue ticket,
+and `npm run clickup -- auto-merge-status` shows the lane's state any time.
+
 ## 2026-08-30 — Tickets now end on what they need from you, in red (#457)
 
 You asked for three things while looking at a merge ticket: put the "NEEDED
