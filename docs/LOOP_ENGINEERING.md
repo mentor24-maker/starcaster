@@ -222,6 +222,55 @@ PR regardless, so the migration cannot reach anything irreversible. A ticket
 whose PR was merged by hand during the stall gets one truthful comment saying
 so instead.
 
+### ...and a hand-off now names who is going to act (2026-08-30, task 86bbq0fh8)
+
+The section above made the hand-off honest about the *approval*. It stayed
+dishonest about the *actor*. The comment said the merge would go through "once
+the branch is caught up", and the pass posted `MERGE BLOCKED` to the bus asking
+for an agent session to resolve it.
+
+**Nothing reads the bus.** No session polls that channel and turns a request
+into claimed work, so it went into an empty room while the ticket comment
+described a process already underway. PR #434 sat that way from 2026-08-26 to
+2026-08-29; every pass logged `MERGE HANDED OFF (unchanged, nothing posted)`
+and `0 merged`, which is the correct quiet behaviour once a hand-off exists.
+Dane found it himself and asked why nothing had happened. The system worked as
+designed and the design had no actor in it.
+
+Dane picked **option C** on 2026-08-30: file it into the queue that already has
+a consumer.
+
+- **A conflict files a Loop Queue ticket.** On a real overlap the merge step
+  creates an ordinary `Queued` task — *"Resolve the merge conflict on PR #N
+  (branch)"* — carrying the branch, why it conflicts, and an explicit
+  instruction not to ask Dane to approve again. The build loop drains that
+  list on a timer today, so the actor already exists and is already running.
+  No new consumer, and no second queue beside the one that works.
+- **The comment names that ticket, or says nobody is on it.** Every notice now
+  declares an `actor` beside its marker, and the two together decide whether
+  the body may promise the approval carries over. `actor: 'nobody'` — filing
+  failed — prints *"Nothing is currently working on it"* and makes no promise
+  at all. Passive voice implying an unnamed actor is itself the defect
+  (vault `doctrine/TERMINOLOGY.md`, 2026-08-29; `docs/DOCTRINE.md` §2.5).
+- **Filing is idempotent, and a failure to file is loud.** The trail comment
+  (`CONFLICT TICKET FILED: PR #N — <url>`) is written by and read back through
+  `scripts/builder/conflictWork.js`, so a conflict that persists for a day
+  does not file twenty-four tickets. If the ticket cannot be filed, that goes
+  in the pass's `could not be checked` list and the bus post says
+  `MERGE BLOCKED AND UNFILED`.
+- **Silence has a shelf life.** A hand-off with no ticket behind it is stalled
+  immediately; one whose ticket has not cleared the conflict in 24 hours stops
+  being quiet and reports every pass under `CONFLICTS STILL UNRESOLVED`, by
+  name. That bucket is deliberately separate from `could not be checked` — the
+  latter exits 1 because it describes an unhealthy *pass*, while a stalled
+  conflict is a healthy pass reporting an unhealthy *ticket*.
+
+**These heal themselves too.** A hand-off already sitting in the record with no
+ticket behind it gets one filed on the next pass, and that counts as news even
+though the reason has not changed — so the comment naming the new actor is
+posted rather than suppressed by the quieting rule. Same shape as the marker
+migration above: nothing to remember to run by hand.
+
 ## The two columns, and the operator card (ratified 2026-08-22)
 
 ClickUp puts the task description on the **left**, wide, and the comment stream
