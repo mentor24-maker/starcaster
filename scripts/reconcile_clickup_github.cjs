@@ -44,6 +44,10 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { listTasks, getTaskComments, moveTaskStatus, postBusMessage } = require('./lib/clickup.cjs');
+
+/** How many terminal tasks the leftover-PR scan looks at, most recent first.
+ *  Bounded because the terminal set grows forever — see the scan below. */
+const TERMINAL_SCAN_MAX = 25;
 const { branchInventory, stampedTaskId, root } = require('./lib/repo_state.cjs');
 
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
@@ -150,6 +154,59 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
 
   const inFlight = tasks.filter(isInFlight);
   log(`[reconcile] ${inFlight.length} in-flight task(s) of ${tasks.length} total in the Loop Queue`);
+
+  // The OTHER direction (2026-08-25, task 86bbm4zwd): a task that is Live
+  // while its PR is still open. The loop below only ever looked at in-flight
+  // tasks, so this pair was invisible — and it is not harmless. Two such
+  // zombies (#374 under a Live 86bbjk5rw, #381 under a Live 86bbjk5wj, both
+  // shipped by a DIFFERENT PR) counted against the work-in-progress cap and
+  // helped deadlock the build loop for four hourly passes that morning.
+  //
+  // Never repaired automatically: the right answer is sometimes "close the
+  // PR" and sometimes "the ticket was closed too early", and only a person
+  // can tell which. Flagged, with both facts, so the choice is one command.
+  // Bounded on purpose (review round 1): one comment read plus one `gh` call
+  // per terminal task, per run. There are already 66 Live tickets and the set
+  // only grows, so the scan takes the most recently updated TERMINAL_SCAN_MAX
+  // and says how many it skipped. An unbounded scan that grows forever is a
+  // job that quietly gets slower until someone notices it timing out.
+  const terminal = tasks.filter(isTerminal)
+    .sort((a, b) => Number(b.date_updated || 0) - Number(a.date_updated || 0));
+  const scanned = terminal.slice(0, TERMINAL_SCAN_MAX);
+  if (terminal.length > scanned.length) {
+    log(`[reconcile] scanning the ${scanned.length} most recently updated of ${terminal.length} terminal task(s) for leftover open PRs`);
+  }
+
+  for (const task of scanned) {
+    const label = `task ${task.id} "${task.name}"`;
+    let comments;
+    try {
+      comments = await getComments(task.id);
+    } catch {
+      unchecked.push(`${label}: terminal, but its comments could not be read — cannot tell whether a PR is still open`);
+      continue;
+    }
+    // EVERY distinct linked PR, not just the newest (review round 1). The real
+    // 2026-08-25 shape is a Live ticket linking an open leftover AND a later
+    // merged PR that actually shipped it — so "newest" is the merged one and
+    // the check returned silently on the exact case it was written for.
+    for (const linked of distinctPrs(comments)) {
+      const pr = prState(linked.owner, linked.repoName, linked.number);
+      if (!pr) {
+        unchecked.push(`${label}: terminal, but the state of PR #${linked.number} could not be read`);
+        continue;
+      }
+      if (pr.state !== 'OPEN') continue;
+      await flag(
+        `contradiction:open-pr-under-terminal:${task.id}:${linked.number}`,
+        `${label} is "${task.status?.status}" but its linked PR #${linked.number} is still OPEN. ` +
+          'Either the work shipped under a different PR and this one is a leftover — which counts against the ' +
+          'work-in-progress cap and blocks the build loop — or the task was closed too early. Close the PR, or reopen the task.',
+        { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what: `${label}: open PR under a terminal task` }
+      );
+    }
+  }
+
 
   for (const task of inFlight) {
     const status = (task.status?.status || '').toLowerCase();
@@ -293,7 +350,11 @@ async function main() {
 
   let tasks;
   try {
-    tasks = await listTasks(LOOP_QUEUE_LIST);
+    // include_closed: ClickUp drops closed-type statuses by default, so
+    // without it `tasks.filter(isTerminal)` is structurally empty and the
+    // leftover-PR scan below can never fire (review round 1, measured: 36
+    // tasks returned while 66 Live tickets existed).
+    tasks = await listTasks(LOOP_QUEUE_LIST, { includeClosed: true });
   } catch (err) {
     console.error(`[reconcile] FAILED to read the Loop Queue — nothing could be checked: ${err.message}`);
     process.exit(1);

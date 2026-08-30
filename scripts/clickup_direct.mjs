@@ -183,17 +183,56 @@ function reportLimits(res) {
  * ~100-requests-per-minute allowance, and "it feels like plenty" is not a
  * number anybody can check later. The count grows with the size of the open
  * queue, so it is worth re-reading whenever the interval is shortened again.
+ *
+ * Counted where the ATTEMPT is made, not where it succeeds: a request that
+ * fails to connect still spent whatever the attempt costs, and for a budget
+ * you would rather over-count than under-count.
  */
 let requestCount = 0;
 
+/**
+ * A response-shaped stand-in for a request that never reached ClickUp at all
+ * — DNS failure, a TLS reset, this machine offline, a connection timeout.
+ *
+ * WHY THIS EXISTS (2026-08-25, task 86bbm4zwd, review round 2). `fetch`
+ * REJECTS on a transport failure rather than resolving with a non-ok
+ * response, and nothing here caught it. The rejection travelled up through
+ * `fetchAllTasks` to a top-level `await` with no handler, so the process died
+ * with a stack trace and exit 1 — and `loop-build` reads exit 1 as "could not
+ * tell, so proceed, unbounded by the cap". A routine network blip therefore
+ * UNCAPPED the loop: the same inverted safety property the `fatal:false` fix
+ * closed for HTTP errors, reached through a different door.
+ *
+ * Returning `res.ok === false` rather than throwing means every caller's
+ * EXISTING failure path handles it — `die()` prints it, `fatal:false` falls
+ * back to the stricter counting — and no caller has to know that `fetch` can
+ * throw. That is the point: the next call site added here inherits the fix
+ * instead of having to remember it.
+ */
+function unreachable(err) {
+  return {
+    res: { ok: false, status: 0, headers: { get: () => null } },
+    json: null,
+    text: `the request never reached ClickUp (${err?.message || err})`,
+  };
+}
+
 async function call(method, path, body) {
   requestCount += 1;
-  const res = await fetch(`https://api.clickup.com${path}`, {
-    method,
-    headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
+  let res;
+  try {
+    res = await fetch(`https://api.clickup.com${path}`, {
+      method,
+      headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    return unreachable(err);
+  }
+  let text;
+  // The body can fail mid-stream after a perfectly good set of headers — a
+  // dropped connection reads as a rejection here, not at the line above.
+  try { text = await res.text(); } catch (err) { return unreachable(err); }
   let json = null;
   try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
   return { res, json, text };
@@ -222,6 +261,13 @@ function die(label, { res, json, text }) {
   if (res.status === 429) {
     console.error('\n429 is ClickUp itself throttling, and it clears in under a minute.');
     console.error('This is NOT the connector quota — wait 60s and run the same command again.');
+  }
+  if (res.status === 0) {
+    // Not a ClickUp status at all — unreachable() invents it so a transport
+    // failure travels the same road as an HTTP error instead of throwing.
+    console.error('\nHTTP 0 is not something ClickUp said. The request never left this machine or never');
+    console.error('arrived — DNS, TLS, a dropped connection, or being offline. Nothing was sent, so');
+    console.error('nothing is half-done: check the network and run the same command again.');
   }
   process.exit(1);
 }
@@ -328,11 +374,35 @@ if (!TOKEN) {
 
 /** Every page of a list's open tasks. The endpoint caps at 100 per page and
  *  a first-page-only read silently starves everything past it (DOCTRINE 5.12). */
-async function fetchAllTasks(list) {
+async function fetchAllTasks(list, { includeClosed = false, fatal = true } = {}) {
+  // includeClosed: ClickUp's v2 list endpoint DROPS closed-type statuses by
+  // default, so `Live` tickets are invisible without it — 36 tasks come back
+  // where 66 Live ones exist (measured 2026-08-25). Opt-in rather than global:
+  // the `queue` command wants only open work, and flipping it there would put
+  // 66 shipped tickets in front of the loop.
+  //
+  // fatal:false — die() ends in process.exit(1), so a caller that WANTS to
+  // handle a failed read cannot: its try/catch never runs and loop-build reads
+  // exit 1 as "proceed, unbounded by the cap". That inverted the wip-check
+  // safety property outright (task 86bbm4zwd, review round 1).
   const tasks = [];
+  const closedParam = includeClosed ? '&include_closed=true' : '';
   for (let page = 0; page < 50; page++) {
-    const out = await call('GET', `/api/v2/list/${list}/task?archived=false&page=${page}`);
-    if (!out.res.ok) die('list tasks', out);
+    const out = await call('GET', `/api/v2/list/${list}/task?archived=false${closedParam}&page=${page}`);
+    if (!out.res.ok) {
+      if (!fatal) return { tasks: null, res: out.res, failed: `HTTP ${out.res.status}` };
+      die('list tasks', out);
+    }
+    // A 200 carrying a body that is not the expected JSON — a proxy's error
+    // page, a truncated response — left `out.json` null, and spreading
+    // `null.tasks` threw exactly like the transport failure above did, past
+    // the fatal:false contract and out to exit 1 (review round 2).
+    // `listTasks` in clickup.cjs has always guarded this; this did not.
+    if (!out.json || !Array.isArray(out.json.tasks)) {
+      const why = 'the response body was not the expected JSON';
+      if (!fatal) return { tasks: null, res: out.res, failed: why };
+      die(`list tasks (${why})`, out);
+    }
     tasks.push(...out.json.tasks);
     if (out.json.last_page !== false || out.json.tasks.length === 0) {
       return { tasks, res: out.res };
@@ -947,7 +1017,9 @@ if (cmd === 'whoami') {
   // nothing here writes to ClickUp — no status, no comment, no Loop note.
   const cap = wipCap.resolveCap(process.env);
   const repoArg = arg('repo') || '';
-  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state'];
+  // `body` carries the ticket link every loop-opened PR must have (pr-opened
+  // refuses without one), which is how a PR is matched to its ticket status.
+  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state,body'];
   if (repoArg) listArgs.push('--repo', repoArg);
 
   const out = gh(listArgs);
@@ -963,7 +1035,57 @@ if (cmd === 'whoami') {
     process.exit(undecided.code);
   }
 
-  const decision = wipCap.wipDecision({ prs, cap });
+  // An open PR only counts when its TICKET says the work is in flight
+  // (task 86bbm4zwd). A ticket sent back to Queued with its PR still open is
+  // rework the loop must be free to claim; counting it deadlocked the build
+  // loop for four hourly passes on 2026-08-25.
+  //
+  // If the queue cannot be read, ticketStatusById stays undefined and
+  // wipDecision falls back to counting every open PR — the older, MORE
+  // restrictive reading. Failing toward the cap costs idle time; failing away
+  // from it costs the churn the cap exists to prevent.
+  //
+  // include_closed:true is REQUIRED here — a zombie PR's ticket is `Live`, and
+  // without it the ticket is simply absent from the map and the PR reports as
+  // "no ticket found", sending the reader after drift that does not exist.
+  //
+  // fatal:false is REQUIRED here — see fetchAllTasks. With the default, a
+  // routine ClickUp 429 exits 1, which loop-build reads as "proceed, uncapped".
+  //
+  // The try/catch below is a LAST RESORT, and it is worth being precise about
+  // what it is and is not (review round 2). `fatal:false` covers a response
+  // that arrived and was not ok. `call()` covers a request that never arrived,
+  // by converting the rejection into a non-ok response. Between them every
+  // known failure already lands in the conservative fallback — this catch
+  // exists only so that a FUTURE change to any of that plumbing still cannot
+  // let an exception out of here, because an unhandled rejection is exit 1 and
+  // loop-build reads exit 1 as "proceed, unbounded by the cap".
+  //
+  // Being a backstop, it is the one layer here no test can isolate: with the
+  // two above it working, nothing reaches it. It also actively HID a bug once
+  // — the JSON guard in fetchAllTasks was break-tested and passed anyway,
+  // because this catch swallowed the TypeError and produced the same exit
+  // code. That is why the tests in wipCapOutage.test.js assert the REASON
+  // reported, not just the exit code: every guard is pinned by wording only it
+  // can produce, so this one cannot mask another one going missing again.
+  let ticketStatusById;
+  let listed = null;
+  try {
+    listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+  } catch (err) {
+    listed = { tasks: null, res: null, failed: String(err?.message || err) };
+  }
+  if (Array.isArray(listed.tasks) && listed.tasks.length) {
+    ticketStatusById = Object.create(null);
+    for (const t of listed.tasks) ticketStatusById[String(t.id)] = t.status?.status ?? '';
+  } else {
+    // Say WHY the stricter reading is in force. "6 open, cap 5" with no
+    // explanation is how the original deadlock stayed invisible for four
+    // passes; the same silence about a failed read would do it again.
+    console.error(`The Loop Queue could not be read (${listed.failed || 'no tasks came back'}), so every open PR is counted.`);
+  }
+
+  const decision = wipCap.wipDecision({ prs, cap, ticketStatusById });
   console.log(decision.message);
   process.exit(decision.code);
 

@@ -67,6 +67,79 @@ Worth noting where this was caught: not by the tests, which were green, and not
 by the build, which passed. It was caught by the independent review step reading
 the output with the question "would this line be true if the check had not run?"
 That is the review lane earning its day.
+## 2026-08-26 — The build loop stops jamming itself, and a dropped connection can no longer switch the brake off (#431)
+
+There is a rule that stops the robot builder taking on new work when too much
+is already half-finished. It was counting the wrong things. A job sent back for
+another go still had its pull request open, so the rule counted it as "busy" —
+even though the only way to finish that job was for the builder to pick it up
+again. The brake was jammed on by the very work it was blocking. One morning
+that left thirty-three jobs waiting and the builder doing nothing for four hours
+straight, while everything looked normal.
+
+It now counts jobs, not paperwork: only work somebody is genuinely moving
+counts, and it says the breakdown out loud — "one in flight, four not counted:
+two sent back, one already shipped" — instead of a bare number that told you
+nothing.
+
+The part that took three passes was the opposite failure. To count properly the
+rule now has to ask ClickUp what state each job is in, and something had to
+happen when ClickUp could not answer. If it cannot tell, it counts everything,
+which is the cautious answer. But a broken network connection did not reach that
+cautious answer at all — it crashed, and a crash was read further up as "carry
+on regardless", so a moment of bad wifi would have taken the brake off entirely.
+That is worse than the jam it was fixing. All three ways the answer can fail —
+ClickUp saying no, ClickUp saying nothing, and never reaching ClickUp at all —
+now land on the cautious answer, and there are tests that run the real command
+with each failure underneath it to prove it.
+
+Alongside it, the daily drift check learned to spot the matching mess: a job
+marked finished whose pull request is still sitting open. It reports those and
+leaves them for a person, because "close the leftover" and "that job was closed
+too early" both happen and only you can tell which.
+## 2026-08-26 — The settings fields and the Layout fields finally line up (#440)
+
+Back on the 13th you looked at a two-column module editor and said the left
+column's width "varies arbitrarily between the Settings fields and the Layout
+fields." Yesterday's work fixed the top half of that. This is the bottom half.
+
+Open Feature Cards and look down the left side. The rows at the top — Label,
+Background, Alignment, the margins — put their boxes at one distance from the
+left edge, and the rows right below them put theirs 33 pixels further over.
+Two ragged edges where you are reading one list.
+
+The reason it survived yesterday's fix is worth a sentence, because it is not
+carelessness. Those top rows and the rows below them are two separate boxes on
+the page, and in the language pages are laid out in, two separate boxes cannot
+share a column width — each one measures its own longest label and puts its
+fields wherever that happens to end. Written identically, they still land in
+different places. There is a newer feature, `subgrid`, that lets two boxes
+borrow their columns from a shared parent, and that is what they do now: the
+widest label is measured across every row at once, so every box starts and
+ends on one line. The two halves of the editor stay exactly the equal widths
+you asked for in August — the card list still begins at the halfway mark, to
+the pixel.
+
+Two of the editors this was expected to touch turned out not to need touching,
+and the only way to know that was to drive a real browser and measure. The
+Carousel's top rows have nothing underneath them to disagree with. Social had
+already solved it a different way months ago. Both were left alone.
+
+The Program List editor, which was not on the ticket, turned out to have its
+two columns backwards: the list of programs was stacked underneath the top
+rows on the left while the settings sat off on the right, with the heading
+"Settings" sitting over the list of programs. Nothing in the styling said so
+— the rule that places those two halves had simply never named this editor.
+It now matches Feature Cards, and the panel is about 850 pixels shorter.
+There are before-and-after pictures on the ticket; that one is worth a look.
+
+The last piece is the checker. `check:panels`, the tool that is supposed to
+catch exactly this kind of misalignment, had been reporting a clean pass over
+it for weeks — it compares each box against itself, so two boxes that are each
+perfectly tidy inside while disagreeing with each other were invisible to it.
+It now measures them together. Before believing the fix, the sharing was
+switched off on purpose to confirm the checker fails loudly: it does, twelve
+times over, at every screen width.
 
 ## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
 
