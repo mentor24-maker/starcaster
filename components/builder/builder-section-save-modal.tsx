@@ -55,6 +55,16 @@ type BuilderSectionSaveModalProps = {
    * Optional so a caller that cannot work it out still gets the page list.
    */
   diff?: SavedSectionDiff | null;
+  /**
+   * One line when this overwrite also moves the section's NAME, from
+   * `describeSavedSectionRename` (`lib/builder-client/saved-section-name.ts`).
+   *
+   * A push from a page carries the page's title, and until 2026-08-30 that was
+   * the only thing in the product that could change the name every other page
+   * shows — silently, which is how the same section ended up with two names
+   * nobody could reconcile. Null when the name is not moving.
+   */
+  renameNotice?: string | null;
   isSaving: boolean;
   onOverwrite: () => void;
   onSaveAsNew: () => void;
@@ -137,6 +147,7 @@ export function BuilderSectionSaveModal({
   canonicalName,
   impact,
   diff,
+  renameNotice,
   isSaving,
   onOverwrite,
   onSaveAsNew,
@@ -178,6 +189,9 @@ export function BuilderSectionSaveModal({
               <dt>Overwrite “{label}”</dt>
               <dd>
                 {impact.summary} This copy links back to it, so it follows the original again.
+                {renameNotice ? (
+                  <span className="builder-choice-dialog-rename">{renameNotice}</span>
+                ) : null}
               </dd>
               <dt>Save as a new section</dt>
               <dd>

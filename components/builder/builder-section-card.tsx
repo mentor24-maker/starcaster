@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
 import { getLayoutColumns, getLayoutGridTemplate } from "@/lib/builder-template";
 import { describeBlockLineage } from "@/lib/block-lineage";
+import { resolveSharedSectionTitle } from "@/lib/saved-section-name";
 import type { BlockUsage } from "@/lib/shared-block-usage";
 import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-down-surface";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
@@ -168,6 +169,11 @@ export function BuilderSectionCard({
   const isCanonical = sectionAny.canonical === true;
   const hasCanonicalSource = Boolean(sectionAny.savedSectionId);
 
+  // ONE name for a following copy: the master's. The copy's own stamped title
+  // is whatever the last fan-out wrote, which for 550 production rows predates
+  // the rename that was supposed to fix them — see @/lib/saved-section-name.
+  const titleShowsMasterName = isCanonical && Boolean(String(canonicalSourceName ?? "").trim());
+
   // Display only. Nothing below this line writes, and nothing here is allowed
   // to — the actions that act on these states are slices 6b and 6c.
   const lineage = describeBlockLineage({
@@ -177,6 +183,7 @@ export function BuilderSectionCard({
     hasMasterSource: hasCanonicalSource,
     masterName: canonicalSourceName,
     usage: canonicalUsage,
+    namedInTitle: titleShowsMasterName,
   });
 
   const columns = getLayoutColumns(section.layout);
@@ -306,10 +313,12 @@ export function BuilderSectionCard({
     return () => { el.removeAttribute("data-builder-focus"); };
   }, [isCollapsed]);
 
-  const rawTitle = section.title?.trim() || `Section ${sectionIndex + 1}`;
-  const displayTitle = isCanonical && rawTitle.endsWith("Canonical")
-    ? rawTitle.slice(0, -"Canonical".length).trim()
-    : rawTitle;
+  const displayTitle = resolveSharedSectionTitle({
+    isFollowing: isCanonical,
+    masterName: canonicalSourceName,
+    title: section.title,
+    fallback: `Section ${sectionIndex + 1}`,
+  });
 
   function handleTitleClick() {
     setIsEditingTitle(true);

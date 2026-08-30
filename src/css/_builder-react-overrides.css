@@ -5486,6 +5486,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   line-height: 1.5;
 }
 
+/* "This also renames it on 35 pages." A push from a page carries the page's
+   title, so an overwrite can move the name every other page shows. Its own
+   line, in the body colour rather than the muted one around it: it is the part
+   of the sentence somebody would otherwise find out about afterwards. */
+.builder-react-root .builder-choice-dialog-choices dd .builder-choice-dialog-rename {
+  display: block;
+  margin-top: var(--space-1, 4px);
+  color: var(--ink, #0b2a4a);
+  font-weight: 600;
+}
+
 .builder-react-root .builder-save-conflict-actions,
 .builder-react-root .builder-choice-dialog-actions {
   display: flex;

@@ -45,6 +45,50 @@ regenerated as a plain copy.
 
 ---
 
+## 1a. One name, and where it is kept
+
+A saved section carries a name in two places: the manager row's `name`, and
+`section.title` inside the content it stores. Nothing kept them together until
+2026-08-30, and the fan-out actively pulled them apart — a rename wrote `name`
+alone, then `propagateCanonicalSection` pushed the master's content, stale
+title included, over every following page. Dane renamed the Delray site header
+three times on 2026-08-29 and watched every page card snap back to the old
+name each time. The only thing that had ever moved the stamped title was a push
+FROM a page (§2, "Overwrite the original"), which nobody would guess.
+
+The rule now is that there is **one name**, and it can be moved from either
+end — `lib/builder-client/saved-section-name.ts`:
+
+- **Renaming the master stamps the content too.** `applySavedSectionName` runs
+  before the PATCH in both places that write a master (`saveSavedSection` in
+  `components/admin-builder-editor.tsx`, `handleSave` in
+  `components/builder/saved-section-editor-modal.tsx`), so the fan-out that
+  used to undo the rename now carries it.
+- **A push from a page moves the name with the title.** That save already
+  carried the page's `title`; the row name follows it rather than being left
+  behind as a second, stale string. An untitled section keeps the name the
+  original already has — a push must never blank it.
+- **Either way the dialog says so.** `describeSavedSectionRename` adds one
+  line — "This also renames it on 35 pages" — to the manager's confirm and to
+  `BuilderSectionSaveModal`. Null when the name is not moving, or when nothing
+  follows the master.
+- **The card shows the master's name, not the stamp.** `resolveSharedSectionTitle`
+  titles a following copy by its master, so a stale stamp cannot contradict the
+  manager on screen. No migration is being run over the rows that already
+  diverge; they simply stop being visible, and converge the next time the
+  section is saved. A copy whose master was deleted falls back to its stamp,
+  because then the stamp is the only name there is.
+- The lineage line beneath drops `Copy of "…"` when the heading already names
+  the master (`namedInTitle`, `./block-lineage.ts`) and keeps the reach.
+
+It lives in `lib/builder-client/` rather than in `routes/builder.js` because
+those two clients are the only things that PATCH a master, and putting it on
+the server would need a hand-ported CommonJS twin of the kind `hasSectionDrifted`
+already carries — a second copy to keep in sync, for no reach it does not
+already have.
+
+---
+
 ## 2. The two saves
 
 The 💾 button on an unlinked instance can mean two entirely different things,
@@ -145,6 +189,10 @@ you are editing holds a second following copy of the same section.
 
 ## 4. Landmines
 
+0. **A saved section used to have two names and only one was renameable.**
+   Fixed 2026-08-30 (§1a). If you add a third place that writes a master, it
+   must go through `applySavedSectionName` or the rename it makes will be
+   undone by its own fan-out — silently, and only on the OTHER pages.
 1. **Nothing stops two originals sharing a name.** There is no unique
    constraint on `name` and no collision check on create. Before 2026-08-16 the
    only save available from a page was "create", so typing the original's name
@@ -177,6 +225,7 @@ you are editing holds a second following copy of the same section.
 | The dialog | `components/builder/builder-section-save-modal.tsx` |
 | Impact + outcome wording, drift counts | `lib/builder-client/shared-block-usage.ts` — `driftedFollowingPages` |
 | Per-page diff before the click | `lib/builder-client/saved-section-diff.ts` |
+| One name: stamp, notice, display | `lib/builder-client/saved-section-name.ts` |
 | Card states, badges, buttons | `components/builder/builder-section-card.tsx` |
 | Routes | `routes/builder.js` — `/api/builder/saved-sections*`, `/force-propagate` |
 | Store | `lib/builderSavedSectionsStore.js` — `getSavedSection` reads the pre-save original |

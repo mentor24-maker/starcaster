@@ -99,7 +99,7 @@ function lineageLine(): HTMLElement | null {
 }
 
 describe("the block header's state chip", () => {
-  it("reads Following, and names the master and its reach, on a linked copy", () => {
+  it("reads Following, and states its reach, on a linked copy", () => {
     renderCard({
       section: { ...SECTION, savedSectionId: "menu", canonical: true },
       canonicalSourceName: "2 - Menu Banner",
@@ -107,7 +107,9 @@ describe("the block header's state chip", () => {
     });
     expect(chip().textContent).toBe("Following");
     expect(chip().dataset.blockState).toBe("following");
-    expect(lineageLine()?.textContent).toBe('Copy of "2 - Menu Banner" · used on 35 pages');
+    // The heading is the master's name now, so the line carries the reach and
+    // not a second copy of the name — see resolveSharedSectionTitle.
+    expect(lineageLine()?.textContent).toBe("Used on 35 pages");
   });
 
   it("reads Changed once the copy has drifted", () => {
@@ -120,7 +122,33 @@ describe("the block header's state chip", () => {
     expect(chip().textContent).toBe("Changed");
     expect(chip().dataset.blockState).toBe("changed");
     // Same sentence as the Following case above: only the chip moves.
-    expect(lineageLine()?.textContent).toBe('Copy of "2 - Menu Banner" · used on 35 pages');
+    expect(lineageLine()?.textContent).toBe("Used on 35 pages");
+  });
+
+  it("titles a following copy by its MASTER, over a stale stamped title", () => {
+    // The Delray header bug, at the surface it reached the operator through:
+    // the row was renamed "2a - Header" three times and every page card kept
+    // reading "2 - Menu Banner", the title the last fan-out stamped. One name,
+    // and it is the manager's.
+    renderCard({
+      section: { ...SECTION, title: "2 - Menu Banner", savedSectionId: "menu", canonical: true },
+      canonicalSourceName: "2a - Header",
+      canonicalUsage: usage({ pages: 35, following: 35 }),
+    });
+    const heading = container?.querySelector(".builder-section-title-main")?.textContent ?? "";
+    expect(heading).toContain("2a - Header");
+    expect(heading).not.toContain("2 - Menu Banner");
+  });
+
+  it("keeps the stamped title when the master was deleted", () => {
+    // Nothing to resolve, so the stamp is the only name there is.
+    renderCard({
+      section: { ...SECTION, title: "2 - Menu Banner", savedSectionId: "gone", canonical: true },
+      canonicalUsage: usage({ pages: 2, following: 2 }),
+    });
+    expect(container?.querySelector(".builder-section-title-main")?.textContent).toContain(
+      "2 - Menu Banner"
+    );
   });
 
   it("reads Independent with no second line on an unlinked block", () => {

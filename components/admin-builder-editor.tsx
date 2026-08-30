@@ -76,6 +76,11 @@ import {
   type BlockUsage
 } from "@/lib/shared-block-usage";
 import { diffSavedSectionOverwrite } from "@/lib/saved-section-diff";
+import {
+  applySavedSectionName,
+  describeSavedSectionRename,
+  savedSectionTitleFor
+} from "@/lib/saved-section-name";
 import { getSectionContent, hasSectionDrifted } from "@/lib/section-drift";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
@@ -293,6 +298,23 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     if (!sectionSaveChoice || !sectionSaveChoiceMaster) return { count: 0, pageLabels: [] };
     return driftedFollowingPages(pages, sectionSaveChoice.savedSectionId, sectionSaveChoiceMaster.section);
   }, [sectionSaveChoice, sectionSaveChoiceMaster, pages]);
+  /**
+   * Pushing a page's copy over the original carries the page's TITLE with it,
+   * so this save can rename the section everywhere. That was the one path that
+   * ever moved the stamped title, and it moved it in silence — the half of the
+   * two-names bug that hid the other half. Say it in the dialog, where the
+   * reach of the content change is already stated.
+   */
+  const sectionSaveRename = useMemo(() => {
+    if (!sectionSaveChoice || !sectionSaveChoiceMaster) return null;
+    const section = draft.layoutSections.find((candidate) => candidate.id === sectionSaveChoice.sectionId);
+    if (!section) return null;
+    return describeSavedSectionRename(
+      sectionSaveChoiceMaster.section,
+      section.title,
+      savedSectionUsage.get(sectionSaveChoice.savedSectionId)
+    );
+  }, [sectionSaveChoice, sectionSaveChoiceMaster, draft.layoutSections, savedSectionUsage]);
   const workspaceThemeStyles = useMemo(() => buildBuilderThemeStyles(linkedTheme), [linkedTheme]);
   // What the canvas paints type with. The shell colours above already read
   // `linkedTheme` — the live record — while the type vars read the copy frozen
@@ -964,7 +986,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
 
     const content = { ...getSectionContent(section), id: master.section.id } as BuilderTemplateSection;
-    const saved = await saveSavedSection(savedSectionId, master.name, content, master.isPrivate === true, {
+    // One name, and this push can be the thing that moves it: the page's title
+    // rides along in `content`, so the row name follows it rather than being
+    // left behind as a second, stale name. An untitled section keeps the name
+    // the original already has — a push must never blank it.
+    const nextName = savedSectionTitleFor(section.title) || master.name;
+    const saved = await saveSavedSection(savedSectionId, nextName, content, master.isPrivate === true, {
       // The dialog just listed every page this touches; a second confirm on top
       // of it is the kind of nagging people learn to click through.
       skipImpactConfirm: true,
@@ -1423,9 +1450,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // be written, which every following page differs from by definition.
     const currentMaster = savedSections.find((ss) => ss.id === sectionId)?.section ?? null;
     const drift = driftedFollowingPages(pages, sectionId, currentMaster);
+
+    // ONE name. The row's `name` and the content's `title` were two separate
+    // strings, and only the row was renameable — so a rename in the manager
+    // was undone by its own fan-out, which pushes the master's content (stale
+    // title included) over every follower. Stamping it here is what makes the
+    // rename survive the push. See @/lib/saved-section-name.
+    const renameNotice = describeSavedSectionRename(section, trimmedName, savedSectionUsage.get(sectionId));
+    const named = applySavedSectionName(section, trimmedName);
+
     if (!options.skipImpactConfirm) {
       const impact = describePushImpact(trimmedName, savedSectionUsage.get(sectionId), drift.count);
-      if (impact && !window.confirm(impact)) return false;
+      const prompt = impact && renameNotice ? `${impact}\n\n${renameNotice}` : impact;
+      if (prompt && !window.confirm(prompt)) return false;
     }
 
     setIsSaving(true);
@@ -1436,7 +1473,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       const response = await builderAdminFetch(`/api/admin/saved-sections/${sectionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmedName, section, isPrivate })
+        body: JSON.stringify({ name: trimmedName, section: named, isPrivate })
       });
       const data = await readAdminJson<{
         savedSection?: BuilderSavedSectionRecord;
@@ -2738,6 +2775,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
             sectionSaveDrift.pageLabels
           )}
           diff={sectionSaveDiff}
+          renameNotice={sectionSaveRename}
           isSaving={isSaving}
           onCancel={() => setSectionSaveChoice(null)}
           onOverwrite={() =>
