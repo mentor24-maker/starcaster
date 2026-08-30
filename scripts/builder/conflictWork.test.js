@@ -203,6 +203,27 @@ test('a failure to file is reported, never swallowed', () => {
   assert.match(fn, /return null;/, 'and must return null so the notice says nobody is on it');
 });
 
+test('a stalled conflict is counted ONCE in the summary line', () => {
+  // Review round 1 (task 86bbq0fh8): `merges.stalled` and `stalledHandOffs`
+  // fire on the same event, and both clauses landed in one console.log —
+  // "1 conflict(s) still unresolved, 1 conflict(s) STILL UNRESOLVED" reads as
+  // two problems. Only stalledLine reports it, because it vanishes at zero.
+  const mergeLine = SCRIPT.slice(SCRIPT.indexOf('const mergeLine'), SCRIPT.indexOf('const stalledLine'));
+  assert.ok(mergeLine.length > 0, 'mergeLine must be built before stalledLine');
+  assert.ok(!/unresolved/i.test(mergeLine), 'mergeLine must not also count stalled conflicts');
+  assert.match(SCRIPT, /const stalledLine = stalledHandOffs\.length \? `, \$\{stalledHandOffs\.length\} conflict\(s\) STILL UNRESOLVED` : ''/);
+});
+
+test('announcing a stall re-stamps the marker; a failed announcement does not', () => {
+  // The cadence promise in conflictWork.js is one pass of noise per DAY, and
+  // the clock is the marker timestamp. Without the re-stamp, every pass after
+  // the threshold nags again (review round 1). And the re-stamp must be gated
+  // on the bus post SUCCEEDING, or a post nobody saw buys a day of silence.
+  const block = SCRIPT.slice(SCRIPT.indexOf('MERGE HAND-OFF STALLED'), SCRIPT.indexOf("outcome: 'handed-off-stalled'"));
+  assert.match(block, /else await markMergeHandled\(decision\.commentId, task, unchecked, notice\.marker\)/);
+  assert.ok(block.indexOf('busStall.ok') < block.indexOf('markMergeHandled'), 'the re-stamp is the else of the failed-announcement branch');
+});
+
 test('a stalled conflict is reported separately from things the pass could not check', () => {
   // `unchecked` exits 1 — that is a health signal about the PASS. A stalled
   // ticket is a healthy pass reporting an unhealthy ticket; conflating them

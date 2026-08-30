@@ -964,7 +964,14 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       stalledHandOffs.push(line);
       if (dryRun) return { outcome: 'would-report-stalled', reason: stalled.why };
       const busStall = await postToBus(channel, `[CC-starcaster bus-relay] CONFLICT STILL UNRESOLVED — ${line}\n\n${pr.url}`);
+      // "One pass of noise per day is the price" (conflictWork.js) — and the
+      // clock that meters it is the marker's timestamp, so a stall that has
+      // been ANNOUNCED re-stamps the marker and the next nag is a day away.
+      // An announcement that failed does not: leaving the old stamp is what
+      // makes the next pass try again instead of going quiet for a day on
+      // the strength of a post nobody saw (review round 1, task 86bbq0fh8).
       if (!busStall.ok) reportBusFailure({ cosmetic: false, unchecked, busSkipped, line: `${task.id}: a stalled conflict hand-off could not be announced on the bus (${busStall.why})` });
+      else await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
       return { outcome: 'handed-off-stalled', reason: stalled.why };
     }
 
@@ -3036,7 +3043,7 @@ if (cmd === 'whoami') {
     : '';
 
   const mergeLine = mergingAllowed
-    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass, ${merges.stalled} conflict(s) still unresolved`
+    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
     : pauseState.paused
       ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
       : ', merging disabled (--no-merge)';
