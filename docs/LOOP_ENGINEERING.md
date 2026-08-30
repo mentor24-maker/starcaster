@@ -75,6 +75,7 @@ npm run clickup -- comment --task <id> --body-file -           # a plain note (p
 npm run clickup -- describe --task <id> --body-file -          # REPLACE the description (the left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
 npm run clickup -- attach --task <id> --file a.png --file b.png             # before/after pictures
+npm run --silent clickup -- next-interval --for loop-build --fallback 3600  # how long to sleep next (one integer)
 ```
 
 `status` enforces the handoff rule by itself: moving into any machine status
@@ -623,6 +624,10 @@ applies to **building**: every piece of work gets its own folder and branch.
 That is what the loops do for each task. It was never about where a loop
 session is launched from.
 
+The unattended runner on the Mac Mini does not use a fixed number any more —
+it asks the queue how long to sleep after each pass. See **"How often the
+LOOPS wake"** below for the curve, the 900 s floor and why that floor exists.
+
 `/loop 30m X` means "run X, then run it again every 30 minutes." Build drains
 the `Queued` pile into PRs; review drains the `In review` pile into
 `Ready to launch` PRs that ping you.
@@ -1099,6 +1104,96 @@ outlives two hours announces itself on the party line and keeps saying so
 hourly, because a pause nobody remembers looks exactly like a pipeline that has
 broken.
 
+## The fast-track lane — the loop's job, done by hand (2026-08-30, task 86bbq5523)
+
+**Ruled by Dane on 2026-08-30:** *"Let's fast track \<ticket-id\>"*, said at
+the start of a new session, is a complete instruction. The agent runs the
+human lane end to end and the session ends with a clean merge. Until this
+section existed the procedure lived only in one machine's agent memory; it
+belongs here so every machine and every session runs the same lane.
+
+The lane is not an exemption. It exists because the loop lane — spec, build,
+review, merge — is about a day end to end, and sometimes a ticket cannot wait
+a day. Everything the loops check, the hand session checks too; the only thing
+it skips is the queue position.
+
+### The steps
+
+1. **`npm run pipeline -- check`.** Exit 3 = the deck is Dane's; claim
+   nothing, merge nothing, say so once. Exit 1 = could not tell; re-run it
+   before treating that as paused (one transient 1 was observed on
+   2026-08-30 from a background shell, and the re-run said running).
+2. **Read the ticket and every comment.** On a send-back, the review comment
+   is the specification — it names the defects, how they were proved, and
+   what it already verified so you do not redo it. The description is context.
+3. **Claim it, atomically.** `npm run clickup -- status --task <id> --status
+   Building --if-status Queued`. **Priority is not a guard** — an Urgent
+   ticket is still claimable by a loop pass; only the status is, and only
+   `--if-status` makes the write refuse if a pass got there first (the same
+   check-then-act guard the loops use). Leave the priority where it is.
+4. **Find the branch.** `npm run clickup -- build-start --task <id>`: exit 3
+   means a PR is already open, so the work continues on THAT branch, not a
+   fresh one. `npm run thread` only creates new branches, so for an existing
+   one it is by hand:
+
+   ```
+   git worktree add .claude/worktrees/<topic> -b <branch> origin/<branch>
+   cd .claude/worktrees/<topic> && npm ci && npm run build && npm run env:local
+   git config branch.<branch>.clickup-task <id>     # what tidy reads back
+   ```
+
+   Then hand over the command to open a session in that folder and stop
+   building in the current window (CLAUDE.md, "One thread, one topic, one
+   session", rule 2). A session that was opened by "fast track" with nothing
+   else in it may keep going from the worktree by absolute path — the rule's
+   purpose is that the folder and the topic stay one thing, and they do.
+5. **On a send-back, merge `origin/main` in FIRST.** Before touching a line.
+   The branch has been sitting in review while `main` moved; the fix review
+   asked for may already be there under another name. On 2026-08-30, ticket
+   86bbmg2fb's rework added a `soft` option to `fetchAllTasks` for exactly
+   what `main` had meanwhile added as `fatal: false` — a conflict `ship` had
+   to stop for, resolved by throwing the rework away and calling `main`'s
+   version. Merging first would have shown that before any code was written.
+   (`docs/DOCTRINE.md` §6.7.)
+6. **Build to the Definition of done**, and **break every fix on purpose**:
+   revert it, run the suite, name the test that failed, restore it. Say the
+   numbers ("reverted the clamp: tests 3 and 15 failed; restored: 0"). A fix
+   whose test passes both ways is not tested (§6.8).
+7. **`npm run ship`.** It catches up, rebuilds, runs the checks, pushes,
+   reuses the open PR, waits for CI, merges, and tidies. **No pause to merge.**
+   Dane's first instinct was to pause the pipeline so the merge would not
+   collide with a loop pass; it cannot — the loops never merge, and a merge
+   only re-dates their open branches, which `ship` handles by catching up.
+   `pause` costs up to a thirty-minute drain and, past two hours, an hourly
+   nag on the bus. If `ship` stops on a conflict, resolve it by hand, commit,
+   and run `ship` again — it picks up where it got to.
+   *Gotcha:* run from inside the worktree, and expect the shell to lose its
+   working directory afterwards — `ship`'s tidy removes the folder you ran it
+   from, so a trailing command in the same shell can report exit 1 for
+   `getcwd` after a successful merge. Read `ship`'s own last line.
+8. **Close it out.** Ticket to Live with a note that states the gates and
+   their numbers, what was probed live, and what was break-tested;
+   `npm run tidy` (ship already did); one line on the bus.
+
+### What the first run of this lane found (2026-08-30, ticket 86bbmg2fb, PR #441)
+
+* **The Mini's runners took the change before the command existed.** The
+  one-line change to `~/bin/loop-runner.sh` was on the Mini before
+  `next-interval` was on `main`, so both loops logged
+  `next-interval gave no usable answer ('') -- falling back to 900s` for a
+  day. That is the fallback working, not a fault: each loop pass
+  fast-forwards the Mini's `main` checkout (its reflog shows one merge per
+  pass), so the runners pick up a new CLI command on the pass after it
+  merges. If that line persists after a merge, the Mini's `main` is behind —
+  `git pull` there. No restart is needed while the runner already calls the
+  command; a runner that does NOT yet call it holds the old script's inode
+  and needs its screen restarted.
+* **A pipeline-side rework needs the Mini checked, not assumed.** The review
+  note said the runners held the old inode; the logs said they had already
+  been restarted and were calling the command. Thirty seconds over SSH
+  (`zsh -lc`, not a bare `ssh host cmd` — the login shell is what finds
+  Homebrew) settled it, and it changed what the closing step was.
+
 ## How often the relay wakes, and why that number (2026-08-23, task 86bbk2fuh)
 
 The relay runs **every 10 minutes** (`StartInterval` 600). It was hourly until
@@ -1304,6 +1399,155 @@ changes in six places or it is wrong in some of them.
 rotation. It is small (a few KB per pass) but unbounded, and belongs to a
 housekeeping ticket rather than this one.
 
+## How often the LOOPS wake — the queue decides, not a number (2026-08-25, task 86bbmg2fb)
+
+The relay's schedule above is fixed on purpose: it polls for something that
+either happened or didn't. The two build/review loops are different — how often
+they *should* wake depends entirely on how much work is waiting — so since
+2026-08-25 they **ask, each cycle, instead of being told once at startup**.
+
+```
+npm run --silent clickup -- next-interval --for loop-build --fallback 3600
+```
+
+It prints **one integer, seconds, on stdout** and the reason on stderr, and
+**always exits 0**. The decision itself is a pure, tested module —
+`scripts/builder/loopInterval.js`, `scripts/builder/loopInterval.test.js` —
+so the numbers below are testable claims, not lore.
+
+### The curve
+
+| Claimable queue | Interval | Why |
+|---|---|---|
+| 0 | 3600 s | Nothing to do; do not pay to find that out often. |
+| 1–3 | 1800 s | Shallow — the work will be gone soon anyway. |
+| 4+ | 900 s | Deep enough that idling is the dominant cost. |
+
+This is a **starting** curve, to be tuned against real data rather than
+defended as correct. The trade it encodes inverts on one thing: with a deep
+queue a short interval is nearly free *per unit of work* (a session's overhead
+is noise against a 14-minute build), and with an empty one it is pure waste —
+a whole Claude session every few minutes to learn there is nothing to do.
+
+The problem it replaces: the build loop worked ~14 minutes and then slept a
+flat 60, a **23% duty cycle**. Nothing was recovering or waiting in that gap.
+The hour was a quota throttle, picked as a safe default when the loops first
+ran unattended, and never revisited. On 2026-08-25 it was hand-retimed to 900 s
+(`~/loop-logs/retime.log`) — which is the same failure one rung up: right at
+the moment it was typed, wrong by the next morning.
+
+### The floor is 900 s, and here is why
+
+**Do not lower it without recording the decision here and on task 86bbmg2fb.**
+
+`loop-review` was left on a **2-minute** interval on 2026-08-24 and ran roughly
+**360 passes**, almost every one of them finding nothing. 900 s is the shortest
+cadence at which session overhead is still small against the ~14 minutes of
+real work a pass does; below it, the loop spends more on starting than on
+building. A number with no derivation gets tuned by whoever is annoyed that
+day — so the derivation lives beside the number, in the module and here.
+
+The floor is applied to *everything*: the curve's own rungs, the runner's
+argument, and the on-disk state file. A hand-edited `120` cannot get through.
+Nor can a hand-edited `null` get *under* the hysteresis: `Number(null)` is 0,
+which a floor-only clamp would raise to 900 and treat as the cadence already
+in force, so one deep reading would shorten it at once. Anything that is not
+actually a number resolves to the long fallback instead, and the test asserts
+that value rather than merely `>= floor`.
+
+### "Claimable", not "queued"
+
+A queue full of tickets the loop **cannot take** is not a reason to wake more
+often. The count excludes:
+
+* tickets whose `repo:` tag makes the loop escalate rather than build — wrong
+  repo, unknown repo, two repo tags, or a repo not checked out on this machine;
+* tickets blocked by a dependency that is not finished. **A finished blocker
+  is never in the list** — the list read returns open tasks only — so the
+  command reads each blocker the list cannot show back separately, once per
+  cycle, and only those. One that cannot be read stays unseen and counts as
+  still blocking, the safe direction. (Review round 1, 2026-08-29: without
+  that read, a ticket waiting on work that had already shipped read as
+  blocked on every cycle, forever — and the fixture that "covered" it put the
+  closed blocker in the list, a shape the endpoint cannot return. The fixture
+  now keeps it out.)
+* The list is read in full, every page — never page 0 alone. ClickUp pages
+  newest-first and the loops claim oldest-first, so a one-page read drops
+  exactly the oldest backlog (DOCTRINE 5.12).
+* **for `loop-build` only**, everything, when the work-in-progress cap is
+  already full: a capped pass claims nothing however deep the queue is.
+
+The cap deliberately does **not** throttle `loop-review`. Review drains the
+very PRs the cap is waiting on; pausing it because the cap is full would make
+the cap permanent.
+
+### Hysteresis, and which direction it protects
+
+**Shortening needs two consecutive readings. Lengthening is immediate.**
+
+One burst of tickets must not set a fast cadence for the rest of the night —
+the queue may be drained again before the loop next wakes. Going *slower*
+never waits, because that is the cheap mistake.
+
+With no state on disk at all, the cadence in force is taken to be the runner's
+configured argument, so a first pass against a deep queue holds one cycle and
+shortens on the next. That is the same rule every later pass follows, rather
+than a special case that skips the guard exactly when nothing is known.
+
+State is one small file per loop, beside the log the runner already writes:
+`~/loop-logs/<loop>.interval-state.json`. Deleting it is harmless — it costs
+one cycle of hysteresis, in the safe direction.
+
+### Every failure lengthens the sleep, and says so
+
+| What went wrong | Answer | Why not the floor |
+|---|---|---|
+| ClickUp unreadable | the runner's configured fallback (3600 s) | A short interval on unknown state is how quota gets burned invisibly. |
+| Open-PR count unreadable | assume the cap is full → 3600 s | Unlike `wip-check` (which fails *open*, because refusing there would stop all work), the pass has already run; the only question left is how long to sleep. |
+| Depth is absurd — `NaN`, `Infinity`, negative | read as 0 → 3600 s | `Infinity` reads like "wake often" and is in fact garbage. Garbage takes the cheap direction. |
+| The command itself fails | the runner's `$INTERVAL` argument | The runner never sleeps on a guess. |
+
+A failed read is **not a reading**: it leaves the hysteresis state untouched,
+so two outages in a row cannot masquerade as two consecutive short readings.
+
+And nothing is silent. Every cycle logs the number *and* its reason —
+
+```
+interval: 900s (12 claimable — deep enough that idling is the dominant cost)
+[loop-runner] 04:38:10 sleeping 900s before the next /loop-build
+```
+
+— because the WIP cap shipped with a bare total and nobody could tell why it
+had declined.
+
+### The runner side (unversioned — keep this copy)
+
+`~/bin/loop-runner.sh` lives on the Mac Mini only and is **in no repository**,
+so this is the recoverable copy of the change. It replaced the single line
+`sleep "$INTERVAL"` at the bottom of the `while` loop with:
+
+```bash
+  NEXT=$(PATH="/opt/homebrew/bin:/usr/local/bin:$PATH" npm run --silent clickup -- \
+           next-interval --for "$SKILL" --fallback "$INTERVAL" 2>>"$LOG" | tail -1)
+  if ! [[ "$NEXT" =~ ^[0-9]+$ ]]; then
+    echo "[loop-runner] next-interval gave no usable answer ('$NEXT') -- falling back to ${INTERVAL}s" >> "$LOG"
+    NEXT=$INTERVAL
+  fi
+  echo "[loop-runner] $(date "+%H:%M:%S") sleeping ${NEXT}s before the next /$SKILL" >> "$LOG"
+  sleep "$NEXT"
+```
+
+`PATH` is set inline because a detached `screen` session does not inherit
+Homebrew's. The `^[0-9]+$` test is the whole fallback: anything that is not a
+plain integer — no `npm`, no Doppler, a usage error, a checkout that predates
+the command — means the runner keeps using its configured argument.
+
+**A running runner keeps its old behaviour.** Bash reads a script as it goes,
+so the file was replaced with `mv` rather than edited in place; the live
+`screen` sessions hold the old inode. The new cadence starts when a runner is
+next restarted. Bringing that wrapper under version control is **NODES Slice B
+(86bbh9kh2)**, not this ticket.
+
 ## A build node must be able to make GitHub run its checks
 
 Every gate downstream of the build loop reads GitHub's checks. `ship` waits for
@@ -1483,6 +1727,171 @@ a scratch ticket plus a comment of your own works too. Do **not** delete an
 existing `[bus-relay]` marker to manufacture one — that is destructive, and the
 run will then send his real answer to a dead channel.
 
+## The pulse — is anything actually moving? (2026-08-25, task 86bbm9h60)
+
+```
+npm run pulse                 # human-readable, exit 0 whatever it finds
+npm run pulse -- --json       # machine-readable
+npm run pulse -- --exit-code  # 0 clean / 1 findings / 2 could not look
+npm run pulse -- --job loop-review   # read a different loop's log
+```
+
+**Seven incidents in the week to 2026-08-25. Not one of them was a crash.**
+Every single one was a component that ran, exited 0, and accomplished nothing:
+a build loop that declined thirteen passes in a row on a deadlocked cap,
+tickets sitting seventy hours in `Building`, a pull request and its ticket
+linked in only one direction. A health check would have passed during all of
+them, because every process was alive and every exit code was 0.
+
+That is why the pulse measures **flow, never status**. "Is it running" is the
+question that failed; "is anything moving" is the question that works.
+
+It is **read-only** — three GET-only sources, no write path in the file at all,
+and a test that fails if one is ever added. The ClickUp read sends
+`include_closed=true`, and a test asserts the literal string: without it the
+list endpoint hides every closed-type status (47 tickets came back where 163
+existed, all 116 `Live` ones missing — measured 2026-08-30), which made the
+zombie shape below impossible to fire. Fourth reader in this repo to hit that
+trap; each one carries the same regression test. It reports and stops. Repairs live
+in `npm run reconcile`, deliberately: the fourth drift shape below has two
+valid fixes and only a person knows which one is right.
+
+### A1 — the no-op streak
+
+Consecutive loop passes that claimed nothing. A declining pass and a healthy
+quiet pass are byte-identical from outside, which is how fourteen hours of a
+dead build loop read as a quiet morning.
+
+| Number | Value | Where it came from |
+|---|---|---|
+| Streak threshold | **3 passes** | One claimless pass is normal, two is plausible. Eight happened; thirteen happened on 2026-08-25. Three is the first count that cannot be explained away. |
+| Gate | **only while `Queued > 0`** | A loop declining an empty queue is working perfectly. Alarming on that teaches the reader to ignore the alarm. |
+| Hung pass | **4 hours** | A pass is 10–15 minutes of work; the longest in a 580-pass sample was 38 minutes. |
+| Loop gone silent | **3 hours** since the loop was last seen alive | `loopInterval.js` sleeps at most 3600s between passes (the empty-queue cadence; 900–1800s with work queued). Three missed intervals at the *longest* cadence is 3h — past that no queue depth explains the silence. Measured from the newest END banner, or the START of a pass still running, so the pulse's own in-flight pass counts as a sign of life. |
+
+**Two shapes of a dead loop, and the streak only sees one.** A loop that runs
+and declines shows up as a streak. A loop that *stops emitting passes* does not:
+the streak walk stops at the newest claim, so a launchd job that died right
+after a claim read as `clear` with 36 tickets queued and the loop last seen
+five days earlier (caught in review, 2026-08-30). The silence check above is
+judged *before* the streak, and every A1 result carries `lastPassAt` whatever
+its verdict, so the JSON always answers "when did this last run".
+
+**An orphan `START` the loop has since recovered from is history, not news.**
+The log is append-only, so a pass that never printed its END banner stays in
+it forever; the 2026-08-23 orphan alarmed on every production run and pinned
+`--exit-code` at 1 permanently — the "same false note on every run" the 4h
+threshold guards against, at the other end. If any pass has *completed* since
+the orphan started, it is reported as `superseded` and counts as nothing.
+
+The source is `~/loop-logs/loop-build.log`, whose body is **the agent's own
+prose report, not tool output** — there is no structured claim record to read.
+So a pass is classified off the *deterministic strings the loop's own commands
+print* and a declining pass quotes verbatim: `wipCap.js`'s "WIP cap reached —
+N PR(s) open, cap M", `nodeRoles.js`'s "so it did nothing.", and the harness's
+own quota notice. Measured against 580 real passes, **90% classify; the other
+10% are reported as CANNOT TELL, never as a decline.** That asymmetry is the
+point — guessing "declined" invents an outage, guessing "claimed" hides one.
+
+An early draft matched `wip-check` and `exit 3` *anywhere* in the body and
+mislabelled a genuine claim, because `build-start` — a different command — had
+exited 3 for an unrelated reason. Requiring the quoted message is the fix.
+
+### A2 — stage residency
+
+How long each ticket has sat where it is.
+
+| Stage | Threshold | Where the number came from |
+|---|---|---|
+| Building | **2 h** | A build takes 10–15 minutes. Three tickets measured 65–72 hours on 2026-08-25. |
+| In review | **4 h** | A review takes about 10 minutes on an hourly poll, so 4 hours is already several missed polls. |
+| Ready to launch | **24 h** (notice, not alarm) | Operator-held. Surface it; do not alarm — only Dane moves a ticket out of it. |
+| Queued | **7 days** (notice) | Long is fine. Forgotten is not. |
+
+**`date_updated` is a proxy for stage entry, not a measurement of it.** ClickUp
+bumps it on any edit, so a comment or a Loop-note stamp resets the clock. The
+error runs one way — it makes a stuck ticket look *fresher* than it is — so the
+check under-reports, and every run says so rather than implying a precision the
+data does not have. A stage with no threshold (`Needs your input`, `Live`) is
+listed as **not measured**, never silently skipped.
+
+### B1 — ticket ↔ PR drift, in both directions
+
+| Shape | Meaning | Severity |
+|---|---|---|
+| 1 | Non-terminal ticket, PR **merged** — the work is live and the ticket did not follow | notice (`reconcile` repairs it) |
+| 2 | Terminal ticket, PR still **open** — a zombie branch | alarm |
+| 3 | In-flight ticket, **no PR on either side** — stranded | alarm |
+| 4 | A PR names a ticket, **the ticket has no record of that PR** | alarm |
+
+**Shape 4 is the dangerous one, and the reason this check reads both
+directions.** `build-start` decides whether a branch already exists by reading
+*the ticket*. A link that exists only on the PR side is invisible to it, so the
+next pass opens a second branch for work that already has one — exactly how
+duplicate PRs #407 and #408 were born. Real case: PR #373 ↔ 86bbjj6qb, found
+while writing the design and since repaired by hand.
+
+Two distinctions cost false positives on the first production run, and both are
+now guarded by tests:
+
+- **`Queued` is neither in-flight nor terminal.** A queued ticket with an open
+  PR is a **send-back** — the ordinary state of work a review handed back, and
+  the exact state `build-start` exists to recognise. Reading "not in flight" as
+  "finished" called two of them zombies.
+- **A PR *mentioning* a ticket is not a PR *claiming* one.** The link is the
+  ClickUp URL line the PR body is required to carry, not any id appearing in
+  prose. PR #435 discusses four other tickets — one of them the literal example
+  `86bbnonexistent` — while declaring exactly one.
+
+### The five rules, which matter more than the checks
+
+1. **Silence is never all-clear.** Every check prints a section whether or not
+   it found anything, so "all clear" and "the job died" can never look alike.
+2. **"Cannot tell" is its own state**, never folded into "fine" (DOCTRINE
+   3.11) — and it has its own exit code (2) so a caller can treat "I could not
+   look" differently from "I looked and it was fine".
+   In the report that means a **`CLEAR` line may only print when the check
+   both found nothing AND could read everything** — `whollyMeasured()` in
+   `pulse.js`, one predicate shared by every section. Guarding on findings
+   alone is how the two collapse: with `gh` unavailable, B1 compared 0 tickets
+   against 0 PRs, found nothing because it had seen nothing, and printed
+   "CLEAR every ticket and PR names the other" directly above its own CANNOT
+   line (caught in review, 2026-08-30). A CLEAR asserts something about
+   everything the check looked at, so a check that looked at nothing has
+   nothing to assert.
+   **The headline is bound by the same rule, and it is the line that
+   matters most.** A failed log read returns `verdict: 'cannot-tell'`
+   *alongside* its `sourceError`, and the sentence tests that state before
+   the REVIEW and OPERATOR branches — otherwise an unread log plus two stale
+   reviews read "Not the builder … the loop is claiming", steering the reader
+   away from the one stage nobody had looked at (the round-2 send-back,
+   2026-08-30). And when GitHub cannot be read, the CANNOT line carries `gh`'s
+   own first line of stderr, so auth, rate limit and wrong folder are told
+   apart instead of all reading as "failed".
+3. **Every count carries its breakdown.** `7 open, cap 5` was true and hid a
+   deadlock for four passes.
+4. **The bottleneck is named in a sentence** — "Bottleneck: BUILD (4
+   consecutive claimless passes, 26 queued). Ready to launch holds 1." A table
+   of rates makes the reader do arithmetic they will skip.
+5. **The pulse cannot fail silently either.** Every completed run ends with
+   `PULSE COMPLETE <timestamp>`, so a scheduled run that does not print that
+   line is itself the alert. It writes no heartbeat file, because the ticket's
+   non-goals forbid the pulse writing anything; a persisted heartbeat belongs
+   to phase 2 alongside the daily digest.
+
+### Where the code lives
+
+`scripts/builder/pulse.js` is **pure** — every threshold, every classification
+and every sentence, with no clock, no network and no disk (a test enforces
+that). `scripts/pulse.cjs` holds only the reads. That split is what makes a
+threshold break-testable, and a threshold nobody can break-test is one that
+gets tuned by whoever is annoyed that day.
+
+Phase 1 is deliberately only these three checks — the ones that would have
+caught real incidents — so the value is provable before the other nine in the
+design are written. **There is no dashboard, on purpose:** a screen nobody
+opens manufactures the feeling of oversight, which is the failure being
+designed against.
 ## The work-in-progress cap — and what it counts
 
 `loop-build` asks `npm run clickup -- wip-check` before claiming, and declines
@@ -1570,8 +1979,9 @@ The Status column says which STAGE a ticket is in; the **Loop note** column
 says what is actually happening and what happens next, in plain language:
 `🔨 building — claimed 10:12am`, `🔀 PR #351 open — waiting for a review pass`,
 `🔍 being checked — a review pass started 8/23 3:41am`,
-`👀 verified — waiting on Dane to say "merge"`, `↩ returned to the line…`,
-`✅ live 8/20`. An empty note means "waiting in line" — correct, not a gap.
+`👀 verified — waiting on Dane to say "merge"`,
+`↩ round 3 — three docs now contradict the change`, `✅ live 8/20`. An empty
+note means "waiting in line" — correct, not a gap.
 The note is not decoration in one case: `🔍 being checked` is loop-review's
 **claim** on a ticket, and the next review pass reads it to decide whether to
 leave that ticket alone (see "Two passes, one ticket" above). `queue` and `get`
@@ -1584,6 +1994,63 @@ The loops stamp these themselves (`loop-note` / `loop-heartbeat` in
 `scripts/clickup_direct.mjs`, wording in `scripts/builder/loopNote.js`) — one
 write per real transition, never per queued ticket (that would be ~33 writes a
 pass against a rate-limited API for what the sort order already shows).
+
+### A send-back says which round it is, and the fourth asks Dane
+
+`Queued` holds two different things — work nobody has started, and work that
+was built, reviewed and handed back with notes — and from the board they are
+identical. Dane spotted it from the UI on 2026-08-25, watching a ticket bounce
+for the third time: *"I would think tasks would never go back to queue except
+for situations involving dependencies or time delays."* The build loop had
+spotted the same conflation by jamming on it earlier that day (86bbm4zwd): the
+WIP cap counts open PRs, three of those PRs belonged to tickets sitting in
+`Queued` **for rework**, so the cap was blocking the only thing that could
+close them.
+
+He chose the lighter of the two fixes — carry the distinction in the Loop note,
+**not** in a new ClickUp status. (Statuses live on the list, and that dialog has
+burned this project before.) So a send-back now reads
+`↩ round 3 — three docs now contradict the change (12:28pm)`:
+
+- **The round** is prior send-backs + 1, counted from the ticket's own
+  `REVIEW: sent back` verdict comments. Derived, never stored — no new state
+  means no new state to fall out of sync.
+- **The reason** is the first line of the note the review pass gave
+  `verdict --fail`, so the board line and the audit trail cannot disagree.
+  It is truncated to fit ClickUp's 255-character field; **the round is never
+  what gets cut**, because "this is the third time" is the part that carries
+  the meaning and the reason can be read in full on the ticket.
+
+**On what would be round 4, `verdict --fail` refuses** (exit 3, nothing
+written) and prints what every previous round found plus the `ask` command to
+use instead. Three rounds means the **spec** was wrong, not the builder, and a
+fourth pass at the same ticket is the system failing to notice it is stuck.
+Ticket 86bbk2fuh proved it on 2026-08-25: it asked to change one number, turned
+out to touch four other records, and each round found something genuinely new.
+The escalation card must name each round's finding on its own line — a card
+saying "this has failed three times" without saying what they were is not
+actionable — and `@@NEEDED` should offer him named options (respec, split,
+drop) rather than an open question.
+
+Four, not three: two rounds is ordinary and healthy. The week this shipped,
+send-backs caught a tenancy hole and an inverted safety property, and
+escalating either would have spent his attention on work the loop was handling
+correctly.
+
+```
+npm run clickup -- send-back-rounds --task <id>   # rounds so far, what each found; exit 3 = escalate
+```
+
+**The counter is the ticket's whole history, and it does not reset** — including
+after Dane answers an escalation. That is deliberate: the count is a fact about
+the ticket, and resetting it on any operator comment would let a ticket loop
+indefinitely as long as somebody kept talking on it. If he settles a ticket and
+a further round genuinely is the right move, `verdict --fail
+--fourth-round-anyway` is the written claim that you meant it, visible in the
+transcript — the same idiom as `--no-guard`.
+
+Code: `scripts/builder/sendBackRounds.js` (pure, `sendBackRounds.test.js` pins
+the round counting and both sides of the round-3/round-4 boundary).
 
 **One-time setup (ClickUp UI — the API cannot create either):**
 1. On the Loop Queue list: Columns → + → Create field → **Text**, named

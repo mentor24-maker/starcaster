@@ -9,7 +9,12 @@ test('each transition composes its intended, operator-facing wording', () => {
   assert.equal(loopNote('pr-open', { at: '10:20am', pr: 351 }), '🔀 PR #351 open — waiting for a review pass (10:20am)');
   assert.equal(loopNote('review-started', { at: '8/23 3:41am' }), '🔍 being checked — a review pass started 8/23 3:41am');
   assert.equal(loopNote('verified', { at: '11:00am' }), '👀 verified — waiting on Dane to say "merge" (11:00am)');
-  assert.equal(loopNote('sent-back', { at: '11:05am' }), '↩ returned to the line with notes for the builder (11:05am)');
+  // The send-back line carries its round since task 86bbmg2tq — `Queued` held
+  // both "nobody has started this" and "this came back with notes", and the
+  // board could not tell them apart. Its own rules are pinned in
+  // sendBackRounds.test.js.
+  assert.equal(loopNote('sent-back', { at: '11:05am', round: 2, reason: 'the docs contradict it' }),
+    '↩ round 2 — the docs contradict it (11:05am)');
   assert.equal(loopNote('merged', { at: '8/20' }), '✅ live 8/20');
   assert.equal(loopNote('escalated', { at: '9:00am' }), '🙋 needs Dane — a question is waiting (9:00am)');
 });
