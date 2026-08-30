@@ -57,7 +57,9 @@ export function unmountBuilderReact() {
 export function mountBuilderPreview(host: HTMLElement | null) {
   if (!host) return false;
   createRoot(host).render(
-    <div className="builder-react-root">
+    // Same root class as the live mount below, so the preview picks up the
+    // live-site CSS (no card, full-bleed, 100vh shell) — 86bbq2y7x.
+    <div className="builder-react-root builder-public-site">
       <BuilderPreviewPage />
     </div>
   );
