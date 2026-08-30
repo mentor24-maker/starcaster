@@ -1,3 +1,278 @@
+## 2026-08-26 — Somewhere to write down what footage exists (#422)
+
+The video Studio needs a filing cabinet before it can have a workshop: a record
+of which recording sessions exist and which files belong to each one. This is
+that cabinet, and nothing else — nothing downloads, nothing processes video,
+there is no screen to look at yet. Those come in the next seven pieces.
+
+The care here went into two mistakes that have already cost this project real
+money. The first is a table that forgets which client it belongs to: there are
+two columns that decide that, and if a table carries only one of them, the code
+that fills them in quietly gives up and fills in neither. Nothing errors. Rows
+just land belonging to nobody, and you find out weeks later — 550 rows sat that
+way in August. Both tables here carry both columns, and a test fails if anyone
+removes one.
+
+The second is deciding a file is a duplicate across every client at once. The
+same footage handed to two clients is genuinely two things, and a rule that says
+otherwise locks the second client out of their own file forever. That has
+happened here before, with topic names. So "we already have this one" is asked
+per client, never globally.
+
+The tests are unusual in a way worth mentioning: they read the database design
+straight out of the file that creates it, rather than keeping their own copy.
+A copy stays right while the original goes wrong, which is exactly how the
+forgotten-client bug survives being tested. To prove that works, the design was
+broken three separate ways on purpose and the right tests failed each time.
+
+Three rounds of review later, the same mistake had been found three times in
+three different places, so this round went after the pattern rather than the
+instances. The pattern is: you hand the system a value it cannot read, and
+instead of refusing, it throws away the good value that was already there and
+tells you it worked. A recording's length, its frame rate, its dimensions, how
+confident we are about the audio sync — every one of those would accept the
+word "N/A" from a piece of equipment that failed to read the file, wipe what
+was there, and report success. Now each of them says no and leaves the good
+value alone. That matters most because the very next pieces of this project are
+the ones that read video files and write those numbers back, and equipment that
+cannot read a file reports exactly that kind of nonsense.
+
+One of those numbers deserved more than a refusal. The sync offset says how far
+apart two recordings are in time, and it used to fall back to zero — but zero
+is not a blank, it is the confident claim "these two are already perfectly
+lined up." An unmeasured file was silently asserting something false about
+itself. It can now say "nobody has measured this yet," which is the truth.
+
+Also fixed: a database that was briefly unreachable used to be reported as
+"that recording session does not exist," which would send somebody looking for
+a problem that was not there. And the miniature stand-in database the tests run
+against was quietly ignoring three of the rules the real one enforces, so a
+future test could have proved something it was not actually checking. It now
+enforces them, and refuses out loud when it meets a rule it does not understand
+— which is what its own instructions had claimed all along.
+
+Every one of these was proved twice: once by breaking the fix on purpose and
+watching the right test fail, and once by running it against a real database.
+
+A fourth review found the same shape twice more, in the two places nobody had
+looked yet. Each recording session names one file as the one everybody else
+gets lined up against — and the code that set that name never checked the file
+belonged to the same client. One client could point at another client's
+footage and be told it worked. Then the other client deletes their file and the
+first one is pointing at nothing. There is no safety net underneath this in the
+database itself, deliberately, so this code was the only thing that could have
+caught it, and it was not looking. It looks now, and a test proves it both
+refuses the other client's file and still accepts your own.
+
+The second: every file gets a fingerprint so the same footage is not filed
+twice. If something handed over a fingerprint that was not text — a whole
+bundle of data instead of a line of it — it got quietly turned into the useless
+word "[object Object]" and stored. The next genuinely different file then came
+back as "we already have this one," which was simply untrue, about two files
+with nothing in common. Now anything that is not text is refused outright, and
+whatever was already recorded is left alone.
+
+Four smaller things came with them, the notable one being the miniature
+stand-in database the tests run against: it was reading the column types out of
+the real design and then never checking anything against them, so a test could
+hand it obvious nonsense and be told yes. It checks now — and, in keeping with
+how the rest of it already worked, it refuses out loud when it meets a type it
+does not know how to check, rather than waving it through.
+
+Proved the same way as before, and deliberately: each of the seven fixes was
+broken on purpose and the matching test failed each time, and both of the
+serious ones were reproduced against a real database on the old code before
+being confirmed fixed on the new.
+
+A fifth review found six more, and the first one is the plainest example of
+this whole pattern yet. There are two ways to spell the name of anything in
+this system — `durationS` if you are writing code, `duration_s` if you are
+looking at the database. Filing a new file accepted both spellings. Updating
+one accepted only the first. So a piece of equipment reporting "this video is
+99.5 seconds long" using the database's own spelling was told "saved" and the
+old wrong length stayed. Nothing about that input was wrong. It was correct
+data, in a correct field, dropped because of how it was spelled. And the only
+code that will ever write those numbers is the next three pieces of this
+project, which naturally use exactly that spelling. Both spellings now work
+everywhere, giving the same field twice with two different answers is refused
+rather than one being quietly picked, and a field name that is simply a typo is
+now turned away instead of being ignored inside an otherwise successful save.
+
+The session's chosen audio file got the same treatment one level deeper. Last
+round taught it to refuse another client's file; it turned out it would still
+accept a file belonging to a different session of your own. Delete that other
+session and the first one is left pointing at something that no longer exists.
+It now requires the file to belong to the session that is naming it.
+
+Dates were the last of it, and the worst behaved. Handing over the number zero
+where a date belongs stored "1 January 2000" — a real moment in time, invented
+out of something that was not a date at all, reported as success. Asking for
+the 30th of February stored the 2nd of March. And a time written without a time
+zone was read in whatever zone the computer happened to be in, so the same
+recording filed from the Mac Mini and from the laptop landed six hours apart.
+All three are now refused or made consistent, which matters because these dates
+are how footage gets lined up in the edit.
+
+The other three were in the miniature stand-in database the tests run against.
+It is going to be the test bench for the next seven pieces of this project, so
+a rule it pretends to enforce is a rule that gets broken seven more times. It
+was ignoring an instruction about what to send back — the exact mistake that
+would make new code work perfectly in tests and fail on the live site. It was
+only half-reading the rule about which client owns which row, in the direction
+that shows too much rather than too little. And it treated two blanks as
+identical to each other, inventing a restriction the real database does not
+have.
+
+All six were reproduced against a real database on the old code first, then
+confirmed gone on the new. Each fix was also broken on purpose to watch the
+right test fail — and that exercise caught something on its own: two of the
+safety checks covered each other so completely that either could be deleted
+with every test still passing. A check that cannot fail is not a check, so a
+test was added that tells them apart.
+
+A sixth review found five more, and two of them are the same story this whole
+entry keeps telling: an answer that is wrong, delivered as a success.
+
+The first is about how a name is spelled in capitals. Every recording session
+has an id, and the database treats `A115C635` and `a115c635` as the same id —
+it does not care about capitals. Our code did. So a session handed its own id
+in capital letters refused its own audio file, with the message "that file
+belongs to a different session." The file did belong to it. The session did
+exist. The refusal simply was not true. Ids get typed, pasted and copied out of
+logs by hand, and any of those can change the capitals without changing the id.
+
+The second is what happens when a fingerprint is too long. There is a limit on
+how much of one gets stored, and past that limit the system used to quietly cut
+it short and say "saved." Two completely different files that happen to match
+for the first stretch then look identical, and the second one is turned away as
+"we already have this one" — untrue, about two files with nothing in common.
+That is the same lie an earlier round fixed from the other end: the check that
+reports the duplicate was corrected, but the thing that manufactured the
+collision was not. Anything too long is now refused outright, saying which
+field and what the limit is. The same applies to the file paths, where a
+quietly shortened one is worse still — a shortened path points at nothing, and
+the pieces of this project that write those paths are the next ones to be built.
+
+The other three were in the miniature stand-in database again, and they matter
+for the same reason as last round: it is the test bench for the next seven
+pieces. It was matching genuinely empty values against the literal word "null"
+— the third time that exact confusion has been found in this branch, in a third
+place. It was accepting a misspelled column name and a malformed id by
+answering "no results found" where the real database refuses the question
+outright, which had already caused a test here to be checking for the wrong
+answer entirely. And it was silently unable to handle three of the column types
+it listed as supported, which today's design does not use — a trap set for
+whichever of the next seven pieces uses one first.
+
+Fixing the capitals problem turned up something the tests could never have
+found: the fake ids the tests use were made entirely of zeroes, so "the same id
+in capitals" was not a thing that could exist in a test. They have letters in
+them now, and that change alone immediately exposed a second copy of the
+capitals bug in the stand-in database itself.
+
+All five were reproduced against a real database on the old code before being
+fixed, and twenty-one checks against that real database confirm the new
+behaviour — each one reading the row back with a direct query rather than
+asking the code that wrote it. Every fix was then broken on purpose, nine
+different ways, to watch the right test fail each time.
+
+## 2026-08-25 — One command that answers what is actually waiting on you (#435)
+
+Twice on the evening of the 23rd an agent told you something needed you when it
+did not, and you went and dealt with it both times. Eleven of the "seventeen
+tickets waiting on your merge word" already had your approval on them — they
+were stuck on a machine that could not reach GitHub. And the YouTube worker
+question you were asked a second time, you had already answered "A" an hour
+before. Neither agent was lying or thinking badly. Both had stated something
+about how things stood right now while reading something that was not how
+things stood right now — an old terminal window in one case, a stale memory of
+a list in the other. In both cases the true answer was one lookup away.
+
+Writing down a rule would not have fixed it, because the problem is that asking
+"wait, is this really his?" takes a moment of doubt, and nobody had a quick way
+to settle it. So instead there is now a command that is faster to run than the
+sentence is to think about: `npm run clickup -- waiting`. With no arguments it
+sweeps every open ticket in both lists you watch and shows only the ones that
+genuinely need you. Point it at one ticket and it prints that ticket's status,
+whether your name is on it, who spoke last and what they said, and then its
+verdict.
+
+It works out that verdict from three things it has just looked up, and nothing
+else: which column the ticket is in, whether you are assigned, and whether the
+newest comment is yours. If the newest comment is yours, it is never waiting on
+you — you have spoken, something else owes the next move. And when it cannot
+establish one of those three facts it says "cannot tell" and names the reason,
+rather than picking the comfortable answer. Guessing "nothing needs you" is how
+a question you already answered sits unread for nine hours.
+
+The same rule now guards the other direction. The command that hands a ticket
+back to you refuses to do it when your own comment is already the newest one —
+that is the "please answer this a third time" failure, and it was arriving
+through the very thing built to stop it. There are two ways for a machine to
+put a ticket in your column, and review caught that the refusal was only
+standing across one of them; it now stands across both. A lock on one of two
+doors is worse than no lock, because everyone stops checking the handle.
+
+It proved itself on its first live run. Two tickets are sitting in Ready to
+launch with your name on them where you already typed "merge" — the exact shape
+that produced the wrong sentence on the 23rd. The old way of looking would call
+those two things waiting on you. The command says they are not: you did your
+part, a machine owes those merges.
+## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
+
+Earlier today a pull request went straight to the live site without anyone
+reviewing it. Nothing was broken by it, but the way it happened is worth
+fixing: a second Claude window you had open ran the ordinary "merge this"
+command, and it had no way of knowing that the review lane was still waiting on
+that piece of work. The ticket jumped from "being built" to "live" without ever
+stopping at "ready to launch" for your say-so.
+
+The rule against that has always existed — it is written down, and every part
+of the automatic pipeline obeys it. But a written rule only reaches the people
+and programs that have read it. A fresh window, a terminal you forgot was open,
+or a hurried moment on your own machine are all outside it. So the rule has been
+turned into a lock: GitHub itself now runs a check on every pull request that
+looks up the work's ticket, finds the most recent review verdict on it, and
+refuses the merge unless that verdict is a pass — and a pass on the *current*
+code, not on an older version that has since been rewritten. If the ticket has
+no review at all, or the review sent the work back, or the pull request does not
+even say which ticket it belongs to, the check says no and explains in plain
+words what has to happen next.
+
+There is a deliberate escape hatch, because a rule with no way out gets worked
+around instead of used: writing `[gate-waived: reason]` in the pull request lets
+it through, and doing so announces itself on the team chat with the reason. An
+override nobody can see is not an override, it is a hole.
+
+Two honest notes. First, the check is currently a **warning, not a lock** — it
+watches and reports but blocks nothing, because switching it on is a setting in
+GitHub's own website that only you can change, and it deserves a few days of
+watching first to be sure it never says no when it should say yes. Second, it
+needs a password stored with GitHub so it can read your ClickUp tickets, and
+this project has none stored yet; that one is also yours to add. Both steps are
+written out in the project notes, and neither was guessed at or faked.
+
+The escape hatch had a flaw of its own, and it showed up immediately: this very
+pull request has to *explain* the escape hatch, and the check read its own
+explanation as a real override and let itself straight through. That was fixed
+by requiring the override to sit alone on its own line — a mention inside a
+sentence is talk about the rule, not the rule. The review then found the same
+flaw one step further out: an override written out as a code example, the way
+this project documents everything, still sat alone on a line and still counted.
+So examples shown as code are now skipped entirely, which is why the notes for
+this feature can quote the syntax as often as they like without arming it. When
+in doubt the check now loses an override rather than granting one — a lost
+override costs one edit, a granted one costs a merge.
+
+One thing was caught before it could cause trouble. The obvious version of
+"has this been reviewed recently enough?" compares the review against the newest
+change on the branch. But this project keeps branches up to date by pulling in
+the latest main code, which counts as a change — so every properly reviewed
+piece of work would have looked stale the moment it was refreshed, and the whole
+pipeline would have jammed. Running the new check against the real record found
+exactly that on two recent pull requests, and the rule now ignores those
+housekeeping updates and looks only at genuine edits.
+
 ## 2026-08-25 — The robot that reads your replies now checks every 10 minutes (#426)
 
 There is a small program on the Mac Mini whose whole job is to read your ClickUp

@@ -65,6 +65,7 @@ The everyday commands (run `npm run clickup` bare for the full list):
 npm run clickup -- queue --list 901418546619 --status Queued   # first line = the task to claim
 npm run clickup -- get --task <id>                             # header + body
 npm run clickup -- comments --task <id>                        # where the PR URL lives
+npm run clickup -- waiting [--task <id>]                        # is this ACTUALLY waiting on Dane? read-only; run it BEFORE saying so
 npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
 npm run clickup -- pr-opened --task <id> --pr <pr-url>          # record the PR (loop-build step 7 — required)
@@ -506,6 +507,77 @@ offers every status in the workspace at once. Assignment sidesteps all of it.
 If you ever see a ticket assigned to you sitting in `Queued`, `Building`, or
 `In review`, that is a bug in a loop, not a job for you — tell CC.
 
+### No agent says something is waiting on you without running `waiting` first
+
+**The rule, in one line: an agent may not state that anything is waiting on
+Dane until `npm run clickup -- waiting` has said so.** It is one command, it
+takes a couple of seconds, and it is the only thing in the room that has
+actually read the ticket.
+
+Twice on the evening of 2026-08-23 an agent told him something needed him when
+it did not, and he acted on it both times:
+
+- *"Seventeen Ready-to-launch tickets are waiting on your merge word."* Eleven
+  already carried his approval and were stuck on a machine that could not push
+  to GitHub. He went looking for work that was not his.
+- *"The YouTube worker decision is the one thing waiting on you."* He had
+  answered `A` an hour earlier, and the relay had already cleared his name and
+  moved the ticket to `Queued`. He asked, reasonably, whether he had to answer
+  a third time.
+
+Neither was a lie and neither was a reasoning failure. Both were **a claim
+about current state, stated flatly, by an agent reading something other than
+the state** — a terminal buffer in one case, a stale impression of a list in
+the other. Him, that night: *"The issue is making assumptions and stating them
+with confidence. It has come up many times."*
+
+A rule alone would not have held. Every claim that was RIGHT that evening
+carried its evidence welded on ("854/854, verified by read-back"; "exit 0,
+here is the output"). Every claim that was WRONG was a confident sentence with
+nothing attached. So the command exists to make the cheapest path the correct
+one:
+
+```bash
+npm run clickup -- waiting                    # what actually needs him, both lists
+npm run clickup -- waiting --task 86bbjve6b   # one ticket, the whole picture
+```
+
+```
+86bbjve6b  Acquire YouTube slice 3/4
+  status:     queued
+  assignee:   (not Dane)
+  last word:  Dane, "A", 2026-08-23 8:11pm
+  VERDICT:    NOT waiting on Dane — his own comment is the newest word on it — a machine owes the next move, whatever the status says
+```
+
+The verdict is **derived, never guessed**, from three live facts and nothing
+else: the status (`needs your input` / `ready to launch` are his lane), whether
+he is assigned (assignment IS the handoff signal, above), and whether the
+newest comment is his. A ticket in his lane, assigned to him, whose newest
+comment is not his → **waiting on him**. A ticket whose newest comment IS his →
+waiting on a machine, whatever the status says. Anything the read cannot
+establish prints `CANNOT TELL` with the reason and exits non-zero — never a
+confident verdict either way, because a wrong "not waiting" is how an answered
+ticket sits for nine hours.
+
+Exit codes match the rest of the loop tooling: **0** nothing of his, **3**
+something IS his, **1** could not tell. It is read-only — it never moves a
+status, assigns anyone or comments anywhere.
+
+`ask` enforces the same rule at the other end: it **refuses** to hand a ticket
+back to him when his own comment is already the newest one on it, because that
+is the "answer this a third time" failure arriving through the mechanism built
+to prevent it. `--after-his-answer` overrides it, on the record, for a
+genuinely new question.
+
+**The refusal stands on both doors into his lane.** `ask` is one way in;
+`status --status "Needs your input" --no-card` is the other, and it assigns him
+just the same — so both go through one shared check rather than a copy that can
+drift. This is the same lesson the Ready-to-launch gate learned (task
+86bbjt18r): a guard covering one of two routes is worse than no guard, because
+it earns the belief that the failure has become impossible.
+
+
 ## Visual changes come to you as pictures
 
 A ticket that changes what a page *renders* arrives with before/after
@@ -554,6 +626,141 @@ is different, so the loops have guardrails baked in:
   `Needs your input` for a human instead of shipping broken.
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
+- **And since 2026-08-25 one of these is a check, not a convention.** Every
+  bullet above binds only an actor that has read this file; PR #432 was merged
+  unreviewed by a session that had not. The `review-gate` status check refuses a
+  merge whose ticket carries no review PASS newer than the code — see "The
+  review gate" below, including the two settings that switch it from a warning
+  into a block.
+
+## The review gate — the rule the repository enforces (2026-08-25, task 86bbmfbkv)
+
+Everything in "Safety" above is a **convention**, and a convention only reaches
+the actors that know they are bound by it.
+
+On 2026-08-25 at 12:38 PR #432 was merged to production with no review verdict
+on its ticket and no merge word from Dane. Ticket 86bbjt1aq went `Live` without
+ever reaching `Ready to launch`. None of the unattended machinery did it: it was
+**a second Claude Code session on the MacBook** running `gh pr merge 432
+--squash` — an ordinary session, with ordinary `gh` access, that had no way to
+know a review lane was waiting for that PR.
+
+A fresh session, a forgotten terminal window, an operator in a hurry: none of
+them have read this file. So the rule stops being something every actor must
+remember and becomes a **status check**.
+
+### What it checks
+
+`.github/workflows/review-gate.yml` runs `scripts/review_gate.mjs` on every
+pull request. It reads the ticket id out of the PR body, reads that ticket's
+comments, and finds the newest `REVIEW:` verdict. It **passes only if that
+verdict is a PASS and it is newer than the PR's newest commit** — a PASS on
+older code is not a review of what is about to merge.
+
+The verdict parser is **imported** from `scripts/builder/mergeOnComment.js`,
+never re-implemented, and a test asserts the gate, the merge step and
+`loopTrail.readyToLaunchGate` all agree across a fixture set. A gate that
+disagreed with the merge step about what a PASS is would be worse than no gate.
+
+| Situation | Verdict |
+|---|---|
+| Newest verdict is a PASS, newer than the newest commit | **pass** |
+| No `REVIEW:` verdict on the ticket at all | **fail**, naming the ticket |
+| Newest verdict is a send-back | **fail** |
+| PASS older than the newest commit (sent back, fixed, pushed) | **fail** |
+| No ClickUp link in the PR body | **fail** |
+| `[gate-waived: <reason>]` in the PR body | **pass**, and announced on the bus |
+| ClickUp unreachable, or the CI token missing | **CANNOT TELL** — never a pass |
+
+Every failure names the ticket, says what the newest verdict actually is, and
+states the one thing that has to happen next. A red X that teaches nothing
+teaches people to route around it.
+
+**Lane A is not exempt.** Auto-merging a docs- or test-only change removes the
+*operator's word*, never the review (vault `doctrine/AUTO-MERGE-LANES.md`).
+
+**Freshness measures the branch's own commits, not its catch-up merges.**
+Branch protection is `strict: true` and this repo catches up by merging
+`origin/main` in rather than rebasing (DOCTRINE §6.6), so every catch-up adds a
+commit newer than any review. Counting those would deadlock the pipeline —
+catch up, go stale, re-review, catch up again. Merge commits are excluded by
+**parent count**, which is what a merge *is*, rather than by matching a merge
+message, which is only what a script currently writes. Checked against the live
+record before shipping: PRs #400 and #406 both failed the naive rule and pass
+the real one, while #432 (the incident) and #419 still fail correctly.
+
+### The waiver
+
+A waiver line passes the gate, including past the no-ticket rule — a hotfix
+opened by hand at 2am is what it is for. A reason is **required**; an empty one
+is not a waiver, and neither is a placeholder pasted out of this document.
+
+**It must sit ALONE on its own line**, and that anchor is load-bearing. The
+first version matched anywhere in the body, and the first CI run caught it on
+the gate's own pull request: that PR necessarily *documents* the syntax, so the
+gate read its own documentation as a live waiver and let itself through. Any PR
+quoting the syntax — a doc change, a rules table, a discussion — would have
+bypassed the gate while looking entirely ordinary. Mentioning a waiver inside a
+sentence or a table cell is now only mentioning it, exactly as `mergeOnComment`
+anchors its verdict regexes so that prose about a rule is not the rule.
+
+**And a waiver shown as CODE is an example, not an instruction.** The anchor
+alone still let a realistic waiver through if it sat on its own line inside a
+code fence — which is exactly how this repo writes down its own rules, so the
+next docs page with a plausible reason in it would have reopened the same hole
+one step out (found in review, 2026-08-25). Both ways Markdown says "this is
+an example" are skipped: a fenced block (triple backtick or triple tilde) and a
+four-space-indented block. Both skips fail **closed**: an unclosed
+fence hides the rest of the body, so a real waiver after it is ignored and the
+gate goes on to check the ticket. Losing a waiver costs one edit; granting one
+costs a merge. That is why the table above and every example in this document
+can quote the syntax safely.
+
+Using one **posts to the party line** with the reason, the PR and who did it.
+An override nobody can see is not an override, it is a hole, so the price of
+reaching for it is visibility. If the bus post fails the gate still passes but
+says so loudly — tell the party line by hand.
+
+### It is ADVISORY until Dane ticks the box
+
+Making a check *required* is a branch-protection change in GitHub's settings, a
+browser action on his account that an agent may not perform. Until then the job
+annotates loudly, writes its verdict to the run summary, and **exits 0**.
+
+Exiting 0 rather than going red is deliberate and load-bearing:
+`mergeOnComment.githubGate` refuses to merge **any** PR carrying a red check. An
+"advisory" gate that went red would therefore not be advisory at all — it would
+silently block every merge the relay makes, through a rule nobody had agreed to
+enforce yet.
+
+**To switch it on, both halves, in one visit:**
+
+1. **Settings → Branches → `main` → Require status checks to pass → add
+   `review-gate`.**
+2. **Settings → Secrets and variables → Actions → Variables → New variable:
+   `REVIEW_GATE_ENFORCING` = `true`.**
+
+The variable exists so the two halves cannot drift. With the box ticked but the
+token missing or revoked, the gate answers CANNOT TELL and stays shut, instead
+of quietly reverting to advisory and waving everything through. Inferring the
+mode from "is the token present?" would have exactly that hole.
+
+### Before ticking the box: two things must be true
+
+1. **The CI ClickUp token must exist.** The workflow reads
+   `secrets.CLICKUP_API_TOKEN` — the same name the rest of the repo uses
+   (`scripts/clickup_direct.mjs`), not a new one invented for CI. **As of
+   2026-08-25 this repository has no Actions secrets at all**, so the gate
+   currently answers CANNOT TELL on every PR and, being advisory, exits 0.
+   Adding it is Settings → Secrets and variables → Actions → New repository
+   secret.
+2. **Something must re-run the gate after a review lands.** A status check is
+   computed once per commit. loop-review posts its PASS *after* the last push,
+   so the check that already ran saw no verdict and will not re-run on its own.
+   Today the answer is by hand — `gh run rerun <run-id>` — which is fine while
+   the gate is advisory and **not** fine once it is required. Teaching the merge
+   step to re-run a stale gate before merging is the follow-up that has to land
+   first.
 
 ## How often the relay wakes, and why that number (2026-08-23, task 86bbk2fuh)
 
