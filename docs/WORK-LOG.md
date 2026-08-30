@@ -27,6 +27,375 @@ a practice run and a real run is one job, not two: I run both and tell you what
 changed.
 
 Nothing about the app changed — this is a change to the instructions I read.
+## 2026-08-30 — Small, safe changes now merge themselves after an hour's notice (#438)
+
+Your ruling from the 24th is now running code: a pull request that touches
+nothing but tests and documentation, and has already passed review, announces
+itself on its ticket — "merging at 9:15pm unless you say otherwise" — waits
+one hour, and merges. Any comment from you during that hour stops it; not a
+keyword, anything at all. Everything riskier still waits for your word, and
+Lane C — anything visual, routes, data, sign-in — is never automated.
+
+It shipped the careful way: the first review pass sent it back because the
+branch had fallen behind the main line, and the second found six real holes
+before anyone was exposed to them. The two that mattered: the loop agents'
+own instruction files counted as "documentation", so a change rewriting the
+review rules could have merged itself — now anything that instructs an agent
+is on the never-auto-merge list; and a damaged memory file (the little ledger
+that records "Dane said stop") was being replaced with a blank one, which
+would have quietly lifted your stop order a pass later — now a ledger that
+cannot be read is never written over, it is left for a person to look at.
+
+Also from that review: an announcement that sat armed for more than a day
+goes stale and is cancelled instead of merged, the daily digest no longer
+lists the same merge twice, and a dry run truly writes nothing. Every one of
+those rules was broken on purpose to prove a named test catches it. The
+switch is `stop auto-merging` on the party line or any Loop Queue ticket,
+and `npm run clickup -- auto-merge-status` shows the lane's state any time.
+
+## 2026-08-30 — Tickets now end on what they need from you, in red (#457)
+
+You asked for three things while looking at a merge ticket: put the "NEEDED
+FROM DANE" block last, make it properly red and bold, and put the actual ask
+on the same line as the label instead of hiding below the banner. All three
+shipped the same day through the fast-track lane.
+
+Every card a machine puts in front of you now ends on the banner — your words
+first, then the explanation, then any proof, and the ask dead last, where your
+eye stops. The banner is bold and true red (#CC0000). The washed-out red you
+were seeing before was never a choice anybody made: it was ClickUp's standard
+colouring for "computer text", which the banner was wrapped in for safety.
+
+Getting the real red meant changing how cards are sent. ClickUp only allows
+coloured text through its structured format, and that format ignores the
+usual **bold** markup agents write — so the card builder now translates as it
+posts, and the tests prove the translation both ways: break the colour, a
+named test fails; move the banner up, another one fails.
+
+There is a living sample on the ticket itself (86bbq5ruz) — the newest card
+from Pulse ends exactly the way every future one will.
+
+## 2026-08-30 — When a merge gets stuck, somebody is now actually told to fix it (#452)
+
+You found PR #434 sitting untouched for three days and asked why nothing had
+happened. Here is what was going on, and it was not anybody forgetting.
+
+When two pieces of work change the same lines of the same file, the computer
+cannot safely guess which version wins — that is a "merge conflict", and it
+needs a pair of hands. The system knew that. On hitting one it did two things:
+it left a note on your ticket saying your approval still stood and you did not
+need to do anything, and it posted a message on the party line asking for a
+session to come and sort the branch out.
+
+The second half never worked. **Nothing reads the party line.** There is no
+watcher on that channel turning those requests into work, so the message went
+into an empty room — while the note on your ticket, sitting right next to it,
+described a process that was well underway. Both halves individually looked
+fine. Together they meant a job nobody had, under a message saying it was in
+hand. And it was quiet, so nothing looked wrong: every hourly check reported
+"handed off, nothing new to say" and "0 merged", which is exactly what a
+healthy system says when it has nothing to report.
+
+You picked the fix: instead of asking an empty room, **file it as an ordinary
+job in the queue**. The build loop already empties that queue every pass, on a
+timer, today — so the worker exists and is already running. Now a conflict
+creates a normal ticket ("Resolve the merge conflict on PR #N"), carrying the
+branch, what clashed, and a note telling whoever picks it up not to come back
+and ask you to approve a second time, because you already did.
+
+Two more things came with it. Every message the merge step writes now has to
+name **who** is going to act next, and if the answer is nobody it has to say so
+out loud — "Nothing is currently working on it" — rather than reaching for the
+comfortable phrasing that implies someone. And silence now expires: a conflict
+with no ticket behind it is flagged immediately, and one that has not been
+sorted within a day reports itself by name once a day until it is cleared —
+each report re-arms the clock, so a day of silence is the most it can buy
+(that cadence was the review's fix; as first built it nagged every pass).
+Three days of nothing cannot happen again without something saying so.
+## 2026-08-26 — You can now stage a fake outage to check the backup plan works (#445)
+
+Back on the 23rd, ClickUp's group chat broke for about sixteen hours. The
+machines use that chat to tell each other things, so when it went down, five of
+your answers sat in your queue doing nothing — the tickets you had replied to
+never moved on. A fix went in afterwards: if the chat is unavailable, the relay
+writes a short note on the ticket itself instead, and the ticket moves anyway.
+
+The trouble is that backup plan only runs during an outage, and you cannot order
+one. So it had never actually been watched working — only reasoned about. There
+was a command that sounded like a practice run, but it quit early and never
+touched the part it was supposedly practising, which is the worst kind of test:
+one that passes without checking anything.
+
+This adds a switch that pretends the chat is down. Nothing is sent and nothing
+is written, but the real backup code runs and prints what it decided — so you
+can see the ticket note being written and the ticket still moving, on demand, in
+about five seconds. The switch refuses to run in any mode that could write
+something, because faking an outage for real would leave a permanent note on a
+ticket claiming a breakdown that never happened.
+
+Worth recording: while proving this out, one of the new tests turned out to be
+unable to fail. Breaking the code on purpose is the only way that ever shows up,
+and it is why we do it before believing a passing run.
+
+## 2026-08-26 — Test and documentation changes can now merge themselves, after giving you an hour to object (#438)
+
+You are the last step on every merge, and lately that has meant saying "merge"
+ninety-odd times a week. A word you say that often without pausing is not really
+a decision any more — it is a rubber stamp, and a rubber stamp is worse than no
+check at all, because it looks like oversight while providing none.
+
+So this hands one narrow slice of that word to the machine, and only where your
+answer was never in doubt: a piece of work that has already passed an
+independent review and whose changes are **nothing but tests and documentation**
+— nothing that runs on the site, nothing anybody can see. On work like that, the
+pipeline now posts a comment on the ticket saying *"merging this at 9:15pm
+unless you say otherwise"*, lists exactly which files earned it that treatment,
+waits a full hour, and only then merges.
+
+**To stop it, just comment on the ticket.** Anything — a word, a question, "hold
+on". It is not looking for a keyword; if you are talking about it, it stops. And
+once stopped it stays stopped: it will not raise the same thing again until a
+fresh review has looked at it. That asymmetry is on purpose — stopping it by
+accident costs you one word, whereas missing your objection would merge
+something you did not want.
+
+Two words turn the whole thing off wherever you are: **"stop auto-merging"** on
+the party line or on any ticket. **"resume auto-merging"** puts it back. And if
+the system cannot read those instructions for any reason — the chat is down, a
+file will not open — it treats that as OFF rather than assuming everything is
+fine, because "you never said stop" and "I could not find out whether you said
+stop" look identical from the inside and only one of them is safe.
+
+Four more brakes sit behind that: it will not do more than three in an hour or
+twelve in a day; it posts one summary a day of everything it merged, and says
+"none" on a quiet day so a silent day and a broken job never look alike; it
+switches itself off if a run reports anything it could not fully check or if the
+live site's build goes red; and it is allowed to undo its own merges without
+asking.
+
+What it will never touch: anything visual, anything that runs, any database
+change — and, deliberately, none of the files that set the rules for the
+machines themselves. It cannot merge a change to its own instructions, which
+means this change could not have merged itself. There is a test that says so.
+
+This is the smallest, safest slice on purpose. It is about a tenth of the weekly
+volume and close to none of the risk, which makes it the right place to find out
+whether the safety machinery actually works before anything larger is
+considered.
+## 2026-08-26 — A check that asks "is anything moving?" rather than "is it switched on" (#439)
+
+Seven things went wrong in the pipeline last week, and here is the part worth
+sitting with: **not one of them was a crash.** Every single one was a piece of
+the system that started up, ran, reported success, and got nothing done. The
+build loop turned away thirteen jobs in a row because a counter had got stuck.
+Tickets sat three days in a stage that normally takes fifteen minutes. A pull
+request and its ticket each knew about the other in only one direction, which is
+exactly how two duplicate branches got opened a few days earlier.
+
+None of it was noticed, and the reason is uncomfortable: **everything looked
+healthy the whole time.** Every program was running. Every command reported
+success. Any "is it alive?" check you could have run would have come back green
+during all seven.
+
+So `npm run pulse` asks a different question. It looks at three things and
+prints a page you can read in about ten seconds. Has the build loop stopped
+picking up work, and if so, *why* did it decline each time? Has any ticket been
+sitting longer than that stage actually takes — with the time limit for each
+stage set from how long the work really takes, and the reasoning written down
+next to the number so nobody quietly retunes it on an irritating afternoon? And
+do the tickets and the pull requests still agree with each other, checked in
+*both* directions rather than one?
+
+That last one sounds like a technicality and is not. The loop decides "has this
+job been started already?" by reading the ticket. So a job whose link exists
+only on the pull-request side is invisible to it, and it cheerfully starts the
+same work a second time. That is not hypothetical — it happened, twice, on the
+23rd.
+
+Three deliberate choices are worth knowing about. **It never changes anything;
+it only reads** — and not as a promise but as a property, with a test that fails
+if anyone ever adds a way for it to write. When it finds a problem it tells you
+and stops, because one of the four problems it detects has two sensible fixes
+and only a person can pick the right one. **It always prints, even when
+everything is fine** — that is the entire point, because "all clear" and "the
+job died" looking identical is precisely what hid all seven incidents. And
+**"I couldn't check that" is never reported as "fine"**; it is kept separate all
+the way through to the end.
+
+The first time it ran against the real pipeline it found two things wrong with
+itself, both now fixed. It had been calling ordinary handed-back work "abandoned
+branches", and it had been matching any ticket number that appeared anywhere in
+a pull request's text — including, in one case, a made-up example number sitting
+in a paragraph that explained error messages. Both are worth mentioning because
+they are the failure this whole thing exists to prevent: a check that cries wolf
+gets skimmed past, and then the day it means something, it gets skimmed past
+then too.
+
+**The review caught a third one, and it was the same bug a third time.** The
+paragraph above says "I couldn't check that" is never reported as "fine" — and
+that was the intention, but in one line of the printout it was not what the code
+did. When the tool asked GitHub for the open pull requests and GitHub did not
+answer, that check compared nothing, found nothing wrong because it had looked
+at nothing, and printed **"all clear: every ticket and pull request names the
+other"** — sitting directly above its own line admitting it could not read
+GitHub at all. Read quickly, that is a green light on a check that never ran.
+
+The fix is one rule applied in one place: a check may only say "all clear" if it
+found nothing **and** managed to read everything, and that judgement now lives in
+a single shared function rather than being re-decided in each section, so the
+next check added to the tool inherits it instead of repeating the mistake. Two
+tests hold it down — each one run against the old code first and watched to
+fail, because a test that has never failed is not yet evidence of anything.
+
+Worth noting where this was caught: not by the tests, which were green, and not
+by the build, which passed. It was caught by the independent review step reading
+the output with the question "would this line be true if the check had not run?"
+That is the review lane earning its day.
+## 2026-08-26 — A ticket sent back now says which trip round it is (#442)
+
+You noticed this on the board on Monday: when a piece of work comes back from
+review with notes, it goes back into the "Queued" column — the same column as
+work nobody has started yet. From the outside those two look identical, so a
+ticket on its third trip round reads exactly like a fresh one.
+
+That is not just an eyesore. The same morning it jammed the build pipeline: the
+limit on how much work can be in flight counts open pull requests, and three of
+those belonged to tickets sitting in "Queued" *for rework* — so the limit was
+blocking the only thing that could clear them.
+
+Two changes, both the lighter option you chose rather than adding a new column
+to ClickUp. First, the Loop note on a sent-back ticket now says the round and
+the reason in one line — `↩ round 3 — three docs now contradict the change`
+instead of the old, identical-every-time "returned to the line with notes".
+The round is counted from the review comments already on the ticket, so nothing
+new is stored and nothing can drift out of step.
+
+Second, a fourth trip round no longer happens. Three rounds means the
+*instructions* were wrong, not the work, so on what would be the fourth the
+review pass stops and hands the ticket to you instead — with a card naming what
+each of the three previous rounds found, one line each, and asking you to pick:
+rewrite the spec, split it up, or drop it. Four and not three deliberately: two
+rounds is ordinary and healthy, and this week's send-backs caught two real bugs
+that would have been a waste of your attention to escalate.
+
+## 2026-08-26 — The loops now decide their own nap length from the queue (#441)
+
+The two background helpers that build and check work have always worked for
+about fourteen minutes and then slept for a fixed stretch. That stretch was an
+hour, chosen as a careful guess back when they first started running on their
+own overnight, and never looked at since. It meant they sat idle roughly three
+quarters of the time.
+
+The trouble is that no single number is right for very long. When there are
+thirty tickets waiting, a short nap costs almost nothing — starting up a
+session is a rounding error next to a fourteen-minute job, so you are only
+removing dead time from work you wanted done anyway. When the list is empty,
+the same short nap is pure waste: a whole session fired up every few minutes
+just to find out there is nothing to do. That is not a theory — one of the
+loops was left on a two-minute timer on the 24th and ran roughly three hundred
+and sixty passes, almost every one of them finding nothing.
+
+So they now ask, after every pass, how long to sleep. Nothing waiting: an hour.
+A few tickets: half an hour. Four or more: fifteen minutes, and never less than
+that. That fifteen-minute floor is written down together with the reason it
+exists, so nobody quietly lowers it on a day they are feeling impatient.
+
+Two things make it safe. It counts only tickets it could actually pick up —
+work belonging to a different codebase, or blocked waiting on something else,
+or work it is not allowed to start because too much is already in flight, does
+not count as a reason to wake up sooner. And every kind of confusion makes it
+sleep *longer*, never shorter: if it cannot reach the ticket list, if it cannot
+count what is already in progress, if the number comes back as nonsense, it
+falls back to the old hour and writes down why. Sleeping too long shows up as
+a slower response, which you would notice. Sleeping too little shows up only on
+the bill.
+
+One busy moment also cannot set the pace for the whole night: speeding up needs
+two readings in a row agreeing, while slowing down happens straight away.
+
+Every cycle now writes both the number and the reason into the log, so the
+pace is never a mystery. The change takes effect the next time the loops are
+restarted.
+
+Review found two holes before it shipped, both fixed in the same PR: a ticket
+waiting on work that had *already finished* would have looked blocked forever
+(finished tickets never appear in the list it reads, so it now looks those up
+separately), and a hand-edited settings file could have switched the
+two-readings rule off. Both would have failed quietly toward sleeping longer.
+
+## 2026-08-26 — The build loop stops jamming itself, and a dropped connection can no longer switch the brake off (#431)
+
+There is a rule that stops the robot builder taking on new work when too much
+is already half-finished. It was counting the wrong things. A job sent back for
+another go still had its pull request open, so the rule counted it as "busy" —
+even though the only way to finish that job was for the builder to pick it up
+again. The brake was jammed on by the very work it was blocking. One morning
+that left thirty-three jobs waiting and the builder doing nothing for four hours
+straight, while everything looked normal.
+
+It now counts jobs, not paperwork: only work somebody is genuinely moving
+counts, and it says the breakdown out loud — "one in flight, four not counted:
+two sent back, one already shipped" — instead of a bare number that told you
+nothing.
+
+The part that took three passes was the opposite failure. To count properly the
+rule now has to ask ClickUp what state each job is in, and something had to
+happen when ClickUp could not answer. If it cannot tell, it counts everything,
+which is the cautious answer. But a broken network connection did not reach that
+cautious answer at all — it crashed, and a crash was read further up as "carry
+on regardless", so a moment of bad wifi would have taken the brake off entirely.
+That is worse than the jam it was fixing. All three ways the answer can fail —
+ClickUp saying no, ClickUp saying nothing, and never reaching ClickUp at all —
+now land on the cautious answer, and there are tests that run the real command
+with each failure underneath it to prove it.
+
+Alongside it, the daily drift check learned to spot the matching mess: a job
+marked finished whose pull request is still sitting open. It reports those and
+leaves them for a person, because "close the leftover" and "that job was closed
+too early" both happen and only you can tell which.
+## 2026-08-26 — The settings fields and the Layout fields finally line up (#440)
+
+Back on the 13th you looked at a two-column module editor and said the left
+column's width "varies arbitrarily between the Settings fields and the Layout
+fields." Yesterday's work fixed the top half of that. This is the bottom half.
+
+Open Feature Cards and look down the left side. The rows at the top — Label,
+Background, Alignment, the margins — put their boxes at one distance from the
+left edge, and the rows right below them put theirs 33 pixels further over.
+Two ragged edges where you are reading one list.
+
+The reason it survived yesterday's fix is worth a sentence, because it is not
+carelessness. Those top rows and the rows below them are two separate boxes on
+the page, and in the language pages are laid out in, two separate boxes cannot
+share a column width — each one measures its own longest label and puts its
+fields wherever that happens to end. Written identically, they still land in
+different places. There is a newer feature, `subgrid`, that lets two boxes
+borrow their columns from a shared parent, and that is what they do now: the
+widest label is measured across every row at once, so every box starts and
+ends on one line. The two halves of the editor stay exactly the equal widths
+you asked for in August — the card list still begins at the halfway mark, to
+the pixel.
+
+Two of the editors this was expected to touch turned out not to need touching,
+and the only way to know that was to drive a real browser and measure. The
+Carousel's top rows have nothing underneath them to disagree with. Social had
+already solved it a different way months ago. Both were left alone.
+
+The Program List editor, which was not on the ticket, turned out to have its
+two columns backwards: the list of programs was stacked underneath the top
+rows on the left while the settings sat off on the right, with the heading
+"Settings" sitting over the list of programs. Nothing in the styling said so
+— the rule that places those two halves had simply never named this editor.
+It now matches Feature Cards, and the panel is about 850 pixels shorter.
+There are before-and-after pictures on the ticket; that one is worth a look.
+
+The last piece is the checker. `check:panels`, the tool that is supposed to
+catch exactly this kind of misalignment, had been reporting a clean pass over
+it for weeks — it compares each box against itself, so two boxes that are each
+perfectly tidy inside while disagreeing with each other were invisible to it.
+It now measures them together. Before believing the fix, the sharing was
+switched off on purpose to confirm the checker fails loudly: it does, twelve
+times over, at every screen width.
 
 ## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
 

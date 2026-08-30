@@ -344,9 +344,11 @@ try {
    *      any module overflow before the page ever sees it. Disabling the
    *      corridor's own clip — the regression worth catching — changed the
    *      page width by exactly 0px.
-   *   2. The preview harness's own admin chrome overflows by 2px with NO
-   *      module on the page at all, so the document already "scrolls
-   *      sideways" before anything is rendered.
+   *   2. Until 86bbq2y7x the preview's own admin chrome overflowed by 2px
+   *      with NO module on the page at all, so the document already
+   *      "scrolled sideways" before anything was rendered. The preview now
+   *      renders the live-site markup under a thin strip, so that particular
+   *      noise is gone — but points 1 and 3 still stand on their own.
    *   3. A travelling module sits hundreds of pixels off-screen ON PURPOSE
    *      mid-crossing (measured at left: -332px), which any naive overflow
    *      sweep reports as a violation.
