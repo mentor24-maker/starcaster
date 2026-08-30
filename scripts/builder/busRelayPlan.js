@@ -205,6 +205,85 @@ function isThisReceipt(comment, { id, at } = {}) {
  *   'unchecked' — nobody was told. Still "could not fully verify", still
  *                 exits 1. The gate is re-pointed, never weakened.
  */
+/* ------------------------------------------------------------------------ *
+ * Breaking the party line on purpose (task 86bbjzg83, Dane's option B).
+ *
+ * PR #414 gave the relay a fallback: chat first, then a receipt comment on
+ * the ticket, and the handback fires if either landed. What it could not give
+ * was a way to WATCH that happen. The fallback only runs during a vendor
+ * outage, which is the worst possible moment to discover a bug in it, and the
+ * one command that sounds like a rehearsal — `bus-relay --dry-run` — returns
+ * before deliverToBus() is ever called.
+ *
+ * So: a switch that fails every party-line write without sending a request,
+ * and a dry-run that stops short-circuiting when it is on.
+ * ------------------------------------------------------------------------ */
+
+/** What a simulated party-line failure reports as its `why`. It says
+ *  "simulated" in the string itself, deliberately: this text travels into the
+ *  run report and into the receipt comment's body, and a reader finding it in
+ *  a log six months from now must not mistake a rehearsal for an outage. */
+const SIMULATED_BUS_WHY = 'HTTP 000 — SIMULATED by --simulate-bus-failure (no request was sent)';
+
+/** May `--simulate-bus-failure` run? Only inside `--dry-run`.
+ *
+ *  Outside dry-run the switch would not be a rehearsal, it would be sabotage
+ *  with permanent consequences: a forced chat failure sends the relay down the
+ *  real fallback, which posts a real receipt comment saying the party line is
+ *  unavailable and then writes the real, permanent dedup marker recording that
+ *  the message was carried by the ticket. Chat would have been fine the whole
+ *  time. The bus message is then dropped for good — the marker means "already
+ *  relayed" forever — and the ticket's trail now lies about an outage that
+ *  never happened.
+ *
+ *  That is the exact shape of loss #414 was written to remove, so the guard
+ *  refuses rather than warns. Returns { ok, why } — `why` is printed verbatim.
+ */
+function simulationGuard({ simulate, dryRun } = {}) {
+  if (!simulate) return { ok: true, why: '' };
+  if (dryRun) return { ok: true, why: '' };
+  return {
+    ok: false,
+    why: [
+      '--simulate-bus-failure requires --dry-run.',
+      '',
+      'Without it this is not a rehearsal. Forcing the party line to fail sends the',
+      'relay down its real fallback, which would post a real receipt comment claiming',
+      'an outage that is not happening, then write the permanent "already relayed"',
+      'marker against it — dropping the real bus message for good and leaving a trail',
+      'that lies. Nothing was run.',
+      '',
+      'Try:  npm run clickup -- bus-relay --dry-run --simulate-bus-failure',
+    ].join('\n'),
+  };
+}
+
+/** One line per relayed comment in a simulated pass, so the rehearsal is
+ *  readable rather than inferred. `verdict` is deliveryVerdict()'s own answer
+ *  — this only renders it. `target` is the status the watch would move to, or
+ *  null on a notify-only watch.
+ *
+ *  The failure explanation prefers `reason` (deliveryVerdict's account of why
+ *  nothing was delivered) over `why` (the chat failure). Keeping those two
+ *  apart was a review finding on #414: printing the chat error alone says
+ *  "HTTP 000" and leaves out the part that actually explains the outcome —
+ *  that this watch hands nothing back, so a receipt would deliver nothing. */
+function simulationLine({ verdict, target } = {}) {
+  const v = verdict || {};
+  if (v.ok && v.via === 'ticket') {
+    return `  SIMULATION — party line down: delivered by receipt on the ticket; hand-back to "${target}" WOULD fire`;
+  }
+  if (v.ok && v.via === 'chat') {
+    // Unreachable while simulating (chat always fails), but a verdict of
+    // "chat" here would mean the simulation did not take effect — say so
+    // rather than printing a success line that reads as a passing rehearsal.
+    return '  SIMULATION — reported delivery via chat, which the simulation should have made impossible. Treat this run as INVALID.';
+  }
+  const explain = v.reason || v.why;
+  const why = explain ? ` — ${explain}` : '';
+  return `  SIMULATION — party line down: NOT delivered${why}; nothing marked relayed, no hand-back`;
+}
+
 function busFailureBucket({ delivered, cosmetic } = {}) {
   return delivered || cosmetic ? 'skipped' : 'unchecked';
 }
@@ -221,4 +300,7 @@ module.exports = {
   relayMarkerText,
   receiptText,
   busFailureBucket,
+  SIMULATED_BUS_WHY,
+  simulationGuard,
+  simulationLine,
 };

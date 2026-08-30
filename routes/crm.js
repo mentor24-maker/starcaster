@@ -1,7 +1,7 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj, nextId } = require('./http');
-const { assertProjectIdAllowedOnHost } = require('../lib/publicSiteHostBinding');
+const { resolvePublicProjectForRequest } = require('../lib/publicSiteHostBinding');
 const { listConfigs, getConfig, createConfig, updateConfig, deleteConfig } = require('../lib/crmConfigStore');
 const { listContacts, getContact, createContact, updateContact, deleteContact } = require('../lib/crmContactsStore');
 const { listForms, getForm, createForm, updateForm, deleteForm, getLastFormStoreError } = require('../lib/crmFormsStore');
@@ -172,14 +172,16 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const crmConfigId = String(body.crmConfigId || '').trim();
     if (!crmConfigId) return sendErr(res, 400, 'crmConfigId is required'), true;
-    const projectId = String(body.projectId || '').trim();
-    const bind = await assertProjectIdAllowedOnHost(req, projectId);
-    if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
-    // Honeypot
+    // Honeypot first: a bot that fills the hidden field gets the same cheerful
+    // answer as a person, and costs no database work on the way there.
     if (String(body._trap || '').trim()) {
       return sendOk(res, 200, {}, { message: 'Thank you!' }), true;
     }
-    const scopedProjectId = bind.projectId || projectId;
+    // This WRITES a contact row, so the project has to be a real one — on a
+    // system host the body's projectId is otherwise an unverified claim.
+    const bind = await resolvePublicProjectForRequest(req, body.projectId);
+    if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
+    const scopedProjectId = bind.projectId;
     const submittedEmail = String(body.email || '').trim().toLowerCase() || null;
     const submittedData = (body.data && typeof body.data === 'object') ? body.data : {};
     let stored = true;

@@ -35,6 +35,33 @@ npm run node:owns -- loop-build
     safe. The message says exactly what to type to fix it (one line, once per
     machine). `npm run node:whoami` shows the whole picture.
 
+## Then: has the operator taken the deck?
+
+There is a sanctioned way for Dane to clear the decks and run something
+through fast, and it is a switch rather than an improvisation. While it is on,
+the machines stop taking new work so nothing lands under him while he is
+working.
+
+```bash
+npm run pipeline -- check
+```
+
+*   **exit 0** — the pipeline is running. Carry on.
+*   **exit 3** — **paused.** Claim nothing, review nothing, merge nothing,
+    and write NOTHING to ClickUp — no status, no comment, no Loop note. Report
+    the line it printed and finish the pass **successfully**. This is a normal
+    outcome, the same shape as another machine owning the job.
+
+It **fails safe**: if the switch cannot be read at all, it says so and still
+exits 3. That is deliberate. Running while the operator has the deck collides
+with whatever he is doing there; pausing when he does not costs idle machines
+and one loud message. Those are not symmetric, so the tie goes to stopping.
+
+**Never resume it.** An agent may pause the line — that is a safety move
+anyone should be able to make — but only Dane hands the deck back
+(`npm run pipeline -- resume --operator-asked`). `npm run pipeline -- status` says
+whether it is on, since when, who put it there and why.
+
 ## Then: is the merge side already full?
 
 Branch protection is `strict: true`, so a branch must be current with `main` to
@@ -106,16 +133,40 @@ spec. Dane could not tell what was being asked of him on either ticket.
 **Escalating is one command, not two.** `status --status "Needs your input"`
 refuses on its own now — a status move with no stated ask is a red badge in his
 inbox with no answerable question on it, which is exactly how 7/7 sat there for
-a day. Use `ask`, whose body is four sections, checked before anything is sent:
+a day. Use `ask`, whose body is four sections plus a fifth that costly asks must
+carry, all checked before anything is sent:
 
 ```
 @@ASKED     his own words that caused this ticket, verbatim — never invented
 @@WHEN      optional — when and where he said it
 @@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
 @@NEEDED    the specific ask; "Nothing right now" is fine, but say it out loud
+@@EVIDENCE  required ONLY when the ask costs money or cannot be undone
 ```
 
-`@@NEEDED` renders under a banner he can spot without reading. If the ticket
+`@@NEEDED` renders under a banner he can spot without reading.
+
+**An ask that spends money or cannot be undone is refused without
+`@@EVIDENCE`** — spend, buy, subscribe, upgrade, a plan change, a credential
+rotation, a deletion — and it reads third-person phrasings too ("this deletes
+all 550 rows"). That section carries the command in runnable form, its ACTUAL
+output pasted in a fence, and one line saying when you ran it:
+
+```
+@@MEASURED 8:04pm
+```
+
+That line is the only thing that dates the card — every other clock in the
+section, narrated or inside the paste, is ignored. Put it in the prose outside
+the fence, with the clock and nothing else on it (date it too if it was not
+today). It is declared rather than read out of your sentences because four
+earlier versions guessed which clock you meant and the last one dated a card by
+the outage it was reporting (Dane's call, 2026-08-29, task 86bbk34ym).
+
+On 2026-08-23 an agent asked Dane to pay for a plan upgrade on a
+diagnosis that was wrong, and re-running the one failing call would have
+settled it in seconds. Re-run it, paste what it says — do not summarise it.
+Ordinary escalations are untouched. If the ticket
 genuinely has no instruction behind it, say that in `@@ASKED` and name the
 standing decision it descends from.
 
@@ -191,7 +242,11 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    *   **exit 3** — a PR for this ticket is **still open**. Do NOT start a
        second branch. Check that one out, read the send-back that returned the
        ticket to `Queued`, fix what it named, and push to the SAME PR. The
-       command prints the branch.
+       command prints the branch. The ticket's Loop note says which round
+       this is (`↩ round 3 — <why>`); at round 3, read all of the earlier
+       send-backs before you touch anything — `npm run clickup --
+       send-back-rounds --task <id>` lists what each one found — because a
+       fourth would stop the loop and go to Dane instead.
    *   **exit 1** — it could not tell. **Stop and say so.** Do not start a
        branch on a guess; that is the failure this step exists to prevent,
        arriving through the check meant to catch it.
