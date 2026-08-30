@@ -1,3 +1,48 @@
+## 2026-08-26 — The loops now decide their own nap length from the queue (#441)
+
+The two background helpers that build and check work have always worked for
+about fourteen minutes and then slept for a fixed stretch. That stretch was an
+hour, chosen as a careful guess back when they first started running on their
+own overnight, and never looked at since. It meant they sat idle roughly three
+quarters of the time.
+
+The trouble is that no single number is right for very long. When there are
+thirty tickets waiting, a short nap costs almost nothing — starting up a
+session is a rounding error next to a fourteen-minute job, so you are only
+removing dead time from work you wanted done anyway. When the list is empty,
+the same short nap is pure waste: a whole session fired up every few minutes
+just to find out there is nothing to do. That is not a theory — one of the
+loops was left on a two-minute timer on the 24th and ran roughly three hundred
+and sixty passes, almost every one of them finding nothing.
+
+So they now ask, after every pass, how long to sleep. Nothing waiting: an hour.
+A few tickets: half an hour. Four or more: fifteen minutes, and never less than
+that. That fifteen-minute floor is written down together with the reason it
+exists, so nobody quietly lowers it on a day they are feeling impatient.
+
+Two things make it safe. It counts only tickets it could actually pick up —
+work belonging to a different codebase, or blocked waiting on something else,
+or work it is not allowed to start because too much is already in flight, does
+not count as a reason to wake up sooner. And every kind of confusion makes it
+sleep *longer*, never shorter: if it cannot reach the ticket list, if it cannot
+count what is already in progress, if the number comes back as nonsense, it
+falls back to the old hour and writes down why. Sleeping too long shows up as
+a slower response, which you would notice. Sleeping too little shows up only on
+the bill.
+
+One busy moment also cannot set the pace for the whole night: speeding up needs
+two readings in a row agreeing, while slowing down happens straight away.
+
+Every cycle now writes both the number and the reason into the log, so the
+pace is never a mystery. The change takes effect the next time the loops are
+restarted.
+
+Review found two holes before it shipped, both fixed in the same PR: a ticket
+waiting on work that had *already finished* would have looked blocked forever
+(finished tickets never appear in the list it reads, so it now looks those up
+separately), and a hand-edited settings file could have switched the
+two-readings rule off. Both would have failed quietly toward sleeping longer.
+
 ## 2026-08-26 — The build loop stops jamming itself, and a dropped connection can no longer switch the brake off (#431)
 
 There is a rule that stops the robot builder taking on new work when too much

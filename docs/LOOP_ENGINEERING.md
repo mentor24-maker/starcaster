@@ -75,6 +75,7 @@ npm run clickup -- comment --task <id> --body-file -           # a plain note (p
 npm run clickup -- describe --task <id> --body-file -          # REPLACE the description (the left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
 npm run clickup -- attach --task <id> --file a.png --file b.png             # before/after pictures
+npm run --silent clickup -- next-interval --for loop-build --fallback 3600  # how long to sleep next (one integer)
 ```
 
 `status` enforces the handoff rule by itself: moving into any machine status
@@ -623,6 +624,10 @@ applies to **building**: every piece of work gets its own folder and branch.
 That is what the loops do for each task. It was never about where a loop
 session is launched from.
 
+The unattended runner on the Mac Mini does not use a fixed number any more —
+it asks the queue how long to sleep after each pass. See **"How often the
+LOOPS wake"** below for the curve, the 900 s floor and why that floor exists.
+
 `/loop 30m X` means "run X, then run it again every 30 minutes." Build drains
 the `Queued` pile into PRs; review drains the `In review` pile into
 `Ready to launch` PRs that ping you.
@@ -1168,6 +1173,155 @@ changes in six places or it is wrong in some of them.
 **Known and not fixed here:** the launchd log now grows 6× faster with no
 rotation. It is small (a few KB per pass) but unbounded, and belongs to a
 housekeeping ticket rather than this one.
+
+## How often the LOOPS wake — the queue decides, not a number (2026-08-25, task 86bbmg2fb)
+
+The relay's schedule above is fixed on purpose: it polls for something that
+either happened or didn't. The two build/review loops are different — how often
+they *should* wake depends entirely on how much work is waiting — so since
+2026-08-25 they **ask, each cycle, instead of being told once at startup**.
+
+```
+npm run --silent clickup -- next-interval --for loop-build --fallback 3600
+```
+
+It prints **one integer, seconds, on stdout** and the reason on stderr, and
+**always exits 0**. The decision itself is a pure, tested module —
+`scripts/builder/loopInterval.js`, `scripts/builder/loopInterval.test.js` —
+so the numbers below are testable claims, not lore.
+
+### The curve
+
+| Claimable queue | Interval | Why |
+|---|---|---|
+| 0 | 3600 s | Nothing to do; do not pay to find that out often. |
+| 1–3 | 1800 s | Shallow — the work will be gone soon anyway. |
+| 4+ | 900 s | Deep enough that idling is the dominant cost. |
+
+This is a **starting** curve, to be tuned against real data rather than
+defended as correct. The trade it encodes inverts on one thing: with a deep
+queue a short interval is nearly free *per unit of work* (a session's overhead
+is noise against a 14-minute build), and with an empty one it is pure waste —
+a whole Claude session every few minutes to learn there is nothing to do.
+
+The problem it replaces: the build loop worked ~14 minutes and then slept a
+flat 60, a **23% duty cycle**. Nothing was recovering or waiting in that gap.
+The hour was a quota throttle, picked as a safe default when the loops first
+ran unattended, and never revisited. On 2026-08-25 it was hand-retimed to 900 s
+(`~/loop-logs/retime.log`) — which is the same failure one rung up: right at
+the moment it was typed, wrong by the next morning.
+
+### The floor is 900 s, and here is why
+
+**Do not lower it without recording the decision here and on task 86bbmg2fb.**
+
+`loop-review` was left on a **2-minute** interval on 2026-08-24 and ran roughly
+**360 passes**, almost every one of them finding nothing. 900 s is the shortest
+cadence at which session overhead is still small against the ~14 minutes of
+real work a pass does; below it, the loop spends more on starting than on
+building. A number with no derivation gets tuned by whoever is annoyed that
+day — so the derivation lives beside the number, in the module and here.
+
+The floor is applied to *everything*: the curve's own rungs, the runner's
+argument, and the on-disk state file. A hand-edited `120` cannot get through.
+Nor can a hand-edited `null` get *under* the hysteresis: `Number(null)` is 0,
+which a floor-only clamp would raise to 900 and treat as the cadence already
+in force, so one deep reading would shorten it at once. Anything that is not
+actually a number resolves to the long fallback instead, and the test asserts
+that value rather than merely `>= floor`.
+
+### "Claimable", not "queued"
+
+A queue full of tickets the loop **cannot take** is not a reason to wake more
+often. The count excludes:
+
+* tickets whose `repo:` tag makes the loop escalate rather than build — wrong
+  repo, unknown repo, two repo tags, or a repo not checked out on this machine;
+* tickets blocked by a dependency that is not finished. **A finished blocker
+  is never in the list** — the list read returns open tasks only — so the
+  command reads each blocker the list cannot show back separately, once per
+  cycle, and only those. One that cannot be read stays unseen and counts as
+  still blocking, the safe direction. (Review round 1, 2026-08-29: without
+  that read, a ticket waiting on work that had already shipped read as
+  blocked on every cycle, forever — and the fixture that "covered" it put the
+  closed blocker in the list, a shape the endpoint cannot return. The fixture
+  now keeps it out.)
+* The list is read in full, every page — never page 0 alone. ClickUp pages
+  newest-first and the loops claim oldest-first, so a one-page read drops
+  exactly the oldest backlog (DOCTRINE 5.12).
+* **for `loop-build` only**, everything, when the work-in-progress cap is
+  already full: a capped pass claims nothing however deep the queue is.
+
+The cap deliberately does **not** throttle `loop-review`. Review drains the
+very PRs the cap is waiting on; pausing it because the cap is full would make
+the cap permanent.
+
+### Hysteresis, and which direction it protects
+
+**Shortening needs two consecutive readings. Lengthening is immediate.**
+
+One burst of tickets must not set a fast cadence for the rest of the night —
+the queue may be drained again before the loop next wakes. Going *slower*
+never waits, because that is the cheap mistake.
+
+With no state on disk at all, the cadence in force is taken to be the runner's
+configured argument, so a first pass against a deep queue holds one cycle and
+shortens on the next. That is the same rule every later pass follows, rather
+than a special case that skips the guard exactly when nothing is known.
+
+State is one small file per loop, beside the log the runner already writes:
+`~/loop-logs/<loop>.interval-state.json`. Deleting it is harmless — it costs
+one cycle of hysteresis, in the safe direction.
+
+### Every failure lengthens the sleep, and says so
+
+| What went wrong | Answer | Why not the floor |
+|---|---|---|
+| ClickUp unreadable | the runner's configured fallback (3600 s) | A short interval on unknown state is how quota gets burned invisibly. |
+| Open-PR count unreadable | assume the cap is full → 3600 s | Unlike `wip-check` (which fails *open*, because refusing there would stop all work), the pass has already run; the only question left is how long to sleep. |
+| Depth is absurd — `NaN`, `Infinity`, negative | read as 0 → 3600 s | `Infinity` reads like "wake often" and is in fact garbage. Garbage takes the cheap direction. |
+| The command itself fails | the runner's `$INTERVAL` argument | The runner never sleeps on a guess. |
+
+A failed read is **not a reading**: it leaves the hysteresis state untouched,
+so two outages in a row cannot masquerade as two consecutive short readings.
+
+And nothing is silent. Every cycle logs the number *and* its reason —
+
+```
+interval: 900s (12 claimable — deep enough that idling is the dominant cost)
+[loop-runner] 04:38:10 sleeping 900s before the next /loop-build
+```
+
+— because the WIP cap shipped with a bare total and nobody could tell why it
+had declined.
+
+### The runner side (unversioned — keep this copy)
+
+`~/bin/loop-runner.sh` lives on the Mac Mini only and is **in no repository**,
+so this is the recoverable copy of the change. It replaced the single line
+`sleep "$INTERVAL"` at the bottom of the `while` loop with:
+
+```bash
+  NEXT=$(PATH="/opt/homebrew/bin:/usr/local/bin:$PATH" npm run --silent clickup -- \
+           next-interval --for "$SKILL" --fallback "$INTERVAL" 2>>"$LOG" | tail -1)
+  if ! [[ "$NEXT" =~ ^[0-9]+$ ]]; then
+    echo "[loop-runner] next-interval gave no usable answer ('$NEXT') -- falling back to ${INTERVAL}s" >> "$LOG"
+    NEXT=$INTERVAL
+  fi
+  echo "[loop-runner] $(date "+%H:%M:%S") sleeping ${NEXT}s before the next /$SKILL" >> "$LOG"
+  sleep "$NEXT"
+```
+
+`PATH` is set inline because a detached `screen` session does not inherit
+Homebrew's. The `^[0-9]+$` test is the whole fallback: anything that is not a
+plain integer — no `npm`, no Doppler, a usage error, a checkout that predates
+the command — means the runner keeps using its configured argument.
+
+**A running runner keeps its old behaviour.** Bash reads a script as it goes,
+so the file was replaced with `mv` rather than edited in place; the live
+`screen` sessions hold the old inode. The new cadence starts when a runner is
+next restarted. Bringing that wrapper under version control is **NODES Slice B
+(86bbh9kh2)**, not this ticket.
 
 ## A build node must be able to make GitHub run its checks
 
