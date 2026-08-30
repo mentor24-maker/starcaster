@@ -950,6 +950,11 @@ day — so the derivation lives beside the number, in the module and here.
 
 The floor is applied to *everything*: the curve's own rungs, the runner's
 argument, and the on-disk state file. A hand-edited `120` cannot get through.
+Nor can a hand-edited `null` get *under* the hysteresis: `Number(null)` is 0,
+which a floor-only clamp would raise to 900 and treat as the cadence already
+in force, so one deep reading would shorten it at once. Anything that is not
+actually a number resolves to the long fallback instead, and the test asserts
+that value rather than merely `>= floor`.
 
 ### "Claimable", not "queued"
 
@@ -958,8 +963,18 @@ often. The count excludes:
 
 * tickets whose `repo:` tag makes the loop escalate rather than build — wrong
   repo, unknown repo, two repo tags, or a repo not checked out on this machine;
-* tickets blocked by a dependency that is not finished (a blocker outside the
-  list is unknowable, so it counts as still blocking — the safe direction);
+* tickets blocked by a dependency that is not finished. **A finished blocker
+  is never in the list** — the list read returns open tasks only — so the
+  command reads each blocker the list cannot show back separately, once per
+  cycle, and only those. One that cannot be read stays unseen and counts as
+  still blocking, the safe direction. (Review round 1, 2026-08-29: without
+  that read, a ticket waiting on work that had already shipped read as
+  blocked on every cycle, forever — and the fixture that "covered" it put the
+  closed blocker in the list, a shape the endpoint cannot return. The fixture
+  now keeps it out.)
+* The list is read in full, every page — never page 0 alone. ClickUp pages
+  newest-first and the loops claim oldest-first, so a one-page read drops
+  exactly the oldest backlog (DOCTRINE 5.12).
 * **for `loop-build` only**, everything, when the work-in-progress cap is
   already full: a capped pass claims nothing however deep the queue is.
 

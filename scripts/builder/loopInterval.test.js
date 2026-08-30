@@ -40,6 +40,15 @@ test('BREAK-TEST THE FLOOR: nothing the curve or a config can say goes below 900
   assert.equal(li.clampToFloor(-99999), 900);
   assert.equal(li.clampToFloor(899), 900);
   assert.equal(li.clampToFloor(901), 901, 'the floor raises, it does not flatten');
+  // BREAK-TEST (review round 1, 2026-08-29): Number(null), Number(''),
+  // Number([]) and Number(false) are all 0 — finite — so a "total" clamp that
+  // only checks isFinite sends every one of them to 900, the SHORT end. Assert
+  // the VALUE, not merely >= floor: the old test passed either way.
+  for (const notANumber of [null, undefined, '', '   ', [], {}, false, true, NaN, Infinity, 'soon']) {
+    assert.equal(li.clampToFloor(notANumber), 3600,
+      `clampToFloor(${JSON.stringify(notANumber) ?? String(notANumber)}) must be the LONG fallback, not the floor`);
+  }
+  assert.equal(li.clampToFloor(' 1800 '), 1800, 'a numeric string with padding is still a number');
   for (const row of li.CURVE) {
     assert.ok(row.seconds >= li.FLOOR_SECONDS, `curve rung ${row.seconds}s is below the ${li.FLOOR_SECONDS}s floor`);
   }
@@ -156,6 +165,17 @@ test('a corrupt or hand-edited state file cannot push the interval below the flo
   assert.ok(d.seconds >= li.FLOOR_SECONDS, 'a doctored state file got under the floor');
 });
 
+test('BREAK-TEST: a state file reading {"interval": null} does NOT switch hysteresis off', () => {
+  // Review round 1 found this: null clamped to 900, so "current" was already
+  // the floor, every proposal was >= it, and one deep reading shortened the
+  // cadence at once. AC4 says one reading must hold.
+  for (const junk of [{ interval: null }, { interval: '' }, { interval: [] }, { interval: false }]) {
+    const d = li.decideInterval({ depth: 12, state: junk, fallbackSeconds: 3600 });
+    assert.equal(d.seconds, 3600, `state ${JSON.stringify(junk)} let one deep reading through`);
+    assert.equal(d.held, true);
+  }
+});
+
 test('with no state, the cadence in force is the runner argument, not the proposal', () => {
   // The first pass must follow the SAME rule as every later pass rather than
   // skipping the guard exactly when nothing is known yet.
@@ -187,9 +207,11 @@ const QUEUE = [
   { id: 'a4', status: { status: 'Queued', type: 'custom' }, tags: [], dependencies: [{ task_id: 'a4', depends_on: 'a1' }] },
   // Blocked by something outside this list — unknowable, so treated as blocking.
   { id: 'a5', status: { status: 'Queued', type: 'custom' }, tags: [], dependencies: [{ task_id: 'a5', depends_on: 'zz' }] },
-  // Waiting on a DONE task: claimable.
+  // Waiting on a DONE task. NOTE d1 is deliberately NOT in this array: the
+  // list endpoint returns open tasks only, so a finished blocker is never in
+  // it (review round 1, 2026-08-29). It arrives via `blockers` instead — see
+  // RESOLVED below — which is the only shape production can produce.
   { id: 'a6', status: { status: 'Queued', type: 'custom' }, tags: [], dependencies: [{ task_id: 'a6', depends_on: 'd1' }] },
-  { id: 'd1', status: { status: 'Live', type: 'closed' }, tags: [] },
   // The mirror edge: a7 BLOCKS a1. That must not make a7 look blocked.
   { id: 'a7', status: { status: 'Queued', type: 'custom' }, tags: [], dependencies: [{ task_id: 'a1', depends_on: 'a7' }] },
   // Other statuses are not this loop's work.
@@ -197,8 +219,14 @@ const QUEUE = [
   { id: 'b2', status: { status: 'In review', type: 'custom' }, tags: [] },
 ];
 
+// What the CLI reads back for the ids `outsideBlockerIds` names. `zz` is
+// missing on purpose: an unresolvable blocker must stay blocking.
+const RESOLVED = [
+  { id: 'd1', status: { status: 'Live', type: 'closed' }, tags: [] },
+];
+
 test('"claimable" counts only what loop-build could actually take', () => {
-  const r = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, capReached: false, resolveRepo: fakeRepo });
+  const r = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, capReached: false, resolveRepo: fakeRepo, blockers: RESOLVED });
   assert.deepEqual(r.claimable.map((t) => t.id).sort(), ['a1', 'a2', 'a6', 'a7']);
   assert.equal(r.depth, 4);
 });
@@ -206,13 +234,36 @@ test('"claimable" counts only what loop-build could actually take', () => {
 test('the wrong-repo and blocked exclusions are REPORTED, not silently dropped', () => {
   // A sweep that cannot say what it skipped gives a false all-clear
   // (DOCTRINE 3.11). Here the cost of silence is a cadence nobody can explain.
-  const r = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, capReached: false, resolveRepo: fakeRepo });
+  const r = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, capReached: false, resolveRepo: fakeRepo, blockers: RESOLVED });
   const byId = Object.fromEntries(r.excluded.map((x) => [x.id, x.why]));
   assert.match(byId.a3, /repo escalates/);
   assert.match(byId.a4, /waiting on a1/);
   assert.match(byId.a5, /not in this list/);
   // ...and tickets that were never candidates are not reported as exclusions.
   assert.ok(!('b1' in byId));
+});
+
+test('BREAK-TEST: a FINISHED blocker that is absent from the list must not block forever', () => {
+  // The production shape: a6 waits on d1, d1 shipped, so d1 is not in the
+  // list read. Without resolving it, a6 reads as blocked on every cycle.
+  const without = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, resolveRepo: fakeRepo });
+  assert.ok(without.excluded.some((x) => x.id === 'a6' && /not in this list/.test(x.why)),
+    'unresolved, a6 must be reported as blocked (safe direction)');
+  const withIt = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, resolveRepo: fakeRepo, blockers: RESOLVED });
+  assert.ok(withIt.claimable.some((t) => t.id === 'a6'), 'resolved as closed, a6 is claimable');
+  assert.equal(withIt.depth, without.depth + 1);
+  // ...and the resolved blocker is consulted for status ONLY — never counted.
+  const openBlocker = [{ id: 'd1', status: { status: 'Queued', type: 'custom' }, tags: [] }];
+  const stillOpen = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, resolveRepo: fakeRepo, blockers: openBlocker });
+  assert.ok(!stillOpen.claimable.some((t) => t.id === 'a6'), 'an OPEN blocker read from outside still blocks');
+  assert.ok(!stillOpen.claimable.some((t) => t.id === 'd1'), 'a blocker read from outside is never itself claimable');
+});
+
+test('outsideBlockerIds names exactly the blockers the list cannot show', () => {
+  assert.deepEqual(li.outsideBlockerIds(QUEUE).sort(), ['d1', 'zz']);
+  // Mirror edges (a7 blocks a1) and in-list blockers (a1) are not "outside".
+  assert.ok(!li.outsideBlockerIds(QUEUE).includes('a1'));
+  assert.deepEqual(li.outsideBlockerIds([null, 7, {}]), []);
 });
 
 test('BREAK-TEST: a queue of ONLY wrong-repo tickets is depth 0, not depth 3', () => {
@@ -244,8 +295,8 @@ test('the WIP cap does NOT throttle loop-review — that would deadlock the pipe
 });
 
 test('loop-review is paced on "In review" depth, loop-build on "Queued"', () => {
-  const build = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, resolveRepo: fakeRepo });
-  const review = li.claimableDepth({ loop: 'loop-review', tasks: QUEUE, resolveRepo: fakeRepo });
+  const build = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, resolveRepo: fakeRepo, blockers: RESOLVED });
+  const review = li.claimableDepth({ loop: 'loop-review', tasks: QUEUE, resolveRepo: fakeRepo, blockers: RESOLVED });
   assert.equal(build.depth, 4);
   assert.equal(review.depth, 1);
 });

@@ -91,10 +91,21 @@ const KNOWN_LOOPS = Object.keys(LOOP_STATUS);
  * the input" has to mean whatever the input.
  */
 function clampToFloor(seconds, { fallback = DEFAULT_FALLBACK_SECONDS } = {}) {
+  const long = Math.max(FLOOR_SECONDS, Math.trunc(Number(fallback)) || DEFAULT_FALLBACK_SECONDS);
+  // `Number(null)`, `Number('')`, `Number([])` and `Number(false)` are all 0 —
+  // finite, and therefore "raise 0 to the floor", the SHORT end. Review round
+  // 1 (2026-08-29) found exactly that: a state file reading
+  // `{"interval": null}` made the cadence in force 900s, every proposal was
+  // then >= it, and ONE deep reading dropped the interval with no hysteresis
+  // at all. So the test is "is this actually a number", not "does Number()
+  // manage to make one" — anything that is not a number or a non-blank
+  // numeric string resolves to the long fallback (bias 1).
+  const usable = typeof seconds === 'number'
+    || (typeof seconds === 'string' && seconds.trim() !== '');
+  if (!usable) return long;
   const n = Number(seconds);
-  // NaN, Infinity, null, '', 'soon' — none of these is a number of seconds.
-  // They resolve to the long fallback, not the floor (bias 1).
-  if (!Number.isFinite(n)) return Math.max(FLOOR_SECONDS, Math.trunc(Number(fallback)) || DEFAULT_FALLBACK_SECONDS);
+  // NaN, Infinity, 'soon' — none of these is a number of seconds either.
+  if (!Number.isFinite(n)) return long;
   return Math.max(FLOOR_SECONDS, Math.trunc(n));
 }
 
@@ -139,8 +150,10 @@ function intervalForDepth(depth) {
  * @param {string} opts.wantStatus the status this loop drains, lower-cased
  * @param {(tags:any)=>{action:string}} opts.resolveRepo  taskRepo.resolveTaskRepo
  * @param {Map<string,object>} opts.byId  every task in the list, for blockers
+ * @param {Map<string,object>} [opts.blockers]  blockers read from OUTSIDE the
+ *   list (finished tickets never appear in it), consulted for status only
  */
-function unclaimableReason(task, { wantStatus, resolveRepo, byId } = {}) {
+function unclaimableReason(task, { wantStatus, resolveRepo, byId, blockers } = {}) {
   if (!task || typeof task !== 'object') return 'not a task';
 
   const status = String(task.status?.status ?? '').toLowerCase();
@@ -161,17 +174,52 @@ function unclaimableReason(task, { wantStatus, resolveRepo, byId } = {}) {
   // way round and must not count.
   for (const dep of Array.isArray(task.dependencies) ? task.dependencies : []) {
     if (!dep || String(dep.task_id) !== String(task.id)) continue;
-    const blocker = byId instanceof Map ? byId.get(String(dep.depends_on)) : null;
+    const key = String(dep.depends_on);
+    const blocker = (byId instanceof Map ? byId.get(key) : null)
+      || (blockers instanceof Map ? blockers.get(key) : null)
+      || null;
     // A blocker we cannot see is treated as still blocking. That is the safe
     // direction: it can only make the queue look shallower and the interval
-    // longer (bias 1). Reading each blocker back would cost one API call per
-    // dependency on every cycle, which is a poor trade for a cadence hint.
+    // longer (bias 1).
+    //
+    // BUT A FINISHED BLOCKER IS NEVER IN THE LIST (review round 1,
+    // 2026-08-29). The list read returns open tasks only — ClickUp's
+    // `include_closed` defaults to false — so a ticket waiting on work that
+    // has already shipped would read as blocked on every cycle, forever. The
+    // caller resolves those ids separately (`outsideBlockerIds` says which)
+    // and hands them in as `blockers`; one that could not be resolved stays
+    // unseen, and stays blocking.
     const type = String(blocker?.status?.type ?? '').toLowerCase();
     const done = type === 'closed' || type === 'done';
-    if (!done) return `waiting on ${dep.depends_on}${blocker ? ` (${blocker.status?.status})` : ' (not in this list)'}`;
+    if (!done) return `waiting on ${key}${blocker ? ` (${blocker.status?.status})` : ' (not in this list and not resolvable — treated as still open)'}`;
   }
 
   return null;
+}
+
+/**
+ * The ids of every blocker a "waiting on" edge points at that is NOT in the
+ * list itself. Pure; the caller decides whether to fetch them.
+ *
+ * Why the caller needs this at all: the list endpoint returns open tasks
+ * only, so a blocker that has FINISHED is exactly the one that is missing —
+ * and the one that must not keep its dependant looking blocked. Nothing is
+ * fetched here; a cadence hint should not cost a network call per ticket, so
+ * only the ids actually pointing outside the list are handed back.
+ */
+function outsideBlockerIds(tasks) {
+  const list = Array.isArray(tasks) ? tasks : [];
+  const present = new Set(list.filter((t) => t && t.id != null).map((t) => String(t.id)));
+  const out = new Set();
+  for (const t of list) {
+    if (!t || typeof t !== 'object') continue;
+    for (const dep of Array.isArray(t.dependencies) ? t.dependencies : []) {
+      if (!dep || String(dep.task_id) !== String(t.id)) continue;
+      const id = String(dep.depends_on ?? '').trim();
+      if (id && !present.has(id)) out.add(id);
+    }
+  }
+  return [...out];
 }
 
 /**
@@ -182,9 +230,13 @@ function unclaimableReason(task, { wantStatus, resolveRepo, byId } = {}) {
  * @param {object[]} opts.tasks     every task in the Loop Queue list
  * @param {boolean} opts.capReached is the work-in-progress cap already full?
  * @param {Function} opts.resolveRepo
+ * @param {object[]|Map<string,object>} [opts.blockers]  tasks read from outside
+ *   the list because a dependency pointed at them (see outsideBlockerIds).
+ *   They are consulted for a blocker's status only — never counted as
+ *   claimable themselves, whatever status they carry.
  * @returns {{ depth:number, claimable:object[], excluded:Array<{id:string,why:string}>, note:string|null }}
  */
-function claimableDepth({ loop, tasks, capReached = false, resolveRepo } = {}) {
+function claimableDepth({ loop, tasks, capReached = false, resolveRepo, blockers } = {}) {
   const wantStatus = LOOP_STATUS[String(loop || '').trim()];
   if (!wantStatus) {
     throw new Error(`unknown loop "${loop}" — known: ${KNOWN_LOOPS.join(', ')}`);
@@ -209,11 +261,14 @@ function claimableDepth({ loop, tasks, capReached = false, resolveRepo } = {}) {
 
   const list = Array.isArray(tasks) ? tasks : [];
   const byId = new Map(list.filter((t) => t && t.id != null).map((t) => [String(t.id), t]));
+  const seen = blockers instanceof Map
+    ? blockers
+    : new Map((Array.isArray(blockers) ? blockers : []).filter((t) => t && t.id != null).map((t) => [String(t.id), t]));
 
   const claimable = [];
   const excluded = [];
   for (const t of list) {
-    const why = unclaimableReason(t, { wantStatus, resolveRepo, byId });
+    const why = unclaimableReason(t, { wantStatus, resolveRepo, byId, blockers: seen });
     if (why === null) claimable.push(t);
     // Only worth reporting the ones that are the RIGHT status but still
     // unclaimable. Every other ticket in the list has a different status and
@@ -325,6 +380,7 @@ module.exports = {
   normalizeDepth,
   intervalForDepth,
   unclaimableReason,
+  outsideBlockerIds,
   claimableDepth,
   decideInterval,
   fallbackInterval,

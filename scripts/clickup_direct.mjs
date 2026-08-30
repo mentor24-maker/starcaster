@@ -256,7 +256,7 @@ function usage(code = 2) {
   console.error('  wip-check [--repo owner/name]              is the merge side already full? 0 = room to claim,');
   console.error('                                             3 = capped (a normal decline), 1 = could not tell.');
   console.error('                                             Reads only; a capped pass writes nothing.');
-  console.error('  next-interval --for <loop-build|loop-review> [--fallback <s>] [--list <id>] [--state-file <f>]');
+  console.error('  next-interval --for <loop-build|loop-review> [--fallback <s>] [--list <id>] [--state-file <f>] [--repo owner/name]');
   console.error('                                             how long to sleep before the next pass, from how much work');
   console.error('                                             this loop could actually CLAIM. Prints one integer on stdout');
   console.error('                                             and the reason on stderr; always exits 0 (an unreadable queue');
@@ -312,10 +312,13 @@ if (!TOKEN) {
 
 /** Every page of a list's open tasks. The endpoint caps at 100 per page and
  *  a first-page-only read silently starves everything past it (DOCTRINE 5.12). */
-async function fetchAllTasks(list) {
+async function fetchAllTasks(list, { soft = false } = {}) {
   const tasks = [];
   for (let page = 0; page < 50; page++) {
     const out = await call('GET', `/api/v2/list/${list}/task?archived=false&page=${page}`);
+    // `soft`: throw instead of exiting, for a caller that has its own answer
+    // to an unreadable list (next-interval must exit 0 with the fallback).
+    if (!out.res.ok && soft) throw new Error(`ClickUp returned HTTP ${out.res.status} on page ${page}`);
     if (!out.res.ok) die('list tasks', out);
     tasks.push(...out.json.tasks);
     if (out.json.last_page !== false || out.json.tasks.length === 0) {
@@ -944,7 +947,10 @@ if (cmd === 'whoami') {
   // only `loop-build` pays for asking.
   let capReached = false;
   if (loop === 'loop-build') {
-    const capOut = gh(['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state']);
+    // `--repo` pins the probe to a repository the way `wip-check` allows, so
+    // it is not silently cwd-dependent (review round 1).
+    const repo = arg('repo');
+    const capOut = gh(['pr', 'list', ...(repo ? ['--repo', repo] : []), '--state', 'open', '--limit', '200', '--json', 'number,state']);
     let prs = null;
     if (capOut.ok) { try { prs = JSON.parse(capOut.stdout); } catch { prs = null; } }
     if (prs === null) {
@@ -960,25 +966,36 @@ if (cmd === 'whoami') {
     }
   }
 
-  // The queue itself.
+  // The queue itself — EVERY page. The first version read page 0 only, on the
+  // argument that the curve saturates at 4; but ClickUp pages newest-first and
+  // the loops claim oldest-first, so the oldest `Queued` backlog is exactly
+  // what a one-page read drops (review round 1; DOCTRINE 5.12).
   let tasks = null;
   let res = null;
   try {
-    const out = await call('GET', `/api/v2/list/${list}/task?archived=false&page=0`);
-    if (out.res.ok && Array.isArray(out.json?.tasks)) {
-      tasks = out.json.tasks;
-      res = out.res;
-      // One page is enough to pace a loop: the curve's top rung is 4, so any
-      // page-sized queue already saturates it. Paging the whole list every
-      // cycle would spend API budget to refine a number that cannot change.
-      if (out.json.last_page === false) {
-        console.error('  (queue has more pages; the first page alone already decides the curve)');
-      }
-    } else {
-      answer(loopInterval.fallbackInterval({ fallbackSeconds, why: `ClickUp returned HTTP ${out.res.status}` }), { writeState: false });
-    }
+    const out = await fetchAllTasks(list, { soft: true });
+    tasks = out.tasks;
+    res = out.res;
+    console.error(`  (read ${tasks.length} open task(s) in the list, every page)`);
   } catch (err) {
     answer(loopInterval.fallbackInterval({ fallbackSeconds, why: err.message }), { writeState: false });
+  }
+
+  // Blockers the list cannot show. The list read returns OPEN tasks only, so
+  // a blocker that has finished is precisely the one that is missing — and
+  // the one that must not keep its dependant looking blocked forever (review
+  // round 1: a ticket waiting on a Live blocker read as blocked on every
+  // cycle). Read each such id back once; one that cannot be read stays
+  // unseen, which the module treats as still blocking — the safe direction.
+  const blockers = [];
+  for (const id of loopInterval.outsideBlockerIds(tasks)) {
+    try {
+      const out = await call('GET', `/api/v2/task/${id}`);
+      if (out.res.ok && out.json?.id) blockers.push(out.json);
+      else console.error(`  (blocker ${id} could not be read — HTTP ${out.res.status}; treated as still open)`);
+    } catch (err) {
+      console.error(`  (blocker ${id} could not be read — ${err.message}; treated as still open)`);
+    }
   }
 
   const { depth, excluded, note } = loopInterval.claimableDepth({
@@ -986,6 +1003,7 @@ if (cmd === 'whoami') {
     tasks,
     capReached,
     resolveRepo: resolveTaskRepo,
+    blockers,
   });
   if (note) console.error(`  (${note})`);
   for (const x of excluded) console.error(`  (not claimable: ${x.id} — ${x.why})`);

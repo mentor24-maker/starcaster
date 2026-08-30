@@ -37,6 +37,12 @@ Every cycle now writes both the number and the reason into the log, so the
 pace is never a mystery. The change takes effect the next time the loops are
 restarted.
 
+Review found two holes before it shipped, both fixed in the same PR: a ticket
+waiting on work that had *already finished* would have looked blocked forever
+(finished tickets never appear in the list it reads, so it now looks those up
+separately), and a hand-edited settings file could have switched the
+two-readings rule off. Both would have failed quietly toward sleeping longer.
+
 ## 2026-08-25 — The "don't merge unreviewed work" rule is now a lock, not a sign (#433)
 
 Earlier today a pull request went straight to the live site without anyone
