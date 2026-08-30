@@ -1612,7 +1612,12 @@ That is why the pulse measures **flow, never status**. "Is it running" is the
 question that failed; "is anything moving" is the question that works.
 
 It is **read-only** — three GET-only sources, no write path in the file at all,
-and a test that fails if one is ever added. It reports and stops. Repairs live
+and a test that fails if one is ever added. The ClickUp read sends
+`include_closed=true`, and a test asserts the literal string: without it the
+list endpoint hides every closed-type status (47 tickets came back where 163
+existed, all 116 `Live` ones missing — measured 2026-08-30), which made the
+zombie shape below impossible to fire. Fourth reader in this repo to hit that
+trap; each one carries the same regression test. It reports and stops. Repairs live
 in `npm run reconcile`, deliberately: the fourth drift shape below has two
 valid fixes and only a person knows which one is right.
 
@@ -1627,6 +1632,22 @@ dead build loop read as a quiet morning.
 | Streak threshold | **3 passes** | One claimless pass is normal, two is plausible. Eight happened; thirteen happened on 2026-08-25. Three is the first count that cannot be explained away. |
 | Gate | **only while `Queued > 0`** | A loop declining an empty queue is working perfectly. Alarming on that teaches the reader to ignore the alarm. |
 | Hung pass | **4 hours** | A pass is 10–15 minutes of work; the longest in a 580-pass sample was 38 minutes. |
+| Loop gone silent | **3 hours** since the loop was last seen alive | `loopInterval.js` sleeps at most 3600s between passes (the empty-queue cadence; 900–1800s with work queued). Three missed intervals at the *longest* cadence is 3h — past that no queue depth explains the silence. Measured from the newest END banner, or the START of a pass still running, so the pulse's own in-flight pass counts as a sign of life. |
+
+**Two shapes of a dead loop, and the streak only sees one.** A loop that runs
+and declines shows up as a streak. A loop that *stops emitting passes* does not:
+the streak walk stops at the newest claim, so a launchd job that died right
+after a claim read as `clear` with 36 tickets queued and the loop last seen
+five days earlier (caught in review, 2026-08-30). The silence check above is
+judged *before* the streak, and every A1 result carries `lastPassAt` whatever
+its verdict, so the JSON always answers "when did this last run".
+
+**An orphan `START` the loop has since recovered from is history, not news.**
+The log is append-only, so a pass that never printed its END banner stays in
+it forever; the 2026-08-23 orphan alarmed on every production run and pinned
+`--exit-code` at 1 permanently — the "same false note on every run" the 4h
+threshold guards against, at the other end. If any pass has *completed* since
+the orphan started, it is reported as `superseded` and counts as nothing.
 
 The source is `~/loop-logs/loop-build.log`, whose body is **the agent's own
 prose report, not tool output** — there is no structured claim record to read.
@@ -1703,6 +1724,15 @@ now guarded by tests:
    line (caught in review, 2026-08-30). A CLEAR asserts something about
    everything the check looked at, so a check that looked at nothing has
    nothing to assert.
+   **The headline is bound by the same rule, and it is the line that
+   matters most.** A failed log read returns `verdict: 'cannot-tell'`
+   *alongside* its `sourceError`, and the sentence tests that state before
+   the REVIEW and OPERATOR branches — otherwise an unread log plus two stale
+   reviews read "Not the builder … the loop is claiming", steering the reader
+   away from the one stage nobody had looked at (the round-2 send-back,
+   2026-08-30). And when GitHub cannot be read, the CANNOT line carries `gh`'s
+   own first line of stderr, so auth, rate limit and wrong folder are told
+   apart instead of all reading as "failed".
 3. **Every count carries its breakdown.** `7 open, cap 5` was true and hid a
    deadlock for four passes.
 4. **The bottleneck is named in a sentence** — "Bottleneck: BUILD (4

@@ -65,19 +65,25 @@ function readNoOp(job, queuedCount, now) {
   try {
     text = fs.readFileSync(file, 'utf8');
   } catch (err) {
+    // `verdict` travels WITH the error so every consumer — the headline
+    // sentence above all — sees the same state the section prints. Without it
+    // the headline fell through every guard and said "the loop is claiming"
+    // four lines above a CANNOT TELL (review, 2026-08-30).
     return {
+      verdict: 'cannot-tell',
       sourceError: `could not read ${file} (${err.code || err.message}) — ` +
         'on a machine that does not run this loop that is expected, but it is still not an all-clear',
       source: file,
+      lastPassAt: null,
     };
   }
 
   const { passes, unterminated } = parsePassLog(text);
-  const result = noOpStreak(passes, { queuedCount });
+  const result = noOpStreak(passes, { queuedCount, now, unterminated });
   return {
     ...result,
     source: file,
-    unterminated: unterminated.map((p) => classifyUnterminated(p, { now })),
+    unterminated: unterminated.map((p) => classifyUnterminated(p, { now, passes })),
   };
 }
 
@@ -102,11 +108,17 @@ async function clickupGet(apiPath) {
 
 /** Every non-archived task in the list, across all pages. Same termination
  *  rule as lib/clickup.cjs: an empty page or an explicit last_page, never
- *  `last_page !== false` (the API can omit the flag, which truncated at 100). */
+ *  `last_page !== false` (the API can omit the flag, which truncated at 100).
+ *
+ *  `include_closed=true` IS LOAD-BEARING. Without it the list endpoint hides
+ *  every closed-type status: measured live on 2026-08-30, 47 tickets came back
+ *  where 163 existed, and all 116 `Live` ones were invisible — which made B1's
+ *  zombie shape (terminal ticket, PR still open) impossible to fire. The
+ *  fourth reader in this repo to hit the same trap; see the regression test. */
 async function listTasks(listId) {
   const tasks = [];
   for (let page = 0; page < 50; page++) {
-    const json = await clickupGet(`/api/v2/list/${listId}/task?archived=false&page=${page}`);
+    const json = await clickupGet(`/api/v2/list/${listId}/task?archived=false&include_closed=true&page=${page}`);
     const batch = Array.isArray(json.tasks) ? json.tasks : [];
     tasks.push(...batch);
     if (batch.length === 0 || json.last_page === true) return tasks;
@@ -143,15 +155,18 @@ function gh(args) {
   return execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
-/** Open PRs with their bodies, so the PR→ticket direction can be read. null
- *  means the lookup failed — never an empty list, which would report every
- *  ticket as stranded. */
+/** Open PRs with their bodies, so the PR→ticket direction can be read.
+ *  `{ prs: null, error }` means the lookup failed — never an empty list, which
+ *  would report every ticket as stranded — and the error travels with it so
+ *  the CANNOT line can say WHY (auth, rate limit, wrong folder), per rule 2. */
 function listOpenPrs() {
   try {
-    return JSON.parse(gh(['pr', 'list', '--state', 'open', '--limit', '200',
+    const prs = JSON.parse(gh(['pr', 'list', '--state', 'open', '--limit', '200',
       '--json', 'number,title,body,headRefName']));
+    return { prs, error: null };
   } catch (err) {
-    return null;
+    const stderr = String(err.stderr || '').trim().split('\n')[0];
+    return { prs: null, error: stderr || err.code || err.message };
   }
 }
 
@@ -178,14 +193,14 @@ function prState(number) {
  * four shapes, so skipping it drops no finding — and the report says how many
  * were compared so the number is never mistaken for "all of them".
  */
-async function readDrift(tasks, openPrs) {
+async function readDrift(tasks, { prs: openPrs, error: prError }) {
   if (openPrs === null) {
     return {
       findings: [],
       cannotTell: [{
         taskId: '(all)',
         status: '-',
-        reason: '`gh pr list` failed, so the PR side could not be read at all — ' +
+        reason: `\`gh pr list\` failed (${prError}), so the PR side could not be read at all — ` +
           'without it every ticket would falsely read as stranded, so nothing is reported',
       }],
       ticketsCompared: 0,

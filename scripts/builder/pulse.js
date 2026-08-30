@@ -118,7 +118,7 @@ const PASS_HUNG_AFTER_HOURS = 4;
  * @param now   epoch ms, passed in — this module owns no clock
  * @returns { state: 'running' | 'hung' | 'cannot-tell', message }
  */
-function classifyUnterminated(pass, { now, hungAfterHours = PASS_HUNG_AFTER_HOURS } = {}) {
+function classifyUnterminated(pass, { now, hungAfterHours = PASS_HUNG_AFTER_HOURS, passes } = {}) {
   // The banner stamp is local wall-clock with no zone, which is what the
   // wrapper writes; Date.parse reads it as local time, matching it.
   const started = Date.parse(String(pass?.start || '').replace(' ', 'T'));
@@ -126,6 +126,22 @@ function classifyUnterminated(pass, { now, hungAfterHours = PASS_HUNG_AFTER_HOUR
     return {
       state: 'cannot-tell',
       message: `a pass began with an unreadable timestamp ("${pass?.start}") and never printed an END banner`,
+    };
+  }
+  // HISTORY, NOT NEWS. The log is append-only, so an orphan START stays in it
+  // forever; without this rule the 2026-08-23 orphan alarmed on every run and
+  // pinned `--exit-code` at 1 permanently — the "same false note on every
+  // run" the 4h threshold exists to prevent, at the other end. If the loop
+  // has completed passes SINCE the orphan, it demonstrably recovered.
+  const completedAfter = (passes || []).filter((p) => {
+    const t = Date.parse(String(p?.start || '').replace(' ', 'T'));
+    return Number.isFinite(t) && t > started && p.end;
+  }).length;
+  if (completedAfter > 0) {
+    return {
+      state: 'superseded',
+      message: `a pass started ${pass.start} and never printed an END banner, but ${completedAfter} later ` +
+        'pass(es) completed after it — the loop recovered; history, not news',
     };
   }
   const hours = (now - started) / MS_PER_HOUR;
@@ -248,10 +264,52 @@ function classifyPass(pass) {
 const NOOP_STREAK_THRESHOLD = 3;
 
 /**
+ * THE OTHER SHAPE OF A DEAD LOOP: it stops emitting passes at all. The streak
+ * walk cannot see that — if the launchd job dies right after a pass that
+ * claimed, the streak is empty and the verdict is "clear", with 36 tickets
+ * queued and the loop last seen five days ago (caught in review, 2026-08-30).
+ * The module's own thesis is that a dead loop looks like a quiet morning; a
+ * loop that has gone silent is the same outage wearing different bytes.
+ *
+ * THREE HOURS, derived from the loop's own cadence: `loopInterval.js` sleeps
+ * at most 3600s between passes (the empty-queue cadence; with work queued it
+ * is 900-1800s), and the longest real pass was 38 minutes. Three missed
+ * intervals at the LONGEST cadence is 3h — past that, no queue depth explains
+ * the silence. Measured from the newest pass's END (or a still-running pass's
+ * START), so the pulse's own in-flight pass counts as a sign of life.
+ */
+const LOOP_STALE_AFTER_HOURS = 3;
+
+/** The newest moment the loop was provably alive: the latest END banner, or
+ *  the START of a pass that has not ended yet. Epoch ms, or null if no banner
+ *  carries a readable stamp. */
+function lastSeenAlive(passes, unterminated) {
+  let best = null;
+  for (const p of passes || []) {
+    const t = Date.parse(String(p?.end || '').replace(' ', 'T'));
+    if (Number.isFinite(t) && (best === null || t > best)) best = t;
+  }
+  for (const p of unterminated || []) {
+    const t = Date.parse(String(p?.start || '').replace(' ', 'T'));
+    if (Number.isFinite(t) && (best === null || t > best)) best = t;
+  }
+  return best;
+}
+
+/**
  * @param passes        oldest-first, as `parsePassLog` returns them
  * @param queuedCount   how many tickets are waiting. null = could not read it.
+ * @param now           epoch ms — enables the staleness check (this module owns
+ *                      no clock, so without it only the streak is judged)
+ * @param unterminated  passes with no END yet; a young one proves the loop alive
  */
-function noOpStreak(passes, { queuedCount, threshold = NOOP_STREAK_THRESHOLD } = {}) {
+function noOpStreak(passes, {
+  queuedCount,
+  threshold = NOOP_STREAK_THRESHOLD,
+  now,
+  unterminated,
+  staleAfterHours = LOOP_STALE_AFTER_HOURS,
+} = {}) {
   const classified = (passes || []).map((p) => ({ pass: p, ...classifyPass(p) }));
 
   // Walk back from the newest until a confirmed claim stops it.
@@ -265,6 +323,8 @@ function noOpStreak(passes, { queuedCount, threshold = NOOP_STREAK_THRESHOLD } =
   const breakdown = {};
   for (const s of streak) breakdown[s.reasonKey] = (breakdown[s.reasonKey] || 0) + 1;
   const unreadable = streak.filter((s) => s.outcome === 'unknown').length;
+  const lastSeen = lastSeenAlive(passes, unterminated);
+  const lastPassAtIso = lastSeen === null ? null : new Date(lastSeen).toISOString();
 
   const base = {
     streak: streak.length,
@@ -273,9 +333,40 @@ function noOpStreak(passes, { queuedCount, threshold = NOOP_STREAK_THRESHOLD } =
     unreadable,
     since: streak.length ? streak[0].pass.start : null,
     latest: streak.length ? streak[streak.length - 1].pass.start : null,
+    // Always carried, whatever the verdict: "when did this loop last run" is
+    // the question a reader has the moment anything looks off.
+    lastPassAt: lastPassAtIso,
+    staleAfterHours,
     queuedCount,
     passesRead: classified.length,
   };
+
+  // A loop that has stopped emitting passes is judged BEFORE the streak,
+  // because a streak of zero says nothing about a loop that is not running.
+  if (Number.isFinite(now)) {
+    if (lastSeen === null) {
+      return {
+        ...base,
+        verdict: 'cannot-tell',
+        message:
+          'no pass in the log carries a readable timestamp, so when the loop last ran cannot be told' +
+          ` (${classified.length} pass(es) read)`,
+      };
+    }
+    const silentHours = (now - lastSeen) / MS_PER_HOUR;
+    if (silentHours > staleAfterHours) {
+      return {
+        ...base,
+        verdict: 'finding',
+        stale: true,
+        message:
+          `the loop has not run in ${formatDuration(silentHours)} — last seen alive ${lastPassAtIso}, ` +
+          `threshold ${staleAfterHours}h (three of its longest interval, 3600s); ` +
+          `${queuedCount === null || queuedCount === undefined ? 'queued count unread' : `${queuedCount} queued`}. ` +
+          'A loop that stopped is not a quiet one',
+      };
+    }
+  }
 
   if (queuedCount === null || queuedCount === undefined) {
     return {
@@ -671,11 +762,23 @@ function bottleneckSentence({ noOp, residency } = {}) {
   const ready = count('ready to launch');
   const review = count('in review');
 
+  if (noOp?.verdict === 'finding' && noOp.stale) {
+    return `Bottleneck: BUILD — ${noOp.message}. Ready to launch holds ${ready}.`;
+  }
   if (noOp?.verdict === 'finding') {
     return (
       `Bottleneck: BUILD — ${noOp.streak} consecutive claimless passes with ${queued} queued ` +
       `(${describeBreakdown(noOp.breakdown)}). Ready to launch holds ${ready}.`
     );
+  }
+  // A cannot-tell on the loop log OUTRANKS the review and operator branches.
+  // Those two say "not the builder ... the loop is claiming", and with the log
+  // unread that steers the reader away from the one stage nobody looked at —
+  // the exact incident this module was written for. Caught in review,
+  // 2026-08-30, after the same class of defect had already been sent back once.
+  if (!noOp || noOp.sourceError || noOp.verdict === 'cannot-tell') {
+    const why = noOp?.sourceError || noOp?.message || 'the loop log was not read at all';
+    return `Bottleneck: CANNOT TELL — ${why}`;
   }
   if (overIn('in review') >= 2) {
     return (
@@ -688,9 +791,6 @@ function bottleneckSentence({ noOp, residency } = {}) {
       `Bottleneck: OPERATOR — ${overIn('ready to launch')} of ${ready} approved tickets have waited past ` +
       `${STAGE_THRESHOLDS['ready to launch'].hours}h for a merge. The machine side is keeping up.`
     );
-  }
-  if (noOp?.verdict === 'cannot-tell') {
-    return `Bottleneck: CANNOT TELL — ${noOp.message}`;
   }
   return `No bottleneck: the loop is claiming, ${review} in review, ${ready} awaiting merge, ${queued} queued.`;
 }
@@ -727,12 +827,12 @@ function formatReport(result) {
     push(`  CANNOT TELL — ${noOp.sourceError}`);
   } else {
     push(`  ${verdictTag(noOp.verdict)} ${noOp.message}`);
-    push(`  read ${noOp.passesRead} pass(es) from ${noOp.source || 'the loop log'}`);
+    push(`  read ${noOp.passesRead} pass(es) from ${noOp.source || 'the loop log'}; last seen alive ${noOp.lastPassAt || 'unknown'}`);
     if (noOp.unreadable) {
       push(`  ${noOp.unreadable} pass(es) in the streak could not be classified — counted, not assumed`);
     }
     for (const u of noOp.unterminated || []) {
-      push(`  ${verdictTag(u.state === 'hung' ? 'alarm' : u.state === 'running' ? 'clear' : 'cannot-tell')} ${u.message}`);
+      push(`  ${verdictTag(u.state === 'hung' ? 'alarm' : u.state === 'running' || u.state === 'superseded' ? 'clear' : 'cannot-tell')} ${u.message}`);
     }
   }
   push('');
@@ -827,7 +927,8 @@ function tally(result) {
   if (result?.noOp?.sourceError) cannotTell++;
   else if (result?.noOp?.verdict === 'finding') alarms++;
   else if (result?.noOp?.verdict === 'cannot-tell') cannotTell++;
-  // A pass that is merely still running is neither a finding nor a blind spot.
+  // A pass that is merely still running is neither a finding nor a blind spot,
+  // and neither is an old orphan the loop has since recovered from.
   for (const u of result?.noOp?.unterminated || []) {
     if (u.state === 'hung') alarms++;
     else if (u.state === 'cannot-tell') cannotTell++;
@@ -869,6 +970,8 @@ module.exports = {
   PASS_BANNER_RE,
   PASS_MARKERS,
   NOOP_STREAK_THRESHOLD,
+  LOOP_STALE_AFTER_HOURS,
+  lastSeenAlive,
   PASS_HUNG_AFTER_HOURS,
   classifyUnterminated,
   parsePassLog,

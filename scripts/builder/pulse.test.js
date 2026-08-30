@@ -26,6 +26,8 @@ const {
   formatReport,
   tally,
   exitCodeFor,
+  LOOP_STALE_AFTER_HOURS,
+  lastSeenAlive,
 } = require('./pulse');
 
 /**
@@ -762,6 +764,150 @@ test('and once the "PR opened:" comment is added, the same ticket reports clean'
   }]);
   assert.deepEqual(findings, []);
   assert.deepEqual(cannotTell, []);
+});
+
+// ── Round-2 send-back (2026-08-30): the reader starved the honest module ────
+
+test('BREAK-TEST: the pulse asks ClickUp for closed tasks, or Live tickets are invisible', () => {
+  // Measured live: without include_closed the Loop Queue read 47 tickets where
+  // 163 existed, and all 116 Live ones were missing — so shape 2 (terminal
+  // ticket, PR still open) could never fire in production. Fourth reader in
+  // this repo to hit this; the other three carry the same assertion
+  // (pipelinePauseStore, reconcile_clickup_github, wipCap).
+  const src = fs.readFileSync(path.join(__dirname, '..', 'pulse.cjs'), 'utf8');
+  assert.match(src, /\/task\?archived=false&include_closed=true&page=/,
+    'listTasks must send include_closed=true');
+});
+
+test('BREAK-TEST: an unread loop log makes the HEADLINE say CANNOT TELL, never "the loop is claiming"', () => {
+  // What the reader returns on a failed read: a sourceError WITH a verdict.
+  const noOp = { verdict: 'cannot-tell', sourceError: 'could not read /x/loop-build.log (ENOENT)', lastPassAt: null };
+  const s = bottleneckSentence({ noOp, residency: stageResidency([task('86bb1', 'queued', 1)], { now: NOW }) });
+  assert.match(s, /^Bottleneck: CANNOT TELL/);
+  assert.match(s, /ENOENT/, 'with the reason');
+  assert.doesNotMatch(s, /loop is claiming/);
+});
+
+test('BREAK-TEST: an unread log plus a backed-up review stage is STILL cannot-tell, not "REVIEW"', () => {
+  // The sharper edge: REVIEW and OPERATOR used to sit before the cannot-tell
+  // branch, so this state read "Not the builder ... the loop is claiming" —
+  // steering the reader away from the one stage nobody had looked at.
+  const noOp = { verdict: 'cannot-tell', sourceError: 'could not read /x/loop-build.log (EACCES)' };
+  const residency = stageResidency(
+    [task('86bb1', 'in review', 40), task('86bb2', 'in review', 50)], { now: NOW });
+  const s = bottleneckSentence({ noOp, residency });
+  assert.match(s, /^Bottleneck: CANNOT TELL/);
+  assert.doesNotMatch(s, /^Bottleneck: REVIEW/);
+  assert.doesNotMatch(s, /Not the builder/);
+  // and the OPERATOR branch, the same way
+  const s2 = bottleneckSentence({ noOp, residency: stageResidency([task('86bb9', 'ready to launch', 40)], { now: NOW }) });
+  assert.match(s2, /^Bottleneck: CANNOT TELL/);
+});
+
+test('BREAK-TEST: a sourceError with NO verdict key still cannot reach "the loop is claiming"', () => {
+  // Belt and braces: the sentence keys off sourceError as well as verdict, so
+  // a future reader that forgets the verdict still cannot produce a fine.
+  const s = bottleneckSentence({ noOp: { sourceError: 'boom' }, residency: stageResidency([], { now: NOW }) });
+  assert.match(s, /^Bottleneck: CANNOT TELL — boom/);
+});
+
+const stamped = (startIso, endIso, body = 'Built 86bbaaaaa into PR #1.') => ({
+  body: [body], exitCode: 0,
+  start: startIso.replace('T', ' ').slice(0, 19),
+  end: endIso.replace('T', ' ').slice(0, 19),
+});
+
+test('the staleness threshold is three of the loop\'s longest interval', () => {
+  assert.equal(LOOP_STALE_AFTER_HOURS, 3, 'loopInterval.js sleeps at most 3600s; three missed = 3h');
+});
+
+test('BREAK-TEST: a loop that STOPPED RUNNING is a finding, even when its last pass claimed', () => {
+  // The streak walk stops at the newest claim, so a launchd job that died
+  // right after a claim produced verdict "clear", 36 queued, last seen five
+  // days ago (review, 2026-08-30). A loop that stopped is not a quiet one.
+  const now = Date.parse('2026-08-30T12:00:00');
+  const passes = [stamped('2026-08-25T03:00:00', '2026-08-25T03:12:00')];
+  const out = noOpStreak(passes, { queuedCount: 36, now });
+  assert.equal(out.verdict, 'finding');
+  assert.equal(out.stale, true);
+  assert.match(out.message, /has not run in 5\.4d/);
+  assert.match(out.message, /threshold 3h/, 'the threshold, with its derivation');
+  assert.match(out.message, /36 queued/);
+  assert.equal(out.lastPassAt, new Date(Date.parse('2026-08-25T03:12:00')).toISOString());
+});
+
+test('a loop seen inside the staleness window is judged on its streak as before', () => {
+  const now = Date.parse('2026-08-30T12:00:00');
+  const passes = [stamped('2026-08-30T10:00:00', '2026-08-30T10:12:00')];
+  const out = noOpStreak(passes, { queuedCount: 36, now });
+  assert.equal(out.verdict, 'clear');
+  assert.equal(out.streak, 0);
+  assert.equal(out.lastPassAt, new Date(Date.parse('2026-08-30T10:12:00')).toISOString(),
+    'lastPassAt is carried on EVERY verdict, not only on the stale one');
+});
+
+test('a pass still running counts as the loop being alive', () => {
+  // The pulse runs inside a loop pass; the newest END may be hours old while
+  // the newest START is minutes old. That START is the sign of life.
+  const now = Date.parse('2026-08-30T12:00:00');
+  const passes = [stamped('2026-08-30T07:00:00', '2026-08-30T07:12:00')];
+  const unterminated = [{ start: '2026-08-30 11:50:00', end: null, body: [] }];
+  assert.equal(noOpStreak(passes, { queuedCount: 5, now, unterminated }).verdict, 'clear');
+  assert.equal(noOpStreak(passes, { queuedCount: 5, now }).verdict, 'finding', 'and without it, stale');
+  assert.equal(lastSeenAlive(passes, unterminated), Date.parse('2026-08-30T11:50:00'));
+});
+
+test('BREAK-TEST: a log with no readable stamps is CANNOT TELL about staleness, not clear', () => {
+  const now = Date.parse('2026-08-30T12:00:00');
+  const out = noOpStreak([claimed()], { queuedCount: 5, now });   // fixtures stamp 'x'/'y'
+  assert.equal(out.verdict, 'cannot-tell');
+  assert.equal(out.lastPassAt, null);
+});
+
+test('a stale loop names BUILD in the headline, with when it was last seen', () => {
+  const now = Date.parse('2026-08-30T12:00:00');
+  const noOp = noOpStreak([stamped('2026-08-25T03:00:00', '2026-08-25T03:12:00')], { queuedCount: 36, now });
+  const s = bottleneckSentence({ noOp, residency: stageResidency([], { now }) });
+  assert.match(s, /^Bottleneck: BUILD — the loop has not run in/);
+  assert.match(s, /last seen alive 2026-08-25/);
+});
+
+test('BREAK-TEST: an orphan START the loop has since recovered from is history, not a permanent alarm', () => {
+  // The 2026-08-23 orphan alarmed on every production run and pinned
+  // --exit-code at 1 forever — the log is append-only, so it never goes away.
+  const now = Date.parse('2026-08-30T09:10:00');
+  const passes = [stamped('2026-08-24T01:00:00', '2026-08-24T01:12:00')];
+  const out = classifyUnterminated({ start: '2026-08-23 22:13:52' }, { now, passes });
+  assert.equal(out.state, 'superseded');
+  assert.match(out.message, /1 later pass\(es\) completed after it/);
+  // Whereas with NO later completed pass, it is still hung — the loop did not recover.
+  assert.equal(classifyUnterminated({ start: '2026-08-23 22:13:52' }, { now, passes: [] }).state, 'hung');
+  // and a completed pass BEFORE the orphan does not count as recovery
+  const before = [stamped('2026-08-23T20:00:00', '2026-08-23T20:12:00')];
+  assert.equal(classifyUnterminated({ start: '2026-08-23 22:13:52' }, { now, passes: before }).state, 'hung');
+});
+
+test('a superseded orphan counts as nothing in the tally and prints as CLEAR', () => {
+  const result = {
+    generatedAt: 'now',
+    noOp: {
+      ...noOpStreak([claimed()], { queuedCount: 1 }), source: '/tmp/x.log',
+      unterminated: [{ state: 'superseded', message: 'a pass started 2026-08-23 22:13:52 ... history, not news' }],
+    },
+    residency: stageResidency([], { now: NOW }),
+    drift: { findings: [], cannotTell: [], ticketsCompared: 0, openPrsCompared: 0 },
+  };
+  assert.equal(exitCodeFor(result), 0);
+  assert.match(formatReport(result), /CLEAR\s+a pass started 2026-08-23 22:13:52 \.\.\. history, not news/);
+});
+
+test('BREAK-TEST: when gh fails, the B1 cannot-tell carries the reason from gh itself', () => {
+  // `listOpenPrs` used to bind `err` and drop it, so the CANNOT line could not
+  // say whether GitHub was unreadable for auth, rate limit or wrong folder.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'pulse.cjs'), 'utf8');
+  assert.match(src, /return \{ prs: null, error: stderr \|\| err\.code \|\| err\.message \}/,
+    'listOpenPrs must return the error, not swallow it');
+  assert.match(src, /failed \(\$\{prError\}\), so the PR side could not be read/, 'and readDrift must print it');
 });
 
 // ── Read-only is a property, not an intention ───────────────────────────────
