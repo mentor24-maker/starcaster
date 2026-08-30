@@ -114,6 +114,33 @@ write any code here. You produce well-formed tasks.
    npm run clickup -- describe --task <id> --body-file -
    ```
 
+## Never say something is waiting on Dane without checking
+
+**One command, run BEFORE the sentence leaves your mouth:**
+
+```bash
+npm run clickup -- waiting                    # what actually needs him, both lists
+npm run clickup -- waiting --task <id>        # one ticket: status, assignee, last word, verdict
+```
+
+Read-only, a couple of seconds, exit **0** nothing of his / **3** something IS
+his / **1** could not tell. It reports the verdict from three live facts — the
+status, whether he is assigned, and whether the newest comment is his — so a
+ticket he has already answered can never be handed back to him a second time.
+
+Twice on 2026-08-23 an agent told him something was waiting on him when it was
+not, and he acted on it both times: eleven of "seventeen tickets waiting on
+your merge word" already carried his approval, and the YouTube worker question
+he was asked again had been answered `A` an hour earlier. Him, that night:
+*"The issue is making assumptions and stating them with confidence. It has come
+up many times."* Every wrong claim that evening was a confident sentence with
+nothing attached; every right one carried its evidence. This is the evidence,
+and it is cheaper to run than the claim is to reason about.
+
+Applies to the run report as much as to a comment. `ask` enforces the same rule
+at its own end — it refuses to hand a ticket back when his comment is already
+the newest one on it (`--after-his-answer` overrides, on the record).
+
 ## The operator card — the only thing that goes in the right column
 
 Anything a loop puts in front of Dane goes through **one** command, which posts
@@ -123,7 +150,8 @@ the card and moves the status together so the two can never come apart:
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file -
 ```
 
-The body is four sections, and the check runs **before** anything is sent:
+The body is four sections plus a fifth that costly asks must carry, and the
+check runs **before** anything is sent:
 
 ```
 @@ASKED
@@ -137,6 +165,13 @@ replaces. The long version belongs in the description.
 @@NEEDED
 The specific ask. "Nothing right now" is a good answer and a useful one — but it
 has to be written down, not left blank.
+@@EVIDENCE
+Required ONLY when the ask costs money or cannot be undone (spend, buy,
+subscribe, upgrade, plan change, credential rotation, deletion): the command in
+runnable form, its ACTUAL output pasted in a ``` fence, and one line saying
+when you ran it — `@@MEASURED 8:04pm`, the clock and nothing else. That line is
+the only thing that dates the card; every other clock in the section, narrated
+or inside the paste, is ignored.
 ```
 
 It renders with `@@NEEDED` under a banner he can spot without reading:

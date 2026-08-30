@@ -18,6 +18,7 @@
     "check:assets": "node scripts/check_asset_versions.cjs",
     "check:syntax": "node scripts/check_syntax.cjs",
     "clickup": "doppler run --project starcaster --config dev --no-check-version -- node scripts/clickup_direct.mjs",
+    "pipeline": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pipeline.mjs",
     "reconcile": "doppler run --project starcaster --config dev --no-check-version -- node scripts/reconcile_clickup_github.cjs",
     "check:css": "node scripts/ui/check_css.mjs",
     "check:render": "node scripts/ui/check_render.mjs",
@@ -92,7 +93,8 @@
     "build:ecosystem": "node scripts/build_ecosystem_diagram.mjs",
     "build:ecosystem-notes": "node scripts/build_ecosystem_notes.mjs",
     "build:ecosystem-html": "node scripts/build_ecosystem_html.mjs",
-    "check:vault-drift": "node scripts/check_vault_drift.cjs"
+    "check:vault-drift": "node scripts/check_vault_drift.cjs",
+    "pulse": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pulse.cjs"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
