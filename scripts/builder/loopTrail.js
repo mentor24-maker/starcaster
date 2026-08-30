@@ -29,6 +29,7 @@
  */
 
 const { findPullRequest, isReviewVerdict, isReviewPassed } = require('./mergeOnComment.js');
+const { bodyNamesTicket } = require('./clickupTicketLink.js');
 
 /** The one shape `mergeOnComment.findPullRequest` will find. */
 function prOpenedComment(prUrl, extra) {
@@ -67,16 +68,18 @@ function prTrailLanded(comments, prNumber) {
 }
 
 /**
- * Does the PR body carry its ClickUp ticket? Accepts the full URL or the
- * bare task id — ClickUp short links and the `app.clickup.com/t/<id>` form
- * both resolve, and an id alone is enough to find the ticket by search.
- * Case-insensitive because ids are quoted in mixed case in the wild.
+ * Does the PR body carry its ClickUp ticket?
+ *
+ * A full `app.clickup.com/t/<id>` link is required. It used to accept a bare
+ * id as well, and that was the one place this command disagreed with the
+ * review gate, which has always required the URL: `ClickUp: 86bbjt18r` passed
+ * here and was then refused by the gate with "the PR body carries no ClickUp
+ * ticket link" (task 86bbmmv7t, finding 2). Both now read the SAME matcher, so
+ * the disagreement cannot come back — the reasoning for settling it on the URL
+ * is in `clickupTicketLink.js`.
  */
 function prBodyCarriesTicket(body, taskId, taskUrl) {
-  const text = String(body || '').toLowerCase();
-  if (!text.trim()) return false;
-  if (taskUrl && text.includes(String(taskUrl).toLowerCase())) return true;
-  return Boolean(taskId) && text.includes(String(taskId).toLowerCase());
+  return bodyNamesTicket(body, taskId, taskUrl);
 }
 
 /**

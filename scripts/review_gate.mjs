@@ -16,6 +16,11 @@
  *
  * Needs `gh` (for the PR) and CLICKUP_API_TOKEN (for the ticket). Without the
  * ClickUp token the answer is CANNOT TELL — never a pass.
+ *
+ * Every message this file prints begins with `gate.GATE_LABEL`, never the word
+ * REVIEW. That is not cosmetic: `mergeOnComment.isReviewVerdict` reads any line
+ * starting with REVIEW as a ticket verdict, so the gate's own output pasted onto
+ * a ticket used to register as a send-back nobody wrote (task 86bbmmv7t).
  */
 
 import { spawnSync } from 'node:child_process';
@@ -120,7 +125,7 @@ async function main() {
   if (!view.ok) {
     // Cannot read the PR at all. Same rule as an unreachable ClickUp: this is
     // a CANNOT TELL, and it is never a pass.
-    const message = `REVIEW GATE CANNOT TELL — could not read PR #${prNumber} from GitHub: ${view.stderr || 'unknown error'}`;
+    const message = `${gate.GATE_LABEL} CANNOT TELL — could not read PR #${prNumber} from GitHub: ${view.stderr || 'unknown error'}`;
     console.error(message);
     annotate('error', message);
     summarize(`### Review gate\n\n\`\`\`\n${message}\n\`\`\``);
@@ -174,6 +179,10 @@ async function main() {
 
   const decision = gate.reviewGateDecision({
     prBody: pr.body,
+    // Which PR this is, so the gate can confirm the ticket the body points at
+    // is actually this PR's own rather than a related one cited above it
+    // (task 86bbmmv7t, finding 1). Without it the answer is CANNOT TELL.
+    prNumber: pr.number,
     headCommittedAt,
     comments,
     clickupError,
@@ -223,7 +232,7 @@ async function main() {
 
 main().catch((err) => {
   // An unexpected crash is a CANNOT TELL too. It must never read as a pass.
-  const message = `REVIEW GATE CANNOT TELL — the gate itself crashed: ${err?.stack || err}`;
+  const message = `${gate.GATE_LABEL} CANNOT TELL — the gate itself crashed: ${err?.stack || err}`;
   console.error(message);
   annotate('error', message);
   process.exit(gate.exitCodeFor(gate.CANNOT_TELL, gate.isEnforcing(process.env.REVIEW_GATE_ENFORCING)));
