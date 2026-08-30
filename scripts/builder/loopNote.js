@@ -13,6 +13,23 @@
  * ways.
  */
 
+const { LOOP_NOTE_MAX, truncateReason } = require('./sendBackRounds.js');
+
+/**
+ * The send-back line (task 86bbmg2tq, 2026-08-25). Until then every send-back
+ * read the same — "returned to the line with notes for the builder" — so a
+ * ticket on its third round was indistinguishable on the board from one being
+ * handed back for the first time. That is the ambiguity Dane spotted from the
+ * UI and the WIP cap spotted by jamming on it. The round comes first and is
+ * never truncated; the reason is one short clause, cut to fit if it has to be,
+ * because the board is a glance and the ticket holds the full story.
+ */
+function sentBackNote({ at, round, reason }) {
+  const clause = String(reason || '').trim() || 'returned to the line with notes for the builder';
+  const shell = `↩ round ${round} —  (${at})`;
+  return `↩ round ${round} — ${truncateReason(clause, LOOP_NOTE_MAX - shell.length)} (${at})`;
+}
+
 /**
  * The stem of the review-claim note, exported because it is not only a
  * wording: the pipeline drain identifies a review pass that is ACTUALLY
@@ -32,7 +49,13 @@ const TRANSITIONS = {
   // running or did it die?" cannot be answered by a time of day alone.
   'review-started': ({ at }) => `${REVIEW_CLAIM_NOTE} — a review pass started ${at}`,
   verified:  ({ at }) => `👀 verified — waiting on Dane to say "merge" (${at})`,
-  'sent-back': ({ at }) => `↩ returned to the line with notes for the builder (${at})`,
+  'sent-back': sentBackNote,
+  // Lane A (task 86bbkw2au). The Loop note is what distinguishes "waiting on
+  // your word" from "merging shortly unless you object" — the ticket stays in
+  // Ready to launch either way, because statuses live on the ClickUp list and
+  // that dialog is hazardous to touch.
+  'auto-merge-armed': ({ deadline }) => `🤖 auto-merge at ${deadline} unless you say stop`,
+  'auto-merge-cancelled': ({ at }) => `✋ auto-merge stopped — back to waiting on your word (${at})`,
   merged:    ({ at }) => `✅ live ${at}`,
   escalated: ({ at }) => `🙋 needs Dane — a question is waiting (${at})`,
 };
@@ -47,7 +70,26 @@ function loopNote(transition, opts = {}) {
   if (transition === 'pr-open' && !opts.pr) {
     throw new Error('loop-note "pr-open" needs a PR number (--pr)');
   }
-  return make({ at: String(opts.at || '').trim() || 'just now', pr: opts.pr });
+  // A deadline is the entire content of this note. Without one it would read
+  // "auto-merge at undefined unless you say stop", which is worse than no note
+  // at all: it tells him something is coming and refuses to say when.
+  if (transition === 'auto-merge-armed' && !opts.deadline) {
+    throw new Error('loop-note "auto-merge-armed" needs a deadline (--deadline)');
+  }
+  // A send-back with no round is the old, ambiguous line coming back. It is
+  // refused rather than defaulted: the round is derived from the ticket's own
+  // comments by the caller, and a derivation that quietly failed must not
+  // render as a note that merely looks a bit less informative.
+  if (transition === 'sent-back' && !(Number(opts.round) > 0)) {
+    throw new Error('loop-note "sent-back" needs the round number (--round), counted from the ticket\'s send-back verdicts');
+  }
+  return make({
+    at: String(opts.at || '').trim() || 'just now',
+    pr: opts.pr,
+    deadline: opts.deadline,
+    round: Number(opts.round),
+    reason: opts.reason,
+  });
 }
 
 /** The once-per-pass heartbeat line for the pinned "Loop heartbeat" ticket. */
