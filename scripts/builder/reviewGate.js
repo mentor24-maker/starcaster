@@ -478,6 +478,33 @@ function reviewGateStaleness({ rollup, comments } = {}) {
 }
 
 /**
+ * The gate the re-run wait polls on, instead of the ordinary check gate.
+ *
+ * WHY THE ONLY PASS-THROUGH IS 'fresh' (found in review, 2026-08-30). A
+ * re-run was just fired, so for a few seconds GitHub's rollup is in flux:
+ * first it still shows the old, settled, stale answer, then it may show NO
+ * review-gate entry at all while the old attempt is swapped for the new one.
+ * Before this ran through one function, the wait hook fell through to the
+ * ordinary gate on 'absent' — and at that instant the other checks are green,
+ * so the PR merged with the re-run's answer never observed. 'absent' means
+ * "no answer to be out of date" before a re-run exists; DURING the wait it
+ * means "cannot see", and cannot-see is never a pass (acceptance criterion 4,
+ * task 86bbmk7pv). So 'stale', 'pending' and 'absent' all keep waiting, and
+ * only a fresh answer hands the question back to the ordinary gate — which is
+ * still the one that decides whether anything may merge.
+ */
+function duringRerunWait({ staleness, gate } = {}) {
+  const state = String((staleness && staleness.state) || '');
+  if (state !== 'fresh') {
+    return {
+      action: 'wait',
+      reason: `the re-run has not produced a fresh review-gate answer yet (${(staleness && staleness.reason) || 'no staleness answer'})`,
+    };
+  }
+  return gate;
+}
+
+/**
  * What the merge step does with the result of waiting on a re-run.
  *
  * Takes the SHAPE `githubGate` already produces, so nothing here re-decides
@@ -485,17 +512,31 @@ function reviewGateStaleness({ rollup, comments } = {}) {
  * one to the refusal path with GitHub's own wording, a conflict to the
  * hand-off.
  *
- * Anything else — the wait ran out, the pass had no wait budget left, the
- * answer was unreadable — is a REFUSAL, never a merge and never a silent
- * wait. Acceptance criterion 4 of task 86bbmk7pv, and the same rule as the
- * gate itself: a re-run whose result nobody saw is not a pass. The refusal is
- * re-decidable, so the next pass merges it on the operator's original word
- * once the re-run has landed.
+ * 'update-branch' is the one answer that is neither a pass nor a failure:
+ * main moved during the ~3 minutes of waiting, so the branch needs catching
+ * up — which the NEXT pass's catch-up path already does, gate re-run
+ * included (the push fires `synchronize`). Before this arm existed, that
+ * race polled out the full wait and then REFUSED with "the re-run did not
+ * clear it" — telling the reader the gate failed when the branch merely
+ * fell behind (found in review, 2026-08-30). It maps to a quiet wait, never
+ * a refusal and never a merge.
+ *
+ * Anything else — the wait ran out, the answer was unreadable — is a
+ * REFUSAL, never a merge and never a silent wait. Acceptance criterion 4 of
+ * task 86bbmk7pv, and the same rule as the gate itself: a re-run whose
+ * result nobody saw is not a pass. The refusal is re-decidable, so the next
+ * pass merges it on the operator's original word once the re-run has landed.
  */
 function afterRerunDecision({ action, reason } = {}) {
   const act = String(action || '');
   if (act === 'merge' || act === 'refuse' || act === 'conflict') {
     return { action: act, reason: reason || '' };
+  }
+  if (act === 'update-branch') {
+    return {
+      action: 'wait',
+      reason: `main moved while waiting on the review-gate re-run (${reason || 'the branch is behind main'}) — the next pass catches the branch up, which re-runs the gate itself`,
+    };
   }
   return {
     action: 'refuse',
@@ -613,6 +654,7 @@ module.exports = {
   findReviewGateRun,
   newestVerdictAt,
   reviewGateStaleness,
+  duringRerunWait,
   afterRerunDecision,
   PASS,
   FAIL,

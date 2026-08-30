@@ -708,6 +708,17 @@ test('still running inside the budget means ask again', () => {
   assert.equal(out.action, 'poll-again');
 });
 
+test('a branch that goes behind during the wait ends the wait — polling cannot catch it up', () => {
+  // BREAK-TEST: delete the update-branch arm of afterCatchUpDecision and this
+  // fails — `assert.equal(out.action, 'update-branch')` reports 'poll-again',
+  // which polls out the full budget and then answers "CI was still running"
+  // about a branch whose CI was fine and had merely fallen behind main
+  // (found in review, 2026-08-30, task 86bbmk7pv).
+  const out = afterCatchUpDecision({ gate: { action: 'update-branch', reason: 'the branch is behind main' }, elapsedMs: 1000 });
+  assert.equal(out.action, 'update-branch');
+  assert.equal(out.reason, 'the branch is behind main');
+});
+
 test('OUT OF BUDGET IS A WAIT, never a merge', () => {
   // The whole safety of this feature. A slow CI run must not become either a
   // failure or an unchecked merge — it must become exactly the outcome the
@@ -795,11 +806,14 @@ test('the relay waits after BOTH catch-up paths, and merges the same way', () =>
   // It must NOT decide mergeability itself. The `gateOf` hook added for the
   // stale-gate re-run narrows when to KEEP WAITING; it can never widen "may
   // merge", because its default is githubGate and the one caller that
-  // overrides it composes with githubGate rather than replacing it.
+  // overrides it composes with githubGate rather than replacing it — through
+  // the pure, tested duringRerunWait, whose only pass-through is a FRESH
+  // answer (an 'absent' mid-swap rollup keeps waiting; reviewGate.test.js
+  // pins that arm by behaviour).
   assert.match(src, /gateOf = githubGate/,
     'the in-pass wait must default to the same gate');
   assert.match(src, /gate: gateOf\(json\)/,
     'the in-pass wait must re-ask the gate it was given, not re-implement it');
-  assert.match(src, /return githubGate\(json\);/,
-    'the stale-gate hook must fall through to githubGate for the actual merge decision');
+  assert.match(src, /reviewGate\.duringRerunWait\(\{\n\s*staleness: reviewGate\.reviewGateStaleness\(\{ rollup: json\.statusCheckRollup, comments \}\),\n\s*gate: githubGate\(json\),/,
+    'the stale-gate hook must route through the tested duringRerunWait, composed with githubGate for the actual merge decision');
 });

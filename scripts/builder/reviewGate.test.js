@@ -792,6 +792,61 @@ test('a re-run that times out or cannot be read refuses the merge', () => {
   assert.equal(gate.afterRerunDecision({ action: 'conflict', reason: 'branch conflicts' }).action, 'conflict');
 });
 
+test('a branch that falls behind during the re-run waits for the next pass, never refuses', () => {
+  // Main moving during the ~3 minutes of the re-run is a normal race, not a
+  // gate failure — the next pass's catch-up path handles it, and the push it
+  // makes re-runs the gate on its own.
+  //
+  // BREAK-TEST: delete the update-branch arm of afterRerunDecision and this
+  // fails — `assert.equal(behind.action, 'wait')` reports 'refuse', which
+  // posts "the re-run did not clear it" onto the ticket about a branch whose
+  // gate was fine and merely needed catching up (found in review, 2026-08-30).
+  const behind = gate.afterRerunDecision({ action: 'update-branch', reason: 'the branch is behind main' });
+  assert.equal(behind.action, 'wait');
+  assert.match(behind.reason, /catches the branch up/);
+});
+
+test('during the re-run wait, only a FRESH answer falls through to the gate', () => {
+  const greenGate = { action: 'merge', reason: 'open, 2 check(s) green, no conflicts' };
+
+  // BREAK-TEST: make duringRerunWait fall through to the gate on 'absent' and
+  // this fails — `assert.equal(absent.action, 'wait')` reports 'merge', which
+  // is the PR merging in the seconds while GitHub swaps the old check run for
+  // the new attempt, the re-run's answer never observed. Before the re-run,
+  // 'absent' means "no gate on this PR"; during the wait it means "cannot
+  // see", and cannot-see is not a pass (found in review, 2026-08-30).
+  const absent = gate.duringRerunWait({
+    staleness: { state: 'absent', reason: 'this PR carries no review-gate check run' },
+    gate: greenGate,
+  });
+  assert.equal(absent.action, 'wait');
+
+  const stale = gate.duringRerunWait({
+    staleness: { state: 'stale', reason: 'it answered a question that has since changed' },
+    gate: greenGate,
+  });
+  assert.equal(stale.action, 'wait');
+
+  const pending = gate.duringRerunWait({
+    staleness: { state: 'pending', reason: 'the review-gate check is still running' },
+    gate: greenGate,
+  });
+  assert.equal(pending.action, 'wait');
+
+  // Fresh hands the question straight back to the ordinary gate, untouched —
+  // this hook narrows "keep waiting" and can never widen "may merge".
+  const fresh = gate.duringRerunWait({
+    staleness: { state: 'fresh', reason: 'newer than the verdict' },
+    gate: greenGate,
+  });
+  assert.deepEqual(fresh, greenGate);
+  const red = gate.duringRerunWait({
+    staleness: { state: 'fresh', reason: 'newer than the verdict' },
+    gate: { action: 'refuse', reason: 'checks are red: review-gate (FAILURE)' },
+  });
+  assert.equal(red.action, 'refuse');
+});
+
 // --- Finding the run at all -------------------------------------------------
 
 test('the run id comes from the run segment of the details URL, not the job', () => {
@@ -869,4 +924,30 @@ test('the merge step checks staleness before merging, and never merges past a st
   const mergeAt = src.indexOf("gh(['pr', 'merge'");
   assert.ok(staleAt !== -1 && mergeAt !== -1 && staleAt < mergeAt,
     'the staleness check must run before the merge command, not after it');
+
+  // ...and BEFORE the red-check refusal, which is the half the first wiring
+  // test could not see (found in review, 2026-08-30). In enforcing mode a
+  // stale gate exits 1 — a RED check — so githubGate answers 'refuse', and a
+  // staleness question asked after the refusal branch is never reached in the
+  // one mode this ticket exists for: the deadlock survives while every test
+  // stays green, because advisory mode (exit 0) still reaches the block.
+  // BREAK-TEST: move the staleness block back below
+  // `if (gate.action === 'refuse')` and this fails —
+  // `assert.ok(staleAt < refuseAt)` reports false.
+  const refuseAt = src.indexOf("if (gate.action === 'refuse')");
+  assert.ok(refuseAt !== -1 && staleAt < refuseAt,
+    'the staleness check must run before the red-check refusal — a stale RED gate is re-run, not refused');
+
+  // The wait budget is a scheduling fact about THIS pass, not about the PR,
+  // so it is asked before a CI run is spent — firing the re-run first meant
+  // paying for a run only to refuse over a purely local limit (found in
+  // review, 2026-08-30).
+  // BREAK-TEST: move the mayWaitInPass ask below `gh(['run', 'rerun'...])`
+  // and this fails — the source between the staleness question and the
+  // re-run no longer contains it.
+  const rerunAt = src.indexOf("gh(['run', 'rerun'");
+  assert.ok(rerunAt !== -1 && staleAt < rerunAt,
+    'the re-run must be reached from the staleness question');
+  assert.match(src.slice(staleAt, rerunAt), /mayWaitInPass\(/,
+    'the wait budget must be checked BEFORE the re-run is fired, not after a CI run is already spent');
 });
