@@ -68,6 +68,9 @@ import loopInterval from './builder/loopInterval.js';
 import branchCatchUp from './builder/branchCatchUp.js';
 import wipCap from './builder/wipCap.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
+import pipelinePause from './builder/pipelinePause.js';
+import pipelinePauseStore from './builder/pipelinePauseStore.js';
+import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
@@ -82,6 +85,10 @@ const {
 } = loopTrail;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
 const { resolveTaskRepo } = taskRepo;
+const {
+  waitingVerdict, verdictFromStatusAlone, renderTicket, exitCodeFor, sweepSummary,
+  operatorSpokeLast, WAITING: V_WAITING, NOT_WAITING: V_NOT_WAITING, CANNOT_TELL: V_CANNOT_TELL,
+} = waitingOnOperator;
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
@@ -101,6 +108,9 @@ const PRIORITY_RANK = { urgent: 1, high: 2, normal: 3, low: 4 };
 const AGENT_RESPONSE_LIST = process.env.CLICKUP_AGENT_RESPONSE_LIST || '901418805125';
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
+// The pipeline pause switch (task 86bbmfc15). Optional: unset, the switch is
+// found by name in the Loop Queue. Set it and every check is a single GET.
+const PAUSE_TASK = process.env.CLICKUP_PAUSE_TASK || '';
 const BUS_RELAY_OPEN_STATUSES = ['pending response', 'responding'];
 // The dedup marker. A threaded reply starting with this exact prefix means
 // "already relayed" — checked by prefix, not just presence-of-any-reply, so
@@ -111,7 +121,7 @@ const { BUS_RELAY_MARKER } = busRelayPlan;
 // The merge path's OWN dedup marker, separate from the relay's on purpose.
 // The relay marks a comment the moment it reaches the bus; the merge path
 // must only mark a comment once it has reached an answer (merged, handed to
-// a human, or refused with a reason on the ticket). "Checks are still
+// an agent session, or refused with a reason on the ticket). "Checks are still
 // running" writes no marker, so the next pass picks the same
 // authorization up instead of losing it.
 //
@@ -177,17 +187,56 @@ function reportLimits(res) {
  * ~100-requests-per-minute allowance, and "it feels like plenty" is not a
  * number anybody can check later. The count grows with the size of the open
  * queue, so it is worth re-reading whenever the interval is shortened again.
+ *
+ * Counted where the ATTEMPT is made, not where it succeeds: a request that
+ * fails to connect still spent whatever the attempt costs, and for a budget
+ * you would rather over-count than under-count.
  */
 let requestCount = 0;
 
+/**
+ * A response-shaped stand-in for a request that never reached ClickUp at all
+ * — DNS failure, a TLS reset, this machine offline, a connection timeout.
+ *
+ * WHY THIS EXISTS (2026-08-25, task 86bbm4zwd, review round 2). `fetch`
+ * REJECTS on a transport failure rather than resolving with a non-ok
+ * response, and nothing here caught it. The rejection travelled up through
+ * `fetchAllTasks` to a top-level `await` with no handler, so the process died
+ * with a stack trace and exit 1 — and `loop-build` reads exit 1 as "could not
+ * tell, so proceed, unbounded by the cap". A routine network blip therefore
+ * UNCAPPED the loop: the same inverted safety property the `fatal:false` fix
+ * closed for HTTP errors, reached through a different door.
+ *
+ * Returning `res.ok === false` rather than throwing means every caller's
+ * EXISTING failure path handles it — `die()` prints it, `fatal:false` falls
+ * back to the stricter counting — and no caller has to know that `fetch` can
+ * throw. That is the point: the next call site added here inherits the fix
+ * instead of having to remember it.
+ */
+function unreachable(err) {
+  return {
+    res: { ok: false, status: 0, headers: { get: () => null } },
+    json: null,
+    text: `the request never reached ClickUp (${err?.message || err})`,
+  };
+}
+
 async function call(method, path, body) {
   requestCount += 1;
-  const res = await fetch(`https://api.clickup.com${path}`, {
-    method,
-    headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
+  let res;
+  try {
+    res = await fetch(`https://api.clickup.com${path}`, {
+      method,
+      headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    return unreachable(err);
+  }
+  let text;
+  // The body can fail mid-stream after a perfectly good set of headers — a
+  // dropped connection reads as a rejection here, not at the line above.
+  try { text = await res.text(); } catch (err) { return unreachable(err); }
   let json = null;
   try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
   return { res, json, text };
@@ -216,6 +265,13 @@ function die(label, { res, json, text }) {
   if (res.status === 429) {
     console.error('\n429 is ClickUp itself throttling, and it clears in under a minute.');
     console.error('This is NOT the connector quota — wait 60s and run the same command again.');
+  }
+  if (res.status === 0) {
+    // Not a ClickUp status at all — unreachable() invents it so a transport
+    // failure travels the same road as an HTTP error instead of throwing.
+    console.error('\nHTTP 0 is not something ClickUp said. The request never left this machine or never');
+    console.error('arrived — DNS, TLS, a dropped connection, or being offline. Nothing was sent, so');
+    console.error('nothing is half-done: check the network and run the same command again.');
   }
   process.exit(1);
 }
@@ -274,11 +330,26 @@ function usage(code = 2) {
   console.error('  describe --task <id> --body-file <file|->  REPLACE the task description — the left column, where the');
   console.error('                                             long detail belongs. Verified by reading it back.');
   console.error('  ask --task <id> --body-file <file|-> [--status "Needs your input"|"Ready to launch"] [--no-move]');
-  console.error('                                             hand the ticket to the operator: post an operator card, then');
+  console.error('      [--after-his-answer]                   hand the ticket to the operator: post an operator card, then');
   console.error('                                             move the status (he is auto-assigned). --no-move posts the');
   console.error('                                             card and leaves the status alone. The card body uses');
   console.error(`                                             @@ASKED / @@WHEN / @@CONTEXT / @@NEEDED; @@CONTEXT must be`);
-  console.error(`                                             ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words. Checked before anything is sent.`);
+  console.error(`                                             ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words. An ask that SPENDS MONEY or cannot be undone`);
+  console.error('                                             also needs @@EVIDENCE: the command, its real output, and');
+  console.error('                                             a "@@MEASURED 8:04pm" line saying when you ran it — the');
+  console.error('                                             only clock that dates the card. Checked before it is sent.');
+  console.error('                                             REFUSES if his own comment is the newest one on the ticket —');
+  console.error('                                             handing it back then asks him to answer twice. The same');
+  console.error('                                             refusal stands on `status --no-card`, the other door into his');
+  console.error('                                             lane. --after-his-answer overrides it, on the record, when it');
+  console.error('                                             genuinely is a NEW question.');
+  console.error('  waiting [--task <id>]                     is anything ACTUALLY waiting on Dane? Live reads only.');
+  console.error('                                             With --task: status, assignee, newest-comment author, verdict.');
+  console.error('                                             With no arguments: every open ticket in Agent Response + the');
+  console.error('                                             Loop Queue, listing only the ones waiting on him, newest first.');
+  console.error('                                             exit 0 = nothing of his, 3 = something IS his, 1 = could not tell.');
+  console.error('                                             READ-ONLY — it never writes. NO AGENT SAYS SOMETHING IS WAITING');
+  console.error('                                             ON DANE WITHOUT RUNNING THIS FIRST (task 86bbk34x7).');
   console.error('  lists --space <id>                         every list in a space, with ids (a space id is NOT a list id)');
   console.error('  bus-relay [--list <id>] [--channel <id>] [--statuses "a,b"] [--dry-run] [--no-merge]');
   console.error('                                             relay the operator\'s new comments on open tasks to the bus.');
@@ -288,7 +359,7 @@ function usage(code = 2) {
   console.error(`                                             a merge command (${MERGE_PHRASES.join(' / ')}) from the`);
   console.error('                                             operator MERGES the PR — but only if loop-review passed it,');
   console.error('                                             the PR is open, green and conflict-free; then the ticket goes');
-  console.error('                                             Live. Conflicts are handed to a human, never resolved here.');
+  console.error('                                             Live. Conflicts go to an agent session, never resolved here.');
   console.error('                                             --list/--statuses = that one list, notify-only and no merging;');
   console.error('                                             --no-merge disables merging everywhere; --dry-run reads GitHub');
   console.error('                                             and ClickUp and prints the decision, writing nothing at all;');
@@ -312,14 +383,35 @@ if (!TOKEN) {
 
 /** Every page of a list's open tasks. The endpoint caps at 100 per page and
  *  a first-page-only read silently starves everything past it (DOCTRINE 5.12). */
-async function fetchAllTasks(list, { soft = false } = {}) {
+async function fetchAllTasks(list, { includeClosed = false, fatal = true } = {}) {
+  // includeClosed: ClickUp's v2 list endpoint DROPS closed-type statuses by
+  // default, so `Live` tickets are invisible without it — 36 tasks come back
+  // where 66 Live ones exist (measured 2026-08-25). Opt-in rather than global:
+  // the `queue` command wants only open work, and flipping it there would put
+  // 66 shipped tickets in front of the loop.
+  //
+  // fatal:false — die() ends in process.exit(1), so a caller that WANTS to
+  // handle a failed read cannot: its try/catch never runs and loop-build reads
+  // exit 1 as "proceed, unbounded by the cap". That inverted the wip-check
+  // safety property outright (task 86bbm4zwd, review round 1).
   const tasks = [];
+  const closedParam = includeClosed ? '&include_closed=true' : '';
   for (let page = 0; page < 50; page++) {
-    const out = await call('GET', `/api/v2/list/${list}/task?archived=false&page=${page}`);
-    // `soft`: throw instead of exiting, for a caller that has its own answer
-    // to an unreadable list (next-interval must exit 0 with the fallback).
-    if (!out.res.ok && soft) throw new Error(`ClickUp returned HTTP ${out.res.status} on page ${page}`);
-    if (!out.res.ok) die('list tasks', out);
+    const out = await call('GET', `/api/v2/list/${list}/task?archived=false${closedParam}&page=${page}`);
+    if (!out.res.ok) {
+      if (!fatal) return { tasks: null, res: out.res, failed: `HTTP ${out.res.status}` };
+      die('list tasks', out);
+    }
+    // A 200 carrying a body that is not the expected JSON — a proxy's error
+    // page, a truncated response — left `out.json` null, and spreading
+    // `null.tasks` threw exactly like the transport failure above did, past
+    // the fatal:false contract and out to exit 1 (review round 2).
+    // `listTasks` in clickup.cjs has always guarded this; this did not.
+    if (!out.json || !Array.isArray(out.json.tasks)) {
+      const why = 'the response body was not the expected JSON';
+      if (!fatal) return { tasks: null, res: out.res, failed: why };
+      die(`list tasks (${why})`, out);
+    }
     tasks.push(...out.json.tasks);
     if (out.json.last_page !== false || out.json.tasks.length === 0) {
       return { tasks, res: out.res };
@@ -654,7 +746,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
 
   // A script never resolves a merge conflict (task 86bbjd5nn, binding). What
   // it must NOT also do is eat the authorization on the way past: resolving
-  // the branch is a job for a person, saying "merge" a second time afterwards
+  // the branch is a job for an agent session, saying "merge" a second time afterwards
   // is not (task 86bbk0g4u). The marker written here is re-decidable, so the
   // pass that runs after someone fixes the branch merges it on his original
   // word — which is what the comment promised all along.
@@ -769,7 +861,7 @@ async function readyToLaunchRefused(task, status) {
     console.error('Nothing was moved. Try again, or pass --operator-asked if you have checked by eye.\n');
     return true;
   }
-  const gate = readyToLaunchGate(out.json.comments || []);
+  const gate = readyToLaunchGate(out.json?.comments || []);
   if (gate.ok) return false;
   console.error(`\n"Ready to launch" is the operator's safe-to-merge signal, and ${gate.why}.\n`);
   console.error('Nothing was moved — the ticket is where you left it.\n');
@@ -779,6 +871,62 @@ async function readyToLaunchRefused(task, status) {
   console.error('To override anyway, add --operator-asked — that flag is your written claim');
   console.error('that a human checked this, visible in the transcript.\n');
   return true;
+}
+
+/**
+ * THE OPERATOR MUST NOT BE ASKED FOR SOMETHING HE HAS ALREADY ANSWERED
+ * (task 86bbk34x7). Moving a ticket into one of his statuses IS the claim that
+ * something is needed from him — so it is checked against the live ticket, by
+ * the same rule `waiting` uses, before anything is written.
+ *
+ * This is the 2026-08-23 failure: he answered `A` on the YouTube worker ticket
+ * and an hour later was asked the same question again. Authorship only — no
+ * reading of intent from his words (the ticket's own non-goal); if his comment
+ * is the newest one, a machine owes the next move.
+ *
+ * IT HAS TO STAND ON BOTH DOORS. `ask` is one way into his lane;
+ * `status --status "Needs your input" --no-card` is the other, and it
+ * auto-assigns him just the same. A guard that covers one of two routes is
+ * worse than none, because it invites the belief that the double-ask is now
+ * impossible — the same lesson `readyToLaunchRefused` above already learned
+ * (task 86bbjt18r). Both callers go through here; `waitingRuleCarried.test.js`
+ * fails if either one loses it.
+ *
+ * Returns null when the caller may proceed, or the exit code it should stop
+ * with (1 = could not read, 2 = refused). Runs BEFORE any write, so a refusal
+ * leaves the ticket exactly where it was.
+ */
+async function alreadyAnsweredRefused(task, status) {
+  if (!OPERATOR_STATUSES.includes(String(status || '').toLowerCase())) return null;
+
+  // --after-his-answer says "yes, I know he just spoke; this is a NEW
+  // question." A real thing to need, and worth saying out loud in the log.
+  if (flag('after-his-answer')) {
+    console.error('Handing this back although he spoke last (--after-his-answer). Recorded in this transcript.');
+    return null;
+  }
+
+  const seen = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!seen.res.ok) {
+    console.error(`\nCould not read the comments on ${task} — HTTP ${seen.res.status}.`);
+    console.error('Refusing to hand this to Dane without knowing whether he has already answered it.');
+    console.error('Nothing has been posted and the status has NOT moved. Try again, or pass');
+    console.error('--after-his-answer if you already know this is a new question.');
+    return 1;
+  }
+  // `call` leaves json null when a 2xx body is not JSON, so the optional chain
+  // is what keeps this refusal a refusal instead of a TypeError at the one
+  // moment it matters.
+  if (operatorSpokeLast(seen.json?.comments || [], { operatorId: OPERATOR_ID })) {
+    console.error(`\nREFUSED — Dane's own comment is the NEWEST one on ${task}, so a machine owes`);
+    console.error('the next move here. Handing it back to him now asks him to answer twice, which');
+    console.error('is exactly what this check exists to stop (task 86bbk34x7, 2026-08-23).');
+    console.error('\nRead what he said:   npm run clickup -- waiting --task ' + task);
+    console.error('If this really is a NEW question, say so on the record:  ... --after-his-answer');
+    console.error('\nNothing was posted and the status has NOT moved.');
+    return 2;
+  }
+  return null;
 }
 
 const cmd = process.argv[2];
@@ -878,7 +1026,9 @@ if (cmd === 'whoami') {
   // nothing here writes to ClickUp — no status, no comment, no Loop note.
   const cap = wipCap.resolveCap(process.env);
   const repoArg = arg('repo') || '';
-  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state'];
+  // `body` carries the ticket link every loop-opened PR must have (pr-opened
+  // refuses without one), which is how a PR is matched to its ticket status.
+  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state,body'];
   if (repoArg) listArgs.push('--repo', repoArg);
 
   const out = gh(listArgs);
@@ -894,7 +1044,57 @@ if (cmd === 'whoami') {
     process.exit(undecided.code);
   }
 
-  const decision = wipCap.wipDecision({ prs, cap });
+  // An open PR only counts when its TICKET says the work is in flight
+  // (task 86bbm4zwd). A ticket sent back to Queued with its PR still open is
+  // rework the loop must be free to claim; counting it deadlocked the build
+  // loop for four hourly passes on 2026-08-25.
+  //
+  // If the queue cannot be read, ticketStatusById stays undefined and
+  // wipDecision falls back to counting every open PR — the older, MORE
+  // restrictive reading. Failing toward the cap costs idle time; failing away
+  // from it costs the churn the cap exists to prevent.
+  //
+  // include_closed:true is REQUIRED here — a zombie PR's ticket is `Live`, and
+  // without it the ticket is simply absent from the map and the PR reports as
+  // "no ticket found", sending the reader after drift that does not exist.
+  //
+  // fatal:false is REQUIRED here — see fetchAllTasks. With the default, a
+  // routine ClickUp 429 exits 1, which loop-build reads as "proceed, uncapped".
+  //
+  // The try/catch below is a LAST RESORT, and it is worth being precise about
+  // what it is and is not (review round 2). `fatal:false` covers a response
+  // that arrived and was not ok. `call()` covers a request that never arrived,
+  // by converting the rejection into a non-ok response. Between them every
+  // known failure already lands in the conservative fallback — this catch
+  // exists only so that a FUTURE change to any of that plumbing still cannot
+  // let an exception out of here, because an unhandled rejection is exit 1 and
+  // loop-build reads exit 1 as "proceed, unbounded by the cap".
+  //
+  // Being a backstop, it is the one layer here no test can isolate: with the
+  // two above it working, nothing reaches it. It also actively HID a bug once
+  // — the JSON guard in fetchAllTasks was break-tested and passed anyway,
+  // because this catch swallowed the TypeError and produced the same exit
+  // code. That is why the tests in wipCapOutage.test.js assert the REASON
+  // reported, not just the exit code: every guard is pinned by wording only it
+  // can produce, so this one cannot mask another one going missing again.
+  let ticketStatusById;
+  let listed = null;
+  try {
+    listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+  } catch (err) {
+    listed = { tasks: null, res: null, failed: String(err?.message || err) };
+  }
+  if (Array.isArray(listed.tasks) && listed.tasks.length) {
+    ticketStatusById = Object.create(null);
+    for (const t of listed.tasks) ticketStatusById[String(t.id)] = t.status?.status ?? '';
+  } else {
+    // Say WHY the stricter reading is in force. "6 open, cap 5" with no
+    // explanation is how the original deadlock stayed invisible for four
+    // passes; the same silence about a failed read would do it again.
+    console.error(`The Loop Queue could not be read (${listed.failed || 'no tasks came back'}), so every open PR is counted.`);
+  }
+
+  const decision = wipCap.wipDecision({ prs, cap, ticketStatusById });
   console.log(decision.message);
   process.exit(decision.code);
 
@@ -973,7 +1173,8 @@ if (cmd === 'whoami') {
   let tasks = null;
   let res = null;
   try {
-    const out = await fetchAllTasks(list, { soft: true });
+    const out = await fetchAllTasks(list, { fatal: false });
+    if (out.failed || !Array.isArray(out.tasks)) throw new Error(`ClickUp list read failed (${out.failed || 'no tasks'})`);
     tasks = out.tasks;
     res = out.res;
     console.error(`  (read ${tasks.length} open task(s) in the list, every page)`);
@@ -1102,11 +1303,13 @@ if (cmd === 'whoami') {
     console.error(`\n"${status}" is a handoff to the operator, not just a status.\n`);
     console.error('Use `ask` instead — it posts the operator card and moves the status together:');
     console.error(`  npm run clickup -- ask --task ${task} --status "${status}" --body-file -\n`);
-    console.error('The card body is four sections, and the check runs before anything is sent:');
+    console.error('The card body is these sections, and the check runs before anything is sent:');
     console.error('  @@ASKED    his own words that caused this ticket, verbatim');
     console.error('  @@WHEN     optional — when and where he said it');
     console.error(`  @@CONTEXT  the problem and the fix in plain English, ${CONTEXT_MIN_WORDS}-${CONTEXT_MAX_WORDS} words`);
-    console.error('  @@NEEDED   the specific ask ("Nothing right now" is fine — say it out loud)\n');
+    console.error('  @@NEEDED   the specific ask ("Nothing right now" is fine — say it out loud)');
+    console.error('  @@EVIDENCE required only when the ask spends money or cannot be undone: the');
+    console.error('             command, its real output, and when you ran it ("measured at 8:04pm")\n');
     console.error('If this really is a status move with no ask attached, pass --no-card. That flag is');
     console.error('your written claim that a card is not owed here, visible in the transcript.\n');
     process.exit(2);
@@ -1116,6 +1319,13 @@ if (cmd === 'whoami') {
   // `status --no-card` is the other door into that status, so the gate has to
   // stand on both (task 86bbjt18r).
   if (await readyToLaunchRefused(task, status)) process.exit(2);
+
+  // And the same reasoning for the already-answered guard (task 86bbk34x7):
+  // `--no-card` walks past the "use `ask` instead" refusal above and still
+  // lands the ticket in his lane with his name auto-assigned to it, so the
+  // double-ask has a route here too unless this stands on both doors.
+  const answeredStop = await alreadyAnsweredRefused(task, status);
+  if (answeredStop !== null) process.exit(answeredStop);
 
   // One read up front: it powers the --if-status claim guard, the
   // clear-assignees list, and the was→now line in the report.
@@ -1630,6 +1840,15 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
 
+  // He must not be asked for something he has already answered (task
+  // 86bbk34x7). The rule and its message live in `alreadyAnsweredRefused`, so
+  // that `status --no-card` — the other door into his lane — enforces exactly
+  // the same thing rather than a copy that can drift.
+  if (!noMove) {
+    const stop = await alreadyAnsweredRefused(task, status);
+    if (stop !== null) process.exit(stop);
+  }
+
   const posted = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: rendered });
   if (!posted.res.ok) die('post the operator card', posted);
   const cardId = String(posted.json.id ?? '');
@@ -1686,6 +1905,126 @@ if (cmd === 'whoami') {
   }
   console.log(`Task ${task}: card ${cardId} posted, "${was}" -> "${now}", assigned: ${assigneeNames(moved.json)}.`);
   reportLimits(moved.res);
+
+} else if (cmd === 'waiting') {
+  // "Is this actually waiting on Dane?" — the whole point is that it is
+  // CHEAPER TO RUN THAN THE CLAIM IS TO REASON ABOUT (task 86bbk34x7). Twice on
+  // 2026-08-23 an agent stated flatly that something was waiting on him while
+  // reading something other than the state — a terminal buffer once, a stale
+  // impression of a list the other time — and he acted on both. The
+  // authoritative answer was one API call away each time.
+  //
+  // Read-only, always. It moves nothing, assigns nobody and comments nowhere:
+  // a command an agent must run before speaking cannot also be a command that
+  // changes what it is describing.
+  const one = arg('task');
+  const operatorId = OPERATOR_ID;
+
+  /** m/d h:mmam local — the register he reads, same as the loop notes. */
+  const whenClock = (ms) => {
+    const d = new Date(Number(ms));
+    if (Number.isNaN(d.getTime())) return '';
+    const clock = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+      .toLowerCase().replace(/\s/g, '');
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${clock}`;
+  };
+
+  if (one) {
+    // One ticket: read both halves in full, even where the status alone would
+    // settle it. It is two requests, and showing the last word is most of the
+    // value — "you answered this an hour ago" is the sentence that was missing.
+    const got = await call('GET', `/api/v2/task/${one}`);
+    if (!got.res.ok) {
+      console.error(`Could not read task ${one} — HTTP ${got.res.status}. Reporting CANNOT TELL rather than guessing.`);
+    }
+    const task = got.res.ok ? got.json : null;
+    const cm = await call('GET', `/api/v2/task/${one}/comment`);
+    if (!cm.res.ok) {
+      console.error(`Could not read the comments on ${one} — HTTP ${cm.res.status}.`);
+    }
+    const comments = cm.res.ok ? (cm.json?.comments || []) : null;
+
+    const result = waitingVerdict({ task, comments }, { operatorId });
+    console.log(renderTicket({ id: one, name: task?.name, result }, { formatWhen: whenClock }));
+    if (task?.url) console.log(`  url:        ${task.url}`);
+    reportLimits(cm.res);
+    process.exit(exitCodeFor(result.verdict));
+  }
+
+  // No arguments: the answer to "what actually needs me?" — a question he
+  // asked five times that evening and got a wrong answer to twice.
+  const watched = [
+    { id: AGENT_RESPONSE_LIST, label: 'Agent Response' },
+    { id: LOOP_QUEUE_LIST, label: 'Loop Queue' },
+  ];
+  const flagged = [];
+  let checked = 0;
+  let readInFull = 0;
+  let lastRes = null;
+
+  for (const w of watched) {
+    // fetchAllTasks pages to the end and dies loudly on a failed read — a
+    // partial sweep must never print as "nothing is waiting on you".
+    const { tasks, res } = await fetchAllTasks(w.id);
+    if (res) lastRes = res;
+    for (const t of tasks) {
+      checked += 1;
+      // A machine status is settled by the status alone (proven against the
+      // full verdict in waitingOnOperator.test.js), so the comment read is
+      // skipped there — otherwise the sweep would spend most of ClickUp's
+      // per-minute allowance confirming things already decided.
+      let result = verdictFromStatusAlone(t, { operatorId });
+      if (!result) {
+        const cm = await call('GET', `/api/v2/task/${t.id}/comment`);
+        readInFull += 1;
+        if (!cm.res.ok) {
+          console.error(`Could not read the comments on ${t.id} — HTTP ${cm.res.status}.`);
+        }
+        result = waitingVerdict(
+          { task: t, comments: cm.res.ok ? (cm.json?.comments || []) : null },
+          { operatorId },
+        );
+        if (cm.res) lastRes = cm.res;
+      }
+      if (result.verdict !== V_NOT_WAITING) {
+        flagged.push({ id: t.id, name: t.name, list: w.label, url: t.url, updated: t.date_updated, result });
+      }
+    }
+  }
+
+  // Newest question first: the most recent comment on the ticket, falling back
+  // to when the ticket itself last moved. The fallback matters — a genuinely
+  // waiting ticket with no comments on it has no lastWord date, and sorting
+  // that to 0 buries the newest thing in the list at the bottom of it.
+  const sortKey = (x) => Number(x.result.facts?.lastWord?.date) || Number(x.updated) || 0;
+  flagged.sort((a, b) => sortKey(b) - sortKey(a));
+
+  const waiting = flagged.filter((x) => x.result.verdict === V_WAITING);
+  const unclear = flagged.filter((x) => x.result.verdict === V_CANNOT_TELL);
+
+  for (const x of waiting) {
+    console.log(renderTicket({ id: x.id, name: `${x.name}  [${x.list}]`, result: x.result }, { formatWhen: whenClock }));
+    if (x.url) console.log(`  url:        ${x.url}`);
+    console.log('');
+  }
+  if (unclear.length) {
+    console.log('--- could NOT be decided — do not assume either way ---');
+    for (const x of unclear) {
+      console.log(renderTicket({ id: x.id, name: `${x.name}  [${x.list}]`, result: x.result }, { formatWhen: whenClock }));
+      if (x.url) console.log(`  url:        ${x.url}`);
+      console.log('');
+    }
+  }
+
+  console.error(sweepSummary({
+    checked,
+    waiting: waiting.length,
+    cannotTell: unclear.length,
+    lists: watched.map((w) => w.label),
+  }));
+  console.error(`  ${readInFull} of them were in his lane and had their comments read in full; the rest were settled by status.`);
+  if (lastRes) reportLimits(lastRes);
+  process.exit(exitCodeFor(flagged.map((x) => x.result.verdict)));
 
 } else if (cmd === 'lists') {
   // Exists because of 2026-08-18: 90146476303 (the Starcaster SPACE) was
@@ -1749,7 +2088,26 @@ if (cmd === 'whoami') {
   // The escape hatch: --no-merge runs the relay exactly as it behaved before
   // 2026-08-21, notify-only everywhere. Nothing depends on it, but a job that
   // can perform a merge should have an off switch that is not "edit the code".
-  const mergingAllowed = !flag('no-merge');
+  const mergeSwitchOn = !flag('no-merge');
+
+  // THE PIPELINE PAUSE SWITCH (task 86bbmfc15). When the operator has taken
+  // the deck, nothing merges — a paused pipeline that still merged would put
+  // new code under him while he is working, which is most of what the pause is
+  // for. Relaying his own words CONTINUES: carrying a message is not claiming
+  // work, and a pause must never swallow the operator's instructions.
+  //
+  // Fails safe. An unreadable switch counts as paused (pipelinePause.js says
+  // why the two costs are not symmetric), so a ClickUp outage stops merging
+  // rather than merging blind.
+  const pauseSwitch = await pipelinePauseStore.readSwitch({ call, list: LOOP_QUEUE_LIST, pauseTaskId: PAUSE_TASK });
+  const pauseState = pipelinePause.pauseVerdict({
+    readable: pauseSwitch.readable,
+    why: pauseSwitch.why,
+    switchFound: pauseSwitch.switchFound,
+    comments: pauseSwitch.comments || [],
+  });
+  if (pauseState.paused) console.error(`\n${pauseState.message}\n`);
+  const mergingAllowed = mergeSwitchOn && !pauseState.paused;
 
   // Scope a pass to ONE ticket. This is how the merge path gets exercised
   // for real without touching anything else: a fixture ticket, a real run,
@@ -1805,7 +2163,7 @@ if (cmd === 'whoami') {
       // weakened.
       let fresh = 0;
       // Merge commands this pass must NOT act on: either terminally acted on
-      // (merged, or handed to a human for a conflict), or unknowable because
+      // (merged, or handed to an agent session for a conflict), or unknowable because
       // the reply read failed. The second case is deliberate — a comment
       // whose history could not be read is a comment that might already have
       // merged its PR, and acting on what you could not check is the failure
@@ -1931,9 +2289,49 @@ if (cmd === 'whoami') {
     }
   }
 
+  // A pause that has outlived its welcome announces itself (task 86bbmfc15,
+  // criterion 5). Two hours of silence, then hourly — because a pause nobody
+  // remembers looks exactly like a pipeline that has broken, and telling those
+  // two apart cost most of 2026-08-25. This relay is the announcer because it
+  // is the one job that already wakes on a timer on the always-on machine.
+  if (pauseState.paused && pauseState.certain && !dryRun) {
+    const trail = pipelinePause.readTrail(pauseSwitch.comments || []);
+    const nag = pipelinePause.nagDecision({
+      paused: true,
+      sinceMs: trail.state?.atMs,
+      lastNagAt: trail.lastNagAt,
+      nowMs: Date.now(),
+    });
+    if (!nag.post) {
+      console.error(`pipeline pause: saying nothing this pass — ${nag.reason}.`);
+    } else {
+      const text = pipelinePause.nagMessage({
+        by: trail.state?.by, why: trail.state?.why, sinceMs: trail.state?.atMs, nowMs: Date.now(),
+      });
+      const chat = await postToBus(channel, text);
+      // One write either way, and it is the marker as well as the fallback
+      // record: on a chat outage the announcement still lands somewhere
+      // durable, and either way the next pass knows it has already spoken.
+      const body = pipelinePause.nagRecord({ node: nodeRoles.thisNode().name, at: new Date().toISOString() })
+        + (chat.ok ? '' : `\n\nThe party line was unavailable (${chat.why}), so this is the record instead:\n\n${text}`);
+      const wrote = await call('POST', `/api/v2/task/${pauseSwitch.task.id}/comment`, { comment_text: body, notify_all: false });
+      if (!wrote.res.ok) {
+        // No marker written, so the next pass tries again rather than losing
+        // the announcement altogether.
+        unchecked.push(`pipeline pause: could not announce (chat ${chat.ok ? 'ok' : chat.why}) and could not record it on the switch (HTTP ${wrote.res.status}) — will retry next pass`);
+      } else if (chat.ok) {
+        console.error('pipeline pause: announced on the party line.');
+      } else {
+        reportBusFailure({ delivered: true, unchecked, busSkipped, line: `pipeline pause: party line unavailable (${chat.why}) — the still-paused notice was recorded on the switch ticket instead` });
+      }
+    }
+  }
+
   const mergeLine = mergingAllowed
-    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to a human, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
-    : ', merging disabled (--no-merge)';
+    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
+    : pauseState.paused
+      ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
+      : ', merging disabled (--no-merge)';
   console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? ' (DRY RUN — nothing was merged, posted or moved)' : ''}`);
   // Its own heading, above the failures and visibly not one of them. A chat
   // outage is worth seeing; it is not worth stopping the pipeline for.
