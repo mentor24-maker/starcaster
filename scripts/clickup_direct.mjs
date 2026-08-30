@@ -117,7 +117,7 @@ const { BUS_RELAY_MARKER } = busRelayPlan;
 // The merge path's OWN dedup marker, separate from the relay's on purpose.
 // The relay marks a comment the moment it reaches the bus; the merge path
 // must only mark a comment once it has reached an answer (merged, handed to
-// a human, or refused with a reason on the ticket). "Checks are still
+// an agent session, or refused with a reason on the ticket). "Checks are still
 // running" writes no marker, so the next pass picks the same
 // authorization up instead of losing it.
 //
@@ -304,7 +304,7 @@ function usage(code = 2) {
   console.error(`                                             a merge command (${MERGE_PHRASES.join(' / ')}) from the`);
   console.error('                                             operator MERGES the PR — but only if loop-review passed it,');
   console.error('                                             the PR is open, green and conflict-free; then the ticket goes');
-  console.error('                                             Live. Conflicts are handed to a human, never resolved here.');
+  console.error('                                             Live. Conflicts go to an agent session, never resolved here.');
   console.error('                                             --list/--statuses = that one list, notify-only and no merging;');
   console.error('                                             --no-merge disables merging everywhere; --dry-run reads GitHub');
   console.error('                                             and ClickUp and prints the decision, writing nothing at all;');
@@ -667,7 +667,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, dryRun
 
   // A script never resolves a merge conflict (task 86bbjd5nn, binding). What
   // it must NOT also do is eat the authorization on the way past: resolving
-  // the branch is a job for a person, saying "merge" a second time afterwards
+  // the branch is a job for an agent session, saying "merge" a second time afterwards
   // is not (task 86bbk0g4u). The marker written here is re-decidable, so the
   // pass that runs after someone fixes the branch merges it on his original
   // word — which is what the comment promised all along.
@@ -1917,7 +1917,7 @@ if (cmd === 'whoami') {
       // weakened.
       let fresh = 0;
       // Merge commands this pass must NOT act on: either terminally acted on
-      // (merged, or handed to a human for a conflict), or unknowable because
+      // (merged, or handed to an agent session for a conflict), or unknowable because
       // the reply read failed. The second case is deliberate — a comment
       // whose history could not be read is a comment that might already have
       // merged its PR, and acting on what you could not check is the failure
@@ -2082,7 +2082,7 @@ if (cmd === 'whoami') {
   }
 
   const mergeLine = mergingAllowed
-    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to a human, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
+    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
     : pauseState.paused
       ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
       : ', merging disabled (--no-merge)';
