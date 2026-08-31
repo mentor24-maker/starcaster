@@ -79,6 +79,7 @@ import { diffSavedSectionOverwrite } from "@/lib/saved-section-diff";
 import {
   applySavedSectionName,
   describeSavedSectionRename,
+  pushedSectionContent,
   relinkPushedSection,
   resolveSharedSectionTitle,
   savedSectionNameAfterPush
@@ -288,9 +289,18 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     if (!sectionSaveChoice) return null;
     const section = draft.layoutSections.find((candidate) => candidate.id === sectionSaveChoice.sectionId);
     if (!section) return null;
-    // The same content `overwriteCanonicalFromSection` sends to the PATCH.
-    return diffSavedSectionOverwrite(pages, sectionSaveChoice.savedSectionId, getSectionContent(section));
-  }, [sectionSaveChoice, draft.layoutSections, pages]);
+    // The same content `overwriteCanonicalFromSection` sends to the PATCH —
+    // INCLUDING the name it stamps on the way, which is why this goes through
+    // the one shared expression rather than restating it. Previewing the raw
+    // content was correct until this branch made the push carry a name, and
+    // then it began describing a write that no longer happens: an untitled
+    // copy pushed over a master called "2a - Header" previewed
+    // `Section title "2a - Header" -> "empty"` and listed every OTHER follower
+    // as changing, while the write stamps "2a - Header" and leaves them alone.
+    // The dialog named the wrong pages, which is the one thing it exists to do.
+    const proposed = pushedSectionContent(getSectionContent(section), sectionSaveChoiceMaster?.name);
+    return diffSavedSectionOverwrite(pages, sectionSaveChoice.savedSectionId, proposed);
+  }, [sectionSaveChoice, sectionSaveChoiceMaster, draft.layoutSections, pages]);
   /**
    * Which following pages this overwrite will SKIP rather than rewrite —
    * a copy already hand-edited on its own page, measured against the
@@ -981,8 +991,14 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          // ONE name, from the very first write. Posting the raw section here
+          // created the row with `name` and `section.title` already disagreeing
+          // — the exact divergence this file's header describes — whenever the
+          // prompt was answered with anything but the default it offers. It hid
+          // behind `resolveSharedSectionTitle` reconciling the card on read, and
+          // came back the first time a page's copy was pushed back up.
           name,
-          section
+          section: applySavedSectionName(section, name)
         })
       });
       const data = await readAdminJson<{ savedSection?: BuilderSavedSectionRecord; error?: string }>(response, "Failed to save section.");
@@ -1078,7 +1094,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         const response = await builderAdminFetch("/api/admin/saved-sections", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, section: getSectionContent(section) })
+          // Stamped, for the same reason as the create path above: a section
+          // born here is named by a prompt, and an unstamped row starts life
+          // with two names.
+          body: JSON.stringify({ name, section: applySavedSectionName(getSectionContent(section), name) })
         });
         const data = await readAdminJson<{ savedSection?: BuilderSavedSectionRecord; error?: string }>(response, "Failed to save section.");
         if (data.savedSection) {

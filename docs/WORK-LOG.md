@@ -1,4 +1,4 @@
-## 2026-08-30 — A saved section has one name, and renaming it now sticks (#454)
+## 2026-08-31 — A saved section has one name, and renaming it now sticks (#454)
 
 You renamed the Delray site header three times and it snapped back three
 times. That was not stubbornness in the interface — the section genuinely had
@@ -34,9 +34,8 @@ rename stayed silent, because it was comparing the wrong two strings: it
 checked the name stamped in the content instead of the name in the list, and
 on exactly those sections those two look identical. It now compares the name
 you can actually see in the list, so the dialog says what it is about to do.
-It also counts only the pages the save will really reach — a page you have
-hand-edited is skipped, and the sentence above it in the same dialog already
-said so, so the two used to give different numbers.
+(That count went one step too far and is corrected in the third round
+below.)
 
 Second thing review caught: after saving a section from a page back to the
 master, that section on the page immediately showed up as *Changed* — as if
@@ -51,6 +50,40 @@ section again" was always supposed to mean.
 Finally, the little "add this saved section under…" list was still labelling
 sections with the old stamped name, so it could offer you a section under a
 different name from the one its own card was showing, one click away.
+
+**A third round, after review.** Fixing the rename put a new wrong sentence
+into the very dialog this whole ticket is about. When you save a section from
+a page back over the master, that dialog lists every page it will change and
+exactly what changes on each — and it was working that list out from the
+section as it sits on your page, while the save itself now stamps the master's
+name on before writing. So it was describing a write that no longer happens.
+On a section with no title of its own it announced that the name was about to
+be wiped off every following page, and named those pages as changing, when in
+truth the name is kept and those pages are untouched. Telling somebody their
+section is about to be renamed to nothing, in the week whose complaint was a
+name behaving unpredictably, is worse than saying nothing. The preview and the
+save are now one and the same thing — worked out once, in one place, so the
+two cannot drift apart again.
+
+The second round had also made the rename warning count only the pages the
+save physically rewrites, skipping any page you had hand-edited. That is the
+right rule for *content* and the wrong one for a *name*: a hand-edited page
+still follows the section, so its card is titled by the master and it renames
+on screen the moment you rename, edits or no edits. Where every page had been
+hand-edited the warning therefore said nothing at all while every card
+changed — the original complaint, one more time. It now counts every page that
+will visibly rename, and says separately how many of them keep their own local
+edits, so the two sentences in that dialog stop disagreeing without either of
+them lying.
+
+Last, creating a saved section was still making one with two names. The name
+comes from a little prompt, and whatever you typed went onto the list entry
+while the section's own content kept whatever title it already had. Answer
+that prompt with anything but the default and the section was born with the
+exact mismatch this ticket exists to remove — invisible at first, because the
+cards now show the master's name either way, and back the moment somebody
+saved a page's copy over it. Both places that create a section now set both
+names together, and a test fails if a third one is ever added that does not.
 ## 2026-08-29 — The CRM Form settings panel was never being checked (#451)
 
 Back on 8/13 you pointed at a module's settings panel and said the column width

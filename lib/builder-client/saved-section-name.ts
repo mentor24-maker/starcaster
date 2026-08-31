@@ -108,6 +108,35 @@ export function savedSectionNameAfterPush(
 }
 
 /**
+ * The content a push FROM a page actually sends to the PATCH.
+ *
+ * One expression, because it has TWO readers and they must never answer
+ * differently: `overwriteCanonicalFromSection` performs the push, and
+ * `sectionSaveDiff` previews it in the confirmation dialog. Previewing the
+ * RAW content was correct until this same fix made the push carry a name —
+ * and then the dialog started describing a write that no longer happens. An
+ * untitled copy pushed over a master called "2a - Header" previewed
+ * `Section title "2a - Header" -> "empty"` and listed every OTHER follower as
+ * changing, while the write stamps "2a - Header" and leaves them untouched.
+ * The dialog named the wrong pages, which is the one thing it exists to do.
+ *
+ * `content` is `getSectionContent(section)` — it keeps `title`, which is why
+ * this takes one object and not two: a signature that took the section AND
+ * its content is a signature where the two can be passed inconsistently.
+ *
+ * By construction this is what `saveSavedSection` stamps when the push hands
+ * it `savedSectionNameAfterPush(section, master.name)`, and
+ * `saved-section-name.test.ts` asserts that the two agree rather than trusting
+ * the sentence.
+ */
+export function pushedSectionContent<T extends TitledSection>(
+  content: T,
+  currentName: string | null | undefined
+): T {
+  return applySavedSectionName(content, savedSectionNameAfterPush(content, currentName));
+}
+
+/**
  * The extra line for the impact dialog when a save also moves the name.
  *
  * Takes the master's CURRENT ROW NAME and the name it is about to carry —
@@ -118,10 +147,20 @@ export function savedSectionNameAfterPush(
  * and stayed silent while the row name went from "2a - Header" to
  * "Menu Banner" — the reported bug again, reached through the other door.
  *
- * `drifted` is the count from `driftedFollowingPages`: those copies are
- * skipped by the fan-out, so they keep their old stamp. Stating the reach
- * without it put two different counts in one dialog, directly under the
- * drift-aware sentence from `describePushImpact`.
+ * THE REACH IS EVERY FOLLOWING PAGE, drifted ones included — and that is the
+ * one place this sentence must NOT copy `describePushImpact` above it. That
+ * one is about CONTENT, which the fan-out really does skip on a drifted copy.
+ * This one is about the NAME ON SCREEN, and the other half of this same fix
+ * decided that separately: a drifted copy is still `canonical: true`, so
+ * `resolveSharedSectionTitle` heads its card with the master's name whatever
+ * stamp its own row holds. It renames the moment the master does, stamp or no
+ * stamp. Subtracting the drifted count — which is what this function did for
+ * one round — made a master whose followers had ALL drifted rename in total
+ * silence, which is the reported symptom over again.
+ *
+ * `drifted` is still taken, and still from `driftedFollowingPages`, but only
+ * to say the honest thing about the stamp: those pages keep their own local
+ * edits. The count in the sentence stays the count of cards that change.
  *
  * `null` when nothing moves or the rename reaches no page — the dialogs
  * already return null in those cases, and a rename nobody else sees is not
@@ -138,13 +177,18 @@ export function describeSavedSectionRename(
   if (!next || previous === next) return null;
 
   const pages = usage?.pages ?? 0;
-  const willRename = Math.max(0, pages - Math.max(0, drifted));
-  if (willRename < 1) return null;
+  if (pages < 1) return null;
 
-  const reach = willRename === 1 ? "1 page" : `${willRename} pages`;
-  return previous
+  const reach = pages === 1 ? "1 page" : `${pages} pages`;
+  const sentence = previous
     ? `This also renames it on ${reach} — they currently show "${previous}", and will show "${next}".`
     : `This also renames it on ${reach}, which will show "${next}".`;
+
+  const keepingLocal = Math.min(Math.max(0, drifted), pages);
+  if (keepingLocal < 1) return sentence;
+  return keepingLocal === 1
+    ? `${sentence} 1 page keeps its own local edits.`
+    : `${sentence} ${keepingLocal} pages keep their own local edits.`;
 }
 
 /** The shape this needs off a stored master — everything else rides along. */

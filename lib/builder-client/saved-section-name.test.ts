@@ -3,12 +3,14 @@ import {
   SAVED_SECTION_NAME_MAX,
   applySavedSectionName,
   describeSavedSectionRename,
+  pushedSectionContent,
   relinkPushedSection,
   resolveSharedSectionTitle,
   savedSectionNameAfterPush,
   savedSectionTitleChanges,
   savedSectionTitleFor,
 } from "./saved-section-name";
+import { readFileSync } from "node:fs";
 import { hasSectionDrifted } from "./section-drift";
 import type { BlockUsage } from "./shared-block-usage";
 
@@ -140,16 +142,36 @@ describe("describeSavedSectionRename", () => {
     expect(notice).toContain('"Menu Banner"');
   });
 
-  it("counts only the pages the fan-out will actually reach", () => {
-    // It sits directly under `describePushImpact`, which subtracts drifted
-    // followers. Reporting the raw page count put two different numbers in the
-    // same dialog.
-    expect(describeSavedSectionRename("old", "new", usage({ pages: 5 }), 2)).toContain("3 pages");
-    expect(describeSavedSectionRename("old", "new", usage({ pages: 2 }), 1)).toContain("1 page");
+  it("counts every following page, DRIFTED INCLUDED, because every card renames", () => {
+    // Round 3, and it reverses round 1 on purpose. Round 1 asked for the
+    // drifted followers to be subtracted, to agree with `describePushImpact`
+    // directly above. That is right about the DATA and wrong about this
+    // SENTENCE: a drifted copy is still `canonical: true`, so
+    // `resolveSharedSectionTitle` heads its card with the master's name
+    // regardless of the stamp it carries. It renames on screen either way.
+    expect(describeSavedSectionRename("old", "new", usage({ pages: 5 }), 2)).toContain("5 pages");
+    expect(describeSavedSectionRename("old", "new", usage({ pages: 2 }), 1)).toContain("2 pages");
   });
 
-  it("says nothing when every follower is drifted, because none is renamed", () => {
-    expect(describeSavedSectionRename("old", "new", usage({ pages: 3 }), 3)).toBeNull();
+  it("SPEAKS UP when every follower is drifted — all three cards still rename", () => {
+    // The case subtracting produced: three followers, all drifted, notice null,
+    // and all three cards renaming the moment the save lands. A rename with no
+    // warning at all is the reported symptom over again.
+    const notice = describeSavedSectionRename("old", "new", usage({ pages: 3 }), 3);
+    expect(notice).not.toBeNull();
+    expect(notice).toContain("3 pages");
+  });
+
+  it("still says which pages keep their own local edits", () => {
+    // The honest half of round 1 survives: the count is the count of cards that
+    // rename, and the stamp is reported separately rather than by shrinking it.
+    expect(describeSavedSectionRename("old", "new", usage({ pages: 5 }), 2)).toContain(
+      "2 pages keep their own local edits"
+    );
+    expect(describeSavedSectionRename("old", "new", usage({ pages: 5 }), 1)).toContain(
+      "1 page keeps its own local edits"
+    );
+    expect(describeSavedSectionRename("old", "new", usage({ pages: 5 }), 0)).not.toContain("local edits");
   });
 
   it("says nothing when the name is not moving", () => {
@@ -327,5 +349,95 @@ describe("a push from a page ends the drift instead of creating it", () => {
     expect(copy.background).not.toBe(master.background);
     expect(copy.modules[0]).not.toBe(master.modules[0]);
     expect(copy.modules[0].settings).not.toBe(master.modules[0].settings);
+  });
+});
+
+describe("pushedSectionContent — the preview and the write must be one thing", () => {
+  // The round-3 send-back, in a suite. The confirmation dialog previewed the
+  // RAW content while the PATCH sent the STAMPED content, so an untitled copy
+  // pushed over a named master told the operator their section's name was
+  // about to be erased on every following page — in the very product whose
+  // complaint that week was a name behaving unpredictably.
+
+  it("stamps the master's name onto an untitled copy, so the preview reports NO title change", () => {
+    // The case the suite never constructed.
+    const content = { title: "", modules: [] };
+    expect(pushedSectionContent(content, "2a - Header").title).toBe("2a - Header");
+  });
+
+  it("carries the page's OWN title up when it has one — that push is a rename", () => {
+    const content = { title: "Menu Banner", modules: [] };
+    expect(pushedSectionContent(content, "2a - Header").title).toBe("Menu Banner");
+  });
+
+  it("is EXACTLY what saveSavedSection stamps, so the two readers cannot diverge", () => {
+    // Not a restatement of the doc comment — the assertion. `saveSavedSection`
+    // writes `applySavedSectionName(content, name)` where the push hands it
+    // `savedSectionNameAfterPush(section, master.name)`. If either side is ever
+    // edited alone, this fails.
+    for (const content of [
+      { title: "", modules: [] },
+      { title: "Menu Banner", modules: [] },
+      { title: "   padded   ", modules: [] },
+      { title: "x".repeat(300), modules: [] },
+    ]) {
+      for (const masterName of ["2a - Header", "", "  spaced  "]) {
+        const whatTheWriteSends = applySavedSectionName(
+          content,
+          savedSectionNameAfterPush(content, masterName)
+        );
+        expect(pushedSectionContent(content, masterName)).toEqual(whatTheWriteSends);
+      }
+    }
+  });
+
+  it("leaves the content alone when there is no name of any kind to stamp", () => {
+    // A master deleted in another tab: no name, no stamp, and above all no
+    // blanked title. Same object back, so nothing counts as a write.
+    const content = { title: "", modules: [] };
+    expect(pushedSectionContent(content, undefined)).toBe(content);
+  });
+});
+
+describe("every create path stamps, including the ones not written yet", () => {
+  /**
+   * A saved section is created by a `window.prompt`, so its name is whatever
+   * was typed — and both POST paths sent the section content unstamped. Answer
+   * that prompt with anything but the default it offers and the row was born
+   * with `name` and `section.title` already disagreeing: the exact divergence
+   * this whole ticket is about, created on the spot. It hid because
+   * `resolveSharedSectionTitle` reconciles the card on read, and came back the
+   * first time somebody pushed a page's copy back up.
+   *
+   * Fixing the two that exist does not stop a third being added, and this is
+   * round three of a ticket whose subject is a section having two names. So
+   * this reads the editor and asserts the RULE rather than the instances.
+   */
+  const source = readFileSync(
+    new URL("../../components/admin-builder-editor.tsx", import.meta.url),
+    "utf8"
+  );
+
+  it("posts no saved section without applySavedSectionName in the body", () => {
+    // Every call to the COLLECTION endpoint, with the request that follows it.
+    // The `${id}` endpoint is a different string and is not matched here; the
+    // list GET is matched and then dropped for not being a POST.
+    const calls = source
+      .split('builderAdminFetch("/api/admin/saved-sections"')
+      .slice(1)
+      // Up to the next fetch, so one call's body can never be read as another's
+      // — and capped, so a trailing call cannot swallow the rest of the file.
+      .map((tail) => tail.split("builderAdminFetch(")[0].slice(0, 2000));
+    const posts = calls.filter((call) => call.includes('method: "POST"'));
+
+    // A guard that cannot find its subject is not a guard: if the endpoint is
+    // renamed or the calls are refactored away, fail loudly rather than pass by
+    // matching nothing.
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    expect(posts.length).toBeGreaterThanOrEqual(2);
+
+    for (const post of posts) {
+      expect(post).toContain("applySavedSectionName(");
+    }
   });
 });
