@@ -1,3 +1,55 @@
+## 2026-08-30 — The review caught a way one client could have read another's permissions (#448)
+
+The safe box for client permissions went in last week (the entry below this
+one). Review then found four problems with it before it went anywhere near a
+client, and one of them was serious enough to be worth understanding, because
+the cause is not in that box at all — it is in a piece of plumbing that sits
+underneath nearly everything.
+
+Every time the app looks up stored records, it adds "…and only this client's"
+to the request. To know whether a particular filing cabinet is even organised
+by client, it asks the database once, early on, and then remembers the answer
+so it does not have to keep asking.
+
+The flaw was in what counted as an answer. If the database replied "no, that
+cabinet isn't organised by client," that is a real answer and remembering it is
+correct. But if the question simply failed to arrive — the database was briefly
+asleep, the connection dropped, the sort of hiccup this setup genuinely has and
+already warns us about — the app treated the silence as though it were the same
+"no." And it remembered that. From then on, until the app next restarted, it
+stopped adding "…and only this client's" to *anything*.
+
+Nothing would have looked wrong. No error, no blank screen, no slowdown — in
+fact the requests get faster and return more. It just quietly starts handing
+back everybody's records instead of one client's. In the box we had just built,
+those records are the permissions clients grant us to post on their own social
+accounts. Rich could have been handed another client's.
+
+It is fixed in two independent places, on purpose, because they fail
+differently. The plumbing now only remembers a real answer; a hiccup means "ask
+again next time," which costs nothing and lets it recover on its own. And
+separately, the permissions box now refuses to run a lookup that has not had
+"…and only this client's" attached to it — it stops and says so rather than
+returning anything. Either fix alone would have closed this hole. Both together
+mean the next piece of code built on that plumbing does not have to know this
+story to be safe, which is the part worth paying for.
+
+The other three problems were smaller and are also fixed: a way that recording
+"this permission stopped working" could have wiped the permission itself
+(unrecoverable — a client only hands it over once); a length limit measured
+against the wrong thing, so an unusually long permission would save and then be
+unreadable; and four fields that noticed a mistake and then stored a blank
+anyway instead of reporting it.
+
+Every fix was checked by deliberately breaking it again and confirming the
+relevant test failed — a test that cannot fail is worse than no test, because
+it tells you it is watching something when it is not.
+
+You applied the database change the same day, and I confirmed against the live
+database that both tables arrived correctly and are organised by client the way
+they must be. The box is real and empty, which is exactly where it should be.
+The next piece — the part that actually talks to Instagram and X — is unblocked.
+
 ## 2026-08-30 — Why the review-gate work sat two hours after you approved it
 
 You said "merge" on the review-gate ticket and it stayed put. None of the reason

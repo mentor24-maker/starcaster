@@ -949,6 +949,82 @@ see the indirect case. To prove the guard bites: add a vitest test that requires
 
 ---
 
+### 5.19 A cache must not remember a failed question as an answer
+
+2026-08-30, found in review of PR #448 (Connections 1/7). `lib/projectScope.js`
+asks each table once whether it has both tenant columns, and remembers the
+answer for the life of the process:
+
+```js
+const probe = await sbQuery({ table, query: 'select=project_id,owner_user_id&limit=1' });
+const supported = probe.ok;          // ← the bug, in one line
+SUPPORT_CACHE.set(tableName, supported);
+```
+
+`probe.ok` is false for two situations that are **not the same fact**:
+
+| What happened | What it means | Cacheable? |
+|---|---|---|
+| 400 naming the column, 404 on the relation | Postgres answered: the columns are not there | Yes — it is a property of the table |
+| 502, cold start, dropped connection | The question never arrived | **No** — it is a property of the moment |
+
+Both were stored as "this table has no tenant columns", permanently. And
+`scopedListQuery`/`scopedIdQuery` respond to that by returning the caller's
+query **with no project filter appended at all** — which is a reasonable
+behaviour for a table that genuinely is not tenant-scoped, and a catastrophic
+one for a table that is. Every scoped read in that process then returned every
+project's rows. On `project_connections` that is one client reading another
+client's decrypted OAuth tokens; review reproduced it with a single simulated
+502.
+
+Note what makes this invisible. There is no error, no empty result, no slow
+query — the unscoped read is *faster* and returns *more* data, and every store
+above it reports `ok: true`. It also cannot be reproduced by running the
+software normally, because the cache is only wrong after a failure that is by
+definition rare and transient. It is a bug that exists exclusively in
+production, exclusively after a hiccup, and exclusively in the direction of
+handing out too much.
+
+**The rule.** A negative cache entry must be justified by an answer, never by
+the absence of one. If a probe can fail for reasons unrelated to the thing
+being probed — and any probe crossing a network can — then a failure must be
+classified before it is stored, and an unclassifiable failure is not stored at
+all. Answering "unknown, ask again next time" costs one extra round trip on the
+next call; answering "no" costs the whole process.
+
+**Fixed at both ends, deliberately** (PR #448), because they fail differently:
+
+1. `supportsProjectColumns` caches only a definitive answer. A transient
+   failure returns false for that one call and re-probes on the next, so the
+   process heals itself.
+2. `lib/projectConnectionsStore.js` refuses to *execute* a query that did not
+   come back scoped — `requireScopedQuery` checks for `project_id.eq.` and
+   returns a 503 rather than run it. The insert path already did this;
+   the read, list and delete paths did not.
+
+The second is the one that matters, and it generalises: **the guard belongs
+where the damage happens, not only where the mistake originates.** Fixing only
+the cache leaves every future caller of `scopedIdQuery` trusting that a
+returned query is a scoped query, which is exactly the assumption that failed
+here. A store handling secrets should verify the filter is present rather than
+assume the helper added it — cheap, local, and it does not depend on anyone
+remembering this incident.
+
+**Prove a fix.** Simulate the transient failure specifically; a missing column
+does not exercise this path, because that failure is correctly cached.
+`scripts/builder/projectConnectionsStore.test.js` does it with a fault switch
+that fails the NEXT probe with a 502 and nothing else — then asserts three
+things: the read is refused, the token appears nowhere in the refusal, and the
+very next call recovers to a correctly scoped 404. Break either end and that
+test fails; both were reverted and watched to fail before the fix was believed.
+
+**Where else this shape lives.** Anything that probes once and remembers.
+`git grep -n "CACHE.set" lib/` is the starting point — the question to ask of
+each is "can this probe fail without telling me anything about the thing I am
+probing?", and if it can, "what does the cached wrong answer authorise?"
+
+---
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
