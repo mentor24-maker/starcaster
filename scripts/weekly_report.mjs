@@ -42,12 +42,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const R = require(path.join(REPO, 'scripts/builder/weeklyReport.js'));
+const { run: runCommand } = require(path.join(REPO, 'scripts/builder/runCommand.js'));
 const { checkRole } = require(path.join(REPO, 'lib/nodeRoles.js'));
 
 const REPORTS_DIR = path.join(REPO, 'docs', 'reports');
@@ -126,18 +126,9 @@ const OUT_JSON = R.dataPathFor(OUT_HTML);
  * where what was actually run is still in scope, rather than in a catch block
  * that only knows something went wrong.
  */
-function run(cmd, args, { cwd = REPO, timeout = 300000, allowFail = false } = {}) {
-  const res = spawnSync(cmd, args, { cwd, timeout, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  const shown = `${cmd} ${args.join(' ')}`;
-  if (res.error) {
-    return { ok: false, reason: `\`${shown}\` could not run (${res.error.message})`, stdout: '', stderr: '' };
-  }
-  if (res.status !== 0 && !allowFail) {
-    const detail = (res.stderr || res.stdout || '').trim().split('\n').slice(0, 2).join(' ').slice(0, 200);
-    return { ok: false, reason: `\`${shown}\` exited ${res.status}${detail ? `: ${detail}` : ''}`, stdout: res.stdout || '', stderr: res.stderr || '' };
-  }
-  return { ok: true, stdout: res.stdout || '', stderr: res.stderr || '', status: res.status };
-}
+// Shelling out lives in its own module so a test can reach it — the reasoning,
+// and the two bugs that paid for it, are written down there.
+const run = (cmd, args, opts = {}) => runCommand(cmd, args, { cwd: REPO, ...opts });
 
 /**
  * A scratch file for a command that only takes `--body-file`, written OUTSIDE
@@ -206,7 +197,7 @@ function gatherMerges() {
   for (const c of commits) {
     const parsed = R.parseMergeSubject(c.subject);
     if (!parsed) continue;
-    const files = run('git', ['show', '--name-only', '--format=', c.sha], { allowFail: true });
+    const files = run('git', ['show', '--name-only', '--format=', c.sha]);
     const paths = files.ok ? files.stdout.split('\n').map((s) => s.trim()).filter(Boolean) : [];
     candidates.push({ number: parsed.number, title: parsed.title, date: c.date, sha: c.sha, paths });
   }
@@ -329,18 +320,28 @@ function gatherDiffstat(mergesFigure, merges) {
 
 function gatherTests() {
   if (flag('no-tests')) return R.notAvailable('skipped with --no-tests on this run');
-  const res = run('npm', ['run', '--silent', 'test:builder'], { timeout: 600000, allowFail: true });
-  if (!res.ok) return R.notAvailable(res.reason);
+  // A FAILING SUITE EXITS NON-ZERO, and that is precisely the run whose numbers
+  // matter most — "1439 pass / 3 fail" is a figure, not an error. So this is the
+  // one caller that reads the output whatever the exit status was, and it says
+  // so right here, rather than through an option that quietly did the same to
+  // every other caller. If the counts are missing, the exit status is the reason.
+  const res = run('npm', ['run', '--silent', 'test:builder'], { timeout: 600000 });
   const text = `${res.stdout}\n${res.stderr}`;
   const pass = /^# pass (\d+)$/m.exec(text);
   const fail = /^# fail (\d+)$/m.exec(text);
-  if (!pass) return R.notAvailable('the test run produced no "# pass" line to read');
+  if (!pass) return R.notAvailable(res.ok ? 'the test run produced no "# pass" line to read' : res.reason);
   return R.ok({ pass: Number(pass[1]), fail: fail ? Number(fail[1]) : 0 });
 }
 
 function gatherCiMedian() {
-  const from = Date.parse(`${WINDOW.from}T00:00:00Z`);
-  const to = Date.parse(`${WINDOW.to}T23:59:59Z`);
+  // LOCAL, not UTC — the same bounds gatherMerges uses. Dropping the `Z` is the
+  // whole fix: every other figure on the page is bounded by the operator's local
+  // day, and at -04:00 a UTC bound here measured a span shifted four hours from
+  // the week the page names. The effect on a median of a few hundred runs is
+  // negligible, which is exactly why it would never have shown up as a wrong
+  // number — but two figures on one page must not mean two different weeks.
+  const from = Date.parse(`${WINDOW.from}T00:00:00`);
+  const to = Date.parse(`${WINDOW.to}T23:59:59`);
   // Ask GitHub for the WINDOW, do not trim a recent slice down to it. A day of
   // slack each side because --created is dated in UTC while the window is the
   // operator's local day; the exact in-or-out decision is made below, on the
@@ -483,12 +484,12 @@ function publish(reportPath, jsonPath, indexPath) {
   // as it found it, on whatever branch it was on, with whatever uncommitted
   // work was in it.
   const tmp = path.join(REPO, '.git', 'weekly-report-publish');
-  run('git', ['worktree', 'remove', '--force', tmp], { allowFail: true });
+  run('git', ['worktree', 'remove', '--force', tmp]); // may not exist yet; nothing to report
 
   const fail = (reason) => {
     bus(`Weekly report could not publish: ${reason}`);
     console.error(`\nPublishing stopped: ${reason}`);
-    run('git', ['worktree', 'remove', '--force', tmp], { allowFail: true });
+    run('git', ['worktree', 'remove', '--force', tmp]); // best effort on the way out
     return { published: false, reason };
   };
 
@@ -553,7 +554,15 @@ is estimated, and only pull requests GitHub reports as MERGED are counted.
       bus(`Weekly report pushed its branch but could not open a PR: ${pr.reason}`);
       return { published: false, reason: pr.reason };
     }
+    // gh normally prints the PR url and nothing else, but `.pop()` on an empty
+    // list is `undefined`, and `undefined` interpolates into a ticket body as the
+    // WORD "undefined" — a narrative ticket pointing at nothing, filed and
+    // looking fine. A PR we cannot name is a publish that did not finish.
     const url = pr.stdout.trim().split('\n').filter((l) => l.startsWith('http')).pop();
+    if (!url) {
+      return fail('gh reported success creating the pull request but printed no URL, '
+        + 'so there is nothing to point the narrative ticket at');
+    }
     console.error(`\nPull request: ${url}`);
 
     fileNarrativeTicket(url, rel(reportPath), rel(jsonPath));
@@ -561,7 +570,7 @@ is estimated, and only pull requests GitHub reports as MERGED are counted.
   } finally {
     // Always. A worktree left behind turns next Monday's run into a confusing
     // "already exists" failure rather than a report.
-    run('git', ['worktree', 'remove', '--force', tmp], { allowFail: true });
+    run('git', ['worktree', 'remove', '--force', tmp]); // best effort on the way out
   }
 }
 
@@ -617,7 +626,7 @@ function bus(message) {
   let scratch = null;
   try {
     scratch = scratchFile('bus.md', `[CC-starcaster] ${message}`);
-    const res = run('npm', ['run', '--silent', 'clickup', '--', 'chat', '--channel', BUS_CHANNEL, '--body-file', scratch.path], { timeout: 120000, allowFail: true });
+    const res = run('npm', ['run', '--silent', 'clickup', '--', 'chat', '--channel', BUS_CHANNEL, '--body-file', scratch.path], { timeout: 120000 });
     if (!res.ok) console.error(`(could not reach the bus either: ${res.reason})`);
   } catch (err) {
     console.error(`(could not reach the bus either: ${err.message})`);
@@ -717,9 +726,34 @@ if (unread.length) {
   for (const [name, f] of unread) process.stderr.write(`  ${name}: ${f.reason}\n`);
 }
 
-if (flag('publish')) publish(OUT_HTML, OUT_JSON, indexPath || path.join(REPORTS_DIR, 'index.html'));
-
-// Exit 0 even with unreadable figures. A report that says "not available" IS a
+// EXIT 0 EVEN WITH UNREADABLE FIGURES. A report that says "not available" IS a
 // successful run — the honesty rule only works if the honest outcome is not
 // also treated as a failure.
+//
+// A FAILED PUBLISH IS A DIFFERENT THING and does not get that grace. It is not
+// an honest gap in a report that exists; it is no report at all. launchd and
+// anything watching exit codes would otherwise record a clean Monday for a week
+// that produced nothing, which is the same silence this whole script is written
+// against. "Nothing to publish" is not a failure — an edition identical to the
+// one already on main is the correct outcome of a quiet week.
+if (flag('publish')) {
+  const result = publish(OUT_HTML, OUT_JSON, indexPath || path.join(REPORTS_DIR, 'index.html'));
+  if (!result.published) {
+    // Two of the ways publishing does not happen are not failures, and saying
+    // so is the difference between a monitor that gets read and one that gets
+    // muted:
+    //   'no changes'  — a week identical to the edition already on main.
+    //   the role guard — this machine does not own `weekly-report`. That is a
+    //                    designed decline, so it takes exit 3, the same code
+    //                    `npm run node:owns` uses for "another machine's job".
+    if (result.reason === 'no changes') process.exit(0);
+    if (result.reason === 'other-node' || result.reason === 'unidentified') {
+      process.stderr.write('\nExiting 3: publishing belongs to another machine.\n');
+      process.exit(3);
+    }
+    process.stderr.write(`\nExiting 1: --publish was asked for and did not happen (${result.reason}).\n`);
+    process.exit(1);
+  }
+}
+
 process.exit(0);

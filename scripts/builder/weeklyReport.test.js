@@ -509,6 +509,210 @@ test('the self-update survives the output the job itself leaves behind', () => {
   }
 });
 
+// ── The third door into the self-update deadlock (review pass 3) ───────────
+//
+// The test above proves the wrapper survives its own UNTRACKED output. That is
+// only half of what it leaves behind, and the other half arrives later — which
+// is why it was missed. `writeIndex()` rewrites docs/reports/index.html on
+// every run, and `publish()` COMMITS it. So the first published edition is
+// fine, and from the second one onward index.html is a tracked file with a
+// local modification: `git clean` cannot touch it, `git status --porcelain`
+// reports it forever, and the self-update is skipped permanently and silently —
+// the same deadlock as round 1, through a third door.
+//
+// The fixture difference is one line (`git add` the index before modifying it)
+// and it is the entire point of this test.
+
+test('the self-update survives its own output even once that output is TRACKED', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-report-tracked-'));
+  try {
+    const origin = path.join(tmp, 'origin.git');
+    const work = path.join(tmp, 'work');
+    const other = path.join(tmp, 'other');
+
+    fs.mkdirSync(origin);
+    git(origin, 'init', '--bare', '-b', 'main', '.');
+
+    fs.mkdirSync(work);
+    git(work, 'init', '-b', 'main', '.');
+    git(work, 'remote', 'add', 'origin', origin);
+    fs.writeFileSync(path.join(work, 'README.md'), 'first\n');
+    fs.mkdirSync(path.join(work, 'scripts'), { recursive: true });
+    const wrapper = path.join(work, 'scripts', 'run_weekly_report.sh');
+    fs.copyFileSync(path.resolve(__dirname, '..', 'run_weekly_report.sh'), wrapper);
+    fs.chmodSync(wrapper, 0o755);
+
+    // THE STATE THE SECOND PUBLISHED EDITION RUNS IN: index.html is tracked,
+    // because the first edition's pull request merged and brought it to main.
+    fs.mkdirSync(path.join(work, 'docs', 'reports'), { recursive: true });
+    fs.writeFileSync(path.join(work, 'docs', 'reports', 'index.html'), '<!doctype html>edition one\n');
+    fs.writeFileSync(path.join(work, 'docs', 'reports', '2026-08-25.html'), '<!doctype html>published\n');
+    git(work, 'add', '-A');
+    git(work, 'commit', '-m', 'first, including the first published edition');
+    git(work, 'push', '-u', 'origin', 'main');
+
+    // Upstream moves on, as a merged pull request would.
+    git(tmp, 'clone', '--quiet', origin, other);
+    fs.writeFileSync(path.join(other, 'README.md'), 'second\n');
+    git(other, 'add', '-A');
+    git(other, 'commit', '-m', 'second');
+    git(other, 'push', 'origin', 'main');
+    const wanted = git(other, 'rev-parse', 'HEAD');
+
+    // What run two actually leaves: the index REWRITTEN (tracked, modified) and
+    // a fresh edition beside it (untracked). Only the second kind was handled.
+    fs.writeFileSync(path.join(work, 'docs', 'reports', 'index.html'), '<!doctype html>edition two\n');
+    fs.writeFileSync(path.join(work, 'docs', 'reports', '2026-09-01.html'), 'leftover\n');
+    fs.writeFileSync(path.join(work, 'docs', 'reports', '2026-09-01.data.json'), '{}\n');
+
+    // The control, and it is a sharper one than the test above needs: the dirt
+    // must include a MODIFIED TRACKED file, not just untracked residue. If the
+    // fixture only carried untracked files this test would be a copy of the
+    // previous one and would pass against the broken wrapper.
+    const dirty = spawnSync('git', ['status', '--porcelain'], { cwd: work, encoding: 'utf8' }).stdout;
+    assert.match(dirty, /^ M docs\/reports\/index\.html$/m,
+      'the fixture must reproduce a MODIFIED TRACKED file, or this test proves nothing new');
+
+    const res = spawnSync('bash', [wrapper], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...process.env, WEEKLY_REPORT_UPDATE_ONLY: '1' },
+    });
+    const out = `${res.stdout}\n${res.stderr}`;
+
+    assert.ok(!/update: skipped/.test(out), `the update disabled itself on the second edition:\n${out}`);
+    assert.match(out, /update: checkout is at/, `the update did not run:\n${out}`);
+    assert.equal(git(work, 'rev-parse', 'HEAD'), wanted, 'the checkout did not actually move');
+    assert.match(out, /cleanup: restoring/, 'and it said what it restored, rather than doing it silently');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('restoring tracked files is fenced to main, so it cannot eat a branch\'s work', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-report-fence-'));
+  try {
+    const work = path.join(tmp, 'work');
+    fs.mkdirSync(work);
+    git(work, 'init', '-b', 'main', '.');
+    fs.mkdirSync(path.join(work, 'scripts'), { recursive: true });
+    const wrapper = path.join(work, 'scripts', 'run_weekly_report.sh');
+    fs.copyFileSync(path.resolve(__dirname, '..', 'run_weekly_report.sh'), wrapper);
+    fs.chmodSync(wrapper, 0o755);
+    fs.mkdirSync(path.join(work, 'docs', 'reports'), { recursive: true });
+    fs.writeFileSync(path.join(work, 'docs', 'reports', '2026-08-25.html'), 'the shipped edition\n');
+    git(work, 'add', '-A');
+    git(work, 'commit', '-m', 'first');
+
+    // The narrative pass: a person writing prose onto a report, on a branch, in
+    // its own worktree. Restoring here would throw away exactly the work this
+    // whole script exists to make possible.
+    git(work, 'checkout', '-q', '-b', 'weekly-narrative');
+    fs.writeFileSync(path.join(work, 'docs', 'reports', '2026-08-25.html'), 'the narrative, half written\n');
+
+    const res = spawnSync('bash', [wrapper], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...process.env, WEEKLY_REPORT_UPDATE_ONLY: '1' },
+    });
+
+    assert.equal(
+      fs.readFileSync(path.join(work, 'docs', 'reports', '2026-08-25.html'), 'utf8'),
+      'the narrative, half written\n',
+      'a background job may keep a checkout current; it may not throw away a branch\'s work',
+    );
+    assert.match(`${res.stdout}`, /not main — leaving them alone/,
+      'and it says why it left them, rather than appearing to have done nothing');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ── A failed command is never reported as a success (review pass 3) ─────────
+//
+// `bus()` is the only escalation channel an unattended Monday run has, and its
+// "(could not reach the bus either)" warning was unreachable code: run() was
+// called with allowFail, which set ok:true on ANY non-zero exit. A failed bus
+// post said nothing whatsoever — while the bus was in fact returning HTTP 400
+// in production (ticket 86bbjzg83).
+//
+// The flag is gone, so the trap is gone with it. These pin the behaviour rather
+// than the absence of a word, because "nobody passes allowFail today" is a fact
+// about today.
+
+const { run } = require('./runCommand.js');
+
+test('a command that exits non-zero is never ok, and still hands back its output', () => {
+  const res = run('sh', ['-c', 'echo the-output-still-matters; exit 3']);
+  assert.equal(res.ok, false, 'a non-zero exit is a failure, whatever the caller hoped');
+  assert.equal(res.status, 3, 'and the real exit status survives for a caller that wants it');
+  assert.match(res.reason, /exited 3/, 'the reason names the exit status');
+  assert.match(res.stdout, /the-output-still-matters/,
+    'output is still available — that is what allowFail was for, and it costs nothing to give it away for free');
+});
+
+test('a command that exits 0 is ok', () => {
+  const res = run('sh', ['-c', 'echo fine']);
+  assert.equal(res.ok, true);
+  assert.equal(res.status, 0);
+  assert.match(res.stdout, /fine/);
+});
+
+test('a command that cannot run at all is reported as such, not as empty output', () => {
+  const res = run('this-command-does-not-exist-anywhere', []);
+  assert.equal(res.ok, false);
+  assert.match(res.reason, /could not run|exited/,
+    'a missing binary must not read as a command that ran and said nothing');
+});
+
+test('the report never asks run() to call a failure a success', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const code = src.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
+  assert.ok(!/allowFail/.test(code),
+    'allowFail made every `if (!res.ok)` below it dead code, twice, in two different functions — it does not come back');
+});
+
+test('the bus warning is reachable: bus() checks the result it gets back', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const busFn = src.slice(src.indexOf('function bus('));
+  const body = busFn.slice(0, busFn.indexOf('\n}'));
+  assert.match(body, /if \(!res\.ok\)/, 'a failed bus post is reported');
+  assert.ok(!/allowFail/.test(body), 'and nothing upstream is telling run() to lie about it');
+});
+
+// ── The three smaller round-3 items ────────────────────────────────────────
+
+test('a publish that was asked for and did not happen exits non-zero', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const tail = src.slice(src.indexOf("if (flag('publish'))"));
+  assert.match(tail, /process\.exit\(1\)/,
+    'launchd must not record a clean Monday for a week that produced no report');
+  assert.match(tail, /result\.reason === 'no changes'[\s\S]*process\.exit\(0\)/,
+    'but a week identical to the last edition is a success, not a failure');
+  assert.match(tail, /process\.exit\(3\)/,
+    "and a machine that does not own the role declines with 3, the same code node:owns uses");
+});
+
+test('the narrative ticket can never be filed pointing at the word "undefined"', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const idx = src.indexOf("const url = pr.stdout");
+  assert.ok(idx > 0, 'the PR url is still read off gh here');
+  const after = src.slice(idx, idx + 600);
+  assert.match(after, /if \(!url\)/, 'a missing url is caught');
+  assert.ok(after.indexOf('if (!url)') < after.indexOf('fileNarrativeTicket'),
+    'and it is caught BEFORE the ticket is filed, which is the only ordering that helps');
+});
+
+test('every window on the page means the same week — the CI median is local, like the rest', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const fn = src.slice(src.indexOf('function gatherCiMedian('));
+  const bounds = fn.slice(0, fn.indexOf('const created'));
+  assert.ok(!/T00:00:00Z|T23:59:59Z/.test(bounds),
+    'a UTC bound here measured a span shifted from the local week the page names');
+  assert.match(bounds, /T00:00:00`/, 'the window opens on the local day, as gatherMerges does');
+  assert.match(bounds, /T23:59:59`/, 'and closes on it');
+});
+
 // ── The six defects the second review pass found ───────────────────────────
 //
 // Five of them are one rule broken from five directions, and it is the same

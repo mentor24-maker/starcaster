@@ -18,21 +18,40 @@
 # AND IT HAS TO CLEAN UP AFTER ITSELF FIRST, or it disables itself on run two.
 # The report writes docs/reports/<date>.html, <date>.data.json and index.html
 # into this checkout and leaves them there — publishing copies them into a
-# throwaway worktree, so the originals stay behind, untracked. "Clean tree" then
-# reads false forever: run 1 dirties the checkout, run 2 skips the update, the
-# files never become tracked, so it stays dirty. A deadlock, and a silent one —
-# every log line says "update: skipped", which is what a HEALTHY skip says too.
+# throwaway worktree, so the originals stay behind. "Clean tree" then reads
+# false forever: run 1 dirties the checkout, run 2 skips the update, and it
+# stays dirty. A deadlock, and a silent one — every log line says
+# "update: skipped", which is what a HEALTHY skip says too.
 #
 # That is worse than staleness. The whole reason this update exists is so that
 # moving `weekly-report` to another machine in lib/nodeRoles.js actually reaches
 # this one; with the update dead, ownership could move and the Mini would go on
 # publishing regardless.
 #
-# So: remove the residue this job itself wrote, and nothing else. Untracked
-# files under docs/reports/ are by definition its own output. Doing it BEFORE
-# the fast-forward matters twice over — an untracked docs/reports/2026-08-25.html
-# also makes `git merge --ff-only` refuse outright once that same file lands on
-# main, which is exactly what the first published edition does.
+# THE RESIDUE COMES IN TWO KINDS, AND REMOVING ONLY THE FIRST REOPENS THE
+# DEADLOCK THROUGH A SECOND DOOR.
+#
+#   untracked — docs/reports/<date>.html and <date>.data.json. A new date every
+#               week, so these are never on main when they are written.
+#   TRACKED   — docs/reports/index.html. writeIndex() rewrites it on EVERY run,
+#               and publish() commits it. So from the second published edition
+#               onward it is a tracked file with a local modification, which
+#               `git clean` cannot touch and `git status --porcelain` reports
+#               forever. `git merge --ff-only` would refuse it too, with
+#               "local changes would be overwritten".
+#
+# So the cleanup does both: remove what is untracked, restore what is tracked.
+# Doing it BEFORE the fast-forward matters twice over — leftover output also
+# makes `git merge --ff-only` refuse outright once the same file lands on main,
+# which is exactly what the first published edition does.
+#
+# RESTORING IS DESTRUCTIVE, so it is fenced: only on `main`, and only under
+# docs/reports/. That is this job's own output directory, and `main` in the
+# always-on checkout is the one place nobody hand-edits — it auto-deploys, and
+# the repo blocks edits to it. The narrative pass, which is the only thing that
+# legitimately edits a report by hand, happens on a branch in its own worktree
+# and is never touched by this. Everything restored is named in the log, so a
+# surprise is visible rather than silent.
 
 set -uo pipefail
 
@@ -41,6 +60,8 @@ cd "$REPO" || exit 1
 
 echo "=== weekly-report $(date '+%Y-%m-%d %H:%M:%S') — $REPO"
 
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+
 if [ -d docs/reports ]; then
   residue="$(git ls-files --others --exclude-standard -- docs/reports 2>/dev/null)"
   if [ -n "$residue" ]; then
@@ -48,9 +69,21 @@ if [ -d docs/reports ]; then
     echo "$residue" | sed 's/^/  /'
     git clean -fdq -- docs/reports 2>/dev/null || echo "cleanup: could not remove it; the update below will say so"
   fi
+
+  # The tracked half — index.html, and any edition re-rendered for a date that
+  # has already shipped. Only on main; see the fencing note above.
+  if [ "$branch" = "main" ]; then
+    modified="$(git diff --name-only -- docs/reports 2>/dev/null)"
+    if [ -n "$modified" ]; then
+      echo "cleanup: restoring the last run's own changes to TRACKED files under docs/reports/"
+      echo "$modified" | sed 's/^/  /'
+      git checkout -- docs/reports 2>/dev/null || echo "cleanup: could not restore them; the update below will say so"
+    fi
+  elif [ -n "$(git diff --name-only -- docs/reports 2>/dev/null)" ]; then
+    echo "cleanup: tracked files under docs/reports/ are modified, but this checkout is on '$branch', not main — leaving them alone."
+  fi
 fi
 
-branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
 if [ "$branch" != "main" ]; then
   echo "update: skipped — checkout is on '$branch', not main. Running the code that is here."
 elif [ -n "$(git status --porcelain 2>/dev/null)" ]; then
