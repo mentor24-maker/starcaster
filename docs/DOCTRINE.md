@@ -1027,7 +1027,7 @@ live on Publish", which is a decision, not a cleanup), or select one row in SQL
 and accept that the publish/private filters and the frame resolution then exist
 twice.
 
-### 5.17 A zero-value filter is not "no filter" — it captures `position: fixed`
+### 5.17 A zero-value filter is not "no filter" — it captures `position: fixed` and disables `background-attachment: fixed`
 
 `position: fixed` means "fixed to the browser window" only while **no ancestor
 has a `transform`, `filter`, `perspective`, `backdrop-filter`, `will-change`
@@ -1066,6 +1066,23 @@ declarations the browser KEPT — and it kept this one; the declaration is
 valid, applied, and doing exactly what it says. The fault is a side effect of
 a valid value, which is a different question from the one that harness asks.
 
+**The same capture has a second symptom, and it looks nothing like the
+first.** Those six properties also turn `background-attachment: fixed` into
+plain `scroll`. Nothing is mispositioned and there is no offset to measure —
+the background simply stops being fixed and scrolls with the page. So the
+"walk the ancestors" advice below is right, but the tell that leads you to it
+is absent: you are not looking at something in the wrong place, you are
+looking at an effect that is not happening.
+
+Worse, it is conditional. Whether a themed column carries a filter decides
+whether a fixed background works, so the same page can be correct under one
+theme and dead under another, with no diff between them.
+
+This is why parallax is a scroll-driven layer here and not the one-line CSS
+version (2026-08-31, 86bbqazxv / PR #481). `docs/VIDEO_BACKGROUNDS.md`,
+under "`background-attachment: fixed` was considered and rejected", carries
+the worked example — and the iOS Safari half of the reason.
+
 **Do this:**
 
 - Never emit a filter, transform or backdrop-filter for a zero setting. Emit
@@ -1075,6 +1092,10 @@ a valid value, which is a different question from the one that harness asks.
 - When a fixed element lands somewhere unexplainable, walk its ancestors for
   those six properties before doubting your own arithmetic. If the offset
   equals some ancestor's origin, that ancestor is the containing block.
+- When a fixed BACKGROUND is not fixed — it scrolls like an ordinary one —
+  walk the same six properties. There is no offset to compare here, so check
+  the ancestors first rather than last; it is the likeliest cause and the
+  cheapest to rule out.
 - Positioning bugs are measured, not eyeballed: read
   `getBoundingClientRect()` against the window centre and compare numbers.
   Both halves of this one were found that way and neither was obvious on
