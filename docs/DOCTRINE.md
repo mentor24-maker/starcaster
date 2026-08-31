@@ -268,6 +268,39 @@ human eye is the only gate that exists"*, *"only a HUMAN exports a token by
 hand"*, *"an Urgent flag is a human override"*. The test is not the word, it is
 the referent — replace it only where the actor is genuinely an agent session.
 
+### 2.6 The actor has one source, or two code paths will name two
+
+§2.5 made every hand-off name the actor it waits on. That is necessary and it is
+not sufficient. On 2026-08-30 the merge step named its actor correctly, and a
+second code path in the same pass named a different one.
+
+PR #444 was approved and its branch needed catching up with `main`. The catch-up
+merged cleanly and the **push** lost a race — another session had pushed to the
+same branch seconds earlier, so git rejected it with `fetch first`.
+`branchCatchUp` reported `PUSH_FAILED`; `clickup_direct.mjs` mapped it to
+`kind: 'unknown'`; `mergeOnComment.conflictHandOffNotice` read that, chose the
+actor `later-pass`, and wrote the true sentence — *"It will be merged on the next
+run."* Nothing needed to act.
+
+Then the filing path ran. It files on `gate.action === 'conflict'` alone and
+never reads the local verdict, so it opened a ticket titled *"Resolve the merge
+conflict on PR #444"* — for conflict markers that did not exist; `git merge-tree
+--write-tree` on the two branches exits 0 with a clean tree — and posted a second
+comment naming the build loop as the actor. The two comments landed 200
+milliseconds apart saying different things. The ticket then sat two hours in
+Ready to launch, because a reader believes whichever one they read last, and
+neither named actor was going to move it.
+
+**Do this:** derive the actor once and let every consumer read that one value —
+the notice, the filing decision, the log line. Where two readers exist, a test
+asserts they cannot disagree on the same fixtures, the way the verdict parser
+already guards its own pair. An actor computed twice is two actors.
+
+The tell is a condition that stops short of the value it is deciding about:
+`if (!filed && !dryRun)` asks whether a ticket already exists and whether this is
+a real run, and never asks the one question it is answering — *is there anything
+to resolve?* Closing it is task 86bbq80j5.
+
 ---
 
 ## 3. Designing checks

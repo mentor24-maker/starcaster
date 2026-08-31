@@ -1,3 +1,35 @@
+## 2026-08-30 — Why the review-gate work sat two hours after you approved it
+
+You said "merge" on the review-gate ticket and it stayed put. None of the reason
+was visible from the ticket, so here it is.
+
+Two things were genuinely wrong first, and both were handled correctly. The
+automatic checks were failing for a real reason, so the merge step refused to
+merge — the right call, and it said so quietly each time rather than nagging.
+Another session fixed the failing check and saved its work.
+
+The stall came after that. Before merging anything, the machinery brings the
+branch up to date with the live code. It did, and that update was clean — there
+was never anything to resolve. But in the moment it went to save the result, the
+other session had just saved to the same branch, so its save was rejected. That
+is two things arriving at once, not a disagreement in the work itself, and the
+correct response is simply to try again on the next pass.
+
+It half did that. One part of the machinery understood exactly what had happened
+and posted "it will be merged on the next run." A second part, which never asks
+whether a conflict is real, filed a whole new ticket titled "Resolve the merge
+conflict" — for a conflict that did not exist — and posted that too. So the
+ticket ended up carrying two notices, a fifth of a second apart, saying opposite
+things: one that it would sort itself out, one that a new ticket now owned it.
+Neither came true.
+
+Cleared by hand: bring the branch up to date with today's live code, save it,
+wait for the checks to go green, merge. The real repair — stop filing a conflict
+ticket when there is no conflict — is filed as its own task. The rule the
+incident produced is written down as DOCTRINE §2.6: work out who is waiting
+once, in one place, so two halves of the same pass can never name two different
+actors.
+
 ## 2026-08-29 — A safe place to keep a client's own permissions (#448)
 
 Right now, posting to a client's Instagram or X means somebody pastes that
