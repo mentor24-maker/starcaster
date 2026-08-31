@@ -25,7 +25,17 @@ const ORIGIN_VARS = [
   'CONNECTIONS_OAUTH_ORIGIN', 'PUBLIC_APP_ORIGIN', 'APP_PUBLIC_ORIGIN', 'PUBLIC_BASE_URL', 'VERCEL_URL',
 ];
 
-/** Run `fn` with the named env vars set to exactly `values` and nothing else. */
+/**
+ * Run `fn` with the named env vars set to exactly `values` and nothing else.
+ *
+ * It waits for an async `fn` before restoring. A plain try/finally does NOT:
+ * `finally` fires the instant the promise is created, so the body would run
+ * past its first `await` against the ambient environment while still reading
+ * as though it controlled it. That is a test that cannot fail, which is worse
+ * than no test — and this file is the harness slices 3-7 extend, so the trap
+ * would be inherited. `withFetch` below has always had this shape; withEnv
+ * now matches it.
+ */
 function withEnv(values, fn) {
   const saved = new Map();
   const keys = new Set([...ORIGIN_VARS, ...Object.keys(values)]);
@@ -34,13 +44,25 @@ function withEnv(values, fn) {
     if (Object.prototype.hasOwnProperty.call(values, key)) process.env[key] = values[key];
     else delete process.env[key];
   }
-  try {
-    return fn();
-  } finally {
+  const restore = () => {
     for (const [key, value] of saved) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
+  };
+  try {
+    const out = fn();
+    if (out && typeof out.then === 'function') {
+      return out.then(
+        (result) => { restore(); return result; },
+        (err) => { restore(); throw err; },
+      );
+    }
+    restore();
+    return out;
+  } catch (err) {
+    restore();
+    throw err;
   }
 }
 
@@ -153,6 +175,51 @@ test('the callback origin prefers an explicit pin, then the configured origin', 
   withEnv({ PUBLIC_APP_ORIGIN: 'http://localhost:3001', VERCEL_URL: 'preview.vercel.app' }, () => {
     assert.deepEqual(contract.oauthCallbackOrigin(), { origin: 'http://localhost:3001', source: 'PUBLIC_APP_ORIGIN' });
   });
+  // `source` must name the variable that ACTUALLY answered. It used to say
+  // PUBLIC_APP_ORIGIN for all three, which sends whoever is debugging a rejected
+  // redirect to edit a setting nobody set.
+  for (const name of ['PUBLIC_APP_ORIGIN', 'APP_PUBLIC_ORIGIN', 'PUBLIC_BASE_URL']) {
+    withEnv({ [name]: 'https://configured.example/' }, () => {
+      assert.deepEqual(
+        contract.oauthCallbackOrigin(),
+        { origin: 'https://configured.example', source: name },
+        `oauthCallbackOrigin() must report ${name} as its source when ${name} is what answered`,
+      );
+    });
+  }
+  withEnv({}, () => {
+    assert.deepEqual(contract.oauthCallbackOrigin(), { origin: contract.PRODUCTION_ORIGIN, source: 'pinned' });
+  });
+});
+
+test('withEnv still controls the environment after an await — the harness slices 3-7 inherit', async () => {
+  // This is a test OF the helper, not of the product. It is here because
+  // `withEnv` is how every later slice will pin VERCEL_URL, and the failure it
+  // guards against is silent: a try/finally restores at the first `await`, so an
+  // async body asserts against the ambient environment while reading as though
+  // it had pinned one. Such a test passes whatever the code does.
+  await withEnv({ VERCEL_URL: 'starcaster-git-some-preview-alphire.vercel.app' }, async () => {
+    assert.equal(process.env.VERCEL_URL, 'starcaster-git-some-preview-alphire.vercel.app');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      process.env.VERCEL_URL,
+      'starcaster-git-some-preview-alphire.vercel.app',
+      'withEnv restored the environment before its async body finished',
+    );
+    assert.deepEqual(contract.oauthCallbackOrigin(), { origin: contract.PRODUCTION_ORIGIN, source: 'pinned' });
+  });
+});
+
+test('withEnv restores the environment when its async body rejects', async () => {
+  const before = process.env.VERCEL_URL;
+  await assert.rejects(
+    () => withEnv({ VERCEL_URL: 'preview.vercel.app' }, async () => {
+      await new Promise((resolve) => setImmediate(resolve));
+      throw new Error('boom');
+    }),
+    /boom/,
+  );
+  assert.equal(process.env.VERCEL_URL, before);
 });
 
 test('facebookPage.authorizeUrl builds its redirect from the pinned origin, not the request', () => {
