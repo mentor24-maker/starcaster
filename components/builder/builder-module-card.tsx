@@ -14,6 +14,7 @@ import {
   resolveCarouselFormat
 } from "./builder-carousel-module-settings";
 import { getCarouselImageFrameStyle } from "@/lib/builder-carousel-image-frame";
+import { moduleFollowsMaster, setFollowsMaster } from "@/lib/canonical-follow";
 import {
   createBuilderCardItem,
   parseBuilderCardItems,
@@ -3480,18 +3481,25 @@ export function BuilderModuleCard({
             <span>{module.type}</span>
           </div>
           {module.savedModuleId ? (
-            <button
-              aria-label={module.canonicalLocked ? "Unlock: allow push updates from canonical" : "Lock: block push updates from canonical"}
-              className={`builder-canonical-badge${module.canonicalLocked ? " builder-canonical-badge-locked" : ""}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onUpdateModule((m) => ({ ...m, canonicalLocked: !m.canonicalLocked }));
-              }}
-              title={module.canonicalLocked ? "Custom (push updates blocked) — click to re-link" : "Linked to canonical — click to lock"}
-              type="button"
-            >
-              {module.canonicalLocked ? "Custom" : "Linked"}
-            </button>
+            // Reads every spelling, writes only `canonical` — see
+            // lib/builder-client/canonical-follow.ts and its server twin.
+            (() => {
+              const following = moduleFollowsMaster(module);
+              return (
+                <button
+                  aria-label={following ? "Lock: block push updates from canonical" : "Unlock: allow push updates from canonical"}
+                  className={`builder-canonical-badge${following ? "" : " builder-canonical-badge-locked"}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdateModule((m) => setFollowsMaster(m, !moduleFollowsMaster(m)));
+                  }}
+                  title={following ? "Linked to canonical — click to lock" : "Custom (push updates blocked) — click to re-link"}
+                  type="button"
+                >
+                  {following ? "Linked" : "Custom"}
+                </button>
+              );
+            })()
           ) : null}
         </div>
         {hideHeaderActions ? (
