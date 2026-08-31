@@ -417,6 +417,43 @@ it against what you sent — count and identity, not just "no error". Stop on
 the first mismatch, before the next record is touched, and print the
 restore command. A tool's own log is not evidence about the database.
 
+### 3.12 A guard placed after the refusal it exists to pre-empt is unreachable
+
+The merge step was taught to notice a `review-gate` check that had answered an
+older question and **re-run** it rather than merge on it (task 86bbmk7pv, PR
+#443). The decision logic was pure, tested from nine angles, and correct. It was
+also, in the one mode it was written for, dead code.
+
+The step's first rule is *never merge past a red check*. In enforcing mode a
+stale gate **exits 1** — so it IS a red check, `githubGate` answered `refuse`,
+and the function returned three lines above the staleness question. Ticking the
+branch-protection box would have produced exactly the deadlock the ticket was
+written to prevent.
+
+Two things hid it. The feature ships **advisory first** (exit 0), and in advisory
+mode the stale check reads green, the refusal never fires, and the block is
+reached — so every trial and every test exercised the reachable half. And the
+wiring test asserted only that the staleness call appeared *before the merge
+command*, which stayed true with the code unreachable: it pinned a boundary that
+could not move, so it could not fail.
+
+**Do this:** when a check exists to handle a specific failure state, prove it is
+**reached while the system is in that state** — not merely that it is called
+somewhere before the action. Two questions catch it:
+
+- *What else answers first?* List the branches that return before yours. A guard
+  that interprets a red signal must sit above the rule that refuses on red
+  signals; a stale red means "run it again", and only the re-run's answer is a
+  real refusal.
+- *Which mode did I test?* A feature with an advisory phase and an enforcing
+  phase is two programs. Green in the harmless one is not evidence about the
+  other, and the enforcing path is the one with the consequences.
+
+An ordering test must pin the boundary that can actually move — here,
+*staleness before the red-check refusal*, not *staleness before the merge*.
+Break it on purpose and watch it fail; an assertion that survives the bug it
+names is decoration.
+
 ---
 
 ## 4. Secrets
