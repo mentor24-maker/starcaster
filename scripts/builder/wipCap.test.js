@@ -11,6 +11,7 @@ const {
   resolveCap,
   countOpenPrs,
   wipDecision,
+  probeCap,
   undeterminedDecision,
   ticketIdFromPrBody,
   classifyPrs,
@@ -135,14 +136,27 @@ test('the wip-check command reads only — no ClickUp writes anywhere in it', ()
   const src = fs.readFileSync(path.join(__dirname, '../clickup_direct.mjs'), 'utf8');
   const start = src.indexOf("} else if (cmd === 'wip-check') {");
   assert.ok(start > -1, 'the wip-check command must exist');
-  const end = src.indexOf("} else if (cmd === 'queue') {", start);
+  // Bounded at next-interval, which now follows it. Bounding at `queue` used
+  // to sweep both commands into one "block" and would let a write added to
+  // next-interval pass as if it were wip-check's (task 86bbq8br2).
+  const end = src.indexOf("} else if (cmd === 'next-interval') {", start);
   assert.ok(end > start, 'could not bound the wip-check block');
   const block = src.slice(start, end);
 
   for (const forbidden of ["call('POST'", "call('PUT'", "call('DELETE'", 'stampLoopNote', 'postToBus']) {
     assert.ok(!block.includes(forbidden), `wip-check must not ${forbidden} — it is a read-only check`);
   }
-  assert.match(block, /--state', 'open'/, 'it must ask gh for open PRs only');
+
+  // "Open PRs only" is still the rule; since task 86bbq8br2 it is enforced in
+  // the one shared probe rather than in this block, because both callers need
+  // it and two copies of a rule are how they drifted in the first place.
+  const ps = src.indexOf('function capProbe(');
+  assert.ok(ps > -1, 'capProbe must exist — it is the single cap reading');
+  const probe = src.slice(ps, src.indexOf('\n}\n', ps));
+  assert.match(probe, /'--state', 'open'/, 'it must ask gh for open PRs only');
+  for (const forbidden of ["call('POST'", "call('PUT'", "call('DELETE'"]) {
+    assert.ok(!probe.includes(forbidden), `capProbe must not ${forbidden} — it is a read-only probe`);
+  }
 });
 
 test('the build skill actually consults it before claiming', () => {
@@ -450,4 +464,127 @@ test('the doc does not describe the reconcile scan as newest-PR-only', () => {
     'round 1 replaced newest-only with every-distinct-PR; the doc documented the bug');
   assert.match(para, /any linked PR still open|every distinct PR/i,
     'it must say what the code actually does');
+});
+
+// ── One reading, two callers (2026-08-31, task 86bbq8br2) ─────────────────
+// `wip-check` and `next-interval` answered "is the cap full?" differently:
+// the claim gate said "4 in flight, cap 5 — room to claim another" while the
+// sleep timer wrote "the work-in-progress cap is full" into the log and slept
+// the maximum hour, with 38 tickets claimable. Neither function was wrong;
+// they were two call sites, and only one of them passed ticket statuses.
+
+// Eight open PRs, four of them rework whose tickets went back to `Queued` —
+// the exact shape of the queue on the morning this was found.
+const EIGHT = {
+  prs: [
+    pr(419, 'tq1'), pr(446, 'tq2'), pr(447, 'tq3'), pr(449, 'tq4'),
+    pr(454, 'tf1'), pr(471, 'tf2'), pr(481, 'tf3'), pr(482, 'tf4'),
+  ],
+  statuses: {
+    tq1: 'Queued', tq2: 'Queued', tq3: 'Queued', tq4: 'Queued',
+    tf1: 'In review', tf2: 'Building', tf3: 'In review', tf4: 'Building',
+  },
+};
+
+test('8 open PRs, 4 queued for rework, cap 5 — the cap is NOT reached', async () => {
+  // THE regression. Counting all eight is what made loop-build sleep an hour
+  // after every productive pass.
+  const out = await probeCap({
+    cap: 5,
+    listOpenPrs: async () => EIGHT.prs,
+    readTicketStatuses: async () => EIGHT.statuses,
+  });
+  assert.equal(out.determined, true);
+  assert.equal(out.statusesAvailable, true);
+  assert.equal(out.decision.inFlight, 4, 'the four sent back for rework must not count');
+  assert.equal(out.decision.code, 0, 'code 3 here is the bug: a full cap that is not full');
+  assert.equal(out.decision.claim, true);
+});
+
+test('an unreadable queue still counts every open PR, and says so', async () => {
+  // Criterion 3: the conservative fallback is unchanged, and never silent.
+  const out = await probeCap({
+    cap: 5,
+    listOpenPrs: async () => EIGHT.prs,
+    readTicketStatuses: async () => { throw new Error('HTTP 429'); },
+  });
+  assert.equal(out.determined, true);
+  assert.equal(out.statusesAvailable, false, 'the caller must be able to say statuses were unavailable');
+  assert.match(out.queueFailure, /429/, 'and must be able to say WHY');
+  assert.equal(out.decision.code, 3, 'all eight counted — the stricter reading');
+  assert.match(out.decision.message, /statuses were NOT available/i);
+});
+
+test('an empty queue read is a failed read, not an empty queue', async () => {
+  // `[]` back from ClickUp is never true here — the Loop Queue always has
+  // tickets — so treating it as "no ticket is in flight" would uncap the loop.
+  const out = await probeCap({
+    cap: 5,
+    listOpenPrs: async () => EIGHT.prs,
+    readTicketStatuses: async () => ({}),
+  });
+  assert.equal(out.statusesAvailable, false);
+  assert.equal(out.decision.code, 3, 'must fall back to the strict count, not claim nothing is in flight');
+});
+
+test('an unlistable PR set is UNDETERMINED — neither caller gets to guess here', async () => {
+  const out = await probeCap({
+    cap: 5,
+    listOpenPrs: async () => { throw new Error('gh is not installed'); },
+    readTicketStatuses: async () => EIGHT.statuses,
+  });
+  assert.equal(out.determined, false);
+  assert.equal(out.decision, null, 'no decision at all, so wip-check can fail open and next-interval closed');
+  assert.match(out.why, /gh is not installed/);
+});
+
+test('a PR list with no bodies UNCAPS the loop — which is why the field list is pinned at source', () => {
+  // Worth stating exactly, because it is the opposite of what it looks like.
+  // `--json number,state` omits the body, so classifyPrs matches no PR to a
+  // ticket and all eight land in `unknown` — a bucket that deliberately does
+  // NOT count, so a hand-made PR never caps the loop. The result is that a
+  // body-less list fails OPEN: 0 in flight, claim away.
+  //
+  // (The old next-interval bug was the other one — it passed no statuses at
+  // all, taking the fallback that counts every open PR, and so read as FULL.
+  // Same missing field, opposite failure, depending on whether statuses came
+  // with it. Neither is acceptable, and no runtime assertion can tell a
+  // body-less list from a repo where nobody links tickets — so the guard is
+  // the source test below, which requires 'body' in the one field list there
+  // is.)
+  const g = classifyPrs({
+    prs: EIGHT.prs.map(({ number, state }) => ({ number, state })),
+    ticketStatusById: EIGHT.statuses,
+  });
+  assert.equal(g.inFlight.length, 0);
+  assert.equal(g.unknown.length, 8, 'every PR unmatched — invisible to the cap');
+});
+
+// ── The wiring, pinned at source ─────────────────────────────────────────
+// The bug lived in the call sites, not in this module, so unit tests alone
+// would pass on the broken code. These are the assertions that fail on it.
+
+test('every cap probe goes through capProbe — no command reads the cap its own way', () => {
+  assert.doesNotMatch(CD, /wipCap\.wipDecision\(/,
+    'wipDecision must be reached only through wipCap.probeCap, or the two callers can drift apart again');
+  const probes = CD.match(/await capProbe\(/g) || [];
+  assert.equal(probes.length, 2, 'exactly two callers: wip-check and next-interval');
+});
+
+test('the PR list asks for the body, or every PR counts as having no ticket', () => {
+  // `--json number,state` is what next-interval used, and it is why the cap
+  // read as full: classifyPrs finds a PR's ticket through its body.
+  assert.doesNotMatch(CD, /'--json', 'number,state'/,
+    "a PR list without 'body' makes classifyPrs blind");
+  assert.match(CD, /'--json', 'number,state,body'/);
+  const lists = CD.match(/'pr', 'list'/g) || [];
+  assert.equal(lists.length, 1, 'one place builds the PR list, so the field list cannot diverge');
+});
+
+test('next-interval logs the cap sentence itself, not just its effect', () => {
+  // A disagreement with wip-check took a morning to spot because the interval
+  // log said only "the cap is full". Printing the decision makes the two
+  // comparable at a glance.
+  assert.match(CD, /\(cap: \$\{String\(probe\.decision\.message\)/,
+    'the interval log must quote the same sentence wip-check prints');
 });
