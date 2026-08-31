@@ -78,10 +78,17 @@ export function BuilderBackgroundControls({
   const videoGallery = openVideoPicker ? (
     <BuilderGalleryModal
       isUploading={false}
-      // The picker opens on the Video shelf for the clip and the Image shelf
-      // for the still. It is a starting point, not a lock — the filter bar
-      // still shows it and Clear removes it.
-      initialMediaCategory={openVideoPicker === "clip" ? "Video" : "Image"}
+      /*
+       * FILE KIND, not media category. This was `initialMediaCategory` with
+       * "Video"/"Image" until 2026-08-31, and `mediaCategory` is the topical
+       * category ("Article Banner", "X Post") — nothing in the library carries
+       * "Video" as one. The picker painted the whole gallery and then emptied
+       * itself the moment the filter landed: a flash, then a blank shell.
+       *
+       * Still a starting point, not a lock — the filter bar shows it and
+       * Clear brings the whole library back.
+       */
+      initialKind={openVideoPicker === "clip" ? "video" : "image"}
       onSelectImage={(path) => {
         const url = normalizeBuilderAssetUrl(path);
         onChange((current) =>
