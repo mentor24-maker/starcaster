@@ -215,6 +215,19 @@ export function BuilderBackgroundControls({
           />
         </BuilderSettingRow>
 
+        <BuilderSettingRow label="Loop Fade">
+          <input
+            type="number"
+            min={0}
+            max={5}
+            step={0.1}
+            value={String(background.videoLoopFade ?? 0.6)}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, videoLoopFade: Number(event.target.value) }))
+            }
+          />
+        </BuilderSettingRow>
+
         <BuilderSettingRow label="Start At">
           <input
             type="number"
@@ -287,6 +300,7 @@ export function BuilderBackgroundControls({
 
         <BuilderSettingRow label="" fullWidth>
           <p className="builder-video-background-note">
+            Loop Fade dissolves the clip back into itself instead of cutting; 0 is a hard cut.
             Phones show the poster instead unless Play On Phones is on — a background video is
             megabytes of someone&rsquo;s cell data. Leave both trim boxes at 0 to play the whole clip.
           </p>

@@ -626,6 +626,100 @@ export const RENDER_CONTRACTS = [
   },
 
   {
+    id: 'video-background-crossfade-renders-two-copies',
+    why:
+      'One video cannot dissolve into itself — seeking back to the start is a single ' +
+      'discontinuous jump with nothing to fade into — so the crossfade is TWO elements taking ' +
+      'turns. If the second one stops rendering, the setting is still on, the panel still shows ' +
+      'a fade length, and the loop quietly goes back to the hard cut the operator asked us to ' +
+      'remove. Nothing else would notice.',
+    section: {
+      ...VIDEO_SECTION,
+      background: { ...VIDEO_SECTION.background, videoLoopFade: 0.6 },
+    },
+    selector: 'video[data-builder-video-role="follow"]',
+    read: ['objectFit', 'transitionDuration'],
+    expect(sample) {
+      if (sample.styles.objectFit !== 'cover') {
+        return `the trailing copy is \`object-fit: ${sample.styles.objectFit || 'none'}\`, not cover — ` +
+          'it would crop differently from the leading copy and the dissolve would visibly shift.';
+      }
+      const duration = parseFloat(String(sample.styles.transitionDuration || '0'));
+      if (!(duration > 0)) {
+        return 'the trailing copy has no opacity transition (transition-duration ' +
+          `${sample.styles.transitionDuration || 'none'}) — it would pop in rather than dissolve.`;
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-background-crossfade-actually-dissolves',
+    why:
+      'THE CONTRACT ABOVE PASSES ON A DEAD CROSSFADE. Measured, not feared: with the handoff ' +
+      'disabled so the opaque copy never swaps, both elements still render, both still carry an ' +
+      'opacity transition, and check:render reported 19/19. A transition property is not a ' +
+      'transition — the same shape as the image effects that set a class no stylesheet defined ' +
+      'and stood still for months. What proves a dissolve is two copies BOTH partly visible at ' +
+      'the same instant, which exists only over time, so this watches instead of reading a frame.',
+    section: {
+      ...VIDEO_SECTION,
+      background: {
+        ...VIDEO_SECTION.background,
+        videoLoopFade: 0.6,
+        // A two-second window, so a seam lands inside the sampling run.
+        videoTrimStart: 0,
+        videoTrimEnd: 2,
+      },
+    },
+    selector: 'video[data-builder-video-role="lead"]',
+    series: {
+      count: 45,
+      everyMs: 100,
+      read: ['opacity'],
+      selectors: {
+        lead: 'video[data-builder-video-role="lead"]',
+        follow: 'video[data-builder-video-role="follow"]',
+      },
+    },
+    expect(sample) {
+      const frames = sample.series || [];
+      if (frames.length < 10) {
+        return `only ${frames.length} frame(s) sampled — nothing was watched, so nothing is proven.`;
+      }
+      const partly = (value) => {
+        const o = Number(value);
+        return Number.isFinite(o) && o > 0.05 && o < 0.95;
+      };
+      const dissolving = frames.filter(
+        (f) => f.lead && f.follow && partly(f.lead.opacity) && partly(f.follow.opacity)
+      );
+      if (!dissolving.length) {
+        const seen = [...new Set(frames.map((f) => `${f.lead?.opacity ?? '-'}/${f.follow?.opacity ?? '-'}`))];
+        return 'the two copies were never both partly visible across ' +
+          `${frames.length} frames — the loop is still a hard cut with a transition property on it. ` +
+          `Opacity pairs seen: ${seen.slice(0, 8).join(', ')}.`;
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-background-hard-cut-renders-one-copy',
+    why:
+      'A fade of 0 is the hard cut, and it has to actually cost one element. Rendering the pair ' +
+      'anyway would double the decoding on every background that does not use the dissolve — ' +
+      'invisible on a desktop, and exactly the kind of cost that only shows up on somebody ' +
+      'else\'s phone.',
+    section: {
+      ...VIDEO_SECTION,
+      background: { ...VIDEO_SECTION.background, videoLoopFade: 0 },
+    },
+    selector: 'video[data-builder-video-role="follow"]',
+    absent: true,
+  },
+
+  {
     id: 'row-overlay-tint-actually-paints',
     why:
       'The tint screen was normalized on both sides for months and PAINTED only by the frozen vanilla ' +

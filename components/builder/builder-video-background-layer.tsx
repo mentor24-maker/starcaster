@@ -1,6 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { BackgroundSettings } from "@/lib/builder-template";
-import { builderVideoBackgroundPosition } from "@/lib/builder-template";
+import {
+  builderVideoBackgroundPosition,
+  builderVideoCrossfades,
+  resolveBuilderVideoLoopFade
+} from "@/lib/builder-template";
 
 /**
  * The one video-background layer. Section rows use it today; the page
@@ -91,8 +95,21 @@ export function BuilderVideoBackgroundLayer({
   background,
   surface = "section"
 }: BuilderVideoBackgroundLayerProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  /*
+   * TWO elements, because one video cannot dissolve into itself: seeking back
+   * to the start is a single discontinuous jump with nothing to fade into.
+   * The pair take turns — as the leading copy nears its out point, the
+   * trailing one starts from the in point and fades up over it. Only `videoA`
+   * is rendered when the fade is off, so a hard cut costs exactly what it did
+   * before this existed.
+   */
+  const videoA = useRef<HTMLVideoElement | null>(null);
+  const videoB = useRef<HTMLVideoElement | null>(null);
+  const [leadIsA, setLeadIsA] = useState(true);
   const [isVisible, setIsVisible] = useState(true);
+  // Guards the handoff: `timeupdate` fires many times inside the fade window,
+  // and without this every one of them would restart the dissolve.
+  const handingOff = useRef(false);
 
   const videoUrl = background.videoUrl ?? "";
   const posterUrl = background.posterUrl ?? "";
@@ -103,45 +120,115 @@ export function BuilderVideoBackgroundLayer({
   const blur = background.videoBlur ?? 0;
 
   const playbackAllowed = useVideoPlaybackAllowed(background.videoPlayOnMobile === true);
+  const crossfades = builderVideoCrossfades(background);
 
   /*
    * The native `loop` attribute always restarts at zero, so it is only correct
    * when the clip is untrimmed. With a trim it would jump back past the start
-   * point and play the part the operator cut off — so trimming takes the
-   * manual path below instead, and the attribute stays off.
+   * point and play the part the operator cut off — and in crossfade mode it
+   * would restart the leading copy underneath a dissolve that is already
+   * running. Both cases take the manual path below instead.
    */
   const isTrimmed = trimStart > 0 || trimEnd > 0;
-  const useNativeLoop = shouldLoop && !isTrimmed;
+  const useNativeLoop = shouldLoop && !isTrimmed && !crossfades;
+
+  /** The playing window of whichever element is asking. */
+  const windowFor = useCallback(
+    (video: HTMLVideoElement) => {
+      const end = trimEnd > 0 ? trimEnd : video.duration;
+      return Number.isFinite(end) ? Math.max(0, end - trimStart) : 0;
+    },
+    [trimEnd, trimStart]
+  );
+
+  const startAt = useCallback(
+    (video: HTMLVideoElement | null) => {
+      if (!video) return;
+      video.playbackRate = speed;
+      if (trimStart > 0 || crossfades) {
+        video.currentTime = trimStart;
+      }
+      void video.play().catch(() => {
+        // A refused autoplay is not an error worth surfacing — the poster is
+        // already painted behind this element and reads as intended.
+      });
+    },
+    [crossfades, speed, trimStart]
+  );
 
   // Playback rate is not an attribute. It has to be set on the element, and it
   // is reset by a source change, so it is reapplied whenever either moves.
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.playbackRate = speed;
-  }, [speed, videoUrl, playbackAllowed]);
+    for (const ref of [videoA, videoB]) {
+      if (ref.current) ref.current.playbackRate = speed;
+    }
+  }, [speed, videoUrl, playbackAllowed, crossfades]);
 
-  // Seek to the trim point once the browser knows how long the clip is.
+  // Seek the leading copy to the trim point once the browser knows the length.
   useEffect(() => {
-    const video = videoRef.current;
+    const video = videoA.current;
     if (!video || trimStart <= 0) return;
 
     const seekToStart = () => {
-      if (video.currentTime < trimStart) {
-        video.currentTime = trimStart;
-      }
+      if (video.currentTime < trimStart) video.currentTime = trimStart;
     };
 
-    if (video.readyState >= 1) {
-      seekToStart();
-    }
+    if (video.readyState >= 1) seekToStart();
     video.addEventListener("loadedmetadata", seekToStart);
     return () => video.removeEventListener("loadedmetadata", seekToStart);
   }, [trimStart, videoUrl, playbackAllowed]);
 
-  // The trim window: come back to the start at the out point, or stop there.
+  /*
+   * THE HANDOFF. Watches whichever copy is leading and, one fade-length before
+   * its out point, starts the other from the in point and swaps which one is
+   * opaque. The CSS transition does the dissolve; this only decides when.
+   */
   useEffect(() => {
-    const video = videoRef.current;
+    if (!crossfades || !playbackAllowed) return;
+
+    const lead = leadIsA ? videoA.current : videoB.current;
+    const follower = leadIsA ? videoB.current : videoA.current;
+    if (!lead || !follower) return;
+
+    const onTime = () => {
+      if (handingOff.current) return;
+
+      const end = trimEnd > 0 ? trimEnd : lead.duration;
+      if (!Number.isFinite(end)) return;
+
+      const fade = resolveBuilderVideoLoopFade(background, windowFor(lead));
+      if (fade <= 0) return;
+
+      if (lead.currentTime < end - fade) return;
+
+      handingOff.current = true;
+      startAt(follower);
+      setLeadIsA((current) => !current);
+
+      // Rewind the outgoing copy only AFTER it has finished fading out —
+      // seeking it while it is still visible is the very jump this replaces.
+      window.setTimeout(() => {
+        lead.pause();
+        lead.currentTime = trimStart;
+        handingOff.current = false;
+      }, fade * 1000);
+    };
+
+    lead.addEventListener("timeupdate", onTime);
+    lead.addEventListener("ended", onTime);
+    return () => {
+      lead.removeEventListener("timeupdate", onTime);
+      lead.removeEventListener("ended", onTime);
+    };
+  }, [background, crossfades, leadIsA, playbackAllowed, startAt, trimEnd, trimStart, windowFor]);
+
+  /*
+   * The single-element trim window, for when there is no crossfade: come back
+   * to the start at the out point, or stop there.
+   */
+  useEffect(() => {
+    if (crossfades) return;
+    const video = videoA.current;
     if (!video || !isTrimmed) return;
 
     const enforceWindow = () => {
@@ -150,9 +237,7 @@ export function BuilderVideoBackgroundLayer({
 
       if (shouldLoop) {
         video.currentTime = trimStart;
-        void video.play().catch(() => {
-          // Autoplay can be refused; the poster underneath is the answer.
-        });
+        void video.play().catch(() => {});
       } else {
         video.pause();
       }
@@ -164,15 +249,16 @@ export function BuilderVideoBackgroundLayer({
       video.removeEventListener("timeupdate", enforceWindow);
       video.removeEventListener("ended", enforceWindow);
     };
-  }, [isTrimmed, trimStart, trimEnd, shouldLoop, videoUrl, playbackAllowed]);
+  }, [crossfades, isTrimmed, trimStart, trimEnd, shouldLoop, videoUrl, playbackAllowed]);
 
   /*
    * Pause while off screen. Not a setting and never will be: nobody would turn
    * it off, and decoding video nobody is looking at costs battery on every
-   * device that scrolls past the section.
+   * device that scrolls past the section — twice over, once the clip is
+   * running as a crossfading pair.
    */
   useEffect(() => {
-    const video = videoRef.current;
+    const video = videoA.current;
     if (!video || typeof IntersectionObserver !== "function") return;
 
     const observer = new IntersectionObserver(
@@ -188,48 +274,79 @@ export function BuilderVideoBackgroundLayer({
   }, [videoUrl, playbackAllowed]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    const lead = leadIsA ? videoA.current : videoB.current;
+    if (!lead) return;
 
     if (isVisible) {
-      void video.play().catch(() => {
+      void lead.play().catch(() => {
         // A refused autoplay is not an error worth surfacing — the poster is
         // already painted behind this element and reads as intended.
       });
     } else {
-      video.pause();
+      videoA.current?.pause();
+      videoB.current?.pause();
     }
-  }, [isVisible, videoUrl, playbackAllowed]);
+  }, [isVisible, leadIsA, videoUrl, playbackAllowed]);
 
   // Nothing to play, or not allowed to. Render nothing and let the poster the
-  // surrounding surface already painted stand as the answer.
+  // surrounding surface already painted stand as the answer. The crossfade
+  // does not get an exemption here: two elements nobody may see is worse than
+  // one.
   if (!videoUrl || !playbackAllowed) {
     return null;
   }
 
+  const requestedFade = resolveBuilderVideoLoopFade(background, 0);
+
+  function videoStyle(isLead: boolean) {
+    return {
+      objectPosition: builderVideoBackgroundPosition(background),
+      ...(crossfades
+        ? {
+            opacity: isLead ? 1 : 0,
+            transition: `opacity ${requestedFade}s linear`
+          }
+        : {}),
+      ...(blur > 0
+        ? {
+            filter: `blur(${blur}px)`,
+            transform: `scale(${blurCompensationScale(blur)})`
+          }
+        : {})
+    };
+  }
+
+  const shared = {
+    "aria-hidden": true as const,
+    className: `builder-preview-video-background builder-preview-video-background-${surface}`,
+    loop: useNativeLoop,
+    muted: true,
+    playsInline: true,
+    poster: posterUrl || undefined,
+    preload: "metadata" as const,
+    src: videoUrl,
+    tabIndex: -1
+  };
+
   return (
-    <video
-      aria-hidden="true"
-      autoPlay
-      className={`builder-preview-video-background builder-preview-video-background-${surface}`}
-      data-builder-video-background={surface}
-      loop={useNativeLoop}
-      muted
-      playsInline
-      poster={posterUrl || undefined}
-      preload="metadata"
-      ref={videoRef}
-      src={videoUrl}
-      style={{
-        objectPosition: builderVideoBackgroundPosition(background),
-        ...(blur > 0
-          ? {
-              filter: `blur(${blur}px)`,
-              transform: `scale(${blurCompensationScale(blur)})`
-            }
-          : {})
-      }}
-      tabIndex={-1}
-    />
+    <>
+      <video
+        {...shared}
+        autoPlay
+        data-builder-video-background={surface}
+        data-builder-video-role="lead"
+        ref={videoA}
+        style={videoStyle(leadIsA)}
+      />
+      {crossfades ? (
+        <video
+          {...shared}
+          data-builder-video-background={surface}
+          data-builder-video-role="follow"
+          ref={videoB}
+          style={videoStyle(!leadIsA)}
+        />
+      ) : null}
+    </>
   );
 }

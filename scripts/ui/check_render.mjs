@@ -131,8 +131,8 @@ async function render(page, doc) {
 /**
  * Everything a contract can assert on, sampled twice so motion is provable.
  */
-function sample(page, selector, read, settleMs) {
-  return page.evaluate(async ({ selector, read, settleMs }) => {
+function sample(page, selector, read, settleMs, series) {
+  return page.evaluate(async ({ selector, read, settleMs, series }) => {
     const doc = document.documentElement;
     const modules = document.querySelectorAll('.builder-preview-module');
     const el = document.querySelector(selector);
@@ -159,10 +159,40 @@ function sample(page, selector, read, settleMs) {
     const styles = {};
     for (const prop of read) styles[prop] = cs[prop];
 
+    /*
+     * A TIME SERIES, for behaviour that only exists as a change.
+     *
+     * Some things cannot be read from one frame. A crossfade at a video's loop
+     * seam is the case that forced this: the two elements exist, they carry an
+     * opacity transition, and every single-instant assertion about them passes
+     * with the handoff completely dead — measured, not guessed. What proves a
+     * dissolve is two copies both PARTLY visible at the same moment, and that
+     * only appears if you watch.
+     *
+     * Each entry samples the named selectors' computed properties repeatedly
+     * and hands the whole series to `expect`.
+     */
+    let seriesOut = null;
+    if (series) {
+      seriesOut = [];
+      for (let i = 0; i < series.count; i += 1) {
+        const frame = {};
+        for (const [name, sel] of Object.entries(series.selectors)) {
+          const node = document.querySelector(sel);
+          if (!node) { frame[name] = null; continue; }
+          const style = getComputedStyle(node);
+          frame[name] = Object.fromEntries(series.read.map((prop) => [prop, style[prop]]));
+        }
+        seriesOut.push(frame);
+        await new Promise((resolve) => setTimeout(resolve, series.everyMs));
+      }
+    }
+
     const rect = el.getBoundingClientRect();
     return {
       found: true,
       page: page_,
+      series: seriesOut,
       box: { width: Math.round(rect.width), height: Math.round(rect.height) },
       styles,
       animations: after,
@@ -173,7 +203,7 @@ function sample(page, selector, read, settleMs) {
       text: (el.textContent || '').trim().slice(0, 200),
       settleMs,
     };
-  }, { selector, read, settleMs });
+  }, { selector, read, settleMs, series: series ?? null });
 }
 
 /**
@@ -393,7 +423,13 @@ try {
     }
 
     await render(page, contract.section ? documentForSection(contract.section) : documentFor(contract.module));
-    const result = await sample(page, contract.selector, contract.read || [], SETTLE_MS);
+    const result = await sample(
+      page,
+      contract.selector,
+      contract.read || [],
+      SETTLE_MS,
+      contract.series
+    );
 
     if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });
     if (contract.emulate?.viewport && DEFAULT_VIEWPORT) await page.setViewportSize(DEFAULT_VIEWPORT);

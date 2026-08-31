@@ -183,6 +183,13 @@ export type BackgroundSettings = {
   /** Playback rate, 0.25–2. */
   videoSpeed?: number;
   videoLoop?: boolean;
+  /**
+   * Seconds of crossfade at the loop seam, 0–5. Zero is a hard cut.
+   * Non-zero makes the layer render the clip TWICE and hand off between the
+   * copies — one video cannot dissolve into itself, because seeking back to
+   * the start is a single discontinuous jump with nothing to fade into.
+   */
+  videoLoopFade?: number;
   /** Seconds. An end of 0 means "play to the end of the clip". */
   videoTrimStart?: number;
   videoTrimEnd?: number;
@@ -1170,6 +1177,7 @@ function clampBackgroundNumber(value: unknown, min: number, max: number, fallbac
 export const BUILDER_VIDEO_SPEED_MIN = 0.25;
 export const BUILDER_VIDEO_SPEED_MAX = 2;
 export const BUILDER_VIDEO_BLUR_MAX = 20;
+export const BUILDER_VIDEO_LOOP_FADE_MAX = 5;
 
 export function createDefaultBackgroundSettings(): BackgroundSettings {
   return {
@@ -1186,6 +1194,7 @@ export function createDefaultBackgroundSettings(): BackgroundSettings {
     posterAssetId: "",
     videoSpeed: 1,
     videoLoop: true,
+    videoLoopFade: 0.6,
     videoTrimStart: 0,
     videoTrimEnd: 0,
     videoBlur: 0,
@@ -1223,6 +1232,7 @@ export function normalizeBackgroundSettings(value: unknown): BackgroundSettings 
     // Looping is the default, so only an explicit `false` turns it off — an
     // absent key on an older row must not read as "do not loop".
     videoLoop: background.videoLoop === undefined ? true : background.videoLoop !== false,
+    videoLoopFade: clampBackgroundNumber(background.videoLoopFade, 0, BUILDER_VIDEO_LOOP_FADE_MAX, 0.6),
     videoTrimStart: clampBackgroundNumber(background.videoTrimStart, 0, Number.MAX_SAFE_INTEGER, 0),
     videoTrimEnd: clampBackgroundNumber(background.videoTrimEnd, 0, Number.MAX_SAFE_INTEGER, 0),
     videoBlur: clampBackgroundNumber(background.videoBlur, 0, BUILDER_VIDEO_BLUR_MAX, 0),
@@ -1655,6 +1665,50 @@ export function resolveRenderTheme(
  * for `object-position`, so the still and the moving footage crop identically
  * and nothing jumps when one replaces the other.
  */
+/**
+ * The crossfade actually used, clamped against the clip's own playing window.
+ *
+ * A dissolve longer than the material is not a dissolve — the section would
+ * spend its whole life mid-fade, with both copies half-visible and neither
+ * ever clearly on screen. A third of the window is the ceiling: it leaves the
+ * clip visibly ITSELF for the majority of every pass, which is the point of
+ * having a video at all.
+ *
+ * `windowSeconds` is what actually plays: (trim end, or the full duration)
+ * minus the trim start. Pass 0 when the duration is not known yet — the
+ * browser has not loaded metadata — and the requested value stands until it
+ * is.
+ */
+export function resolveBuilderVideoLoopFade(
+  background: BackgroundSettings | undefined,
+  windowSeconds: number
+): number {
+  const requested = clampBackgroundNumber(
+    background?.videoLoopFade,
+    0,
+    BUILDER_VIDEO_LOOP_FADE_MAX,
+    0.6
+  );
+  if (requested <= 0) {
+    return 0;
+  }
+  if (!Number.isFinite(windowSeconds) || windowSeconds <= 0) {
+    return requested;
+  }
+  return Math.min(requested, windowSeconds / 3);
+}
+
+/** Does this background wrap with a dissolve rather than a cut? */
+export function builderVideoCrossfades(
+  background: BackgroundSettings | undefined,
+  windowSeconds = 0
+): boolean {
+  if (!background || background.videoLoop === false) {
+    return false;
+  }
+  return resolveBuilderVideoLoopFade(background, windowSeconds) > 0;
+}
+
 export function builderVideoBackgroundPosition(background: BackgroundSettings | undefined): string {
   const x = Math.round(clampBackgroundNumber(background?.videoFocalX, 0, 100, 50));
   const y = Math.round(clampBackgroundNumber(background?.videoFocalY, 0, 100, 50));
