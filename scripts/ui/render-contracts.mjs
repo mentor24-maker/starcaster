@@ -53,6 +53,25 @@ const PARALLAX_IMAGE_SECTION = {
   modules: [{ type: 'heading', text: 'Text over a drifting picture', settings: {} }],
 };
 
+/**
+ * THE SAME SECTION, ON A THEMED PAGE.
+ *
+ * A theme's "Photo overlay tint" is composited onto the section element itself
+ * as `linear-gradient(tint, tint), url(photo)`, together with the inverse
+ * (white) text colour — the tint is the only thing making that text readable.
+ * Every parallax contract above uses an UNTINTED section, which is exactly why
+ * they all reported green while switching parallax on wiped the tint off a
+ * themed row and left white text on a bare photo (review round 3 of #481,
+ * measured at mean RGB [166, 11, 17] -> [44, 53, 63]).
+ *
+ * Red at three-quarter strength is not a design choice — it is the loudest
+ * value available, so a failure here is unmistakable in a screenshot.
+ */
+const PARALLAX_THEMED_SECTION = {
+  ...PARALLAX_IMAGE_SECTION,
+  themeTreatments: { heroOverlay: '#ff0000', heroOverlayOpacity: 0.75 },
+};
+
 /** How the parallax contracts watch: scroll a fixed step, read, repeat. */
 const PARALLAX_SERIES = {
   count: 14,
@@ -772,9 +791,22 @@ export const RENDER_CONTRACTS = [
         return `the parallax layer is \`position: ${sample.styles.position}\` — it is in the row's flow ` +
           'rather than behind it, so it would push the content down the page.';
       }
-      if (sample.styles.backgroundSize !== 'cover') {
-        return `the parallax layer is \`background-size: ${sample.styles.backgroundSize}\`, not cover — ` +
-          'it would tile or letterbox instead of filling the row.';
+      /*
+       * EVERY layer, not the whole string. The layer paints TWO backgrounds now
+       * — the tint it has to carry, in front of the picture — and a browser
+       * reports one `background-size` per layer, so the honest reading of
+       * "cover" here is `cover, cover`. Splitting is what the assertion always
+       * meant, and it is strictly stricter than the old string equality was:
+       * `contain`, `auto` or a length still fails, and so does a single layer
+       * that stops covering.
+       */
+      const sizes = String(sample.styles.backgroundSize || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+      if (!sizes.length || !sizes.every((value) => value === 'cover')) {
+        return `the parallax layer is \`background-size: ${sample.styles.backgroundSize}\`, and every ` +
+          'layer of it has to be cover — otherwise it tiles or letterboxes instead of filling the row.';
       }
       return null;
     },
@@ -907,6 +939,69 @@ export const RENDER_CONTRACTS = [
   },
 
   {
+    id: 'image-parallax-carries-the-tint-it-covers',
+    why:
+      'TURNING ON A MOTION SETTING MUST NOT DELETE A THEME\'S PHOTO TINT. The tint is composited onto ' +
+      'the section element itself, and an element\'s own background paints BENEATH its positioned ' +
+      'descendants — so the parallax layer, which repaints the same photo as a positioned child, ' +
+      'covered it with the raw picture while `--lp-inverse-text` kept the text white. Measured in a ' +
+      'real browser in review round 3 of #481: mean RGB [166, 11, 17] with parallax off, [44, 53, 63] ' +
+      'with it on. On a light photo that is unreadable white text on a live tenant page, and it is not ' +
+      'an exotic setup — `heroOverlay` is REQUIRED in the Theme Wizard\'s generator schema, so every ' +
+      'wizard-built theme sets one. Every other parallax contract here uses an untinted section, which ' +
+      'is precisely why 27/27 was green over this.',
+    section: { ...PARALLAX_THEMED_SECTION },
+    selector: '.builder-preview-image-background',
+    series: {
+      // Two frames, no scrolling: what is being read is what the layer PAINTS,
+      // which does not depend on scroll position. The drift itself is proven
+      // by the two contracts above.
+      count: 2,
+      everyMs: 30,
+      read: ['backgroundImage'],
+      selectors: {
+        layer: '.builder-preview-image-background',
+        section: '.builder-preview-section-layered',
+      },
+    },
+    expect(sample) {
+      // One level of nesting by hand: `rgba(...)` carries its own brackets, so
+      // a lazy `linear-gradient\([^)]*\)` stops at the first colour's close.
+      const tintOf = (value) => {
+        const match = /linear-gradient\(\s*(rgba?\([^)]*\))\s*,\s*(rgba?\([^)]*\))\s*\)/.exec(value || '');
+        return match ? `${match[1]}, ${match[2]}` : null;
+      };
+
+      const frames = (sample.series || []).filter((f) => f.layer && f.section);
+      if (!frames.length) {
+        return 'neither the layer nor the row could be read, so nothing is proven.';
+      }
+      const frame = frames[0];
+
+      const sectionTint = tintOf(frame.section.backgroundImage);
+      if (!sectionTint) {
+        return 'the ROW itself is not wearing a theme tint, so this contract is measuring an untinted ' +
+          `page and could not fail. Its background-image is \`${(frame.section.backgroundImage || '').slice(0, 120)}\`. ` +
+          'The themed fixture stopped reaching the preview — fix the fixture, never the assertion.';
+      }
+
+      const layerTint = tintOf(frame.layer.backgroundImage);
+      if (!layerTint) {
+        return `the row is tinted \`${sectionTint}\` and the drifting background carries no tint at all ` +
+          `(\`${(frame.layer.backgroundImage || '').slice(0, 120)}\`). It paints the bare photo over the ` +
+          'tint the row composited, so switching parallax on silently removes the darkening the white ' +
+          'text depends on.';
+      }
+      if (layerTint !== sectionTint) {
+        return `the row is tinted \`${sectionTint}\` and the drifting background is tinted ` +
+          `\`${layerTint}\`. The moving copy has to be indistinguishable from the still one it covers, ` +
+          'or the band changes colour the moment the effect starts.';
+      }
+      return null;
+    },
+  },
+
+  {
     id: 'video-parallax-drifts-the-video-layer-too',
     why:
       'One layer, used by image and video alike — that was the instruction on the ticket, because ' +
@@ -944,6 +1039,20 @@ export const RENDER_CONTRACTS = [
           `${Math.round(sectionMoved)}px and the video moved ${Math.round(layerMoved)}px — the video ` +
           'is keeping pace with the page. The image half of this feature works and the video half ' +
           'does not, which is the exact split the shared layer exists to prevent.';
+      }
+      /*
+       * THE OTHER END OF THE RANGE, and it was missing until review round 3 of
+       * #481. `layerMoved < sectionMoved - 1` is satisfied by zero — so a
+       * regression that PINNED the video to the viewport, which is a worse bug
+       * than no parallax at all, passed the one contract written to prove the
+       * video half is not dead. The image twin above has always had this
+       * branch; the two must agree, because the whole point of the shared
+       * layer is that image and video cannot drift apart.
+       */
+      if (!(layerMoved > 0)) {
+        return `the video moved ${Math.round(layerMoved)}px against ${Math.round(sectionMoved)}px ` +
+          'of row movement — it is pinned to the screen rather than drifting. At the shipped default ' +
+          'speed of 0.3 it should move about a third as far as the row.';
       }
       return null;
     },

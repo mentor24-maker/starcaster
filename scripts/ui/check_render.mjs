@@ -99,7 +99,14 @@ function documentFor(...specs) {
 /** A page carrying ONE section with the given layout + modules — so a contract
  *  can measure a SECTION-level layout (e.g. the 4/5/6 equal-column rows), which
  *  documentFor (always `layout: 'single'`) cannot reach. */
-function documentForSection({ layout = 'single', modules = [], background, overlayScreen, spacers = 0 } = {}) {
+function documentForSection({
+  layout = 'single',
+  modules = [],
+  background,
+  overlayScreen,
+  spacers = 0,
+  themeTreatments,
+} = {}) {
   /*
    * SPACER SECTIONS, above and below, so the page is tall enough to SCROLL.
    *
@@ -140,9 +147,44 @@ function documentForSection({ layout = 'single', modules = [], background, overl
 
   const before = Array.from({ length: spacers }, (_, i) => spacer('before', i));
   const after = Array.from({ length: spacers }, (_, i) => spacer('after', i));
+
+  /*
+   * A THEME, WITHOUT A DATABASE.
+   *
+   * Some rendering is only wrong when a theme is on — the photo overlay tint
+   * is the case that forced this, because a parallax layer covering it is
+   * invisible on the untinted section every other contract here uses. The
+   * preview page reads `themeShellBackground` straight out of this stored
+   * draft and builds the theme styles from it, and it skips its API call
+   * entirely when the stored palette already carries colours. So a contract
+   * can ask for a themed page and this file keeps its bargain: no database,
+   * no login, no fixture.
+   *
+   * Contracts that want no theme leave it out and the draft is byte-for-byte
+   * what it always was — the keys are not written at all.
+   */
+  const theme = themeTreatments
+    ? {
+        themePalette: {
+          primaryColor: '#1f4d8f',
+          secondaryColor: '#8f1f4d',
+          backgroundColor: '#ffffff',
+          accentColor: '#4d8f1f',
+        },
+        themeShellBackground: {
+          primaryColor: '#1f4d8f',
+          secondaryColor: '#8f1f4d',
+          backgroundColor: '#ffffff',
+          accentColor: '#4d8f1f',
+          treatments: themeTreatments,
+        },
+      }
+    : {};
+
   return {
     name: 'Render Contract Section',
     layoutSections: [...before, subject, ...after],
+    ...theme,
   };
 }
 

@@ -162,6 +162,42 @@ the layer never mounts, and the static background underneath is simply what
 the visitor sees — never blank, never mispositioned, and with no second code
 path to keep in step. Exactly like "show the still instead".
 
+### The layer carries the tint it covers
+
+The picture is not the only thing painted on the surface. A theme's **Photo
+overlay tint** is composited onto the section as
+`linear-gradient(tint, tint), url(photo)`, together with the inverse (white)
+text colour — the tint is the only thing making that text readable on a photo.
+And an element's own background paints *beneath* its positioned descendants,
+so the drifting copy lands **on top of the tint** and hides it.
+
+Shipped broken and caught in review (#481, round 3): mean RGB
+`[166, 11, 17]` with parallax off, `[44, 53, 63]` — the raw photo — with it on,
+white text in both. On a light photo that is unreadable text on a live tenant
+page, and it is not an exotic setup: `heroOverlay` is a **required** property
+in the Theme Wizard's generator schema, so every wizard-built theme sets one.
+An image row wears a tint even with no theme assigned, because `heroTint`
+falls back to the default hex colour (a white 45% wash) — so this was every
+photo row in the product, not only themed ones.
+
+The fix is that the layer **repaints the same tint in front of the same
+picture**, so the moving copy is indistinguishable from the still one it
+covers. `image-parallax-carries-the-tint-it-covers` measures it in a browser,
+against a themed fixture — every other parallax contract uses an untinted
+section, which is exactly why 27/27 was green over this.
+
+**Do not "fix" this with a negative `z-index` instead.** Within a stacking
+context the context's own background paints first, so a negative child still
+lands on top of it; it would only appear to work while the section happens not
+to form a stacking context, and the section forms one on several ordinary
+paths (an overlay slot, a navigation module, a hero overlap). Silent and
+theme-dependent — the same failure shape as the next section.
+
+A **video** row cannot wear a hero tint today, because the theme's banner is
+only assigned to a row with no background of its own. So the video branch
+ignores the tint rather than guarding against it; if video rows ever become
+tintable, `videoStyle` needs the same treatment.
+
 ### `background-attachment: fixed` was considered and rejected
 
 It is the obvious one-line answer and it is wrong twice over:
@@ -260,11 +296,14 @@ Five, and the pattern is the same each time: everything reported success.
 
 ## Checking a change here
 
-`npm run check:render` carries eight `video-background-*` contracts and seven
+`npm run check:render` carries eight `video-background-*` contracts and eight
 `*-parallax-*` ones, and reaching them needs no database, no login and no
 fixture — a video and a greyscale poster are committed at
 `public/images/render-fixture-background*`, and the parallax contracts reuse
-the same banner image every other image contract already uses:
+the same banner image every other image contract already uses. The tint
+contract asks for a **themed** page and still needs no database: the preview
+reads its theme straight out of the stored draft, so `documentForSection` puts
+one there (`themeTreatments`):
 
 ```
 PORT=3058 node server.js

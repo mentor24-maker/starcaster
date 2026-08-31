@@ -6968,6 +6968,22 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * inline style overrides top/height with the driver's numbers, which make it
  * taller than the section by the full travel distance so no edge of the band
  * is ever uncovered.
+ *
+ * `z-index: 0` IS DELIBERATE, AND DO NOT MAKE IT NEGATIVE. The obvious way to
+ * stop this layer covering the section's own background — a theme's photo
+ * overlay tint is composited there — is to push it behind with `z-index: -1`.
+ * That does not work: within a stacking context the context's own background
+ * paints first, so a negative child still lands ON TOP of it. It would only
+ * appear to work while the section happens NOT to form a stacking context, and
+ * the section forms one on several ordinary paths (an overlay slot, a
+ * navigation module, a hero overlap). Silent, theme-dependent, exactly the
+ * failure mode `background-attachment: fixed` was rejected for on this
+ * ticket's own description.
+ *
+ * So the layer CARRIES the tint instead — the component composites the same
+ * `linear-gradient(tint, tint)` the surface used, in front of the same picture
+ * (`builder-background-layer.tsx`). The row overlay screen below stays at
+ * `z-index: 1` so it still paints over the drifting copy.
  */
 .builder-preview-image-background {
   position: absolute;

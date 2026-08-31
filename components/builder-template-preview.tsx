@@ -1495,26 +1495,46 @@ function BuilderSectionPreview({
   const bannerImage = !isImageSection && heroBannerUrl ? `url("${heroBannerUrl}")` : "";
   const heroImageSource = bannerImage || (isImageSection ? String(sectionStyle?.backgroundImage || "") : "");
   const heroTint = normalizeBuilderHexColor(heroOverlay || (bannerImage ? "#101820" : ""));
-  const heroStyle: CSSProperties | undefined =
+  /*
+   * The tint as a COLOUR of its own, not only baked into the gradient below.
+   *
+   * A parallaxing image background paints the same photo a second time as a
+   * positioned child, and an element's own background paints BENEATH its
+   * positioned descendants — so that child covers this tint with the bare
+   * photo while `--lp-inverse-text` keeps the text white. Measured in review
+   * round 3 of #481: mean RGB [166, 11, 17] with parallax off and [44, 53, 63]
+   * with it on, white text throughout. The layer has to carry what it covers,
+   * so the colour is needed on its own to hand over.
+   *
+   * Painting the layer BEHIND the section's background instead is not an
+   * option: a negative z-index child still paints above its parent's own
+   * background whenever the parent forms a stacking context, and this section
+   * forms one on several ordinary paths (an overlay slot, a navigation module,
+   * a hero overlap). That is the same shape of silent, theme-dependent failure
+   * as `background-attachment: fixed`, which this ticket rejected by name.
+   */
+  const heroTintColor: string | undefined =
     heroImageSource && heroTint
       ? (() => {
           const opacity = Math.min(0.75, Math.max(0, heroOverlayOpacity ?? 0.45));
           const [r, g, b] = [1, 3, 5].map((offset) => parseInt(heroTint.slice(offset, offset + 2), 16));
-          const tint = `rgba(${r}, ${g}, ${b}, ${opacity})`;
-          return {
-            backgroundImage: `linear-gradient(${tint}, ${tint}), ${heroImageSource}`,
-            ...(bannerImage
-              ? {
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  paddingTop: "72px",
-                  paddingBottom: "72px"
-                }
-              : {}),
-            color: "var(--lp-inverse-text, #ffffff)"
-          };
+          return `rgba(${r}, ${g}, ${b}, ${opacity})`;
         })()
       : undefined;
+  const heroStyle: CSSProperties | undefined = heroTintColor
+    ? {
+        backgroundImage: `linear-gradient(${heroTintColor}, ${heroTintColor}), ${heroImageSource}`,
+        ...(bannerImage
+          ? {
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              paddingTop: "72px",
+              paddingBottom: "72px"
+            }
+          : {}),
+        color: "var(--lp-inverse-text, #ffffff)"
+      }
+    : undefined;
 
   // Overlap treatment: ride up over the hero's bottom edge, above its tint.
   const overlapStyle: CSSProperties | undefined = overlapsHero
@@ -1567,6 +1587,24 @@ function BuilderSectionPreview({
       ? section.background
       : null;
   const sectionBackgroundLayer = sectionVideoBackground ?? sectionParallaxImageBackground;
+  /*
+   * THE TINT THE LAYER HAS TO CARRY, because it is about to cover it.
+   *
+   * The two guards mirror exactly where `heroStyle` is applied to the section
+   * below: a navigation-only row and a collapsed overlay slot never wear the
+   * tint, so their layer must not invent one.
+   *
+   * There is deliberately no "image only" guard, even though only the image
+   * layer composites this today. It would be dead code: a video row cannot
+   * carry a hero tint at all, because the theme's banner is only assigned to a
+   * row that has no background of its own (`heroBannerSectionId` above) and a
+   * video row has one. A guard that can never fire is worse than none — it
+   * reads as protection and is not.
+   */
+  const sectionBackgroundLayerTint =
+    sectionBackgroundLayer && !isNavigationSection && !isOverlayLayoutCollapsed
+      ? heroTintColor
+      : undefined;
   const sectionOverlayScreenStyle = isOverlayLayoutCollapsed
     ? undefined
     : getBuilderRowOverlayScreenStyle(section.overlayScreen);
@@ -1648,7 +1686,11 @@ function BuilderSectionPreview({
       style={gridStyle}
     >
       {sectionBackgroundLayer ? (
-        <BuilderBackgroundLayer background={sectionBackgroundLayer} surface="section" />
+        <BuilderBackgroundLayer
+          background={sectionBackgroundLayer}
+          surface="section"
+          tint={sectionBackgroundLayerTint}
+        />
       ) : null}
       {sectionOverlayScreenStyle ? (
         <div className="builder-preview-row-overlay-screen" style={sectionOverlayScreenStyle} />

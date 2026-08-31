@@ -257,11 +257,30 @@ type BuilderBackgroundLayerProps = {
   background: BackgroundSettings;
   /** Marks which surface mounted it, for the render contracts and for CSS. */
   surface?: "section" | "page" | "cell";
+  /**
+   * A CSS colour the surface has ALREADY composited over its own background —
+   * a theme's "Photo overlay tint" — which this layer must repaint, because it
+   * is about to cover it.
+   *
+   * The surface paints `linear-gradient(tint, tint), url(photo)` and sets the
+   * inverse text colour on top of it; that tint is the only thing making white
+   * text readable on the photo. An element's own background paints beneath its
+   * positioned descendants, so a layer painting the bare photo erases the tint
+   * and leaves white text on a raw picture.
+   *
+   * THE IMAGE BRANCH COMPOSITES THIS; THE VIDEO BRANCH IGNORES IT, and that is
+   * not an oversight. A video row cannot wear a hero tint today — the theme's
+   * banner is only assigned to a row with no background of its own, and a video
+   * row has one — so the value reaching a video layer is always undefined. If
+   * video rows ever become tintable, `videoStyle` needs the same treatment.
+   */
+  tint?: string;
 };
 
 export function BuilderBackgroundLayer({
   background,
-  surface = "section"
+  surface = "section",
+  tint
 }: BuilderBackgroundLayerProps) {
   /*
    * TWO elements, because one video cannot dissolve into itself: seeking back
@@ -526,7 +545,15 @@ export function BuilderBackgroundLayer({
         style={{
           // A CSS background cannot carry a srcset, so it takes the widest
           // copy instead — the same bargain getBuilderBackgroundStyle makes.
-          backgroundImage: `url("${backgroundImageUrlFor(background.imageUrl)}")`,
+          //
+          // The tint rides in FRONT of the picture here, in the same order and
+          // with the same value the surface underneath used, so the drifting
+          // copy is indistinguishable from the still one it covers. Without it,
+          // switching parallax on silently deletes a theme's photo overlay and
+          // strands the white text it exists to make readable (#481, round 3).
+          backgroundImage: tint
+            ? `linear-gradient(${tint}, ${tint}), url("${backgroundImageUrlFor(background.imageUrl)}")`
+            : `url("${backgroundImageUrlFor(background.imageUrl)}")`,
           ...parallaxBoxStyle(true),
           transform: parallaxTransform(true, "")
         }}
