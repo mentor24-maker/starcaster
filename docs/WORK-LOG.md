@@ -1,3 +1,28 @@
+## 2026-08-31 — Parallax was quietly removing a theme's photo tint (#481)
+
+Themes can lay a wash of colour over a photo — the "Photo overlay tint" — and
+it is not decoration. It is the thing that darkens a picture enough for white
+words to be readable on top of it. Review found that switching parallax on
+threw that wash away and left the white text sitting on the raw photo. On a
+dark picture you might not notice; on a light one the words disappear.
+
+The cause is the sort of thing only a browser tells you. The wash is painted
+on the row itself, and the drifting copy of the picture is a separate piece
+sitting inside the row — and a browser always paints the pieces inside a box
+on top of the box's own paint, never underneath it. So the drifting picture
+landed over the wash and hid it. The fix is that the drifting copy now carries
+the same wash, so it looks identical to the still one it covers. Measured with
+a red test tint before and after: the band read as raw photo before and as
+properly tinted after.
+
+Two checks came out of it. A new one photographs a themed row with parallax on
+and fails if the drifting picture is not wearing the row's tint — every
+existing parallax check used a plain untinted row, which is precisely why all
+27 of them were green over this. And an old check that was supposed to prove
+the video half of parallax still worked turned out to accept a video frozen to
+the screen, which is worse than no parallax at all; that hole is closed, and
+proved closed by freezing a video on purpose and watching it fail.
+
 ## 2026-08-31 — Backgrounds can drift slower than the page now (#481)
 
 A section with a photo behind it used to look flat, and the reason was that the
