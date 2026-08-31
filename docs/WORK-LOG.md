@@ -43,6 +43,91 @@ either proves its own record can be handed back to itself or it fails the test.
 
 Nothing changes on any screen. The screen where a client actually clicks
 "Connect" is the next piece but one.
+## 2026-08-31 — Parallax was quietly removing a theme's photo tint (#481)
+
+Themes can lay a wash of colour over a photo — the "Photo overlay tint" — and
+it is not decoration. It is the thing that darkens a picture enough for white
+words to be readable on top of it. Review found that switching parallax on
+threw that wash away and left the white text sitting on the raw photo. On a
+dark picture you might not notice; on a light one the words disappear.
+
+The cause is the sort of thing only a browser tells you. The wash is painted
+on the row itself, and the drifting copy of the picture is a separate piece
+sitting inside the row — and a browser always paints the pieces inside a box
+on top of the box's own paint, never underneath it. So the drifting picture
+landed over the wash and hid it. The fix is that the drifting copy now carries
+the same wash, so it looks identical to the still one it covers. Measured with
+a red test tint before and after: the band read as raw photo before and as
+properly tinted after.
+
+Two checks came out of it. A new one photographs a themed row with parallax on
+and fails if the drifting picture is not wearing the row's tint — every
+existing parallax check used a plain untinted row, which is precisely why all
+27 of them were green over this. And an old check that was supposed to prove
+the video half of parallax still worked turned out to accept a video frozen to
+the screen, which is worse than no parallax at all; that hole is closed, and
+proved closed by freezing a video on purpose and watching it fail.
+
+## 2026-08-31 — Backgrounds can drift slower than the page now (#481)
+
+A section with a photo behind it used to look flat, and the reason was that the
+picture scrolled at exactly the same rate as the words on top of it. Everything
+moved as one sheet. Making the background drift a little slower than the text is
+the cheapest thing there is for making a page feel like it has depth, and Delray
+needs it.
+
+It is a checkbox and a number, in the Motion group of a row's Background panel.
+0 pins the picture to the screen, 1 is ordinary scrolling, and about 0.3 is the
+usual look. It works on video backgrounds as well as photos. Nothing that exists
+today changes: it is off unless you turn it on, and six pages were photographed
+before and after to prove it — every pixel identical.
+
+One thing to know before using it. The picture crops in tighter. That is not a
+bug and it cannot be avoided: the picture has to be taller than the row to have
+anywhere to drift to, so the stronger you set the effect the closer it is
+cropped. If the photo has a logo or a face near an edge, use a higher number,
+nearer 0.7. The panel says so in as many words.
+
+There is an obvious one-line way to build this that half the internet uses, and
+it was deliberately not used. It stops working the moment anything above it on
+the page has a blur or a shrink on it — the same six properties that caused the
+`blur(0px)` trouble a fortnight ago — and iPhones ignore it entirely. Both
+failures are silent. The version that shipped moves a real element instead, which
+nothing above it can switch off.
+
+The arithmetic was pulled out into its own file with no page-drawing in it at
+all, which is the house pattern for anything that moves, and for a plain reason:
+nothing in this codebase can test how something LOOKS, so the sums are the only
+part that can be pinned down and kept honest. Eleven checks were broken on
+purpose afterwards and watched to fail, because a check that has never failed has
+not been tested, only written. One of those breaks was worth the whole exercise:
+a check meant to prove the feature stays out of the way passed on the exact bug
+its own note described, and had to be replaced with one that actually looks at
+the right thing.
+
+Review then caught two things worth knowing about. The Speed box could not be
+typed into: clearing it put 0.3 straight back, so typing 0.7 left you looking at
+0.37. The cause was a small thing with a wide moral — the box was asking "what
+does this value mean?" using the rule meant for values coming back out of the
+database, where a blank means "never set, use the usual". Halfway through typing
+a number, a blank means "not finished yet", which is the opposite. Those are now
+two separate questions with two separate answers, and clearing the box leaves it
+empty like every other field on the screen.
+
+The other was the panel telling a small lie. It said parallax runs on phones,
+which is true of a photo and not of a video — a video background is not loaded on
+phones at all unless you switch that on, so there was nothing there to drift. The
+note now says which is which and names the switch. A control that quietly does
+nothing on half the devices people use is worse than one that says so.
+
+A third pass caught something duller and just as real. This work renamed the one
+file that draws a background — it was the "video background" file, and it is not
+video-only any more — but two of the written guides still sent the reader to the
+old name, which is now a file that does not exist. Both were corrected, and the
+video guide was brought up to date to say that one layer now carries photos and
+clips alike, and why that was the point rather than a side effect. A guide that
+points at a deleted file is worse than no guide: it costs somebody the time to
+find out it is wrong before they can start.
 ## 2026-08-29 — The CRM Form settings panel was never being checked (#451)
 
 Back on 8/13 you pointed at a module's settings panel and said the column width
