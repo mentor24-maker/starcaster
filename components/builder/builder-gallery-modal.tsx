@@ -16,7 +16,7 @@ import {
   type GalleryMediaListSortKey
 } from "@/lib/gallery-media-list-sort";
 import { useGalleryMediaLibrary, type GalleryMediaSource } from "@/lib/use-gallery-media-library";
-import type { AdminMediaItem } from "@/lib/admin-media-shared";
+import type { AdminMediaItem, AdminMediaKind } from "@/lib/admin-media-shared";
 
 type BuilderGalleryModalProps = {
   anchor?: BuilderModalAnchor | null;
@@ -32,6 +32,22 @@ type BuilderGalleryModalProps = {
    * indistinguishable from an empty gallery.
    */
   initialMediaCategory?: string;
+  /**
+   * File kind the picker opens filtered to — `"video"` or `"image"`.
+   *
+   * Distinct from `initialMediaCategory`, and the distinction is the whole
+   * reason this exists. `mediaCategory` is the TOPICAL category ("Article
+   * Banner", "X Post", and a "Top / Sub" pair for community assets); `kind`
+   * is what sort of FILE it is, resolved from the asset type and the
+   * extension. Asking for a category of "Video" matches nothing in the
+   * library, so the picker painted the full gallery and then emptied itself
+   * when the filter landed — a flash and then a blank shell (Dane,
+   * 2026-08-31, on the panel shipped in #476).
+   *
+   * A starting point, not a lock: the filter bar shows it and Clear removes
+   * it, exactly as for the category above.
+   */
+  initialKind?: AdminMediaKind;
 };
 
 type GalleryViewMode = "grid" | "list";
@@ -82,7 +98,8 @@ export function BuilderGalleryModal({
   onSelectImage,
   onClose,
   onUploadImage,
-  initialMediaCategory = ""
+  initialMediaCategory = "",
+  initialKind
 }: BuilderGalleryModalProps) {
   const [mounted, setMounted] = useState(false);
   const [mediaSource, setMediaSource] = useState<GalleryMediaSource>("project");
@@ -136,6 +153,14 @@ export function BuilderGalleryModal({
     if (!initialMediaCategory) return;
     setFilters((current) => ({ ...current, mediaCategory: initialMediaCategory }));
   }, [initialMediaCategory, setFilters]);
+
+  // Same, for the file kind. Separate effect rather than one combined with the
+  // category above: a caller asks for one or the other, and folding them
+  // together would make an absent category clear a kind that was set.
+  useEffect(() => {
+    if (!initialKind) return;
+    setFilters((current) => ({ ...current, kind: initialKind }));
+  }, [initialKind, setFilters]);
 
   const topicOptions = useMemo(
     () => buildGalleryMediaTopicOptions(allMedia.map((item) => item.topic ?? "")),

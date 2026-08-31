@@ -487,6 +487,128 @@ An ordering test must pin the boundary that can actually move — here,
 Break it on purpose and watch it fail; an assertion that survives the bug it
 names is decoration.
 
+### 3.13 A watchdog that runs only where its subject runs cannot see the case it exists for
+
+Slice E of the NODES plan (task 86bbhbadj, PR #469) had to make *silence*
+detectable: a job that fails writes a log line, but a job that never fires
+writes nothing anywhere, and nothing is indistinguishable from a quiet week.
+
+The obvious build is a check on the machine that owns the job — it has the
+data, it is already awake when the job runs, and it needs no coordination. It is
+also useless, and useless in the exact scenario the feature was written for.
+**The machine being switched off takes the watchdog out with the job.** A
+schedule evicted by an OS update, a Mini unplugged, a launchd job that never
+reloaded after a restart: in every one of those the watcher and the watched die
+together, and the silence goes unreported by the one thing built to report it.
+
+So the beats go on a surface **both** machines read (a ClickUp ticket), and the
+check runs from whichever machine is awake — including, and especially, the one
+that does **not** own the job. `scripts/run_bus_relay.sh` performs it *before*
+the ownership test, which reads oddly until you see why: the non-owning machine
+was already waking every ten minutes to say "not my job" and exit, and that idle
+wake is the only vantage point in the system that survives the owning machine
+being dead.
+
+**Do this:** for any check whose subject is a machine, a process or a schedule,
+ask *what takes both of us out at once?* If the answer is "the thing I am
+watching for", the check is in the wrong place. Put the evidence somewhere
+neither party owns, and read it from somewhere the failure cannot reach.
+
+The corollary is a resolution question, and it is the cheap half: the shared
+record only needs to be as fine-grained as the absence you must notice. Slice E
+pushes one row per machine per day, because the requirement is "a day-long
+absence is visible", not "a ten-minute one is". A finer clock would have been
+more writes, more noise and no more detection.
+
+### 3.14 An unpopulated field is not an empty answer
+
+The same slice reads its roll call out of a ClickUp task description. Driven
+against the live API, ClickUp answered a `GET` with `markdown_description: ""`
+for a task whose description it was holding **perfectly well** — the text
+arriving under `description` instead. The reader preferred the markdown field,
+so it handed the parser an empty string for a record that was entirely intact.
+
+The parser then did the reasonable thing and read an empty string as *an empty
+roll call*: no beats recorded yet. Which would have announced **every scheduled
+job in the system as having gone quiet, all at once**, off a field that was
+simply not filled in. For a monitoring feature that is the worst available
+failure: an alarm that cries wolf is an alarm nobody reads, so a false-alarm
+storm does not merely add noise, it disables the real alerts behind it.
+
+It was caught only because the thing was run against the live service instead of
+reasoned about — the code is correct against the API as documented.
+
+**Do this:** when a provider can return a field empty, decide explicitly which
+of two things "empty" means — *a confirmed absence* or *nothing was read* — and
+make the two render differently (§3.2, §3.11). Where the record you write always
+carries something (a preamble, a header, a marker), a wholly empty read is
+**unreadable**, never zero results. And consult every field that could carry the
+value rather than one by preference; a provider populating a different field
+than the one you wrote is a real behaviour, not a corruption.
+
+### 3.15 A declared behaviour is not a running one — watch it, do not read one frame
+
+Three render contracts were written for the video-background crossfade
+(2026-08-31, #478). Two of them assert the pair of `<video>` elements exists
+and that the trailing copy carries an `opacity` transition. Both are true
+statements about the DOM and both are worthless.
+
+The handoff was then disabled on purpose — the opaque copy never swaps, the
+loop hard-cuts, the feature is completely dead — and `check:render` reported
+**19/19 green**. Nothing had to go wrong for that; the elements were still
+there, and a `transition` property is a declaration about what *would* happen
+if something changed, not evidence that anything does.
+
+This is the same species as the two already recorded in §5.14: an
+`animation-name` naming keyframes that do not exist, and a `--sc-effect-*`
+variable compared against itself. A property that describes motion is not
+motion. Here the tell is sharper, because the property was correct and the
+thing that never ran was ours.
+
+What proves a dissolve is **two copies both partly visible at the same
+instant**, which does not exist in any single frame. So `sample()` in
+`scripts/ui/check_render.mjs` grew a `series` option — named selectors, a list
+of properties, a count and an interval — and hands the whole run to `expect`.
+The contract now fails with the opacity pairs it actually saw:
+
+```
+✗ video-background-crossfade-actually-dissolves: the two copies were never
+  both partly visible across 45 frames — the loop is still a hard cut with a
+  transition property on it. Opacity pairs seen: 1/0.
+```
+
+**Do this:** if the behaviour is a CHANGE — a fade, a hand-off, a debounce, a
+retry, a thing that settles — the check has to watch it happen. Reading one
+frame can only ever confirm the setup. And before believing any new contract,
+break the behaviour it guards and watch it fail; every check in this repo that
+skipped that step went on to report clean over something broken.
+
+### 3.16 An absence has to be a stated expectation, never a silent not-found
+
+The same feature needed the opposite assertion: under reduced motion, and at
+phone width, the layer must render **no `<video>` element at all** — the poster
+underneath is the answer (`docs/VIDEO_BACKGROUNDS.md`).
+
+`check:render` could not express that. Its first rule is that nothing measured
+is a failure, never a pass — which is right, and which made "this must not be
+here" unwritable. Left as-is, the fallbacks would have had no coverage at all,
+and their failure mode is invisible to whoever is not affected: the page looks
+perfectly fine to anyone who has not asked for reduced motion and is not on a
+phone.
+
+So `absent: true` inverts that one rule explicitly, and says so in the failure
+message. Explicit is the whole point — a check that treats "I found nothing" as
+a pass by default is how §3.11 and §3.2 keep being relearned. Paired with it,
+`emulate` (reduced motion, viewport) puts the browser into the condition the
+behaviour exists for, because the only prior evidence those paths worked was
+somebody remembering to toggle a system setting by hand.
+
+**Do this:** when correct behaviour is that something does not appear, assert
+the absence deliberately, and make the assertion distinguishable from the check
+having failed to look. Then verify the pair from both sides — the presence
+contract is what stops the absence contract passing because the feature never
+rendered at all.
+
 ---
 
 ## 4. Secrets
@@ -821,7 +943,23 @@ So it was built (#315, #318, #320, #322):
 - Horizontal-overflow on a rendered page is **not** asserted anywhere: the
   Builder preview shell clips it, so the assertion was written, tried, and
   deleted when it could not be made to fail.
-- Only the `image` module family has real contracts today.
+- Only the `image` module family has real contracts today. *(2026-08-31: the
+  video background has six as well — `docs/VIDEO_BACKGROUNDS.md`.)*
+
+#### What `check:render` grew on 2026-08-31, and what each was built against
+
+Three capabilities, each added because a contract could not otherwise be
+written — or worse, could be written and could not fail:
+
+| Capability | Lets a contract say | Built against |
+|---|---|---|
+| `emulate` | put the browser in a condition first — `reducedMotion`, `viewport` | the reduced-motion and phone fallbacks, whose only prior evidence was somebody remembering to toggle a system setting by hand |
+| `absent: true` | **this must NOT be here** — inverts "nothing measured is a failure", explicitly (§3.16) | the same two fallbacks, whose correct behaviour is rendering no element at all |
+| `series` | watch named selectors over N frames and judge the run (§3.15) | a crossfade that reported 19/19 green with its handoff disabled and the loop hard-cutting |
+
+They are general. Any contract can use them, and `series` is the answer for
+anything whose truth is a change rather than a state — a fade, a hand-off, a
+debounce, something that settles.
 
 So the first paragraph stands: **the verification for a visual change is
 still a browser measurement or the operator's eye.** These checks widen what
@@ -1377,6 +1515,39 @@ human when it had not; here, an agent implies a human is needed when none is.
 
 Canon home for this rule is the vault `doctrine/OPERATIONS.md`; this section is
 the repo-side copy, which is the one actually loaded into every session.
+
+### 6.10 A behaviour proven in an uncommitted file does not move when its job moves
+
+On 2026-08-20 the `bus-relay` failure alert was built, break-tested and watched
+to work: a forced failure posted to the bus, a second one was suppressed, a
+success cleared the stamp. It was written into
+`~/Library/Application Support/starcaster/bus-relay-cron.sh` — a hand-installed
+file on the MacBook Pro, correct at the time, in git nowhere.
+
+Then two ordinary, well-run changes landed. Slice B brought the schedule into
+the repo (`scripts/run_bus_relay.sh` + `scripts/install_bus_relay.sh`), and
+`lib/nodeRoles.js` moved `bus-relay` to the Mac Mini. Both were reviewed. Both
+were right. **Neither carried the alert**, because the alert was not in the
+thing being moved — so from that cutover until 2026-08-30, a relay failure on
+the machine that actually ran it reached nobody at all.
+
+Nothing could have caught it. No test covered the file, no review saw it, no
+check compared old behaviour against new, and the regression's only symptom is
+the absence of a message nobody was expecting on a particular day. It was found
+only because the *next* ticket in the same plan went looking at the runner.
+
+**Do this:** when a slice says a thing "now lives in the repo", diff what the
+old artifact did against what the new one does before believing the migration
+is complete — the committed version is a rewrite, not a move, and rewrites drop
+things. Treat "we proved this works" as scoped to the file it was proved in.
+And when a hand-installed file is superseded, say explicitly what happened to
+every behaviour it carried; "it is replaced" is a claim about the file, not
+about the behaviour.
+
+The general shape, which is why this sits next to §6.6: work that lives outside
+version control has no changelog, no review, no test and no blast radius anyone
+can compute. That is acceptable for a one-off, and it is a debt that comes due
+the first time anything around it moves.
 
 ---
 

@@ -11,12 +11,14 @@ import {
   formatPlainTextContent,
   formatRichTextContent,
   getBuilderBackgroundStyle,
+  getBuilderRowOverlayScreenStyle,
   getLayoutColumns,
   groupJoinedSections,
   isPlainTextVariant,
   resolvePublicBuilderAssetUrl
 } from "@/lib/builder-template";
 import { imageProps } from "@/lib/image-renditions";
+import { BuilderVideoBackgroundLayer } from "@/components/builder/builder-video-background-layer";
 
 /** Feature cards sit up to three across the content column. */
 const FEATURE_CARD_SIZES = "(max-width: 700px) 100vw, 400px";
@@ -1531,6 +1533,26 @@ function BuilderSectionPreview({
   // preset otherwise. Both the grid and the token the mobile stylesheet reads
   // take the same answer, so they cannot disagree.
   const sectionGridTemplate = getSectionGridTemplate(section);
+  /*
+   * A video background is the one mode that is not CSS. `sectionStyle` above
+   * has already painted its POSTER, so the row reads correctly before this
+   * layer mounts, while it buffers, and in every state where the layer decides
+   * not to play at all (reduce motion, phone width). The <video> simply covers
+   * the still when it is allowed to run.
+   *
+   * Overlay slots are excluded on purpose: they are not really rows, and the
+   * containment below would clip the very thing they exist to let overflow.
+   */
+  const sectionVideoBackground =
+    !isOverlayLayoutCollapsed &&
+    section.background?.mode === "video" &&
+    Boolean(section.background?.videoUrl)
+      ? section.background
+      : null;
+  const sectionOverlayScreenStyle = isOverlayLayoutCollapsed
+    ? undefined
+    : getBuilderRowOverlayScreenStyle(section.overlayScreen);
+
   const gridStyle: CSSProperties = {
     // Band first: a section carrying its own background never gets one, so
     // this cannot overwrite an operator's choice.
@@ -1575,6 +1597,13 @@ function BuilderSectionPreview({
           borderRadius: `${section.rowBorderRadius ?? "0"}px`
         }
       : {}),
+    // Containment for the video layer and the tint screen, both of which are
+    // absolutely positioned children. Without `overflow: hidden` a blurred
+    // video — which is scaled up so its soft rim falls outside — would spill
+    // over the rows above and below it.
+    ...(sectionVideoBackground || sectionOverlayScreenStyle
+      ? { position: "relative", overflow: "hidden" }
+      : {}),
     display: "grid",
     gridTemplateColumns: sectionGridTemplate,
     ...(isOverlayLayoutCollapsed ? { gap: 0 } : getSectionColumnGapStyle(section)),
@@ -1593,9 +1622,19 @@ function BuilderSectionPreview({
           : ""
       }${
         section.widthMode === "full-width" ? " builder-preview-section-full-width" : ""
+      }${
+        sectionVideoBackground || sectionOverlayScreenStyle
+          ? " builder-preview-section-layered"
+          : ""
       }`}
       style={gridStyle}
     >
+      {sectionVideoBackground ? (
+        <BuilderVideoBackgroundLayer background={sectionVideoBackground} surface="section" />
+      ) : null}
+      {sectionOverlayScreenStyle ? (
+        <div className="builder-preview-row-overlay-screen" style={sectionOverlayScreenStyle} />
+      ) : null}
       {columnKeys.map((columnKey) => {
         const columnModules = section.modules.filter((module) => module.column === columnKey);
         // What share of the row this column occupies, so an image inside it can
