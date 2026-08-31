@@ -388,6 +388,7 @@ test('a TERMINAL marker is still spent forever — a merged PR is never re-merge
 
 const {
   markerKind,
+  mayPromiseApproval,
   refusalNotice,
   conflictHandOffNotice,
   mergedNotice,
@@ -404,14 +405,29 @@ const SOME_PR = { number: 380, url: PR_URL };
  * body MUST NOT — that promise is exactly the lie the conflict hand-off told
  * eleven tickets on 2026-08-23. Building body and marker in one function is
  * what makes this checkable at all; before, they lived in different files.
+ *
+ * SHARPENED 2026-08-30 (task 86bbq0fh8). A re-decidable marker turned out not
+ * to be enough. "It goes through on its own" is only true if somebody is going
+ * to deal with the reason, and on a conflict nobody was: the hand-off asked
+ * the bus for an agent session, nothing reads the bus, and PR #434 sat three
+ * days under a comment saying it was progressing. So the promise now needs
+ * BOTH a re-decidable marker and a named actor, and `actor: 'nobody'` is the
+ * case that must stay silent about merging and say it is stalled instead.
  */
+const FILED = { id: '86bbzzzzz', url: 'https://app.clickup.com/t/86bbzzzzz' };
+
 function assertPromiseMatchesMarker(notice, label) {
   const kind = markerKind(notice.marker);
   const promises = notice.body.includes(APPROVAL_CARRIES_OVER);
+  assert.ok(notice.actor, `${label}: every notice must name who acts next`);
+  const mayPromise = mayPromiseApproval({ marker: notice.marker, actor: notice.actor });
+  assert.equal(promises, mayPromise,
+    `${label}: marker ${kind}, actor "${notice.actor}" — the body ${promises ? 'promises' : 'does not promise'} the approval carries over and should ${mayPromise ? '' : 'not '}`);
   if (kind === 'terminal') {
     assert.equal(promises, false, `${label}: terminal marker (${notice.marker}) must not promise the approval carries over`);
-  } else {
-    assert.equal(promises, true, `${label}: re-decidable marker (${notice.marker}) should say so`);
+  }
+  if (notice.actor === 'nobody') {
+    assert.equal(promises, false, `${label}: no actor exists, so it must not promise a merge`);
   }
 }
 
@@ -425,13 +441,72 @@ test('EVERY notice the merge path posts says truthfully whether the approval sur
     'hand-off, unchecked locally',
   );
   assertPromiseMatchesMarker(
-    conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: { realConflict: true, reason: 'both touched routes/index.js' } }),
-    'hand-off, real overlap',
+    conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: { realConflict: true, reason: 'both touched routes/index.js' }, filed: FILED }),
+    'hand-off, real overlap, ticket filed',
+  );
+  assertPromiseMatchesMarker(
+    conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: { realConflict: true, reason: 'both touched routes/index.js' }, filed: null }),
+    'hand-off, real overlap, NOTHING filed',
   );
   assertPromiseMatchesMarker(
     mergedNotice({ commentId: '77', pr: SOME_PR, mergedAt: '2026-08-23T10:00:00.000Z' }),
     'merged',
   );
+});
+
+// ---------- a hand-off names its actor, or says there isn't one (86bbq0fh8)
+
+test('THE BUG: a real conflict with nothing filed must not say it will merge', () => {
+  // PR #434, 2026-08-26 to 2026-08-29. The comment said the approval stood and
+  // it would merge once the branch was caught up; "once the branch is caught
+  // up" had no owner, the bus post asking for an agent session went into a
+  // room nothing reads, and three days passed. Dane found it himself.
+  const { body, actor } = conflictHandOffNotice({
+    commentId: '77', pr: SOME_PR, filed: null,
+    localVerdict: { kind: 'real-conflict', reason: 'both touched routes/index.js' },
+  });
+  assert.equal(actor, 'nobody');
+  assert.ok(!body.includes(APPROVAL_CARRIES_OVER), 'must not promise the approval carries over with no actor');
+  assert.doesNotMatch(body, /will merge|goes through on its own|on a later run/i,
+    'must not describe a merge that nothing is going to perform');
+  assert.match(body, /Nothing is currently working on it/i, 'must say plainly that it is stalled');
+  assert.match(body, /agent session/i, 'must name what kind of actor it needs');
+});
+
+test('a filed conflict ticket IS the named actor, and the body says which one', () => {
+  const { body, actor } = conflictHandOffNotice({
+    commentId: '77', pr: SOME_PR, filed: FILED,
+    localVerdict: { kind: 'real-conflict', reason: 'both touched routes/index.js' },
+  });
+  assert.equal(actor, 'loop-queue');
+  assert.match(body, new RegExp(FILED.id), 'the ticket that will do the work must be named by id');
+  assert.match(body, new RegExp(FILED.url.replace(/[/.]/g, '\\$&')), 'and linked');
+  assert.match(body, /build loop drains every pass/i, 'and the reader must be told that actor is already running');
+  assert.ok(body.includes(APPROVAL_CARRIES_OVER), 'with a real actor the approval genuinely does carry over');
+});
+
+test('no hand-off leans on the passive voice to imply an actor it cannot name', () => {
+  // vault doctrine/TERMINOLOGY.md, 2026-08-29: a hand-off names which of the
+  // two it needs — a person or an agent session — and passive voice implying
+  // an unnamed one is itself the defect.
+  const stalled = conflictHandOffNotice({
+    commentId: '77', pr: SOME_PR, filed: null,
+    localVerdict: { kind: 'real-conflict', reason: 'overlap' },
+  }).body;
+  for (const weasel of [/it will be (?:merged|caught up|resolved)/i, /once the branch is caught up/i]) {
+    assert.doesNotMatch(stalled, weasel, `passive promise with no actor behind it: ${weasel}`);
+  }
+});
+
+test('a stale GitHub answer still retries, filed or not — only a REAL overlap needs an actor', () => {
+  // 'unknown' means the local check could not run. That genuinely does retry
+  // usefully on the next pass, so it keeps its promise and needs nobody.
+  for (const filed of [null, FILED]) {
+    const n = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null, filed });
+    assert.equal(n.actor, 'later-pass');
+    assert.ok(n.body.includes(APPROVAL_CARRIES_OVER));
+    assert.match(n.body, /merged on the next run/i);
+  }
 });
 
 test('the two hand-off kinds say two different things', () => {
@@ -490,8 +565,12 @@ test('only a REAL overlap is denied the "next run" promise', () => {
   // outcome it cannot deliver. A real overlap will hit the same wall next
   // pass, so it must not say the next run merges it; anything else retries
   // usefully and must say so, or he is left wondering whether to act.
+  // With a ticket filed there IS an actor, so the "later run" promise is
+  // honest; without one the body must not promise a merge at all, which the
+  // stalled-hand-off tests above cover.
   const real = conflictHandOffNotice({
-    commentId: '77', pr: SOME_PR, localVerdict: { realConflict: true, reason: 'both touched routes/index.js' },
+    commentId: '77', pr: SOME_PR, filed: FILED,
+    localVerdict: { realConflict: true, reason: 'both touched routes/index.js' },
   }).body;
   assert.doesNotMatch(real, /on the next run/i);
   assert.match(real, /on a later run/i);
@@ -629,6 +708,17 @@ test('still running inside the budget means ask again', () => {
   assert.equal(out.action, 'poll-again');
 });
 
+test('a branch that goes behind during the wait ends the wait — polling cannot catch it up', () => {
+  // BREAK-TEST: delete the update-branch arm of afterCatchUpDecision and this
+  // fails — `assert.equal(out.action, 'update-branch')` reports 'poll-again',
+  // which polls out the full budget and then answers "CI was still running"
+  // about a branch whose CI was fine and had merely fallen behind main
+  // (found in review, 2026-08-30, task 86bbmk7pv).
+  const out = afterCatchUpDecision({ gate: { action: 'update-branch', reason: 'the branch is behind main' }, elapsedMs: 1000 });
+  assert.equal(out.action, 'update-branch');
+  assert.equal(out.reason, 'the branch is behind main');
+});
+
 test('OUT OF BUDGET IS A WAIT, never a merge', () => {
   // The whole safety of this feature. A slow CI run must not become either a
   // failure or an unchecked merge — it must become exactly the outcome the
@@ -702,12 +792,28 @@ test('the relay waits after BOTH catch-up paths, and merges the same way', () =>
   // Counting the NAME is not enough: a first version of this assertion counted
   // `waitForChecksInPass(` and a break that left the identifier in place while
   // never calling it passed cleanly. The AWAITED calls are the thing.
+  //
+  // THREE since 2026-08-26 (task 86bbmk7pv): the two catch-up paths, plus the
+  // re-run of a stale review gate, which waits for the same reason — a merge
+  // that has to wait three minutes should not wait a whole relay interval.
   const awaited = (src.match(/await waitForChecksInPass\(/g) || []).length;
-  assert.equal(awaited, 2,
-    `expected exactly 2 awaited calls, one per catch-up path, found ${awaited}`);
+  assert.equal(awaited, 3,
+    `expected exactly 3 awaited calls — two catch-up paths and the stale review-gate re-run — found ${awaited}`);
   assert.match(src, /branch updated from main —/);
+  assert.match(src, /re-ran the stale review gate/,
+    'the stale review-gate re-run must say so on the console, like every other path here');
 
-  // It must NOT decide mergeability itself.
-  assert.match(src, /gate: githubGate\(json\)/,
-    'the in-pass wait must re-ask the same gate, not re-implement it');
+  // It must NOT decide mergeability itself. The `gateOf` hook added for the
+  // stale-gate re-run narrows when to KEEP WAITING; it can never widen "may
+  // merge", because its default is githubGate and the one caller that
+  // overrides it composes with githubGate rather than replacing it — through
+  // the pure, tested duringRerunWait, whose only pass-through is a FRESH
+  // answer (an 'absent' mid-swap rollup keeps waiting; reviewGate.test.js
+  // pins that arm by behaviour).
+  assert.match(src, /gateOf = githubGate/,
+    'the in-pass wait must default to the same gate');
+  assert.match(src, /gate: gateOf\(json\)/,
+    'the in-pass wait must re-ask the gate it was given, not re-implement it');
+  assert.match(src, /reviewGate\.duringRerunWait\(\{\n\s*staleness: reviewGate\.reviewGateStaleness\(\{ rollup: json\.statusCheckRollup, comments \}\),\n\s*gate: githubGate\(json\),/,
+    'the stale-gate hook must route through the tested duringRerunWait, composed with githubGate for the actual merge decision');
 });

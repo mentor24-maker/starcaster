@@ -99,7 +99,7 @@ function documentFor(...specs) {
 /** A page carrying ONE section with the given layout + modules — so a contract
  *  can measure a SECTION-level layout (e.g. the 4/5/6 equal-column rows), which
  *  documentFor (always `layout: 'single'`) cannot reach. */
-function documentForSection({ layout = 'single', modules = [] } = {}) {
+function documentForSection({ layout = 'single', modules = [], background, overlayScreen } = {}) {
   return {
     name: 'Render Contract Section',
     layoutSections: [{
@@ -109,6 +109,11 @@ function documentForSection({ layout = 'single', modules = [] } = {}) {
       locked: false,
       alignment: 'left',
       widthMode: 'contained',
+      // Section-level background and tint. Dropping these was fine while every
+      // background was CSS on the section itself; a video background renders a
+      // real element, so a contract cannot reach it without them.
+      ...(background ? { background } : {}),
+      ...(overlayScreen ? { overlayScreen } : {}),
       modules: modules.map(moduleFrom),
     }],
   };
@@ -126,8 +131,8 @@ async function render(page, doc) {
 /**
  * Everything a contract can assert on, sampled twice so motion is provable.
  */
-function sample(page, selector, read, settleMs) {
-  return page.evaluate(async ({ selector, read, settleMs }) => {
+function sample(page, selector, read, settleMs, series) {
+  return page.evaluate(async ({ selector, read, settleMs, series }) => {
     const doc = document.documentElement;
     const modules = document.querySelectorAll('.builder-preview-module');
     const el = document.querySelector(selector);
@@ -154,10 +159,40 @@ function sample(page, selector, read, settleMs) {
     const styles = {};
     for (const prop of read) styles[prop] = cs[prop];
 
+    /*
+     * A TIME SERIES, for behaviour that only exists as a change.
+     *
+     * Some things cannot be read from one frame. A crossfade at a video's loop
+     * seam is the case that forced this: the two elements exist, they carry an
+     * opacity transition, and every single-instant assertion about them passes
+     * with the handoff completely dead — measured, not guessed. What proves a
+     * dissolve is two copies both PARTLY visible at the same moment, and that
+     * only appears if you watch.
+     *
+     * Each entry samples the named selectors' computed properties repeatedly
+     * and hands the whole series to `expect`.
+     */
+    let seriesOut = null;
+    if (series) {
+      seriesOut = [];
+      for (let i = 0; i < series.count; i += 1) {
+        const frame = {};
+        for (const [name, sel] of Object.entries(series.selectors)) {
+          const node = document.querySelector(sel);
+          if (!node) { frame[name] = null; continue; }
+          const style = getComputedStyle(node);
+          frame[name] = Object.fromEntries(series.read.map((prop) => [prop, style[prop]]));
+        }
+        seriesOut.push(frame);
+        await new Promise((resolve) => setTimeout(resolve, series.everyMs));
+      }
+    }
+
     const rect = el.getBoundingClientRect();
     return {
       found: true,
       page: page_,
+      series: seriesOut,
       box: { width: Math.round(rect.width), height: Math.round(rect.height) },
       styles,
       animations: after,
@@ -168,7 +203,7 @@ function sample(page, selector, read, settleMs) {
       text: (el.textContent || '').trim().slice(0, 200),
       settleMs,
     };
-  }, { selector, read, settleMs });
+  }, { selector, read, settleMs, series: series ?? null });
 }
 
 /**
@@ -344,9 +379,11 @@ try {
    *      any module overflow before the page ever sees it. Disabling the
    *      corridor's own clip — the regression worth catching — changed the
    *      page width by exactly 0px.
-   *   2. The preview harness's own admin chrome overflows by 2px with NO
-   *      module on the page at all, so the document already "scrolls
-   *      sideways" before anything is rendered.
+   *   2. Until 86bbq2y7x the preview's own admin chrome overflowed by 2px
+   *      with NO module on the page at all, so the document already
+   *      "scrolled sideways" before anything was rendered. The preview now
+   *      renders the live-site markup under a thin strip, so that particular
+   *      noise is gone — but points 1 and 3 still stand on their own.
    *   3. A travelling module sits hundreds of pixels off-screen ON PURPOSE
    *      mid-crossing (measured at left: -332px), which any naive overflow
    *      sweep reports as a violation.
@@ -369,9 +406,51 @@ try {
     );
     process.exit(1);
   }
+  const DEFAULT_VIEWPORT = page.viewportSize();
   for (const contract of RENDER_CONTRACTS) {
+    /*
+     * Optional emulation. Some behaviour is only correct in a condition the
+     * default browser is not in — a visitor who asked for reduced motion, or a
+     * phone-width window. Those paths used to be untestable here, which meant
+     * the only evidence they worked was somebody remembering to toggle a
+     * system setting by hand.
+     */
+    if (contract.emulate?.reducedMotion) {
+      await page.emulateMedia({ reducedMotion: contract.emulate.reducedMotion });
+    }
+    if (contract.emulate?.viewport) {
+      await page.setViewportSize(contract.emulate.viewport);
+    }
+
     await render(page, contract.section ? documentForSection(contract.section) : documentFor(contract.module));
-    const result = await sample(page, contract.selector, contract.read || [], SETTLE_MS);
+    const result = await sample(
+      page,
+      contract.selector,
+      contract.read || [],
+      SETTLE_MS,
+      contract.series
+    );
+
+    if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });
+    if (contract.emulate?.viewport && DEFAULT_VIEWPORT) await page.setViewportSize(DEFAULT_VIEWPORT);
+
+    /*
+     * An ABSENCE contract inverts R1: the whole assertion is that nothing
+     * matches. Kept explicit rather than letting "not found" quietly pass,
+     * because a silent not-found is exactly how the checks in this repo have
+     * died before — this one has to say out loud that absence is the point.
+     */
+    if (contract.absent) {
+      if (result.found) {
+        failures.push(
+          `${contract.id}: \`${contract.selector}\` IS present and it must not be. ` +
+          (contract.why ? `${contract.why}` : '')
+        );
+      } else {
+        measured += 1;
+      }
+      continue;
+    }
 
     // R1 — IT RENDERED AT ALL. Zero measured is a failure, never a pass: this
     // is the single most repeated way a check dies in this repo, and

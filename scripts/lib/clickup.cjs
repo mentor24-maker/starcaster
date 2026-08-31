@@ -60,10 +60,14 @@ async function call(method, apiPath, body) {
  * any list past 100 tasks. An empty page always terminates, so an absent flag
  * just means "fetch the next page" rather than "stop and hope".
  */
-async function listTasks(listId) {
+async function listTasks(listId, { includeClosed = false } = {}) {
+  // includeClosed: ClickUp's v2 list endpoint omits closed-type statuses
+  // (`Live` among them) unless asked. Opt-in, so callers that want only open
+  // work are unaffected.
   const tasks = [];
+  const closedParam = includeClosed ? '&include_closed=true' : '';
   for (let page = 0; page < 50; page++) {
-    const out = await call('GET', `/api/v2/list/${listId}/task?archived=false&page=${page}`);
+    const out = await call('GET', `/api/v2/list/${listId}/task?archived=false${closedParam}&page=${page}`);
     if (!out.ok) throw new Error(`listTasks(${listId}) page ${page}: HTTP ${out.status} ${out.json?.err || out.text.slice(0, 200)}`);
     const batch = Array.isArray(out.json.tasks) ? out.json.tasks : [];
     tasks.push(...batch);
@@ -174,6 +178,11 @@ function postBusMessage(channelId, text) {
 module.exports = {
   WORKSPACE,
   COMMENT_PAGE_SIZE,
+  // The raw door, for callers that need an endpoint this module has no opinion
+  // about (the heartbeat's roll call reads and rewrites a task description).
+  // Exported rather than re-implemented: a second fetch wrapper is a second
+  // place for the token contract and the JSON/non-JSON handling to drift.
+  call,
   listTasks,
   pageComments,
   getTaskComments,

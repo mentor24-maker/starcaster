@@ -2959,12 +2959,36 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-module-editor--feature-cards,
 .builder-react-root .builder-module-editor--program-list {
   display: grid;
-  /* Equal halves (operator, 2026-08-12). The settings column was sized to
-     its own lattice — 360px, its longest label plus its widest control —
-     which read as lopsided next to the card list. Controls keep their own
-     widths inside the wider half; the leftover room stays empty rather
-     than stretching them (W-umbrella). */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /*
+   * THE EDITOR OWNS THE LATTICE TRACKS (ticket 86bbmafd6, 2026-08-26).
+   *
+   * The settings half is spelled out as label · control · leftover instead
+   * of one `1fr`, because the chrome and the settings column below it are
+   * two different boxes and tracks cannot be shared between two grids. Both
+   * of them `subgrid` onto these two named tracks now (see THE CHROME AND
+   * THE SETTINGS COLUMN SHARE ONE LATTICE, further down), so `max-content`
+   * measures the longest label and the longest control across BOTH — which
+   * is the whole point, and is what the split into three tracks buys.
+   *
+   * Equal halves survive it (operator, 2026-08-12). The settings column
+   * sized to its own lattice — ~360px — read as lopsided next to the card
+   * list, so the item column is pinned to half the editor rather than
+   * "whatever is left after the lattice": `calc((100% - gap) / 2)` is the
+   * width `minmax(0, 1fr) minmax(0, 1fr)` used to resolve to, written out.
+   * The leftover track is the empty right-hand part of the settings half —
+   * it exists so the lattice stays compact (W-umbrella: the room stays
+   * empty rather than stretching the controls) while the item column still
+   * begins exactly at the halfway line. Measured at 1440: the item column
+   * starts at x=639 before and after.
+   *
+   * `column-gap` is 0 for the same reason it is 0 on every other lattice —
+   * the 40px of room lives on the label as padding, not in a gutter. The
+   * 24px between the halves is inside the pinned track's own calc.
+   */
+  grid-template-columns:
+    [settings-start lattice-start] max-content minmax(0, max-content) [lattice-end]
+    minmax(0, 1fr) [settings-end items-start]
+    calc((100% - var(--space-6, 24px)) / 2) [items-end];
   /*
    * ROW GAP IS ZERO, and the row spacing comes from margins below.
    *
@@ -2975,7 +2999,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    * 2,777px tall around 463px of content, Slideshow 1,868px around the same.
    * Nothing about it is visible in the CSS, which is why it shipped.
    */
-  gap: 0 var(--space-6, 24px);
+  gap: 0;
   align-items: start;
 }
 
@@ -2987,6 +3011,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   min-width: 0;
   /* The row spacing the gap used to give, charged to the rows that exist. */
   margin-bottom: var(--space-4, 12px);
+}
+
+/* The settings half is three tracks wide in these two, so "column 1" is the
+   whole half rather than one track. A heading, the module's own copy field,
+   anything the card puts above the panel: all of them span it. */
+.builder-react-root .builder-module-editor--feature-cards > *,
+.builder-react-root .builder-module-editor--program-list > * {
+  grid-column: settings-start / settings-end;
 }
 
 .builder-react-root .builder-module-editor--feature-cards > *:last-child,
@@ -3098,9 +3130,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   align-self: start;
 }
 
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings {
-  grid-column: 1;
-}
+/* Both halves of these two editors are placed by NAMED LINE, down with the
+   rules that make them share the chrome's tracks — see THE CHROME AND THE
+   SETTINGS COLUMN SHARE ONE LATTICE. Placing them here as well would have
+   left two rules of equal specificity disagreeing about the same box, which
+   is the trap the carousel's item column already fell into once (see the
+   note below it). */
 
 
 /*
@@ -3128,12 +3163,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    three-column block above, and while it was still named here as well it
    landed back in track 2 — on top of Image Border, since a later rule of
    equal specificity wins. Caught by measuring the live editor; the two
-   columns reported the same x. */
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items {
-  grid-column: 2;
-  grid-row: 1 / span 100;
-  align-self: start;
-}
+   columns reported the same x.
+
+   Moved 2026-08-26 to the named-line block below, with the settings half it
+   is paired with — and it gained `--program-list`, which had never been
+   named in either rule. That omission was visible in the running editor and
+   nowhere in the CSS: with no placement of its own, the Programs list
+   auto-placed into column 1 UNDER the chrome and the Layout settings landed
+   in column 2, the mirror image of Feature Cards. `> *` could not reach
+   them to say otherwise, because `.builder-cards-panel` is `display:
+   contents` and a direct-child selector does not see through it. */
 
 /* The two column names. Bigger than a group title (operator: "make the
    column headings larger font") — they name a whole column, while Layout,
@@ -3350,12 +3389,29 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    has to give up its row-1 placement too, or it would sit above the Label
    row it is supposed to follow. */
 @media (max-width: 1000px) {
-  .builder-react-root .builder-module-editor--feature-cards,
   .builder-react-root .builder-module-editor--carousel {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
+  /*
+   * These two keep their two lattice tracks — a box cannot `subgrid` onto
+   * tracks that are not there, and collapsing to `minmax(0, 1fr)` would take
+   * them away and drop the chrome and the panel back into one cell each.
+   * The names simply all land on the same two lines, so "the settings half"
+   * and "the item column" both become the whole width and the list stacks
+   * under the settings exactly as before.
+   */
+  .builder-react-root .builder-module-editor--feature-cards,
+  .builder-react-root .builder-module-editor--program-list {
+    grid-template-columns:
+      [settings-start items-start lattice-start] max-content minmax(0, max-content) [lattice-end]
+      minmax(0, 1fr) [settings-end items-end];
+  }
+
+  /* Feature Cards and Program List give theirs up further down instead, in
+     the block that pins it — a media query carries no extra specificity, so
+     an override has to come after the rule it is overriding, not merely be
+     wrapped in an `@media`. */
   .builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
     grid-column: 1;
     grid-row: auto;
@@ -4131,6 +4187,113 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .is-lattice .builder-module-chrome .builder-background-controls-horizontal .builder-module-field-strip,
 .builder-react-root .is-lattice.builder-module-editor > .builder-module-field-strip > .builder-module-field {
   display: contents;
+}
+
+/* ---------------------------------------------------------------------------
+ * THE CHROME AND THE SETTINGS COLUMN SHARE ONE LATTICE
+ * (ticket 86bbmafd6, 2026-08-26 — the second half of the operator's
+ * 2026-08-13 note, *"the column width varies arbitrarily between the
+ * Settings fields and the Layout fields"*.)
+ *
+ * The first half shipped in PR 432 and made the chrome ONE column. It could
+ * not close the rest, because the chrome and the panel below it are two
+ * boxes, and two grids cannot share a track no matter how identically they
+ * are written. Measured on Feature Cards at 1440 after PR 432: the chrome put
+ * its controls at x=125 and the Layout / Card / Icons / Link groups directly
+ * beneath put theirs at x=158. Two label tracks, 33px apart, one under the
+ * other — exactly the pairing he pointed at.
+ *
+ * SUBGRID is what makes one track out of two boxes, and it is already the
+ * house answer to this shape: `.builder-schema-axis-section` joined its
+ * column's lattice the same way on 2026-08-13. Each box keeps its own rows —
+ * they are separate items of the editor and must stack, not interleave —
+ * while its COLUMNS are the editor's, so `max-content` measures the longest
+ * label and the longest control across the chrome AND the panel at once.
+ * That is the sharing; nothing else in here does any work.
+ *
+ * WHY ONLY THESE TWO EDITORS. Because measuring said so, and reading the CSS
+ * had said otherwise:
+ *   · Feature Cards  — the bug, as above.
+ *   · Program List   — the same, plus its own halves had never been placed
+ *                      at all (see the note on the item column above).
+ *   · Carousel       — its chrome is ALONE in column 1; Image Border is a
+ *                      column of its own in track 2. Nothing sits under the
+ *                      chrome to disagree with it.
+ *   · Social         — has no `.builder-module-chrome`. It renders Label,
+ *                      Background, Alignment and the margins as rows of its
+ *                      own Structure column, so the two already ARE one
+ *                      grid. This is the same fix, reached from the React
+ *                      side, and it is why Social measured clean.
+ * Both of those hold today and are asserted, not assumed: `check_panels`
+ * measures every panel that declares a shared lattice, and a panel that
+ * stops sharing one fails.
+ *
+ * `column-gap: 0` on each subgrid is not decoration. A subgrid keeps its OWN
+ * gutters rather than the parent's, and the axis-section rule above paid for
+ * that lesson in six invisible pixels.
+ * ------------------------------------------------------------------------ */
+
+/* The chrome flattens so that the strip inside it — not the chrome box — is
+   the item that lands on the editor's tracks. Keeping the STRIP as the
+   subgrid rather than the chrome is deliberate: `check_panels` measures
+   `.builder-module-chrome > .builder-module-field-strip` and needs it to
+   have a box, and a `display: contents` element measures 0×0 at the origin,
+   which would silently turn every chrome offset in the report into a raw
+   viewport coordinate. */
+.builder-react-root .builder-module-editor--feature-cards > .builder-module-chrome,
+.builder-react-root .builder-module-editor--program-list > .builder-module-chrome {
+  display: contents;
+}
+
+/* Every child, not just the strip: a chrome that grows a second row later
+   lands on the lattice too, instead of auto-placing into the label track. */
+.builder-react-root .builder-module-editor--feature-cards > .builder-module-chrome > *,
+.builder-react-root .builder-module-editor--program-list > .builder-module-chrome > * {
+  grid-column: lattice-start / lattice-end;
+  /* The chrome box carried this from `> *`; flattening it hands the job to
+     the rows, or the panel below would sit against the last margin row. */
+  margin-bottom: var(--space-4, 12px);
+}
+
+.builder-react-root .builder-module-editor--feature-cards > .builder-module-chrome > .builder-module-field-strip,
+.builder-react-root .builder-module-editor--program-list > .builder-module-chrome > .builder-module-field-strip {
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+  column-gap: 0;
+}
+
+/* The settings half, on the same two tracks. This is also where the two
+   editors' columns are PLACED — by name, in one rule, so the placement and
+   the track-sharing can never drift apart. */
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings,
+.builder-react-root .builder-module-editor--program-list .builder-cards-panel-settings {
+  grid-column: lattice-start / lattice-end;
+  grid-template-columns: subgrid;
+  column-gap: 0;
+}
+
+/* `span 100` rather than `1 / -1`, for the reason the block above gives: -1
+   on an implicit grid collapses the column to a single row. */
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
+.builder-react-root .builder-module-editor--program-list .builder-cards-panel-items {
+  grid-column: items-start / items-end;
+  grid-row: 1 / span 100;
+  align-self: start;
+}
+
+/* Narrow: one column, the list under the settings rather than beside them.
+   Only the ROW placement has to go — `items-start / items-end` already
+   spans the whole width once the narrow track list puts those two names on
+   the outer lines. It lives here, after the rule it undoes, because an
+   `@media` block adds no specificity and the cascade would otherwise settle
+   it by source order in the wrong direction. */
+@media (max-width: 1000px) {
+  .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
+  .builder-react-root .builder-module-editor--program-list .builder-cards-panel-items {
+    grid-row: auto;
+  }
 }
 
 /*
@@ -6681,4 +6844,153 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ *
+ * Builder Preview strip (86bbq2y7x)
+ *
+ * The preview page renders the live-site markup (`.builder-public-site`) so
+ * it looks like starcaster.pro/<slug>; the only thing that says "this is a
+ * preview" is this thin yellow strip. It is sticky, not fixed, so it takes
+ * its own 32px and never covers the page's first row.
+ * ------------------------------------------------------------------ */
+.builder-react-root .builder-preview-strip {
+  position: sticky;
+  top: 0;
+  z-index: 10000;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--preview-strip-bg);
+  color: var(--preview-strip-ink);
+  font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+.builder-react-root .builder-preview-strip-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+
+.builder-react-root .builder-preview-strip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.builder-react-root .builder-preview-strip-toggle {
+  display: inline-flex;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.builder-react-root .builder-preview-strip button {
+  appearance: none;
+  margin: 0;
+  padding: 3px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--preview-strip-ink);
+  font: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-preview-strip-toggle button + button {
+  border-left: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.builder-react-root .builder-preview-strip-toggle button.is-active {
+  background: var(--preview-strip-ink);
+  color: var(--preview-strip-bg);
+}
+
+.builder-react-root .builder-preview-strip-close {
+  text-decoration: underline;
+}
+
+/* Browser mode has no wrapper, so the phone frame needs room of its own. */
+.builder-react-root.builder-public-site .builder-preview-device-mobile {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+.builder-react-root.builder-public-site .builder-preview-device-email {
+  padding: 24px 12px;
+}
+
+.builder-react-root .builder-preview-empty {
+  max-width: 640px;
+  margin: 15vh auto;
+  padding: 0 24px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-align: center;
+}
+
+/*
+ * Video backgrounds — the layer, the tint screen over it, and the stacking
+ * that keeps the row's own content in front of both.
+ *
+ * The section paints the POSTER as its own CSS background
+ * (`getBuilderBackgroundStyle`), so everything here sits on top of a still
+ * that is already correct. That is why there is no poster rule below: when the
+ * layer decides not to play — reduce motion, phone width, a refused autoplay —
+ * it renders nothing and the still is simply what remains.
+ */
+.builder-preview-video-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.builder-preview-row-overlay-screen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/*
+ * The columns are grid children; the two layers above are absolutely
+ * positioned and out of flow. Without a stacking context of their own the
+ * columns would paint underneath the video, which reads as the row having
+ * gone blank.
+ */
+.builder-preview-section-layered > .builder-preview-column {
+  position: relative;
+  z-index: 2;
+}
+
+/*
+ * The Video background panel. The warning is a plain sentence rather than a
+ * red error box on purpose: a missing poster is a bad idea, not an invalid
+ * setting, and the operator is allowed to save without one.
+ */
+.builder-video-background-warning,
+.builder-video-background-note {
+  margin: 6px 0 0;
+  max-width: 62ch;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--ink-secondary, #4a5568);
+}
+
+.builder-video-background-warning {
+  color: var(--ink-primary, #1a202c);
+  font-weight: 600;
 }

@@ -23,6 +23,17 @@ to do with saved sections; do not read it as "locked to the canonical".
 
 So an instance is in one of four states:
 
+> **One polarity, since Sync 7/7.** "Does this copy follow its master?" has one
+> answer at both levels: `canonical === true`. The module side used to say the
+> opposite thing with the opposite flag (`canonicalLocked: true` meant *don't*),
+> which is still READ — nothing on a live page was rewritten to ship this — but
+> is no longer written. Each level also keeps the default it has always had for
+> a copy that never answered: an unmarked **section** does not follow (inserting
+> one has always offered "linked" or "just a copy"), an unmarked **module**
+> does (it never had an opt-in, only the opt-out). Both readers live in
+> `lib/builder-client/canonical-follow.ts`, with a hand-ported twin in
+> `lib/canonicalPropagation.js` for the server.
+
 - **Following** — `canonical: true`. The card shows *(canonical)*, the editor is
   closed, and only the Unlock button is offered. There is deliberately no 💾
   here: nothing has changed to save.
@@ -73,7 +84,13 @@ immediately; the page you are looking at still needs its own Save.
 
 ## 3. What propagation actually touches
 
-`propagateCanonicalSection` (`lib/builderPagesStore.js`):
+`propagateCanonicalSection` — since **Sync 7/7** a thin wrapper over the one
+engine in `lib/canonicalPropagation.js`, which the saved-**module** push
+(`propagateCanonicalModule`) also calls. Before that there were two engines and
+they disagreed about five things; the worst was that the module push was
+fire-and-forget, so serverless froze it partway down the page list every time.
+`lib/builderPagesStore.js` still exports the section name, for the callers that
+already reached for it there.
 
 - Targets pages holding a section where `canonical === true` **and**
   `savedSectionId` matches. An unlinked copy is skipped — that is the whole
@@ -95,6 +112,17 @@ immediately; the page you are looking at still needs its own Save.
 - That `runId` is what `POST /api/builder/propagation-runs/:runId/undo` rolls
   back. A page skipped for drift was never written, so it holds no revision
   for this run and undo never touches it either — consistent either way.
+- **Templates are reached, and content is never written into one.** A template
+  stores its frame sections as REFERENCES since `cb27a65` and resolves them
+  against the live master when it is applied, so pushing content back in would
+  recreate the second source of truth that commit deleted. The only template-
+  side operation is the opposite one: a legacy stored **copy** of the master
+  being saved is normalized down to a reference. A reference is left alone.
+  **Template writes are not undoable** — `builder_page_templates` has no
+  revision table, so nothing banks a restore point. Shipped that way on the
+  operator's decision (2026-08-23, "ship it without undo"); a mistaken
+  normalization is fixed by hand, and the tally says `templates.undoable: false`
+  rather than letting a caller assume the page undo covers these too.
 
 **Local edits on a following page are replaced, without a merge — unless the
 copy has drifted, in which case it is left alone by default.** There is still
@@ -180,4 +208,5 @@ you are editing holds a second following copy of the same section.
 | Card states, badges, buttons | `components/builder/builder-section-card.tsx` |
 | Routes | `routes/builder.js` — `/api/builder/saved-sections*`, `/force-propagate` |
 | Store | `lib/builderSavedSectionsStore.js` — `getSavedSection` reads the pre-save original |
-| Fan-out, drift skip, and undo | `lib/builderPagesStore.js` — `propagateCanonicalSection` |
+| Fan-out, drift skip, templates, and undo | `lib/canonicalPropagation.js` — one engine for both levels |
+| "Does this copy follow its master?" | `lib/builder-client/canonical-follow.ts` — hand-ported CJS twin: `followsMaster` / `markFollowing` in `lib/canonicalPropagation.js` |

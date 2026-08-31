@@ -817,6 +817,39 @@ const buildPanelCheckSection = (ids) => {
   locked: false,
   alignment: 'left',
   widthMode: 'contained',
+  /*
+   * A VIDEO row background, so the Video sub-panel in Row Background actually
+   * renders and gets measured. Its controls only exist while the mode is
+   * "video", so on any other background this check would report a confident
+   * green having never seen them — the exact hole that let two staggered
+   * panels reach the operator in August 2026.
+   */
+  background: {
+    mode: 'video',
+    videoUrl: '/images/render-fixture-background.mp4',
+    posterUrl: '/images/render-fixture-background-poster.jpg',
+    videoSpeed: 1,
+    videoLoop: true,
+  },
+  /*
+   * AND AN OVERLAY SCREEN, for exactly the reason above one level along.
+   *
+   * The Overlay group's dependent controls — the colour picker, the opacity
+   * select — only exist while the type is something other than "none", so on
+   * an unseeded row the whole group is ONE label/field pair. A group of one
+   * always agrees with itself, which means `check_panels` would measure it,
+   * find nothing to disagree, and report a confident green over a lattice it
+   * had never actually tested (the same shape as #432). Breaking the group's
+   * layout on purpose passes without this; with it, it fails.
+   *
+   * Colour rather than image so the fixture does not depend on a seeded
+   * asset, and 45 rather than 100 so the opacity select shows a value that
+   * would be visibly wrong if it stopped being read.
+   */
+  overlayScreen: {
+    background: { mode: 'color', color: '#1b2a4a' },
+    opacity: 45,
+  },
   modules: [
     ...BUILDER_MODULE_TYPES.map((type) => {
       const base = createEmptyModule(type, 'main');

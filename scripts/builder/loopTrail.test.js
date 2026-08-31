@@ -60,8 +60,25 @@ test('the newest line wins, so a rebuild verifies against its own PR', () => {
 
 test('the link runs the other way too: the PR body must name its ticket', () => {
   assert.equal(prBodyCarriesTicket(`Closes ${TASK_URL}\n\nSummary.`, TASK, TASK_URL), true);
-  assert.equal(prBodyCarriesTicket(`ClickUp: ${TASK}`, TASK, TASK_URL), true);
-  assert.equal(prBodyCarriesTicket(`ClickUp: ${TASK.toUpperCase()}`, TASK, TASK_URL), true);
+  // ClickUp's own "copy link" button includes the workspace id.
+  assert.equal(
+    prBodyCarriesTicket(`Closes https://app.clickup.com/t/90141423066/${TASK}`, TASK, TASK_URL),
+    true,
+  );
+  // Ids are quoted in mixed case in the wild.
+  assert.equal(prBodyCarriesTicket(`Closes ${TASK_URL.toUpperCase()}`, TASK, TASK_URL), true);
+});
+
+test('a bare task id is NOT a link — this command and the review gate agree now', () => {
+  // Until 2026-08-26 (task 86bbmmv7t, finding 2) a bare id passed here and was
+  // then refused by the review gate, which has always wanted the URL — so
+  // `pr-opened` called a PR traceable and the gate told the same reader, of the
+  // same body, that it carried no ticket link. The two read one matcher now.
+  //
+  // BREAK-TEST: point prBodyCarriesTicket back at a substring search for the
+  // id and this fails, along with the agreement test in reviewGate.test.js.
+  assert.equal(prBodyCarriesTicket(`ClickUp: ${TASK}`, TASK, TASK_URL), false);
+  assert.equal(prBodyCarriesTicket(`ClickUp: ${TASK.toUpperCase()}`, TASK, TASK_URL), false);
 });
 
 test('BREAK IT: a PR body with a plain summary and no ticket is refused', () => {
@@ -152,7 +169,9 @@ test('the gate runs BEFORE anything is written, on both doors', () => {
   // task read that leads to the write. A refusal has to leave the ticket
   // exactly where it was.
   const askAt = SCRIPT.indexOf('if (!noMove && await readyToLaunchRefused');
-  const cardAt = SCRIPT.indexOf("call('POST', `/api/v2/task/${task}/comment`, { comment_text: rendered })");
+  // The card posts in ClickUp's structured shape since task 86bbq5ruz (the
+  // banner is bold and red, and colour only exists there).
+  const cardAt = SCRIPT.indexOf("call('POST', `/api/v2/task/${task}/comment`, { comment: commentBody })");
   assert.ok(askAt > 0 && cardAt > askAt, 'the ask gate must run before the card is posted');
 
   const statusAt = SCRIPT.indexOf('if (await readyToLaunchRefused(task, status)) process.exit(2)');
