@@ -1,3 +1,41 @@
+## 2026-08-29 — The CRM Form settings panel was never being checked (#451)
+
+Back on 8/13 you pointed at a module's settings panel and said the column width
+"varies arbitrarily between the Settings fields and the Layout fields." That
+started a sweep to bring every panel onto one grid, so labels all start on the
+same line and fields all end on the same one. This is panel 9 of 15: the two CRM
+panels.
+
+The interesting part is what the check had been telling us. There is an
+automated check that opens the real app and measures every panel. It was passing.
+But before changing anything I asked a narrower question — not "does this pass?"
+but "is this panel actually being *looked at*?" — and the answer for the CRM Form
+panel was no. Zero of its eleven fields were being measured. The panel was built
+in a shape the checker does not recognise, so it was skipped, and a skipped panel
+looks exactly like a perfect one in the summary line.
+
+It was not perfect. With a picture taken of it, labels were sitting on top of
+their own boxes, and two of them — "H Margin" and "Field Width" — were being
+sliced off mid-word by the very control they were labelling. That has presumably
+been sitting there for months, inside green run after green run.
+
+The other panel in this ticket, the CRM contacts table, was genuinely fine: all
+ten of its fields were being measured and all ten obeyed the rule. I left it
+alone and said so, rather than touching it to look busy.
+
+The fix changed no styling at all — only the structure of the panel, so that it
+is built the same way the app builds the panels it generates automatically. That
+also means it is now *visible* to the checker, which matters more than this one
+fix: the next time someone breaks it, something will say so.
+
+One thing worth recording, because it nearly let a false pass through here too.
+The ticket asks that you break the check on purpose and watch it fail before you
+believe it. My first attempt to break it **didn't fail** — and that was correct
+behaviour, not a broken check. The grid makes every label box the same size
+automatically, so deliberately setting one to the wrong width just gets absorbed.
+A break that the check *can* see (shifting where the words start) failed
+immediately at all three screen widths. Had I skipped that step, I would have
+reported a green run as proof, exactly as has happened here before.
 ## 2026-08-31 — The overlay controls a row always deserved (#482)
 
 Every row on a Builder page has been able to carry an overlay for months — a
