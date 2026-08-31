@@ -350,10 +350,14 @@ function usage(code = 2) {
   console.error('                                             this loop could actually CLAIM. Prints one integer on stdout');
   console.error('                                             and the reason on stderr; always exits 0 (an unreadable queue');
   console.error('                                             answers with the configured fallback). Floor 900s.');
-  console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->]');
+  console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->] [--if-missing]');
   console.error('                                             record the PR on the ticket in the ONE shape the merge step');
   console.error('                                             can read. Refuses first if the PR body carries no link back');
   console.error('                                             to the ticket, then verifies the comment by parsing it back.');
+  console.error('                                             --if-missing writes nothing when the merge step can ALREADY');
+  console.error('                                             find this PR on the ticket, whoever put it there — for');
+  console.error('                                             `npm run ship`, which is meant to be re-run and would');
+  console.error('                                             otherwise leave one line per catch-up round.');
   console.error('  send-back-rounds --task <id>               how many times this ticket has been sent back, what each round found,');
   console.error('                                             and whether the next one escalates. Exit 3 = escalate, do not send back.');
   console.error('  verdict --task <id> --pass|--fail --if-status "In review" [--body-file <file|->] [--no-guard] [--fourth-round-anyway]');
@@ -2140,52 +2144,74 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
 
+  // IDEMPOTENCE (--if-missing, task 86bbq7z1k). `npm run ship` now records the
+  // trail itself, and ship is designed to be run again whenever main moves
+  // under it — so the SAME PR reaches this command repeatedly. Without a
+  // preflight each run posts another identical line, and the ticket collects
+  // one per catch-up round. The question is not "did I already post" but the
+  // consumer's own question, asked with the consumer's own reader: can the
+  // merge step already find THIS PR here? A line written by a loop, or by hand,
+  // counts exactly the same — it is the trail that matters, not its author.
+  let alreadyRecorded = false;
+  if (flag('if-missing')) {
+    const pre = await call('GET', `/api/v2/task/${task}/comment`);
+    if (!pre.res.ok) die('read the task comments', pre);
+    if (prTrailLanded(pre.json.comments || [], prNumber).ok) {
+      alreadyRecorded = true;
+      console.log(`Task ${task}: PR #${prNumber} is already recorded on this ticket — nothing written.`);
+    }
+  }
+
   // The link the OTHER way round. Two of those four PRs also shipped with no
   // ClickUp link in the body, so ticket and PR could only be matched by
   // reading titles. Checked before the comment is posted: a PR that cannot be
   // traced back to its ticket is not a finished hand-off, and fixing the body
   // afterwards is a step nobody remembers.
-  const view = gh(['pr', 'view', String(prNumber), '--repo', repo, '--json', 'body,url,title,number']);
-  if (!view.ok) {
-    console.error(`Could not read PR #${prNumber} from ${repo}: ${view.stderr.slice(0, 300)}`);
-    console.error('Nothing was written to the ticket.');
-    process.exit(1);
-  }
-  let prJson;
-  try { prJson = JSON.parse(view.stdout); } catch {
-    console.error(`gh returned output that is not JSON for PR #${prNumber}. Nothing was written.`);
-    process.exit(1);
-  }
-  if (!prBodyCarriesTicket(prJson.body, task, taskUrl)) {
-    console.error(`\nPR #${prNumber} has no link back to this ticket in its body, so nothing was written.`);
-    console.error('The trail has to run both ways: the ticket names the PR, the PR names the ticket.');
-    console.error('Otherwise the only way to pair them later is by reading titles and guessing.\n');
-    console.error('Add the line to the PR body and run this again:');
-    console.error(`  ClickUp: ${taskUrl}\n`);
-    process.exit(4);
-  }
+  let lastRes = null;
+  if (!alreadyRecorded) {
+    const view = gh(['pr', 'view', String(prNumber), '--repo', repo, '--json', 'body,url,title,number']);
+    if (!view.ok) {
+      console.error(`Could not read PR #${prNumber} from ${repo}: ${view.stderr.slice(0, 300)}`);
+      console.error('Nothing was written to the ticket.');
+      process.exit(1);
+    }
+    let prJson;
+    try { prJson = JSON.parse(view.stdout); } catch {
+      console.error(`gh returned output that is not JSON for PR #${prNumber}. Nothing was written.`);
+      process.exit(1);
+    }
+    if (!prBodyCarriesTicket(prJson.body, task, taskUrl)) {
+      console.error(`\nPR #${prNumber} has no link back to this ticket in its body, so nothing was written.`);
+      console.error('The trail has to run both ways: the ticket names the PR, the PR names the ticket.');
+      console.error('Otherwise the only way to pair them later is by reading titles and guessing.\n');
+      console.error('Add the line to the PR body and run this again:');
+      console.error(`  ClickUp: ${taskUrl}\n`);
+      process.exit(4);
+    }
 
-  const text = prOpenedComment(prUrl, arg('body-file') ? readBody(arg('body-file')) : '');
-  const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: text });
-  if (!out.res.ok) die('post the "PR opened" comment', out);
+    const text = prOpenedComment(prUrl, arg('body-file') ? readBody(arg('body-file')) : '');
+    const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: text });
+    if (!out.res.ok) die('post the "PR opened" comment', out);
 
-  // Read it back and parse it with the SAME function the merge step uses.
-  // "The write returned 200" is not the question; "can the merge step find
-  // this PR tomorrow" is (DOCTRINE 3.10).
-  const check = await call('GET', `/api/v2/task/${task}/comment`);
-  if (!check.res.ok) {
-    console.error(`WARNING: the comment posted but reading it back FAILED, so the trail is UNVERIFIED.`);
-    console.error('Check the ticket by eye before treating this task as handed off.');
-    process.exit(1);
+    // Read it back and parse it with the SAME function the merge step uses.
+    // "The write returned 200" is not the question; "can the merge step find
+    // this PR tomorrow" is (DOCTRINE 3.10).
+    const check = await call('GET', `/api/v2/task/${task}/comment`);
+    if (!check.res.ok) {
+      console.error(`WARNING: the comment posted but reading it back FAILED, so the trail is UNVERIFIED.`);
+      console.error('Check the ticket by eye before treating this task as handed off.');
+      process.exit(1);
+    }
+    const landed = prTrailLanded(check.json.comments || [], prNumber);
+    if (!landed.ok) {
+      console.error(`\nThe "PR opened" trail did NOT land: ${landed.why}.`);
+      console.error('The merge step will refuse this ticket, and the operator\'s approval will sit');
+      console.error('there doing nothing. Fix the comment by hand before handing this to review.\n');
+      process.exit(1);
+    }
+    console.log(`Task ${task}: PR #${prNumber} recorded (${prUrl}), read back and parsed by the merge step's own reader.`);
+    lastRes = check.res;
   }
-  const landed = prTrailLanded(check.json.comments || [], prNumber);
-  if (!landed.ok) {
-    console.error(`\nThe "PR opened" trail did NOT land: ${landed.why}.`);
-    console.error('The merge step will refuse this ticket, and the operator\'s approval will sit');
-    console.error('there doing nothing. Fix the comment by hand before handing this to review.\n');
-    process.exit(1);
-  }
-  console.log(`Task ${task}: PR #${prNumber} recorded (${prUrl}), read back and parsed by the merge step's own reader.`);
 
   // Now the number exists, so fill it into the work-log entry that was written
   // before it did. This is the whole point of doing it HERE: it is the one
@@ -2231,7 +2257,11 @@ if (cmd === 'whoami') {
     process.exit(1);
   }
 
-  reportLimits(check.res);
+  // Deliberately OUTSIDE the skip above: the placeholder fill has to run even
+  // when the comment was already there. The one state that would otherwise be
+  // unreachable is a run that posted the trail and then failed to fill the
+  // work-log — a second run would skip straight past the repair it exists for.
+  if (lastRes) reportLimits(lastRes);
 
 } else if (cmd === 'verdict') {
   // loop-review's verdict, made into a command for the same reason as

@@ -407,9 +407,15 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
    revert it, watch the named test fail, restore it.
 7. `npm run ship`. **No pause to merge**: merges never collide with the
    loops, `pause` drains for up to half an hour, and a pause older than two
-   hours nags the bus hourly. `ship` re-runs the gates, pushes, waits for CI,
-   merges and tidies; if it stops on a conflict, resolve by hand and run it
-   again.
+   hours nags the bus hourly. `ship` re-runs the gates, pushes, **records the
+   PR on its ticket**, waits for CI, merges and tidies; if it stops on a
+   conflict, resolve by hand and run it again.
+   You do not run `clickup pr-opened` by hand here — `ship` writes that trail
+   itself, from the branch's `clickup-task` stamp, which is why step 4 stamps
+   it even on an existing branch. Without the trail the review gate answers
+   CANNOT TELL and refuses the PR once branch protection is enforcing
+   (`docs/LOOP_ENGINEERING.md`, "Who writes the PR trail"). A branch with no
+   stamp still ships; it says out loud that nothing was recorded.
 8. Ticket to Live with the closing note (gates, live probe, what was
    break-tested); `npm run tidy`; one line on the bus.
 

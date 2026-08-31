@@ -1,3 +1,36 @@
+## 2026-08-31 — `npm run ship` now writes the note that lets a PR be merged (#PR)
+
+There are two ways a finished change reaches the live site. The loops do it on
+their own, and Dane's own lane — `npm run ship` — does it by hand. A guard added
+last week checks, before letting anything merge, that the ticket has a note on
+it saying which pull request belongs to it. No note means the guard cannot tell,
+and it never lets something through it cannot tell about.
+
+The loops have been leaving that note for over a week. `ship` never has — it had
+no connection to ClickUp at all. Nothing was broken yet only because the guard is
+still advisory. The moment it is switched on for real, every change Dane ships by
+hand would have been stuck, waiting on a command nobody would have known to run.
+
+So `ship` writes the note itself now. It already knows which ticket the work is
+for, because starting a piece of work stamps the ticket onto it; it just never
+used that for this. It writes the note before it merges, so even a run that stops
+on a failed check leaves the ticket properly labelled. Running `ship` twice does
+not leave two notes — it asks the guard's own reader whether the note is already
+there, so one written by a loop or typed by hand counts the same. A branch with
+no ticket still ships perfectly well; it just says out loud that nothing was
+recorded, rather than staying quiet, because quiet looks exactly like success.
+And if ClickUp is down, the change still merges — the failure is reported
+loudly with the one command that repairs it, because a note going missing in
+silence is the entire thing being fixed here.
+
+The rules behind all of that were written as their own small piece of code so
+they could be tested, then broken on purpose one at a time — fourteen breaks,
+each of which made a named test fail. Two of those breaks found real bugs before
+the change ever left the branch: one test could not fail at all and was rewritten,
+and the code was reading a ClickUp command that had been killed mid-run as
+though it had succeeded, which is precisely the silent missing note the whole
+job exists to prevent.
+
 ## 2026-08-31 — Parallax was quietly removing a theme's photo tint (#481)
 
 Themes can lay a wash of colour over a photo — the "Photo overlay tint" — and
