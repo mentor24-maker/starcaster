@@ -39,6 +39,7 @@ Newest first. One row per file actually run against production.
 
 | Date | File | What it did |
 |---|---|---|
+| 2026-08-29 | `docs/SQL/project_connections_setup.sql` | **Pending — not yet applied.** Creates `project_connections` (a tenant's own OAuth grants, tokens encrypted at rest) and `project_connection_handoffs` (short-lived, for when one grant covers several postable accounts). Connections 1/7, task 86bbpz1d0. Two new tables and nothing else: no existing table, row or code path is touched, and nothing reads or writes either one until slice 2. RLS on with no policies, matching the 2026-08-17 lockdown. Idempotent — every statement is `if not exists`. |
 | 2026-08-18 | `docs/SQL/starcaster_readonly_role.sql` (re-run) | **Pending.** PR #334 enabled row security on 65 more tables; the file must be re-run or those 65 copy across empty on the next `db:refresh`. Idempotent — adds the missing policies, changes nothing else. |
 | 2026-08-16 | `docs/SQL/starcaster_readonly_role.sql` | Created the `starcaster_readonly` login and gave it read-only access, so `npm run db:refresh` can copy production down without being able to change it. Adds a login and read policies; touches no existing data. |
 

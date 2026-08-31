@@ -18,6 +18,15 @@ function comment(text, atMillis, id = String(atMillis)) {
 const PASS_COMMENT = (at) => comment(loopTrail.verdictComment(true, 'gates green, looked at it'), at);
 const SEND_BACK = (at) => comment(loopTrail.verdictComment(false, 'the panel is staggered'), at);
 
+/**
+ * The ticket's recorded PR line — the trace that says this ticket is about this
+ * PR. Required on every PASS since 2026-08-26 (task 86bbmmv7t, finding 1):
+ * without it the gate cannot tell whose review it is reading.
+ */
+const PR_NUMBER = 433;
+const PR_URL = `https://github.com/mentor24-maker/starcaster/pull/${PR_NUMBER}`;
+const PR_TRAIL = (at) => comment(loopTrail.prOpenedComment(PR_URL), at);
+
 const BODY_WITH_TICKET = [
   'Adds the thing.',
   '',
@@ -33,8 +42,9 @@ const BODY_WITH_TICKET = [
 test('a review PASS newer than the head commit passes the gate', () => {
   const decision = gate.reviewGateDecision({
     prBody: BODY_WITH_TICKET,
+    prNumber: PR_NUMBER,
     headCommittedAt: new Date(NOW - HOUR).toISOString(),
-    comments: [PASS_COMMENT(NOW)],
+    comments: [PASS_COMMENT(NOW), PR_TRAIL(NOW - HOUR)],
   });
   // BREAK-TEST: change reviewGate's final branch to return FAIL and this
   // assertion is the one that fails — the whole gate would refuse every
@@ -100,9 +110,15 @@ test('a send-back as the newest verdict fails, even with an older PASS behind it
 });
 
 test('comment order in the payload does not decide the verdict — the dates do', () => {
-  const jumbled = [SEND_BACK(NOW - HOUR), PASS_COMMENT(NOW), comment('unrelated note', NOW - 2 * HOUR)];
+  const jumbled = [
+    SEND_BACK(NOW - HOUR),
+    PASS_COMMENT(NOW),
+    comment('unrelated note', NOW - 2 * HOUR),
+    PR_TRAIL(NOW - 3 * HOUR),
+  ];
   const decision = gate.reviewGateDecision({
     prBody: BODY_WITH_TICKET,
+    prNumber: PR_NUMBER,
     headCommittedAt: NOW - 2 * HOUR,
     comments: jumbled,
   });
@@ -132,8 +148,9 @@ test('a PASS that predates the newest commit fails — it reviewed code that has
 test('a PASS at the same instant as the commit passes — equal is not stale', () => {
   const decision = gate.reviewGateDecision({
     prBody: BODY_WITH_TICKET,
+    prNumber: PR_NUMBER,
     headCommittedAt: NOW,
-    comments: [PASS_COMMENT(NOW)],
+    comments: [PASS_COMMENT(NOW), PR_TRAIL(NOW - HOUR)],
   });
   assert.equal(decision.verdict, gate.PASS);
 });
@@ -252,8 +269,9 @@ test('the gate and the merge step agree on every fixture verdict', () => {
     const at = NOW;
     const decision = gate.reviewGateDecision({
       prBody: BODY_WITH_TICKET,
+      prNumber: PR_NUMBER,
       headCommittedAt: at,
-      comments: [comment(text, at)],
+      comments: [comment(text, at), PR_TRAIL(at - HOUR)],
     });
 
     const isVerdict = mergeOnComment.isReviewVerdict(text);
@@ -423,8 +441,12 @@ test('a catch-up merge after the review does not make the review stale', () => {
   ];
   const decision = gate.reviewGateDecision({
     prBody: BODY_WITH_TICKET,
+    prNumber: PR_NUMBER,
     headCommittedAt: gate.newestSubstantiveCommitAt(commits),
-    comments: [PASS_COMMENT(Date.parse('2026-08-23T14:11:57Z'))],
+    comments: [
+      PASS_COMMENT(Date.parse('2026-08-23T14:11:57Z')),
+      PR_TRAIL(Date.parse('2026-08-23T14:00:00Z')),
+    ],
   });
   // BREAK-TEST: make newestSubstantiveCommitAt return the newest commit of
   // any kind and this fails. It is the difference between a gate that can be
@@ -618,4 +640,577 @@ test('a placeholder copied out of the documentation is not a reason', () => {
 test('a waiver cannot smuggle itself in on the same line as other text', () => {
   assert.equal(gate.findWaiver('fixes things [gate-waived: because] and ships'), '');
   assert.equal(gate.findWaiver('[gate-waived: because] and ships'), '');
+});
+
+// ===========================================================================
+// STALENESS — the merge step must re-run a gate that answered an older
+// question, not merge on it (2026-08-26, task 86bbmk7pv).
+// ===========================================================================
+
+/** A `review-gate` check run in the shape `gh pr view --json statusCheckRollup`
+ *  actually returns one. */
+function gateRun({ startedAt, completedAt = startedAt, conclusion = 'SUCCESS', status = 'COMPLETED', runId = '7001', name = 'review-gate' }) {
+  return {
+    __typename: 'CheckRun',
+    name,
+    workflowName: 'review-gate',
+    status,
+    conclusion,
+    startedAt: new Date(startedAt).toISOString(),
+    completedAt: completedAt === null ? null : new Date(completedAt).toISOString(),
+    detailsUrl: `https://github.com/alphire/starcaster/actions/runs/${runId}/job/9${runId}`,
+  };
+}
+
+/** Another check on the same PR, so "find the review gate" has to actually find it. */
+const VERIFY_RUN = {
+  __typename: 'CheckRun',
+  name: 'verify',
+  workflowName: 'ci',
+  status: 'COMPLETED',
+  conclusion: 'SUCCESS',
+  startedAt: new Date(NOW).toISOString(),
+  detailsUrl: 'https://github.com/alphire/starcaster/actions/runs/6001/job/96001',
+};
+
+// --- Acceptance criterion 1 — a run older than the newest PASS is stale -----
+
+test('a review-gate run that started before the newest PASS is stale', () => {
+  // BREAK-TEST: invert the comparison in reviewGateStaleness to
+  // `checkStartedAt < verdictAt` and THIS assertion fails —
+  // `assert.equal(staleness.state, 'stale')` reports 'fresh', which is the
+  // live bug: the merge step would merge on a check computed before the
+  // review existed. (The `>` vs `>=` boundary has its own test below; this
+  // fixture is an hour clear of it on purpose, so each rule is pinned by the
+  // test named after it.)
+  const staleness = gate.reviewGateStaleness({
+    rollup: [VERIFY_RUN, gateRun({ startedAt: NOW - HOUR })],
+    comments: [PASS_COMMENT(NOW)],
+  });
+  assert.equal(staleness.state, 'stale');
+  assert.equal(staleness.runId, '7001');
+  assert.match(staleness.reason, /answered a question that has since changed/);
+});
+
+test('staleness is measured from when the run STARTED, not when it finished', () => {
+  // A run that started before the verdict landed and finished after it may or
+  // may not have read the ticket in time. That ambiguity is resolved toward
+  // "stale", because being wrong costs one CI minute in this direction and a
+  // merge on an unreviewed verdict in the other.
+  //
+  // BREAK-TEST: read `completedAt` first in reviewGateStaleness and this
+  // assertion fails — `assert.equal(staleness.state, 'stale')` reports
+  // 'fresh' for a run that provably raced the verdict.
+  const staleness = gate.reviewGateStaleness({
+    rollup: [gateRun({ startedAt: NOW - 60_000, completedAt: NOW + 60_000 })],
+    comments: [PASS_COMMENT(NOW)],
+  });
+  assert.equal(staleness.state, 'stale');
+});
+
+test('a run that started at the same instant as the verdict is stale, not fresh', () => {
+  // BREAK-TEST: change `checkStartedAt > verdictAt` to `>=` and this fails —
+  // `assert.equal(staleness.state, 'stale')` reports 'fresh' on the exact tie,
+  // which is the one case where the run certainly could not have seen it.
+  const staleness = gate.reviewGateStaleness({
+    rollup: [gateRun({ startedAt: NOW })],
+    comments: [PASS_COMMENT(NOW)],
+  });
+  assert.equal(staleness.state, 'stale');
+});
+
+test('freshness measures the newest verdict of ANY kind, not the newest PASS', () => {
+  // A ticket passed, then sent back, is not fresh just because an older PASS
+  // sits behind the send-back. (The merge step refuses a send-back anyway;
+  // this keeps the two halves from disagreeing about which comment counts.)
+  //
+  // BREAK-TEST: swap isReviewVerdict for isReviewPassed in newestVerdictAt and
+  // this fails — `assert.equal(staleness.state, 'stale')` reports 'fresh'.
+  const staleness = gate.reviewGateStaleness({
+    rollup: [gateRun({ startedAt: NOW - HOUR })],
+    comments: [PASS_COMMENT(NOW - 2 * HOUR), SEND_BACK(NOW)],
+  });
+  assert.equal(staleness.state, 'stale');
+});
+
+// --- Acceptance criterion 3 — a fresh run is NOT re-run ---------------------
+
+test('a review-gate run newer than the newest verdict is fresh — no re-run', () => {
+  // BREAK-TEST: make reviewGateStaleness always return 'stale' and this fails —
+  // `assert.equal(staleness.state, 'fresh')` reports 'stale', meaning every
+  // merge on the common path would burn a pointless CI run.
+  const staleness = gate.reviewGateStaleness({
+    rollup: [VERIFY_RUN, gateRun({ startedAt: NOW })],
+    comments: [PASS_COMMENT(NOW - HOUR)],
+  });
+  assert.equal(staleness.state, 'fresh');
+});
+
+test('a PR with no review-gate check at all has no stale answer to re-run', () => {
+  // Deliberately NOT a refusal here: there is no answer to be out of date, and
+  // refusing would strand every PR opened before the workflow existed. GitHub
+  // itself refuses such a PR once the check is required.
+  //
+  // BREAK-TEST: return 'stale' for a missing run and this fails —
+  // `assert.equal(staleness.state, 'absent')` reports 'stale', and the merge
+  // step then tries to re-run a run id it does not have, refusing every PR.
+  const staleness = gate.reviewGateStaleness({ rollup: [VERIFY_RUN], comments: [PASS_COMMENT(NOW)] });
+  assert.equal(staleness.state, 'absent');
+  assert.equal(staleness.runId, '');
+});
+
+test('a review-gate run still in flight is pending, not an answer', () => {
+  // BREAK-TEST: drop the isRunComplete check and this fails —
+  // `assert.equal(staleness.state, 'pending')` reports 'stale', so the merge
+  // step would re-run a check that is already running.
+  const staleness = gate.reviewGateStaleness({
+    rollup: [gateRun({ startedAt: NOW, status: 'IN_PROGRESS', conclusion: null, completedAt: null })],
+    comments: [PASS_COMMENT(NOW - HOUR)],
+  });
+  assert.equal(staleness.state, 'pending');
+});
+
+// --- Acceptance criterion 4 — cannot see is never a pass --------------------
+
+test('an unreadable timestamp on either side is treated as stale, never fresh', () => {
+  // BREAK-TEST: return 'fresh' when a timestamp will not parse and this fails —
+  // `assert.equal(noRunDate.state, 'stale')` reports 'fresh', which is the
+  // "open when you cannot see" mistake the gate exists to refuse.
+  const noRunDate = gate.reviewGateStaleness({
+    rollup: [{ ...gateRun({ startedAt: NOW }), startedAt: 'not a date', completedAt: null }],
+    comments: [PASS_COMMENT(NOW)],
+  });
+  assert.equal(noRunDate.state, 'stale');
+
+  const noVerdictDate = gate.reviewGateStaleness({
+    rollup: [gateRun({ startedAt: NOW })],
+    comments: [{ id: '1', comment_text: 'REVIEW: PASSED (fine)', date: 'whenever' }],
+  });
+  assert.equal(noVerdictDate.state, 'stale');
+});
+
+test('a re-run that fails blocks the merge and carries GitHub\'s own reason', () => {
+  // BREAK-TEST: make afterRerunDecision return `{action: 'merge'}` for a
+  // refusal and this fails — `assert.equal(failed.action, 'refuse')` reports
+  // 'merge', i.e. a PR merging over a red review gate.
+  const failed = gate.afterRerunDecision({ action: 'refuse', reason: 'checks are red: review-gate (FAILURE)' });
+  assert.equal(failed.action, 'refuse');
+  assert.equal(failed.reason, 'checks are red: review-gate (FAILURE)');
+});
+
+test('a re-run that times out or cannot be read refuses the merge', () => {
+  // BREAK-TEST: fall through to `{action: 'merge'}` for an unrecognised answer
+  // and this fails — `assert.equal(timedOut.action, 'refuse')` reports 'merge',
+  // which merges on a gate whose result nobody ever saw.
+  const timedOut = gate.afterRerunDecision({ action: 'wait', reason: 'CI was still running after 180s' });
+  assert.equal(timedOut.action, 'refuse');
+  assert.match(timedOut.reason, /refusing rather than merging on a stale gate/);
+
+  const nothing = gate.afterRerunDecision({});
+  assert.equal(nothing.action, 'refuse');
+
+  // A clean re-run is the ONE answer that lets the merge proceed.
+  assert.equal(gate.afterRerunDecision({ action: 'merge', reason: 'green' }).action, 'merge');
+  assert.equal(gate.afterRerunDecision({ action: 'conflict', reason: 'branch conflicts' }).action, 'conflict');
+});
+
+test('a branch that falls behind during the re-run waits for the next pass, never refuses', () => {
+  // Main moving during the ~3 minutes of the re-run is a normal race, not a
+  // gate failure — the next pass's catch-up path handles it, and the push it
+  // makes re-runs the gate on its own.
+  //
+  // BREAK-TEST: delete the update-branch arm of afterRerunDecision and this
+  // fails — `assert.equal(behind.action, 'wait')` reports 'refuse', which
+  // posts "the re-run did not clear it" onto the ticket about a branch whose
+  // gate was fine and merely needed catching up (found in review, 2026-08-30).
+  const behind = gate.afterRerunDecision({ action: 'update-branch', reason: 'the branch is behind main' });
+  assert.equal(behind.action, 'wait');
+  assert.match(behind.reason, /catches the branch up/);
+});
+
+test('during the re-run wait, only a FRESH answer falls through to the gate', () => {
+  const greenGate = { action: 'merge', reason: 'open, 2 check(s) green, no conflicts' };
+
+  // BREAK-TEST: make duringRerunWait fall through to the gate on 'absent' and
+  // this fails — `assert.equal(absent.action, 'wait')` reports 'merge', which
+  // is the PR merging in the seconds while GitHub swaps the old check run for
+  // the new attempt, the re-run's answer never observed. Before the re-run,
+  // 'absent' means "no gate on this PR"; during the wait it means "cannot
+  // see", and cannot-see is not a pass (found in review, 2026-08-30).
+  const absent = gate.duringRerunWait({
+    staleness: { state: 'absent', reason: 'this PR carries no review-gate check run' },
+    gate: greenGate,
+  });
+  assert.equal(absent.action, 'wait');
+
+  const stale = gate.duringRerunWait({
+    staleness: { state: 'stale', reason: 'it answered a question that has since changed' },
+    gate: greenGate,
+  });
+  assert.equal(stale.action, 'wait');
+
+  const pending = gate.duringRerunWait({
+    staleness: { state: 'pending', reason: 'the review-gate check is still running' },
+    gate: greenGate,
+  });
+  assert.equal(pending.action, 'wait');
+
+  // Fresh hands the question straight back to the ordinary gate, untouched —
+  // this hook narrows "keep waiting" and can never widen "may merge".
+  const fresh = gate.duringRerunWait({
+    staleness: { state: 'fresh', reason: 'newer than the verdict' },
+    gate: greenGate,
+  });
+  assert.deepEqual(fresh, greenGate);
+  const red = gate.duringRerunWait({
+    staleness: { state: 'fresh', reason: 'newer than the verdict' },
+    gate: { action: 'refuse', reason: 'checks are red: review-gate (FAILURE)' },
+  });
+  assert.equal(red.action, 'refuse');
+});
+
+// --- Finding the run at all -------------------------------------------------
+
+test('the run id comes from the run segment of the details URL, not the job', () => {
+  // BREAK-TEST: match `/job/(\d+)` instead and this fails —
+  // `assert.equal(gate.runIdFromDetailsUrl(...), '1234')` reports '5678', and
+  // `gh run rerun` is then handed a job id, which fails on every PR.
+  assert.equal(gate.runIdFromDetailsUrl('https://github.com/a/b/actions/runs/1234/job/5678'), '1234');
+  assert.equal(gate.runIdFromDetailsUrl('https://github.com/a/b/actions/runs/1234'), '1234');
+  assert.equal(gate.runIdFromDetailsUrl('https://example.com/nothing'), '');
+  assert.equal(gate.runIdFromDetailsUrl(undefined), '');
+});
+
+test('the newest review-gate run wins, and other checks are ignored', () => {
+  // A re-run sits alongside the answer it replaces for a few seconds. Taking
+  // the older one back would make the merge step re-run the gate forever.
+  //
+  // BREAK-TEST: return the FIRST matching run instead of the newest and this
+  // fails — `assert.equal(found.detailsUrl.includes('/runs/7002/'), true)`
+  // reports the older run 7001.
+  const found = gate.findReviewGateRun([
+    VERIFY_RUN,
+    gateRun({ startedAt: NOW - HOUR, runId: '7001' }),
+    gateRun({ startedAt: NOW, runId: '7002' }),
+  ]);
+  assert.equal(found.detailsUrl.includes('/runs/7002/'), true);
+  assert.equal(gate.findReviewGateRun([VERIFY_RUN]), null);
+  assert.equal(gate.findReviewGateRun([]), null);
+});
+
+test('the gate is found by its workflow name even if the job is renamed', () => {
+  // BREAK-TEST: drop the workflowName arm of findReviewGateRun and this fails —
+  // `assert.notEqual(found, null)` reports null, and a renamed job reads as
+  // "this PR has no gate", which is the failure in disguise.
+  const found = gate.findReviewGateRun([
+    { ...gateRun({ startedAt: NOW }), name: 'Review gate (enforcing)' },
+  ]);
+  assert.notEqual(found, null);
+  assert.equal(gate.reviewGateStaleness({
+    rollup: [{ ...gateRun({ startedAt: NOW - HOUR }), name: 'Review gate (enforcing)' }],
+    comments: [PASS_COMMENT(NOW)],
+  }).state, 'stale');
+});
+
+// --- The plumbing actually asks, before it merges ---------------------------
+
+test('the merge step checks staleness before merging, and never merges past a stale gate', () => {
+  // The decisions above are pure and tested; this is the one thing a pure test
+  // cannot see — that the merge path actually CALLS them, on the path that
+  // merges. A perfect decision function nothing consults is the same as no
+  // decision function at all.
+  const src = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '../clickup_direct.mjs'), 'utf8');
+
+  // COUNTED, not merely matched. The first version of this asserted the name
+  // appeared SOMEWHERE in the file, and the break-test caught it: deleting the
+  // real check still left the identical call inside the re-run's wait hook, so
+  // the assertion passed with the ticket's bug fully restored. There are
+  // exactly two call sites and the test knows it.
+  //
+  // BREAK-TEST: delete the `reviewGateStaleness` call that guards the merge and
+  // this fails — `assert.equal(asks, 2)` reports 1.
+  const asks = (src.match(/reviewGate\.reviewGateStaleness\(/g) || []).length;
+  assert.equal(asks, 2,
+    `expected two staleness checks — the one guarding the merge and the one the re-run waits on — found ${asks}`);
+  assert.match(src, /reviewGate\.afterRerunDecision\(/,
+    'the merge path must route the re-run result through the tested decision');
+  assert.match(src, /'run', 'rerun'/,
+    'a stale gate must be RE-RUN, not merged on and not waived');
+
+  // The staleness check has to sit BEFORE the merge command, not after it.
+  // BREAK-TEST: move the block below `gh(['pr', 'merge'...])` and this fails —
+  // `assert.ok(staleAt < mergeAt)` reports false, i.e. the check runs on a PR
+  // that has already merged.
+  const staleAt = src.indexOf('reviewGate.reviewGateStaleness(');
+  const mergeAt = src.indexOf("gh(['pr', 'merge'");
+  assert.ok(staleAt !== -1 && mergeAt !== -1 && staleAt < mergeAt,
+    'the staleness check must run before the merge command, not after it');
+
+  // ...and BEFORE the red-check refusal, which is the half the first wiring
+  // test could not see (found in review, 2026-08-30). In enforcing mode a
+  // stale gate exits 1 — a RED check — so githubGate answers 'refuse', and a
+  // staleness question asked after the refusal branch is never reached in the
+  // one mode this ticket exists for: the deadlock survives while every test
+  // stays green, because advisory mode (exit 0) still reaches the block.
+  // BREAK-TEST: move the staleness block back below
+  // `if (gate.action === 'refuse')` and this fails —
+  // `assert.ok(staleAt < refuseAt)` reports false.
+  const refuseAt = src.indexOf("if (gate.action === 'refuse')");
+  assert.ok(refuseAt !== -1 && staleAt < refuseAt,
+    'the staleness check must run before the red-check refusal — a stale RED gate is re-run, not refused');
+
+  // The wait budget is a scheduling fact about THIS pass, not about the PR,
+  // so it is asked before a CI run is spent — firing the re-run first meant
+  // paying for a run only to refuse over a purely local limit (found in
+  // review, 2026-08-30).
+  // BREAK-TEST: move the mayWaitInPass ask below `gh(['run', 'rerun'...])`
+  // and this fails — the source between the staleness question and the
+  // re-run no longer contains it.
+  const rerunAt = src.indexOf("gh(['run', 'rerun'");
+  assert.ok(rerunAt !== -1 && staleAt < rerunAt,
+    'the re-run must be reached from the staleness question');
+  assert.match(src.slice(staleAt, rerunAt), /mayWaitInPass\(/,
+    'the wait budget must be checked BEFORE the re-run is fired, not after a CI run is already spent');
+});
+
+// ---------------------------------------------------------------------------
+// The four holes found reviewing the gate itself (2026-08-26, task 86bbmmv7t).
+// None of them could bite while the gate was advisory — it exits 0 on every
+// path. All four are closed here, before the branch-protection box is ticked.
+// ---------------------------------------------------------------------------
+
+// --- Finding 1: the one that failed OPEN -----------------------------------
+//
+// `findTicketId` returns the FIRST ClickUp link in the body. Nothing checked it
+// was the PR's own, so a body citing a related ticket first was judged against
+// THAT ticket's verdict — and passed whenever it happened to be fresh enough.
+
+test("a foreign ticket cited before this PR's own does not pass on its verdict", () => {
+  const FOREIGN = '86bbmk7pv';
+  const body = [
+    // Exactly PR #433's shape, with the two links the other way round.
+    `Blocked on https://app.clickup.com/t/${FOREIGN}`,
+    '',
+    'https://app.clickup.com/t/86bbmfbkv',
+  ].join('\n');
+
+  // The foreign ticket is genuinely reviewed and genuinely fresh — its PASS is
+  // newer than this PR's newest commit. Everything the old gate looked at says
+  // yes; the only thing wrong is that the review is of different work.
+  const decision = gate.reviewGateDecision({
+    prBody: body,
+    prNumber: PR_NUMBER,
+    headCommittedAt: NOW - HOUR,
+    comments: [
+      PASS_COMMENT(NOW),
+      // ...and that ticket's own PR is a different one.
+      comment(loopTrail.prOpenedComment('https://github.com/mentor24-maker/starcaster/pull/300'), NOW - HOUR),
+    ],
+  });
+
+  // BREAK-TEST: delete the `ticketNamesThisPr` check on the pass path in
+  // reviewGate.js and this assertion fails — the gate returns PASS, which is it
+  // opening on a review of code that is not in this PR. (Verified by mutation
+  // before this test was believed.)
+  assert.equal(decision.verdict, gate.CANNOT_TELL);
+  assert.equal(gate.allowsMerge(decision.verdict), false);
+  assert.equal(decision.ticketId, FOREIGN);
+  assert.match(decision.reason, /cannot be confirmed to be this PR's ticket/);
+});
+
+test('a ticket with no PR line cannot vouch for any PR, however fresh its PASS', () => {
+  const decision = gate.reviewGateDecision({
+    prBody: BODY_WITH_TICKET,
+    prNumber: PR_NUMBER,
+    headCommittedAt: NOW - HOUR,
+    comments: [PASS_COMMENT(NOW)],
+  });
+  assert.equal(decision.verdict, gate.CANNOT_TELL);
+  assert.equal(decision.cause, 'ticket-not-this-prs');
+});
+
+test('a gate not told which PR it is judging says so, and does not pass', () => {
+  // "I could not check" and "it checked out" must never be the same answer.
+  for (const prNumber of [undefined, '', 0, 'not-a-number', -1]) {
+    const decision = gate.reviewGateDecision({
+      prBody: BODY_WITH_TICKET,
+      prNumber,
+      headCommittedAt: NOW - HOUR,
+      comments: [PASS_COMMENT(NOW), PR_TRAIL(NOW - HOUR)],
+    });
+    assert.equal(decision.verdict, gate.CANNOT_TELL, `prNumber ${JSON.stringify(prNumber)} passed the gate`);
+    assert.match(decision.reason, /was not told which PR/);
+  }
+});
+
+test('the ownership check reuses loopTrail rather than re-implementing it', () => {
+  const source = require('node:fs').readFileSync(require.resolve('./reviewGate.js'), 'utf8');
+  // Comments stripped first: this file DISCUSSES that trail line at length, and
+  // prose about a rule is not the rule — the same distinction the verdict
+  // regexes make by anchoring themselves to a line.
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  // BREAK-TEST: hand-roll a "PR opened:" regex in reviewGate.js and this fails.
+  // Two readers of one fact drift — finding 2 on this same ticket is the bill.
+  assert.match(code, /require\('\.\/loopTrail\.js'\)/);
+  assert.doesNotMatch(code, /PR opened/);
+});
+
+test('the ticket-ownership refusal tells the reader how to fix it', () => {
+  const decision = gate.reviewGateDecision({
+    prBody: BODY_WITH_TICKET,
+    prNumber: PR_NUMBER,
+    headCommittedAt: NOW - HOUR,
+    comments: [PASS_COMMENT(NOW)],
+  });
+  const message = gate.gateMessage(decision, { prNumber: PR_NUMBER });
+  // Not the ClickUp-unreachable advice, which is what every CANNOT TELL used to
+  // print regardless of why it could not tell.
+  assert.doesNotMatch(message, /could not reach ClickUp/);
+  assert.match(message, /pr-opened/);
+  assert.match(message, /OWN ticket link first/);
+});
+
+// --- Finding 2: the gate and `pr-opened` must agree on what a link is -------
+
+test('the gate and pr-opened agree about every ticket-reference shape', () => {
+  const TICKET = '86bbmfbkv';
+  const URL = `https://app.clickup.com/t/${TICKET}`;
+  const bodies = [
+    `Closes ${URL}`,
+    `ClickUp: https://app.clickup.com/t/90141423066/${TICKET}`,
+    `Summary.\n\n${URL}\n\nHow to test: open the page.`,
+    `see ${URL.toUpperCase()}`,
+    // The shape that used to split them: an id with no link around it.
+    `ClickUp: ${TICKET}`,
+    `ClickUp: ${TICKET.toUpperCase()}`,
+    'Adds the thing. Vercel preview attached.',
+    '',
+    'https://app.clickup.com/t/86bbjd5nn',
+  ];
+
+  for (const body of bodies) {
+    // What the gate reads out of the body...
+    const gateSees = gate.findTicketId(body).toLowerCase() === TICKET;
+    // ...and what `pr-opened` refuses on (exit 4) must be the same answer.
+    const prOpenedSees = loopTrail.prBodyCarriesTicket(body, TICKET, URL);
+    assert.equal(
+      gateSees,
+      prOpenedSees,
+      `the gate and pr-opened disagree about: ${JSON.stringify(body)}`,
+    );
+  }
+});
+
+test('both read the SAME matcher, so they cannot drift apart again', () => {
+  const fs = require('node:fs');
+  assert.ok(fs.existsSync(require.resolve('./clickupTicketLink.js')));
+  for (const file of ['./reviewGate.js', './loopTrail.js']) {
+    const source = fs.readFileSync(require.resolve(file), 'utf8');
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    // BREAK-TEST: paste a local app.clickup.com regex back into either file and
+    // this fails. Agreement by two matching copies is not agreement.
+    assert.match(code, /require\('\.\/clickupTicketLink\.js'\)/, `${file} stopped importing the shared matcher`);
+    assert.doesNotMatch(code, /app\\\.clickup\\\.com/, `${file} has its own ClickUp link regex again`);
+  }
+});
+
+// --- Finding 3: the gate's own output must not read as a ticket verdict -----
+
+test('nothing the gate says parses as a review verdict', () => {
+  // Every real output string, not a hand-written approximation of one.
+  const decisions = [
+    gate.reviewGateDecision({
+      prBody: BODY_WITH_TICKET,
+      prNumber: PR_NUMBER,
+      headCommittedAt: NOW,
+      comments: [PASS_COMMENT(NOW), PR_TRAIL(NOW - HOUR)],
+    }),
+    gate.reviewGateDecision({ prBody: BODY_WITH_TICKET, prNumber: PR_NUMBER, headCommittedAt: NOW, comments: [] }),
+    gate.reviewGateDecision({ prBody: BODY_WITH_TICKET, prNumber: PR_NUMBER, headCommittedAt: NOW, comments: [SEND_BACK(NOW)] }),
+    gate.reviewGateDecision({ prBody: 'no ticket here', prNumber: PR_NUMBER, headCommittedAt: NOW, comments: [] }),
+    gate.reviewGateDecision({ prBody: BODY_WITH_TICKET, prNumber: PR_NUMBER, headCommittedAt: NOW, comments: null }),
+    gate.reviewGateDecision({ prBody: BODY_WITH_TICKET, prNumber: PR_NUMBER, headCommittedAt: 'nonsense', comments: [PASS_COMMENT(NOW)] }),
+    gate.reviewGateDecision({ prBody: BODY_WITH_TICKET, prNumber: PR_NUMBER, headCommittedAt: NOW, comments: [PASS_COMMENT(NOW)] }),
+    gate.reviewGateDecision({ prBody: '[gate-waived: production is down]', prNumber: PR_NUMBER, headCommittedAt: NOW, comments: null }),
+  ];
+
+  // Every verdict shape is covered, or this test proves less than it looks.
+  assert.deepEqual(
+    [...new Set(decisions.map((d) => d.verdict))].sort(),
+    [gate.CANNOT_TELL, gate.FAIL, gate.PASS, gate.WAIVED].sort(),
+  );
+
+  const messages = decisions.map((d) => gate.gateMessage(d, { prNumber: PR_NUMBER }));
+  messages.push(gate.waiverAnnouncement({
+    prNumber: PR_NUMBER,
+    prUrl: PR_URL,
+    reason: 'production is down',
+    actor: 'daneofearth',
+  }));
+
+  for (const message of messages) {
+    // BREAK-TEST: put GATE_LABEL back to 'REVIEW GATE' and this fails on every
+    // string. Pasting a refusal onto the ticket to explain it would otherwise
+    // become the ticket's newest verdict — and a send-back, since none of these
+    // match the PASSED spelling — freezing readyToLaunchGate, mergeDecision and
+    // this gate at once, with a verdict nobody wrote.
+    assert.equal(
+      mergeOnComment.isReviewVerdict(message),
+      false,
+      `the gate's own words parse as a verdict: ${JSON.stringify(message.slice(0, 80))}`,
+    );
+    assert.equal(mergeOnComment.isReviewPassed(message), false);
+    // And it must not release a Ready-to-launch ticket either.
+    assert.equal(loopTrail.readyToLaunchGate([comment(message, NOW)]).ok, false);
+  }
+});
+
+test('the runner speaks with the same label, so it cannot drift back', () => {
+  const source = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', 'review_gate.mjs'),
+    'utf8',
+  );
+  assert.match(source, /gate\.GATE_LABEL/);
+  // BREAK-TEST: type `REVIEW GATE ...` into a message in review_gate.mjs and
+  // this fails — the runner prints the two messages the module never sees (a
+  // PR that cannot be read, and a crash).
+  assert.doesNotMatch(source, /`REVIEW GATE/);
+  assert.equal(mergeOnComment.isReviewVerdict(`${gate.GATE_LABEL} CANNOT TELL — the gate itself crashed`), false);
+});
+
+// --- Finding 4: `parents` as an array read as NaN --------------------------
+
+test("parents is read as a count or as GitHub's native array, identically", () => {
+  const asCount = [
+    { committedDate: '2026-08-23T14:04:20Z', parents: 1 },
+    { committedDate: '2026-08-24T02:02:58Z', parents: 2 },
+  ];
+  // The shape GitHub's REST API actually returns, unmapped.
+  const asArray = [
+    { committedDate: '2026-08-23T14:04:20Z', parents: [{ sha: 'a' }] },
+    { committedDate: '2026-08-24T02:02:58Z', parents: [{ sha: 'a' }, { sha: 'b' }] },
+  ];
+
+  // BREAK-TEST: restore `Number((c && c.parents) || 1) > 1` and this fails —
+  // Number([{},{}]) is NaN, NaN > 1 is false, so the merge counts as the
+  // branch's own work and the catch-up deadlock this exclusion prevents comes
+  // silently back for any caller handed the native shape.
+  assert.equal(
+    gate.newestSubstantiveCommitAt(asArray),
+    gate.newestSubstantiveCommitAt(asCount),
+  );
+  assert.equal(
+    new Date(gate.newestSubstantiveCommitAt(asArray)).toISOString(),
+    '2026-08-23T14:04:20.000Z',
+  );
+});
+
+test('an unreadable parent count is one parent — the strict direction', () => {
+  for (const parents of [undefined, null, 0, '', 'two', {}, NaN]) {
+    assert.equal(gate.parentCount(parents), 1, `parents ${JSON.stringify(parents)} was not read as own work`);
+  }
+  assert.equal(gate.parentCount([]), 0);
+  assert.equal(gate.parentCount(['a', 'b']), 2);
+  assert.equal(gate.parentCount('2'), 2);
 });
