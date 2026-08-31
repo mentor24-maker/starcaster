@@ -118,3 +118,39 @@ test('junk in the link field is not persisted', () => {
   assert.equal(persisted.savedModuleId, undefined, 'an empty id is not a link');
   assert.equal(persisted.canonicalLocked, undefined, 'only a real boolean counts');
 });
+
+/**
+ * Sync 7/7 added the ONE polarity, `canonical`, to the module level. It has to
+ * survive the round trip for the same reason `canonicalLocked` does — and one
+ * reason more: it is stored as a TRI-STATE. `false` means "deliberately
+ * detached", absent means "never answered", and on the module side absent has
+ * always meant FOLLOWING. Collapse false into absent anywhere along this path
+ * and every deliberately-detached copy quietly re-enrols itself, which is the
+ * silent kind of failure — a page that starts taking pushes again looks
+ * exactly like a page nobody has touched.
+ */
+test('the one polarity survives being written and read back', () => {
+  const written = writeLayoutSectionsToRow(
+    docWith([mod({ savedModuleId: 'dmod_9', canonical: true })])
+  );
+  assert.equal(written.sections[0].modules[0].canonical, true);
+  const read = readLayoutSectionsFromRow({ layout_sections: written });
+  assert.equal(read.layoutSections[0].modules[0].canonical, true);
+});
+
+test('a deliberately detached copy keeps its false, rather than collapsing to absent', () => {
+  const written = writeLayoutSectionsToRow(
+    docWith([mod({ savedModuleId: 'dmod_9', canonical: false })])
+  );
+  assert.equal(written.sections[0].modules[0].canonical, false);
+  const read = readLayoutSectionsFromRow({ layout_sections: written });
+  assert.equal(read.layoutSections[0].modules[0].canonical, false);
+});
+
+test('a module that never answered stays unmarked, so it keeps the legacy default', () => {
+  const written = writeLayoutSectionsToRow(docWith([mod({ savedModuleId: 'dmod_9' })]));
+  assert.ok(
+    !('canonical' in written.sections[0].modules[0]),
+    'inventing an answer for an old copy is the same silent change as flipping the default'
+  );
+});
