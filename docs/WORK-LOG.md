@@ -23,6 +23,228 @@ sync happened to stamp on them, so an old name cannot sit next to the new one
 arguing with it. Nothing was rewritten in the database to fix the sections
 that already disagree; they simply stop showing the wrong name, and they
 correct themselves the next time the section is saved.
+## 2026-08-31 — The merge lock can now actually read the tickets
+
+The check that reads a ticket before letting anything merge has been running
+blind since it was built. It needed a password to look at ClickUp, that password
+was never added, and so on every single pull request it answered "I can't see" —
+which it correctly treats as a refusal rather than an all-clear. Harmless so far,
+because the check is still in warning mode and cannot block anything, but it
+meant nobody had ever watched it do its actual job.
+
+It has one now, and it works. On the first real run it named the ticket, read
+the newest review on it, and correctly said the work had been sent back rather
+than passed. I checked that ticket myself afterwards to be sure it was right and
+not just producing a sensible-looking sentence. It was right.
+
+**Getting it there took two wrong turns, and the second one is worth writing
+down.** You were sent to the GitHub settings page to paste the password in by
+hand. That page has a box for the *label* sitting directly above the box for the
+*password*, and the password went in the label box — twice, with two different
+passwords. GitHub scrambles a password so nobody can read it, but it does no such
+thing to a label, so both were sitting there in plain sight until they were
+deleted. Nobody but you can see that page, and there's no sign either was used,
+but they should not have been there at all.
+
+The cause was a rule of mine, applied backwards. It says an agent must never
+handle a real password — and it was written after a photo went round with a
+credentials file visible on a TV in the background. That rule is about a value
+being *seen*, not about who is holding it. Read the other way, it sent the
+password on a detour through the one screen in the whole process where it could
+be typed into the wrong field. There was a one-line command available the whole
+time that moves the password straight from one vault to the other without ever
+showing it, and it had no label box to get wrong. That command is now what the
+instructions say to use, and running it is my job.
+
+The rule has been rewritten to say what it always meant: **the question is
+whether the value ends up somewhere it could be read.** If no, the machine does
+it. If yes — writing one down, making a new one, typing it into a web page —
+that stays with you.
+
+The lock still cannot block anything. One prerequisite is left before it is
+switched on for real, and it has its own ticket.
+
+## 2026-08-26 — Saving a shared section no longer wipes your page templates (#428)
+
+The Builder lets you save a section — a footer, say — once and have every page
+that uses it follow along. This change was meant to make that push reach page
+templates too. It did, but it wrote them the wrong way: instead of updating
+just the sections, it overwrote the template's whole record with mostly blanks.
+A template called "Delray — Main Site Template" came back with no name at all,
+and its subject line, colours, logos, banner images and feature copy went with
+it. Templates keep no history, so there was nothing to undo it from.
+
+The write now hands over the full template with only the sections changed —
+the same way the page side has always done it. Two tests hold the line, and
+both were deliberately broken first to confirm they actually catch it: one
+runs a real push through the real storage code and checks the name and
+everything around it survives, and one fails if someone later adds a field to
+the saving half without adding it to the loading half, which is how this class
+of bug gets back in.
+## 2026-08-29 — A safe place to keep a client's own permissions (#448)
+
+Right now, posting to a client's Instagram or X means somebody pastes that
+client's password-equivalent into a settings screen by hand. The plan is to
+replace that with the client clicking "Connect" on their own screen and granting
+us the permission themselves. This is the safe box those permissions will go
+into — and nothing else. There is no screen to look at yet, and nothing reads or
+writes the box so far. Six more pieces follow.
+
+Two things got the care here, both of them mistakes this project has already
+paid for. The first is a record that forgets which client it belongs to. Two
+columns decide that, and if a table carries only one, the code that fills them
+in quietly gives up and fills in neither — nothing errors, the rows just land
+belonging to nobody. That happened to 550 records in August. A record belonging
+to nobody here would be a client's login permission with no name on it, so this
+one does not merely test for the problem: it refuses to write at all if it
+cannot put the client's name on the row.
+
+The second is answering a question with a blank instead of an error. The
+existing version of this code, when it cannot unscramble a stored permission,
+hands back an empty one and reports success — so the app then tries to post with
+no credential and Instagram's complaint reads as the client's fault. This one
+says it could not read the permission, which is the true answer.
+
+The permissions themselves are scrambled before they are stored, and that was
+checked the only way worth checking: by looking at what actually landed in a
+real database and searching every column of the table for the original text. It
+is not there.
+## 2026-08-26 — The new merge lock could have jammed itself shut (#443)
+
+Yesterday's change put a real lock on the merge button: before anything goes
+live, GitHub itself checks the work's ticket for a review pass. It works — but
+it had a flaw that would only have shown up on the day you switched it from a
+warning into a real block, and by then it would have stopped everything.
+
+The problem is that these checks run **once**, right after code is pushed, and
+they never think again. The review always lands *after* the last push — that is
+what a review is. So the check looked at the ticket, saw no review yet, wrote
+down "no", and then sat there forever with that answer. Nothing was ever going
+to change its mind. The only way to make a check run again is to push more code,
+and pushing more code cancels the review that just passed. Every properly
+reviewed piece of work would have been stuck in that loop.
+
+So the step that actually performs merges now asks one extra question first: is
+this check answering a question that has since changed? If the check ran before
+the review landed, it runs it again and waits for the real answer — about three
+minutes — instead of merging on the old one. If the fresh answer is a no, the
+merge is refused and you are told why. If the check cannot be run again at all,
+or its answer never arrives, the merge is refused too: not being able to see is
+never treated as an all-clear. And when the check is already up to date, nothing
+happens and nothing is spent, which is the ordinary case.
+
+Nothing about the lock itself was loosened to achieve this — "out of date" only
+ever means run it again, never let it through. With this in place the
+branch-protection setting is safe to turn on.
+
+The review pass caught something important before this shipped: the new
+question was being asked in the wrong place. Once the lock is switched on, an
+out-of-date check shows up as a *failed* check — and the merge step's very
+first rule is "never merge past a failed check", so it was giving up before it
+ever got to the new question. Everything looked fine in testing because the
+lock is still in warning mode, where the old answer stays green. The question
+now gets asked before that first rule instead of after it, a test pins the
+order so it cannot quietly drift back, and three smaller catches from the same
+review ride along: the step no longer pays for a re-run it has no time left to
+wait for, a branch that falls behind during the wait is told "catch up first"
+instead of being blamed for a failed check, and a moment where GitHub is
+swapping the old answer for the new one no longer looks like "no check here,
+go ahead".
+
+## 2026-08-26 — Checking the new merge lock before trusting it (#444)
+
+Yesterday's work put a lock on the door: an automatic check that refuses to
+merge a pull request unless its ticket carries a passing review of the code
+actually being merged. The lock is fitted but not yet switched on — that is a
+setting only you can tick — so right now it announces its answer and lets
+everything through regardless.
+
+Before flipping a switch like that, it is worth going over the lock itself, so
+this pass did. Four things were wrong with it. None of them can do any harm
+today, precisely because it is not switched on yet, but every one of them
+becomes real the moment it is.
+
+The serious one: the lock finds the ticket by taking the first ClickUp link in
+the pull request's description, and nothing checked that it was the right
+ticket. A description that mentioned some related ticket before its own would
+have been checked against **that** ticket's approval — and would have been let
+through if that other ticket happened to have a recent one. A lock that opens
+because it read somebody else's paperwork is worse than no lock. It never
+actually happened, but only because our automatic builder happens to always put
+its own link first. That is a habit, and habits are the exact thing this lock
+exists so we stop relying on. It now confirms the ticket it read really is
+about this pull request, and says "I cannot tell" rather than yes when it
+cannot.
+
+The other three were smaller and quieter. Two of our commands disagreed about
+what counts as naming a ticket, so a description one of them called perfectly
+fine would be rejected by the other with a message saying the opposite of what
+you could plainly see — they read the same piece of code now, so they cannot
+disagree again. The lock's own messages happened to be worded in a way our
+system reads as a **review rejection**, meaning that pasting one onto a ticket
+to explain it would have registered as a rejection nobody wrote and jammed
+three things at once. And a mismatch in how commit history is described could
+have silently switched off a protection that stops perfectly good reviews from
+being treated as out of date.
+
+Each of the four fixes was then deliberately un-done, one at a time, to watch
+the test that guards it actually fail — because a test that cannot fail proves
+nothing, and this is a lock we are about to start trusting.
+## 2026-08-30 — The rule about who runs the commands, put where it gets read (#453)
+
+Three times now you have had to say the same thing: when there is a command to
+run, I should run it, not hand it to you to paste. The most recent was the
+Delray header evening. Early on, one of my own safety gates refused a step —
+and instead of treating that as "this one call was blocked", I treated it as
+"I am not allowed to touch production tonight", and everything after that came
+back to you as something to copy. One of those was a script with two halves: a
+practice run that shows what it *would* change, and a second command that
+actually changes it. You ran the practice half. Nothing told you the real one
+was still sitting there waiting, so the fix was written but not applied, and
+most of an evening went on it.
+
+The reason it keeps coming back is dull and fixable: the rule was only written
+down in my memory and in the vault, and neither of those gets loaded when a
+session opens this repo. `CLAUDE.md` does — every session reads it. So the rule
+now lives there, in the "Coach the operator" section, with the full story and
+the incident behind it in `docs/DOCTRINE.md`.
+
+It says four things. I run the operational commands and tell you what happened
+in plain English. There are exactly four things I hand over instead — a real
+password or key, a billing screen, a login in your browser, and a decision
+that is genuinely yours — and when I hand something over I have to say which
+of the four it is, so "I need you" never arrives unexplained. A refusal applies
+to the one command it refused, not to the rest of the session. And a fix with
+a practice run and a real run is one job, not two: I run both and tell you what
+changed.
+
+Nothing about the app changed — this is a change to the instructions I read.
+## 2026-08-30 — Small, safe changes now merge themselves after an hour's notice (#438)
+
+Your ruling from the 24th is now running code: a pull request that touches
+nothing but tests and documentation, and has already passed review, announces
+itself on its ticket — "merging at 9:15pm unless you say otherwise" — waits
+one hour, and merges. Any comment from you during that hour stops it; not a
+keyword, anything at all. Everything riskier still waits for your word, and
+Lane C — anything visual, routes, data, sign-in — is never automated.
+
+It shipped the careful way: the first review pass sent it back because the
+branch had fallen behind the main line, and the second found six real holes
+before anyone was exposed to them. The two that mattered: the loop agents'
+own instruction files counted as "documentation", so a change rewriting the
+review rules could have merged itself — now anything that instructs an agent
+is on the never-auto-merge list; and a damaged memory file (the little ledger
+that records "Dane said stop") was being replaced with a blank one, which
+would have quietly lifted your stop order a pass later — now a ledger that
+cannot be read is never written over, it is left for a person to look at.
+
+Also from that review: an announcement that sat armed for more than a day
+goes stale and is cancelled instead of merged, the daily digest no longer
+lists the same merge twice, and a dry run truly writes nothing. Every one of
+those rules was broken on purpose to prove a named test catches it. The
+switch is `stop auto-merging` on the party line or any Loop Queue ticket,
+and `npm run clickup -- auto-merge-status` shows the lane's state any time.
+
 ## 2026-08-30 — Tickets now end on what they need from you, in red (#457)
 
 You asked for three things while looking at a merge ticket: put the "NEEDED

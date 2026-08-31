@@ -434,7 +434,7 @@ function mayWaitInPass(waitsUsed, cap = MAX_IN_PASS_WAITS) {
  * `conflict` are handed straight back to the paths that already handle them,
  * so there is exactly one place that decides whether something may merge.
  *
- * @returns {{ action: 'merge'|'refuse'|'conflict'|'wait'|'poll-again', reason?: string }}
+ * @returns {{ action: 'merge'|'refuse'|'conflict'|'update-branch'|'wait'|'poll-again', reason?: string }}
  */
 function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS } = {}) {
   const action = String(gate?.action || '');
@@ -442,6 +442,15 @@ function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS 
   // Terminal answers go back to the existing paths untouched.
   if (action === 'merge' || action === 'refuse' || action === 'conflict') {
     return { action, reason: gate.reason };
+  }
+
+  // Behind main is also terminal: no amount of polling makes a branch catch
+  // itself up, so waiting out the budget on it can only end in a wrong-reason
+  // answer — "CI was still running" about a branch whose CI was fine (found
+  // in review, 2026-08-30, task 86bbmk7pv). Ending the wait here hands it to
+  // the next pass, where the catch-up path already lives.
+  if (action === 'update-branch') {
+    return { action, reason: gate.reason || 'the branch fell behind main while waiting' };
   }
 
   // Anything else means "not resolved yet". Out of budget is a WAIT — the

@@ -100,7 +100,9 @@ found what the other times cost:
   correctly refused to guess which PR they meant — and two of those PRs also
   shipped with no ClickUp link in the body, so ticket and PR could only be
   paired by reading titles. `pr-opened` now checks the PR body FIRST (exit 4
-  if the link is missing) and only then writes the ticket side.
+  if the link is missing) and only then writes the ticket side. That check
+  wants the **full URL** — a bare task id is not enough (see "One matcher for
+  'the PR names its ticket'" below for why the two readers had to agree).
 - **Two tickets reached `Ready to launch` with no passing review on them.**
   That status is the operator's "safe to merge" signal; he approved both in
   good faith. `ask` and `status` now both refuse to set it unless the newest
@@ -890,6 +892,7 @@ disagreed with the merge step about what a PASS is would be worse than no gate.
 | Newest verdict is a send-back | **fail** |
 | PASS older than the newest commit (sent back, fixed, pushed) | **fail** |
 | No ClickUp link in the PR body | **fail** |
+| The ticket does not record THIS PR (see below) | **CANNOT TELL** — never a pass |
 | `[gate-waived: <reason>]` in the PR body | **pass**, and announced on the bus |
 | ClickUp unreachable, or the CI token missing | **CANNOT TELL** — never a pass |
 
@@ -897,8 +900,73 @@ Every failure names the ticket, says what the newest verdict actually is, and
 states the one thing that has to happen next. A red X that teaches nothing
 teaches people to route around it.
 
+A check is computed once per commit, so a verdict posted *after* the last push
+does not reach the run that already happened. The merge step re-runs a gate in
+that state rather than merging on it — "A stale gate is re-run, never merged
+on", below.
+
 **Lane A is not exempt.** Auto-merging a docs- or test-only change removes the
 *operator's word*, never the review (vault `doctrine/AUTO-MERGE-LANES.md`).
+
+### The ticket has to be THIS PR's (added 2026-08-26, task 86bbmmv7t)
+
+The gate reads the **first** ClickUp link in the PR body. That is a convention,
+not a fact, and until 2026-08-26 nothing checked it: a body that cited a related
+ticket *before* its own was judged against **that** ticket's verdict, and
+**passed** whenever that verdict happened to be newer than this PR's newest
+commit. The gate opening on a review of different work is the one failure it
+exists to prevent, and it was the only one of the four holes found in review
+that failed **open**.
+
+It never bit, purely because loop-built bodies put their own ticket on line 1 —
+which is the kind of luck this whole check exists to stop depending on. PR #433
+proves the shape is live: its body carries `86bbmfbkv` on line 1 and
+`86bbmk7pv` on line 156, and the other order would have judged it against a
+ticket it does not belong to.
+
+So before granting a PASS the gate confirms the ticket **records this PR**: the
+ticket's newest `PR opened:` line must name this PR's number. That reader is
+`loopTrail.prTrailLanded` — the same one `pr-opened` verifies its own write
+with, imported rather than re-implemented. When it cannot confirm, the answer is
+**CANNOT TELL**, never a pass, and the message names the fix.
+
+Practical effect: **`pr-opened` is no longer only bookkeeping.** A ticket
+without that line cannot pass the gate, which is the point — it is the only
+trace that pairs a ticket with a PR.
+
+### One matcher for "the PR names its ticket"
+
+`pr-opened` used to accept a **bare task id** (`ClickUp: 86bbjt18r`) while the
+gate required a full `app.clickup.com/t/<id>` URL. The direction was safe — the
+gate refused rather than passed — but once it is required, that combination
+strands a PR the very command that checked it called traceable, with a message
+saying the opposite of what the reader can see in the body.
+
+Settled on the **full URL**, and both sides now import one matcher
+(`scripts/builder/clickupTicketLink.js`) so they cannot drift again. A bare id
+cannot be recognised safely — it has the same shape as an abbreviated commit
+sha or a build hash, so matching one in prose fails *open* on a coincidence —
+and the URL is what a reader wants anyway. `loop-build` step 7 has always asked
+for the URL on a line of its own; this makes the shipped rule match the written
+one rather than the other way round.
+
+### The gate does not say "REVIEW"
+
+Its messages begin `MERGE GATE`, and that is load-bearing rather than a
+naming preference. `mergeOnComment.isReviewVerdict` reads any line starting with
+the word REVIEW as a ticket verdict. The gate's own output used to begin
+"REVIEW GATE ...", so **every message it printed** — pass, fail and CANNOT TELL
+alike — parsed as a verdict, and as a **send-back**, since none of them match
+the PASSED spelling.
+
+Nothing automated pastes those onto a ticket, so it never bit. But a refusal
+here is written to tell the reader what to do next, which makes copying it onto
+the ticket the natural next move for a person or an agent — and that one paste
+would have become the ticket's newest verdict, freezing `readyToLaunchGate`,
+`mergeDecision` and the gate itself at once, showing a send-back nobody wrote.
+The label is exported from one place so the runner cannot drift back into that
+namespace, and a test feeds every real output string through the verdict parser
+to prove none of them registers.
 
 **Freshness measures the branch's own commits, not its catch-up merges.**
 Branch protection is `strict: true` and this repo catches up by merging
@@ -966,22 +1034,132 @@ token missing or revoked, the gate answers CANNOT TELL and stays shut, instead
 of quietly reverting to advisory and waving everything through. Inferring the
 mode from "is the token present?" would have exactly that hole.
 
-### Before ticking the box: two things must be true
+### Before ticking the box: three things must be true
 
-1. **The CI ClickUp token must exist.** The workflow reads
-   `secrets.CLICKUP_API_TOKEN` — the same name the rest of the repo uses
-   (`scripts/clickup_direct.mjs`), not a new one invented for CI. **As of
-   2026-08-25 this repository has no Actions secrets at all**, so the gate
-   currently answers CANNOT TELL on every PR and, being advisory, exits 0.
-   Adding it is Settings → Secrets and variables → Actions → New repository
-   secret.
-2. **Something must re-run the gate after a review lands.** A status check is
-   computed once per commit. loop-review posts its PASS *after* the last push,
-   so the check that already ran saw no verdict and will not re-run on its own.
-   Today the answer is by hand — `gh run rerun <run-id>` — which is fine while
-   the gate is advisory and **not** fine once it is required. Teaching the merge
-   step to re-run a stale gate before merging is the follow-up that has to land
-   first.
+**Read this list before the tick, not after.** Each item is a way for the gate
+to be *correct* and still stop every merge in the pipeline. Two are done; one is
+open.
+
+1. **The CI ClickUp token must exist.** ☑ DONE — `CLICKUP_API_TOKEN` was set as
+   a repository Actions secret on 2026-08-31 at 00:57Z, and the gate now returns
+   real verdicts instead of CANNOT TELL. Confirmed on PR #437: the run named the
+   ticket and read its newest verdict correctly ("a send-back, not a PASS"), and
+   the ticket was checked independently to be sure the gate was right and not
+   merely plausible. The workflow reads `secrets.CLICKUP_API_TOKEN` — the same
+   name the rest of the repo uses (`scripts/clickup_direct.mjs`), not one
+   invented for CI.
+
+   **Set it with the pipe, never the browser form:**
+
+   ```
+   doppler secrets get CLICKUP_API_TOKEN --project starcaster --config dev --plain \
+     | gh secret set CLICKUP_API_TOKEN --repo mentor24-maker/starcaster
+   ```
+
+   That is an agent's command to run, not a hand-off. The form has a **Name**
+   box above the **Secret** box, and doing this by hand put the token in the
+   Name box twice, with two different tokens — where GitHub does not protect it.
+   `docs/DOCTRINE.md` §4.1 carries the incident and the rule.
+2. **Something must re-run the gate after a review lands.** ☑ DONE — task
+   86bbmk7pv, PR #443, 2026-08-31. See "A stale gate is re-run, never merged
+   on" below. Note the second round: the re-run was written, tested and
+   *unreachable in enforcing mode* because it sat below the red-check refusal
+   (`docs/DOCTRINE.md` §3.12). Green tests in advisory mode said nothing about
+   the mode that matters.
+3. **`npm run ship` must record the PR on its ticket.** ☐ OPEN — task
+   **86bbq7z1k**, Queued. Since task 86bbmmv7t the gate confirms the ticket
+   records *this* PR by reading its newest `PR opened:` line
+   (`loopTrail.prTrailLanded`); a ticket without one answers CANNOT TELL, which
+   is never a pass. That is deliberate and it fails closed — but
+   `scripts/ship_thread.cjs` contains no ClickUp interaction at all, so **every
+   hand-shipped and fast-tracked PR** would be blocked until somebody ran
+   `npm run clickup -- pr-opened --task <id> --pr <url>` by hand. The loops are
+   unaffected; they write the trail already.
+
+Ticking the box with 3 still open does not produce a gate that is too strict —
+it produces a pipeline that cannot merge anything at all, which is the same
+deadlock item 2 was written to prevent, arriving through a different door.
+
+### A stale gate is re-run, never merged on (2026-08-26, task 86bbmk7pv)
+
+A GitHub status check is computed **once per commit**. This gate reads the
+ticket for a review PASS — and loop-review posts that PASS *after* the last
+push, by definition. So the run that already happened saw no verdict, recorded
+a fail, and **will not re-run on its own**. Nothing later changes its mind.
+
+While the gate is advisory that is harmless: it exits 0 either way. The moment
+the branch-protection box is ticked it is a **deadlock** — every correctly
+reviewed PR carries a stale red check that only a new commit can clear, and
+pushing a commit to clear it invalidates the review that just passed.
+
+So the merge step (`bus-relay`'s merge path) asks one more question before it
+merges: **is this check answering a question that has since changed?**
+
+| What it finds | What it does |
+|---|---|
+| The gate run started **after** the newest verdict | nothing — merges as before, no CI spent |
+| The gate run started **before** the newest verdict | **re-runs it** (`gh run rerun`) and waits for the result |
+| The re-run comes back red | **refuses** the merge, naming GitHub's own reason |
+| The re-run cannot be started, or its result is never seen | **refuses** the merge — cannot-see is not a pass |
+| The PR carries **no** gate run at all | nothing to be out of date; see below |
+| A timestamp on either side is unreadable | treated as **stale**, so it re-runs |
+| The pass has no wait budget left | waits quietly for the next pass — **before** spending a CI run, not after |
+| Main moves while it waits on the re-run | ends the wait; the next pass's catch-up handles it (the push re-runs the gate itself) |
+
+**The question is asked BEFORE the red-check refusal, and the order is the
+whole fix** (found in review, 2026-08-30). In enforcing mode a stale gate
+exits 1 — a red check — and the merge step's first rule is to refuse any PR
+with a red check. Asked after that refusal, the staleness question was
+unreachable in the one mode it was written for: every test stayed green
+because advisory mode (exit 0) still reached it. A stale RED gate means
+*re-run it*; only a re-run that comes back red is a real refusal. A wiring
+test pins the ordering (staleness before the refusal branch, before the merge
+command, and the budget ask before the re-run fires), so it cannot drift
+back. The conflict hand-off and the catch-up keep precedence above it on
+purpose: a conflict needs an agent session no matter what the gate says, and
+a catch-up push re-runs the gate on its own. A PR that is closed, merged or a
+draft skips the question entirely — its refusal reason is the honest one, and
+a re-run on it would spend a CI run to change nothing.
+
+**It compares START times, not completion times.** A verdict posted before the
+run started was certainly visible to it; one posted after the start may or may
+not have been read before the job fetched the ticket. That ambiguity resolves
+toward "stale", because being wrong costs one CI minute in this direction and a
+merge on an unreviewed verdict in the other.
+
+**A catch-up does not need any of this.** `gh pr update-branch` pushes a commit,
+which fires `synchronize` and re-runs the gate on its own. The staleness path is
+for the case where nothing was pushed, so nothing re-ran.
+
+**No gate run at all is deliberately not a refusal.** There is no answer to be
+out of date, and refusing would strand every PR opened before the workflow
+existed — a deadlock introduced by the fix for a deadlock. Both actors that
+could merge such a PR are already covered: GitHub refuses one itself once the
+check is required, and the relay has independently checked the ticket's verdict
+in ClickUp before it ever reaches this step.
+
+**The gate is never weakened to work around its own staleness.** "Stale" only
+ever means *run it again*; it never means *pass*.
+
+The decision is pure and lives beside the gate
+(`scripts/builder/reviewGate.js` — `reviewGateStaleness`, `afterRerunDecision`),
+so every path is tested without touching GitHub, including the ones that are
+awkward to reproduce live. The plumbing that carries it out is in
+`scripts/clickup_direct.mjs`, and a test asserts it is still wired in — the
+first version of that assertion could not fail, because deleting the real check
+left an identical call in the wait loop behind it.
+
+While it waits for the re-run it keeps waiting on **the re-run**, not merely on
+"the checks look settled": a re-run takes a few seconds to appear, and until it
+does GitHub still reports the old, settled, stale answer. Polling on the
+ordinary check gate alone would act on it in the first poll — the same bug
+wearing a fresh coat. And inside that wait, only a **fresh** answer falls
+through to the ordinary gate (`duringRerunWait`, pure and tested): for a few
+seconds GitHub's rollup may carry no review-gate entry at all while the old
+attempt is swapped for the new one, and before this was one function the hook
+fell through on that moment — other checks green, the PR merged, the re-run's
+answer never observed. "No gate on this PR" is benign before a re-run exists;
+during the wait it means *cannot see*, and cannot-see is not a pass.
 
 ## Lane A — when the machine supplies the word (2026-08-25, task 86bbkw2au)
 

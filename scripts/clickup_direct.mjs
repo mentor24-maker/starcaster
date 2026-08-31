@@ -66,6 +66,7 @@ import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
 import loopInterval from './builder/loopInterval.js';
 import branchCatchUp from './builder/branchCatchUp.js';
+import reviewGate from './builder/reviewGate.js';
 import conflictWork from './builder/conflictWork.js';
 import wipCap from './builder/wipCap.js';
 import autoMergeLane from './builder/autoMergeLane.js';
@@ -723,8 +724,16 @@ async function fileConflictTicket({ task, pr, branch, localVerdict, commentId, u
  *
  * Re-reads the PR and hands the answer to githubGate — nothing here decides
  * whether a PR may merge.
+ *
+ * `gateOf` exists for exactly one caller: the stale-review-gate re-run below
+ * (task 86bbmk7pv), which needs to keep waiting while the OLD answer is still
+ * the one GitHub is reporting. Waiting on `githubGate` alone would merge on
+ * that old answer in the first poll, because a re-run takes a few seconds to
+ * show up and until it does the PR looks green and settled. The hook narrows
+ * the "keep waiting" condition; it can never widen "may merge", because the
+ * gate it composes with is still this one.
  */
-async function waitForChecksInPass({ pr, repo, label, fields, budget }) {
+async function waitForChecksInPass({ pr, repo, label, fields, budget, gateOf = githubGate }) {
   if (!budget || !mergeOnComment.mayWaitInPass(budget.used, budget.cap)) {
     return { action: 'wait', reason: 'the in-pass wait cap for this run is already spent' };
   }
@@ -745,7 +754,7 @@ async function waitForChecksInPass({ pr, repo, label, fields, budget }) {
     }
 
     const next = mergeOnComment.afterCatchUpDecision({
-      gate: githubGate(json),
+      gate: gateOf(json),
       elapsedMs: Date.now() - startedAt,
       budgetMs,
     });
@@ -857,9 +866,11 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       gate = { action: 'conflict', reason: `the branch could not be caught up with main (${upd.stderr.slice(0, 200)})` };
     } else {
       // Do not go away for an hour: CI takes ~85s and the whole merge is
-      // three minutes of work.
+      // three minutes of work. 'update-branch' out of the wait means main
+      // moved AGAIN while we waited — the next pass catches up from the top
+      // rather than this one chasing a moving target.
       const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
-      if (after.action === 'wait') {
+      if (after.action === 'wait' || after.action === 'update-branch') {
         console.error(`  MERGE WAITING on ${label}: branch updated from main — ${after.reason}`);
         return { outcome: 'waiting', reason: after.reason };
       }
@@ -883,7 +894,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     if (local.ok) {
       console.error(`  ${label}: GitHub reported a conflict, but ${local.reason}`);
       const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
-      if (after.action === 'wait') {
+      if (after.action === 'wait' || after.action === 'update-branch') {
         console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
         return { outcome: 'waiting', reason: after.reason };
       }
@@ -995,6 +1006,108 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     if (alreadyFiled) console.error(`  (conflict ticket ${filed.id} was already on file — not filed twice)`);
     await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'handed-off', reason: gate.reason, filed: filed ? filed.id : null };
+  }
+
+  // -------------------------------------------------------------------------
+  // THE CHECK MAY BE ANSWERING AN OLDER QUESTION (2026-08-26, task
+  // 86bbmk7pv). A GitHub status check is computed ONCE PER COMMIT. The
+  // `review-gate` check reads the ticket for a review PASS — and loop-review
+  // posts that PASS *after* the last push, by definition. So the run that
+  // already happened saw no verdict and will not re-run on its own; nothing
+  // later changes its mind.
+  //
+  // While the gate is advisory that is harmless (it exits 0 either way). The
+  // moment the branch-protection box is ticked it is a deadlock: every
+  // correctly-reviewed PR carries a stale red check that only a new commit
+  // can clear, and pushing a commit to clear it invalidates the review that
+  // just passed. So the merge step re-runs a stale gate rather than merging
+  // on it — and never the other way round, which would be weakening the gate
+  // to work around its own staleness.
+  //
+  // THIS SITS ABOVE THE WAIT AND REFUSE BRANCHES, AND THE ORDER IS THE FIX
+  // (found in review, 2026-08-30). In enforcing mode a stale gate exits 1 —
+  // a RED check — so githubGate answers 'refuse', and a staleness question
+  // asked after the refusal branch is never reached in the one mode it was
+  // written for: the deadlock above, unchanged. A stale RED gate means
+  // "re-run it"; only a re-run that comes back red is a real refusal. The
+  // conflict hand-off and the catch-up stay above it on purpose: a conflict
+  // needs an agent session no matter what the gate says, and a catch-up push
+  // fires `synchronize`, which re-runs the gate on its own — this is the
+  // path where nothing was pushed, so nothing re-ran.
+  //
+  // The one PR that skips the question is one that is not open for work at
+  // all — closed, merged, or a draft. Its refusal reason is the honest one
+  // ("the PR is already merged"), and re-running a check on it would spend a
+  // CI run to change nothing.
+  const prOpenForWork = String((prJson && prJson.state) || '').toUpperCase() === 'OPEN' && !prJson.isDraft;
+  const staleness = reviewGate.reviewGateStaleness({ rollup: prJson.statusCheckRollup, comments });
+  if (prOpenForWork) {
+    if (staleness.state === 'pending') {
+      console.error(`  MERGE WAITING on ${label}: ${staleness.reason}`);
+      return { outcome: 'waiting', reason: staleness.reason };
+    }
+    if (staleness.state === 'stale') {
+      if (dryRun) {
+        console.error(`  DRY RUN — would re-run the stale review gate on PR #${pr.number}, then wait: ${staleness.reason}`);
+        return { outcome: 'would-rerun-review-gate', pr: pr.number, reason: staleness.reason };
+      }
+
+      // The budget question comes BEFORE the re-run is fired, and the answer
+      // to "no budget left" is a quiet wait, not a refusal: the cap is this
+      // pass's own scheduling limit, not a fact about the PR, and firing the
+      // re-run first meant spending a CI run only to post a refusal about a
+      // result nobody had waited for (found in review, 2026-08-30).
+      if (!inPassBudget || !mergeOnComment.mayWaitInPass(inPassBudget.used, inPassBudget.cap)) {
+        const why = `the review gate is stale (${staleness.reason}) but this pass has no wait budget left — the next pass re-runs it`;
+        console.error(`  MERGE WAITING on ${label}: ${why}`);
+        return { outcome: 'waiting', reason: why };
+      }
+
+      const cannotRerun = (why) => refuse(
+        `the review gate on PR #${pr.number} is out of date (${staleness.reason}) and ${why}`,
+        `PR #${pr.number} carries a review check that was worked out BEFORE the review landed, so it is answering an older question. It could not be re-run, and merging on the old answer is not something this step will do.`,
+      );
+      if (!staleness.runId) return cannotRerun('its workflow run could not be identified, so it cannot be re-run');
+
+      const rerun = gh(['run', 'rerun', String(staleness.runId), '--repo', repo]);
+      if (!rerun.ok) return cannotRerun(`re-running it failed (${rerun.stderr.slice(0, 200)})`);
+      console.error(`  ${label}: re-ran the stale review gate (run ${staleness.runId}) — ${staleness.reason}`);
+
+      // Wait for the RE-RUN, not merely for "the checks look settled". A
+      // re-run takes a few seconds to appear, and until it does GitHub still
+      // reports the old, settled, stale answer — polling on githubGate alone
+      // would act on it in the first poll, which is the whole bug wearing a
+      // fresh coat. The hook is pure (reviewGate.duringRerunWait) and only a
+      // FRESH answer falls through to the ordinary gate: 'absent' inside this
+      // wait is the rollup mid-swap, not "no gate on this PR".
+      const after = await waitForChecksInPass({
+        pr, repo, label, fields, budget: inPassBudget,
+        gateOf: (json) => reviewGate.duringRerunWait({
+          staleness: reviewGate.reviewGateStaleness({ rollup: json.statusCheckRollup, comments }),
+          gate: githubGate(json),
+        }),
+      });
+      const next = reviewGate.afterRerunDecision(after);
+      if (next.action === 'refuse') {
+        return refuse(next.reason, `PR #${pr.number} was not merged: its review check had to be re-run first, and the re-run did not clear it.`);
+      }
+      if (next.action === 'conflict' || next.action === 'wait') {
+        // Rare: the branch went stale or fell behind during the three minutes
+        // of the re-run. Say nothing now and let the NEXT pass take it from
+        // the top, where the conflict hand-off and the catch-up live — those
+        // paths know how to explain themselves to the operator and this one
+        // does not.
+        console.error(`  MERGE WAITING on ${label}: ${next.reason} (found while re-running the review gate)`);
+        return { outcome: 'waiting', reason: next.reason };
+      }
+      console.error(`  ${label}: the re-run of the review gate came back clean — ${next.reason}`);
+      // The re-run rewrote the answer the rest of this function acts on: the
+      // gate that said 'refuse' was refusing the stale red check that no
+      // longer exists. Carry the fresh read forward so the refusal branch
+      // below judges the PR as it is now, not as it was.
+      gate = { action: next.action, reason: next.reason };
+      if (after.prJson) prJson = after.prJson;
+    }
   }
 
   // Not terminal: no marker, no comment, no noise. The next pass looks again.
@@ -2737,7 +2850,7 @@ if (cmd === 'whoami') {
         // means "nothing to say", and this is the one thing that most needs
         // saying (task 86bbq0fh8).
         else if (m.outcome === 'handed-off-stalled' || m.outcome === 'would-report-stalled') merges.stalled++;
-        else if (m.outcome === 'waiting' || m.outcome === 'would-update-branch') merges.waiting++;
+        else if (m.outcome === 'waiting' || m.outcome === 'would-update-branch' || m.outcome === 'would-rerun-review-gate') merges.waiting++;
         // A merged ticket is now Live, which is not a status this watch
         // handles — skip the handback check rather than acting on a status
         // this pass itself just changed.

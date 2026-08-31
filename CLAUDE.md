@@ -32,6 +32,20 @@ does not land. Every agent working here must:
   then say so immediately and completely. Everything else is a chore, and
   chores are silent.
 
+- **CC runs the operational commands.** Scripts, `doppler run`, SSH to the
+  Mini, publishing: the agent session runs them and reports the outcome in
+  plain English. Handing him a command to paste is itself a claim that CC
+  cannot run it, and he reads it that way every time. There are four
+  exceptions — a real secret VALUE (`docs/DOCTRINE.md` §4.1), a billing
+  screen, a browser login, and a decision that is genuinely his — and a
+  hand-off **names which one applies**. A gate or permission refusal is not
+  one of them: it refused one call, not the session, so retry it when the
+  step actually comes and say so in one line if it is refused again. And
+  never leave a production fix as a two-step for him — if a script has a dry
+  run and an `--apply`, run both and report what changed. He has raised this
+  three times (2026-08-07, 08-23, 08-30); the incident is
+  `docs/DOCTRINE.md` §6.9.
+
 - **A person is a human being. An agent is not.** `person` and `human` mean
   Dane, or another actual human. An agent session is an **agent session** —
   never a person, a human, somebody, or anyone. He has raised this at least
@@ -252,7 +266,22 @@ setting somebody flips on one machine at 2am.
 ```
 npm run node:whoami          # which machine is this, and what may it run
 npm run node:owns -- <job>   # 0 = yes, 3 = another machine's job, 1 = cannot tell
+npm run doctor:node          # is this MACHINE a valid node? (read-only, safe anywhere)
+npm run provision:node       # what would it take to make it one? (dry run)
 ```
+
+**Standing a new machine up is a script, not a document**
+(`docs/NODE_PROVISIONING.md`). `doctor:node` is to a machine what `doctor` is to
+a folder: identity, toolchain, checkouts, config and schedules, each answered
+PASS / FAIL / **CANNOT TELL** — never a pass for a check that could not run.
+`provision:node` fixes what a script is allowed to fix and prints the rest as
+`::: PROMPT FOR DANE :::` blocks; it is a dry run unless you add `--apply`.
+The two are separate programs on purpose — a provisioner that graded its own
+work would grade it by the assumptions it acted on — but they read ONE inventory
+(`lib/nodeProvision.js`), because two definitions of "provisioned" disagree
+quietly. **Installing the pulse schedules reports CANNOT DO YET on every run**
+until Slice B (`86bbh9kh2`) exists: a green check on a machine that runs no jobs
+is the exact failure the NODES plan was written against.
 
 Each machine says who it is in `~/.alphire-node` (one short line:
 `macbook-pro` or `mac-mini`). Without that file it falls back to the hostname,

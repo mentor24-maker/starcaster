@@ -33,19 +33,20 @@
  */
 
 const { isReviewVerdict, isReviewPassed } = require('./mergeOnComment.js');
+const { prTrailLanded } = require('./loopTrail.js');
 
 /**
- * The ticket link in a PR body. `pr-opened` refuses a PR whose body carries
- * no link back to its ticket, so on loop-built PRs this is reliable; a
- * hand-made PR that skipped that step is exactly the case the gate is here
- * to catch.
+ * The ticket link in a PR body. `pr-opened` refuses a PR whose body carries no
+ * link back to its ticket, so on loop-built PRs this is reliable; a hand-made
+ * PR that skipped that step is exactly the case the gate is here to catch.
  *
- * Both live shapes are accepted: the plain `app.clickup.com/t/<id>` form the
- * loop writes, and the `t/<workspace>/<id>` form ClickUp's own "copy link"
- * button produces. Ids are alphanumeric (`86bbmfbkv`), so the workspace
- * segment — all digits — is distinguished by shape rather than by position.
+ * That premise is now TRUE as written. It was not before 2026-08-26: this gate
+ * required a full URL while `pr-opened` ALSO accepted a bare id, so a body that
+ * command called traceable could arrive here and be refused for carrying no
+ * link at all (task 86bbmmv7t, finding 2). Both sides read the one matcher
+ * below now, and it carries the reasoning for which shape won.
  */
-const CLICKUP_LINK_RE = /https?:\/\/app\.clickup\.com\/t\/(?:\d+\/)?([a-z0-9]+)/i;
+const { CLICKUP_LINK_RE, findTicketId, findTicketIds } = require('./clickupTicketLink.js');
 
 /**
  * A deliberate override, e.g. `[gate-waived: hotfix, site is down]`.
@@ -97,12 +98,6 @@ const INDENTED_CODE_RE = /^(?: {4,}|\t)/;
  */
 const PLACEHOLDER_REASON_RE = /^<[^>]*>$/;
 
-/** The ticket id a PR body points at, or '' if it points at none. */
-function findTicketId(prBody) {
-  const m = CLICKUP_LINK_RE.exec(String(prBody || ''));
-  return m ? m[1] : '';
-}
-
 /**
  * The waiver reason a PR body carries, or '' if it carries none.
  *
@@ -139,6 +134,34 @@ function toMillis(value) {
   if (/^\d+$/.test(raw)) return Number(raw);
   const parsed = Date.parse(raw);
   return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+/**
+ * How many parents a commit has, given either shape the world hands us.
+ *
+ * GitHub's native REST commit object carries `parents` as an ARRAY of parent
+ * objects; the runner in `scripts/review_gate.mjs` maps it down to a count with
+ * jq before calling in. The first version of this read `Number(parents || 1)`,
+ * which handles only the count — `Number([{}, {}])` is `NaN`, and `NaN > 1` is
+ * false, so under the native shape every catch-up merge silently counted as the
+ * branch's own work and the merge exclusion below quietly went away
+ * (task 86bbmmv7t, finding 4).
+ *
+ * No live caller was affected, because only the runner's own jq mapping
+ * produces the count. That is exactly what made it worth fixing: the next
+ * caller handed the native shape would have restored the catch-up deadlock this
+ * function exists to avoid, and done it invisibly — the failure direction is
+ * the strict one, so nothing goes wrong loudly, reviews just start reading as
+ * stale for no reason a reader can see.
+ *
+ * Anything unreadable counts as ONE parent, i.e. as the branch's own work. That
+ * is the strict direction: an unrecognised commit tightens the freshness rule
+ * rather than escaping it.
+ */
+function parentCount(parents) {
+  if (Array.isArray(parents)) return parents.length;
+  const n = Number(parents);
+  return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
 /**
@@ -180,13 +203,49 @@ function newestSubstantiveCommitAt(commits) {
   const dated = (commits || [])
     .map((c) => ({
       at: toMillis(c && (c.committedDate ?? c.date)),
-      isMerge: Number((c && c.parents) || 1) > 1,
+      isMerge: parentCount(c && c.parents) > 1,
     }))
     .filter((c) => Number.isFinite(c.at));
   if (!dated.length) return NaN;
   const own = dated.filter((c) => !c.isMerge);
   const pool = own.length ? own : dated;
   return pool.reduce((best, c) => (c.at > best ? c.at : best), -Infinity);
+}
+
+/**
+ * Is the ticket the gate just read actually THIS pull request's ticket?
+ *
+ * WHY (2026-08-26, task 86bbmmv7t, finding 1 — the one that failed OPEN).
+ * `findTicketId` returns the FIRST ClickUp link in the body, and nothing
+ * checked that it was the PR's own. A body that cites a related ticket before
+ * its own was judged against THAT ticket's verdict, and PASSED whenever that
+ * verdict happened to be newer than this PR's newest non-merge commit — the
+ * gate opening on a review of entirely different work.
+ *
+ * It did not bite in the live record only because of an ordering CONVENTION:
+ * loop-built bodies put their own ticket on line 1. A convention is what this
+ * whole gate exists to stop relying on. PR #433's own body proves the shape is
+ * live — it carries 86bbmfbkv on line 1 and 86bbmk7pv on line 156, and had
+ * those been the other way round the gate would have judged it against a ticket
+ * it does not belong to.
+ *
+ * The confirmation reuses `loopTrail.prTrailLanded`, which is the reader
+ * `pr-opened` already verifies its own write with: the ticket's newest
+ * PR line must name this PR's number. Reused rather than re-implemented for
+ * the same reason the verdict parser is imported — two readers of one fact
+ * drift, and finding 2 on this very ticket is what that costs.
+ *
+ * A PR number the gate was not given is not a pass either. "I could not check"
+ * and "it checked out" must never collapse into the same answer.
+ */
+function ticketNamesThisPr(comments, prNumber) {
+  const want = Number(prNumber);
+  if (!Number.isFinite(want) || want <= 0) {
+    return { ok: false, why: 'the gate was not told which PR it is judging, so it cannot confirm the ticket belongs to this PR' };
+  }
+  const landed = prTrailLanded(comments, want);
+  if (landed.ok) return { ok: true, why: '' };
+  return { ok: false, why: landed.why };
 }
 
 function byDateNewestFirst(comments) {
@@ -216,6 +275,9 @@ function allowsMerge(verdict) {
  *
  * @param {object} input
  * @param {string} input.prBody         the pull request description
+ * @param {string|number} input.prNumber  which PR this is, so the ticket the
+ *                                        body points at can be confirmed as
+ *                                        this PR's own
  * @param {string|number} input.headCommittedAt  the newest commit's timestamp
  * @param {Array|null} input.comments   the ticket's ClickUp comments, or null
  *                                      if they could not be read
@@ -223,8 +285,8 @@ function allowsMerge(verdict) {
  * @returns {{verdict: string, reason: string, ticketId: string,
  *            waiverReason: string, verdictCommentId: string}}
  */
-function reviewGateDecision({ prBody, headCommittedAt, comments, clickupError } = {}) {
-  const base = { ticketId: '', waiverReason: '', verdictCommentId: '' };
+function reviewGateDecision({ prBody, prNumber, headCommittedAt, comments, clickupError } = {}) {
+  const base = { ticketId: '', waiverReason: '', verdictCommentId: '', cause: '' };
 
   // The override is read FIRST, before the ticket link is even required. A
   // waiver is the deliberate way past every rule below it, including the
@@ -262,6 +324,7 @@ function reviewGateDecision({ prBody, headCommittedAt, comments, clickupError } 
       ...base,
       ticketId,
       verdict: CANNOT_TELL,
+      cause: 'clickup-unreachable',
       reason: `could not read ticket ${ticketId} from ClickUp${clickupError ? `: ${clickupError}` : ''}`,
     };
   }
@@ -307,6 +370,7 @@ function reviewGateDecision({ prBody, headCommittedAt, comments, clickupError } 
       ticketId,
       verdictCommentId,
       verdict: CANNOT_TELL,
+      cause: 'unreadable-dates',
       reason: 'could not compare the review date with the commit date — one of them is unreadable',
     };
   }
@@ -321,6 +385,29 @@ function reviewGateDecision({ prBody, headCommittedAt, comments, clickupError } 
     };
   }
 
+  // Everything above says the ticket carries a fresh PASS. One question is
+  // left, and it is the one that failed open: is this ticket THIS PR's?
+  //
+  // Checked HERE, on the pass path alone, rather than up beside the ticket
+  // link. Every refusal above is already safe, so moving the check earlier
+  // could only change the WORDING of a refusal, never its outcome — and it
+  // would change it for the worse in the gate's commonest case. A hand-made PR
+  // typically has neither a review verdict nor a recorded PR line, and
+  // "ticket X carries no review verdict" is the message that reader needs;
+  // pointing them at the trail would send them to fix bookkeeping on a ticket
+  // that nothing has reviewed.
+  const owned = ticketNamesThisPr(comments, prNumber);
+  if (!owned.ok) {
+    return {
+      ...base,
+      ticketId,
+      verdictCommentId,
+      verdict: CANNOT_TELL,
+      cause: 'ticket-not-this-prs',
+      reason: `ticket ${ticketId} carries a review PASS, but it cannot be confirmed to be this PR's ticket: ${owned.why}`,
+    };
+  }
+
   return {
     ...base,
     ticketId,
@@ -331,9 +418,247 @@ function reviewGateDecision({ prBody, headCommittedAt, comments, clickupError } 
 }
 
 /**
+ * ---------------------------------------------------------------------------
+ * STALENESS — the answer a check gave before the question changed
+ * (2026-08-26, task 86bbmk7pv).
+ * ---------------------------------------------------------------------------
+ *
+ * A GitHub status check is computed ONCE PER COMMIT. This gate reads the
+ * ticket for a review PASS — and loop-review posts that PASS *after* the last
+ * push, by definition. So the run that already happened saw no verdict,
+ * recorded a fail, and will not re-run on its own. Nothing later changes its
+ * mind.
+ *
+ * While the gate is advisory that is harmless. The moment the
+ * branch-protection box is ticked it is a deadlock: every correctly-reviewed
+ * PR carries a stale red check that only a new commit can clear, and pushing
+ * a commit to clear it invalidates the review that just passed.
+ *
+ * The fix is not to weaken the gate. It is for the merge step to notice that
+ * the check answered an older question and RE-RUN it before merging — which
+ * is what these functions decide. As everywhere else in this file, they are
+ * pure: the caller fetches the rollup and the comments, and carries the
+ * answer out with `gh`.
+ */
+
+/** The check the gate publishes. The workflow's job id, so also its name. */
+const REVIEW_GATE_CHECK_NAME = 'review-gate';
+
+/**
+ * The workflow run id inside a check run's details URL, e.g.
+ * `https://github.com/alphire/starcaster/actions/runs/1234/job/5678` -> '1234'.
+ * `gh run rerun` takes the RUN id, not the job id, so the digits after
+ * `/runs/` are the ones that matter and the `/job/` tail is ignored.
+ */
+function runIdFromDetailsUrl(url) {
+  const m = /\/actions\/runs\/(\d+)/.exec(String(url || ''));
+  return m ? m[1] : '';
+}
+
+/**
+ * The review-gate entry in a `gh pr view --json statusCheckRollup` payload.
+ *
+ * Matches on the check's own name OR its workflow name, case-insensitively:
+ * the job is named by its id today, and a future `name:` line in the workflow
+ * would otherwise make this quietly stop finding it — and "not found" reads
+ * as "no gate on this PR", which is the failure wearing a disguise.
+ *
+ * Newest wins, measured by when the run STARTED. A re-run appears alongside
+ * the answer it replaces for a few seconds, and taking the older one back
+ * would make the merge step re-run the gate forever.
+ */
+function findReviewGateRun(rollup) {
+  let best = null;
+  let bestAt = -Infinity;
+  for (const c of rollup || []) {
+    const name = String((c && (c.name || c.context)) || '');
+    const workflow = String((c && c.workflowName) || '');
+    if (name.toLowerCase() !== REVIEW_GATE_CHECK_NAME
+      && workflow.toLowerCase() !== REVIEW_GATE_CHECK_NAME) continue;
+    const at = toMillis(c.startedAt ?? c.completedAt ?? c.createdAt);
+    const key = Number.isFinite(at) ? at : -Infinity;
+    if (best === null || key >= bestAt) { best = c; bestAt = key; }
+  }
+  return best;
+}
+
+/** When the newest REVIEW verdict landed on the ticket, or NaN if there is none. */
+function newestVerdictAt(comments) {
+  const newest = byDateNewestFirst(comments).find((c) => isReviewVerdict(c && c.comment_text));
+  return newest ? toMillis(newest.date) : NaN;
+}
+
+/** Has this check run finished? An unfinished one has no answer to be stale. */
+function isRunComplete(run) {
+  const status = String((run && run.status) || '').toUpperCase();
+  if (status) return status === 'COMPLETED';
+  // A StatusContext has no `status`; `state` PENDING/EXPECTED means running.
+  const state = String((run && run.state) || '').toUpperCase();
+  if (state) return state !== 'PENDING' && state !== 'EXPECTED';
+  return false;
+}
+
+/**
+ * Does this PR's review-gate check still answer the current question?
+ *
+ * Compares the run's START time with the newest verdict, NOT its completion
+ * time, and that direction is the safe one: a verdict posted before the run
+ * started was certainly visible to it, while one posted after the start may
+ * or may not have been read before the job fetched the ticket. Comparing
+ * against `completedAt` would call that ambiguous run fresh. Being wrong here
+ * costs one CI minute in one direction and a merge on an unreviewed verdict
+ * in the other.
+ *
+ * @returns {{state: 'fresh'|'stale'|'pending'|'absent', reason: string,
+ *            runId: string, checkStartedAt: number, verdictAt: number}}
+ */
+function reviewGateStaleness({ rollup, comments } = {}) {
+  const run = findReviewGateRun(rollup);
+  const base = { runId: '', checkStartedAt: NaN, verdictAt: NaN };
+
+  // NO REVIEW-GATE RUN AT ALL is deliberately not a refusal here, and the
+  // reasoning matters. This function's job is "is the existing answer out of
+  // date", and there is no answer to be out of date. The two actors that
+  // could merge such a PR are both already covered: GitHub itself refuses one
+  // once the check is required (githubGate sees BLOCKED), and the relay's own
+  // merge path has independently checked the ticket's verdict in ClickUp
+  // before it gets here. Refusing instead would strand every PR opened before
+  // the workflow existed, which is a deadlock introduced by the fix for a
+  // deadlock.
+  if (!run) {
+    return { ...base, state: 'absent', reason: 'this PR carries no review-gate check run' };
+  }
+
+  const runId = runIdFromDetailsUrl(run.detailsUrl || run.targetUrl);
+  const checkStartedAt = toMillis(run.startedAt ?? run.completedAt ?? run.createdAt);
+  const verdictAt = newestVerdictAt(comments);
+  const found = { runId, checkStartedAt, verdictAt };
+
+  if (!isRunComplete(run)) {
+    return { ...found, state: 'pending', reason: 'the review-gate check is still running' };
+  }
+
+  // An unreadable timestamp on either side is treated as STALE, not fresh.
+  // Same rule as the gate itself: cannot-see is never a pass — and here the
+  // remedy is cheap, because "stale" only means "run it again".
+  if (!Number.isFinite(checkStartedAt) || !Number.isFinite(verdictAt)) {
+    return {
+      ...found,
+      state: 'stale',
+      reason: 'could not compare the review-gate run with the newest verdict — one of the two timestamps is unreadable',
+    };
+  }
+
+  if (checkStartedAt > verdictAt) {
+    return {
+      ...found,
+      state: 'fresh',
+      reason: `the review-gate check started ${new Date(checkStartedAt).toISOString()}, after the newest verdict (${new Date(verdictAt).toISOString()})`,
+    };
+  }
+
+  return {
+    ...found,
+    state: 'stale',
+    reason: `the review-gate check started ${new Date(checkStartedAt).toISOString()}, before the newest verdict (${new Date(verdictAt).toISOString()}) — it answered a question that has since changed`,
+  };
+}
+
+/**
+ * The gate the re-run wait polls on, instead of the ordinary check gate.
+ *
+ * WHY THE ONLY PASS-THROUGH IS 'fresh' (found in review, 2026-08-30). A
+ * re-run was just fired, so for a few seconds GitHub's rollup is in flux:
+ * first it still shows the old, settled, stale answer, then it may show NO
+ * review-gate entry at all while the old attempt is swapped for the new one.
+ * Before this ran through one function, the wait hook fell through to the
+ * ordinary gate on 'absent' — and at that instant the other checks are green,
+ * so the PR merged with the re-run's answer never observed. 'absent' means
+ * "no answer to be out of date" before a re-run exists; DURING the wait it
+ * means "cannot see", and cannot-see is never a pass (acceptance criterion 4,
+ * task 86bbmk7pv). So 'stale', 'pending' and 'absent' all keep waiting, and
+ * only a fresh answer hands the question back to the ordinary gate — which is
+ * still the one that decides whether anything may merge.
+ */
+function duringRerunWait({ staleness, gate } = {}) {
+  const state = String((staleness && staleness.state) || '');
+  if (state !== 'fresh') {
+    return {
+      action: 'wait',
+      reason: `the re-run has not produced a fresh review-gate answer yet (${(staleness && staleness.reason) || 'no staleness answer'})`,
+    };
+  }
+  return gate;
+}
+
+/**
+ * What the merge step does with the result of waiting on a re-run.
+ *
+ * Takes the SHAPE `githubGate` already produces, so nothing here re-decides
+ * whether a PR may merge — a green re-run goes back to the merge path, a red
+ * one to the refusal path with GitHub's own wording, a conflict to the
+ * hand-off.
+ *
+ * 'update-branch' is the one answer that is neither a pass nor a failure:
+ * main moved during the ~3 minutes of waiting, so the branch needs catching
+ * up — which the NEXT pass's catch-up path already does, gate re-run
+ * included (the push fires `synchronize`). Before this arm existed, that
+ * race polled out the full wait and then REFUSED with "the re-run did not
+ * clear it" — telling the reader the gate failed when the branch merely
+ * fell behind (found in review, 2026-08-30). It maps to a quiet wait, never
+ * a refusal and never a merge.
+ *
+ * Anything else — the wait ran out, the answer was unreadable — is a
+ * REFUSAL, never a merge and never a silent wait. Acceptance criterion 4 of
+ * task 86bbmk7pv, and the same rule as the gate itself: a re-run whose
+ * result nobody saw is not a pass. The refusal is re-decidable, so the next
+ * pass merges it on the operator's original word once the re-run has landed.
+ */
+function afterRerunDecision({ action, reason } = {}) {
+  const act = String(action || '');
+  if (act === 'merge' || act === 'refuse' || act === 'conflict') {
+    return { action: act, reason: reason || '' };
+  }
+  if (act === 'update-branch') {
+    return {
+      action: 'wait',
+      reason: `main moved while waiting on the review-gate re-run (${reason || 'the branch is behind main'}) — the next pass catches the branch up, which re-runs the gate itself`,
+    };
+  }
+  return {
+    action: 'refuse',
+    reason: `the review gate was re-run because it was stale, and this pass could not confirm the result (${reason || 'no answer'}) — refusing rather than merging on a stale gate`,
+  };
+}
+
+/**
+ * THE GATE'S OWN VOICE — and why it does not say "REVIEW".
+ *
+ * `mergeOnComment.isReviewVerdict` treats any line beginning with the word
+ * REVIEW as a review verdict, deliberately and case-insensitively. The gate's
+ * messages used to begin with that word, which meant every single one of them —
+ * pass, fail and CANNOT TELL alike — parsed as a verdict, and as a SEND-BACK,
+ * since none of them matches the PASSED spelling (task 86bbmmv7t, finding 3).
+ *
+ * Nothing automated pasted them onto a ticket, so it never bit. But a refusal
+ * here is written to tell the reader what to do next, which makes copying it
+ * onto the ticket the natural next move for a person or an agent — and doing
+ * that would have made the gate's own words the ticket's newest verdict,
+ * freezing `readyToLaunchGate`, `mergeDecision` and this gate at once, with
+ * the ticket showing a send-back nobody wrote.
+ *
+ * The fix is to stay out of that namespace: every message this file and
+ * `scripts/review_gate.mjs` emit begins with GATE_LABEL, which the verdict
+ * parser does not recognise. Exported rather than typed twice so the runner
+ * cannot drift back, and a test asserts every real output string reads as no
+ * verdict at all.
+ */
+const GATE_LABEL = 'MERGE GATE';
+
+/**
  * WHAT A FAILURE SAYS.
  *
- * A red X that says "review-gate failed" teaches nothing and, worse, teaches
+ * A red X that says "the gate failed" teaches nothing and, worse, teaches
  * people to route around it. Every refusal names the ticket, what its newest
  * verdict actually is, and the one thing that has to happen next — so the
  * reader's next action is obvious without opening this file.
@@ -346,7 +671,7 @@ function gateMessage(decision, { prNumber } = {}) {
 
   if (decision.verdict === WAIVED) {
     return [
-      `REVIEW GATE WAIVED — ${label} merged past the review check on purpose.`,
+      `${GATE_LABEL} WAIVED — ${label} merged past the review check on purpose.`,
       '',
       `Reason given: ${decision.waiverReason}`,
       ticketLine,
@@ -357,37 +682,58 @@ function gateMessage(decision, { prNumber } = {}) {
   }
 
   if (decision.verdict === PASS) {
-    return [`REVIEW GATE PASSED — ${decision.reason}`, ticketLine].join('\n');
+    return [`${GATE_LABEL} PASSED — ${decision.reason}`, ticketLine].join('\n');
   }
 
-  const fix = decision.verdict === CANNOT_TELL
+  const fix = decision.cause === 'ticket-not-this-prs'
     ? [
-      'The gate could not reach ClickUp, so it cannot tell whether this work',
-      'was reviewed. It fails rather than passes, deliberately: a gate that',
-      'opens when it cannot see is not a gate.',
+      'The PR body points at a ticket, and that ticket has been reviewed — but',
+      'nothing on it says it is about THIS pull request, so the review may',
+      'belong to different work. The gate refuses rather than borrowing it.',
       '',
-      'What to do: re-run this check. If it keeps failing, the CI ClickUp',
-      'token is missing or expired — see docs/LOOP_ENGINEERING.md, "The review gate".',
+      "What to do: put this PR's OWN ticket link first in the body (a body may",
+      'cite other tickets, but the first link is the one that is read), and make',
+      'sure that ticket records this PR — `npm run clickup -- pr-opened --task',
+      '<id> --pr <url>` writes that line and checks it landed. Then re-run.',
     ]
-    : !decision.ticketId
+    : decision.cause === 'unreadable-dates'
       ? [
-        'What to do: add the ticket link to this PR description, on a line of',
-        'its own — `https://app.clickup.com/t/<id>`. Every PR gets a ticket,',
-        'hand-made ones included. If this genuinely has no ticket and must',
-        'merge anyway, put `[gate-waived: <reason>]` in the body; that is',
-        'allowed, and it is reported to the bus.',
-      ]
-      : [
-        'What to do: let loop-review run and record a PASS on the ticket, then',
-        're-run this check (a status check is computed once per commit, so a',
-        'verdict posted after the last push does not reach it on its own).',
+        'The gate could not compare the review date with the commit date, so it',
+        'cannot tell whether the review covers the code about to merge. It fails',
+        'rather than passes, deliberately.',
         '',
-        'If this must merge without a review, put `[gate-waived: <reason>]` in',
-        'the PR body; that is allowed, and it is reported to the bus.',
-      ];
+        'What to do: re-run this check. If it keeps failing, the verdict comment',
+        'on the ticket has an unreadable timestamp — say so on the bus.',
+      ]
+      : decision.verdict === CANNOT_TELL
+        ? [
+          'The gate could not reach ClickUp, so it cannot tell whether this work',
+          'was reviewed. It fails rather than passes, deliberately: a gate that',
+          'opens when it cannot see is not a gate.',
+          '',
+          'What to do: re-run this check. If it keeps failing, the CI ClickUp',
+          'token is missing or expired — see docs/LOOP_ENGINEERING.md, "The review gate".',
+        ]
+        : !decision.ticketId
+          ? [
+            'What to do: add the ticket link to this PR description, on a line of',
+            'its own — `https://app.clickup.com/t/<id>`. The full link, not the id',
+            'alone; every PR gets a ticket, hand-made ones included. If this',
+            'genuinely has no ticket and must merge anyway, put',
+            '`[gate-waived: <reason>]` in the body; that is allowed, and it is',
+            'reported to the bus.',
+          ]
+          : [
+            'What to do: let loop-review run and record a PASS on the ticket, then',
+            're-run this check (a status check is computed once per commit, so a',
+            'verdict posted after the last push does not reach it on its own).',
+            '',
+            'If this must merge without a review, put `[gate-waived: <reason>]` in',
+            'the PR body; that is allowed, and it is reported to the bus.',
+          ];
 
   return [
-    `REVIEW GATE ${decision.verdict} — ${label} may not merge.`,
+    `${GATE_LABEL} ${decision.verdict} — ${label} may not merge.`,
     '',
     `Why: ${decision.reason}.`,
     ticketLine,
@@ -399,7 +745,7 @@ function gateMessage(decision, { prNumber } = {}) {
 /** The bus post that makes an override visible. */
 function waiverAnnouncement({ prNumber, prUrl, reason, actor }) {
   const who = actor ? ` by ${actor}` : '';
-  return `[CC-starcaster review-gate] REVIEW GATE WAIVED on PR #${prNumber}${who}: ${reason}\n\nThis PR is merging without a recorded review PASS, on purpose. Reason as given in the PR body above.\n\n${prUrl}`;
+  return `[CC-starcaster review-gate] ${GATE_LABEL} WAIVED on PR #${prNumber}${who}: ${reason}\n\nThis PR is merging without a recorded review PASS, on purpose. Reason as given in the PR body above.\n\n${prUrl}`;
 }
 
 /**
@@ -435,17 +781,28 @@ function isEnforcing(value) {
 }
 
 module.exports = {
+  REVIEW_GATE_CHECK_NAME,
+  runIdFromDetailsUrl,
+  findReviewGateRun,
+  newestVerdictAt,
+  reviewGateStaleness,
+  duringRerunWait,
+  afterRerunDecision,
   PASS,
   FAIL,
   CANNOT_TELL,
   WAIVED,
+  GATE_LABEL,
   CLICKUP_LINK_RE,
   WAIVER_RE,
   PLACEHOLDER_REASON_RE,
   findTicketId,
+  findTicketIds,
   findWaiver,
   toMillis,
+  parentCount,
   newestSubstantiveCommitAt,
+  ticketNamesThisPr,
   allowsMerge,
   reviewGateDecision,
   gateMessage,

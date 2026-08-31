@@ -268,6 +268,39 @@ human eye is the only gate that exists"*, *"only a HUMAN exports a token by
 hand"*, *"an Urgent flag is a human override"*. The test is not the word, it is
 the referent — replace it only where the actor is genuinely an agent session.
 
+### 2.6 The actor has one source, or two code paths will name two
+
+§2.5 made every hand-off name the actor it waits on. That is necessary and it is
+not sufficient. On 2026-08-30 the merge step named its actor correctly, and a
+second code path in the same pass named a different one.
+
+PR #444 was approved and its branch needed catching up with `main`. The catch-up
+merged cleanly and the **push** lost a race — another session had pushed to the
+same branch seconds earlier, so git rejected it with `fetch first`.
+`branchCatchUp` reported `PUSH_FAILED`; `clickup_direct.mjs` mapped it to
+`kind: 'unknown'`; `mergeOnComment.conflictHandOffNotice` read that, chose the
+actor `later-pass`, and wrote the true sentence — *"It will be merged on the next
+run."* Nothing needed to act.
+
+Then the filing path ran. It files on `gate.action === 'conflict'` alone and
+never reads the local verdict, so it opened a ticket titled *"Resolve the merge
+conflict on PR #444"* — for conflict markers that did not exist; `git merge-tree
+--write-tree` on the two branches exits 0 with a clean tree — and posted a second
+comment naming the build loop as the actor. The two comments landed 200
+milliseconds apart saying different things. The ticket then sat two hours in
+Ready to launch, because a reader believes whichever one they read last, and
+neither named actor was going to move it.
+
+**Do this:** derive the actor once and let every consumer read that one value —
+the notice, the filing decision, the log line. Where two readers exist, a test
+asserts they cannot disagree on the same fixtures, the way the verdict parser
+already guards its own pair. An actor computed twice is two actors.
+
+The tell is a condition that stops short of the value it is deciding about:
+`if (!filed && !dryRun)` asks whether a ticket already exists and whether this is
+a real run, and never asks the one question it is answering — *is there anything
+to resolve?* Closing it is task 86bbq80j5.
+
 ---
 
 ## 3. Designing checks
@@ -417,15 +450,85 @@ it against what you sent — count and identity, not just "no error". Stop on
 the first mismatch, before the next record is touched, and print the
 restore command. A tool's own log is not evidence about the database.
 
+### 3.12 A guard placed after the refusal it exists to pre-empt is unreachable
+
+The merge step was taught to notice a `review-gate` check that had answered an
+older question and **re-run** it rather than merge on it (task 86bbmk7pv, PR
+#443). The decision logic was pure, tested from nine angles, and correct. It was
+also, in the one mode it was written for, dead code.
+
+The step's first rule is *never merge past a red check*. In enforcing mode a
+stale gate **exits 1** — so it IS a red check, `githubGate` answered `refuse`,
+and the function returned three lines above the staleness question. Ticking the
+branch-protection box would have produced exactly the deadlock the ticket was
+written to prevent.
+
+Two things hid it. The feature ships **advisory first** (exit 0), and in advisory
+mode the stale check reads green, the refusal never fires, and the block is
+reached — so every trial and every test exercised the reachable half. And the
+wiring test asserted only that the staleness call appeared *before the merge
+command*, which stayed true with the code unreachable: it pinned a boundary that
+could not move, so it could not fail.
+
+**Do this:** when a check exists to handle a specific failure state, prove it is
+**reached while the system is in that state** — not merely that it is called
+somewhere before the action. Two questions catch it:
+
+- *What else answers first?* List the branches that return before yours. A guard
+  that interprets a red signal must sit above the rule that refuses on red
+  signals; a stale red means "run it again", and only the re-run's answer is a
+  real refusal.
+- *Which mode did I test?* A feature with an advisory phase and an enforcing
+  phase is two programs. Green in the harmless one is not evidence about the
+  other, and the enforcing path is the one with the consequences.
+
+An ordering test must pin the boundary that can actually move — here,
+*staleness before the red-check refusal*, not *staleness before the merge*.
+Break it on purpose and watch it fail; an assertion that survives the bug it
+names is decoration.
+
 ---
 
 ## 4. Secrets
 
-### 4.1 Agents never handle live secret values
+### 4.1 The rule is about EXPOSURE, not custody
 
-Standing rule. Agents write rotation and diagnostic tooling; the operator runs
-the command that touches the real value. `scripts/diagnose_x_auth.js` follows
-this: it prints lengths and first/last four characters, never a value.
+Standing rule, and the test is one question: **would this render the value
+somewhere a person or a log could read it?**
+
+- **No — the agent runs it.** A command that moves a secret between two stores
+  without displaying it: `doppler secrets get X --plain | gh secret set X`.
+  Nothing reaches the screen, the clipboard, the transcript, or a field where it
+  could be mislabelled.
+- **Yes — the operator runs it.** Anything that makes a value *visible* or
+  *new*: reading one out, generating one (`openssl rand`), pasting into a
+  browser form, a billing screen, a login. `scripts/diagnose_x_auth.js` is the
+  model for tooling that must not cross the line — it prints lengths and
+  first/last four characters, never a value.
+
+Deleting a GitHub secret is refused outright by the session's safety classifier
+(three attempts, 2026-08-31). That is correct behaviour, not a bug to route
+around: hand the click over and say in one line why.
+
+**Why it is stated this way** (2026-08-31). The rule used to read "the operator
+runs the command that touches the real value", and it was applied as though it
+were about **custody** — who holds the secret. It was written after the
+2026-07-13 incident where `.env.local` was visible on a TV in a photo, so it was
+always about **visibility**.
+
+Read as custody, it did the opposite of its job. Setting up the review gate's
+CI token, the operator was handed the GitHub secrets browser form — and pasted
+a ClickUp token into the **Name** box twice, with two different tokens. GitHub
+encrypts and masks secret *values*; it does not protect *names*. Both tokens sat
+in the settings UI as plain labels and are in the repository's audit history
+permanently, which no deletion reaches. The agent had a pipe available that
+would have shown nothing and had no Name box to get wrong, and declined to run
+it on the strength of this rule.
+
+**Do this:** prefer the pipe over the form precisely *because* the form has a
+field the value can land in wrongly. A rule written to prevent exposure must
+never be applied in a way that creates it — when the two readings disagree, the
+one that keeps the value off every screen is the correct one.
 
 ### 4.2 Reveal one field, on demand, and log it
 
@@ -879,6 +982,82 @@ see the indirect case. To prove the guard bites: add a vitest test that requires
 
 ---
 
+### 5.19 A cache must not remember a failed question as an answer
+
+2026-08-30, found in review of PR #448 (Connections 1/7). `lib/projectScope.js`
+asks each table once whether it has both tenant columns, and remembers the
+answer for the life of the process:
+
+```js
+const probe = await sbQuery({ table, query: 'select=project_id,owner_user_id&limit=1' });
+const supported = probe.ok;          // ← the bug, in one line
+SUPPORT_CACHE.set(tableName, supported);
+```
+
+`probe.ok` is false for two situations that are **not the same fact**:
+
+| What happened | What it means | Cacheable? |
+|---|---|---|
+| 400 naming the column, 404 on the relation | Postgres answered: the columns are not there | Yes — it is a property of the table |
+| 502, cold start, dropped connection | The question never arrived | **No** — it is a property of the moment |
+
+Both were stored as "this table has no tenant columns", permanently. And
+`scopedListQuery`/`scopedIdQuery` respond to that by returning the caller's
+query **with no project filter appended at all** — which is a reasonable
+behaviour for a table that genuinely is not tenant-scoped, and a catastrophic
+one for a table that is. Every scoped read in that process then returned every
+project's rows. On `project_connections` that is one client reading another
+client's decrypted OAuth tokens; review reproduced it with a single simulated
+502.
+
+Note what makes this invisible. There is no error, no empty result, no slow
+query — the unscoped read is *faster* and returns *more* data, and every store
+above it reports `ok: true`. It also cannot be reproduced by running the
+software normally, because the cache is only wrong after a failure that is by
+definition rare and transient. It is a bug that exists exclusively in
+production, exclusively after a hiccup, and exclusively in the direction of
+handing out too much.
+
+**The rule.** A negative cache entry must be justified by an answer, never by
+the absence of one. If a probe can fail for reasons unrelated to the thing
+being probed — and any probe crossing a network can — then a failure must be
+classified before it is stored, and an unclassifiable failure is not stored at
+all. Answering "unknown, ask again next time" costs one extra round trip on the
+next call; answering "no" costs the whole process.
+
+**Fixed at both ends, deliberately** (PR #448), because they fail differently:
+
+1. `supportsProjectColumns` caches only a definitive answer. A transient
+   failure returns false for that one call and re-probes on the next, so the
+   process heals itself.
+2. `lib/projectConnectionsStore.js` refuses to *execute* a query that did not
+   come back scoped — `requireScopedQuery` checks for `project_id.eq.` and
+   returns a 503 rather than run it. The insert path already did this;
+   the read, list and delete paths did not.
+
+The second is the one that matters, and it generalises: **the guard belongs
+where the damage happens, not only where the mistake originates.** Fixing only
+the cache leaves every future caller of `scopedIdQuery` trusting that a
+returned query is a scoped query, which is exactly the assumption that failed
+here. A store handling secrets should verify the filter is present rather than
+assume the helper added it — cheap, local, and it does not depend on anyone
+remembering this incident.
+
+**Prove a fix.** Simulate the transient failure specifically; a missing column
+does not exercise this path, because that failure is correctly cached.
+`scripts/builder/projectConnectionsStore.test.js` does it with a fault switch
+that fails the NEXT probe with a 502 and nothing else — then asserts three
+things: the read is refused, the token appears nowhere in the refusal, and the
+very next call recovers to a correctly scoped 404. Break either end and that
+test fails; both were reverted and watched to fail before the fix was believed.
+
+**Where else this shape lives.** Anything that probes once and remembers.
+`git grep -n "CACHE.set" lib/` is the starting point — the question to ask of
+each is "can this probe fail without telling me anything about the thing I am
+probing?", and if it can, "what does the cached wrong answer authorise?"
+
+---
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
@@ -1103,8 +1282,6 @@ old. That is not the point. An unattended agent crossed a line the operator drew
 and the crossing was invisible; on a machine nobody is watching, "the guard has
 a hole" is the whole finding.*
 
----
-
 ### 6.7 On a send-back, merge `main` in before you rework — the fix may already be there
 
 **The incident (2026-08-30, ticket 86bbmg2fb, PR #441).** Review sent the
@@ -1149,6 +1326,57 @@ carries. And a break-test asserts the **value** the rule requires, not a bound
 the wrong answer also satisfies: `assert.equal(clampToFloor(null), 3600)`, not
 `>= 900`. A guard that only checks `isFinite` has not checked "is this a
 number" — `Number()` manufactures finite zeros from garbage.
+
+### 6.9 CC runs the operational commands — handing one over is a claim it cannot
+
+**Standing instruction from the operator, 2026-08-07, verbatim:**
+
+> *"when you say 'you' can veto etc., you mean you, cc-starcaster, right? I
+> won't remember all those commands."*
+
+He raised it again on 2026-08-23 and 2026-08-30. It kept recurring because the
+rule lived only in agent memory and in the vault, and neither of those is
+loaded into a repo session the way `CLAUDE.md` is. Neither is a guard, either —
+so nothing ever caught an agent doing it.
+
+**The incident.** 2026-08-30, the Delray header. One safety-gate refusal early
+in the session was treated as a verdict on the whole session rather than a
+refusal of that one call, and every production step after it came back to him
+as a command to paste. One of them was a script with a dry run and an
+`--apply`. He ran the dry run; it printed what it *would* change; nothing in
+the output or the hand-off said the change had not happened yet, so he had no
+way to know a second command was still waiting on him. Most of an evening went
+on a fix that had already been written.
+
+**The rule.**
+
+- CC runs the operational commands — scripts, `doppler run`, SSH to the Mini,
+  publishing. He says what he wants in plain language; CC picks the script and
+  the flags, runs it, and reports the outcome rather than the log.
+- **Four exceptions, and only four:** a real secret VALUE (§4.1), a billing
+  screen, a browser login, and a decision that is genuinely his — money,
+  clients, what ships. A hand-off **names which one applies**. An unnamed
+  hand-off is itself the defect, the same shape as §2.5's unnamed actor.
+- **A refusal is scoped to the call it refused.** Retry when the step actually
+  comes; if it is refused again, say so in one line and carry on. An early
+  "no" is not a session-wide policy, and converting it into one silently
+  widens a single gate into a work stoppage.
+- **Never leave a production fix as a two-step.** A dry run and its `--apply`
+  are one job. Run both, then say what changed. A dry run reported as though
+  it were the fix is a §3.10 failure wearing an operator's clothes: it looks
+  exactly like success and changed nothing.
+
+*Why this is doctrine and not a courtesy:* flags exist so the agent has a
+precise instrument, not so the operator has a syntax to memorize — §6.4 already
+establishes that his bottleneck is attention. But the sharper cost is that a
+hand-off **misreports the state of the work**. He reads a pasted command as
+"this needs your hands", so a job that was finished reads as blocked on him,
+and one that is genuinely blocked is indistinguishable from it. That is §2.5
+arriving from the other direction: there, an automation said it had asked a
+human when it had not; here, an agent implies a human is needed when none is.
+
+Canon home for this rule is the vault `doctrine/OPERATIONS.md`; this section is
+the repo-side copy, which is the one actually loaded into every session.
 
 ---
 

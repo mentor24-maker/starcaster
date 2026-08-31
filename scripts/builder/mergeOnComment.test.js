@@ -708,6 +708,17 @@ test('still running inside the budget means ask again', () => {
   assert.equal(out.action, 'poll-again');
 });
 
+test('a branch that goes behind during the wait ends the wait — polling cannot catch it up', () => {
+  // BREAK-TEST: delete the update-branch arm of afterCatchUpDecision and this
+  // fails — `assert.equal(out.action, 'update-branch')` reports 'poll-again',
+  // which polls out the full budget and then answers "CI was still running"
+  // about a branch whose CI was fine and had merely fallen behind main
+  // (found in review, 2026-08-30, task 86bbmk7pv).
+  const out = afterCatchUpDecision({ gate: { action: 'update-branch', reason: 'the branch is behind main' }, elapsedMs: 1000 });
+  assert.equal(out.action, 'update-branch');
+  assert.equal(out.reason, 'the branch is behind main');
+});
+
 test('OUT OF BUDGET IS A WAIT, never a merge', () => {
   // The whole safety of this feature. A slow CI run must not become either a
   // failure or an unchecked merge — it must become exactly the outcome the
@@ -781,12 +792,28 @@ test('the relay waits after BOTH catch-up paths, and merges the same way', () =>
   // Counting the NAME is not enough: a first version of this assertion counted
   // `waitForChecksInPass(` and a break that left the identifier in place while
   // never calling it passed cleanly. The AWAITED calls are the thing.
+  //
+  // THREE since 2026-08-26 (task 86bbmk7pv): the two catch-up paths, plus the
+  // re-run of a stale review gate, which waits for the same reason — a merge
+  // that has to wait three minutes should not wait a whole relay interval.
   const awaited = (src.match(/await waitForChecksInPass\(/g) || []).length;
-  assert.equal(awaited, 2,
-    `expected exactly 2 awaited calls, one per catch-up path, found ${awaited}`);
+  assert.equal(awaited, 3,
+    `expected exactly 3 awaited calls — two catch-up paths and the stale review-gate re-run — found ${awaited}`);
   assert.match(src, /branch updated from main —/);
+  assert.match(src, /re-ran the stale review gate/,
+    'the stale review-gate re-run must say so on the console, like every other path here');
 
-  // It must NOT decide mergeability itself.
-  assert.match(src, /gate: githubGate\(json\)/,
-    'the in-pass wait must re-ask the same gate, not re-implement it');
+  // It must NOT decide mergeability itself. The `gateOf` hook added for the
+  // stale-gate re-run narrows when to KEEP WAITING; it can never widen "may
+  // merge", because its default is githubGate and the one caller that
+  // overrides it composes with githubGate rather than replacing it — through
+  // the pure, tested duringRerunWait, whose only pass-through is a FRESH
+  // answer (an 'absent' mid-swap rollup keeps waiting; reviewGate.test.js
+  // pins that arm by behaviour).
+  assert.match(src, /gateOf = githubGate/,
+    'the in-pass wait must default to the same gate');
+  assert.match(src, /gate: gateOf\(json\)/,
+    'the in-pass wait must re-ask the gate it was given, not re-implement it');
+  assert.match(src, /reviewGate\.duringRerunWait\(\{\n\s*staleness: reviewGate\.reviewGateStaleness\(\{ rollup: json\.statusCheckRollup, comments \}\),\n\s*gate: githubGate\(json\),/,
+    'the stale-gate hook must route through the tested duringRerunWait, composed with githubGate for the actual merge decision');
 });
