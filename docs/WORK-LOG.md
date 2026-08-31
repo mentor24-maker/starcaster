@@ -83,6 +83,33 @@ video guide was brought up to date to say that one layer now carries photos and
 clips alike, and why that was the point rather than a side effect. A guide that
 points at a deleted file is worse than no guide: it costs somebody the time to
 find out it is wrong before they can start.
+## 2026-08-31 — The overlay controls a row always deserved (#482)
+
+Every row on a Builder page has been able to carry an overlay for months — a
+wash of colour, a gradient, or a second image laid over the row's own
+background, at whatever strength you pick. The setting was saved, and since
+yesterday the page actually paints it. What was missing was the knobs. The
+newer Builder had none at all, so the only overlay anyone could get was the
+dark tint a video row quietly gives itself, and there was no way to soften it,
+recolour it, or turn it off.
+
+Open a row's settings now and there is an **Overlay** group: choose a type —
+colour, gradient, a picture — and a strength control appears beside it. Put a
+dark blue over a photo at half strength and the words on top become readable
+while the photo still shows through. Pick a second image instead and the two
+blend. Set the type back to None and the row goes back to exactly how it looked.
+A video row opens with its tint already filled in, and that tint is finally
+yours to change.
+
+None of the machinery underneath moved — the saving, the loading and the
+painting were all already right, and only the controls were absent. The one
+thing worth recording is how nearly the layout check let this through. It
+measures a group of settings by asking whether they line up with each other,
+and while the overlay type sits at "None" the group holds exactly one setting.
+One thing always lines up with itself. So the check happily passed a layout
+that had been broken on purpose, until the test page was given a real overlay
+to show. That is the third time this year a green check has turned out to mean
+"nothing was looked at" rather than "nothing was wrong".
 
 ## 2026-08-25 — The weekly report gathers itself now; the writing is still yours (#437)
 
