@@ -4,6 +4,7 @@ import {
   backgroundParallaxGeometry,
   backgroundParallaxOffset,
   backgroundParallaxOverscan,
+  backgroundParallaxSpeedFromInput,
   clampBackgroundParallaxSpeed,
   DEFAULT_BACKGROUND_PARALLAX_SPEED
 } from "./background-parallax";
@@ -40,11 +41,67 @@ describe("clampBackgroundParallaxSpeed", () => {
   });
 
   it("falls back to the DEFAULT, never to 0, when the value is unreadable", () => {
-    // 0 is "pinned", the most dramatic setting on the control. A stored null
-    // or a half-typed number must not silently select it.
+    // 0 is "pinned", the most dramatic setting on the control, and a stored
+    // null must not silently select it. This is the right answer for a value
+    // arriving from STORAGE and the wrong one for a keystroke — which is what
+    // `backgroundParallaxSpeedFromInput` below is for.
     for (const junk of [undefined, null, "", "abc", NaN, {}]) {
       expect(clampBackgroundParallaxSpeed(junk)).toBe(DEFAULT_BACKGROUND_PARALLAX_SPEED);
     }
+  });
+});
+
+/**
+ * THE BUG THIS PAIR OF FUNCTIONS EXISTS TO SPLIT (review of #481, 2026-08-31).
+ *
+ * In the real Builder: click into Parallax Speed, backspace to clear it, type
+ * 0.7 — and the box read 0.37. Backspace never emptied it. The speed box ran
+ * every keystroke through the storage clamp, `<input type="number">` reports
+ * an empty string for anything it cannot parse, and the storage clamp turns an
+ * empty string into the DEFAULT. So clearing the box put 0.3 straight back and
+ * the digits typed next landed inside that number.
+ *
+ * The fix is not to change what unreadable means in storage — 0.3 is right
+ * there, and argued for above. It is that a keystroke is a different question,
+ * and its answer needs a third state the clamp does not have: "not a number
+ * YET, so change nothing".
+ */
+describe("backgroundParallaxSpeedFromInput", () => {
+  it("commits nothing while the box is empty, so backspace can actually empty it", () => {
+    expect(backgroundParallaxSpeedFromInput("")).toBeNull();
+  });
+
+  it("commits nothing for the half-typed values a number input reports as empty", () => {
+    // `<input type="number">` hands back "" for "0." and "-" alike. Whatever
+    // reaches here that is not yet a number must leave the stored speed alone.
+    for (const partial of ["", "   ", "-", ".", "0.", "abc"]) {
+      expect(backgroundParallaxSpeedFromInput(partial)).toBeNull();
+    }
+  });
+
+  it("never answers with the default — that is the substitution that ate the keystroke", () => {
+    // The regression in one line: the old path returned 0.3 here, so the box
+    // refilled itself behind the operator's cursor.
+    expect(backgroundParallaxSpeedFromInput("")).not.toBe(DEFAULT_BACKGROUND_PARALLAX_SPEED);
+  });
+
+  it("commits a readable number, so typing 0.7 gives 0.7 and not 0.37", () => {
+    expect(backgroundParallaxSpeedFromInput("0.7")).toBe(0.7);
+    expect(backgroundParallaxSpeedFromInput("0")).toBe(0);
+    expect(backgroundParallaxSpeedFromInput("1")).toBe(1);
+  });
+
+  it("commits a typed 0 as 0 — pinned is a setting the operator is allowed to choose", () => {
+    // Storage reads an unreadable value as 0.3; a DELIBERATELY typed 0 is the
+    // one case where 0 must survive, and the two paths disagreeing on this is
+    // the whole reason they are separate functions.
+    expect(backgroundParallaxSpeedFromInput("0")).toBe(0);
+    expect(clampBackgroundParallaxSpeed("")).toBe(DEFAULT_BACKGROUND_PARALLAX_SPEED);
+  });
+
+  it("still clamps what it does commit, so the ends of the range hold", () => {
+    expect(backgroundParallaxSpeedFromInput("9")).toBe(1);
+    expect(backgroundParallaxSpeedFromInput("-3")).toBe(0);
   });
 });
 

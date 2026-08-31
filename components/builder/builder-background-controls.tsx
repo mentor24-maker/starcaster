@@ -8,7 +8,7 @@ import {
 import {
   BACKGROUND_PARALLAX_SPEED_MAX,
   BACKGROUND_PARALLAX_SPEED_MIN,
-  clampBackgroundParallaxSpeed,
+  backgroundParallaxSpeedFromInput,
   DEFAULT_BACKGROUND_PARALLAX_SPEED
 } from "@/lib/background-parallax";
 import { BuilderGalleryModal } from "./builder-gallery-modal";
@@ -74,6 +74,17 @@ export function BuilderBackgroundControls({
   allowParallax = false
 }: BuilderBackgroundControlsProps) {
   const [isFallbackGalleryOpen, setIsFallbackGalleryOpen] = useState(false);
+  /*
+   * What is in the Parallax Speed box WHILE it is being typed in, which is not
+   * the same thing as the stored setting and cannot be derived from it.
+   * `<input type="number">` reports an empty string for every value it cannot
+   * yet parse, so a cleared box and the "0." on the way to "0.7" arrive
+   * identically — and normalising either one back to a number is what made
+   * backspace snap the field to 0.3 and turn the next keystrokes into 0.37.
+   * `null` means "not being typed in": the box shows the stored value, which
+   * is what it goes back to on blur.
+   */
+  const [parallaxSpeedDraft, setParallaxSpeedDraft] = useState<string | null>(null);
   const [openVideoPicker, setOpenVideoPicker] = useState<"clip" | "poster" | null>(null);
 
   function handleModeChange(newMode: BackgroundSettings["mode"]) {
@@ -370,13 +381,22 @@ export function BuilderBackgroundControls({
             max={BACKGROUND_PARALLAX_SPEED_MAX}
             step={0.05}
             disabled={!parallaxOn}
-            value={String(background.parallaxSpeed ?? DEFAULT_BACKGROUND_PARALLAX_SPEED)}
-            onChange={(event) =>
-              onChange((current) => ({
-                ...current,
-                parallaxSpeed: clampBackgroundParallaxSpeed(event.target.value)
-              }))
+            value={
+              parallaxSpeedDraft ??
+              String(background.parallaxSpeed ?? DEFAULT_BACKGROUND_PARALLAX_SPEED)
             }
+            onChange={(event) => {
+              // The box holds the keystroke either way; only a readable number
+              // is written to the setting. A half-typed one leaves the stored
+              // value exactly as it was rather than resetting it to the
+              // default, which is what used to eat the backspace.
+              const typed = event.target.value;
+              setParallaxSpeedDraft(typed);
+              const parsed = backgroundParallaxSpeedFromInput(typed);
+              if (parsed === null) return;
+              onChange((current) => ({ ...current, parallaxSpeed: parsed }));
+            }}
+            onBlur={() => setParallaxSpeedDraft(null)}
           />
         </BuilderSettingRow>
 
@@ -388,9 +408,19 @@ export function BuilderBackgroundControls({
             than the row to have somewhere to drift to, so the stronger the effect the more
             closely it is cropped — a photo with a logo or a face near the edge wants a
             higher number, nearer 0.7. Turning it on also trims anything that overhangs the
-            row&rsquo;s edges. It runs on phones as well as desktops, and it switches itself
-            off completely for visitors who have asked their device for reduced motion, so
-            nothing here can make somebody ill.
+            row&rsquo;s edges.{" "}
+            {background.mode === "video" ? (
+              <>
+                On phones this drift only happens if <strong>Play On Phones</strong> is on:
+                with it off the clip is never loaded there, so the still picture is what
+                visitors see and nothing moves. An image background drifts on phones either
+                way.
+              </>
+            ) : (
+              <>It runs on phones as well as desktops.</>
+            )}{" "}
+            It switches itself off completely for visitors who have asked their device for
+            reduced motion, so nothing here can make somebody ill.
           </p>
         </BuilderSettingRow>
       </div>

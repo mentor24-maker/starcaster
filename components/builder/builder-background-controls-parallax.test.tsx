@@ -84,11 +84,42 @@ describe("where Parallax is offered", () => {
     expect(markup).not.toContain("disabled");
   });
 
-  it("says out loud that it runs on phones, rather than being silently dead there", () => {
+  it("says out loud that an IMAGE parallax runs on phones", () => {
     // Acceptance criterion 6: if parallax were skipped on mobile the panel
-    // would have to say so. It is not skipped, and the panel says that too —
-    // a control whose behaviour on half the devices is undocumented is the
-    // same problem one step quieter.
+    // would have to say so. An image is not skipped, and the panel says that
+    // too — a control whose behaviour on half the devices is undocumented is
+    // the same problem one step quieter.
     expect(html({ allowParallax: true, background: IMAGE })).toContain("runs on phones");
+  });
+
+  /*
+   * THE PANEL PROMISED SOMETHING THE VIDEO PATH DOES NOT DO (review of #481).
+   *
+   * One note was shown for both modes and it said parallax "runs on phones as
+   * well as desktops". True of an image. Not true of a video: below 560px the
+   * video layer is not rendered at all unless Play On Phones is on, so there
+   * is no element to translate and nothing drifts. Measured at 390px wide,
+   * where check:render reported "nothing matched
+   * video[data-builder-video-background=section]" for the video contract.
+   *
+   * Criterion 6 asks for exactly this to be stated in the panel rather than
+   * left silently dead, and the panel was stating the opposite.
+   */
+  it("does NOT promise a video background the phone support it does not have", () => {
+    const markup = html({ allowParallax: true, background: VIDEO });
+    expect(markup).not.toContain("runs on phones");
+  });
+
+  it("names the setting that decides it, so the note is actionable", () => {
+    const markup = html({ allowParallax: true, background: VIDEO });
+    // A fragment only this note carries. "Play On Phones" alone would be a
+    // false positive whenever the Video panel is also on screen, since that is
+    // the name of one of its own checkboxes.
+    expect(markup).toContain("the clip is never loaded there");
+    expect(markup).toContain("<strong>Play On Phones</strong>");
+    // And the way out is stated rather than implied: an image drifts there
+    // either way, which is the operator's alternative if the drift matters
+    // more than the footage.
+    expect(markup).toContain("image background drifts on phones either way");
   });
 });

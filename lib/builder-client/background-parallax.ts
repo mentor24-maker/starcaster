@@ -131,6 +131,37 @@ export function clampBackgroundParallaxSpeed(value: unknown): number {
 }
 
 /**
+ * The same question asked of a KEYSTROKE rather than of stored data, and the
+ * answer is different — which is the whole reason this exists beside
+ * `clampBackgroundParallaxSpeed` instead of inside it.
+ *
+ * A value arriving from storage is finished: unreadable means the operator
+ * never set one, so the default is right. A value arriving from the panel is
+ * half-typed, and `<input type="number">` reports an empty string for
+ * everything it cannot yet parse — a cleared box and the "0." on the way to
+ * "0.7" are indistinguishable at that end. Feeding those through the storage
+ * clamp put the DEFAULT back on every such keystroke, so backspace could not
+ * empty the box: it snapped to 0.3 and the digits typed next landed inside
+ * that number. Type 0.7, get 0.37 (review of #481, 2026-08-31).
+ *
+ * So: `null` means "they are still typing — leave the stored value alone",
+ * and it is the caller's job to keep showing what was typed until they leave
+ * the field. Only a number that is actually readable commits.
+ */
+export function backgroundParallaxSpeedFromInput(typed: string): number | null {
+  const trimmed = String(typed ?? "").trim();
+  // A trailing point is checked for by hand because `Number("0.")` is 0, which
+  // is finite, and 0 is "pinned" — the most dramatic setting on the control.
+  // A number input never actually hands this over (it reports "" instead), but
+  // a function named "from input" should not answer a half-typed number with
+  // the most destructive value in its range on the day something does.
+  if (trimmed === "" || trimmed.endsWith(".")) return null;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) return null;
+  return clampBackgroundParallaxSpeed(parsed);
+}
+
+/**
  * How much taller than its section the layer has to be.
  *
  * Zero at speed 1, which is what makes "off" and "reduce motion" cost nothing:

@@ -751,16 +751,22 @@ export const RENDER_CONTRACTS = [
   },
 
   {
-    id: 'image-parallax-mounts-a-layer-and-overscans-it',
+    // Named for what it actually measures. It was
+    // `image-parallax-mounts-a-layer-and-overscans-it` until review pointed out
+    // that it asserted nothing whatsoever about the overscan and read a zIndex
+    // it never looked at — a title claiming coverage that lives one contract
+    // down is worse than no title, because it is the reason nobody checks
+    // whether the coverage is really there.
+    id: 'image-parallax-mounts-a-layer-behind-the-row',
     why:
       'An image background is a CSS background on the section itself, which cannot translate — so ' +
-      'parallax needs a real ELEMENT, and that element has to be TALLER than its section by the ' +
-      'whole travel distance. A layer exactly the size of its section slides off one edge the ' +
-      'instant it moves and leaves a bare strip at the top or bottom of the band. That is the ' +
-      'classic parallax bug and it is acceptance criterion 7 on the ticket that built this.',
+      'parallax needs a real ELEMENT, and this is what proves one is mounted and mounted BEHIND ' +
+      'the content rather than in the flow above it. The other half of the job — that the layer is ' +
+      'taller than its section by the whole travel distance, which is acceptance criterion 7 — is ' +
+      'measured at every scroll position by `image-parallax-never-uncovers-the-band` below.',
     section: { ...PARALLAX_IMAGE_SECTION },
     selector: '.builder-preview-image-background',
-    read: ['position', 'backgroundSize', 'zIndex'],
+    read: ['position', 'backgroundSize'],
     expect(sample) {
       if (sample.styles.position !== 'absolute') {
         return `the parallax layer is \`position: ${sample.styles.position}\` — it is in the row's flow ` +

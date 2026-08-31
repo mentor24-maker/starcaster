@@ -300,16 +300,35 @@ export function BuilderBackgroundLayer({
    * is. `parallaxLive` still gates the loop as well, so a section that is not
    * parallaxing does not pay for a requestAnimationFrame that computes zero.
    *
-   * Parallax runs on PHONES, unlike the video itself. A translate is cheap and
-   * costs no extra bytes, and the reason video falls back on a phone — the
-   * megabytes — does not apply to moving a picture that has already loaded.
-   * The panel says so, because a control that is silently dead on half the
-   * devices is worse than one that is honestly absent.
+   * An IMAGE parallax runs on PHONES, unlike the video itself. A translate is
+   * cheap and costs no extra bytes, and the reason video falls back on a phone
+   * — the megabytes — does not apply to moving a picture that has already
+   * loaded. A VIDEO parallax does not run there unless Play On Phones is on,
+   * because with it off there is no <video> element to translate and the still
+   * is what the visitor sees. The panel says which is which, because a control
+   * that is silently dead on half the devices is worse than one that is
+   * honestly absent.
    */
   const parallaxLive = builderBackgroundParallaxActive(background) && !reducedMotion;
   const parallaxSpeed = builderBackgroundParallaxSpeed(background, reducedMotion);
   const parallaxAnchor = background.mode === "image" ? imageLayer : videoA;
-  useBackgroundParallax(parallaxAnchor, parallaxSpeed, parallaxLive);
+  /*
+   * IS THE ANCHOR ACTUALLY ON THE PAGE? The effect below reads `anchor.current`
+   * and gives up when it is null — but a ref object is stable, so an element
+   * that mounts LATER changes none of the effect's dependencies and the loop
+   * never starts. That is a real window: a video is not rendered below phone
+   * width unless Play On Phones is on, so loading a parallaxing video row in a
+   * narrow window and then widening it inserted a <video> carrying every
+   * parallax inline style with nothing writing the custom properties behind
+   * them — every var() fell back and it sat perfectly still. Folding "is it
+   * rendered" into the flag the effect already depends on is what turns the
+   * mount into a dependency change. (Review of #481, 2026-08-31.)
+   */
+  const parallaxAnchorRendered =
+    background.mode === "image"
+      ? parallaxLive && Boolean(background.imageUrl)
+      : Boolean(videoUrl) && playbackAllowed;
+  useBackgroundParallax(parallaxAnchor, parallaxSpeed, parallaxLive && parallaxAnchorRendered);
 
   /*
    * The native `loop` attribute always restarts at zero, so it is only correct
