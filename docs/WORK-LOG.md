@@ -26,6 +26,48 @@ The permissions themselves are scrambled before they are stored, and that was
 checked the only way worth checking: by looking at what actually landed in a
 real database and searching every column of the table for the original text. It
 is not there.
+## 2026-08-26 — The new merge lock could have jammed itself shut (#443)
+
+Yesterday's change put a real lock on the merge button: before anything goes
+live, GitHub itself checks the work's ticket for a review pass. It works — but
+it had a flaw that would only have shown up on the day you switched it from a
+warning into a real block, and by then it would have stopped everything.
+
+The problem is that these checks run **once**, right after code is pushed, and
+they never think again. The review always lands *after* the last push — that is
+what a review is. So the check looked at the ticket, saw no review yet, wrote
+down "no", and then sat there forever with that answer. Nothing was ever going
+to change its mind. The only way to make a check run again is to push more code,
+and pushing more code cancels the review that just passed. Every properly
+reviewed piece of work would have been stuck in that loop.
+
+So the step that actually performs merges now asks one extra question first: is
+this check answering a question that has since changed? If the check ran before
+the review landed, it runs it again and waits for the real answer — about three
+minutes — instead of merging on the old one. If the fresh answer is a no, the
+merge is refused and you are told why. If the check cannot be run again at all,
+or its answer never arrives, the merge is refused too: not being able to see is
+never treated as an all-clear. And when the check is already up to date, nothing
+happens and nothing is spent, which is the ordinary case.
+
+Nothing about the lock itself was loosened to achieve this — "out of date" only
+ever means run it again, never let it through. With this in place the
+branch-protection setting is safe to turn on.
+
+The review pass caught something important before this shipped: the new
+question was being asked in the wrong place. Once the lock is switched on, an
+out-of-date check shows up as a *failed* check — and the merge step's very
+first rule is "never merge past a failed check", so it was giving up before it
+ever got to the new question. Everything looked fine in testing because the
+lock is still in warning mode, where the old answer stays green. The question
+now gets asked before that first rule instead of after it, a test pins the
+order so it cannot quietly drift back, and three smaller catches from the same
+review ride along: the step no longer pays for a re-run it has no time left to
+wait for, a branch that falls behind during the wait is told "catch up first"
+instead of being blamed for a failed check, and a moment where GitHub is
+swapping the old answer for the new one no longer looks like "no check here,
+go ahead".
+
 ## 2026-08-26 — Checking the new merge lock before trusting it (#444)
 
 Yesterday's work put a lock on the door: an automatic check that refuses to

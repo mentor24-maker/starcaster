@@ -418,6 +418,220 @@ function reviewGateDecision({ prBody, prNumber, headCommittedAt, comments, click
 }
 
 /**
+ * ---------------------------------------------------------------------------
+ * STALENESS — the answer a check gave before the question changed
+ * (2026-08-26, task 86bbmk7pv).
+ * ---------------------------------------------------------------------------
+ *
+ * A GitHub status check is computed ONCE PER COMMIT. This gate reads the
+ * ticket for a review PASS — and loop-review posts that PASS *after* the last
+ * push, by definition. So the run that already happened saw no verdict,
+ * recorded a fail, and will not re-run on its own. Nothing later changes its
+ * mind.
+ *
+ * While the gate is advisory that is harmless. The moment the
+ * branch-protection box is ticked it is a deadlock: every correctly-reviewed
+ * PR carries a stale red check that only a new commit can clear, and pushing
+ * a commit to clear it invalidates the review that just passed.
+ *
+ * The fix is not to weaken the gate. It is for the merge step to notice that
+ * the check answered an older question and RE-RUN it before merging — which
+ * is what these functions decide. As everywhere else in this file, they are
+ * pure: the caller fetches the rollup and the comments, and carries the
+ * answer out with `gh`.
+ */
+
+/** The check the gate publishes. The workflow's job id, so also its name. */
+const REVIEW_GATE_CHECK_NAME = 'review-gate';
+
+/**
+ * The workflow run id inside a check run's details URL, e.g.
+ * `https://github.com/alphire/starcaster/actions/runs/1234/job/5678` -> '1234'.
+ * `gh run rerun` takes the RUN id, not the job id, so the digits after
+ * `/runs/` are the ones that matter and the `/job/` tail is ignored.
+ */
+function runIdFromDetailsUrl(url) {
+  const m = /\/actions\/runs\/(\d+)/.exec(String(url || ''));
+  return m ? m[1] : '';
+}
+
+/**
+ * The review-gate entry in a `gh pr view --json statusCheckRollup` payload.
+ *
+ * Matches on the check's own name OR its workflow name, case-insensitively:
+ * the job is named by its id today, and a future `name:` line in the workflow
+ * would otherwise make this quietly stop finding it — and "not found" reads
+ * as "no gate on this PR", which is the failure wearing a disguise.
+ *
+ * Newest wins, measured by when the run STARTED. A re-run appears alongside
+ * the answer it replaces for a few seconds, and taking the older one back
+ * would make the merge step re-run the gate forever.
+ */
+function findReviewGateRun(rollup) {
+  let best = null;
+  let bestAt = -Infinity;
+  for (const c of rollup || []) {
+    const name = String((c && (c.name || c.context)) || '');
+    const workflow = String((c && c.workflowName) || '');
+    if (name.toLowerCase() !== REVIEW_GATE_CHECK_NAME
+      && workflow.toLowerCase() !== REVIEW_GATE_CHECK_NAME) continue;
+    const at = toMillis(c.startedAt ?? c.completedAt ?? c.createdAt);
+    const key = Number.isFinite(at) ? at : -Infinity;
+    if (best === null || key >= bestAt) { best = c; bestAt = key; }
+  }
+  return best;
+}
+
+/** When the newest REVIEW verdict landed on the ticket, or NaN if there is none. */
+function newestVerdictAt(comments) {
+  const newest = byDateNewestFirst(comments).find((c) => isReviewVerdict(c && c.comment_text));
+  return newest ? toMillis(newest.date) : NaN;
+}
+
+/** Has this check run finished? An unfinished one has no answer to be stale. */
+function isRunComplete(run) {
+  const status = String((run && run.status) || '').toUpperCase();
+  if (status) return status === 'COMPLETED';
+  // A StatusContext has no `status`; `state` PENDING/EXPECTED means running.
+  const state = String((run && run.state) || '').toUpperCase();
+  if (state) return state !== 'PENDING' && state !== 'EXPECTED';
+  return false;
+}
+
+/**
+ * Does this PR's review-gate check still answer the current question?
+ *
+ * Compares the run's START time with the newest verdict, NOT its completion
+ * time, and that direction is the safe one: a verdict posted before the run
+ * started was certainly visible to it, while one posted after the start may
+ * or may not have been read before the job fetched the ticket. Comparing
+ * against `completedAt` would call that ambiguous run fresh. Being wrong here
+ * costs one CI minute in one direction and a merge on an unreviewed verdict
+ * in the other.
+ *
+ * @returns {{state: 'fresh'|'stale'|'pending'|'absent', reason: string,
+ *            runId: string, checkStartedAt: number, verdictAt: number}}
+ */
+function reviewGateStaleness({ rollup, comments } = {}) {
+  const run = findReviewGateRun(rollup);
+  const base = { runId: '', checkStartedAt: NaN, verdictAt: NaN };
+
+  // NO REVIEW-GATE RUN AT ALL is deliberately not a refusal here, and the
+  // reasoning matters. This function's job is "is the existing answer out of
+  // date", and there is no answer to be out of date. The two actors that
+  // could merge such a PR are both already covered: GitHub itself refuses one
+  // once the check is required (githubGate sees BLOCKED), and the relay's own
+  // merge path has independently checked the ticket's verdict in ClickUp
+  // before it gets here. Refusing instead would strand every PR opened before
+  // the workflow existed, which is a deadlock introduced by the fix for a
+  // deadlock.
+  if (!run) {
+    return { ...base, state: 'absent', reason: 'this PR carries no review-gate check run' };
+  }
+
+  const runId = runIdFromDetailsUrl(run.detailsUrl || run.targetUrl);
+  const checkStartedAt = toMillis(run.startedAt ?? run.completedAt ?? run.createdAt);
+  const verdictAt = newestVerdictAt(comments);
+  const found = { runId, checkStartedAt, verdictAt };
+
+  if (!isRunComplete(run)) {
+    return { ...found, state: 'pending', reason: 'the review-gate check is still running' };
+  }
+
+  // An unreadable timestamp on either side is treated as STALE, not fresh.
+  // Same rule as the gate itself: cannot-see is never a pass — and here the
+  // remedy is cheap, because "stale" only means "run it again".
+  if (!Number.isFinite(checkStartedAt) || !Number.isFinite(verdictAt)) {
+    return {
+      ...found,
+      state: 'stale',
+      reason: 'could not compare the review-gate run with the newest verdict — one of the two timestamps is unreadable',
+    };
+  }
+
+  if (checkStartedAt > verdictAt) {
+    return {
+      ...found,
+      state: 'fresh',
+      reason: `the review-gate check started ${new Date(checkStartedAt).toISOString()}, after the newest verdict (${new Date(verdictAt).toISOString()})`,
+    };
+  }
+
+  return {
+    ...found,
+    state: 'stale',
+    reason: `the review-gate check started ${new Date(checkStartedAt).toISOString()}, before the newest verdict (${new Date(verdictAt).toISOString()}) — it answered a question that has since changed`,
+  };
+}
+
+/**
+ * The gate the re-run wait polls on, instead of the ordinary check gate.
+ *
+ * WHY THE ONLY PASS-THROUGH IS 'fresh' (found in review, 2026-08-30). A
+ * re-run was just fired, so for a few seconds GitHub's rollup is in flux:
+ * first it still shows the old, settled, stale answer, then it may show NO
+ * review-gate entry at all while the old attempt is swapped for the new one.
+ * Before this ran through one function, the wait hook fell through to the
+ * ordinary gate on 'absent' — and at that instant the other checks are green,
+ * so the PR merged with the re-run's answer never observed. 'absent' means
+ * "no answer to be out of date" before a re-run exists; DURING the wait it
+ * means "cannot see", and cannot-see is never a pass (acceptance criterion 4,
+ * task 86bbmk7pv). So 'stale', 'pending' and 'absent' all keep waiting, and
+ * only a fresh answer hands the question back to the ordinary gate — which is
+ * still the one that decides whether anything may merge.
+ */
+function duringRerunWait({ staleness, gate } = {}) {
+  const state = String((staleness && staleness.state) || '');
+  if (state !== 'fresh') {
+    return {
+      action: 'wait',
+      reason: `the re-run has not produced a fresh review-gate answer yet (${(staleness && staleness.reason) || 'no staleness answer'})`,
+    };
+  }
+  return gate;
+}
+
+/**
+ * What the merge step does with the result of waiting on a re-run.
+ *
+ * Takes the SHAPE `githubGate` already produces, so nothing here re-decides
+ * whether a PR may merge — a green re-run goes back to the merge path, a red
+ * one to the refusal path with GitHub's own wording, a conflict to the
+ * hand-off.
+ *
+ * 'update-branch' is the one answer that is neither a pass nor a failure:
+ * main moved during the ~3 minutes of waiting, so the branch needs catching
+ * up — which the NEXT pass's catch-up path already does, gate re-run
+ * included (the push fires `synchronize`). Before this arm existed, that
+ * race polled out the full wait and then REFUSED with "the re-run did not
+ * clear it" — telling the reader the gate failed when the branch merely
+ * fell behind (found in review, 2026-08-30). It maps to a quiet wait, never
+ * a refusal and never a merge.
+ *
+ * Anything else — the wait ran out, the answer was unreadable — is a
+ * REFUSAL, never a merge and never a silent wait. Acceptance criterion 4 of
+ * task 86bbmk7pv, and the same rule as the gate itself: a re-run whose
+ * result nobody saw is not a pass. The refusal is re-decidable, so the next
+ * pass merges it on the operator's original word once the re-run has landed.
+ */
+function afterRerunDecision({ action, reason } = {}) {
+  const act = String(action || '');
+  if (act === 'merge' || act === 'refuse' || act === 'conflict') {
+    return { action: act, reason: reason || '' };
+  }
+  if (act === 'update-branch') {
+    return {
+      action: 'wait',
+      reason: `main moved while waiting on the review-gate re-run (${reason || 'the branch is behind main'}) — the next pass catches the branch up, which re-runs the gate itself`,
+    };
+  }
+  return {
+    action: 'refuse',
+    reason: `the review gate was re-run because it was stale, and this pass could not confirm the result (${reason || 'no answer'}) — refusing rather than merging on a stale gate`,
+  };
+}
+
+/**
  * THE GATE'S OWN VOICE — and why it does not say "REVIEW".
  *
  * `mergeOnComment.isReviewVerdict` treats any line beginning with the word
@@ -567,6 +781,13 @@ function isEnforcing(value) {
 }
 
 module.exports = {
+  REVIEW_GATE_CHECK_NAME,
+  runIdFromDetailsUrl,
+  findReviewGateRun,
+  newestVerdictAt,
+  reviewGateStaleness,
+  duringRerunWait,
+  afterRerunDecision,
   PASS,
   FAIL,
   CANNOT_TELL,
