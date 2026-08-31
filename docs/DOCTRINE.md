@@ -487,6 +487,65 @@ An ordering test must pin the boundary that can actually move — here,
 Break it on purpose and watch it fail; an assertion that survives the bug it
 names is decoration.
 
+### 3.13 A watchdog that runs only where its subject runs cannot see the case it exists for
+
+Slice E of the NODES plan (task 86bbhbadj, PR #469) had to make *silence*
+detectable: a job that fails writes a log line, but a job that never fires
+writes nothing anywhere, and nothing is indistinguishable from a quiet week.
+
+The obvious build is a check on the machine that owns the job — it has the
+data, it is already awake when the job runs, and it needs no coordination. It is
+also useless, and useless in the exact scenario the feature was written for.
+**The machine being switched off takes the watchdog out with the job.** A
+schedule evicted by an OS update, a Mini unplugged, a launchd job that never
+reloaded after a restart: in every one of those the watcher and the watched die
+together, and the silence goes unreported by the one thing built to report it.
+
+So the beats go on a surface **both** machines read (a ClickUp ticket), and the
+check runs from whichever machine is awake — including, and especially, the one
+that does **not** own the job. `scripts/run_bus_relay.sh` performs it *before*
+the ownership test, which reads oddly until you see why: the non-owning machine
+was already waking every ten minutes to say "not my job" and exit, and that idle
+wake is the only vantage point in the system that survives the owning machine
+being dead.
+
+**Do this:** for any check whose subject is a machine, a process or a schedule,
+ask *what takes both of us out at once?* If the answer is "the thing I am
+watching for", the check is in the wrong place. Put the evidence somewhere
+neither party owns, and read it from somewhere the failure cannot reach.
+
+The corollary is a resolution question, and it is the cheap half: the shared
+record only needs to be as fine-grained as the absence you must notice. Slice E
+pushes one row per machine per day, because the requirement is "a day-long
+absence is visible", not "a ten-minute one is". A finer clock would have been
+more writes, more noise and no more detection.
+
+### 3.14 An unpopulated field is not an empty answer
+
+The same slice reads its roll call out of a ClickUp task description. Driven
+against the live API, ClickUp answered a `GET` with `markdown_description: ""`
+for a task whose description it was holding **perfectly well** — the text
+arriving under `description` instead. The reader preferred the markdown field,
+so it handed the parser an empty string for a record that was entirely intact.
+
+The parser then did the reasonable thing and read an empty string as *an empty
+roll call*: no beats recorded yet. Which would have announced **every scheduled
+job in the system as having gone quiet, all at once**, off a field that was
+simply not filled in. For a monitoring feature that is the worst available
+failure: an alarm that cries wolf is an alarm nobody reads, so a false-alarm
+storm does not merely add noise, it disables the real alerts behind it.
+
+It was caught only because the thing was run against the live service instead of
+reasoned about — the code is correct against the API as documented.
+
+**Do this:** when a provider can return a field empty, decide explicitly which
+of two things "empty" means — *a confirmed absence* or *nothing was read* — and
+make the two render differently (§3.2, §3.11). Where the record you write always
+carries something (a preamble, a header, a marker), a wholly empty read is
+**unreadable**, never zero results. And consult every field that could carry the
+value rather than one by preference; a provider populating a different field
+than the one you wrote is a real behaviour, not a corruption.
+
 ---
 
 ## 4. Secrets
@@ -1377,6 +1436,39 @@ human when it had not; here, an agent implies a human is needed when none is.
 
 Canon home for this rule is the vault `doctrine/OPERATIONS.md`; this section is
 the repo-side copy, which is the one actually loaded into every session.
+
+### 6.10 A behaviour proven in an uncommitted file does not move when its job moves
+
+On 2026-08-20 the `bus-relay` failure alert was built, break-tested and watched
+to work: a forced failure posted to the bus, a second one was suppressed, a
+success cleared the stamp. It was written into
+`~/Library/Application Support/starcaster/bus-relay-cron.sh` — a hand-installed
+file on the MacBook Pro, correct at the time, in git nowhere.
+
+Then two ordinary, well-run changes landed. Slice B brought the schedule into
+the repo (`scripts/run_bus_relay.sh` + `scripts/install_bus_relay.sh`), and
+`lib/nodeRoles.js` moved `bus-relay` to the Mac Mini. Both were reviewed. Both
+were right. **Neither carried the alert**, because the alert was not in the
+thing being moved — so from that cutover until 2026-08-30, a relay failure on
+the machine that actually ran it reached nobody at all.
+
+Nothing could have caught it. No test covered the file, no review saw it, no
+check compared old behaviour against new, and the regression's only symptom is
+the absence of a message nobody was expecting on a particular day. It was found
+only because the *next* ticket in the same plan went looking at the runner.
+
+**Do this:** when a slice says a thing "now lives in the repo", diff what the
+old artifact did against what the new one does before believing the migration
+is complete — the committed version is a rewrite, not a move, and rewrites drop
+things. Treat "we proved this works" as scoped to the file it was proved in.
+And when a hand-installed file is superseded, say explicitly what happened to
+every behaviour it carried; "it is replaced" is a claim about the file, not
+about the behaviour.
+
+The general shape, which is why this sits next to §6.6: work that lives outside
+version control has no changelog, no review, no test and no blast radius anyone
+can compute. That is acceptable for a one-off, and it is a debt that comes due
+the first time anything around it moves.
 
 ---
 
