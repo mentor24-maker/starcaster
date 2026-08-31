@@ -550,6 +550,7 @@ export function BuilderSectionControls({
       <BuilderBackgroundControls
         hideModeRow
         allowVideo
+        allowParallax
         label="Row Background"
         background={section.background}
         horizontal

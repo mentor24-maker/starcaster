@@ -99,23 +99,92 @@ function documentFor(...specs) {
 /** A page carrying ONE section with the given layout + modules — so a contract
  *  can measure a SECTION-level layout (e.g. the 4/5/6 equal-column rows), which
  *  documentFor (always `layout: 'single'`) cannot reach. */
-function documentForSection({ layout = 'single', modules = [], background, overlayScreen } = {}) {
+function documentForSection({
+  layout = 'single',
+  modules = [],
+  background,
+  overlayScreen,
+  spacers = 0,
+  themeTreatments,
+} = {}) {
+  /*
+   * SPACER SECTIONS, above and below, so the page is tall enough to SCROLL.
+   *
+   * Most contracts read one frame of a section that fits on the screen, and
+   * for those `spacers` stays 0 and the document is exactly what it always
+   * was. Parallax is the exception: it does not exist as a property of a
+   * frame at all — it is the difference between two scroll positions — and a
+   * page that cannot scroll cannot express it. A contract that could not
+   * scroll would have had to assert on the transform being *present*, which is
+   * the same shape as asserting on a transition property and calling it a
+   * dissolve. That one passed on a completely dead crossfade.
+   */
+  const spacer = (side, index) => ({
+    id: `section-render-contract-spacer-${side}-${index}`,
+    title: `Spacer ${side} ${index}`,
+    layout: 'single',
+    locked: false,
+    alignment: 'left',
+    widthMode: 'contained',
+    minHeight: '600',
+    modules: [moduleFrom({ type: 'heading', text: `Spacer ${side} ${index}`, settings: {} }, index)],
+  });
+
+  const subject = {
+    id: 'section-render-contract',
+    title: 'Render Contract Section',
+    layout,
+    locked: false,
+    alignment: 'left',
+    widthMode: 'contained',
+    // Section-level background and tint. Dropping these was fine while every
+    // background was CSS on the section itself; a video background renders a
+    // real element, so a contract cannot reach it without them.
+    ...(background ? { background } : {}),
+    ...(overlayScreen ? { overlayScreen } : {}),
+    modules: modules.map(moduleFrom),
+  };
+
+  const before = Array.from({ length: spacers }, (_, i) => spacer('before', i));
+  const after = Array.from({ length: spacers }, (_, i) => spacer('after', i));
+
+  /*
+   * A THEME, WITHOUT A DATABASE.
+   *
+   * Some rendering is only wrong when a theme is on — the photo overlay tint
+   * is the case that forced this, because a parallax layer covering it is
+   * invisible on the untinted section every other contract here uses. The
+   * preview page reads `themeShellBackground` straight out of this stored
+   * draft and builds the theme styles from it, and it skips its API call
+   * entirely when the stored palette already carries colours. So a contract
+   * can ask for a themed page and this file keeps its bargain: no database,
+   * no login, no fixture.
+   *
+   * Contracts that want no theme leave it out and the draft is byte-for-byte
+   * what it always was — the keys are not written at all.
+   */
+  const theme = themeTreatments
+    ? {
+        themePalette: {
+          primaryColor: '#1f4d8f',
+          secondaryColor: '#8f1f4d',
+          backgroundColor: '#ffffff',
+          accentColor: '#4d8f1f',
+        },
+        themeShellBackground: {
+          primaryColor: '#1f4d8f',
+          secondaryColor: '#8f1f4d',
+          backgroundColor: '#ffffff',
+          accentColor: '#4d8f1f',
+          treatments: themeTreatments,
+        },
+      }
+    : {};
+
   return {
     name: 'Render Contract Section',
-    layoutSections: [{
-      id: 'section-render-contract',
-      title: 'Render Contract Section',
-      layout,
-      locked: false,
-      alignment: 'left',
-      widthMode: 'contained',
-      // Section-level background and tint. Dropping these was fine while every
-      // background was CSS on the section itself; a video background renders a
-      // real element, so a contract cannot reach it without them.
-      ...(background ? { background } : {}),
-      ...(overlayScreen ? { overlayScreen } : {}),
-      modules: modules.map(moduleFrom),
-    }],
+    layoutSections: [...before, subject, ...after],
+    ...theme,
   };
 }
 
@@ -125,6 +194,13 @@ async function render(page, doc) {
   // times out after 30s having rendered perfectly. Wait for the module.
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.builder-preview-module', { timeout: 20000 }).catch(() => {});
+  // Back to the top before anything is measured. A reload restores the
+  // previous scroll position, so a scrolling contract would otherwise start
+  // wherever the one before it finished — and read completely different
+  // numbers depending on the order of the list.
+  await page.evaluate(() => {
+    (document.scrollingElement || document.documentElement).scrollTop = 0;
+  });
   await page.waitForTimeout(1200);
 }
 
@@ -175,13 +251,39 @@ function sample(page, selector, read, settleMs, series) {
     let seriesOut = null;
     if (series) {
       seriesOut = [];
+      /*
+       * A SCROLLING series. `scrollBy` moves the page a fixed number of pixels
+       * between frames, which is the only way to sample an effect whose whole
+       * definition is "as the page scrolls". Contracts that read motion in
+       * place leave it unset and nothing scrolls, exactly as before.
+       *
+       * `scrollY` rides along in every frame because the assertion that
+       * matters is a COMPARISON — the background must move LESS than the page
+       * did — and a series that recorded only the element's transform could
+       * not tell "drifting slower" from "not moving because the page did not
+       * move either", which is the way this check would most plausibly die.
+       */
+      const scroller = series.scrollBy
+        ? (document.scrollingElement || document.documentElement)
+        : null;
       for (let i = 0; i < series.count; i += 1) {
-        const frame = {};
+        if (scroller && i > 0) {
+          scroller.scrollTop += series.scrollBy;
+          // One animation frame, so the rAF loop under test has actually run
+          // against the new scroll position before anything is read.
+          await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+        }
+        const frame = { scrollY: scroller ? scroller.scrollTop : 0 };
         for (const [name, sel] of Object.entries(series.selectors)) {
           const node = document.querySelector(sel);
           if (!node) { frame[name] = null; continue; }
           const style = getComputedStyle(node);
-          frame[name] = Object.fromEntries(series.read.map((prop) => [prop, style[prop]]));
+          const box = node.getBoundingClientRect();
+          frame[name] = {
+            ...Object.fromEntries(series.read.map((prop) => [prop, style[prop]])),
+            top: box.top,
+            height: box.height,
+          };
         }
         seriesOut.push(frame);
         await new Promise((resolve) => setTimeout(resolve, series.everyMs));

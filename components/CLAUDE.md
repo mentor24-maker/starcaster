@@ -136,7 +136,9 @@ an E7 audit walked straight past it because the setting DID reach a renderer.
 
 ## Video backgrounds — read `docs/VIDEO_BACKGROUNDS.md` first
 
-The fifth background mode and `builder-video-background-layer.tsx`. The doc
+The fifth background mode and `builder-background-layer.tsx` — which is no
+longer video-only: parallax made an image background need an element too, so
+one layer that can translate now serves both (2026-08-31). The doc
 carries the one idea the whole feature rests on — a video background reports
 its POSTER as ordinary CSS, which is why the mode could be added without a
 single caller of `getBuilderBackgroundStyle` learning it exists — plus why the
