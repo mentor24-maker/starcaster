@@ -23,6 +23,35 @@ sync happened to stamp on them, so an old name cannot sit next to the new one
 arguing with it. Nothing was rewritten in the database to fix the sections
 that already disagree; they simply stop showing the wrong name, and they
 correct themselves the next time the section is saved.
+
+**A second round, after review.** The first version opened the same problem
+through a different door. Saving a section from a page takes that page's name
+with it — which is what makes the two names stay together — but on a section
+that still had the old mismatch, the page was carrying the *stale* name, so
+saving it put the old name back on the master and quietly undid a rename you
+had just made in the list. Worse, the warning that was supposed to announce a
+rename stayed silent, because it was comparing the wrong two strings: it
+checked the name stamped in the content instead of the name in the list, and
+on exactly those sections those two look identical. It now compares the name
+you can actually see in the list, so the dialog says what it is about to do.
+It also counts only the pages the save will really reach — a page you have
+hand-edited is skipped, and the sentence above it in the same dialog already
+said so, so the two used to give different numbers.
+
+Second thing review caught: after saving a section from a page back to the
+master, that section on the page immediately showed up as *Changed* — as if
+you had edited it — even though you had just made it match. The relink was
+only flipping a couple of flags, while the server tidies a section as it saves
+it and fills in a few dozen settings the page never sent. So the two sides
+differed the instant they were joined, and every later sync then skipped that
+page on the grounds that somebody had edited it. The page now takes the
+section back exactly as the server stored it, which is what "this is the same
+section again" was always supposed to mean.
+
+Finally, the little "add this saved section under…" list was still labelling
+sections with the old stamped name, so it could offer you a section under a
+different name from the one its own card was showing, one click away.
+
 ## 2026-08-31 — The merge lock can now actually read the tickets
 
 The check that reads a ticket before letting anything merge has been running
