@@ -322,6 +322,12 @@ function usage(code = 2) {
   console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name <TAB> loop note');
   console.error('                                             the loop note is what a pass in flight looks like (e.g. a review already running)');
   console.error('                                             repo is the declared repo (repo:<name> tag); ?<name> = escalate, do not build');
+  console.error('  stage-counts [--list <id>] [--since YYYY-MM-DD] [--until YYYY-MM-DD]');
+  console.error('                                             every stage counted, as JSON, CLOSED TICKETS INCLUDED');
+  console.error('                                             ("Live" is a closed status, so the open-queue fetch cannot see it);');
+  console.error('                                             --since counts tickets closed on/after that date, --until');
+  console.error('                                             bounds the other end — without it the count runs to NOW,');
+  console.error('                                             so a report on an older week credits later closures to it');
   console.error('  get --task <id>                            one task: header lines, then "---", then the body markdown');
   console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
   console.error('  status --task <id> --status "In review" [--if-status "Queued"] [--assign <userId>] [--clear-assignees] [--no-auto-assign]');
@@ -432,6 +438,11 @@ async function fetchAllTasks(list, { includeClosed = false, fatal = true } = {})
   // where 66 Live ones exist (measured 2026-08-25). Opt-in rather than global:
   // the `queue` command wants only open work, and flipping it there would put
   // 66 shipped tickets in front of the loop.
+  //
+  // `stage-counts` is the caller that needs them. The weekly report counts the
+  // pipeline by stage, and "Live" IS a closed status — without this the report
+  // counts every stage except the one that means the work shipped, and prints
+  // a confident 0 (task 86bbkw1mn).
   //
   // fatal:false — die() ends in process.exit(1), so a caller that WANTS to
   // handle a failed read cannot: its try/catch never runs and loop-build reads
@@ -1721,6 +1732,66 @@ if (cmd === 'whoami') {
   }
   console.error(`${wanted.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list} (all pages; first line is the one to claim)`);
   if (res) reportLimits(res);
+
+} else if (cmd === 'stage-counts') {
+  // Every stage of the pipeline, counted, as JSON — for the weekly report
+  // (task 86bbkw1mn) and anything else that wants the shape of the queue
+  // rather than its contents.
+  //
+  // It is a command here, and not a `queue | wc -l` in the report script, for
+  // one reason: the token. Reading ClickUp means holding the API token, and
+  // the standing rule is that the token lives in exactly one script that
+  // Doppler feeds (DOCTRINE 4.1). A second reader would be a second place to
+  // get that wrong.
+  const list = arg('list') || LOOP_QUEUE_LIST;
+  const since = arg('since'); // YYYY-MM-DD; counts tickets CLOSED on/after it
+  // A floor with no ceiling counted everything closed from --since until NOW,
+  // so `--since 2026-08-25` on a window that ended the 25th was still counting
+  // tickets closed on the 28th. Right for a window ending today by accident,
+  // wrong for every other one.
+  const until = arg('until'); // YYYY-MM-DD; the other end of that count
+
+  // Work the range out BEFORE asking ClickUp for anything. A date typo is the
+  // caller's mistake either way, but finding it after the fetch spends a page
+  // of the API budget to tell them so.
+  let cutoff = null;
+  let ceiling = Infinity;
+  if (since) {
+    cutoff = Date.parse(`${since}T00:00:00Z`);
+    if (Number.isNaN(cutoff)) {
+      console.error(`--since "${since}" is not a YYYY-MM-DD date.`);
+      process.exit(2);
+    }
+    if (until) {
+      ceiling = Date.parse(`${until}T23:59:59.999Z`);
+      if (Number.isNaN(ceiling)) {
+        console.error(`--until "${until}" is not a YYYY-MM-DD date.`);
+        process.exit(2);
+      }
+      if (ceiling < cutoff) {
+        console.error(`--until "${until}" is before --since "${since}".`);
+        process.exit(2);
+      }
+    }
+  } else if (until) {
+    console.error('--until needs --since; a ceiling with no floor is not a window.');
+    process.exit(2);
+  }
+
+  const { tasks } = await fetchAllTasks(list, { includeClosed: true });
+  const byStatus = {};
+  for (const t of tasks) {
+    const key = (t.status?.status ?? 'unknown').toLowerCase();
+    byStatus[key] = (byStatus[key] || 0) + 1;
+  }
+  let closedInWindow = null;
+  if (cutoff !== null) {
+    closedInWindow = tasks.filter((t) => {
+      const closedAt = Number(t.date_closed);
+      return Number.isFinite(closedAt) && closedAt > 0 && closedAt >= cutoff && closedAt <= ceiling;
+    }).length;
+  }
+  console.log(JSON.stringify({ list, total: tasks.length, byStatus, since: since || null, until: until || null, closedInWindow }, null, 2));
 
 } else if (cmd === 'get') {
   const task = arg('task');
