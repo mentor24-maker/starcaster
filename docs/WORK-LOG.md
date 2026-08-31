@@ -1,3 +1,48 @@
+## 2026-08-31 — One shape for every social platform, proven on two of them (#471)
+
+Adding a new social network to Starcaster has always meant threading a new
+special case through the whole app. This changes that: every platform now
+answers the same six questions in the same way — where do I send the client to
+say yes, what do I do with their answer, which accounts does this cover, is it
+still working, make it work again, and give the permission back. Adding the
+next platform after this is one new file and one line on a list.
+
+A shape is only proven if something awkward fits it, so it was built against two
+platforms that work nothing alike. Facebook Pages is the flow that already runs
+in production, moved across rather than rewritten — if moving it had broken it,
+that would have meant the shape was wrong, and it is far cheaper to learn that
+with one platform on it than with five. Bluesky was written fresh, and second on
+purpose: it has no browser sign-in, no authorisation code, no expiring token to
+renew, and no way for us to hand the permission back on the client's behalf.
+Every one of those is something a design drawn only from Facebook would have
+assumed without noticing.
+
+One real fix rode along. The address Facebook sends a client back to after they
+agree used to be worked out from whichever web address the request happened to
+arrive on. On a test deployment that address is different every single time, and
+Facebook rejects any address it was not told about in advance — so the sign-in
+would have failed there with an error naming nothing useful. It is now a fixed,
+known address.
+
+Review caught a real hole on the third look, and it is the kind worth writing
+down. When a client connects an account, the code hands back a little record of
+it — which account, what it is called, the key that lets us post. That record is
+then what you pass back in later to ask "is this still working?" or "hand the
+permission back". Except the record came out labelled one way and every later
+question expected the other, so handing an account's own record straight back to
+the code that made it got the account refused. On Bluesky the refusal read
+"Bluesky needs a handle and an app password" — which is not a mismatch, it is a
+sentence that would have sent a client off to replace a password that was never
+wrong. Every test passed, because no test anywhere had ever fed a connection's
+own record back in.
+
+Both halves now use the one set of names — the same names the vault that stores
+these connections already used — and the check that would have caught it walks
+every platform on the list rather than the two that exist today. Platform seven
+either proves its own record can be handed back to itself or it fails the test.
+
+Nothing changes on any screen. The screen where a client actually clicks
+"Connect" is the next piece but one.
 ## 2026-08-31 — Parallax was quietly removing a theme's photo tint (#481)
 
 Themes can lay a wash of colour over a photo — the "Photo overlay tint" — and
