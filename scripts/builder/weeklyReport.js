@@ -593,6 +593,43 @@ ${items}
 `;
 }
 
+/**
+ * What exit code a `--publish` run should end on, given what publish() did.
+ *
+ * IT IS A FUNCTION, AND IT IS HERE, so it can be tested without a network, a
+ * git remote or a faked machine identity. The decision it encodes is three
+ * lines of `if` at the bottom of the script, which is exactly the shape of
+ * code that gets read as obviously correct and is not.
+ *
+ * Three outcomes are NOT failures:
+ *   published        — the report shipped.
+ *   'no changes'     — a week identical to the edition already on main. The
+ *                      correct outcome of a quiet week, not a fault.
+ *   'other-node'     — another machine owns `weekly-report`. A designed
+ *                      decline, so it takes 3, the code `npm run node:owns`
+ *                      already uses for "another machine's job".
+ *
+ * 'unidentified' IS NOT THE THIRD ONE, however much it looks like it. It means
+ * the machine could not tell which node it is — so it does not know whether
+ * another machine published this week or whether NOBODY did, and from here
+ * those two are indistinguishable while only one of them is safe. Reporting
+ * that ignorance to launchd as a tidy exit 3 is how a Monday with no report
+ * goes unnoticed, which is the failure this whole script is written against.
+ * It exits 1, matching `node_role.mjs owns`: 'other-node' is an ordinary
+ * answer, everything else means we could not tell. (CLAUDE.md, "Some jobs run
+ * on exactly one machine": a machine whose name is not recognised does not
+ * quietly skip — it refuses out loud.)
+ *
+ * Everything else — a failed push, a gh that printed no URL, an unknown role —
+ * is a publish that was asked for and did not happen. Exit 1.
+ */
+function publishExitCode(result) {
+  if (!result || result.published) return 0;
+  if (result.reason === 'no changes') return 0;
+  if (result.reason === 'other-node') return 3;
+  return 1;
+}
+
 module.exports = {
   AREA_ORDER,
   AREA_RULES,
@@ -614,6 +651,7 @@ module.exports = {
   parseMergeSubject,
   perDay,
   prUrl,
+  publishExitCode,
   renderChart,
   renderConfirmationCaution,
   renderIndexHtml,

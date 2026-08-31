@@ -682,15 +682,52 @@ test('the bus warning is reachable: bus() checks the result it gets back', () =>
 
 // ── The three smaller round-3 items ────────────────────────────────────────
 
+// The exit code of a --publish run. These call the function rather than
+// reading the script's source, which the first version of this test did — and
+// a regex over source can only ever prove a line is PRESENT, not that it runs
+// for the right input. That is how the defect below survived being "tested".
+
 test('a publish that was asked for and did not happen exits non-zero', () => {
-  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
-  const tail = src.slice(src.indexOf("if (flag('publish'))"));
-  assert.match(tail, /process\.exit\(1\)/,
-    'launchd must not record a clean Monday for a week that produced no report');
-  assert.match(tail, /result\.reason === 'no changes'[\s\S]*process\.exit\(0\)/,
-    'but a week identical to the last edition is a success, not a failure');
-  assert.match(tail, /process\.exit\(3\)/,
-    "and a machine that does not own the role declines with 3, the same code node:owns uses");
+  assert.equal(R.publishExitCode({ published: true }), 0, 'a report that shipped is a success');
+  assert.equal(R.publishExitCode({ published: false, reason: 'no changes' }), 0,
+    'a week identical to the last edition is a quiet week, not a failure');
+  assert.equal(R.publishExitCode({ published: false, reason: 'other-node' }), 3,
+    'another machine owning the job is a designed decline — the code node:owns uses');
+
+  for (const reason of ['gh exited 1', 'push rejected', 'unknown-role']) {
+    assert.equal(R.publishExitCode({ published: false, reason }), 1,
+      `launchd must not record a clean Monday for a week that produced no report (${reason})`);
+  }
+});
+
+test("'unidentified' exits 1, not 3 — it is ignorance, not a decline", () => {
+  // THE DEFECT THIS PINS. `unidentified` was filed beside `other-node` and
+  // given exit 3, on the reasoning that both mean "this machine did not
+  // publish". They do — but 3 says WHY: another machine has it in hand. An
+  // unidentified machine does not know that. It cannot tell whether some other
+  // node published this week or whether nobody did, and those look identical
+  // from here while only one of them is safe. Exit 3 reports that ignorance to
+  // launchd as a tidy "not my job", and the Monday with no report goes by
+  // unnoticed — the exact silence this script exists to prevent.
+  assert.equal(R.publishExitCode({ published: false, reason: 'unidentified' }), 1);
+});
+
+test('publishExitCode agrees with node_role.mjs about what 3 means', () => {
+  // Two files decide this independently, so they can drift. node_role.mjs:
+  // "'other-node' is an ordinary answer; the rest mean we could not tell."
+  // Every non-owning verdict nodeRoles.js can produce is checked against that
+  // sentence, so a NEW verdict added there cannot quietly inherit exit 3.
+  const src = fs.readFileSync(path.resolve(__dirname, '..', '..', 'lib', 'nodeRoles.js'), 'utf8');
+  const verdicts = [...src.matchAll(/verdict: '([a-z-]+)'/g)].map((m) => m[1]);
+  assert.ok(verdicts.includes('unidentified') && verdicts.includes('other-node'),
+    'the verdicts are still named this way in lib/nodeRoles.js');
+
+  for (const v of new Set(verdicts)) {
+    if (v === 'owned') continue;
+    const expected = v === 'other-node' ? 3 : 1;
+    assert.equal(R.publishExitCode({ published: false, reason: v }), expected,
+      `verdict '${v}' must exit ${expected}; only "another machine has it" earns a 3`);
+  }
 });
 
 test('the narrative ticket can never be filed pointing at the word "undefined"', () => {

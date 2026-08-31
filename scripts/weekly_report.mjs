@@ -738,21 +738,18 @@ if (unread.length) {
 // one already on main is the correct outcome of a quiet week.
 if (flag('publish')) {
   const result = publish(OUT_HTML, OUT_JSON, indexPath || path.join(REPORTS_DIR, 'index.html'));
-  if (!result.published) {
-    // Two of the ways publishing does not happen are not failures, and saying
-    // so is the difference between a monitor that gets read and one that gets
-    // muted:
-    //   'no changes'  — a week identical to the edition already on main.
-    //   the role guard — this machine does not own `weekly-report`. That is a
-    //                    designed decline, so it takes exit 3, the same code
-    //                    `npm run node:owns` uses for "another machine's job".
-    if (result.reason === 'no changes') process.exit(0);
-    if (result.reason === 'other-node' || result.reason === 'unidentified') {
-      process.stderr.write('\nExiting 3: publishing belongs to another machine.\n');
-      process.exit(3);
-    }
-    process.stderr.write(`\nExiting 1: --publish was asked for and did not happen (${result.reason}).\n`);
-    process.exit(1);
+  // The three-way decision lives in the pure module, where a test can reach it
+  // without a network, a git remote or a faked machine identity — see
+  // publishExitCode() there for which outcomes are failures and which are not.
+  // In particular: 'unidentified' is NOT a tidy "not my job". It exits 1.
+  const code = R.publishExitCode(result);
+  if (code !== 0) {
+    process.stderr.write(
+      code === 3
+        ? '\nExiting 3: publishing belongs to another machine.\n'
+        : `\nExiting 1: --publish was asked for and did not happen (${result.reason}).\n`,
+    );
+    process.exit(code);
   }
 }
 
