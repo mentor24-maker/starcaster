@@ -35,6 +35,21 @@ a check meant to prove the feature stays out of the way passed on the exact bug
 its own note described, and had to be replaced with one that actually looks at
 the right thing.
 
+Review then caught two things worth knowing about. The Speed box could not be
+typed into: clearing it put 0.3 straight back, so typing 0.7 left you looking at
+0.37. The cause was a small thing with a wide moral — the box was asking "what
+does this value mean?" using the rule meant for values coming back out of the
+database, where a blank means "never set, use the usual". Halfway through typing
+a number, a blank means "not finished yet", which is the opposite. Those are now
+two separate questions with two separate answers, and clearing the box leaves it
+empty like every other field on the screen.
+
+The other was the panel telling a small lie. It said parallax runs on phones,
+which is true of a photo and not of a video — a video background is not loaded on
+phones at all unless you switch that on, so there was nothing there to drift. The
+note now says which is which and names the switch. A control that quietly does
+nothing on half the devices people use is worse than one that says so.
+
 ## 2026-08-25 — The weekly report gathers itself now; the writing is still yours (#437)
 
 The first weekly report took most of an afternoon to put together. Almost none
