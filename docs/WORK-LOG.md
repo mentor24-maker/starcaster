@@ -1,3 +1,40 @@
+## 2026-08-31 — Backgrounds can drift slower than the page now (#481)
+
+A section with a photo behind it used to look flat, and the reason was that the
+picture scrolled at exactly the same rate as the words on top of it. Everything
+moved as one sheet. Making the background drift a little slower than the text is
+the cheapest thing there is for making a page feel like it has depth, and Delray
+needs it.
+
+It is a checkbox and a number, in the Motion group of a row's Background panel.
+0 pins the picture to the screen, 1 is ordinary scrolling, and about 0.3 is the
+usual look. It works on video backgrounds as well as photos. Nothing that exists
+today changes: it is off unless you turn it on, and six pages were photographed
+before and after to prove it — every pixel identical.
+
+One thing to know before using it. The picture crops in tighter. That is not a
+bug and it cannot be avoided: the picture has to be taller than the row to have
+anywhere to drift to, so the stronger you set the effect the closer it is
+cropped. If the photo has a logo or a face near an edge, use a higher number,
+nearer 0.7. The panel says so in as many words.
+
+There is an obvious one-line way to build this that half the internet uses, and
+it was deliberately not used. It stops working the moment anything above it on
+the page has a blur or a shrink on it — the same six properties that caused the
+`blur(0px)` trouble a fortnight ago — and iPhones ignore it entirely. Both
+failures are silent. The version that shipped moves a real element instead, which
+nothing above it can switch off.
+
+The arithmetic was pulled out into its own file with no page-drawing in it at
+all, which is the house pattern for anything that moves, and for a plain reason:
+nothing in this codebase can test how something LOOKS, so the sums are the only
+part that can be pinned down and kept honest. Eleven checks were broken on
+purpose afterwards and watched to fail, because a check that has never failed has
+not been tested, only written. One of those breaks was worth the whole exercise:
+a check meant to prove the feature stays out of the way passed on the exact bug
+its own note described, and had to be replaced with one that actually looks at
+the right thing.
+
 ## 2026-08-25 — The weekly report gathers itself now; the writing is still yours (#437)
 
 The first weekly report took most of an afternoon to put together. Almost none
