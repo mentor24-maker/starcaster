@@ -1904,6 +1904,41 @@ The cap deliberately does **not** throttle `loop-review`. Review drains the
 very PRs the cap is waiting on; pausing it because the cap is full would make
 the cap permanent.
 
+### Both commands take ONE reading of the cap
+
+`wip-check` and `next-interval` ask the same question, and on 2026-08-31 they
+answered it differently for a whole morning (task 86bbq8br2):
+
+```
+wip-check      → 4 in flight, cap 5 — room to claim another.
+                 4 open PR(s) not counted: 4 queued for rework (#454, #449, #446, #419).
+next-interval  → interval: 3600s (0 claimable — the work-in-progress cap is full)
+```
+
+So `loop-build` slept the maximum hour after every *productive* pass, telling
+its own log the merge side was full, while 38 tickets were claimable. Every
+gate was green and every green was honest.
+
+Neither function was wrong. There were two **call sites**: `next-interval`
+asked GitHub for `number,state` and passed no ticket statuses, so it took the
+documented conservative fallback of counting every open PR — including the
+ones sent back to `Queued` for rework, which is the exact deadlock task
+86bbm4zwd had already fixed for the claim gate. `wip-check` asked for `body`
+too, read the queue, and excluded them correctly.
+
+The reading now happens once, in `wipCap.probeCap`, wired to `gh` and
+`fetchAllTasks` by a single `capProbe` helper. The two things that had to
+match and did not — the `--json` field list (it **must** include `body`, which
+is how a PR is matched to its ticket) and `include_closed` on the queue read —
+now have one place to be wrong instead of two.
+
+What is deliberately *not* shared is the direction each caller fails in, which
+is a real difference rather than duplication: `probeCap` returns
+`determined:false` and says why, and `wip-check` fails open while
+`next-interval` fails toward capped (the table below). `next-interval` also
+logs the cap sentence itself now, not just its effect — a disagreement should
+be visible in the log, not inferred from an interval an hour later.
+
 ### Hysteresis, and which direction it protects
 
 **Shortening needs two consecutive readings. Lengthening is immediate.**

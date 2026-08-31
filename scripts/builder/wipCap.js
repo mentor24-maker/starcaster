@@ -274,6 +274,95 @@ function wipDecision({ prs, cap, ticketStatusById } = {}) {
 }
 
 /**
+ * The ONE reading of "is the merge side full?", shared by every caller.
+ *
+ * WHY THIS EXISTS (2026-08-31, task 86bbq8br2). `wip-check` and
+ * `next-interval` both answered that question, from the same module, and
+ * reached OPPOSITE answers for eight months' worth of a morning: the claim
+ * gate said "4 in flight, cap 5 — room to claim another" while the sleep timer
+ * wrote "the work-in-progress cap is full" into the log and slept the maximum
+ * hour, with 38 tickets claimable.
+ *
+ * The cause was not a wrong rule. It was two call sites: `next-interval` asked
+ * GitHub for `number,state` and called `wipDecision` with no
+ * `ticketStatusById`, so it took the documented conservative fallback — count
+ * EVERY open PR — while `wip-check` asked for `body` too, read the queue, and
+ * correctly excluded the four PRs whose tickets were `Queued` for rework. Both
+ * behaved exactly as written. They were simply not the same reading.
+ *
+ * That is the failure mode `ticketIdFromPrBody` already carries a comment
+ * about — two functions disagreeing about the same string — so the fix is
+ * structural rather than a matching edit in two places: the reading happens
+ * HERE, once, and a caller supplies only the two I/O calls.
+ *
+ * What is deliberately NOT shared is the direction each caller fails in, which
+ * is a real difference and not duplication:
+ *
+ *   - `wip-check` fails OPEN. Refusing on a transient `gh` hiccup would stop
+ *     all work; the cost of guessing wrong is some catch-up churn.
+ *   - `next-interval` fails toward CAPPED. Its pass has already run and the
+ *     only question is how long to sleep, so the safe direction is the long
+ *     one.
+ *
+ * So this returns `determined:false` and says why, rather than choosing.
+ *
+ * @param {object} opts
+ * @param {() => Promise<object[]|null>} opts.listOpenPrs  open PRs, each with
+ *   `number`, `state` AND `body` — `classifyPrs` matches a PR to its ticket
+ *   through the body, so a caller that omits it gets the statuses-unavailable
+ *   fallback no matter how well the queue read went.
+ * @param {() => Promise<object|null>} opts.readTicketStatuses  id -> status
+ *   string for the Loop Queue, closed tickets INCLUDED (a zombie PR's ticket
+ *   is `Live`, and without it the PR reports as "no ticket found").
+ * @param {number} [opts.cap]
+ * @returns {Promise<{determined:boolean, why:string|null, decision:object|null,
+ *   statusesAvailable:boolean, queueFailure:string|null}>}
+ */
+async function probeCap({ listOpenPrs, readTicketStatuses, cap } = {}) {
+  const limit = Number.isInteger(cap) ? cap : DEFAULT_WIP_CAP;
+
+  let prs = null;
+  let why = null;
+  try {
+    prs = typeof listOpenPrs === 'function' ? await listOpenPrs() : null;
+  } catch (err) {
+    why = String(err?.message || err);
+  }
+  // Not an array = not a count. There is no conservative reading of "we do not
+  // know how many PRs are open", so the caller is told and decides.
+  if (!Array.isArray(prs)) {
+    return {
+      determined: false,
+      why: why || 'the open pull requests could not be listed',
+      decision: null,
+      statusesAvailable: false,
+      queueFailure: null,
+    };
+  }
+
+  let ticketStatusById;
+  let queueFailure = null;
+  try {
+    const read = typeof readTicketStatuses === 'function' ? await readTicketStatuses() : null;
+    if (read && typeof read === 'object' && Object.keys(read).length) ticketStatusById = read;
+    else queueFailure = 'no tasks came back';
+  } catch (err) {
+    queueFailure = String(err?.message || err);
+  }
+
+  return {
+    determined: true,
+    why: null,
+    // With ticketStatusById undefined this is the documented conservative
+    // fallback — count every open PR — which is exactly what BOTH callers
+    // want when the queue is unreadable. Unchanged behaviour, one code path.
+    decision: wipDecision({ prs, cap: limit, ticketStatusById }),
+    statusesAvailable: ticketStatusById !== undefined,
+    queueFailure: ticketStatusById === undefined ? queueFailure : null,
+  };
+}
+
+/**
  * What to do when the count itself could not be read.
  *
  * DELIBERATELY FAILS OPEN, and this is the one place that differs from
@@ -307,5 +396,6 @@ module.exports = {
   classifyPrs,
   countOpenPrs,
   wipDecision,
+  probeCap,
   undeterminedDecision,
 };
