@@ -1282,6 +1282,33 @@ export function finalizeBackgroundSettings(background: BackgroundSettings | unkn
   return normalized;
 }
 
+/** Is a dimmer/tint screen actually configured on this row? */
+export function hasActiveRowOverlayScreen(overlayScreen: unknown): boolean {
+  return normalizeRowOverlayScreenSettings(overlayScreen).background.mode !== "none";
+}
+
+/**
+ * The tint screen's own style. Ported from the frozen vanilla builder
+ * (`public/js/builder.js`, `buildRowOverlayScreenStyle`) — the settings were
+ * normalized on both sides all along, but only the vanilla builder ever
+ * PAINTED one, so a React-rendered row silently had no overlay at all. Text
+ * sitting on moving footage is what finally forced the port.
+ */
+export function getBuilderRowOverlayScreenStyle(overlayScreen: unknown): CSSProperties | undefined {
+  const normalized = normalizeRowOverlayScreenSettings(overlayScreen);
+  if (normalized.background.mode === "none") {
+    return undefined;
+  }
+
+  const style = getBuilderBackgroundStyle(normalized.background);
+  if (!style) {
+    return undefined;
+  }
+
+  const opacity = normalized.opacity / 100;
+  return Number.isFinite(opacity) && opacity < 1 ? { ...style, opacity } : style;
+}
+
 /**
  * Theme Styles → Page Background only. Promotes mode "none" when a custom color,
  * gradient, image, or style was configured (picker often leaves mode unset).

@@ -99,7 +99,7 @@ function documentFor(...specs) {
 /** A page carrying ONE section with the given layout + modules — so a contract
  *  can measure a SECTION-level layout (e.g. the 4/5/6 equal-column rows), which
  *  documentFor (always `layout: 'single'`) cannot reach. */
-function documentForSection({ layout = 'single', modules = [] } = {}) {
+function documentForSection({ layout = 'single', modules = [], background, overlayScreen } = {}) {
   return {
     name: 'Render Contract Section',
     layoutSections: [{
@@ -109,6 +109,11 @@ function documentForSection({ layout = 'single', modules = [] } = {}) {
       locked: false,
       alignment: 'left',
       widthMode: 'contained',
+      // Section-level background and tint. Dropping these was fine while every
+      // background was CSS on the section itself; a video background renders a
+      // real element, so a contract cannot reach it without them.
+      ...(background ? { background } : {}),
+      ...(overlayScreen ? { overlayScreen } : {}),
       modules: modules.map(moduleFrom),
     }],
   };
@@ -371,9 +376,45 @@ try {
     );
     process.exit(1);
   }
+  const DEFAULT_VIEWPORT = page.viewportSize();
   for (const contract of RENDER_CONTRACTS) {
+    /*
+     * Optional emulation. Some behaviour is only correct in a condition the
+     * default browser is not in — a visitor who asked for reduced motion, or a
+     * phone-width window. Those paths used to be untestable here, which meant
+     * the only evidence they worked was somebody remembering to toggle a
+     * system setting by hand.
+     */
+    if (contract.emulate?.reducedMotion) {
+      await page.emulateMedia({ reducedMotion: contract.emulate.reducedMotion });
+    }
+    if (contract.emulate?.viewport) {
+      await page.setViewportSize(contract.emulate.viewport);
+    }
+
     await render(page, contract.section ? documentForSection(contract.section) : documentFor(contract.module));
     const result = await sample(page, contract.selector, contract.read || [], SETTLE_MS);
+
+    if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });
+    if (contract.emulate?.viewport && DEFAULT_VIEWPORT) await page.setViewportSize(DEFAULT_VIEWPORT);
+
+    /*
+     * An ABSENCE contract inverts R1: the whole assertion is that nothing
+     * matches. Kept explicit rather than letting "not found" quietly pass,
+     * because a silent not-found is exactly how the checks in this repo have
+     * died before — this one has to say out loud that absence is the point.
+     */
+    if (contract.absent) {
+      if (result.found) {
+        failures.push(
+          `${contract.id}: \`${contract.selector}\` IS present and it must not be. ` +
+          (contract.why ? `${contract.why}` : '')
+        );
+      } else {
+        measured += 1;
+      }
+      continue;
+    }
 
     // R1 — IT RENDERED AT ALL. Zero measured is a failure, never a pass: this
     // is the single most repeated way a check dies in this repo, and

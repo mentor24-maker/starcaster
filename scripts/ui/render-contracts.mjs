@@ -26,6 +26,27 @@ const BANNER = '/images/Gemini_Generated_starcaster_banner.png';
 const PICTURE = { url: BANNER, alt: 'Contract fixture picture', size: '40' };
 
 /**
+ * The video-background fixture. Six seconds, 128KB, generated with ffmpeg and
+ * committed so this needs no database, no upload and no network — the same
+ * bargain the rest of `builder-preview.html` makes.
+ *
+ * The poster is the SAME frame in greyscale, on purpose: when the fallback is
+ * showing, the row is visibly grey and still, so "the poster is up" is a thing
+ * a person can see across the room rather than something to squint at.
+ */
+const VIDEO_SECTION = {
+  layout: 'single',
+  background: {
+    mode: 'video',
+    videoUrl: '/images/render-fixture-background.mp4',
+    posterUrl: '/images/render-fixture-background-poster.jpg',
+    videoSpeed: 1,
+    videoLoop: true,
+  },
+  modules: [{ type: 'heading', text: 'Text over video', settings: {} }],
+};
+
+/**
  * ─────────────────────────────────────────────────────────────────────────
  * THE SETTINGS SWEEP — coverage nobody has to remember to write.
  *
@@ -508,6 +529,122 @@ export const RENDER_CONTRACTS = [
     expect(sample) {
       if (!sample.text.includes('Contract Heading')) {
         return `the heading rendered but its text is "${sample.text.slice(0, 40)}" — the content did not arrive.`;
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-background-renders-a-real-video',
+    why:
+      'Video is the one background mode that is not CSS. Every other mode is a property on the ' +
+      'section; this one is an ELEMENT behind the section, and `getBuilderBackgroundStyle` returns ' +
+      'the poster for it deliberately. So a video background that quietly renders nothing looks ' +
+      'exactly like one working correctly with a slow clip — a still picture and no error at all.',
+    section: { ...VIDEO_SECTION },
+    selector: 'video[data-builder-video-background="section"]',
+    read: ['objectFit', 'position', 'zIndex'],
+    expect(sample) {
+      if (sample.styles.objectFit !== 'cover') {
+        return `the video background is \`object-fit: ${sample.styles.objectFit || 'none'}\`, not cover — ` +
+          'it would letterbox or stretch instead of filling the row.';
+      }
+      if (sample.styles.position !== 'absolute') {
+        return `the video background is \`position: ${sample.styles.position}\` — it is in the row's flow ` +
+          'rather than behind it, so it would push the content down the page.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-background-sits-behind-the-content',
+    why:
+      'The columns are grid children and the video is absolutely positioned, so without a stacking ' +
+      'context of their own the columns paint UNDERNEATH the footage. The row then reads as having ' +
+      'gone blank, which looks like the text being lost rather than a z-index being wrong.',
+    section: { ...VIDEO_SECTION },
+    selector: '.builder-preview-section-layered > .builder-preview-column',
+    read: ['position', 'zIndex'],
+    expect(sample) {
+      if (sample.styles.position === 'static') {
+        return 'the column is `position: static`, so its z-index does nothing and the video paints over the text.';
+      }
+      const zIndex = Number(sample.styles.zIndex);
+      if (!Number.isFinite(zIndex) || zIndex < 2) {
+        return `the column sits at z-index ${sample.styles.zIndex || 'auto'}, which is not above the video (0) ` +
+          'and the tint screen (1) — the row\'s own content would be hidden behind its background.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-background-honours-reduce-motion',
+    why:
+      'Reduce Motion is a setting people turn on for migraines and motion sickness, and a full-bleed ' +
+      'looping video is the loudest thing a page can do. The poster is already painted by the CSS ' +
+      'underneath, so honouring this costs nothing but has to actually happen — and it is invisible ' +
+      'to every other check, because the page still looks perfectly fine to whoever is not affected.',
+    section: { ...VIDEO_SECTION },
+    selector: 'video[data-builder-video-background="section"]',
+    emulate: { reducedMotion: 'reduce' },
+    absent: true,
+  },
+
+  {
+    id: 'video-background-falls-back-to-the-poster-on-phones',
+    why:
+      'A background video is megabytes of someone else\'s cell data, spent on decoration. The default ' +
+      'is the poster on phone-width screens, and the failure mode is silent everywhere it matters: ' +
+      'nobody testing on a desktop can see that phones are being charged for the clip.',
+    section: { ...VIDEO_SECTION },
+    selector: 'video[data-builder-video-background="section"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    absent: true,
+  },
+
+  {
+    id: 'video-background-plays-on-phones-when-asked',
+    why:
+      'The phone fallback needs an escape hatch, and an escape hatch nobody verifies is the same as ' +
+      'not having one. Pairs with the contract above: together they prove the toggle is what decides, ' +
+      'rather than the video simply never rendering at phone width for some other reason.',
+    section: {
+      ...VIDEO_SECTION,
+      background: { ...VIDEO_SECTION.background, videoPlayOnMobile: true },
+    },
+    selector: 'video[data-builder-video-background="section"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    read: ['objectFit'],
+    expect(sample) {
+      if (sample.styles.objectFit !== 'cover') {
+        return `with "play on phones" on, the video rendered but as \`object-fit: ${sample.styles.objectFit}\`.`;
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'row-overlay-tint-actually-paints',
+    why:
+      'The tint screen was normalized on both sides for months and PAINTED only by the frozen vanilla ' +
+      'builder — a React-rendered row silently had none. Text over moving footage is unreadable without ' +
+      'it, so this is the contract that stops the port being quietly lost again.',
+    section: {
+      ...VIDEO_SECTION,
+      overlayScreen: { background: { mode: 'color', color: '#101820' }, opacity: 50 },
+    },
+    selector: '.builder-preview-row-overlay-screen',
+    read: ['position', 'opacity', 'backgroundColor'],
+    expect(sample) {
+      if (sample.styles.position !== 'absolute') {
+        return `the tint screen is \`position: ${sample.styles.position}\` — it is not covering the row.`;
+      }
+      const opacity = Number(sample.styles.opacity);
+      if (!Number.isFinite(opacity) || opacity >= 1) {
+        return `the tint screen rendered at opacity ${sample.styles.opacity} — a fully opaque screen hides ` +
+          'the very footage it exists to make text readable over.';
       }
       return null;
     },
