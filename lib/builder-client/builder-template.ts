@@ -147,7 +147,14 @@ export type BuilderTemplateModule = {
   settings: Record<string, string>;
   /** ID of the BuilderCellModuleRecord this was inserted from, if any. */
   savedModuleId?: string;
-  /** When true, push operations from the canonical source skip this instance. */
+  /**
+   * Does this copy follow its master? The ONE polarity as of Sync 7/7, written
+   * by everything new at both levels. Absent means the copy never answered,
+   * which on the module side has always meant "following" — see
+   * lib/builder-client/canonical-follow.ts.
+   */
+  canonical?: boolean;
+  /** Legacy spelling of `canonical: false`. Still read; no longer written. */
   canonicalLocked?: boolean;
 };
 
