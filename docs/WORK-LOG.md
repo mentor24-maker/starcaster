@@ -1,3 +1,31 @@
+## 2026-08-29 — A safe place to keep a client's own permissions (#448)
+
+Right now, posting to a client's Instagram or X means somebody pastes that
+client's password-equivalent into a settings screen by hand. The plan is to
+replace that with the client clicking "Connect" on their own screen and granting
+us the permission themselves. This is the safe box those permissions will go
+into — and nothing else. There is no screen to look at yet, and nothing reads or
+writes the box so far. Six more pieces follow.
+
+Two things got the care here, both of them mistakes this project has already
+paid for. The first is a record that forgets which client it belongs to. Two
+columns decide that, and if a table carries only one, the code that fills them
+in quietly gives up and fills in neither — nothing errors, the rows just land
+belonging to nobody. That happened to 550 records in August. A record belonging
+to nobody here would be a client's login permission with no name on it, so this
+one does not merely test for the problem: it refuses to write at all if it
+cannot put the client's name on the row.
+
+The second is answering a question with a blank instead of an error. The
+existing version of this code, when it cannot unscramble a stored permission,
+hands back an empty one and reports success — so the app then tries to post with
+no credential and Instagram's complaint reads as the client's fault. This one
+says it could not read the permission, which is the true answer.
+
+The permissions themselves are scrambled before they are stored, and that was
+checked the only way worth checking: by looking at what actually landed in a
+real database and searching every column of the table for the original text. It
+is not there.
 ## 2026-08-26 — The new merge lock could have jammed itself shut (#443)
 
 Yesterday's change put a real lock on the merge button: before anything goes
