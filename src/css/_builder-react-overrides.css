@@ -6975,3 +6975,22 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   position: relative;
   z-index: 2;
 }
+
+/*
+ * The Video background panel. The warning is a plain sentence rather than a
+ * red error box on purpose: a missing poster is a bad idea, not an invalid
+ * setting, and the operator is allowed to save without one.
+ */
+.builder-video-background-warning,
+.builder-video-background-note {
+  margin: 6px 0 0;
+  max-width: 62ch;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--ink-secondary, #4a5568);
+}
+
+.builder-video-background-warning {
+  color: var(--ink-primary, #1a202c);
+  font-weight: 600;
+}

@@ -1288,6 +1288,42 @@ export function hasActiveRowOverlayScreen(overlayScreen: unknown): boolean {
 }
 
 /**
+ * The tint a video background starts with. A dark neutral at partial strength —
+ * the same treatment the hero banner already applies for the same reason, which
+ * is that text laid over a photograph or over moving footage is unreadable
+ * without something between them.
+ */
+export const BUILDER_VIDEO_DEFAULT_OVERLAY_TINT = "#101820";
+export const BUILDER_VIDEO_DEFAULT_OVERLAY_OPACITY = 45;
+
+/**
+ * Seed the tint when a row first becomes a video row (operator's call,
+ * 2026-08-31: "Default overlay tint ON").
+ *
+ * It SEEDS, it does not lock: an overlay already configured is returned
+ * untouched, and everything about the seeded one — colour, strength, or
+ * turning it off entirely — stays the operator's afterwards. Nothing here
+ * ever removes a tint, because tearing out a setting he can see, as a side
+ * effect of a mode change he made for another reason, is the kind of silent
+ * edit this repo has been bitten by before.
+ */
+export function seedVideoBackgroundOverlayScreen(overlayScreen: unknown): RowOverlayScreenSettings {
+  const current = normalizeRowOverlayScreenSettings(overlayScreen);
+  if (current.background.mode !== "none") {
+    return current;
+  }
+
+  return {
+    background: {
+      ...createDefaultBackgroundSettings(),
+      mode: "color",
+      color: BUILDER_VIDEO_DEFAULT_OVERLAY_TINT
+    },
+    opacity: BUILDER_VIDEO_DEFAULT_OVERLAY_OPACITY
+  };
+}
+
+/**
  * The tint screen's own style. Ported from the frozen vanilla builder
  * (`public/js/builder.js`, `buildRowOverlayScreenStyle`) — the settings were
  * normalized on both sides all along, but only the vanilla builder ever

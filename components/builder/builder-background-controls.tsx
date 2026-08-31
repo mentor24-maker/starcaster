@@ -25,6 +25,14 @@ type BuilderBackgroundControlsProps = {
   themeBackgroundColor?: string;
   themePrimaryColor?: string;
   themeColors?: Array<{ label: string; hex: string }>;
+  /**
+   * Whether Video is offered here. OFF by default, and that default is the
+   * whole point: this component is the chrome worn by button backgrounds,
+   * module backgrounds, poll pods and the email path, none of which can render
+   * a <video>. Opting IN per surface means adding video could not silently put
+   * an option in front of an operator that does nothing where he clicked it.
+   */
+  allowVideo?: boolean;
 };
 
 export function BuilderBackgroundControls({
@@ -40,9 +48,11 @@ export function BuilderBackgroundControls({
   showColorFieldLabel = true,
   themeBackgroundColor,
   themePrimaryColor,
-  themeColors = []
+  themeColors = [],
+  allowVideo = false
 }: BuilderBackgroundControlsProps) {
   const [isFallbackGalleryOpen, setIsFallbackGalleryOpen] = useState(false);
+  const [openVideoPicker, setOpenVideoPicker] = useState<"clip" | "poster" | null>(null);
 
   function handleModeChange(newMode: BackgroundSettings["mode"]) {
     onChange((current) => {
@@ -58,6 +68,218 @@ export function BuilderBackgroundControls({
       }
       return next;
     });
+  }
+
+  const videoUrl = background.videoUrl ?? "";
+  const posterUrl = background.posterUrl ?? "";
+  const needsPoster = background.mode === "video" && !posterUrl;
+
+  const videoGallery = openVideoPicker ? (
+    <BuilderGalleryModal
+      isUploading={false}
+      // The picker opens on the Video shelf for the clip and the Image shelf
+      // for the still. It is a starting point, not a lock — the filter bar
+      // still shows it and Clear removes it.
+      initialMediaCategory={openVideoPicker === "clip" ? "Video" : "Image"}
+      onSelectImage={(path) => {
+        const url = normalizeBuilderAssetUrl(path);
+        onChange((current) =>
+          openVideoPicker === "clip"
+            ? { ...current, videoUrl: url }
+            : { ...current, posterUrl: url }
+        );
+        setOpenVideoPicker(null);
+      }}
+      onClose={() => setOpenVideoPicker(null)}
+    />
+  ) : null;
+
+  /**
+   * The Video panel. One definition, rendered by both layouts below, so the
+   * horizontal and stacked forms of this component cannot drift into offering
+   * different controls — which is exactly what happened to the mode dropdown
+   * itself, where a third hand-written copy in builder-section-controls.tsx
+   * had to be found and updated separately.
+   */
+  function renderVideoControls() {
+    if (background.mode !== "video") return null;
+
+    return (
+      <div className="builder-section-background-controls builder-video-background-controls">
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Video URL" width="full">
+            <input
+              type="text"
+              value={videoUrl}
+              onChange={(event) =>
+                onChange((current) => ({
+                  ...current,
+                  videoUrl: normalizeBuilderAssetUrl(event.target.value)
+                }))
+              }
+              placeholder="/api/admin/media-file/..."
+            />
+          </BuilderModuleField>
+        </BuilderModuleFieldStrip>
+        <div className="builder-media-actions">
+          <button
+            className="secondary-button builder-gallery-button"
+            onClick={() => setOpenVideoPicker("clip")}
+            type="button"
+          >
+            Choose Video
+          </button>
+          {onUploadImage ? (
+            <label className="secondary-button builder-gallery-button builder-upload-button">
+              <span>Upload Video</span>
+              <input
+                className="builder-upload-input"
+                type="file"
+                accept="video/*"
+                onChange={(event) => {
+                  onUploadImage(event.target.files?.[0] ?? null);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+          ) : null}
+        </div>
+
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Poster Image" width="full">
+            <input
+              type="text"
+              value={posterUrl}
+              onChange={(event) =>
+                onChange((current) => ({
+                  ...current,
+                  posterUrl: normalizeBuilderAssetUrl(event.target.value)
+                }))
+              }
+              placeholder="/api/admin/media-file/..."
+            />
+          </BuilderModuleField>
+        </BuilderModuleFieldStrip>
+        <div className="builder-media-actions">
+          <button
+            className="secondary-button builder-gallery-button"
+            onClick={() => setOpenVideoPicker("poster")}
+            type="button"
+          >
+            Choose Poster
+          </button>
+        </div>
+        {needsPoster ? (
+          <p className="builder-video-background-warning">
+            Without a poster image this section will be blank until the video loads — and it is
+            what phones and visitors who have asked for reduced motion see instead of the video.
+          </p>
+        ) : null}
+
+        <BuilderModuleFieldStrip>
+          <BuilderModuleField label="Speed" width="select-sm">
+            <select
+              value={String(background.videoSpeed ?? 1)}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, videoSpeed: Number(event.target.value) }))
+              }
+            >
+              <option value="0.25">0.25x</option>
+              <option value="0.5">0.5x</option>
+              <option value="0.75">0.75x</option>
+              <option value="1">Normal</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+            </select>
+          </BuilderModuleField>
+
+          <BuilderModuleField label="Loop" width="check">
+            <input
+              type="checkbox"
+              checked={background.videoLoop !== false}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, videoLoop: event.target.checked }))
+              }
+            />
+          </BuilderModuleField>
+
+          <BuilderModuleField label="Start At" width="num">
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={String(background.videoTrimStart ?? 0)}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, videoTrimStart: Number(event.target.value) }))
+              }
+            />
+          </BuilderModuleField>
+
+          <BuilderModuleField label="End At" width="num">
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={String(background.videoTrimEnd ?? 0)}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, videoTrimEnd: Number(event.target.value) }))
+              }
+            />
+          </BuilderModuleField>
+
+          <BuilderModuleField label="Blur" width="num">
+            <input
+              type="number"
+              min={0}
+              max={20}
+              value={String(background.videoBlur ?? 0)}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, videoBlur: Number(event.target.value) }))
+              }
+            />
+          </BuilderModuleField>
+
+          <BuilderModuleField label="Focus X" width="num">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={String(background.videoFocalX ?? 50)}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, videoFocalX: Number(event.target.value) }))
+              }
+            />
+          </BuilderModuleField>
+
+          <BuilderModuleField label="Focus Y" width="num">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={String(background.videoFocalY ?? 50)}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, videoFocalY: Number(event.target.value) }))
+              }
+            />
+          </BuilderModuleField>
+
+          <BuilderModuleField label="Play On Phones" width="check">
+            <input
+              type="checkbox"
+              checked={background.videoPlayOnMobile === true}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, videoPlayOnMobile: event.target.checked }))
+              }
+            />
+          </BuilderModuleField>
+        </BuilderModuleFieldStrip>
+        <p className="builder-video-background-note">
+          Phones show the poster instead unless Play On Phones is on — a background video is
+          megabytes of someone&rsquo;s cell data. Leave both trim boxes at 0 to play the whole clip.
+        </p>
+        {videoGallery}
+      </div>
+    );
   }
 
   // When no external gallery callback is wired (e.g. cell/page/poll
@@ -114,6 +336,7 @@ export function BuilderBackgroundControls({
                 <option value="color">Color</option>
                 <option value="gradient">Gradient</option>
                 <option value="image">Image</option>
+                {allowVideo ? <option value="video">Video</option> : null}
                 <option value="style">Style</option>
               </select>
             </BuilderModuleField>
@@ -232,6 +455,8 @@ export function BuilderBackgroundControls({
             {fallbackGallery}
           </>
         ) : null}
+
+        {renderVideoControls()}
       </div>
     );
   }
@@ -243,22 +468,19 @@ export function BuilderBackgroundControls({
           <span>{label}</span>
           <select
             value={background.mode}
-            onChange={(event) => {
-              const mode = event.target.value as BackgroundSettings["mode"];
-              if (mode === "none") {
-                onChange(() => createDefaultBackgroundSettings());
-                return;
-              }
-              onChange((current) => ({
-                ...current,
-                mode
-              }));
-            }}
+            /*
+             * Routed through the shared handler rather than repeating its
+             * logic, which is what this branch used to do — the two layouts
+             * had already drifted, with only the horizontal one seeding theme
+             * colours on a mode change.
+             */
+            onChange={(event) => handleModeChange(event.target.value as BackgroundSettings["mode"])}
           >
             <option value="none">None</option>
             <option value="color">Color</option>
             <option value="gradient">Gradient</option>
             <option value="image">Image</option>
+            {allowVideo ? <option value="video">Video</option> : null}
             <option value="style">Style</option>
           </select>
         </label>
@@ -371,6 +593,8 @@ export function BuilderBackgroundControls({
           {fallbackGallery}
         </div>
       ) : null}
+
+      {renderVideoControls()}
     </div>
   );
 }

@@ -5,7 +5,8 @@ import type { BackgroundSettings, BuilderTemplateLayout, BuilderTemplateSection 
 import {
   getLayoutColumnPercents,
   getLayoutColumns,
-  normalizeSignedOffsetValue
+  normalizeSignedOffsetValue,
+  seedVideoBackgroundOverlayScreen
 } from "@/lib/builder-template";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
@@ -33,6 +34,32 @@ function updateSectionBackground(
   updater: (background: BackgroundSettings) => BackgroundSettings
 ) {
   onUpdateSection((current) => ({ ...current, background: updater(current.background) }));
+}
+
+/**
+ * The row's background mode, plus the one thing choosing Video also does:
+ * turn the tint on (operator's call, 2026-08-31 — "Default overlay tint ON").
+ *
+ * It seeds, it never removes. An overlay the operator already configured is
+ * left exactly as it is, and switching AWAY from Video does not tear the tint
+ * back out — a mode change made for one reason must not silently delete a
+ * setting he can see and did not ask about.
+ *
+ * The tint is a SECTION setting, not part of BackgroundSettings, which is why
+ * this lives here rather than inside the background picker: the picker only
+ * ever sees the background object.
+ */
+function changeSectionBackgroundMode(
+  onUpdateSection: BuilderSectionControlsProps["onUpdateSection"],
+  mode: BackgroundSettings["mode"]
+) {
+  onUpdateSection((current) => ({
+    ...current,
+    background: { ...current.background, mode },
+    ...(mode === "video"
+      ? { overlayScreen: seedVideoBackgroundOverlayScreen(current.overlayScreen) }
+      : {})
+  }));
 }
 
 export function BuilderSectionControls({
@@ -334,16 +361,17 @@ export function BuilderSectionControls({
                     <select
                       value={section.background.mode}
                       onChange={(event) =>
-                        updateSectionBackground(onUpdateSection, (current) => ({
-                          ...current,
-                          mode: event.target.value as BackgroundSettings["mode"]
-                        }))
+                        changeSectionBackgroundMode(
+                          onUpdateSection,
+                          event.target.value as BackgroundSettings["mode"]
+                        )
                       }
                     >
                       <option value="none">None</option>
                       <option value="color">Color</option>
                       <option value="gradient">Gradient</option>
                       <option value="image">Image</option>
+                      <option value="video">Video</option>
                       <option value="style">Style</option>
                     </select>
                   </BuilderSettingRow>
@@ -435,6 +463,7 @@ export function BuilderSectionControls({
       </div>
       <BuilderBackgroundControls
         hideModeRow
+        allowVideo
         label="Row Background"
         background={section.background}
         horizontal
