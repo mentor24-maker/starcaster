@@ -12,6 +12,16 @@ import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 type BuilderBackgroundControlsProps = {
   label: string;
+  /**
+   * What the MODE picker is called, when that differs from the group's own
+   * `label`. The overlay group is one control set worn twice — the same
+   * picker choosing a background on one row and a screen painted over it on
+   * the next — and "Background Type" sitting inside a group headed Overlay
+   * reads as the row's own background. The frozen vanilla builder solved it
+   * with `sectionLabel`; this is the same idea with a name that says which
+   * label it is. Defaults to `label`, so every existing caller is unchanged.
+   */
+  modeLabel?: string;
   background: BackgroundSettings;
   onChange: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
   onChooseImage?: () => void;
@@ -38,6 +48,7 @@ type BuilderBackgroundControlsProps = {
 
 export function BuilderBackgroundControls({
   label,
+  modeLabel,
   background,
   onChange,
   onChooseImage,
@@ -356,7 +367,7 @@ export function BuilderBackgroundControls({
       <div className="builder-background-controls builder-background-controls-horizontal">
         <BuilderModuleFieldStrip>
           {!hideModeRow ? (
-            <BuilderModuleField label={label} width="select-md">
+            <BuilderModuleField label={modeLabel ?? label} width="select-md">
               <select
                 value={background.mode}
                 onChange={(event) => handleModeChange(event.target.value as BackgroundSettings["mode"])}
@@ -494,7 +505,7 @@ export function BuilderBackgroundControls({
     <div className="builder-background-controls">
       <div className={compact ? "builder-background-inline-row" : undefined}>
         <label className="field">
-          <span>{label}</span>
+          <span>{modeLabel ?? label}</span>
           <select
             value={background.mode}
             /*
