@@ -1034,18 +1034,39 @@ token missing or revoked, the gate answers CANNOT TELL and stays shut, instead
 of quietly reverting to advisory and waving everything through. Inferring the
 mode from "is the token present?" would have exactly that hole.
 
-### Before ticking the box: two things must be true
+### Before ticking the box: three things must be true
 
-1. **The CI ClickUp token must exist.** The workflow reads
+**Read this list before the tick, not after.** Each item is a way for the gate
+to be *correct* and still stop every merge in the pipeline. Two are done; one is
+open.
+
+1. **The CI ClickUp token must exist.** ☐ OPEN. The workflow reads
    `secrets.CLICKUP_API_TOKEN` — the same name the rest of the repo uses
    (`scripts/clickup_direct.mjs`), not a new one invented for CI. **As of
    2026-08-25 this repository has no Actions secrets at all**, so the gate
    currently answers CANNOT TELL on every PR and, being advisory, exits 0.
    Adding it is Settings → Secrets and variables → Actions → New repository
-   secret.
-2. **Something must re-run the gate after a review lands.** Done as of
-   2026-08-26 — see "A stale gate is re-run, never merged on" below. It was
-   the follow-up that had to land before the box could be ticked.
+   secret. Its VALUE is a live secret, so it is Dane's keystroke
+   (`docs/DOCTRINE.md` §4.1).
+2. **Something must re-run the gate after a review lands.** ☑ DONE — task
+   86bbmk7pv, PR #443, 2026-08-31. See "A stale gate is re-run, never merged
+   on" below. Note the second round: the re-run was written, tested and
+   *unreachable in enforcing mode* because it sat below the red-check refusal
+   (`docs/DOCTRINE.md` §3.12). Green tests in advisory mode said nothing about
+   the mode that matters.
+3. **`npm run ship` must record the PR on its ticket.** ☐ OPEN — task
+   **86bbq7z1k**, Queued. Since task 86bbmmv7t the gate confirms the ticket
+   records *this* PR by reading its newest `PR opened:` line
+   (`loopTrail.prTrailLanded`); a ticket without one answers CANNOT TELL, which
+   is never a pass. That is deliberate and it fails closed — but
+   `scripts/ship_thread.cjs` contains no ClickUp interaction at all, so **every
+   hand-shipped and fast-tracked PR** would be blocked until somebody ran
+   `npm run clickup -- pr-opened --task <id> --pr <url>` by hand. The loops are
+   unaffected; they write the trail already.
+
+Ticking the box with 1 or 3 still open does not produce a gate that is too
+strict — it produces a pipeline that cannot merge anything at all, which is the
+same deadlock item 2 was written to prevent, arriving through a different door.
 
 ### A stale gate is re-run, never merged on (2026-08-26, task 86bbmk7pv)
 
