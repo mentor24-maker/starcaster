@@ -6,9 +6,14 @@ Style. Built 2026-08-30 to 08-31 across five pull requests (#474, #475, #476,
 (86bbqa7a5) and cells (86bbqa7a8) are specced and unbuilt.
 
 Read this before changing anything in
-`components/builder/builder-video-background-layer.tsx`, the video branch of
+`components/builder/builder-background-layer.tsx`, the video branch of
 `getBuilderBackgroundStyle`, or the Video panel in
 `builder-background-controls.tsx`.
+
+**That first file is no longer video-only, and neither is this document.** It
+was `builder-video-background-layer.tsx` until parallax shipped on 2026-08-31
+(86bbqazxv); it now carries every image background that drifts as well. See
+"The layer is shared with image backgrounds now", below.
 
 ---
 
@@ -130,6 +135,77 @@ Consequences worth knowing before editing this:
 
 ---
 
+## The layer is shared with image backgrounds now
+
+Parallax (2026-08-31, 86bbqazxv) is why `BuilderVideoBackgroundLayer` became
+`BuilderBackgroundLayer`. **An image background had never needed an element.**
+It is painted as an ordinary CSS background on the surface itself — which is
+fine until it has to *move*, because CSS on the surface cannot translate.
+
+That is the same argument that already said the page background and cell
+backgrounds must use THIS component rather than grow copies of it: two
+implementations of "pause when off screen" or "honour reduce motion" drift
+apart silently and only one of them ever gets fixed. One layer that can
+translate, used by image and video alike — not a video parallax and an image
+parallax.
+
+The rename is a rename. **The `<video>` element's own class names and data
+attributes are untouched**, so every render contract written against them
+still means exactly what it meant.
+
+### What the image layer does with the picture already there
+
+It paints the identical picture ON TOP of the surface's CSS background and
+translates that copy. Nothing is stripped from the surface. This is the poster
+idea from the top of this document applied a second time: with JavaScript off
+the layer never mounts, and the static background underneath is simply what
+the visitor sees — never blank, never mispositioned, and with no second code
+path to keep in step. Exactly like "show the still instead".
+
+### `background-attachment: fixed` was considered and rejected
+
+It is the obvious one-line answer and it is wrong twice over:
+
+- It is defeated by any ancestor carrying `transform`, `filter`, `perspective`,
+  `backdrop-filter`, a `will-change` naming one of those, or paint/layout
+  containment — the same six properties as `docs/DOCTRINE.md` §5.17, the
+  `blur(0px)` incident fixed in #327. The hazard is structural, not historical:
+  the moment a theme or effect puts a filter on an ancestor column, a
+  fixed-attachment background inside it silently stops parallaxing. No error,
+  no failing test.
+- iOS Safari ignores it outright.
+
+So the drift is computed and applied, which means it is arithmetic, which
+means it can be held still by a test — the `lib/builder-client/proximity-effects.ts`
+pattern, and for its stated reason: nothing in this repo tests CSS. The pure
+driver is `lib/builder-client/background-parallax.ts`
+(`backgroundParallaxGeometry`), scroll position and the element's box in, one
+offset out, unit tested in vitest alongside it. The layer is the thin renderer
+that asks it for every number.
+
+### The three things that keep it honest
+
+- **Reduced motion returns a flat zero**, read through the layer's exported
+  `prefersReducedMotion()` — one reading, shared, or "reduce motion" ends up
+  honoured by the video and ignored by the drift over it.
+- **The layer is taller than its section by the travel distance.** This is the
+  classic parallax bug: a layer the height of its band uncovers an edge as
+  soon as it moves. `image-parallax-never-uncovers-the-band` measures the gap
+  at every sampled scroll position.
+- **Off is off.** With `parallax` unset — the default — no layer mounts at all,
+  and an existing page renders byte-identically to before this shipped.
+
+### What the panel promises about phones
+
+The Motion note is mode-aware on purpose. An image background drifts on phones.
+A **video** background only drifts there if Play On Phones is on: with it off
+the clip is never loaded, so the poster is what visitors see and nothing moves.
+The panel says so rather than leaving the control silently dead — that was a
+condition of the ticket, and it is the rule to keep: a setting that does
+nothing on a phone must admit it in the panel.
+
+---
+
 ## The row overlay tint was normalized for months and never painted
 
 `normalizeRowOverlayScreenSettings` has existed in `builder-template.ts` all
@@ -184,9 +260,11 @@ Five, and the pattern is the same each time: everything reported success.
 
 ## Checking a change here
 
-`npm run check:render` carries six contracts for this feature, and reaching
-them needs no database, no login and no fixture — a video and a greyscale
-poster are committed at `public/images/render-fixture-background*`:
+`npm run check:render` carries eight `video-background-*` contracts and seven
+`*-parallax-*` ones, and reaching them needs no database, no login and no
+fixture — a video and a greyscale poster are committed at
+`public/images/render-fixture-background*`, and the parallax contracts reuse
+the same banner image every other image contract already uses:
 
 ```
 PORT=3058 node server.js

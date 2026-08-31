@@ -50,6 +50,15 @@ phones at all unless you switch that on, so there was nothing there to drift. Th
 note now says which is which and names the switch. A control that quietly does
 nothing on half the devices people use is worse than one that says so.
 
+A third pass caught something duller and just as real. This work renamed the one
+file that draws a background — it was the "video background" file, and it is not
+video-only any more — but two of the written guides still sent the reader to the
+old name, which is now a file that does not exist. Both were corrected, and the
+video guide was brought up to date to say that one layer now carries photos and
+clips alike, and why that was the point rather than a side effect. A guide that
+points at a deleted file is worse than no guide: it costs somebody the time to
+find out it is wrong before they can start.
+
 ## 2026-08-25 — The weekly report gathers itself now; the writing is still yours (#437)
 
 The first weekly report took most of an afternoon to put together. Almost none
