@@ -817,6 +817,20 @@ const buildPanelCheckSection = (ids) => {
   locked: false,
   alignment: 'left',
   widthMode: 'contained',
+  /*
+   * A VIDEO row background, so the Video sub-panel in Row Background actually
+   * renders and gets measured. Its controls only exist while the mode is
+   * "video", so on any other background this check would report a confident
+   * green having never seen them — the exact hole that let two staggered
+   * panels reach the operator in August 2026.
+   */
+  background: {
+    mode: 'video',
+    videoUrl: '/images/render-fixture-background.mp4',
+    posterUrl: '/images/render-fixture-background-poster.jpg',
+    videoSpeed: 1,
+    videoLoop: true,
+  },
   modules: [
     ...BUILDER_MODULE_TYPES.map((type) => {
       const base = createEmptyModule(type, 'main');

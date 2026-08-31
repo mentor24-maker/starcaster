@@ -49,7 +49,7 @@ function updateSectionBackground(
  * this lives here rather than inside the background picker: the picker only
  * ever sees the background object.
  */
-function changeSectionBackgroundMode(
+export function changeSectionBackgroundMode(
   onUpdateSection: BuilderSectionControlsProps["onUpdateSection"],
   mode: BackgroundSettings["mode"]
 ) {
