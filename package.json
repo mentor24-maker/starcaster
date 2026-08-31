@@ -86,6 +86,7 @@
     "env:local": "node scripts/db_use.mjs local",
     "node:whoami": "node scripts/node_role.mjs whoami",
     "node:owns": "node scripts/node_role.mjs owns",
+    "report:weekly": "node scripts/weekly_report.mjs",
     "doctor:node": "node scripts/doctor_node.mjs",
     "heartbeat": "doppler run --project starcaster --config dev --no-check-version -- node scripts/node_heartbeat.mjs",
     "report:failure": "doppler run --project starcaster --config dev --no-check-version -- node scripts/report_job_failure.mjs",

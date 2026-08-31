@@ -322,6 +322,12 @@ function usage(code = 2) {
   console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name <TAB> loop note');
   console.error('                                             the loop note is what a pass in flight looks like (e.g. a review already running)');
   console.error('                                             repo is the declared repo (repo:<name> tag); ?<name> = escalate, do not build');
+  console.error('  stage-counts [--list <id>] [--since YYYY-MM-DD] [--until YYYY-MM-DD]');
+  console.error('                                             every stage counted, as JSON, CLOSED TICKETS INCLUDED');
+  console.error('                                             ("Live" is a closed status, so the open-queue fetch cannot see it);');
+  console.error('                                             --since counts tickets closed on/after that date, --until');
+  console.error('                                             bounds the other end — without it the count runs to NOW,');
+  console.error('                                             so a report on an older week credits later closures to it');
   console.error('  get --task <id>                            one task: header lines, then "---", then the body markdown');
   console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
   console.error('  status --task <id> --status "In review" [--if-status "Queued"] [--assign <userId>] [--clear-assignees] [--no-auto-assign]');
@@ -433,6 +439,11 @@ async function fetchAllTasks(list, { includeClosed = false, fatal = true } = {})
   // the `queue` command wants only open work, and flipping it there would put
   // 66 shipped tickets in front of the loop.
   //
+  // `stage-counts` is the caller that needs them. The weekly report counts the
+  // pipeline by stage, and "Live" IS a closed status — without this the report
+  // counts every stage except the one that means the work shipped, and prints
+  // a confident 0 (task 86bbkw1mn).
+  //
   // fatal:false — die() ends in process.exit(1), so a caller that WANTS to
   // handle a failed read cannot: its try/catch never runs and loop-build reads
   // exit 1 as "proceed, unbounded by the cap". That inverted the wip-check
@@ -498,6 +509,61 @@ function gh(args) {
     stdout: String(out.stdout || ''),
     stderr: String(out.stderr || out.stdout || '').trim(),
   };
+}
+
+/**
+ * "Is the merge side full?" — the ONE probe, wired to this script's `gh` and
+ * `fetchAllTasks`.
+ *
+ * WHY IT IS A FUNCTION AND NOT TWO CALL SITES (2026-08-31, task 86bbq8br2).
+ * `wip-check` and `next-interval` each asked that question in their own words
+ * and got opposite answers: the claim gate reported room to claim while the
+ * sleep timer wrote "the work-in-progress cap is full" into the log and slept
+ * the maximum hour, with 38 tickets waiting. Neither was buggy in isolation.
+ * `next-interval` simply asked GitHub for `number,state` and passed no ticket
+ * statuses, so it took the documented conservative fallback of counting every
+ * open PR — including the four whose tickets were `Queued` for rework, which
+ * is the exact deadlock task 86bbm4zwd had already fixed for the claim gate.
+ *
+ * So the two things that have to match now live in one place: the `--json`
+ * field list (it MUST include `body` — that is how `classifyPrs` finds a PR's
+ * ticket, and without it every PR falls into "no ticket found" and counts),
+ * and `include_closed` on the queue read (a zombie PR's ticket is `Live`, and
+ * without it that PR reports as having no ticket at all).
+ *
+ * The callers still differ in the direction they fail, which is deliberate and
+ * lives with them: `wip-check` fails open, `next-interval` fails toward capped.
+ *
+ * Both I/O calls THROW on failure and `wipCap.probeCap` catches them, which is
+ * also what keeps the old last-resort guard here: an unhandled rejection is
+ * exit 1, and loop-build reads exit 1 as "proceed, unbounded by the cap".
+ */
+function capProbe({ repo } = {}) {
+  return wipCap.probeCap({
+    cap: wipCap.resolveCap(process.env),
+    listOpenPrs: async () => {
+      const args = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state,body'];
+      if (repo) args.push('--repo', repo);
+      const out = gh(args);
+      if (!out.ok) throw new Error(out.stderr.slice(0, 200) || 'gh failed');
+      try {
+        return JSON.parse(out.stdout);
+      } catch {
+        throw new Error('gh returned output that is not JSON');
+      }
+    },
+    readTicketStatuses: async () => {
+      // fatal:false is REQUIRED — see fetchAllTasks. With the default, a
+      // routine ClickUp 429 exits 1 before this function can report anything.
+      const listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+      if (!Array.isArray(listed.tasks) || !listed.tasks.length) {
+        throw new Error(listed.failed || 'no tasks came back');
+      }
+      const byId = Object.create(null);
+      for (const t of listed.tasks) byId[String(t.id)] = t.status?.status ?? '';
+      return byId;
+    },
+  });
 }
 
 /** Post to the party line. Returns ok/why so a caller can report a failure
@@ -1502,79 +1568,26 @@ if (cmd === 'whoami') {
   //
   // Reads only. A capped pass must leave the queue exactly as it found it, so
   // nothing here writes to ClickUp — no status, no comment, no Loop note.
-  const cap = wipCap.resolveCap(process.env);
-  const repoArg = arg('repo') || '';
-  // `body` carries the ticket link every loop-opened PR must have (pr-opened
-  // refuses without one), which is how a PR is matched to its ticket status.
-  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state,body'];
-  if (repoArg) listArgs.push('--repo', repoArg);
+  // One shared probe (`capProbe`), so this and `next-interval` cannot answer
+  // the same question differently again — task 86bbq8br2. What stays here is
+  // only what is genuinely this command's own: it fails OPEN.
+  const probe = await capProbe({ repo: arg('repo') || '' });
 
-  const out = gh(listArgs);
-  if (!out.ok) {
-    const undecided = wipCap.undeterminedDecision(out.stderr.slice(0, 200) || 'gh failed');
-    console.error(undecided.message);
-    process.exit(undecided.code);
-  }
-  let prs;
-  try { prs = JSON.parse(out.stdout); } catch {
-    const undecided = wipCap.undeterminedDecision('gh returned output that is not JSON');
+  if (!probe.determined) {
+    const undecided = wipCap.undeterminedDecision(probe.why);
     console.error(undecided.message);
     process.exit(undecided.code);
   }
 
-  // An open PR only counts when its TICKET says the work is in flight
-  // (task 86bbm4zwd). A ticket sent back to Queued with its PR still open is
-  // rework the loop must be free to claim; counting it deadlocked the build
-  // loop for four hourly passes on 2026-08-25.
-  //
-  // If the queue cannot be read, ticketStatusById stays undefined and
-  // wipDecision falls back to counting every open PR — the older, MORE
-  // restrictive reading. Failing toward the cap costs idle time; failing away
-  // from it costs the churn the cap exists to prevent.
-  //
-  // include_closed:true is REQUIRED here — a zombie PR's ticket is `Live`, and
-  // without it the ticket is simply absent from the map and the PR reports as
-  // "no ticket found", sending the reader after drift that does not exist.
-  //
-  // fatal:false is REQUIRED here — see fetchAllTasks. With the default, a
-  // routine ClickUp 429 exits 1, which loop-build reads as "proceed, uncapped".
-  //
-  // The try/catch below is a LAST RESORT, and it is worth being precise about
-  // what it is and is not (review round 2). `fatal:false` covers a response
-  // that arrived and was not ok. `call()` covers a request that never arrived,
-  // by converting the rejection into a non-ok response. Between them every
-  // known failure already lands in the conservative fallback — this catch
-  // exists only so that a FUTURE change to any of that plumbing still cannot
-  // let an exception out of here, because an unhandled rejection is exit 1 and
-  // loop-build reads exit 1 as "proceed, unbounded by the cap".
-  //
-  // Being a backstop, it is the one layer here no test can isolate: with the
-  // two above it working, nothing reaches it. It also actively HID a bug once
-  // — the JSON guard in fetchAllTasks was break-tested and passed anyway,
-  // because this catch swallowed the TypeError and produced the same exit
-  // code. That is why the tests in wipCapOutage.test.js assert the REASON
-  // reported, not just the exit code: every guard is pinned by wording only it
-  // can produce, so this one cannot mask another one going missing again.
-  let ticketStatusById;
-  let listed = null;
-  try {
-    listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
-  } catch (err) {
-    listed = { tasks: null, res: null, failed: String(err?.message || err) };
-  }
-  if (Array.isArray(listed.tasks) && listed.tasks.length) {
-    ticketStatusById = Object.create(null);
-    for (const t of listed.tasks) ticketStatusById[String(t.id)] = t.status?.status ?? '';
-  } else {
-    // Say WHY the stricter reading is in force. "6 open, cap 5" with no
-    // explanation is how the original deadlock stayed invisible for four
-    // passes; the same silence about a failed read would do it again.
-    console.error(`The Loop Queue could not be read (${listed.failed || 'no tasks came back'}), so every open PR is counted.`);
+  // Say WHY the stricter reading is in force. "6 open, cap 5" with no
+  // explanation is how the original deadlock stayed invisible for four
+  // passes; the same silence about a failed read would do it again.
+  if (!probe.statusesAvailable) {
+    console.error(`The Loop Queue could not be read (${probe.queueFailure}), so every open PR is counted.`);
   }
 
-  const decision = wipCap.wipDecision({ prs, cap, ticketStatusById });
-  console.log(decision.message);
-  process.exit(decision.code);
+  console.log(probe.decision.message);
+  process.exit(probe.decision.code);
 
 } else if (cmd === 'next-interval') {
   // How long should this loop sleep before its next pass? Prints ONE INTEGER
@@ -1625,22 +1638,30 @@ if (cmd === 'whoami') {
   // only `loop-build` pays for asking.
   let capReached = false;
   if (loop === 'loop-build') {
-    // `--repo` pins the probe to a repository the way `wip-check` allows, so
-    // it is not silently cwd-dependent (review round 1).
-    const repo = arg('repo');
-    const capOut = gh(['pr', 'list', ...(repo ? ['--repo', repo] : []), '--state', 'open', '--limit', '200', '--json', 'number,state']);
-    let prs = null;
-    if (capOut.ok) { try { prs = JSON.parse(capOut.stdout); } catch { prs = null; } }
-    if (prs === null) {
+    // The SAME probe `wip-check` uses — ticket statuses and all. Before task
+    // 86bbq8br2 this read `number,state` and passed no statuses, so it counted
+    // PRs whose tickets were `Queued` for rework and reported a full cap while
+    // the claim gate reported room. `--repo` pins it to a repository the way
+    // `wip-check` allows, so it is not silently cwd-dependent (review round 1).
+    const probe = await capProbe({ repo: arg('repo') || '' });
+    if (!probe.determined) {
       // Unlike `wip-check`, this one assumes the cap IS full when it cannot
       // count. `wip-check` fails open because refusing there would stop all
       // work on a transient `gh` hiccup; here the pass has already run and the
       // only question is how long to sleep, so the safe direction is the long
       // one. Never silent.
       capReached = true;
-      console.error(`  (could not count open PRs — assuming the WIP cap is full, which lengthens this sleep rather than shortening it)`);
+      console.error(`  (could not count open PRs — ${probe.why}; assuming the WIP cap is full, which lengthens this sleep rather than shortening it)`);
     } else {
-      capReached = wipCap.wipDecision({ prs, cap: wipCap.resolveCap(process.env) }).code === 3;
+      if (!probe.statusesAvailable) {
+        console.error(`  (the Loop Queue could not be read — ${probe.queueFailure}; every open PR is counted, the conservative reading)`);
+      }
+      capReached = probe.decision.code === 3;
+      // Print the cap sentence itself, not just its effect. This is the line
+      // that makes a disagreement with `wip-check` visible in the log instead
+      // of having to be inferred from an interval, which is how the original
+      // took a morning to spot.
+      console.error(`  (cap: ${String(probe.decision.message).split('\n')[0]})`);
     }
   }
 
@@ -1721,6 +1742,66 @@ if (cmd === 'whoami') {
   }
   console.error(`${wanted.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list} (all pages; first line is the one to claim)`);
   if (res) reportLimits(res);
+
+} else if (cmd === 'stage-counts') {
+  // Every stage of the pipeline, counted, as JSON — for the weekly report
+  // (task 86bbkw1mn) and anything else that wants the shape of the queue
+  // rather than its contents.
+  //
+  // It is a command here, and not a `queue | wc -l` in the report script, for
+  // one reason: the token. Reading ClickUp means holding the API token, and
+  // the standing rule is that the token lives in exactly one script that
+  // Doppler feeds (DOCTRINE 4.1). A second reader would be a second place to
+  // get that wrong.
+  const list = arg('list') || LOOP_QUEUE_LIST;
+  const since = arg('since'); // YYYY-MM-DD; counts tickets CLOSED on/after it
+  // A floor with no ceiling counted everything closed from --since until NOW,
+  // so `--since 2026-08-25` on a window that ended the 25th was still counting
+  // tickets closed on the 28th. Right for a window ending today by accident,
+  // wrong for every other one.
+  const until = arg('until'); // YYYY-MM-DD; the other end of that count
+
+  // Work the range out BEFORE asking ClickUp for anything. A date typo is the
+  // caller's mistake either way, but finding it after the fetch spends a page
+  // of the API budget to tell them so.
+  let cutoff = null;
+  let ceiling = Infinity;
+  if (since) {
+    cutoff = Date.parse(`${since}T00:00:00Z`);
+    if (Number.isNaN(cutoff)) {
+      console.error(`--since "${since}" is not a YYYY-MM-DD date.`);
+      process.exit(2);
+    }
+    if (until) {
+      ceiling = Date.parse(`${until}T23:59:59.999Z`);
+      if (Number.isNaN(ceiling)) {
+        console.error(`--until "${until}" is not a YYYY-MM-DD date.`);
+        process.exit(2);
+      }
+      if (ceiling < cutoff) {
+        console.error(`--until "${until}" is before --since "${since}".`);
+        process.exit(2);
+      }
+    }
+  } else if (until) {
+    console.error('--until needs --since; a ceiling with no floor is not a window.');
+    process.exit(2);
+  }
+
+  const { tasks } = await fetchAllTasks(list, { includeClosed: true });
+  const byStatus = {};
+  for (const t of tasks) {
+    const key = (t.status?.status ?? 'unknown').toLowerCase();
+    byStatus[key] = (byStatus[key] || 0) + 1;
+  }
+  let closedInWindow = null;
+  if (cutoff !== null) {
+    closedInWindow = tasks.filter((t) => {
+      const closedAt = Number(t.date_closed);
+      return Number.isFinite(closedAt) && closedAt > 0 && closedAt >= cutoff && closedAt <= ceiling;
+    }).length;
+  }
+  console.log(JSON.stringify({ list, total: tasks.length, byStatus, since: since || null, until: until || null, closedInWindow }, null, 2));
 
 } else if (cmd === 'get') {
   const task = arg('task');

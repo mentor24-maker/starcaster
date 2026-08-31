@@ -546,6 +546,69 @@ carries something (a preamble, a header, a marker), a wholly empty read is
 value rather than one by preference; a provider populating a different field
 than the one you wrote is a real behaviour, not a corruption.
 
+### 3.15 A declared behaviour is not a running one — watch it, do not read one frame
+
+Three render contracts were written for the video-background crossfade
+(2026-08-31, #478). Two of them assert the pair of `<video>` elements exists
+and that the trailing copy carries an `opacity` transition. Both are true
+statements about the DOM and both are worthless.
+
+The handoff was then disabled on purpose — the opaque copy never swaps, the
+loop hard-cuts, the feature is completely dead — and `check:render` reported
+**19/19 green**. Nothing had to go wrong for that; the elements were still
+there, and a `transition` property is a declaration about what *would* happen
+if something changed, not evidence that anything does.
+
+This is the same species as the two already recorded in §5.14: an
+`animation-name` naming keyframes that do not exist, and a `--sc-effect-*`
+variable compared against itself. A property that describes motion is not
+motion. Here the tell is sharper, because the property was correct and the
+thing that never ran was ours.
+
+What proves a dissolve is **two copies both partly visible at the same
+instant**, which does not exist in any single frame. So `sample()` in
+`scripts/ui/check_render.mjs` grew a `series` option — named selectors, a list
+of properties, a count and an interval — and hands the whole run to `expect`.
+The contract now fails with the opacity pairs it actually saw:
+
+```
+✗ video-background-crossfade-actually-dissolves: the two copies were never
+  both partly visible across 45 frames — the loop is still a hard cut with a
+  transition property on it. Opacity pairs seen: 1/0.
+```
+
+**Do this:** if the behaviour is a CHANGE — a fade, a hand-off, a debounce, a
+retry, a thing that settles — the check has to watch it happen. Reading one
+frame can only ever confirm the setup. And before believing any new contract,
+break the behaviour it guards and watch it fail; every check in this repo that
+skipped that step went on to report clean over something broken.
+
+### 3.16 An absence has to be a stated expectation, never a silent not-found
+
+The same feature needed the opposite assertion: under reduced motion, and at
+phone width, the layer must render **no `<video>` element at all** — the poster
+underneath is the answer (`docs/VIDEO_BACKGROUNDS.md`).
+
+`check:render` could not express that. Its first rule is that nothing measured
+is a failure, never a pass — which is right, and which made "this must not be
+here" unwritable. Left as-is, the fallbacks would have had no coverage at all,
+and their failure mode is invisible to whoever is not affected: the page looks
+perfectly fine to anyone who has not asked for reduced motion and is not on a
+phone.
+
+So `absent: true` inverts that one rule explicitly, and says so in the failure
+message. Explicit is the whole point — a check that treats "I found nothing" as
+a pass by default is how §3.11 and §3.2 keep being relearned. Paired with it,
+`emulate` (reduced motion, viewport) puts the browser into the condition the
+behaviour exists for, because the only prior evidence those paths worked was
+somebody remembering to toggle a system setting by hand.
+
+**Do this:** when correct behaviour is that something does not appear, assert
+the absence deliberately, and make the assertion distinguishable from the check
+having failed to look. Then verify the pair from both sides — the presence
+contract is what stops the absence contract passing because the feature never
+rendered at all.
+
 ---
 
 ## 4. Secrets
@@ -880,7 +943,23 @@ So it was built (#315, #318, #320, #322):
 - Horizontal-overflow on a rendered page is **not** asserted anywhere: the
   Builder preview shell clips it, so the assertion was written, tried, and
   deleted when it could not be made to fail.
-- Only the `image` module family has real contracts today.
+- Only the `image` module family has real contracts today. *(2026-08-31: the
+  video background has six as well — `docs/VIDEO_BACKGROUNDS.md`.)*
+
+#### What `check:render` grew on 2026-08-31, and what each was built against
+
+Three capabilities, each added because a contract could not otherwise be
+written — or worse, could be written and could not fail:
+
+| Capability | Lets a contract say | Built against |
+|---|---|---|
+| `emulate` | put the browser in a condition first — `reducedMotion`, `viewport` | the reduced-motion and phone fallbacks, whose only prior evidence was somebody remembering to toggle a system setting by hand |
+| `absent: true` | **this must NOT be here** — inverts "nothing measured is a failure", explicitly (§3.16) | the same two fallbacks, whose correct behaviour is rendering no element at all |
+| `series` | watch named selectors over N frames and judge the run (§3.15) | a crossfade that reported 19/19 green with its handoff disabled and the loop hard-cutting |
+
+They are general. Any contract can use them, and `series` is the answer for
+anything whose truth is a change rather than a state — a fade, a hand-off, a
+debounce, something that settles.
 
 So the first paragraph stands: **the verification for a visual change is
 still a browser measurement or the operator's eye.** These checks widen what
