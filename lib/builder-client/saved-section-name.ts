@@ -29,7 +29,7 @@
  * the rule here rather than in routes/builder.js avoids a hand-ported CommonJS
  * twin of the kind `hasSectionDrifted` needs (./section-drift).
  */
-import { describeUsage, type BlockUsage } from "./shared-block-usage";
+import { type BlockUsage } from "./shared-block-usage";
 
 /**
  * Matches `safeText(input.name, 255)` in lib/builderSavedSectionsStore.js and
@@ -62,7 +62,14 @@ export function savedSectionTitleChanges(
 ): boolean {
   const title = savedSectionTitleFor(name);
   if (!title) return false;
-  return String(section?.title ?? "").trim() !== title;
+  // EXACT, not trimmed. The comparison has to be against the string that will
+  // actually be stored, or the guard reports "no change" while the write moves
+  // the value: a copy titled "  Header  " under the name "Header" was left
+  // alone here, the master was written with "Header", and `hasSectionDrifted`
+  // — which compares content verbatim — then read the copy as hand-edited the
+  // instant it relinked. Same shape for a title past SAVED_SECTION_NAME_MAX,
+  // where the stamp truncates and the untouched copy does not.
+  return String(section?.title ?? "") !== title;
 }
 
 /**
@@ -82,25 +89,119 @@ export function applySavedSectionName<T extends TitledSection>(
 }
 
 /**
+ * The row name a push FROM a page leaves on the master.
+ *
+ * The page's own title becomes the master's name — that push is the one path
+ * that has ever moved the stamped title — and an untitled section keeps the
+ * name the master already has, because a push must never blank it.
+ *
+ * It lives here rather than inline at the call site because TWO places need
+ * the same answer: the push itself, and the dialog that warns about it before
+ * the write. Those were the same expression written twice, and the dialog's
+ * copy is exactly what went stale.
+ */
+export function savedSectionNameAfterPush(
+  section: TitledSection | null | undefined,
+  currentName: string | null | undefined
+): string {
+  return savedSectionTitleFor(section?.title) || String(currentName ?? "").trim();
+}
+
+/**
  * The extra line for the impact dialog when a save also moves the name.
  *
- * `null` when nothing moves or nothing follows — the dialogs already return
- * null in those cases, and a rename nobody else sees is not worth a sentence.
+ * Takes the master's CURRENT ROW NAME and the name it is about to carry —
+ * never a stamped content title. That distinction is the whole correctness of
+ * this function. The row name is the thing a save renames; on the ~550 legacy
+ * masters whose `name` and `section.title` still disagree, comparing the
+ * stamps asked whether "Menu Banner" was becoming "Menu Banner", answered no,
+ * and stayed silent while the row name went from "2a - Header" to
+ * "Menu Banner" — the reported bug again, reached through the other door.
+ *
+ * `drifted` is the count from `driftedFollowingPages`: those copies are
+ * skipped by the fan-out, so they keep their old stamp. Stating the reach
+ * without it put two different counts in one dialog, directly under the
+ * drift-aware sentence from `describePushImpact`.
+ *
+ * `null` when nothing moves or the rename reaches no page — the dialogs
+ * already return null in those cases, and a rename nobody else sees is not
+ * worth a sentence.
  */
 export function describeSavedSectionRename(
-  section: TitledSection | null | undefined,
-  name: string | null | undefined,
-  usage: BlockUsage | null | undefined
+  previousName: string | null | undefined,
+  nextName: string | null | undefined,
+  usage: BlockUsage | null | undefined,
+  drifted = 0
 ): string | null {
-  if (!savedSectionTitleChanges(section, name)) return null;
-  const pages = usage?.pages ?? 0;
-  if (pages < 1) return null;
+  const previous = String(previousName ?? "").trim();
+  const next = savedSectionTitleFor(nextName);
+  if (!next || previous === next) return null;
 
-  const previous = String(section?.title ?? "").trim();
-  const next = savedSectionTitleFor(name);
+  const pages = usage?.pages ?? 0;
+  const willRename = Math.max(0, pages - Math.max(0, drifted));
+  if (willRename < 1) return null;
+
+  const reach = willRename === 1 ? "1 page" : `${willRename} pages`;
   return previous
-    ? `This also renames it on ${describeUsage(usage)} — they currently show "${previous}", and will show "${next}".`
-    : `This also renames it on ${describeUsage(usage)}, which will show "${next}".`;
+    ? `This also renames it on ${reach} — they currently show "${previous}", and will show "${next}".`
+    : `This also renames it on ${reach}, which will show "${next}".`;
+}
+
+/** The shape this needs off a stored master — everything else rides along. */
+export type StoredMasterSection = Record<string, unknown> & {
+  background?: unknown;
+  modules?: unknown;
+};
+
+/**
+ * The page's own copy of a section, after that copy has been pushed over its
+ * master (`overwriteCanonicalFromSection`, components/admin-builder-editor.tsx).
+ *
+ * It takes the master's content AS THE SERVER STORED IT, keeping only this
+ * copy's own `id`. Relinking used to mean setting `savedSectionId` and
+ * `canonical` on the copy and nothing more — so the copy went on holding the
+ * client-side object it was pushed from, while the master held the server's
+ * normalised version of it. `hasSectionDrifted` (./section-drift) compares
+ * content verbatim, so the copy read as hand-edited THE INSTANT it relinked,
+ * and every later fan-out skipped the page. Two ways that bit:
+ *
+ *   - the title. An untitled page section pushed up named the master from the
+ *     master's own row name, leaving the copy's title empty and the master's
+ *     set — and the same for a title that only differed by padding or by the
+ *     {@link SAVED_SECTION_NAME_MAX} truncation.
+ *   - every other field. The save route normalises a section on write, filling
+ *     in some forty defaults the client never sent, so the two differed even
+ *     when the titles matched exactly.
+ *
+ * Taking the stored master wholesale answers both, and cannot be reopened by
+ * a new default appearing in the normaliser. It is the same move
+ * `handleToggleSectionCanonical` already makes when it reverts a copy to its
+ * master — including the fresh `background` and `modules` copies, so the
+ * page's draft never shares mutable objects with the saved-sections list.
+ */
+export function relinkPushedSection<M extends StoredMasterSection>(
+  section: { id?: string } | null | undefined,
+  storedMasterSection: M,
+  savedSectionId: string
+): M & { id?: string; savedSectionId: string; canonical: true } {
+  const master = (storedMasterSection ?? {}) as M;
+  const background = master.background;
+  const modules = master.modules;
+  return {
+    ...master,
+    ...(background && typeof background === "object" ? { background: { ...(background as object) } } : {}),
+    ...(Array.isArray(modules)
+      ? {
+          modules: modules.map((module) => ({
+            ...(module as object),
+            settings: { ...((module as { settings?: object })?.settings ?? {}) },
+          })),
+        }
+      : {}),
+    id: section?.id,
+    savedSectionId,
+    canonical: true,
+  };
 }
 
 export type SharedSectionTitleInput = {

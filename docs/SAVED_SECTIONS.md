@@ -83,12 +83,30 @@ end — `lib/builder-client/saved-section-name.ts`:
   line — "This also renames it on 35 pages" — to the manager's confirm and to
   `BuilderSectionSaveModal`. Null when the name is not moving, or when nothing
   follows the master.
-- **The card shows the master's name, not the stamp.** `resolveSharedSectionTitle`
+
+  It compares the master's **row name** against the name the save will leave on
+  it — never a stamped content title, and this is the whole correctness of it.
+  Asking the stamps instead was silent on exactly the rows that needed it: on a
+  legacy master where `name` is "2a - Header" and `section.title` is still
+  "Menu Banner", a push from a page carrying the stale stamp compared
+  "Menu Banner" with "Menu Banner", saw nothing moving, and said nothing —
+  while the row name went to "Menu Banner" and the manager rename was undone.
+  The reported bug again, reached through the other door (review send-back,
+  2026-08-30).
+
+  Its count also subtracts the drifted followers, because they are skipped by
+  the fan-out and keep their old stamp. It sits directly under
+  `describePushImpact`, which already subtracts them, and two different numbers
+  in one dialog is worse than either number alone.
+- **Every list shows the master's name, not the stamp.** `resolveSharedSectionTitle`
   titles a following copy by its master, so a stale stamp cannot contradict the
   manager on screen. No migration is being run over the rows that already
   diverge; they simply stop being visible, and converge the next time the
   section is saved. A copy whose master was deleted falls back to its stamp,
-  because then the stamp is the only name there is.
+  because then the stamp is the only name there is. The same resolver names a
+  section in the "add saved section under…" picker (`sectionDisplayName`), which
+  listed raw `section.title` and so offered a section under a different name
+  from the one its own card was showing, one click away.
 - The lineage line beneath drops `Copy of "…"` when the heading already names
   the master (`namedInTitle`, `./block-lineage.ts`) and keeps the reach.
 
@@ -112,6 +130,20 @@ write the saved-section manager makes. The route rewrites the original and then
 **and what changes on each** (§3a); the message afterwards gives the tally and
 an **Undo this update** button. The instance you saved from is relinked,
 because the original now holds exactly its content.
+
+**The relink takes the master back as the SERVER stored it**
+(`relinkPushedSection`), keeping only the copy's own `id`. Setting
+`savedSectionId` and `canonical` on the copy and stopping there is not enough,
+and the gap is not small: the save route normalises a section on write, filling
+in some forty defaults the client never sent, so the copy differed from the
+master the moment it rejoined it. `hasSectionDrifted` compares content verbatim,
+so the card flipped to **Changed** on the spot and every later fan-out skipped
+that page — the state the relink exists to prevent, created by the relink. The
+title could differ on its own too, whenever the page's section was untitled, or
+padded, or past the 255-character truncation. Taking the stored master wholesale
+answers all of it at once, and cannot be reopened by a new default appearing in
+the normaliser. It is the same move `handleToggleSectionCanonical` already makes
+when it reverts a copy to its master.
 
 **Save as a new section.** `POST /api/builder/saved-sections` — files a separate
 original under a name you type. The old, and until 2026-08-16 the only,

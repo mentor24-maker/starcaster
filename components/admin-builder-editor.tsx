@@ -79,7 +79,9 @@ import { diffSavedSectionOverwrite } from "@/lib/saved-section-diff";
 import {
   applySavedSectionName,
   describeSavedSectionRename,
-  savedSectionTitleFor
+  relinkPushedSection,
+  resolveSharedSectionTitle,
+  savedSectionNameAfterPush
 } from "@/lib/saved-section-name";
 import { getSectionContent, hasSectionDrifted } from "@/lib/section-drift";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
@@ -309,12 +311,42 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     if (!sectionSaveChoice || !sectionSaveChoiceMaster) return null;
     const section = draft.layoutSections.find((candidate) => candidate.id === sectionSaveChoice.sectionId);
     if (!section) return null;
+    // The master's ROW NAME against the name this push will leave on it. Asking
+    // the master's stamped title instead read as "no change" on exactly the
+    // rows where the rename was about to be undone, and the same expression is
+    // used by the push itself so the two cannot answer differently.
     return describeSavedSectionRename(
-      sectionSaveChoiceMaster.section,
-      section.title,
-      savedSectionUsage.get(sectionSaveChoice.savedSectionId)
+      sectionSaveChoiceMaster.name,
+      savedSectionNameAfterPush(section, sectionSaveChoiceMaster.name),
+      savedSectionUsage.get(sectionSaveChoice.savedSectionId),
+      sectionSaveDrift.count
     );
-  }, [sectionSaveChoice, sectionSaveChoiceMaster, draft.layoutSections, savedSectionUsage]);
+  }, [sectionSaveChoice, sectionSaveChoiceMaster, sectionSaveDrift, draft.layoutSections, savedSectionUsage]);
+  /**
+   * The ONE name a section goes by on screen, wherever it is listed.
+   *
+   * The same rule the section card applies (`resolveSharedSectionTitle`): a
+   * copy that follows a master is shown under the master's name. The "add
+   * saved section under…" picker listed `section.title` straight, so a section
+   * whose card now reads "2a - Header" was offered as "2 - Menu Banner" one
+   * click away — a second name on screen, which is the whole complaint this
+   * ticket is about.
+   */
+  const sectionDisplayName = useCallback(
+    (section: BuilderTemplateSection, index: number) => {
+      const sectionAny = section as BuilderTemplateSection & { savedSectionId?: string; canonical?: boolean };
+      const master = sectionAny.savedSectionId
+        ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)
+        : undefined;
+      return resolveSharedSectionTitle({
+        isFollowing: sectionAny.canonical === true,
+        masterName: master?.name,
+        title: section.title,
+        fallback: `Section ${index + 1}`,
+      });
+    },
+    [savedSections]
+  );
   const workspaceThemeStyles = useMemo(() => buildBuilderThemeStyles(linkedTheme), [linkedTheme]);
   // What the canvas paints type with. The shell colours above already read
   // `linkedTheme` — the live record — while the type vars read the copy frozen
@@ -990,7 +1022,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // rides along in `content`, so the row name follows it rather than being
     // left behind as a second, stale name. An untitled section keeps the name
     // the original already has — a push must never blank it.
-    const nextName = savedSectionTitleFor(section.title) || master.name;
+    const nextName = savedSectionNameAfterPush(section, master.name);
     const saved = await saveSavedSection(savedSectionId, nextName, content, master.isPrivate === true, {
       // The dialog just listed every page this touches; a second confirm on top
       // of it is the kind of nagging people learn to click through.
@@ -1001,7 +1033,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     setSectionSaveChoice(null);
 
     if (saved) {
-      updateSection(sectionId, (s) => ({ ...s, savedSectionId, canonical: true } as BuilderTemplateSection));
+      // Take the master back as the server stored it, rather than only flipping
+      // this copy's flags — see `relinkPushedSection`. The route normalises a
+      // section on write, and the title can move too, so a flags-only relink
+      // left the copy differing from the master it had just rejoined: Changed
+      // on the spot, and skipped by every later fan-out.
+      updateSection(sectionId, (s) => relinkPushedSection(s, saved.section, savedSectionId) as BuilderTemplateSection);
     }
   }
 
@@ -1435,11 +1472,14 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       /** Appended to the outcome message — what is still left to do. */
       note?: string;
     } = {}
-  ): Promise<boolean> {
+  ): Promise<BuilderSavedSectionRecord | null> {
+    // The stored record, not a bare `true`: a caller that relinks a page's copy
+    // needs the master's content AS SAVED, because the route normalises it on
+    // write and the copy has to match it exactly to count as Following.
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("Saved section name is required.");
-      return false;
+      return null;
     }
 
     // Say what this will touch BEFORE writing. Saving a master rewrites the
@@ -1448,7 +1488,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // The master's CURRENT content (before this save lands) is what a
     // drifted copy is measured against — never the new content about to
     // be written, which every following page differs from by definition.
-    const currentMaster = savedSections.find((ss) => ss.id === sectionId)?.section ?? null;
+    const currentRecord = savedSections.find((ss) => ss.id === sectionId) ?? null;
+    const currentMaster = currentRecord?.section ?? null;
     const drift = driftedFollowingPages(pages, sectionId, currentMaster);
 
     // ONE name. The row's `name` and the content's `title` were two separate
@@ -1456,13 +1497,22 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     // was undone by its own fan-out, which pushes the master's content (stale
     // title included) over every follower. Stamping it here is what makes the
     // rename survive the push. See @/lib/saved-section-name.
-    const renameNotice = describeSavedSectionRename(section, trimmedName, savedSectionUsage.get(sectionId));
+    // The master's row name is what a rename moves — asking `section` here
+    // compared the content being WRITTEN against the name being written with
+    // it, which on a push from a page is the same string by construction and
+    // so could never report anything.
+    const renameNotice = describeSavedSectionRename(
+      currentRecord?.name,
+      trimmedName,
+      savedSectionUsage.get(sectionId),
+      drift.count
+    );
     const named = applySavedSectionName(section, trimmedName);
 
     if (!options.skipImpactConfirm) {
       const impact = describePushImpact(trimmedName, savedSectionUsage.get(sectionId), drift.count);
       const prompt = impact && renameNotice ? `${impact}\n\n${renameNotice}` : impact;
-      if (prompt && !window.confirm(prompt)) return false;
+      if (prompt && !window.confirm(prompt)) return null;
     }
 
     setIsSaving(true);
@@ -1517,10 +1567,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       setPropagationUndo(runId && updated ? { runId, pages: updated, name: data.savedSection.name } : null);
       // Those pages now hold new content — refresh so the counts stay true.
       await loadPages();
-      return true;
+      return data.savedSection;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save saved section.");
-      return false;
+      return null;
     } finally {
       setIsSaving(false);
     }
@@ -3241,7 +3291,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                 }}
                 type="button"
               >
-                {index + 1}. {section.title?.trim() || `Section ${index + 1}`}
+                {index + 1}. {sectionDisplayName(section, index)}
               </button>
             ))}
           </div>
