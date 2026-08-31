@@ -26,7 +26,7 @@
  * run to exercise — which is exactly how an untested rule rots.
  */
 
-const { bodyNamesTicket } = require('./clickupTicketLink.js');
+const { findTicketId } = require('./clickupTicketLink.js');
 
 /** The one spelling of a ticket URL, shared with the matcher that reads it. */
 function ticketUrl(taskId) {
@@ -111,9 +111,21 @@ function decideTrailWrite({ taskId, prNumber } = {}) {
  * here is what makes acceptance criterion 1 reachable at all; without it, every
  * ship on a stamped branch would post the trail request and get exit 4 back.
  *
- * Idempotent by the SAME matcher `pr-opened` and the review gate use, so a body
- * that already links the ticket — in either live URL shape, written by hand or
- * by a previous run — is returned untouched rather than gaining a second copy.
+ * Idempotent by the SAME question the gate asks, so a body that already RESOLVES
+ * to this ticket — in either live URL shape, written by hand or by a previous
+ * run — is returned untouched rather than gaining a second copy.
+ *
+ * "Resolves to", not "mentions". Round 2 asked the weaker question
+ * (`bodyNamesTicket`: is this ticket linked ANYWHERE) and so returned untouched
+ * a body that named this ticket further down while naming a DIFFERENT one first
+ * — which is the wrong-ticket defect below, still reachable, just needing one
+ * extra line in the body to trigger. The gate resolves the first link, so the
+ * only guard that can be trusted is the gate's own reader. A second copy of the
+ * link further down is harmless; a body that resolves to the wrong ticket is
+ * not.
+ *
+ * The invariant the tests assert, rather than another example:
+ * `findTicketId(bodyWithTicketLink(body, id)) === id` for every input.
  *
  * IT GOES FIRST, AND THAT IS THE WHOLE POINT. The gate resolves which ticket a
  * PR belongs to with `clickupTicketLink.findTicketId`, which returns the FIRST
@@ -133,7 +145,7 @@ function bodyWithTicketLink(body, taskId) {
   const text = String(body == null ? '' : body);
   const id = String(taskId || '').trim();
   if (!id) return text;
-  if (bodyNamesTicket(text, id, '')) return text;
+  if (findTicketId(text).toLowerCase() === id.toLowerCase()) return text;
   const rest = text.replace(/^\s+/, '').replace(/\s+$/, '');
   const link = `ClickUp: ${ticketUrl(id)}\n`;
   return rest ? `${link}\n${rest}\n` : link;
@@ -153,6 +165,18 @@ function bodyWithTicketLink(body, taskId) {
  * Exit 4 is called out separately because it is the one failure with a
  * different fix: the PR body has no link back to the ticket, so the repair is
  * to edit the body, not to re-run the command.
+ *
+ * BOTH repairs carry `--if-missing`, and the generic one does not claim the
+ * trail is missing. Round 2 said "this ticket now has no readable PR trail" and
+ * handed over a bare `pr-opened`, but exit 1 is also reachable AFTER the comment
+ * has posted — `clickup_direct.mjs` exits 1 when the POST succeeded and the
+ * read-back GET failed, printing "the comment posted but reading it back FAILED,
+ * so the trail is UNVERIFIED". On that path the sentence was false and the
+ * command added a SECOND identical "PR opened:" line, which is the duplication
+ * `--if-missing` exists to prevent (criterion 2). A repair should be safe to run
+ * twice by definition, so the flag belongs on both — and what exit 1 actually
+ * proves is that the command could not confirm the trail EITHER WAY, which is
+ * what it now says.
  */
 function describeTrailResult({ taskId, prNumber, code, output } = {}) {
   const id = String(taskId || '').trim();
@@ -177,7 +201,7 @@ function describeTrailResult({ taskId, prNumber, code, output } = {}) {
         'the ticket in its body, so the trail would only run one way. Nothing was written.\n' +
         'The ship itself is unaffected. Add this line to the PR body, then run the command:\n' +
         `  ClickUp: ${ticketUrl(id)}\n` +
-        `  npm run clickup -- pr-opened --task ${id} --pr ${prUrl(pr)}` +
+        `  npm run clickup -- pr-opened --task ${id} --pr ${prUrl(pr)} --if-missing` +
         (tail ? `\n\n${tail}` : ''),
     };
   }
@@ -185,11 +209,12 @@ function describeTrailResult({ taskId, prNumber, code, output } = {}) {
     ok: false,
     loud: true,
     message:
-      `COULD NOT RECORD PR #${pr} ON TICKET ${id} (the command exited ${Number.isFinite(status) ? status : '?'}).\n` +
-      'The ship itself is unaffected — but this ticket now has no readable PR trail, and the\n' +
-      'review gate will refuse it once branch protection is enforcing. Run this when ClickUp\n' +
-      'is reachable again:\n' +
-      `  npm run clickup -- pr-opened --task ${id} --pr ${prUrl(pr)}` +
+      `COULD NOT CONFIRM PR #${pr} IS RECORDED ON TICKET ${id} (the command exited ${Number.isFinite(status) ? status : '?'}).\n` +
+      'The ship itself is unaffected. The trail may or may not be there — this failure is\n' +
+      'also reachable after the comment posted, when reading it back is what went wrong — so\n' +
+      'check the ticket by eye, and run this when ClickUp is reachable again. It writes only\n' +
+      'if the trail is genuinely absent, so it is safe either way:\n' +
+      `  npm run clickup -- pr-opened --task ${id} --pr ${prUrl(pr)} --if-missing` +
       (tail ? `\n\n${tail}` : ''),
   };
 }

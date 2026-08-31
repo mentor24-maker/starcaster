@@ -60,6 +60,27 @@ ticket that already had its note would report success no matter what, and the
 guard would then reject the very same pull request for having no ticket link.
 Now the skip only skips the writing; both halves are checked every time.
 
+A second review pass found two more, and the first is the wrong-ticket problem
+above surviving in the one case the fix stepped over. `ship` puts its link at the
+top now, but it skips a description that already mentions this ticket — and
+"mentions it somewhere" is not the question the guard asks. The guard asks which
+link comes FIRST. So a description naming another ticket at the top and this one
+further down was left exactly as it was, and the guard went off to judge the work
+against somebody else's ticket, telling Dane about a ticket he had nothing to do
+with. The skip now asks the guard's own question, and the test no longer checks
+another example — it checks the rule itself, over five differently-shaped
+descriptions: whatever came in, what comes out points at this ticket.
+
+The second is a message that said more than it knew. When writing the note fails,
+`ship` announced "this ticket now has no note" and handed over a repair command.
+But one of the ways it fails is that the note WAS written and reading it back is
+what broke — so the sentence was false, and the repair command it gave would have
+added a second identical note, which is the duplicate the whole design goes out
+of its way to avoid. It now says what it can actually stand behind: the note may
+or may not be there, go and look. And both repair commands are the safe kind that
+write only if the note is genuinely missing. A repair is by definition run when
+nobody knows what landed, which is exactly when that matters.
+
 ## 2026-08-31 — One shape for every social platform, proven on two of them (#471)
 
 Adding a new social network to Starcaster has always meant threading a new

@@ -1257,6 +1257,16 @@ without a remote, a PR and a live CI run:
   against it. It failed closed rather than open, but the PR it blocked was the
   hand-shipped one — the exact thing this work exists to unblock. Prepending
   removes the dependency instead of restating the convention.
+
+  **And the skip-if-already-linked guard has to ask the gate's question, not a
+  weaker one.** Round 2 prepended correctly but guarded with "is this ticket
+  linked ANYWHERE", so a body naming another ticket first and this one further
+  down was still returned untouched — the same wrong-ticket defect, needing only
+  one extra line in the body to reach. The guard now compares `findTicketId`,
+  which is literally the gate's own reader. The invariant the tests assert,
+  rather than another example: for every input,
+  `findTicketId(bodyWithTicketLink(body, id)) === id`. A second copy of the link
+  further down is harmless; a body that resolves to the wrong ticket is not.
 - **`--if-missing` skips the comment, never the verification.** The PR-body
   check runs on every invocation, before the idempotence preflight can
   short-circuit. When it sat inside the skip, a ticket that already carried a
@@ -1279,6 +1289,15 @@ without a remote, a PR and a live CI run:
   silently missing trail is the entire defect. Exit 4 (the PR body carries no
   ticket link) gets its own message, because its fix is to edit the body, not
   to run the command again.
+- **The failure message claims only what the exit code proves, and every repair
+  it prints carries `--if-missing`.** A non-4 failure is *not* proof the trail
+  is absent: `pr-opened` also exits 1 when the comment POSTED and reading it
+  back failed. Saying "this ticket now has no readable PR trail" was false on
+  that path, and the bare `pr-opened` it handed over would post a second
+  identical line — the duplication `--if-missing` exists to prevent. So the
+  message says the trail may or may not be there and to check by eye, and both
+  repair commands are safe to run twice. A repair is by definition run when
+  nobody knows what landed; that is exactly when idempotence matters.
 
 ### A stale gate is re-run, never merged on (2026-08-26, task 86bbmk7pv)
 

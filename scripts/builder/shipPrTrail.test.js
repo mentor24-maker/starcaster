@@ -103,6 +103,35 @@ test('a body linking some OTHER ticket gains this one FIRST, where the gate look
   assert.equal(bodyNamesTicket(out, '86bbjt18r', ''), true, 'and the cited ticket must survive');
 });
 
+test('INVARIANT: whatever the body was, the gate then resolves it to THIS ticket', () => {
+  // Round 2's defect, and the reason this is an invariant rather than a sixth
+  // example. The guard asked `bodyNamesTicket` — "is this ticket linked
+  // ANYWHERE" — while the gate asks `findTicketId` — "which ticket is FIRST".
+  // A body naming another ticket first and this one further down satisfied the
+  // first question and failed the second, so it was returned untouched and the
+  // gate judged the PR against somebody else's ticket. It fails closed, but the
+  // PR it blocks is the hand-shipped one this whole ticket exists to unblock,
+  // and the message the operator gets names the wrong ticket.
+  //
+  // Row 4 is that case. The other four are the neighbours it hides between.
+  const ME = '86bbq7z1k';
+  const OTHER = 'https://app.clickup.com/t/86bbjt18r';
+  const bodies = [
+    ['no link at all', 'Summary of the change.'],
+    ['this ticket first', `ClickUp: https://app.clickup.com/t/${ME}\n\nSummary.`],
+    ['this ticket last', `Summary.\n\nClickUp: https://app.clickup.com/t/${ME}\n`],
+    ['another first, this one later', `Follows ${OTHER}, which found this.\n\nClickUp: https://app.clickup.com/t/${ME}\n`],
+    ['another ticket only', `Follows ${OTHER}`],
+  ];
+  for (const [what, body] of bodies) {
+    const out = bodyWithTicketLink(body, ME);
+    assert.equal(findTicketId(out).toLowerCase(), ME,
+      `${what}: the gate resolves the FIRST link, so it must resolve to this ticket`);
+    // Criterion 2, asked of the same table: a second pass changes nothing.
+    assert.equal(bodyWithTicketLink(out, ME), out, `${what}: writing it twice must not change it`);
+  }
+});
+
 test('with no ticket, the body is left exactly as it was', () => {
   assert.equal(bodyWithTicketLink('Summary.', ''), 'Summary.');
   assert.equal(bodyWithTicketLink('Summary.', null), 'Summary.');
@@ -147,13 +176,43 @@ test('any other failure is loud, names the ticket and the PR, and gives the repa
     const told = describeTrailResult({ taskId: '86bbq7z1k', prNumber: 512, code, output: 'network is down' });
     assert.equal(told.ok, false, `exit ${code} must not be read as success`);
     assert.equal(told.loud, true);
-    assert.match(told.message, /COULD NOT RECORD PR #512 ON TICKET 86bbq7z1k/);
+    assert.match(told.message, /COULD NOT CONFIRM PR #512 IS RECORDED ON TICKET 86bbq7z1k/);
     assert.match(
       told.message,
       /npm run clickup -- pr-opened --task 86bbq7z1k --pr https:\/\/github\.com\/mentor24-maker\/starcaster\/pull\/512/,
       'the repair must carry the full PR URL — pr-opened refuses a bare number',
     );
     assert.match(told.message, /network is down/, 'the underlying output must not be swallowed');
+  }
+});
+
+test('the generic failure does not claim the trail is missing — it cannot know', () => {
+  // Round 2's second defect. Exit 1 is ALSO reachable after the comment has
+  // posted: clickup_direct.mjs exits 1 when the POST succeeded and the
+  // read-back GET failed ("the comment posted but reading it back FAILED, so
+  // the trail is UNVERIFIED"). The message said "this ticket now has no
+  // readable PR trail", which on that path is false, and handed over a bare
+  // `pr-opened` that would post a SECOND identical line — the exact duplication
+  // --if-missing exists to prevent (criterion 2).
+  const told = describeTrailResult({ taskId: '86bbq7z1k', prNumber: 512, code: 1, output: '' });
+  assert.doesNotMatch(told.message, /now has no readable PR trail/,
+    'exit 1 does not prove the trail is absent — the comment may have posted and the read-back failed');
+  assert.match(told.message, /may or may not be there/,
+    'it must say what exit 1 actually proves: the command could not confirm it either way');
+  assert.match(CLICKUP, /the comment posted but reading it back FAILED/,
+    'the path being described must still exist in the command this message is about');
+});
+
+test('BOTH repair commands carry --if-missing, so a repair is safe to run twice', () => {
+  // A repair is by definition a command run after something went wrong, which
+  // means it is run when nobody knows what landed. Without the flag it appends
+  // a duplicate "PR opened:" line on the one path where the write DID succeed.
+  for (const code of [1, 2, 7, null, 4]) {
+    const told = describeTrailResult({ taskId: '86bbq7z1k', prNumber: 512, code, output: '' });
+    const cmd = /npm run clickup -- pr-opened --task \S+ --pr \S+(.*)/.exec(told.message);
+    assert.ok(cmd, `exit ${code} must carry a pr-opened command`);
+    assert.match(cmd[1], /--if-missing/,
+      `exit ${code}: without --if-missing the repair posts a second identical line`);
   }
 });
 
