@@ -26,6 +26,175 @@ known address.
 
 Nothing changes on any screen. The screen where a client actually clicks
 "Connect" is the next piece but one.
+## 2026-08-25 — The weekly report gathers itself now; the writing is still yours (#437)
+
+The first weekly report took most of an afternoon to put together. Almost none
+of that was writing — it was fetching. How many pull requests merged, how many
+lines changed, how long the tests took, where every ticket sat. Every one of
+those numbers already existed inside a command; somebody just had to go and ask
+for each one and copy it down.
+
+So a program does that part now. Every Monday at 7am the Mac Mini gathers all of
+it, builds the page, and opens a pull request with the figures already filled in
+and a chart of what shipped each day, grouped by which part of the system it
+touched. It stops there. It does not write a word of the actual report — the
+"here is what mattered this week and why" part is judgement, and a paragraph
+written by a machine would read like an opinion nobody actually holds. It leaves
+an obvious blank space where that goes, and files a ticket so writing it does not
+depend on anyone remembering. Ten minutes on top of finished numbers instead of
+an afternoon.
+
+The part worth insisting on is what happens when a number cannot be fetched. It
+prints "not available" and says why, in amber so you cannot skim past it. It
+never quietly leaves the row out, and it never estimates. A report missing a
+metric looks exactly like a report where that metric was fine, and there is no
+way to tell from the page which one you are reading. For the same reason, a
+pull request only counts as shipped if GitHub itself says it merged — the first
+edition credited one that was still open, because a commit message mentioning a
+PR is not proof that the PR landed.
+
+Two problems turned up while building it, both of the quiet kind. The first
+would have broken something else entirely: the straightforward way to commit
+the report would have left the Mac Mini's main folder sitting on the report's
+own branch permanently, and the little program that reads your ClickUp replies
+checks that folder's branch before updating itself. It would have stopped
+updating, kept running old code, and mentioned it only in a log file nobody
+opens. The second: the report was dating itself using Greenwich time, so a run
+late in the evening stamped tomorrow's date on it and pulled the wrong week's
+figures. Both are fixed, and there are tests that fail if either creeps back.
+
+A review pass then caught three more of the same kind, and they are worth
+knowing about because all three broke the one promise this thing makes — that a
+number it could not fully look up says so. Asking GitHub "which pull requests
+merged" only ever gets an answer about recent ones, so when the report was asked
+to rebuild an older week it found two merges in a week that actually had
+forty-three, and printed the two as though that were the whole story. It now
+asks about each pull request it found by name, and anything GitHub will not
+vouch for is said out loud on the page in amber — "this count is incomplete,
+treat it as a floor" — rather than silently dropped. The same older-week rebuild
+was also measuring how much code changed from that week all the way up to today
+instead of stopping at the end of the week, which made one week look about fifty
+times bigger than it was. And the Monday job had a quiet trap in it: it left its
+own finished report sitting in the folder, then next Monday saw a folder with
+loose files in it, decided somebody was working there, and skipped updating
+itself — forever, since the files were never going to move on their own. It
+tidies up after itself now, and there is a test that sets up that exact mess and
+fails if the job goes back to sleep on it.
+
+A second review pass found six more, and five of them were the same promise
+broken from five new directions — a number that was short, printed as though it
+were the whole story. The worst was the schedule itself. Running "the last seven
+days" every Monday at 7am means each edition stops at 7am and the next one picks
+up from Tuesday, so everything that happened on Monday during the day fell into
+no report at all. Nobody would ever have noticed, because from the report's point
+of view that time simply never existed — and it is not a rounding error: since
+the start of July that is 70 of the 107 things that shipped on a Monday. It also
+drew Monday's bar on the chart from seven hours of the day at the same width as
+the six full days beside it, so every single week would have looked like it ended
+on a slow note. The report now covers the week that has actually finished,
+Monday through Sunday.
+
+The second was the "how long does the build take" figure. It was asking GitHub
+for the 200 most recent runs and measuring whichever of those fell inside the
+week — but this repo now runs so much more than it used to that 200 runs only
+reaches back about five and a half days. For the week just gone it was measuring
+190 of the 282 runs that actually happened and printing the answer as if it
+covered all seven days. It now asks GitHub for the week by date instead of taking
+whatever is recent, and it can tell when it has been given everything — if it
+ever cannot see far enough, it says so on the tile rather than printing a
+confident number. The other four are smaller and the same shape: a count of
+finished tickets that had a start date but no end date, so it kept crediting a
+week with things closed days later; two scratch files written into the project
+folder that, if a run were ever killed halfway, would have left the folder
+looking "in use" and quietly stopped the Monday job updating itself again; the
+report reading the project history without refreshing it first, which made three
+separate figures silently short; and two settings that could be combined to write
+the report somewhere nobody intended. Each one now has a test that fails if it
+comes back, and each of those tests was deliberately broken first to check it was
+capable of failing at all.
+## 2026-08-30 — The review caught a way one client could have read another's permissions (#448)
+
+The safe box for client permissions went in last week (the entry below this
+one). Review then found four problems with it before it went anywhere near a
+client, and one of them was serious enough to be worth understanding, because
+the cause is not in that box at all — it is in a piece of plumbing that sits
+underneath nearly everything.
+
+Every time the app looks up stored records, it adds "…and only this client's"
+to the request. To know whether a particular filing cabinet is even organised
+by client, it asks the database once, early on, and then remembers the answer
+so it does not have to keep asking.
+
+The flaw was in what counted as an answer. If the database replied "no, that
+cabinet isn't organised by client," that is a real answer and remembering it is
+correct. But if the question simply failed to arrive — the database was briefly
+asleep, the connection dropped, the sort of hiccup this setup genuinely has and
+already warns us about — the app treated the silence as though it were the same
+"no." And it remembered that. From then on, until the app next restarted, it
+stopped adding "…and only this client's" to *anything*.
+
+Nothing would have looked wrong. No error, no blank screen, no slowdown — in
+fact the requests get faster and return more. It just quietly starts handing
+back everybody's records instead of one client's. In the box we had just built,
+those records are the permissions clients grant us to post on their own social
+accounts. Rich could have been handed another client's.
+
+It is fixed in two independent places, on purpose, because they fail
+differently. The plumbing now only remembers a real answer; a hiccup means "ask
+again next time," which costs nothing and lets it recover on its own. And
+separately, the permissions box now refuses to run a lookup that has not had
+"…and only this client's" attached to it — it stops and says so rather than
+returning anything. Either fix alone would have closed this hole. Both together
+mean the next piece of code built on that plumbing does not have to know this
+story to be safe, which is the part worth paying for.
+
+The other three problems were smaller and are also fixed: a way that recording
+"this permission stopped working" could have wiped the permission itself
+(unrecoverable — a client only hands it over once); a length limit measured
+against the wrong thing, so an unusually long permission would save and then be
+unreadable; and four fields that noticed a mistake and then stored a blank
+anyway instead of reporting it.
+
+Every fix was checked by deliberately breaking it again and confirming the
+relevant test failed — a test that cannot fail is worse than no test, because
+it tells you it is watching something when it is not.
+
+You applied the database change the same day, and I confirmed against the live
+database that both tables arrived correctly and are organised by client the way
+they must be. The box is real and empty, which is exactly where it should be.
+The next piece — the part that actually talks to Instagram and X — is unblocked.
+
+## 2026-08-30 — Why the review-gate work sat two hours after you approved it
+
+You said "merge" on the review-gate ticket and it stayed put. None of the reason
+was visible from the ticket, so here it is.
+
+Two things were genuinely wrong first, and both were handled correctly. The
+automatic checks were failing for a real reason, so the merge step refused to
+merge — the right call, and it said so quietly each time rather than nagging.
+Another session fixed the failing check and saved its work.
+
+The stall came after that. Before merging anything, the machinery brings the
+branch up to date with the live code. It did, and that update was clean — there
+was never anything to resolve. But in the moment it went to save the result, the
+other session had just saved to the same branch, so its save was rejected. That
+is two things arriving at once, not a disagreement in the work itself, and the
+correct response is simply to try again on the next pass.
+
+It half did that. One part of the machinery understood exactly what had happened
+and posted "it will be merged on the next run." A second part, which never asks
+whether a conflict is real, filed a whole new ticket titled "Resolve the merge
+conflict" — for a conflict that did not exist — and posted that too. So the
+ticket ended up carrying two notices, a fifth of a second apart, saying opposite
+things: one that it would sort itself out, one that a new ticket now owned it.
+Neither came true.
+
+Cleared by hand: bring the branch up to date with today's live code, save it,
+wait for the checks to go green, merge. The real repair — stop filing a conflict
+ticket when there is no conflict — is filed as its own task. The rule the
+incident produced is written down as DOCTRINE §2.6: work out who is waiting
+once, in one place, so two halves of the same pass can never name two different
+actors.
 
 ## 2026-08-31 — The merge lock can now actually read the tickets
 

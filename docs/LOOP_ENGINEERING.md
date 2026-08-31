@@ -819,6 +819,144 @@ Because the entry rides inside the task's own PR, the log updates on `main` at
 the exact moment the work merges; nothing edits `WORK-LOG.md` directly. Scroll
 that one file any day to read, in English, everything the loops have shipped.
 
+## The weekly report — figures generated, narrative written (2026-08-25, task 86bbkw1mn)
+
+The first weekly report, on 2026-08-24, was assembled by hand and took most of
+an afternoon. Almost all of that was **gathering**: every figure in it came out
+of a command. The writing did not — the ranked five, the plain-language
+summaries and the incident write-ups are judgement.
+
+So the job is split exactly along that line, and the split is the point:
+
+| | Who does it | How long |
+| ---| ---| --- |
+| The figures | `scripts/weekly_report.mjs`, on a schedule | seconds |
+| The narrative | a person, or an agent in a short pass | about ten minutes |
+
+**The script does not write prose.** A generated paragraph would be worse than
+no paragraph, because it reads like a judgement nobody actually made. It leaves
+a visible empty slot on the page instead, and files a ClickUp ticket so the
+narrative pass is queued work rather than something someone has to remember.
+
+### What it writes, and where
+
+`docs/reports/YYYY-MM-DD.html` plus `docs/reports/YYYY-MM-DD.data.json`, both
+**committed**, with `docs/reports/index.html` listing editions newest-first.
+
+These are records, the same category as `docs/WORK-LOG.md` — **not** build
+artifacts. They are deliberately absent from `.gitignore` and from
+`check_conventions`' generated list. A report that vanishes on the next build is
+not a record, and a test pins that so a future tidy-up cannot quietly reclassify
+them.
+
+The JSON exists so the narrative pass re-gathers nothing: every number on the
+page is in it.
+
+### The honesty rule
+
+**A figure the script could not read prints as `not available` with its reason.
+It is never omitted and never estimated, and the run still exits 0.**
+
+A report that silently drops a metric reads as though the metric was fine — the
+reader cannot tell "zero" from "we didn't look". Unreadable figures are also
+marked visually, not only worded, so a skimmed page cannot mislead either.
+
+Two figures are honest in a particular way worth knowing about:
+
+*   **Unattended loop passes** is a labelled *proxy* for machine time. What a
+    reader actually wants is Anthropic quota spent, and that is not readable
+    from this repo at all. The page says so rather than leaving the row out.
+*   **Only merged work counts.** A `(#373)` in a commit subject is not evidence
+    that #373 merged — the first edition credited exactly that PR while it was
+    still open. The check is GitHub's own state, and a test pins it with a
+    fixture containing an open PR.
+
+### Two ways a figure can be short, and what the page does about it
+
+The honesty rule is easy to state and easy to break from a new direction. Every
+one of these was a number that *was* read, was incomplete, and printed as though
+it were whole — which is worse than a gap, because a gap is visible.
+
+*   **The window must be a week that has finished.** `--window 7` alone means
+    "the 7 days ending *today*". Fired Monday 07:00 that covers up to 07:00, and
+    the next edition starts Tuesday — so Monday daytime lands in **no edition at
+    all**, and nothing says so. On real history since 1 July that is 70 of 107
+    Monday merges. It also drew the last chart bar from 7 hours of Monday at the
+    same width as the six whole days beside it, which read as a slow Monday every
+    week. The wrapper therefore runs `--as-of yesterday`.
+*   **A slice must reach the whole window, or say that it did not.** The CI
+    median used to take the 200 most recent runs and median whatever fell inside
+    the window. On this repo 200 runs reaches back under six days: for the week
+    ending 2026-08-30 that was **190 of the 282** successful runs in the window,
+    printed as a bare `1m27s`. It now asks GitHub for the range itself
+    (`gh run list --created <from>..<to>`) and proves its own completeness —
+    fewer rows back than the limit means GitHub had no more to give. Hitting the
+    limit tints the tile and says so on it.
+*   **A count needs a ceiling as well as a floor.** `stage-counts --since` alone
+    counted tickets closed from the window start *until now*, so a report on an
+    older week credited itself with closures that happened days after it ended.
+    It takes `--until` now, and refuses a ceiling with no floor.
+*   **`origin/main` is fetched before anything is read out of it.** The merge
+    count, both lines-changed figures and the chart all come from it, and the
+    wrapper's self-update skips on four separate conditions — on every one of
+    those paths the local `origin/main` is however stale it happened to be. A
+    failed fetch is now an amber box on the page, not silence.
+
+### Running it
+
+```bash
+node scripts/weekly_report.mjs                 # 7 days ending today
+node scripts/weekly_report.mjs --window 14
+node scripts/weekly_report.mjs --as-of 2026-08-24   # reproduce an old edition
+node scripts/weekly_report.mjs --out /tmp/x.html    # just look at one
+node scripts/weekly_report.mjs --publish       # + branch, commit, PR, ticket
+```
+
+**`--out` and `--publish` do not combine, and the script refuses the pair.**
+Publishing copies the report into a throwaway worktree by its path *relative to
+the repo*: an `--out` inside `docs/reports/` makes that a copy of the file onto
+itself, and an `--out` anywhere else makes it a relative path that climbs out of
+the worktree altogether. Use one or the other.
+
+Running it twice for the same window produces a byte-identical file — nothing
+on the page comes from a clock except the window it was asked for, which is an
+input. That is a property of the renderer, pinned by a test, not luck.
+
+### The schedule, and why one machine
+
+| | |
+| ---| --- |
+| Job | `weekly-report` in `lib/nodeRoles.js` |
+| Owner | **mac-mini** |
+| When | Mondays 07:00 local |
+| Window | the **finished** week — `--as-of yesterday --window 7`, i.e. Monday to Sunday |
+| Wrapper | `scripts/run_weekly_report.sh` |
+| Install | `./scripts/install_weekly_report.sh` (`--status`, `--uninstall`) |
+| Log | `~/Library/Logs/weekly-report.log` |
+
+It writes into the repo and opens a pull request, so two machines holding the
+schedule would file two branches and two PRs for the same week — and the
+duplicate is only visible after both already exist. That is the same class of
+hazard `bus-relay` and `db:refresh` are in the table for.
+
+The Mini owns it for the relay's reason: a Monday-morning job on a laptop that
+spent the weekend closed does not run at all, and a report nobody notices is
+missing is worse than no report.
+
+```bash
+npm run node:owns -- weekly-report   # 0 on the Mini, 3 on the laptop
+```
+
+The role is checked at **run** time, and only gates *publishing*. On a machine
+that does not own the job the script still writes the figures locally and then
+declines to publish — so the schedule is harmless if it is ever installed in two
+places, and it can be installed on a new machine *before* ownership moves, with
+no week where neither machine reports.
+
+It never commits to `main`: `main` auto-deploys to production, and a scheduled
+job with a commit bit on `main` is a scheduled deploy at 07:00 on a Monday with
+nobody awake. A failure posts to the bus, like every other unattended job.
+
 ## Safety — why this is wired tighter than the YouTube version
 
 The popular "just wake up and hit merge" demos run on throwaway apps. Starcaster

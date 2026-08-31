@@ -159,7 +159,7 @@ export type BuilderTemplateModule = {
 };
 
 export type BackgroundSettings = {
-  mode: "none" | "color" | "gradient" | "image" | "style";
+  mode: "none" | "color" | "gradient" | "image" | "video" | "style";
   color: string;
   color2: string;
   imageUrl: string;
@@ -168,6 +168,38 @@ export type BackgroundSettings = {
   styleKey: "" | BackgroundStylePreset;
   /** 0–100. Color/gradient bake alpha into rgba; image/style use a backdrop layer. */
   opacity?: number;
+  /** Video background: the clip itself, from the asset gallery. Mode "video" only. */
+  videoUrl?: string;
+  videoAssetId?: string;
+  /**
+   * The still frame behind the clip. Every surface that cannot play a video —
+   * buttons, email, saved-cell thumbnails, the frozen vanilla builder — paints
+   * this instead, because `getBuilderBackgroundStyle` reports a video background
+   * as an ordinary CSS image. That is what lets mode "video" be added without
+   * touching a single one of its callers.
+   */
+  posterUrl?: string;
+  posterAssetId?: string;
+  /** Playback rate, 0.25–2. */
+  videoSpeed?: number;
+  videoLoop?: boolean;
+  /**
+   * Seconds of crossfade at the loop seam, 0–5. Zero is a hard cut.
+   * Non-zero makes the layer render the clip TWICE and hand off between the
+   * copies — one video cannot dissolve into itself, because seeking back to
+   * the start is a single discontinuous jump with nothing to fade into.
+   */
+  videoLoopFade?: number;
+  /** Seconds. An end of 0 means "play to the end of the clip". */
+  videoTrimStart?: number;
+  videoTrimEnd?: number;
+  /** Pixels, 0–20. */
+  videoBlur?: number;
+  /** Phones show the poster instead unless this is on. */
+  videoPlayOnMobile?: boolean;
+  /** Percent, 0–100 — which part of the frame survives the crop. */
+  videoFocalX?: number;
+  videoFocalY?: number;
 };
 
 /** StarCaster: dimmer/tint screen layered over a section's background. */
@@ -1098,7 +1130,13 @@ export function normalizeBackgroundMode(
 ): BackgroundSettings["mode"] {
   const mode = safeText(value, 20).toLowerCase();
 
-  if (mode === "color" || mode === "gradient" || mode === "image" || mode === "style") {
+  if (
+    mode === "color" ||
+    mode === "gradient" ||
+    mode === "image" ||
+    mode === "video" ||
+    mode === "style"
+  ) {
     return mode;
   }
 
@@ -1115,6 +1153,32 @@ export function normalizeBackgroundStyleKey(value: unknown): BackgroundSettings[
   return "";
 }
 
+/**
+ * Clamp a stored number into range, falling back when it is missing or not a
+ * number at all. Every video setting is a number a panel writes, which means
+ * every one of them can arrive as "", null, or a string from an old row.
+ */
+function clampBackgroundNumber(value: unknown, min: number, max: number, fallback: number): number {
+  // Absent must be checked BEFORE Number(), not after it. `Number("")` and
+  // `Number(null)` are both 0 — a finite number that sails past the guard below
+  // and then clamps to the minimum. An emptied Speed box would have become
+  // 0.25x rather than normal speed, silently, with nothing to see.
+  if (value === null || value === undefined || value === "") {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, parsed));
+}
+
+export const BUILDER_VIDEO_SPEED_MIN = 0.25;
+export const BUILDER_VIDEO_SPEED_MAX = 2;
+export const BUILDER_VIDEO_BLUR_MAX = 20;
+export const BUILDER_VIDEO_LOOP_FADE_MAX = 5;
+
 export function createDefaultBackgroundSettings(): BackgroundSettings {
   return {
     mode: "none",
@@ -1123,7 +1187,20 @@ export function createDefaultBackgroundSettings(): BackgroundSettings {
     imageUrl: "",
     imageAssetId: "",
     styleKey: "",
-    opacity: 100
+    opacity: 100,
+    videoUrl: "",
+    videoAssetId: "",
+    posterUrl: "",
+    posterAssetId: "",
+    videoSpeed: 1,
+    videoLoop: true,
+    videoLoopFade: 0.6,
+    videoTrimStart: 0,
+    videoTrimEnd: 0,
+    videoBlur: 0,
+    videoPlayOnMobile: false,
+    videoFocalX: 50,
+    videoFocalY: 50
   };
 }
 
@@ -1141,7 +1218,27 @@ export function normalizeBackgroundSettings(value: unknown): BackgroundSettings 
     imageUrl: normalizeBuilderAssetUrl(background.imageUrl),
     imageAssetId: safeText(background.imageAssetId, 120),
     styleKey: normalizeBackgroundStyleKey(background.styleKey),
-    opacity: clampBuilderOpacity(background.opacity)
+    opacity: clampBuilderOpacity(background.opacity),
+    videoUrl: normalizeBuilderAssetUrl(background.videoUrl),
+    videoAssetId: safeText(background.videoAssetId, 120),
+    posterUrl: normalizeBuilderAssetUrl(background.posterUrl),
+    posterAssetId: safeText(background.posterAssetId, 120),
+    videoSpeed: clampBackgroundNumber(
+      background.videoSpeed,
+      BUILDER_VIDEO_SPEED_MIN,
+      BUILDER_VIDEO_SPEED_MAX,
+      1
+    ),
+    // Looping is the default, so only an explicit `false` turns it off — an
+    // absent key on an older row must not read as "do not loop".
+    videoLoop: background.videoLoop === undefined ? true : background.videoLoop !== false,
+    videoLoopFade: clampBackgroundNumber(background.videoLoopFade, 0, BUILDER_VIDEO_LOOP_FADE_MAX, 0.6),
+    videoTrimStart: clampBackgroundNumber(background.videoTrimStart, 0, Number.MAX_SAFE_INTEGER, 0),
+    videoTrimEnd: clampBackgroundNumber(background.videoTrimEnd, 0, Number.MAX_SAFE_INTEGER, 0),
+    videoBlur: clampBackgroundNumber(background.videoBlur, 0, BUILDER_VIDEO_BLUR_MAX, 0),
+    videoPlayOnMobile: background.videoPlayOnMobile === true,
+    videoFocalX: Math.round(clampBackgroundNumber(background.videoFocalX, 0, 100, 50)),
+    videoFocalY: Math.round(clampBackgroundNumber(background.videoFocalY, 0, 100, 50))
   };
 }
 
@@ -1169,6 +1266,12 @@ export function finalizeBackgroundSettings(background: BackgroundSettings | unkn
     return { ...normalized, mode: "style" };
   }
 
+  // Checked before imageUrl: a video background carries its still in
+  // `posterUrl`, never `imageUrl`, so the two cannot both be set by the picker.
+  if (normalized.videoUrl) {
+    return { ...normalized, mode: "video" };
+  }
+
   if (normalized.imageUrl) {
     return { ...normalized, mode: "image" };
   }
@@ -1187,6 +1290,69 @@ export function finalizeBackgroundSettings(background: BackgroundSettings | unkn
   }
 
   return normalized;
+}
+
+/** Is a dimmer/tint screen actually configured on this row? */
+export function hasActiveRowOverlayScreen(overlayScreen: unknown): boolean {
+  return normalizeRowOverlayScreenSettings(overlayScreen).background.mode !== "none";
+}
+
+/**
+ * The tint a video background starts with. A dark neutral at partial strength —
+ * the same treatment the hero banner already applies for the same reason, which
+ * is that text laid over a photograph or over moving footage is unreadable
+ * without something between them.
+ */
+export const BUILDER_VIDEO_DEFAULT_OVERLAY_TINT = "#101820";
+export const BUILDER_VIDEO_DEFAULT_OVERLAY_OPACITY = 45;
+
+/**
+ * Seed the tint when a row first becomes a video row (operator's call,
+ * 2026-08-31: "Default overlay tint ON").
+ *
+ * It SEEDS, it does not lock: an overlay already configured is returned
+ * untouched, and everything about the seeded one — colour, strength, or
+ * turning it off entirely — stays the operator's afterwards. Nothing here
+ * ever removes a tint, because tearing out a setting he can see, as a side
+ * effect of a mode change he made for another reason, is the kind of silent
+ * edit this repo has been bitten by before.
+ */
+export function seedVideoBackgroundOverlayScreen(overlayScreen: unknown): RowOverlayScreenSettings {
+  const current = normalizeRowOverlayScreenSettings(overlayScreen);
+  if (current.background.mode !== "none") {
+    return current;
+  }
+
+  return {
+    background: {
+      ...createDefaultBackgroundSettings(),
+      mode: "color",
+      color: BUILDER_VIDEO_DEFAULT_OVERLAY_TINT
+    },
+    opacity: BUILDER_VIDEO_DEFAULT_OVERLAY_OPACITY
+  };
+}
+
+/**
+ * The tint screen's own style. Ported from the frozen vanilla builder
+ * (`public/js/builder.js`, `buildRowOverlayScreenStyle`) — the settings were
+ * normalized on both sides all along, but only the vanilla builder ever
+ * PAINTED one, so a React-rendered row silently had no overlay at all. Text
+ * sitting on moving footage is what finally forced the port.
+ */
+export function getBuilderRowOverlayScreenStyle(overlayScreen: unknown): CSSProperties | undefined {
+  const normalized = normalizeRowOverlayScreenSettings(overlayScreen);
+  if (normalized.background.mode === "none") {
+    return undefined;
+  }
+
+  const style = getBuilderBackgroundStyle(normalized.background);
+  if (!style) {
+    return undefined;
+  }
+
+  const opacity = normalized.opacity / 100;
+  return Number.isFinite(opacity) && opacity < 1 ? { ...style, opacity } : style;
 }
 
 /**
@@ -1244,7 +1410,7 @@ export function getBuilderBackgroundLayerOpacity(background: BackgroundSettings 
   }
 
   const opacity = clampBuilderOpacity(background.opacity) / 100;
-  if (background.mode === "image" || background.mode === "style") {
+  if (background.mode === "image" || background.mode === "video" || background.mode === "style") {
     return opacity;
   }
 
@@ -1493,6 +1659,62 @@ export function resolveRenderTheme(
     : normalizeTheme(storedTheme);
 }
 
+/**
+ * The focal point as a CSS position string. Shared on purpose: the poster
+ * fallback below uses it for `background-position` and the video layer uses it
+ * for `object-position`, so the still and the moving footage crop identically
+ * and nothing jumps when one replaces the other.
+ */
+/**
+ * The crossfade actually used, clamped against the clip's own playing window.
+ *
+ * A dissolve longer than the material is not a dissolve — the section would
+ * spend its whole life mid-fade, with both copies half-visible and neither
+ * ever clearly on screen. A third of the window is the ceiling: it leaves the
+ * clip visibly ITSELF for the majority of every pass, which is the point of
+ * having a video at all.
+ *
+ * `windowSeconds` is what actually plays: (trim end, or the full duration)
+ * minus the trim start. Pass 0 when the duration is not known yet — the
+ * browser has not loaded metadata — and the requested value stands until it
+ * is.
+ */
+export function resolveBuilderVideoLoopFade(
+  background: BackgroundSettings | undefined,
+  windowSeconds: number
+): number {
+  const requested = clampBackgroundNumber(
+    background?.videoLoopFade,
+    0,
+    BUILDER_VIDEO_LOOP_FADE_MAX,
+    0.6
+  );
+  if (requested <= 0) {
+    return 0;
+  }
+  if (!Number.isFinite(windowSeconds) || windowSeconds <= 0) {
+    return requested;
+  }
+  return Math.min(requested, windowSeconds / 3);
+}
+
+/** Does this background wrap with a dissolve rather than a cut? */
+export function builderVideoCrossfades(
+  background: BackgroundSettings | undefined,
+  windowSeconds = 0
+): boolean {
+  if (!background || background.videoLoop === false) {
+    return false;
+  }
+  return resolveBuilderVideoLoopFade(background, windowSeconds) > 0;
+}
+
+export function builderVideoBackgroundPosition(background: BackgroundSettings | undefined): string {
+  const x = Math.round(clampBackgroundNumber(background?.videoFocalX, 0, 100, 50));
+  const y = Math.round(clampBackgroundNumber(background?.videoFocalY, 0, 100, 50));
+  return `${x}% ${y}%`;
+}
+
 export function getBuilderBackgroundStyle(background: BackgroundSettings | undefined): CSSProperties | undefined {
   if (!background || background.mode === "none") {
     return undefined;
@@ -1530,6 +1752,26 @@ export function getBuilderBackgroundStyle(background: BackgroundSettings | undef
       backgroundImage: `url("${backgroundImageUrlFor(background.imageUrl)}")`,
       backgroundSize: "cover",
       backgroundPosition: "center"
+    };
+  }
+
+  // A video is not a CSS background, and this function only returns CSS.
+  // Surfaces that CAN play one draw a real <video> layer of their own and never
+  // reach this branch; every surface that cannot — buttons, email, module cards,
+  // saved-cell thumbnails, the frozen vanilla builder — lands here and paints the
+  // poster. That is deliberate: it is why mode "video" could be added without a
+  // single caller of this function learning about it.
+  if (background.mode === "video") {
+    if (!background.posterUrl) {
+      // No poster means no CSS answer. Returning `undefined` leaves the surface
+      // exactly as it renders today; a `url("")` would paint a broken image.
+      return undefined;
+    }
+
+    return {
+      backgroundImage: `url("${backgroundImageUrlFor(background.posterUrl)}")`,
+      backgroundSize: "cover",
+      backgroundPosition: builderVideoBackgroundPosition(background)
     };
   }
 

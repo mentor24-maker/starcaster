@@ -283,6 +283,48 @@ quietly. **Installing the pulse schedules reports CANNOT DO YET on every run**
 until Slice B (`86bbh9kh2`) exists: a green check on a machine that runs no jobs
 is the exact failure the NODES plan was written against.
 
+### A job that stops firing has to say so
+
+`doctor:node` answers "is this machine set up?", and a schedule can be
+installed, loaded and completely dead. Two different things go wrong on a
+machine nobody is looking at, and only one of them used to make a noise:
+
+```
+npm run heartbeat                        the roll call — when did each job last succeed?
+npm run heartbeat -- --check             the same, and post to the bus if one has gone quiet
+npm run heartbeat -- --beat --role X     record a successful run (jobs call this; you never do)
+```
+
+A job that **fails** writes a log line and posts to the bus
+(`scripts/report_job_failure.mjs`, one post per job per 6h, cleared by the next
+success). A job that **never fires** writes nothing at all, and nothing is
+indistinguishable from a quiet week — so each job records a *beat* when it
+succeeds, and something notices when the beats stop.
+
+**The beats live where both machines can read them**, on a ClickUp ticket
+called *Node roll call* whose description is rewritten in place — no channel
+messages, so no "all is well" ×365. The bus only ever hears about a **miss**.
+
+**And the check runs from the machine that does NOT own the job.** This is the
+whole trick, and it is easy to get backwards: a watchdog running only where its
+job runs cannot detect that machine being switched off, which is the case it
+exists for. `scripts/run_bus_relay.sh` therefore performs the check *before* it
+asks whether it owns the relay — the non-owning machine was already waking
+every ten minutes and doing nothing at all, and that idle wake is the one
+vantage point that survives the owning machine being dead.
+
+Two clocks, on purpose: the local stamp is written on **every** success (free,
+offline — it is what `doctor:node` reads to say when each owned job last
+actually worked here), and the shared row is pushed **at most once a day**,
+which is the resolution the requirement needs and what keeps the ticket quiet.
+
+**Only `bus-relay` beats today.** The two loop lanes run inside long-lived
+agent sessions with no committed runner to hang an emitter on, `db-refresh` has
+no schedule on purpose, and `pulse-pipelines` lives in another repo. Those
+report **NOT REPORTING with the reason**, every run — never as healthy, because
+a system that is one-fifth instrumented must not read as a green board. Adding
+a role to `lib/nodeRoles.js` without deciding either way fails a test.
+
 Each machine says who it is in `~/.alphire-node` (one short line:
 `macbook-pro` or `mac-mini`). Without that file it falls back to the hostname,
 which is a guess — rename the Mac and the guess changes. **A machine whose

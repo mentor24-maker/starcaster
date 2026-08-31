@@ -6935,3 +6935,62 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   text-align: center;
 }
+
+/*
+ * Video backgrounds — the layer, the tint screen over it, and the stacking
+ * that keeps the row's own content in front of both.
+ *
+ * The section paints the POSTER as its own CSS background
+ * (`getBuilderBackgroundStyle`), so everything here sits on top of a still
+ * that is already correct. That is why there is no poster rule below: when the
+ * layer decides not to play — reduce motion, phone width, a refused autoplay —
+ * it renders nothing and the still is simply what remains.
+ */
+.builder-preview-video-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.builder-preview-row-overlay-screen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/*
+ * The columns are grid children; the two layers above are absolutely
+ * positioned and out of flow. Without a stacking context of their own the
+ * columns would paint underneath the video, which reads as the row having
+ * gone blank.
+ */
+.builder-preview-section-layered > .builder-preview-column {
+  position: relative;
+  z-index: 2;
+}
+
+/*
+ * The Video background panel. The warning is a plain sentence rather than a
+ * red error box on purpose: a missing poster is a bad idea, not an invalid
+ * setting, and the operator is allowed to save without one.
+ */
+.builder-video-background-warning,
+.builder-video-background-note {
+  margin: 6px 0 0;
+  max-width: 62ch;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--ink-secondary, #4a5568);
+}
+
+.builder-video-background-warning {
+  color: var(--ink-primary, #1a202c);
+  font-weight: 600;
+}

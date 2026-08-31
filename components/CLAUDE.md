@@ -98,11 +98,27 @@ a line in the differential registry in that file, which fails when a setting
 changes nothing a person could see.
 
 **Then break it on purpose and watch it fail before you believe the pass.**
-This caught two assertions here that could not fail: one that compared a
+This caught three assertions here that could not fail: one that compared a
 setting to itself (the browser lists custom properties among computed styles,
-so `--sc-effect-*` changing WAS the "difference"), and one that measured
+so `--sc-effect-*` changing WAS the "difference"), one that measured
 animations parked at time zero, where a small hop and a huge hop sit in the
-same place.
+same place, and one that asserted a crossfade's two elements and its
+`transition` property while the crossfade itself was completely dead — 19/19
+green over a loop that hard-cut (DOCTRINE §3.15).
+
+A contract has three tools beyond reading one frame, and each exists because
+something could not otherwise be checked:
+
+- `emulate: { reducedMotion, viewport }` — put the browser in the condition
+  the behaviour exists for, instead of trusting somebody to toggle a system
+  setting by hand.
+- `absent: true` — **this must NOT render.** Inverts "nothing measured is a
+  failure" deliberately, so a correct absence is distinguishable from the
+  check having failed to look (§3.16). Always pair it with a presence
+  contract, or it passes because the feature never rendered at all.
+- `series: { selectors, read, count, everyMs }` — watch over time and judge
+  the run. The answer for anything whose truth is a CHANGE rather than a
+  state: a fade, a hand-off, a debounce, something that settles (§3.15).
 
 And a green run is not proof the page looks right. `docs/DOCTRINE.md` §5.14
 says exactly what these checks do and do not cover — the differential proves
@@ -117,6 +133,22 @@ two-element/three-property structure the motions need, and the four traps —
 including the one that started it: **a class name is not a rendering**. Two of
 these effects were offered for months with no stylesheet rule behind them, and
 an E7 audit walked straight past it because the setting DID reach a renderer.
+
+## Video backgrounds — read `docs/VIDEO_BACKGROUNDS.md` first
+
+The fifth background mode and `builder-video-background-layer.tsx`. The doc
+carries the one idea the whole feature rests on — a video background reports
+its POSTER as ordinary CSS, which is why the mode could be added without a
+single caller of `getBuilderBackgroundStyle` learning it exists — plus why the
+crossfade needs two `<video>` elements, the three behaviours that are
+deliberately not settings, and five traps.
+
+The two worth knowing before you touch the panel: adding a background mode
+means **three** dropdowns (the shared picker renders two layouts, and
+`builder-section-controls.tsx` has a third hand-written copy mounted with
+`hideModeRow` — that one is the one the operator uses), and the first version
+of the Video panel shipped visibly broken with every gate green, because
+module-editor field strips do not survive the section editor's lattice.
 
 ## Proximity effects — read `docs/PROXIMITY_EFFECTS.md` first
 

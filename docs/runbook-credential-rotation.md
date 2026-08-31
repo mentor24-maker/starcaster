@@ -45,6 +45,20 @@ credentials that this runbook must cover:
 * **Other repos keep their own copies.** See the next section; this is the one
   that bites.
 
+**Reading the audit log is not a metadata read.** `doppler activity` and
+`doppler secrets --only-names` answer *who changed what, when* without values,
+and an agent may run both. `doppler configs logs get <id>` looks like the next
+step in that same sequence — it is how you find out *which key* a "1 updated"
+entry refers to — and it prints the **old and new values in plain text**. That
+is a live credential handed to whoever ran the command, agent sessions included
+(§4.1 / vault `OPERATIONS.md` SOP 6), and it happened on 2026-08-30 while
+diagnosing the entry logged below.
+
+If you need the key name and you are not the operator, stop at `doppler
+activity` and say what you could not determine. The correlation is usually
+enough: a config changed at a known minute, and a specific job started failing
+at that minute, identifies the credential without anyone reading it.
+
 ## Phase 0b — Credentials with copies elsewhere (do not skip)
 
 Rotating a credential in Doppler does **not** reach a copy of it that another
@@ -144,3 +158,30 @@ this runbook into institutional memory — and eventually into an agent skill
   in four minutes once looked at. Produced Phase 0b and Phase 2 step 4 above.
   Tickets: 86bbq83j0 (Pulse should read Doppler at run time, and repeated
   failures should escalate once), 86bbq88m2 (this runbook change).
+- 2026-08-30, 20:39 — **a real rotation of `CLICKUP_API_TOKEN`**, by Dane, in
+  Doppler `dev` and `prd`. Everything that talks to ClickUp stopped at once on
+  both machines with `401 Invalid API key` — the bus relay (every ten minutes),
+  the loops, and every ticket write.
+
+  Two things this confirmed, one good and one not.
+
+  **Phase 0b works.** `~/pulse/config/clickup-mcp.json` was stale again — the
+  identical gap that cost 820 consecutive failed runs over twelve days — but
+  this time the table named the copy, `bin/restore-clickup-token.py` refilled it
+  without anyone handling the value, and `channel-steward` was verified running
+  to `completed` inside the hour. The table earned its place; the refill still
+  is not automatic, which is what 86bbq83j0 is for.
+
+  **The alert cannot report its own dependency failing.** `bus-relay` failed
+  every ten minutes throughout and could not say so, because
+  `scripts/report_job_failure.mjs` posts through the same token. That residual
+  is named in the script's header and was documented as known on 86bbhbadj the
+  same afternoon; this is its first live occurrence. It degraded correctly — the
+  log recorded every failure and the reporter deliberately did not stamp them as
+  sent — but the operator learned of the outage from an agent session, not from
+  the system. The heartbeat (`npm run heartbeat`) closes the machine-is-off half
+  of this; it does not close the token-is-dead half, because it shares the
+  token too. A genuinely independent channel is the open question.
+
+  Keys rotated: `CLICKUP_API_TOKEN`. Copies refilled: Pulse (above). Tickets:
+  86bbq8v0w (this entry).
