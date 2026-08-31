@@ -27,6 +27,64 @@ known address.
 Nothing changes on any screen. The screen where a client actually clicks
 "Connect" is the next piece but one.
 
+## 2026-08-31 — The merge lock can now actually read the tickets
+
+The check that reads a ticket before letting anything merge has been running
+blind since it was built. It needed a password to look at ClickUp, that password
+was never added, and so on every single pull request it answered "I can't see" —
+which it correctly treats as a refusal rather than an all-clear. Harmless so far,
+because the check is still in warning mode and cannot block anything, but it
+meant nobody had ever watched it do its actual job.
+
+It has one now, and it works. On the first real run it named the ticket, read
+the newest review on it, and correctly said the work had been sent back rather
+than passed. I checked that ticket myself afterwards to be sure it was right and
+not just producing a sensible-looking sentence. It was right.
+
+**Getting it there took two wrong turns, and the second one is worth writing
+down.** You were sent to the GitHub settings page to paste the password in by
+hand. That page has a box for the *label* sitting directly above the box for the
+*password*, and the password went in the label box — twice, with two different
+passwords. GitHub scrambles a password so nobody can read it, but it does no such
+thing to a label, so both were sitting there in plain sight until they were
+deleted. Nobody but you can see that page, and there's no sign either was used,
+but they should not have been there at all.
+
+The cause was a rule of mine, applied backwards. It says an agent must never
+handle a real password — and it was written after a photo went round with a
+credentials file visible on a TV in the background. That rule is about a value
+being *seen*, not about who is holding it. Read the other way, it sent the
+password on a detour through the one screen in the whole process where it could
+be typed into the wrong field. There was a one-line command available the whole
+time that moves the password straight from one vault to the other without ever
+showing it, and it had no label box to get wrong. That command is now what the
+instructions say to use, and running it is my job.
+
+The rule has been rewritten to say what it always meant: **the question is
+whether the value ends up somewhere it could be read.** If no, the machine does
+it. If yes — writing one down, making a new one, typing it into a web page —
+that stays with you.
+
+The lock still cannot block anything. One prerequisite is left before it is
+switched on for real, and it has its own ticket.
+
+## 2026-08-26 — Saving a shared section no longer wipes your page templates (#428)
+
+The Builder lets you save a section — a footer, say — once and have every page
+that uses it follow along. This change was meant to make that push reach page
+templates too. It did, but it wrote them the wrong way: instead of updating
+just the sections, it overwrote the template's whole record with mostly blanks.
+A template called "Delray — Main Site Template" came back with no name at all,
+and its subject line, colours, logos, banner images and feature copy went with
+it. Templates keep no history, so there was nothing to undo it from.
+
+The write now hands over the full template with only the sections changed —
+the same way the page side has always done it. Two tests hold the line, and
+both were deliberately broken first to confirm they actually catch it: one
+runs a real push through the real storage code and checks the name and
+everything around it survives, and one fails if someone later adds a field to
+the saving half without adding it to the loading half, which is how this class
+of bug gets back in.
 ## 2026-08-29 — A safe place to keep a client's own permissions (#448)
 
 Right now, posting to a client's Instagram or X means somebody pastes that
