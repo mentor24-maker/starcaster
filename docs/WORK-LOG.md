@@ -1,3 +1,32 @@
+## 2026-08-31 — One shape for every social platform, proven on two of them (#471)
+
+Adding a new social network to Starcaster has always meant threading a new
+special case through the whole app. This changes that: every platform now
+answers the same six questions in the same way — where do I send the client to
+say yes, what do I do with their answer, which accounts does this cover, is it
+still working, make it work again, and give the permission back. Adding the
+next platform after this is one new file and one line on a list.
+
+A shape is only proven if something awkward fits it, so it was built against two
+platforms that work nothing alike. Facebook Pages is the flow that already runs
+in production, moved across rather than rewritten — if moving it had broken it,
+that would have meant the shape was wrong, and it is far cheaper to learn that
+with one platform on it than with five. Bluesky was written fresh, and second on
+purpose: it has no browser sign-in, no authorisation code, no expiring token to
+renew, and no way for us to hand the permission back on the client's behalf.
+Every one of those is something a design drawn only from Facebook would have
+assumed without noticing.
+
+One real fix rode along. The address Facebook sends a client back to after they
+agree used to be worked out from whichever web address the request happened to
+arrive on. On a test deployment that address is different every single time, and
+Facebook rejects any address it was not told about in advance — so the sign-in
+would have failed there with an error naming nothing useful. It is now a fixed,
+known address.
+
+Nothing changes on any screen. The screen where a client actually clicks
+"Connect" is the next piece but one.
+
 ## 2026-08-29 — A safe place to keep a client's own permissions (#448)
 
 Right now, posting to a client's Instagram or X means somebody pastes that
