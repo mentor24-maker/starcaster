@@ -118,9 +118,19 @@ async function findRollCall() {
   return task ? { readable: true, found: true, task } : { readable: true, found: false };
 }
 
-/** The description ClickUp actually holds, preferring the markdown rendering. */
+/**
+ * The description ClickUp actually holds.
+ *
+ * Both fields are consulted and the one with CONTENT wins, because the API
+ * does not consistently populate the same one: a task written with
+ * `markdown_description` reads back with that field empty and the text under
+ * `description` (driven live, 2026-08-31). Preferring one blindly would hand
+ * the parser an empty string on a task whose roll call is entirely intact.
+ */
 function descriptionOf(task) {
-  return String((task && task.markdown_description) || (task && task.description) || '');
+  const md = String((task && task.markdown_description) || '');
+  const plain = String((task && task.description) || '');
+  return md.trim() ? md : plain;
 }
 
 async function createRollCall() {

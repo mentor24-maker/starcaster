@@ -134,6 +134,21 @@ test('a description with no data block is an EMPTY roll call, which is a real st
   assert.deepEqual(parsed.rows, []);
 });
 
+test('an EMPTY description is unreadable, not an empty roll call', () => {
+  // Found by driving this against the live API on 2026-08-31: ClickUp answers
+  // a GET with `markdown_description: ""` on a task whose description it is
+  // holding fine, the text arriving under `description` instead. Reading that
+  // empty string as "no beats yet" would announce every job in the system as
+  // quiet at once — a false-alarm storm, off a field that was simply not
+  // populated. Every roll call we write carries a preamble, so no text at all
+  // means we read nothing.
+  for (const empty of ['', '   \n  ', null, undefined]) {
+    const parsed = hb.parseRollCall(empty);
+    assert.equal(parsed.parsed, false, `"${String(empty)}" must not read as an empty roll call`);
+    assert.ok(parsed.why);
+  }
+});
+
 test('a CORRUPT data block is unreadable, not empty', () => {
   // The dangerous confusion: "no beats yet" and "we cannot tell when anything
   // last ran" render identically if this collapses them, and the second would
