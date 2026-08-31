@@ -1281,6 +1281,21 @@ without a remote, a PR and a live CI run:
   it, so the same PR reaches the command repeatedly. `pr-opened --if-missing`
   writes nothing when the merge step's own reader (`prTrailLanded`) can already
   find this PR on the ticket — whoever put it there, a loop or a hand.
+- **The idempotence guard fails CLOSED, because a duplicate is permanent.** The
+  `--if-missing` preflight read `json.comments || []`, so a 200 carrying no
+  comment list collapsed to an empty array — indistinguishable from a ticket
+  that genuinely has no trail — and it wrote, which is the second `PR opened:`
+  line the flag exists to prevent. An empty ARRAY is a real answer and still
+  writes; a missing one is CANNOT TELL, and the command now refuses and says to
+  run it again. One re-run is cheap; a duplicate is not. (Found on 2026-08-31
+  when two identical `pr-opened --if-missing` calls eleven minutes apart went
+  opposite ways on the same ticket. The one-off would not reproduce — polling and
+  a post-then-read probe both came back consistent — but this is the only path in
+  the command that produces that symptom from a healthy-looking response, and
+  DOCTRINE 3.11 says a check that could not run never reports an answer.) The
+  read-back one branch below had the same coercion: it called an unreadable body
+  "the trail did NOT land" when the write had just succeeded, so it now joins the
+  other UNVERIFIED case.
 - **No stamp is not a failure.** Plenty of branches legitimately have no
   ticket. `ship` says so out loud and names the consequence, because a silent
   skip is indistinguishable from a success.

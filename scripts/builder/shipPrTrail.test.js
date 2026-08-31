@@ -8,7 +8,7 @@ const path = require('node:path');
 const {
   ticketUrl, prUrl, decideTrailWrite, bodyWithTicketLink, describeTrailResult,
 } = require('./shipPrTrail.js');
-const { prTrailLanded, prOpenedComment } = require('./loopTrail.js');
+const { prTrailLanded, prOpenedComment, commentsReadable } = require('./loopTrail.js');
 const { bodyNamesTicket, findTicketId } = require('./clickupTicketLink.js');
 
 /**
@@ -302,6 +302,58 @@ test('the trail step cannot stop the ship', () => {
   assert.ok(stepMatch, 'must find the trail step');
   assert.doesNotMatch(stepMatch[0], /\bfail\(/, 'a ClickUp failure must never stop a green, mergeable PR');
   assert.doesNotMatch(stepMatch[0], /process\.exit/, 'and must never exit');
+});
+
+test('a comment list that could not be read is CANNOT TELL, never "no trail"', () => {
+  // Found while fixing round 2, and observed live on this ticket: two identical
+  // `pr-opened --if-missing` calls eleven minutes apart, the first skipping
+  // correctly and the second posting a SECOND "PR opened:" line. The one-off
+  // itself would not reproduce — repeated polling and a post-then-read probe
+  // both came back consistent — but the preflight read `json.comments || []`,
+  // so a 200 carrying no comment list collapsed to an empty array, read as "no
+  // trail here", and wrote. That is the one path in the command that turns a
+  // healthy-looking response into that exact duplicate, and an idempotence
+  // guard has no business failing OPEN.
+  assert.equal(commentsReadable({ comments: [] }), true,
+    'an EMPTY list is a real answer — a ticket with no comments must still be writable');
+  assert.equal(commentsReadable({ comments: [{ id: '1' }] }), true);
+  for (const unreadable of [null, undefined, {}, { comments: null }, { comments: 'nope' }, { err: 'rate limited' }]) {
+    assert.equal(commentsReadable(unreadable), false,
+      `${JSON.stringify(unreadable)} cannot answer the question, so it must not authorize a write`);
+  }
+});
+
+test('the --if-missing preflight refuses to write when it could not read', () => {
+  const guard = /if \(flag\('if-missing'\)\) \{[\s\S]*?\n  \}/.exec(CLICKUP);
+  assert.ok(guard, 'must find the --if-missing preflight');
+  assert.match(guard[0], /commentsReadable\(/,
+    'the preflight must ask whether it could read at all before deciding nothing is there');
+  assert.match(guard[0], /process\.exit\(1\)/,
+    'and it must STOP rather than fall through to the write — a duplicate is permanent');
+  // CODE ONLY. The first version asserted this against the raw block and failed
+  // on the comment directly above the fix, which quotes `pre.json.comments || []`
+  // by name — the same prose-for-code confusion the statementBlock helper below
+  // was written for. Break-testing found it; reasoning would not have.
+  assert.doesNotMatch(codeOnly(guard[0]), /pre\.json\.comments \|\| \[\]/,
+    '`|| []` is exactly the coercion that made an unreadable response look like an empty ticket');
+  assert.match(codeOnly(guard[0]), /prTrailLanded\(pre\.json\.comments, prNumber\)/,
+    'the list is passed through as read, with no coercion standing in for an answer');
+});
+
+/** Source with `//` line comments removed, so an assertion cannot match prose. */
+function codeOnly(source) {
+  return String(source).replace(/^[ \t]*\/\/.*$/gm, '');
+}
+
+test('the post-write read-back calls an unreadable body UNVERIFIED, not absent', () => {
+  // The same coercion one branch down. It cannot duplicate anything — both
+  // paths exit 1 — but it reported "the trail did NOT land" for a comment that
+  // had just posted successfully, which is round 2's overstatement defect in a
+  // second place. An unreadable body now joins the other could-not-check case.
+  assert.doesNotMatch(CLICKUP, /prTrailLanded\(check\.json\.comments \|\| \[\], prNumber\)/,
+    'a read-back that could not be read is not proof the trail is missing');
+  assert.match(CLICKUP, /if \(!check\.res\.ok \|\| !commentsReadable\(check\.json\)\) \{/,
+    'it must be handled with the other UNVERIFIED case, which says what it actually knows');
 });
 
 test('--if-missing decides with the merge step\'s own reader, not a private one', () => {

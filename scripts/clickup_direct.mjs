@@ -91,7 +91,7 @@ const {
 } = conflictWork;
 const {
   prOpenedComment, verdictComment, prTrailLanded, prBodyCarriesTicket,
-  readyToLaunchGate, isReadyToLaunch,
+  commentsReadable, readyToLaunchGate, isReadyToLaunch,
 } = loopTrail;
 // Lane A (task 86bbkw2au). Every DECISION is in the module and tested there;
 // what lives out here is the network and the file, nothing else.
@@ -2194,7 +2194,19 @@ if (cmd === 'whoami') {
   if (flag('if-missing')) {
     const pre = await call('GET', `/api/v2/task/${task}/comment`);
     if (!pre.res.ok) die('read the task comments', pre);
-    if (prTrailLanded(pre.json.comments || [], prNumber).ok) {
+    // CANNOT TELL IS NOT "NOT RECORDED". This used to read
+    // `pre.json.comments || []`, so a 200 carrying no comments list collapsed
+    // to an empty array, read as "no trail here", and wrote — a duplicate
+    // "PR opened:" line, which is the one thing --if-missing exists to prevent.
+    // An empty ARRAY is a real answer and still writes; a missing one is not.
+    if (!commentsReadable(pre.json)) {
+      console.error(`\nCould not read task ${task}'s comments: HTTP ${pre.res.status} with no comment list in the body.`);
+      console.error('--if-missing cannot tell whether this PR is already recorded, and a guard that');
+      console.error('cannot tell must not write — that is how a SECOND "PR opened:" line gets posted.');
+      console.error('Nothing was written. Run the same command again.\n');
+      process.exit(1);
+    }
+    if (prTrailLanded(pre.json.comments, prNumber).ok) {
       alreadyRecorded = true;
       console.log(`Task ${task}: PR #${prNumber} is already recorded on this ticket — nothing written.`);
     }
@@ -2210,12 +2222,16 @@ if (cmd === 'whoami') {
     // "The write returned 200" is not the question; "can the merge step find
     // this PR tomorrow" is (DOCTRINE 3.10).
     const check = await call('GET', `/api/v2/task/${task}/comment`);
-    if (!check.res.ok) {
+    // An unreadable body belongs HERE, with the other "could not check" case —
+    // not below with "the trail did NOT land". The write already succeeded, so
+    // the trail is UNVERIFIED, not absent, and saying absent sends whoever
+    // reads it off to fix a comment that is probably fine.
+    if (!check.res.ok || !commentsReadable(check.json)) {
       console.error(`WARNING: the comment posted but reading it back FAILED, so the trail is UNVERIFIED.`);
       console.error('Check the ticket by eye before treating this task as handed off.');
       process.exit(1);
     }
-    const landed = prTrailLanded(check.json.comments || [], prNumber);
+    const landed = prTrailLanded(check.json.comments, prNumber);
     if (!landed.ok) {
       console.error(`\nThe "PR opened" trail did NOT land: ${landed.why}.`);
       console.error('The merge step will refuse this ticket, and the operator\'s approval will sit');

@@ -81,6 +81,21 @@ or may not be there, go and look. And both repair commands are the safe kind tha
 write only if the note is genuinely missing. A repair is by definition run when
 nobody knows what landed, which is exactly when that matters.
 
+One more turned up while testing this on the live ticket, and it is the same
+mistake wearing different clothes. The whole point of the "only write if it is
+missing" option is that running `ship` twice does not leave two notes. To decide
+that, it reads the ticket's comments — and if that read came back without a list
+of comments at all, the code treated it as "there are no comments", which means
+"no note is there", which means write one. So the one check whose entire job is
+to prevent a duplicate would create a duplicate precisely when it could not see.
+It now tells the two apart: a ticket with genuinely no comments still gets its
+note, but a reply it could not read makes it stop and say run this again. One
+re-run costs nothing; a duplicate note sits on the ticket forever. The same
+confusion sat one step further down, where a reply it could not read was
+reported as "the note did not land" moments after the note had in fact been
+posted successfully — it now says what it actually knows, which is that it could
+not check.
+
 ## 2026-08-31 — One shape for every social platform, proven on two of them (#471)
 
 Adding a new social network to Starcaster has always meant threading a new
