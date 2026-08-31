@@ -2144,6 +2144,44 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
 
+  // The link the OTHER way round. Two of those four PRs also shipped with no
+  // ClickUp link in the body, so ticket and PR could only be matched by
+  // reading titles. Checked before the comment is posted: a PR that cannot be
+  // traced back to its ticket is not a finished hand-off, and fixing the body
+  // afterwards is a step nobody remembers.
+  //
+  // IT RUNS BEFORE --if-missing CAN SHORT-CIRCUIT (task 86bbq7z1k, round 2).
+  // This check used to sit inside the idempotence skip below, so a
+  // ticket that already carried a trail was reported as "already recorded",
+  // exit 0, whatever its PR body said. Ship then declared success and the
+  // review gate FAILED the same PR with "the PR body carries no ClickUp ticket
+  // link, so there is no review to check" — a cheerful all-clear standing in
+  // front of a refusal, which is the precise failure mode this ticket exists to
+  // eliminate. Reachable whenever ship reuses an already-open PR whose body
+  // predates this change and whose trail was written by hand.
+  //
+  // So `--if-missing` skips the COMMENT, never the verification. Both halves of
+  // the trail are checked on every run; only the write is idempotent.
+  const view = gh(['pr', 'view', String(prNumber), '--repo', repo, '--json', 'body,url,title,number']);
+  if (!view.ok) {
+    console.error(`Could not read PR #${prNumber} from ${repo}: ${view.stderr.slice(0, 300)}`);
+    console.error('Nothing was written to the ticket.');
+    process.exit(1);
+  }
+  let prJson;
+  try { prJson = JSON.parse(view.stdout); } catch {
+    console.error(`gh returned output that is not JSON for PR #${prNumber}. Nothing was written.`);
+    process.exit(1);
+  }
+  if (!prBodyCarriesTicket(prJson.body, task, taskUrl)) {
+    console.error(`\nPR #${prNumber} has no link back to this ticket in its body, so nothing was written.`);
+    console.error('The trail has to run both ways: the ticket names the PR, the PR names the ticket.');
+    console.error('Otherwise the only way to pair them later is by reading titles and guessing.\n');
+    console.error('Add the line to the PR body and run this again:');
+    console.error(`  ClickUp: ${taskUrl}\n`);
+    process.exit(4);
+  }
+
   // IDEMPOTENCE (--if-missing, task 86bbq7z1k). `npm run ship` now records the
   // trail itself, and ship is designed to be run again whenever main moves
   // under it — so the SAME PR reaches this command repeatedly. Without a
@@ -2162,33 +2200,8 @@ if (cmd === 'whoami') {
     }
   }
 
-  // The link the OTHER way round. Two of those four PRs also shipped with no
-  // ClickUp link in the body, so ticket and PR could only be matched by
-  // reading titles. Checked before the comment is posted: a PR that cannot be
-  // traced back to its ticket is not a finished hand-off, and fixing the body
-  // afterwards is a step nobody remembers.
   let lastRes = null;
   if (!alreadyRecorded) {
-    const view = gh(['pr', 'view', String(prNumber), '--repo', repo, '--json', 'body,url,title,number']);
-    if (!view.ok) {
-      console.error(`Could not read PR #${prNumber} from ${repo}: ${view.stderr.slice(0, 300)}`);
-      console.error('Nothing was written to the ticket.');
-      process.exit(1);
-    }
-    let prJson;
-    try { prJson = JSON.parse(view.stdout); } catch {
-      console.error(`gh returned output that is not JSON for PR #${prNumber}. Nothing was written.`);
-      process.exit(1);
-    }
-    if (!prBodyCarriesTicket(prJson.body, task, taskUrl)) {
-      console.error(`\nPR #${prNumber} has no link back to this ticket in its body, so nothing was written.`);
-      console.error('The trail has to run both ways: the ticket names the PR, the PR names the ticket.');
-      console.error('Otherwise the only way to pair them later is by reading titles and guessing.\n');
-      console.error('Add the line to the PR body and run this again:');
-      console.error(`  ClickUp: ${taskUrl}\n`);
-      process.exit(4);
-    }
-
     const text = prOpenedComment(prUrl, arg('body-file') ? readBody(arg('body-file')) : '');
     const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: text });
     if (!out.res.ok) die('post the "PR opened" comment', out);

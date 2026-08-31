@@ -1246,6 +1246,27 @@ without a remote, a PR and a live CI run:
   PR body links back to the ticket, so `ship` adds `ClickUp: <url>` to the body
   it authors. Without that, every ship on a stamped branch would ask for the
   trail and be told no.
+- **The ticket link goes FIRST in the body, and that is load-bearing.** The
+  gate resolves which ticket a PR belongs to with `findTicketId`, which returns
+  the **first** ClickUp link it finds — a convention `reviewGate` flags as a
+  hazard in its own docstring, because "loop-built bodies put their own ticket
+  on line 1" is a habit rather than a rule. `ship` originally *appended* the
+  line, which made it depend on that convention while writing the one body
+  shape that breaks it: a commit message citing a related ticket ("Follows
+  .../86bbjt18r") left the other ticket first and the gate judged the PR
+  against it. It failed closed rather than open, but the PR it blocked was the
+  hand-shipped one — the exact thing this work exists to unblock. Prepending
+  removes the dependency instead of restating the convention.
+- **`--if-missing` skips the comment, never the verification.** The PR-body
+  check runs on every invocation, before the idempotence preflight can
+  short-circuit. When it sat inside the skip, a ticket that already carried a
+  trail exited 0 — "already recorded" — whatever its body said, and the gate
+  then failed the same PR for carrying no ClickUp link. A cheerful all-clear in
+  front of a refusal is the failure mode this whole ticket exists to remove.
+- **One spelling of each URL.** The repair command a failed write prints has to
+  RUN when it is pasted: `pr-opened` rejects a bare `--pr 484` outright, so
+  `shipPrTrail` owns both the ticket-URL and PR-URL spellings and `ship`
+  imports them rather than keeping its own copy.
 - **Idempotent.** `ship` is *designed* to be re-run whenever main moves under
   it, so the same PR reaches the command repeatedly. `pr-opened --if-missing`
   writes nothing when the merge step's own reader (`prTrailLanded`) can already

@@ -33,6 +33,28 @@ function ticketUrl(taskId) {
   return `https://app.clickup.com/t/${String(taskId || '').trim()}`;
 }
 
+/** This repository, as `pr-opened` and `gh --repo` both spell it. */
+const PR_REPO = 'mentor24-maker/starcaster';
+
+/**
+ * The one spelling of a pull-request URL — and the reason it lives here rather
+ * than in `ship_thread.cjs` where it started.
+ *
+ * Every repair command this module prints has to RUN when it is pasted, and
+ * `pr-opened` refuses a bare number: "--pr got a bare number, so --repo
+ * owner/name is needed to know which repository" (exit 2, nothing written).
+ * The first version of this file printed `--pr 484`, so criterion 4's promise —
+ * a loud failure that names the exact command that repairs it — handed over a
+ * command that could not repair anything. The tests asserted the broken shape
+ * too, which would have made the fix look like a regression.
+ *
+ * `ship` imports this instead of keeping its own copy, so the URL the command
+ * is TOLD to use and the URL it actually sends cannot drift apart.
+ */
+function prUrl(prNumber, repo = PR_REPO) {
+  return `https://github.com/${repo}/pull/${String(prNumber == null ? '' : prNumber).trim()}`;
+}
+
 /**
  * Should `ship` record this PR on a ticket, and if not, what does it say?
  *
@@ -92,14 +114,29 @@ function decideTrailWrite({ taskId, prNumber } = {}) {
  * Idempotent by the SAME matcher `pr-opened` and the review gate use, so a body
  * that already links the ticket — in either live URL shape, written by hand or
  * by a previous run — is returned untouched rather than gaining a second copy.
+ *
+ * IT GOES FIRST, AND THAT IS THE WHOLE POINT. The gate resolves which ticket a
+ * PR belongs to with `clickupTicketLink.findTicketId`, which returns the FIRST
+ * ClickUp link in the body — a convention `reviewGate.ticketNamesThisPr` names
+ * as a hazard in its own docstring, because "loop-built bodies put their own
+ * ticket on line 1" is a habit, not a rule. Appending here made `ship` depend on
+ * that convention while writing the one body shape that breaks it: a commit
+ * message citing a related ticket ("Follows .../86bbjt18r") put the OTHER
+ * ticket first, and the gate judged the PR against it.
+ *
+ * It failed closed rather than open — `ticketNamesThisPr` then refuses instead
+ * of passing the wrong PR — but the PR it blocks is the hand-shipped one, which
+ * is the exact thing this ticket exists to unblock. Prepending removes the
+ * dependency instead of restating the convention.
  */
 function bodyWithTicketLink(body, taskId) {
   const text = String(body == null ? '' : body);
   const id = String(taskId || '').trim();
   if (!id) return text;
   if (bodyNamesTicket(text, id, '')) return text;
-  const trimmed = text.replace(/\s+$/, '');
-  return `${trimmed}${trimmed ? '\n\n' : ''}ClickUp: ${ticketUrl(id)}\n`;
+  const rest = text.replace(/^\s+/, '').replace(/\s+$/, '');
+  const link = `ClickUp: ${ticketUrl(id)}\n`;
+  return rest ? `${link}\n${rest}\n` : link;
 }
 
 /**
@@ -140,7 +177,7 @@ function describeTrailResult({ taskId, prNumber, code, output } = {}) {
         'the ticket in its body, so the trail would only run one way. Nothing was written.\n' +
         'The ship itself is unaffected. Add this line to the PR body, then run the command:\n' +
         `  ClickUp: ${ticketUrl(id)}\n` +
-        `  npm run clickup -- pr-opened --task ${id} --pr ${pr}` +
+        `  npm run clickup -- pr-opened --task ${id} --pr ${prUrl(pr)}` +
         (tail ? `\n\n${tail}` : ''),
     };
   }
@@ -152,9 +189,11 @@ function describeTrailResult({ taskId, prNumber, code, output } = {}) {
       'The ship itself is unaffected — but this ticket now has no readable PR trail, and the\n' +
       'review gate will refuse it once branch protection is enforcing. Run this when ClickUp\n' +
       'is reachable again:\n' +
-      `  npm run clickup -- pr-opened --task ${id} --pr ${pr}` +
+      `  npm run clickup -- pr-opened --task ${id} --pr ${prUrl(pr)}` +
       (tail ? `\n\n${tail}` : ''),
   };
 }
 
-module.exports = { ticketUrl, decideTrailWrite, bodyWithTicketLink, describeTrailResult };
+module.exports = {
+  PR_REPO, ticketUrl, prUrl, decideTrailWrite, bodyWithTicketLink, describeTrailResult,
+};

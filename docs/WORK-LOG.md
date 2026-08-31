@@ -31,6 +31,35 @@ and the code was reading a ClickUp command that had been killed mid-run as
 though it had succeeded, which is precisely the silent missing note the whole
 job exists to prevent.
 
+Review then found three more holes in that same work, all reproduced live rather
+than reasoned about, and this fixes them. The first is the plainest: when the
+note could not be written, the loud failure message handed over a command to
+repair it — and that command was rejected the moment you ran it, because it named
+the pull request by number where the tool wants the full web address. A repair
+step that does not run is not a repair step, and the tests had been written
+around the broken spelling, so fixing it would have looked like a regression.
+There is now one place that spells out both addresses, `ship` uses it for the
+command it prints and for the command it actually runs, and the two can no longer
+drift apart.
+
+The second was an ordering accident with real teeth. The guard works out which
+ticket a pull request belongs to by taking the FIRST ClickUp link in its
+description, and `ship` was adding its link at the bottom. So a change whose
+commit message happened to mention a related ticket — "follows on from ..." —
+would have sent the guard off to judge the work against the wrong ticket
+entirely. It would have refused rather than waved the wrong thing through, but
+the change it refused is the hand-shipped one, which is the exact thing this job
+exists to unblock. The link goes at the top now, so there is nothing left to get
+in the wrong order.
+
+The third was a cheerful all-clear standing in front of a refusal. Because `ship`
+is meant to be re-run, it asks first whether the note is already there and skips
+writing a second copy — but that skip was jumping over the other half of the
+check too, the one confirming the pull request points back at its ticket. So a
+ticket that already had its note would report success no matter what, and the
+guard would then reject the very same pull request for having no ticket link.
+Now the skip only skips the writing; both halves are checked every time.
+
 ## 2026-08-31 — One shape for every social platform, proven on two of them (#471)
 
 Adding a new social network to Starcaster has always meant threading a new

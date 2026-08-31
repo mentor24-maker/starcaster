@@ -6,10 +6,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
-  ticketUrl, decideTrailWrite, bodyWithTicketLink, describeTrailResult,
+  ticketUrl, prUrl, decideTrailWrite, bodyWithTicketLink, describeTrailResult,
 } = require('./shipPrTrail.js');
 const { prTrailLanded, prOpenedComment } = require('./loopTrail.js');
-const { bodyNamesTicket } = require('./clickupTicketLink.js');
+const { bodyNamesTicket, findTicketId } = require('./clickupTicketLink.js');
 
 /**
  * The rules `npm run ship` follows about a ticket's PR trail (task 86bbq7z1k).
@@ -70,9 +70,9 @@ test('a missing or malformed PR number is refused rather than sent to ClickUp', 
 
 /* ------------------------- criterion 1 + 2: the PR body's half of the trail */
 
-test('a body with no ticket link gains one', () => {
+test('a body with no ticket link gains one, at the TOP', () => {
   const out = bodyWithTicketLink('Summary of the change.', '86bbq7z1k');
-  assert.match(out, /^Summary of the change\.\n\nClickUp: https:\/\/app\.clickup\.com\/t\/86bbq7z1k\n$/);
+  assert.match(out, /^ClickUp: https:\/\/app\.clickup\.com\/t\/86bbq7z1k\n\nSummary of the change\.\n$/);
   assert.equal(bodyNamesTicket(out, '86bbq7z1k', ''), true);
 });
 
@@ -90,10 +90,17 @@ test("ClickUp's own copy-link shape counts as already linked", () => {
   assert.equal(bodyWithTicketLink(already, '86bbq7z1k'), already);
 });
 
-test('a body linking some OTHER ticket still gains this one', () => {
+test('a body linking some OTHER ticket gains this one FIRST, where the gate looks', () => {
+  // The defect this replaced (round 1). Appending left the cited ticket first,
+  // and `findTicketId` — which is how `review_gate.mjs:167` decides which
+  // ticket a PR belongs to — returns the FIRST link. So the gate judged the PR
+  // against 86bbjt18r. Asserting that both ids are merely PRESENT cannot see
+  // that; asserting which one resolves can.
   const out = bodyWithTicketLink('Follows https://app.clickup.com/t/86bbjt18r', '86bbq7z1k');
+  assert.equal(findTicketId(out), '86bbq7z1k',
+    'the gate resolves the FIRST link, so this ticket must be first — not merely present');
   assert.equal(bodyNamesTicket(out, '86bbq7z1k', ''), true);
-  assert.equal(bodyNamesTicket(out, '86bbjt18r', ''), true);
+  assert.equal(bodyNamesTicket(out, '86bbjt18r', ''), true, 'and the cited ticket must survive');
 });
 
 test('with no ticket, the body is left exactly as it was', () => {
@@ -141,15 +148,76 @@ test('any other failure is loud, names the ticket and the PR, and gives the repa
     assert.equal(told.ok, false, `exit ${code} must not be read as success`);
     assert.equal(told.loud, true);
     assert.match(told.message, /COULD NOT RECORD PR #512 ON TICKET 86bbq7z1k/);
-    assert.match(told.message, /npm run clickup -- pr-opened --task 86bbq7z1k --pr 512/);
+    assert.match(
+      told.message,
+      /npm run clickup -- pr-opened --task 86bbq7z1k --pr https:\/\/github\.com\/mentor24-maker\/starcaster\/pull\/512/,
+      'the repair must carry the full PR URL — pr-opened refuses a bare number',
+    );
     assert.match(told.message, /network is down/, 'the underlying output must not be swallowed');
   }
+});
+
+test('exit 4 also hands over a runnable command, not a bare number', () => {
+  const told = describeTrailResult({ taskId: '86bbq7z1k', prNumber: 512, code: 4, output: '' });
+  assert.match(told.message, /--pr https:\/\/github\.com\/mentor24-maker\/starcaster\/pull\/512/);
 });
 
 /* ------------------------------- the wiring, which only source can testify to */
 
 const SHIP = fs.readFileSync(path.join(__dirname, '..', 'ship_thread.cjs'), 'utf8');
 const CLICKUP = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+
+test('the repair command a failed write prints is one pr-opened will accept', () => {
+  // Round 1 shipped `--pr 484`, which pr-opened rejects outright: "--pr got a
+  // bare number, so --repo owner/name is needed to know which repository"
+  // (exit 2, nothing written). Criterion 4 promises a loud failure that names
+  // the exact command that repairs it, so a command that cannot run is the
+  // criterion unmet — and the old test asserted the broken shape, which would
+  // have made this fix look like a regression.
+  const told = describeTrailResult({ taskId: '86bbq7z1k', prNumber: 512, code: 1, output: '' });
+  const cmd = /npm run clickup -- pr-opened --task \S+ --pr (\S+)/.exec(told.message);
+  assert.ok(cmd, 'the message must carry a runnable pr-opened command');
+  assert.doesNotMatch(cmd[1], /^\d+$/, 'a bare number is refused, and nothing is written');
+  assert.match(cmd[1], /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/512$/,
+    'the full PR URL is the one shape pr-opened parses without --repo');
+  // The rule being relied on is really the command's own; if this ever goes,
+  // re-check whether the URL is still what it wants.
+  assert.match(CLICKUP, /--pr got a bare number, so --repo owner\/name is needed/);
+});
+
+test('ship sends the same URL it tells you to send — one spelling, not two', () => {
+  // ship_thread used to keep its own `prUrlFor`, so the URL the command was
+  // TOLD to use and the URL ship actually sent were free to drift.
+  assert.equal(prUrl(512), 'https://github.com/mentor24-maker/starcaster/pull/512');
+  assert.doesNotMatch(SHIP, /const prUrlFor = \(number\) =>/,
+    'ship must import the shared spelling rather than redeclare its own');
+  assert.match(SHIP, /prUrl: prUrlFor,?\n?\s*\} = require\('\.\/builder\/shipPrTrail'\)/,
+    'and it must be imported from the module that prints the repair command');
+});
+
+test('--if-missing skips the COMMENT, never the PR-body check', () => {
+  // Round 1's third defect. The body check sat inside `if (!alreadyRecorded)`,
+  // so a ticket already carrying a trail exited 0 — "already recorded" — no
+  // matter what its PR body said. Ship reported success and the review gate
+  // then FAILED the same PR for carrying no ClickUp link: a cheerful all-clear
+  // standing in front of a refusal. Reachable whenever ship reuses an open PR
+  // whose body predates this change.
+  //
+  // Brace depth, not line order, for the same reason as the work-log test
+  // below: "later in the file" is true whether it is inside the skip or after
+  // it, so an indexOf compare here could not fail.
+  const block = statementBlock(CLICKUP, 'if (!alreadyRecorded)');
+  assert.ok(block, 'must find the alreadyRecorded block');
+  assert.match(block, /prOpenedComment\(/, 'the block must be the one that posts the comment');
+  assert.doesNotMatch(block, /prBodyCarriesTicket\(/,
+    'the body check must sit OUTSIDE the skip, or --if-missing reports success on a PR the gate will refuse');
+  assert.match(CLICKUP, /prBodyCarriesTicket\(/, 'and it must still be there at all');
+  // Both halves are verified before anything decides not to write.
+  assert.ok(
+    CLICKUP.indexOf('prBodyCarriesTicket(') < CLICKUP.indexOf("if (flag('if-missing'))"),
+    'the body check must run before the idempotence preflight, not after it',
+  );
+});
 
 test('ship reads the ticket off the branch stamp `npm run thread` writes', () => {
   assert.match(SHIP, /branch\.\$\{branch\}\.clickup-task/,
@@ -184,6 +252,20 @@ test('--if-missing decides with the merge step\'s own reader, not a private one'
     'the skip must be decided by prTrailLanded — "is it findable" is the only question that matters');
 });
 
+/**
+ * The `{...}` body of a real STATEMENT, not of a comment that mentions one.
+ *
+ * A plain `indexOf('if (!alreadyRecorded)')` finds whichever comes first in the
+ * file, and the prose above the check now discusses that very skip by name — so
+ * the locator landed on a comment and measured the wrong braces. Requiring the
+ * line-start indentation and the opening brace is what tells code from prose.
+ */
+function statementBlock(source, statement) {
+  const at = source.indexOf(`\n  ${statement} {`);
+  if (at < 0) return null;
+  return blockAt(source, source.indexOf('{', at));
+}
+
 /** The source between `{` at `open` and its matching `}`. */
 function blockAt(source, open) {
   let depth = 0;
@@ -206,8 +288,7 @@ test('the work-log placeholder fill still runs when the comment was skipped', ()
   // compared indexOf positions, which cannot fail — moving the fill inside the
   // skip leaves it later in the file either way. Break-testing found that; the
   // assertion below is what break-testing then made fail.
-  const open = CLICKUP.indexOf('{', CLICKUP.indexOf('if (!alreadyRecorded)'));
-  const block = blockAt(CLICKUP, open);
+  const block = statementBlock(CLICKUP, 'if (!alreadyRecorded)');
   assert.ok(block, 'must find the alreadyRecorded block');
   assert.match(block, /prOpenedComment\(/, 'the block must be the one that posts the comment');
   assert.doesNotMatch(block, /fillNewestPlaceholder/,

@@ -55,7 +55,9 @@ const PROTECTED = new Set(['main', 'master']);
 const CI_TIMEOUT_MIN = 20;
 const { pickPullRequestCommit, REPIN_SUBJECT, NUDGE_SUBJECT } = require('./builder/pullRequestCommit');
 const { waitForChecks } = require('./builder/waitForChecks');
-const { decideTrailWrite, bodyWithTicketLink, describeTrailResult } = require('./builder/shipPrTrail');
+const {
+  decideTrailWrite, bodyWithTicketLink, describeTrailResult, prUrl: prUrlFor,
+} = require('./builder/shipPrTrail');
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -130,8 +132,10 @@ function queryPullRequestChecks(prNumber) {
   return []; // unreachable; fail() exits.
 }
 
-/** This repository's PR URL for a number — spelled once, used by both steps. */
-const prUrlFor = (number) => `https://github.com/mentor24-maker/starcaster/pull/${number}`;
+// The PR URL spelling moved into `shipPrTrail` (task 86bbq7z1k, round 2). It
+// had a second caller there — the repair command a failed trail write prints —
+// which printed a bare `--pr 484` that `pr-opened` rejects. One spelling, one
+// place, so the command ship is told to run is the command ship itself runs.
 
 let step = 0;
 const say = (message) => console.log(message);
