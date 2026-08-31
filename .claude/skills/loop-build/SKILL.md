@@ -242,7 +242,11 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    *   **exit 3** — a PR for this ticket is **still open**. Do NOT start a
        second branch. Check that one out, read the send-back that returned the
        ticket to `Queued`, fix what it named, and push to the SAME PR. The
-       command prints the branch.
+       command prints the branch. The ticket's Loop note says which round
+       this is (`↩ round 3 — <why>`); at round 3, read all of the earlier
+       send-backs before you touch anything — `npm run clickup --
+       send-back-rounds --task <id>` lists what each one found — because a
+       fourth would stop the loop and go to Dane instead.
    *   **exit 1** — it could not tell. **Stop and say so.** Do not start a
        branch on a guess; that is the failure this step exists to prevent,
        arriving through the check meant to catch it.

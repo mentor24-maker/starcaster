@@ -32,6 +32,20 @@ does not land. Every agent working here must:
   then say so immediately and completely. Everything else is a chore, and
   chores are silent.
 
+- **CC runs the operational commands.** Scripts, `doppler run`, SSH to the
+  Mini, publishing: the agent session runs them and reports the outcome in
+  plain English. Handing him a command to paste is itself a claim that CC
+  cannot run it, and he reads it that way every time. There are four
+  exceptions — a real secret VALUE (`docs/DOCTRINE.md` §4.1), a billing
+  screen, a browser login, and a decision that is genuinely his — and a
+  hand-off **names which one applies**. A gate or permission refusal is not
+  one of them: it refused one call, not the session, so retry it when the
+  step actually comes and say so in one line if it is refused again. And
+  never leave a production fix as a two-step for him — if a script has a dry
+  run and an `--apply`, run both and report what changed. He has raised this
+  three times (2026-08-07, 08-23, 08-30); the incident is
+  `docs/DOCTRINE.md` §6.9.
+
 - **A person is a human being. An agent is not.** `person` and `human` mean
   Dane, or another actual human. An agent session is an **agent session** —
   never a person, a human, somebody, or anyone. He has raised this at least
@@ -184,6 +198,15 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     A dozen older tables still have this gap (`git grep -l 'project_id text'
     docs/SQL | xargs grep -L owner_user_id`); they are only a problem where a
     store actually uses `scopedInsertRow`.
+    **A correct table can fail that probe too.** The probe crosses the network,
+    so a 502 or a cold start fails it while saying nothing about the table —
+    and until 2026-08-30 that failure was cached for the life of the process,
+    which dropped the project filter off every scoped READ as well
+    (`docs/DOCTRINE.md` §5.19). The cache now keeps only a definitive answer.
+    Two consequences for new code: a store handling anything sensitive should
+    check the query actually came back scoped rather than trust that
+    `scopedIdQuery` added the filter, and "it worked in testing" says nothing
+    here, because the probe only fails in production and only occasionally.
 12. **Store calls take the limit FIRST and return an envelope.**
     `listPages(limit, scope)` — `listPages(scope)` reads the scope as a limit
     and returns **every project's pages**, which is a tenant leak that looks
@@ -307,6 +330,46 @@ line — it is a safety move. Handing the deck back is his, because only the
 person standing on it knows whether he is finished. A pause that outlives two
 hours announces itself on the bus and keeps saying so hourly, because a pause
 nobody remembers looks exactly like a pipeline that has broken.
+
+## The fast-track lane — "Let's fast track <ticket-id>"
+
+Said at the start of a session, that sentence is a **complete instruction**
+(Dane, 2026-08-30): run the human lane end to end, and end the session with a
+clean merge. It is the loop's job done by hand, not a way around the loop's
+guards — every check below is one the loops also run. Full version, with the
+incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
+
+1. `npm run pipeline -- check` — exit 3 means stop; say so once.
+2. Read the ticket **and its comments**. On a send-back, the review notes ARE
+   the job; the description is context.
+3. Claim it: `npm run clickup -- status --task <id> --status Building
+   --if-status Queued`. **Priority is not a guard** — only status is, and
+   only `--if-status` makes the claim atomic. Leave the priority alone.
+4. `npm run clickup -- build-start --task <id>` — exit 3 means a branch
+   already exists; work on THAT branch (`git worktree add
+   .claude/worktrees/<topic> -b <branch> origin/<branch>`, then `npm ci`,
+   `npm run build`, `npm run env:local`, and stamp
+   `git config branch.<branch>.clickup-task <id>`). Otherwise
+   `npm run thread <topic> <id>`.
+5. **On a send-back, merge `origin/main` in BEFORE touching a line.** The fix
+   review asked for may already have landed on `main` under another name —
+   on 2026-08-30 it had, and reworking first cost a conflict (`docs/DOCTRINE.md`
+   §6.7).
+6. Build. Every Definition-of-done gate, and break each fix on purpose —
+   revert it, watch the named test fail, restore it.
+7. `npm run ship`. **No pause to merge**: merges never collide with the
+   loops, `pause` drains for up to half an hour, and a pause older than two
+   hours nags the bus hourly. `ship` re-runs the gates, pushes, waits for CI,
+   merges and tidies; if it stops on a conflict, resolve by hand and run it
+   again.
+8. Ticket to Live with the closing note (gates, live probe, what was
+   break-tested); `npm run tidy`; one line on the bus.
+
+A ticket already **In review** with an open PR is the review half of this
+lane: skip the claim in step 3 (never drag it back to `Building`), do steps
+4–8 on the existing branch, re-run the gates on the *merged* code yourself, and
+close with `--if-status "in review"`. A job another machine owns (`bus-relay`)
+exits 0 here having tested nothing — rehearse it on the owning machine.
 
 ## One thread, one topic, one session
 
