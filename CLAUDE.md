@@ -198,15 +198,6 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     A dozen older tables still have this gap (`git grep -l 'project_id text'
     docs/SQL | xargs grep -L owner_user_id`); they are only a problem where a
     store actually uses `scopedInsertRow`.
-    **A correct table can fail that probe too.** The probe crosses the network,
-    so a 502 or a cold start fails it while saying nothing about the table —
-    and until 2026-08-30 that failure was cached for the life of the process,
-    which dropped the project filter off every scoped READ as well
-    (`docs/DOCTRINE.md` §5.19). The cache now keeps only a definitive answer.
-    Two consequences for new code: a store handling anything sensitive should
-    check the query actually came back scoped rather than trust that
-    `scopedIdQuery` added the filter, and "it worked in testing" says nothing
-    here, because the probe only fails in production and only occasionally.
 12. **Store calls take the limit FIRST and return an envelope.**
     `listPages(limit, scope)` — `listPages(scope)` reads the scope as a limit
     and returns **every project's pages**, which is a tenant leak that looks
@@ -275,7 +266,22 @@ setting somebody flips on one machine at 2am.
 ```
 npm run node:whoami          # which machine is this, and what may it run
 npm run node:owns -- <job>   # 0 = yes, 3 = another machine's job, 1 = cannot tell
+npm run doctor:node          # is this MACHINE a valid node? (read-only, safe anywhere)
+npm run provision:node       # what would it take to make it one? (dry run)
 ```
+
+**Standing a new machine up is a script, not a document**
+(`docs/NODE_PROVISIONING.md`). `doctor:node` is to a machine what `doctor` is to
+a folder: identity, toolchain, checkouts, config and schedules, each answered
+PASS / FAIL / **CANNOT TELL** — never a pass for a check that could not run.
+`provision:node` fixes what a script is allowed to fix and prints the rest as
+`::: PROMPT FOR DANE :::` blocks; it is a dry run unless you add `--apply`.
+The two are separate programs on purpose — a provisioner that graded its own
+work would grade it by the assumptions it acted on — but they read ONE inventory
+(`lib/nodeProvision.js`), because two definitions of "provisioned" disagree
+quietly. **Installing the pulse schedules reports CANNOT DO YET on every run**
+until Slice B (`86bbh9kh2`) exists: a green check on a machine that runs no jobs
+is the exact failure the NODES plan was written against.
 
 Each machine says who it is in `~/.alphire-node` (one short line:
 `macbook-pro` or `mac-mini`). Without that file it falls back to the hostname,
