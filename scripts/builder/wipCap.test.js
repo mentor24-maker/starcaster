@@ -169,12 +169,15 @@ test('the ticket id is read out of the PR body', () => {
 });
 
 test('it reads a body exactly as loosely as pr-opened ACCEPTS one', () => {
-  // Review round 2. The gate that guarantees every loop-opened PR carries its
-  // ticket is prBodyCarriesTicket in loopTrail.js, and it takes a BARE id
-  // case-insensitively. This reader demanded a URL and matched case-sensitively
-  // against a lowercase map — so a body reading `ClickUp: 86bbm4zwd` sailed
-  // through pr-opened and then went UNCOUNTED here. That is the cap failing
-  // OPEN, the direction this ticket calls the dangerous one.
+  // Review round 2. At the time, the gate that guarantees every loop-opened PR
+  // carries its ticket — prBodyCarriesTicket in loopTrail.js — took a BARE id
+  // case-insensitively, while this reader demanded a URL and matched
+  // case-sensitively against a lowercase map. So a body reading
+  // `ClickUp: 86bbm4zwd` sailed through pr-opened and then went UNCOUNTED
+  // here: the cap failing OPEN, the direction this ticket calls the dangerous
+  // one. The gate has since tightened to URL-only (86bbmmv7t finding 2); this
+  // reader stays loose on purpose, because over-counting is the cap's safe
+  // direction and older PR bodies still carry the bare shape.
   //
   // BREAK TEST: revert ticketIdFromPrBody to `return m ? m[1] : null` with no
   // knownIds scan, and the first two assertions fail. Watched fail.
@@ -190,7 +193,10 @@ test('it reads a body exactly as loosely as pr-opened ACCEPTS one', () => {
 
 test('the two readers agree — anything pr-opened lets through, the cap can count', () => {
   // The property, asserted against the REAL gate rather than a description of
-  // it, so the two cannot drift apart again without this failing.
+  // it, so the two cannot drift apart again without this failing. The property
+  // is one-directional on purpose: the cap may count MORE than the gate lets
+  // through (over-counting trips the cap early, the safe direction), but it
+  // must never count less — an uncounted in-flight PR is the cap failing OPEN.
   const { prBodyCarriesTicket } = require('./loopTrail');
   const id = '86bbm4zwd';
   const bodies = [
@@ -200,10 +206,27 @@ test('the two readers agree — anything pr-opened lets through, the cap can cou
     `Closes ${id.toUpperCase()}.`,
   ];
   for (const body of bodies) {
-    assert.ok(prBodyCarriesTicket(body, id), `pr-opened accepts: ${body}`);
+    if (!prBodyCarriesTicket(body, id)) continue;
     assert.equal(ticketIdFromPrBody(body, [id]), id,
-      `so the cap must resolve it too, or the PR silently stops counting: ${body}`);
+      `pr-opened accepts this, so the cap must resolve it too, or the PR silently stops counting: ${body}`);
   }
+
+  // Pin what the gate accepts, so a loosening or tightening over there shows
+  // up HERE as a failed expectation rather than as a silently vacuous loop.
+  // Since 2026-08-26 (task 86bbmmv7t, finding 2) a bare id is NOT a ticket
+  // reference — clickupTicketLink.js requires the full URL, both live shapes.
+  assert.ok(prBodyCarriesTicket(`Ticket: https://app.clickup.com/t/${id}`, id),
+    'pr-opened accepts the plain URL the loop writes');
+  assert.ok(prBodyCarriesTicket(`Ticket: https://app.clickup.com/t/90141423066/${id}`, id),
+    "pr-opened accepts the workspace URL ClickUp's copy-link button produces");
+  assert.equal(prBodyCarriesTicket(`ClickUp: ${id}`, id), false,
+    'a bare id no longer passes pr-opened (86bbmmv7t finding 2)');
+
+  // The cap still resolves a bare id via the knownIds scan. That is deliberate
+  // looseness in the safe direction, not drift: a PR whose body predates the
+  // URL rule keeps counting against the cap.
+  assert.equal(ticketIdFromPrBody(`ClickUp: ${id}`, [id]), id,
+    'the cap counts a bare id even though the gate no longer accepts one');
 });
 
 test('casing on EITHER side — the PR body or the queue — must not decide the count', () => {
