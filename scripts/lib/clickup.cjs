@@ -178,6 +178,11 @@ function postBusMessage(channelId, text) {
 module.exports = {
   WORKSPACE,
   COMMENT_PAGE_SIZE,
+  // The raw door, for callers that need an endpoint this module has no opinion
+  // about (the heartbeat's roll call reads and rewrites a task description).
+  // Exported rather than re-implemented: a second fetch wrapper is a second
+  // place for the token contract and the JSON/non-JSON handling to drift.
+  call,
   listTasks,
   pageComments,
   getTaskComments,

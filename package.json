@@ -87,6 +87,8 @@
     "node:whoami": "node scripts/node_role.mjs whoami",
     "node:owns": "node scripts/node_role.mjs owns",
     "doctor:node": "node scripts/doctor_node.mjs",
+    "heartbeat": "doppler run --project starcaster --config dev --no-check-version -- node scripts/node_heartbeat.mjs",
+    "report:failure": "doppler run --project starcaster --config dev --no-check-version -- node scripts/report_job_failure.mjs",
     "provision:node": "bash scripts/provision_node.sh",
     "provision:node:apply": "bash scripts/provision_node.sh --apply",
     "schema:snapshot": "doppler run --project starcaster --config dev --no-check-version -- node scripts/schema_snapshot.mjs snapshot",
