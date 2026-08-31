@@ -26,6 +26,20 @@ Nothing about the lock itself was loosened to achieve this — "out of date" onl
 ever means run it again, never let it through. With this in place the
 branch-protection setting is safe to turn on.
 
+The review pass caught something important before this shipped: the new
+question was being asked in the wrong place. Once the lock is switched on, an
+out-of-date check shows up as a *failed* check — and the merge step's very
+first rule is "never merge past a failed check", so it was giving up before it
+ever got to the new question. Everything looked fine in testing because the
+lock is still in warning mode, where the old answer stays green. The question
+now gets asked before that first rule instead of after it, a test pins the
+order so it cannot quietly drift back, and three smaller catches from the same
+review ride along: the step no longer pays for a re-run it has no time left to
+wait for, a branch that falls behind during the wait is told "catch up first"
+instead of being blamed for a failed check, and a moment where GitHub is
+swapping the old answer for the new one no longer looks like "no check here,
+go ahead".
+
 ## 2026-08-30 — The rule about who runs the commands, put where it gets read (#453)
 
 Three times now you have had to say the same thing: when there is a command to

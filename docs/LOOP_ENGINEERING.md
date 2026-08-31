@@ -1007,6 +1007,23 @@ merges: **is this check answering a question that has since changed?**
 | The re-run cannot be started, or its result is never seen | **refuses** the merge — cannot-see is not a pass |
 | The PR carries **no** gate run at all | nothing to be out of date; see below |
 | A timestamp on either side is unreadable | treated as **stale**, so it re-runs |
+| The pass has no wait budget left | waits quietly for the next pass — **before** spending a CI run, not after |
+| Main moves while it waits on the re-run | ends the wait; the next pass's catch-up handles it (the push re-runs the gate itself) |
+
+**The question is asked BEFORE the red-check refusal, and the order is the
+whole fix** (found in review, 2026-08-30). In enforcing mode a stale gate
+exits 1 — a red check — and the merge step's first rule is to refuse any PR
+with a red check. Asked after that refusal, the staleness question was
+unreachable in the one mode it was written for: every test stayed green
+because advisory mode (exit 0) still reached it. A stale RED gate means
+*re-run it*; only a re-run that comes back red is a real refusal. A wiring
+test pins the ordering (staleness before the refusal branch, before the merge
+command, and the budget ask before the re-run fires), so it cannot drift
+back. The conflict hand-off and the catch-up keep precedence above it on
+purpose: a conflict needs an agent session no matter what the gate says, and
+a catch-up push re-runs the gate on its own. A PR that is closed, merged or a
+draft skips the question entirely — its refusal reason is the honest one, and
+a re-run on it would spend a CI run to change nothing.
 
 **It compares START times, not completion times.** A verdict posted before the
 run started was certainly visible to it; one posted after the start may or may
@@ -1038,9 +1055,15 @@ left an identical call in the wait loop behind it.
 
 While it waits for the re-run it keeps waiting on **the re-run**, not merely on
 "the checks look settled": a re-run takes a few seconds to appear, and until it
-does GitHub still reports the old, green, stale answer. Polling on the ordinary
-check gate alone would merge on it in the first poll — the same bug wearing a
-fresh coat.
+does GitHub still reports the old, settled, stale answer. Polling on the
+ordinary check gate alone would act on it in the first poll — the same bug
+wearing a fresh coat. And inside that wait, only a **fresh** answer falls
+through to the ordinary gate (`duringRerunWait`, pure and tested): for a few
+seconds GitHub's rollup may carry no review-gate entry at all while the old
+attempt is swapped for the new one, and before this was one function the hook
+fell through on that moment — other checks green, the PR merged, the re-run's
+answer never observed. "No gate on this PR" is benign before a re-run exists;
+during the wait it means *cannot see*, and cannot-see is not a pass.
 
 ## Lane A — when the machine supplies the word (2026-08-25, task 86bbkw2au)
 
