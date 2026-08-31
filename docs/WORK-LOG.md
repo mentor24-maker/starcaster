@@ -1,4 +1,4 @@
-## 2026-08-31 — `npm run ship` now writes the note that lets a PR be merged (#PR)
+## 2026-08-31 — `npm run ship` now writes the note that lets a PR be merged (#484)
 
 There are two ways a finished change reaches the live site. The loops do it on
 their own, and Dane's own lane — `npm run ship` — does it by hand. A guard added
