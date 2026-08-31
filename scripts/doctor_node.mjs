@@ -43,6 +43,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const nodeRoles = require('../lib/nodeRoles.js');
 const provision = require('../lib/nodeProvision.js');
+const heartbeat = require('../lib/nodeHeartbeat.js');
 const { mainCheckoutDir } = await import('./lib/main_checkout.mjs');
 
 const HERE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -442,6 +443,45 @@ if (!knownNode) {
       else fail(`${job.role}: schedule file exists but launchd has not loaded it.`, `${job.installer}`, job.label);
     } else {
       fail(`${job.role}: this machine owns it, but its schedule is not installed here.`, job.installer);
+    }
+  }
+
+  // WHEN DID EACH OWNED JOB LAST ACTUALLY WORK?
+  //
+  // "The schedule is installed and loaded" is not the same claim as "the job
+  // runs". launchd will happily hold a job whose script exits non-zero every
+  // ten minutes, and report nothing. This reads the LOCAL beat stamps that
+  // scripts/node_heartbeat.mjs writes on every success — no token, no network,
+  // no ClickUp — so it stays runnable on a machine that is having a bad day.
+  //
+  // The shared, cross-machine view is `npm run heartbeat`, which is the one
+  // that can see a machine being switched off. This one can only ever speak
+  // for the machine it is standing on, and says so.
+  for (const job of owned) {
+    if (job.blocked || job.manual) continue;
+    if (!heartbeat.BEAT_EMITTERS[job.role]) {
+      unknown(
+        `${job.role}: cannot tell when it last succeeded on this machine.`,
+        heartbeat.NOT_REPORTING_WHY[job.role] || 'No beat emitter is registered for it in lib/nodeHeartbeat.js.',
+      );
+      continue;
+    }
+    const beat = heartbeat.readBeat({ role: job.role });
+    if (!beat.readable) {
+      unknown(`${job.role}: its beat stamp could not be read.`, beat.why, `rm ${beat.file}   # the next successful run rewrites it`);
+    } else if (!beat.found) {
+      fail(
+        `${job.role}: has never recorded a successful run on this machine.`,
+        'npm run heartbeat        # the shared roll call, which can see the other machine too',
+        'The schedule can be installed and loaded and still never complete a pass. A job that has never '
+          + 'succeeded and a job that is working perfectly look identical from the schedule alone.',
+      );
+    } else {
+      const ageMs = Date.now() - Date.parse(beat.beat.at);
+      const stale = ageMs > heartbeat.OVERDUE_AFTER_MS;
+      const line = `${job.role}: last succeeded here ${heartbeat.ageText(ageMs)} (${beat.beat.at}).`;
+      if (stale) fail(line, 'npm run heartbeat', 'Older than this system treats as alive. Something has stopped firing.');
+      else pass(line);
     }
   }
 

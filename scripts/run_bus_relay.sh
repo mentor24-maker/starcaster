@@ -43,7 +43,52 @@ fi
 # loud. The reasoning and the exit codes live in the script itself.
 REPO="$REPO" "$REPO/scripts/bus_relay_interval.sh" "interval: " || true
 
+# THE WATCHDOG, BEFORE THE OWNERSHIP CHECK — deliberately (NODES Slice E).
+#
+# A watchdog that runs on the same machine as the job it watches cannot notice
+# that machine being switched off, which is the case it exists for. This wake-up
+# happens on every machine that has the schedule installed, and on a machine
+# that does NOT own the relay it has until now done nothing at all: it wakes,
+# reads lib/nodeRoles.js, says whose job it is and exits. That idle wake is the
+# one vantage point in the system that survives the owning machine being dead,
+# so it is where the check belongs.
+#
+# Reads the shared roll call and posts to the bus only when a job has gone
+# quiet; it is silent otherwise. Never allowed to fail the relay.
+npm run --silent heartbeat -- --check || true
+
 npm run --silent clickup -- bus-relay
 status=$?
 echo "=== exit $status"
+
+if [ "$status" -eq 0 ]; then
+  # A beat, and only on a real success. Recorded locally every time (free,
+  # offline); pushed to the shared roll call at most once a day, which is what
+  # keeps this from being channel noise x365 and is the resolution the
+  # requirement actually asks for — a day-long absence, not a ten-minute one.
+  #
+  # A pass on a machine that does not own the relay also exits 0, and that is
+  # correct: `--role bus-relay` records THIS machine as the beater, and the
+  # report only ever counts the OWNER's row, so a non-owner's beat can never
+  # make a dead relay look alive.
+  # It also clears this job's failure and silence alarms, so a fault that is
+  # fixed and returns is announced again straight away rather than being
+  # swallowed by the earlier one's six-hour suppression window. That clearing
+  # lives in the beat rather than here so only one file knows where the stamps
+  # are kept (NODES P1 — a path written twice is a path that drifts).
+  npm run --silent heartbeat -- --beat --role bus-relay || true
+else
+  # The failure alert, in the repo at last. It was built by hand on 2026-08-20
+  # inside an uncommitted wrapper on the MacBook Pro; when Slice B brought the
+  # schedule into git and ownership moved to the Mini, the alert did not come
+  # with it, and a failure on the machine that actually runs the relay reached
+  # nobody. Nothing announced that — which is what an uncommitted file does.
+  # Through npm, not node, so Doppler supplies the ClickUp token the same way
+  # every other write in this file gets it — and NOT redirected to /dev/null:
+  # this script's stdout IS the launchd log, so an alert that could not be sent
+  # has to leave its reason where the next reader will find it.
+  npm run --silent report:failure -- --job bus-relay --status "$status" \
+    --log "$HOME/Library/Logs/bus-relay-launchd.log" || true
+fi
+
 exit $status
