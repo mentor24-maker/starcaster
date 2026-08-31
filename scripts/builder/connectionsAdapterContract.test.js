@@ -99,6 +99,142 @@ function withFetch(replies, fn) {
  */
 const EMPTY_INPUT = {};
 
+const BSKY_SESSION = { status: 200, body: { accessJwt: 'jwt-abc', did: 'did:plc:xyz', handle: 'delray.bsky.social' } };
+const BSKY_CREDS = { identifier: '@delray.bsky.social', appPassword: 'abcd-efgh-ijkl-mnop' };
+
+/**
+ * How to connect each provider without a network: what `exchange` is called
+ * with, and the canned replies each of the six gets.
+ *
+ * A fixture per provider rather than a generic one because "connect" genuinely
+ * differs — Facebook takes an OAuth code, Bluesky takes a handle and an app
+ * password, and that difference is the reason the contract is proven twice.
+ * What is generic is the SWEEP below, which walks the registry: a ready adapter
+ * with no fixture here fails by name, so platform seven cannot be added without
+ * proving its own account round-trips.
+ */
+const ROUND_TRIP_FIXTURES = {
+  facebook_page: {
+    env: { FACEBOOK_APP_ID: 'app-123', FACEBOOK_APP_SECRET: 'secret-123' },
+    connect: { code: 'the-code' },
+    replies: {
+      exchange: [
+        { status: 200, body: { access_token: 'short-lived' } },
+        { status: 200, body: { access_token: 'long-lived' } },
+        { status: 200, body: { data: [{ id: '55', name: 'Delray Tennis', access_token: 'page-token' }] } },
+      ],
+      verify: [{ status: 200, body: { id: '55', name: 'Delray Tennis' } }],
+      listAccounts: [{ status: 200, body: { data: [{ id: '55', name: 'Delray Tennis', access_token: 'page-token' }] } }],
+      refresh: [{ status: 200, body: {} }],
+      revoke: [{ status: 200, body: { success: true } }],
+    },
+  },
+  bluesky: {
+    env: {},
+    connect: { ...BSKY_CREDS },
+    replies: {
+      exchange: [BSKY_SESSION],
+      verify: [BSKY_SESSION],
+      listAccounts: [BSKY_SESSION],
+      refresh: [BSKY_SESSION],
+      revoke: [BSKY_SESSION],
+    },
+  },
+};
+
+/** The four that are called WITH an account `exchange` handed back. */
+const ROUND_TRIP_FUNCTIONS = ['verify', 'listAccounts', 'refresh', 'revoke'];
+
+test('a connected account round-trips: every adapter accepts the account it just produced', async () => {
+  // The test this slice was sent back twice for. `exchange` used to hand back
+  // `{ id, label }` while the other five read `{ accountId, accountLabel }`, so
+  // an adapter refused its own account — Bluesky on three of the four with
+  // "Bluesky needs a handle and an app password", which reads as a broken
+  // connection, and Facebook on verify and revoke. Every existing test passed:
+  // the conformance sweep only ever passed EMPTY_INPUT and asserted a refusal,
+  // and the per-provider tests passed hand-written credentials. Nothing fed an
+  // adapter its own output, so the gap had no test that could fail.
+  const entries = registry.CATALOGUE.filter((entry) => entry.adapter);
+  assert.ok(entries.length >= 2, 'a round trip proven on one platform is not proven');
+
+  for (const entry of entries) {
+    const fixture = ROUND_TRIP_FIXTURES[entry.provider];
+    assert.ok(
+      fixture,
+      `"${entry.provider}" is a ready adapter with no entry in ROUND_TRIP_FIXTURES. `
+      + 'Add one — what `exchange` is called with, and a canned reply for each of the six — '
+      + 'so this sweep proves your account can be handed back to your own verify/refresh/revoke.'
+    );
+
+    await withEnv(fixture.env || {}, async () => {
+      const account = await withFetch(fixture.replies.exchange, async () => {
+        const res = await entry.adapter.exchange(fixture.connect);
+        assert.equal(res.ok, true, `${entry.provider}.exchange refused its own fixture: ${res.error}`);
+        const accounts = res.data?.accounts;
+        assert.ok(Array.isArray(accounts) && accounts.length, `${entry.provider}.exchange returned no accounts`);
+        const problems = contract.accountProblems(accounts[0], `${entry.provider}.exchange account`);
+        assert.deepEqual(problems, [], problems.join('\n'));
+        return accounts[0];
+      });
+
+      for (const fnName of ROUND_TRIP_FUNCTIONS) {
+        // The account exactly as it came back — a copy, so a mutating adapter
+        // cannot make the next call in this loop pass on leftovers.
+        const res = await withFetch(fixture.replies[fnName], () => entry.adapter[fnName]({ ...account }));
+        assert.equal(contract.envelopeProblem(res), null, `${entry.provider}.${fnName} did not return the envelope`);
+        assert.equal(
+          res.ok,
+          true,
+          `${entry.provider}.${fnName} refused the account ${entry.provider}.exchange just produced `
+          + `(${res.status}: ${res.error}). The account carries ${Object.keys(account).join(', ')}.`
+        );
+      }
+
+      // listAccounts hands accounts back too, so its accounts must round-trip
+      // as well — otherwise slice 6's health sweep, which lists then verifies,
+      // would hit the same wall from the other side.
+      const listed = await withFetch(fixture.replies.listAccounts, () => entry.adapter.listAccounts({ ...account }));
+      const problems = contract.accountProblems(listed.data?.accounts?.[0], `${entry.provider}.listAccounts account`);
+      assert.deepEqual(problems, [], problems.join('\n'));
+    });
+  }
+});
+
+test('the round-trip check FAILS an account in the old two-vocabulary shape', () => {
+  // The break-on-purpose half: every adapter passes the sweep above, so the
+  // only way to watch the check object is to hand it what used to be emitted.
+  const wasEmitted = { id: '55', label: 'Delray Tennis', avatarUrl: '', accessToken: 'page-token', raw: {} };
+  const problems = contract.accountProblems(wasEmitted, 'legacy');
+  assert.match(problems.join('\n'), /carries `id`.*Use `accountId`/s);
+  assert.match(problems.join('\n'), /carries `label`.*Use `accountLabel`/s);
+  assert.match(problems.join('\n'), /missing `accountId`/);
+  assert.match(problems.join('\n'), /missing `accountLabel`/);
+
+  assert.deepEqual(contract.accountProblems(contract.account(wasEmitted), 'converted'), []);
+  assert.match(contract.accountProblems(null).join(''), /expected an account object, got null/);
+  assert.match(
+    contract.accountProblems({ accountId: '1', accountLabel: 'x' }).join(''),
+    /missing `accessToken`/
+  );
+});
+
+test('accountRef reads an account whichever vocabulary it arrives in', () => {
+  // Strict on the way out, tolerant on the way in: a provider's own row or an
+  // older stored shape still resolves, so the fix cannot be undone by a caller
+  // that hands over something it read from somewhere else.
+  assert.deepEqual(contract.accountRef({ id: '55', label: 'Delray', avatarUrl: '/a.png', accessToken: 't' }), {
+    accountId: '55', accountLabel: 'Delray', accountAvatarUrl: '/a.png', accessToken: 't', raw: null,
+  });
+  assert.deepEqual(contract.accountRef({ accountId: '55', accountLabel: 'Delray', accessToken: 't' }), {
+    accountId: '55', accountLabel: 'Delray', accountAvatarUrl: '', accessToken: 't', raw: null,
+  });
+  // The canonical name wins when both are somehow present.
+  assert.equal(contract.accountRef({ accountId: 'right', id: 'wrong' }).accountId, 'right');
+  assert.deepEqual(contract.accountRef(), {
+    accountId: '', accountLabel: '', accountAvatarUrl: '', accessToken: '', raw: null,
+  });
+});
+
 test('every registered adapter exports all six contract functions', () => {
   const adapters = registry.listAdapters();
   assert.ok(adapters.length >= 2, 'the contract is only proven if at least two platforms implement it');
@@ -266,9 +402,9 @@ test('facebookPage.exchange returns the same Page rows the route already stores'
     assert.deepEqual(res.data.pages, [{ id: '55', name: 'Delray Tennis', access_token: 'page-token' }]);
     // And the shape a provider-agnostic caller reads.
     assert.deepEqual(res.data.accounts, [{
-      id: '55',
-      label: 'Delray Tennis',
-      avatarUrl: '',
+      accountId: '55',
+      accountLabel: 'Delray Tennis',
+      accountAvatarUrl: '',
       accessToken: 'page-token',
       raw: { id: '55', name: 'Delray Tennis', access_token: 'page-token' },
     }]);
@@ -334,8 +470,6 @@ test('lib/metaOAuth.js still exports everything it did, now from the adapter', (
 // Bluesky: the same contract, with no browser anywhere in it.
 // ---------------------------------------------------------------------------
 
-const BSKY_SESSION = { status: 200, body: { accessJwt: 'jwt-abc', did: 'did:plc:xyz', handle: 'delray.bsky.social' } };
-const BSKY_CREDS = { identifier: '@delray.bsky.social', appPassword: 'abcd-efgh-ijkl-mnop' };
 
 test('bluesky refuses authorizeUrl in the envelope — it has no browser step', () => {
   const res = registry.adapterFor('bluesky').authorizeUrl({ projectId: 'proj_a', userId: 'user_1' });
@@ -355,9 +489,9 @@ test('bluesky connects, lists, verifies and revokes through the same contract', 
     const res = await adapter.exchange(BSKY_CREDS);
     assert.equal(res.ok, true, res.error);
     assert.deepEqual(res.data.accounts, [{
-      id: 'did:plc:xyz',
-      label: 'delray.bsky.social',
-      avatarUrl: '',
+      accountId: 'did:plc:xyz',
+      accountLabel: 'delray.bsky.social',
+      accountAvatarUrl: '',
       // The app password, not the two-hour session token — see the adapter.
       accessToken: 'abcd-efgh-ijkl-mnop',
       raw: { did: 'did:plc:xyz', handle: 'delray.bsky.social', serviceUrl: 'https://bsky.social' },
@@ -368,6 +502,7 @@ test('bluesky connects, lists, verifies and revokes through the same contract', 
 
   await withFetch(BSKY_SESSION, async () => {
     const res = await adapter.listAccounts({ accountId: 'did:plc:xyz', ...BSKY_CREDS });
+    assert.deepEqual(contract.accountProblems(res.data?.accounts?.[0], 'bluesky.listAccounts account'), []);
     assert.equal(res.ok, true, res.error);
     assert.equal(res.data.accounts.length, 1);
   });
@@ -385,15 +520,26 @@ test('bluesky connects, lists, verifies and revokes through the same contract', 
 });
 
 test('bluesky verify catches an app password that now signs in as someone else', async () => {
+  const adapter = registry.adapterFor('bluesky');
+  // Driven through the account `exchange` actually produced, then with its
+  // saved DID changed — the shape slice 6's sweep will use. Round 2's version
+  // hand-wrote `{ accountId, identifier }`, which no adapter ever emitted, so
+  // the 409 was only ever proven in a vocabulary nothing spoke: on a real
+  // round trip `input.accountId` was absent and the check could not fire.
+  const connected = await withFetch(BSKY_SESSION, async () => {
+    const res = await adapter.exchange(BSKY_CREDS);
+    return res.data.accounts[0];
+  });
+  assert.equal(connected.accountId, 'did:plc:xyz');
+
   await withFetch(BSKY_SESSION, async () => {
-    const res = await registry.adapterFor('bluesky').verify({
-      accountId: 'did:plc:someone-else',
-      accessToken: BSKY_CREDS.appPassword,
-      identifier: 'delray.bsky.social',
-    });
+    const res = await adapter.verify({ ...connected, accountId: 'did:plc:someone-else' });
     assert.equal(res.ok, false);
     assert.equal(res.status, 409);
     assert.match(res.error, /not the account it was saved for/);
+    // Named by handle, which is what the client recognises — the DID is not
+    // something anybody could match against their own account.
+    assert.match(res.error, /delray\.bsky\.social/);
   });
 });
 
