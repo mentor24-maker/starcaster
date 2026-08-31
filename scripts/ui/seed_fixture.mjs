@@ -830,6 +830,15 @@ const buildPanelCheckSection = (ids) => {
     posterUrl: '/images/render-fixture-background-poster.jpg',
     videoSpeed: 1,
     videoLoop: true,
+    /*
+     * Parallax ON, for the same reason the mode is "video": the Motion
+     * sub-panel's Speed box is DISABLED until the checkbox is ticked, and a
+     * disabled input is a different rectangle from an enabled one. Seeding it
+     * off would measure the panel in the state an operator only ever sees for
+     * a moment, and report green over the one he actually works in.
+     */
+    parallax: true,
+    parallaxSpeed: 0.3,
   },
   modules: [
     ...BUILDER_MODULE_TYPES.map((type) => {

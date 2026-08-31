@@ -6957,6 +6957,29 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   z-index: 0;
 }
 
+/*
+ * The IMAGE layer, which exists only to parallax — an image background is a
+ * CSS background on the section itself everywhere else, and this element is
+ * mounted only when it has to MOVE. It paints the same picture on top of the
+ * static one so that a visitor with JavaScript off gets the ordinary
+ * background rather than a blank band.
+ *
+ * `inset: 0` is the resting geometry; while parallax is running, the layer's
+ * inline style overrides top/height with the driver's numbers, which make it
+ * taller than the section by the full travel distance so no edge of the band
+ * is ever uncovered.
+ */
+.builder-preview-image-background {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
 .builder-preview-row-overlay-screen {
   position: absolute;
   inset: 0;
@@ -6982,7 +7005,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * setting, and the operator is allowed to save without one.
  */
 .builder-video-background-warning,
-.builder-video-background-note {
+.builder-video-background-note,
+.builder-parallax-background-note {
   margin: 6px 0 0;
   max-width: 62ch;
   font-size: var(--text-xs);

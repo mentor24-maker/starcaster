@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import {
+  builderBackgroundParallaxActive,
   createDefaultBackgroundSettings,
   formatHeadingContent,
   formatPlainTextContent,
@@ -18,7 +19,7 @@ import {
   resolvePublicBuilderAssetUrl
 } from "@/lib/builder-template";
 import { imageProps } from "@/lib/image-renditions";
-import { BuilderVideoBackgroundLayer } from "@/components/builder/builder-video-background-layer";
+import { BuilderBackgroundLayer } from "@/components/builder/builder-background-layer";
 
 /** Feature cards sit up to three across the content column. */
 const FEATURE_CARD_SIZES = "(max-width: 700px) 100vw, 400px";
@@ -1549,6 +1550,23 @@ function BuilderSectionPreview({
     Boolean(section.background?.videoUrl)
       ? section.background
       : null;
+  /*
+   * An IMAGE background needs a layer too, but only when it parallaxes.
+   *
+   * Everywhere else an image is a CSS background on this very element, which
+   * is why the check is `builderBackgroundParallaxActive` and not "is this an
+   * image": mounting a layer for every image section would give all of them
+   * the containment below (`overflow: hidden`), and a row with an overlay
+   * module deliberately spilling out of it would start being clipped. Off by
+   * default means off, all the way down to the element count.
+   */
+  const sectionParallaxImageBackground =
+    !isOverlayLayoutCollapsed &&
+    section.background?.mode === "image" &&
+    builderBackgroundParallaxActive(section.background)
+      ? section.background
+      : null;
+  const sectionBackgroundLayer = sectionVideoBackground ?? sectionParallaxImageBackground;
   const sectionOverlayScreenStyle = isOverlayLayoutCollapsed
     ? undefined
     : getBuilderRowOverlayScreenStyle(section.overlayScreen);
@@ -1601,7 +1619,7 @@ function BuilderSectionPreview({
     // absolutely positioned children. Without `overflow: hidden` a blurred
     // video — which is scaled up so its soft rim falls outside — would spill
     // over the rows above and below it.
-    ...(sectionVideoBackground || sectionOverlayScreenStyle
+    ...(sectionBackgroundLayer || sectionOverlayScreenStyle
       ? { position: "relative", overflow: "hidden" }
       : {}),
     display: "grid",
@@ -1623,14 +1641,14 @@ function BuilderSectionPreview({
       }${
         section.widthMode === "full-width" ? " builder-preview-section-full-width" : ""
       }${
-        sectionVideoBackground || sectionOverlayScreenStyle
+        sectionBackgroundLayer || sectionOverlayScreenStyle
           ? " builder-preview-section-layered"
           : ""
       }`}
       style={gridStyle}
     >
-      {sectionVideoBackground ? (
-        <BuilderVideoBackgroundLayer background={sectionVideoBackground} surface="section" />
+      {sectionBackgroundLayer ? (
+        <BuilderBackgroundLayer background={sectionBackgroundLayer} surface="section" />
       ) : null}
       {sectionOverlayScreenStyle ? (
         <div className="builder-preview-row-overlay-screen" style={sectionOverlayScreenStyle} />

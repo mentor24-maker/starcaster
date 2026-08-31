@@ -34,6 +34,37 @@ const PICTURE = { url: BANNER, alt: 'Contract fixture picture', size: '40' };
  * showing, the row is visibly grey and still, so "the poster is up" is a thing
  * a person can see across the room rather than something to squint at.
  */
+/**
+ * The parallax fixture — the same banner every image contract uses, on a
+ * section tall enough to be worth drifting, with spacer sections above and
+ * below so the page can actually scroll. `spacers` is what makes that page
+ * tall; without them there is nothing to scroll and the whole effect is
+ * unobservable.
+ */
+const PARALLAX_IMAGE_SECTION = {
+  layout: 'single',
+  spacers: 2,
+  background: {
+    mode: 'image',
+    imageUrl: BANNER,
+    parallax: true,
+    parallaxSpeed: 0.3,
+  },
+  modules: [{ type: 'heading', text: 'Text over a drifting picture', settings: {} }],
+};
+
+/** How the parallax contracts watch: scroll a fixed step, read, repeat. */
+const PARALLAX_SERIES = {
+  count: 14,
+  everyMs: 60,
+  scrollBy: 90,
+  read: ['transform'],
+  selectors: {
+    layer: '.builder-preview-image-background',
+    section: '.builder-preview-section-layered',
+  },
+};
+
 const VIDEO_SECTION = {
   layout: 'single',
   background: {
@@ -717,6 +748,199 @@ export const RENDER_CONTRACTS = [
     },
     selector: 'video[data-builder-video-role="follow"]',
     absent: true,
+  },
+
+  {
+    id: 'image-parallax-mounts-a-layer-and-overscans-it',
+    why:
+      'An image background is a CSS background on the section itself, which cannot translate — so ' +
+      'parallax needs a real ELEMENT, and that element has to be TALLER than its section by the ' +
+      'whole travel distance. A layer exactly the size of its section slides off one edge the ' +
+      'instant it moves and leaves a bare strip at the top or bottom of the band. That is the ' +
+      'classic parallax bug and it is acceptance criterion 7 on the ticket that built this.',
+    section: { ...PARALLAX_IMAGE_SECTION },
+    selector: '.builder-preview-image-background',
+    read: ['position', 'backgroundSize', 'zIndex'],
+    expect(sample) {
+      if (sample.styles.position !== 'absolute') {
+        return `the parallax layer is \`position: ${sample.styles.position}\` — it is in the row's flow ` +
+          'rather than behind it, so it would push the content down the page.';
+      }
+      if (sample.styles.backgroundSize !== 'cover') {
+        return `the parallax layer is \`background-size: ${sample.styles.backgroundSize}\`, not cover — ` +
+          'it would tile or letterbox instead of filling the row.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'image-parallax-is-absent-until-it-is-asked-for',
+    why:
+      'OFF BY DEFAULT is the load-bearing half of this feature: every page in production was saved ' +
+      'before parallax existed and must render byte-identically. A layer that paints the picture a ' +
+      'second time over the section\'s own background would be nearly invisible when it is wrong, ' +
+      'which is how it would survive review.',
+    section: {
+      ...PARALLAX_IMAGE_SECTION,
+      background: { ...PARALLAX_IMAGE_SECTION.background, parallax: false },
+    },
+    selector: '.builder-preview-image-background',
+    absent: true,
+  },
+
+  {
+    id: 'image-parallax-does-not-contain-a-row-it-is-off-for',
+    why:
+      'THE CONTRACT ABOVE PASSES ON THIS BUG, measured rather than feared: make the section mount a ' +
+      'layer for EVERY image background and it still reports clean, because the layer component ' +
+      'itself renders null when parallax is off. What actually changes is the ROW — deciding to ' +
+      'mount a layer is also deciding to make the row `position: relative; overflow: hidden`, and ' +
+      'that would start clipping any overlay module deliberately spilling out of it, on pages ' +
+      'nobody touched. The absence that matters is the containment, not the element.',
+    section: {
+      ...PARALLAX_IMAGE_SECTION,
+      background: { ...PARALLAX_IMAGE_SECTION.background, parallax: false },
+    },
+    selector: '.builder-preview-section-layered',
+    absent: true,
+  },
+
+  {
+    id: 'image-parallax-honours-reduce-motion',
+    why:
+      'Reduce Motion is a setting people turn on for migraines and motion sickness, and a background ' +
+      'sliding against the text is exactly the kind of thing it exists for. The picture is already ' +
+      'painted by the CSS underneath, so honouring this costs nothing — and it is invisible to every ' +
+      'other check, because the page looks perfectly fine to whoever is not affected.',
+    section: { ...PARALLAX_IMAGE_SECTION },
+    selector: '.builder-preview-image-background',
+    emulate: { reducedMotion: 'reduce' },
+    absent: true,
+  },
+
+  {
+    id: 'image-parallax-actually-drifts-slower-than-the-page',
+    why:
+      'THE ONLY ASSERTION THAT CANNOT PASS ON A DEAD PARALLAX. A transform property is not movement ' +
+      '— the crossfade above learned that the hard way, where two elements, both carrying an opacity ' +
+      'transition, reported 19/19 with the handoff completely disabled. Parallax does not exist in a ' +
+      'frame at all: it IS the difference between two scroll positions. So this scrolls the page and ' +
+      'compares how far the background moved against how far the page did. Drifting slower is the ' +
+      'whole feature; moving at all is not.',
+    section: { ...PARALLAX_IMAGE_SECTION },
+    selector: '.builder-preview-image-background',
+    series: PARALLAX_SERIES,
+    expect(sample) {
+      const frames = (sample.series || []).filter((f) => f.layer && f.section);
+      if (frames.length < 6) {
+        return `only ${frames.length} usable frame(s) — nothing was watched, so nothing is proven.`;
+      }
+
+      const first = frames[0];
+      const last = frames[frames.length - 1];
+      const pageMoved = last.scrollY - first.scrollY;
+      if (!(pageMoved > 0)) {
+        return 'the page never scrolled, so no parallax could have been observed. The fixture needs ' +
+          'spacer sections tall enough to scroll — a green run here would mean nothing.';
+      }
+
+      // Both are viewport-relative, so the section's own top falls by exactly
+      // what the page scrolled. The layer's must fall by LESS.
+      const sectionMoved = first.section.top - last.section.top;
+      const layerMoved = first.layer.top - last.layer.top;
+
+      if (!(layerMoved < sectionMoved - 1)) {
+        return `over ${pageMoved}px of scrolling the row moved ${Math.round(sectionMoved)}px and its ` +
+          `background moved ${Math.round(layerMoved)}px — the background is keeping pace with the page, ` +
+          'which is a background, not a parallax.';
+      }
+      if (!(layerMoved > 0)) {
+        return `the background moved ${Math.round(layerMoved)}px against ${Math.round(sectionMoved)}px ` +
+          'of row movement — it is pinned to the screen rather than drifting. At the shipped default ' +
+          'speed of 0.3 it should move about a third as far as the row.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'image-parallax-never-uncovers-the-band',
+    why:
+      'The gap at the top or bottom edge of a parallaxing row is the single most common way this ' +
+      'effect ships broken, and it only appears at SOME scroll positions — which is why nobody sees ' +
+      'it in the editor and everybody sees it on the live page. The driver guarantees it by ' +
+      'construction (the offset is clamped to the overscan) and the unit tests prove the arithmetic; ' +
+      'this proves the arithmetic reached the browser.',
+    section: { ...PARALLAX_IMAGE_SECTION },
+    selector: '.builder-preview-image-background',
+    series: PARALLAX_SERIES,
+    expect(sample) {
+      const frames = (sample.series || []).filter((f) => f.layer && f.section);
+      if (frames.length < 6) {
+        return `only ${frames.length} usable frame(s) — nothing was watched, so nothing is proven.`;
+      }
+      for (const frame of frames) {
+        // One pixel of slack for sub-pixel rounding, and no more: the bug this
+        // catches is tens of pixels of bare band, never one.
+        if (frame.layer.top > frame.section.top + 1) {
+          return `at scroll ${Math.round(frame.scrollY)} the background's top edge sits ` +
+            `${Math.round(frame.layer.top - frame.section.top)}px BELOW the row's — a bare strip across ` +
+            'the top of the band. The layer is not tall enough for the distance it travels.';
+        }
+        const layerBottom = frame.layer.top + frame.layer.height;
+        const sectionBottom = frame.section.top + frame.section.height;
+        if (layerBottom < sectionBottom - 1) {
+          return `at scroll ${Math.round(frame.scrollY)} the background's bottom edge sits ` +
+            `${Math.round(sectionBottom - layerBottom)}px ABOVE the row's — a bare strip across the ` +
+            'bottom of the band.';
+        }
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-parallax-drifts-the-video-layer-too',
+    why:
+      'One layer, used by image and video alike — that was the instruction on the ticket, because ' +
+      'two implementations of "pause when off screen" or "honour reduce motion" drift apart silently ' +
+      'and only one of them ever gets fixed. This is what proves there is not a second, dead code ' +
+      'path behind the video half of the control: the panel offers parallax on a video background, ' +
+      'so a video background has to actually parallax.',
+    section: {
+      ...VIDEO_SECTION,
+      spacers: 2,
+      background: { ...VIDEO_SECTION.background, parallax: true, parallaxSpeed: 0.3 },
+    },
+    selector: 'video[data-builder-video-background="section"]',
+    series: {
+      ...PARALLAX_SERIES,
+      selectors: {
+        layer: 'video[data-builder-video-background="section"]',
+        section: '.builder-preview-section-layered',
+      },
+    },
+    expect(sample) {
+      const frames = (sample.series || []).filter((f) => f.layer && f.section);
+      if (frames.length < 6) {
+        return `only ${frames.length} usable frame(s) — nothing was watched, so nothing is proven.`;
+      }
+      const first = frames[0];
+      const last = frames[frames.length - 1];
+      if (!(last.scrollY > first.scrollY)) {
+        return 'the page never scrolled, so no parallax could have been observed.';
+      }
+      const sectionMoved = first.section.top - last.section.top;
+      const layerMoved = first.layer.top - last.layer.top;
+      if (!(layerMoved < sectionMoved - 1)) {
+        return `over ${Math.round(last.scrollY - first.scrollY)}px of scrolling the row moved ` +
+          `${Math.round(sectionMoved)}px and the video moved ${Math.round(layerMoved)}px — the video ` +
+          'is keeping pace with the page. The image half of this feature works and the video half ' +
+          'does not, which is the exact split the shared layer exists to prevent.';
+      }
+      return null;
+    },
   },
 
   {
