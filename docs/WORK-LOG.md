@@ -1,3 +1,101 @@
+## 2026-08-31 — `npm run ship` now writes the note that lets a PR be merged (#484)
+
+There are two ways a finished change reaches the live site. The loops do it on
+their own, and Dane's own lane — `npm run ship` — does it by hand. A guard added
+last week checks, before letting anything merge, that the ticket has a note on
+it saying which pull request belongs to it. No note means the guard cannot tell,
+and it never lets something through it cannot tell about.
+
+The loops have been leaving that note for over a week. `ship` never has — it had
+no connection to ClickUp at all. Nothing was broken yet only because the guard is
+still advisory. The moment it is switched on for real, every change Dane ships by
+hand would have been stuck, waiting on a command nobody would have known to run.
+
+So `ship` writes the note itself now. It already knows which ticket the work is
+for, because starting a piece of work stamps the ticket onto it; it just never
+used that for this. It writes the note before it merges, so even a run that stops
+on a failed check leaves the ticket properly labelled. Running `ship` twice does
+not leave two notes — it asks the guard's own reader whether the note is already
+there, so one written by a loop or typed by hand counts the same. A branch with
+no ticket still ships perfectly well; it just says out loud that nothing was
+recorded, rather than staying quiet, because quiet looks exactly like success.
+And if ClickUp is down, the change still merges — the failure is reported
+loudly with the one command that repairs it, because a note going missing in
+silence is the entire thing being fixed here.
+
+The rules behind all of that were written as their own small piece of code so
+they could be tested, then broken on purpose one at a time — fourteen breaks,
+each of which made a named test fail. Two of those breaks found real bugs before
+the change ever left the branch: one test could not fail at all and was rewritten,
+and the code was reading a ClickUp command that had been killed mid-run as
+though it had succeeded, which is precisely the silent missing note the whole
+job exists to prevent.
+
+Review then found three more holes in that same work, all reproduced live rather
+than reasoned about, and this fixes them. The first is the plainest: when the
+note could not be written, the loud failure message handed over a command to
+repair it — and that command was rejected the moment you ran it, because it named
+the pull request by number where the tool wants the full web address. A repair
+step that does not run is not a repair step, and the tests had been written
+around the broken spelling, so fixing it would have looked like a regression.
+There is now one place that spells out both addresses, `ship` uses it for the
+command it prints and for the command it actually runs, and the two can no longer
+drift apart.
+
+The second was an ordering accident with real teeth. The guard works out which
+ticket a pull request belongs to by taking the FIRST ClickUp link in its
+description, and `ship` was adding its link at the bottom. So a change whose
+commit message happened to mention a related ticket — "follows on from ..." —
+would have sent the guard off to judge the work against the wrong ticket
+entirely. It would have refused rather than waved the wrong thing through, but
+the change it refused is the hand-shipped one, which is the exact thing this job
+exists to unblock. The link goes at the top now, so there is nothing left to get
+in the wrong order.
+
+The third was a cheerful all-clear standing in front of a refusal. Because `ship`
+is meant to be re-run, it asks first whether the note is already there and skips
+writing a second copy — but that skip was jumping over the other half of the
+check too, the one confirming the pull request points back at its ticket. So a
+ticket that already had its note would report success no matter what, and the
+guard would then reject the very same pull request for having no ticket link.
+Now the skip only skips the writing; both halves are checked every time.
+
+A second review pass found two more, and the first is the wrong-ticket problem
+above surviving in the one case the fix stepped over. `ship` puts its link at the
+top now, but it skips a description that already mentions this ticket — and
+"mentions it somewhere" is not the question the guard asks. The guard asks which
+link comes FIRST. So a description naming another ticket at the top and this one
+further down was left exactly as it was, and the guard went off to judge the work
+against somebody else's ticket, telling Dane about a ticket he had nothing to do
+with. The skip now asks the guard's own question, and the test no longer checks
+another example — it checks the rule itself, over five differently-shaped
+descriptions: whatever came in, what comes out points at this ticket.
+
+The second is a message that said more than it knew. When writing the note fails,
+`ship` announced "this ticket now has no note" and handed over a repair command.
+But one of the ways it fails is that the note WAS written and reading it back is
+what broke — so the sentence was false, and the repair command it gave would have
+added a second identical note, which is the duplicate the whole design goes out
+of its way to avoid. It now says what it can actually stand behind: the note may
+or may not be there, go and look. And both repair commands are the safe kind that
+write only if the note is genuinely missing. A repair is by definition run when
+nobody knows what landed, which is exactly when that matters.
+
+One more turned up while testing this on the live ticket, and it is the same
+mistake wearing different clothes. The whole point of the "only write if it is
+missing" option is that running `ship` twice does not leave two notes. To decide
+that, it reads the ticket's comments — and if that read came back without a list
+of comments at all, the code treated it as "there are no comments", which means
+"no note is there", which means write one. So the one check whose entire job is
+to prevent a duplicate would create a duplicate precisely when it could not see.
+It now tells the two apart: a ticket with genuinely no comments still gets its
+note, but a reply it could not read makes it stop and say run this again. One
+re-run costs nothing; a duplicate note sits on the ticket forever. The same
+confusion sat one step further down, where a reply it could not read was
+reported as "the note did not land" moments after the note had in fact been
+posted successfully — it now says what it actually knows, which is that it could
+not check.
+
 ## 2026-08-31 — One shape for every social platform, proven on two of them (#471)
 
 Adding a new social network to Starcaster has always meant threading a new
