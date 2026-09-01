@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
+  eventOccursOn,
   formatEventWhen,
   isoToLocalInput,
+  isUpcomingEvent,
   localInputToIso,
+  monthGrid,
   normalizeEventStatus,
 } from "./event-format";
 
@@ -135,5 +138,106 @@ describe("normalizeEventStatus", () => {
     expect(normalizeEventStatus("live")).toBe("draft");
     expect(normalizeEventStatus("")).toBe("draft");
     expect(normalizeEventStatus(null)).toBe("draft");
+  });
+});
+
+describe("monthGrid", () => {
+  it("draws whole weeks, starting on the chosen weekday", () => {
+    // April 2026 begins on a Wednesday.
+    const weeks = monthGrid(2026, 3, 0);
+    for (const week of weeks) expect(week).toHaveLength(7);
+    expect(weeks[0][0].date.getDay()).toBe(0);
+    expect(weeks[0][0].inMonth).toBe(false);
+    const firstOfMonth = weeks.flat().find((c) => c.inMonth);
+    expect(firstOfMonth?.date.getDate()).toBe(1);
+    expect(firstOfMonth?.date.getDay()).toBe(3);
+  });
+
+  it("honours a Monday start", () => {
+    const weeks = monthGrid(2026, 3, 1);
+    expect(weeks[0][0].date.getDay()).toBe(1);
+  });
+
+  it("covers every day of the month exactly once", () => {
+    // Every month of a leap year and the one either side of it — an off-by-one
+    // in the lead or the week count drops a day or repeats one, and on a
+    // calendar that is an event that silently has nowhere to go.
+    for (const year of [2024, 2026, 2027]) {
+      for (let month = 0; month < 12; month += 1) {
+        const days = monthGrid(year, month).flat().filter((c) => c.inMonth).map((c) => c.date.getDate());
+        const expected = new Date(year, month + 1, 0).getDate();
+        expect(days, `${year}-${month + 1}`).toHaveLength(expected);
+        expect(new Set(days).size, `${year}-${month + 1} repeats a day`).toBe(expected);
+        expect(Math.min(...days)).toBe(1);
+        expect(Math.max(...days)).toBe(expected);
+      }
+    }
+  });
+
+  it("adds no empty trailing week", () => {
+    // A month that fits in five rows must not draw a sixth of nothing.
+    for (const year of [2024, 2026, 2027]) {
+      for (let month = 0; month < 12; month += 1) {
+        const weeks = monthGrid(year, month);
+        expect(weeks[weeks.length - 1].some((c) => c.inMonth), `${year}-${month + 1}`).toBe(true);
+      }
+    }
+  });
+
+  it("handles February in a leap year", () => {
+    const days = monthGrid(2024, 1).flat().filter((c) => c.inMonth);
+    expect(days).toHaveLength(29);
+  });
+});
+
+describe("eventOccursOn", () => {
+  const day = (y: number, m: number, d: number) => new Date(y, m, d, 12, 0);
+
+  it("puts a single-evening event on its own day and no other", () => {
+    const e = { startsAt: new Date(2026, 3, 12, 18, 0).toISOString(), endsAt: new Date(2026, 3, 12, 21, 0).toISOString() };
+    expect(eventOccursOn(e, day(2026, 3, 12))).toBe(true);
+    expect(eventOccursOn(e, day(2026, 3, 11))).toBe(false);
+    expect(eventOccursOn(e, day(2026, 3, 13))).toBe(false);
+  });
+
+  it("puts a multi-day event on every day it spans, ends included", () => {
+    const e = { startsAt: new Date(2026, 3, 12, 9, 0).toISOString(), endsAt: new Date(2026, 3, 14, 17, 0).toISOString() };
+    expect(eventOccursOn(e, day(2026, 3, 12))).toBe(true);
+    expect(eventOccursOn(e, day(2026, 3, 13))).toBe(true);
+    expect(eventOccursOn(e, day(2026, 3, 14))).toBe(true);
+    expect(eventOccursOn(e, day(2026, 3, 15))).toBe(false);
+  });
+
+  it("puts an unscheduled event on no day at all", () => {
+    expect(eventOccursOn({}, day(2026, 3, 12))).toBe(false);
+    expect(eventOccursOn({ startsAt: "whenever" }, day(2026, 3, 12))).toBe(false);
+  });
+});
+
+describe("isUpcomingEvent", () => {
+  it("keeps an event that has started but not finished", () => {
+    // The moment it is most relevant is exactly when judging by start time
+    // would drop it.
+    const now = new Date(2026, 3, 12, 19, 30);
+    const e = { startsAt: new Date(2026, 3, 12, 18, 0).toISOString(), endsAt: new Date(2026, 3, 12, 21, 0).toISOString() };
+    expect(isUpcomingEvent(e, now)).toBe(true);
+  });
+
+  it("keeps a festival on its middle day", () => {
+    const now = new Date(2026, 3, 13, 10, 0);
+    const e = { startsAt: new Date(2026, 3, 12).toISOString(), endsAt: new Date(2026, 3, 14, 23, 0).toISOString(), allDay: true };
+    expect(isUpcomingEvent(e, now)).toBe(true);
+  });
+
+  it("keeps an all-day event for the whole of its day", () => {
+    const e = { startsAt: new Date(2026, 3, 12).toISOString(), allDay: true };
+    expect(isUpcomingEvent(e, new Date(2026, 3, 12, 22, 0))).toBe(true);
+    expect(isUpcomingEvent(e, new Date(2026, 3, 13, 0, 1))).toBe(false);
+  });
+
+  it("drops an event that has finished, and an unscheduled one", () => {
+    const now = new Date(2026, 3, 20);
+    expect(isUpcomingEvent({ startsAt: new Date(2026, 3, 12, 18, 0).toISOString() }, now)).toBe(false);
+    expect(isUpcomingEvent({}, now)).toBe(false);
   });
 });

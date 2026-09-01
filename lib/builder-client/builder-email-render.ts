@@ -108,7 +108,15 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     // manager module gets; it is written down here because a module that
     // merely falls off the end of this function is indistinguishable from one
     // nobody thought about.
-    module.type === "event-manager"
+    module.type === "event-manager" ||
+    // Standard 11, decided 2026-09-01: skipped, for the reason the two Site
+    // Search modules are. The calendar is a live query run in the browser
+    // after the page loads, and its month grid is a CSS grid that Outlook's
+    // Word engine cannot lay out. In an email it would render as an empty
+    // frame with paging buttons nobody can press. A calendar in an email is
+    // a real want — it needs a nested-table renderer written against a
+    // snapshot of the events, which is its own task, not a footnote here.
+    module.type === "event-calendar"
   ) {
     return "";
   }

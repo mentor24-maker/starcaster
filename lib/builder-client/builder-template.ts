@@ -129,6 +129,7 @@ export const BUILDER_MODULE_TYPES = [
   "blog-search",
   "blog-search-results",
   "event-manager",
+  "event-calendar",
   "site-search",
   "site-search-results",
   "messaging-topic-list",
@@ -2136,6 +2137,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-search" ||
     type === "blog-search-results" ||
     type === "event-manager" ||
+    type === "event-calendar" ||
     type === "site-search" ||
     type === "site-search-results" ||
     type === "messaging-topic-list" ||
@@ -3710,6 +3712,21 @@ export function createEmptyModule(
                             showStatus: "true",
                             showDate: "true",
                             showDelete: "true",
+                            accentColor: "#0f4f8f"
+                          }
+                      : type === "event-calendar"
+                        ? {
+                            calendarTitle: "",
+                            eventPageUrl: "",
+                            layout: "month",
+                            columns: "3",
+                            limit: "12",
+                            weekStartsOn: "0",
+                            showPast: "false",
+                            showImages: "true",
+                            showLocation: "true",
+                            showExcerpt: "true",
+                            emptyMessage: "No events scheduled just yet — check back soon.",
                             accentColor: "#0f4f8f"
                           }
                       : type === "event-manager"

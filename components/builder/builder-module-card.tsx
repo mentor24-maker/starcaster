@@ -92,6 +92,7 @@ import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-modu
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
 import { BuilderEventManagerModuleSettings } from "./builder-event-manager-module-settings";
+import { BuilderEventCalendarModuleSettings } from "./builder-event-calendar-module-settings";
 import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-category-manager-module-settings";
 import { BuilderBlogCardManagerModuleSettings } from "./builder-blog-card-manager-module-settings";
 import { BuilderBlogSearchModuleSettings } from "./builder-blog-search-module-settings";
@@ -1988,6 +1989,58 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "event-calendar") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    const layout = module.settings.layout || "month";
+    if (layout === "month") {
+      // A miniature April: the 1st on a Wednesday, so the leading blanks are
+      // visible and the shape reads as a real month rather than a plain grid.
+      const lead = 3;
+      const cells = Array.from({ length: 35 }, (_, i) => i - lead + 1).map((d) => (d >= 1 && d <= 30 ? d : null));
+      const marked = new Set([12, 19, 27]);
+      return (
+        <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden", padding: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, fontSize: 8, fontWeight: 700, color: "#587592", textAlign: "center", marginBottom: 3 }}>
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <span key={i}>{d}</span>)}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+            {cells.map((d, i) => (
+              <span
+                key={i}
+                style={{
+                  fontSize: 8, textAlign: "center", padding: "3px 0", borderRadius: 2,
+                  color: d === null ? "transparent" : marked.has(d) ? "#fff" : "#18324a",
+                  background: d === null ? "transparent" : marked.has(d) ? accent : "#f4f8fb",
+                  fontWeight: d !== null && marked.has(d) ? 700 : 400,
+                }}
+              >
+                {d ?? "·"}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    const rows = [
+      { date: "APR 12", title: "Spring Member Mixer", place: "Center Court" },
+      { date: "APR 19", title: "Junior Clinic Open House", place: "Courts 1–4" },
+      { date: "MAY 03", title: "Summer Kickoff Social", place: "Clubhouse" },
+    ];
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden" }}>
+        {rows.map((row, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 12px", borderBottom: i < rows.length - 1 ? "1px solid #f0f4f8" : undefined }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: accent, borderRadius: 4, padding: "4px 6px", whiteSpace: "nowrap" }}>{row.date}</span>
+            <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+              <span style={{ fontSize: 12, color: "#18324a", fontWeight: 600 }}>{row.title}</span>
+              <span style={{ fontSize: 10, color: "#8ba9be" }}>{row.place}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (module.type === "event-manager") {
     const accent = module.settings.accentColor || "#0f4f8f";
     const rows = [
@@ -3058,6 +3111,7 @@ export function BuilderModuleCard({
     const isBlogPostTagsModule = module.type === "blog-post-tags";
     const isBlogPostCreateModule = module.type === "blog-post-create";
     const isBlogPostManagerModule = module.type === "blog-post-manager";
+    const isEventCalendarModule = module.type === "event-calendar";
     const isEventManagerModule = module.type === "event-manager";
     const isBlogCategoryManagerModule = module.type === "blog-category-manager";
     const isBlogCardManagerModule = module.type === "blog-card-manager";
@@ -3124,6 +3178,7 @@ export function BuilderModuleCard({
       isBlogPostTagsModule ||
       isBlogPostCreateModule ||
       isBlogPostManagerModule ||
+      isEventCalendarModule ||
       isEventManagerModule ||
       isBlogCategoryManagerModule ||
       isBlogCardManagerModule ||
@@ -3347,6 +3402,8 @@ export function BuilderModuleCard({
               <BuilderBlogPostCreateModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostManagerModule ? (
               <BuilderBlogPostManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isEventCalendarModule ? (
+              <BuilderEventCalendarModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isEventManagerModule ? (
               <BuilderEventManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryManagerModule ? (

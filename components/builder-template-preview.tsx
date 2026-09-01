@@ -131,9 +131,13 @@ import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import { BuilderImagePickerField } from "@/components/builder/builder-image-picker-field";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import {
+  eventOccursOn,
   formatEventWhen,
+  isSameDay,
   isoToLocalInput,
+  isUpcomingEvent,
   localInputToIso,
+  monthGrid,
   normalizeEventStatus,
 } from "@/lib/event-format";
 import { BuilderImagePreview } from "@/components/builder/builder-image-preview";
@@ -2200,6 +2204,9 @@ function BuilderModulePreview({
   if (module.type === "blog-post-manager") {
     return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
   }
+  if (module.type === "event-calendar") {
+    return <EventCalendarPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
+  }
   if (module.type === "event-manager") {
     return <EventManagerPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
   }
@@ -3814,6 +3821,283 @@ function BlogCardManagerPreview() {
         ) : null}
         <span className="bcm-save-note">Applies to all Post Feed modules on your site</span>
       </div>
+    </div>
+  );
+}
+
+/* ── Event Calendar (public) ───────────────────────────────────────────────
+ *
+ * What a visitor sees. Three layouts over one fetch: a month grid, an
+ * upcoming list, and a row of cards.
+ *
+ * It reads `/api/events?status=published`, which is public on a tenant site
+ * (lib/projectAdminApiAuth.js) — deliberately the published-only opening,
+ * so a draft is unreachable here even by asking for it.
+ */
+
+type CalendarEvent = {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  excerpt: string;
+  imageUrl: string;
+  imageAlt: string;
+  url: string;
+  featured: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  allDay: boolean;
+  locationName: string;
+};
+
+const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function EventCalendarPreview({
+  settings,
+  theme,
+  themePalette,
+}: {
+  settings: Record<string, string>;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+}) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const layout = settings.layout || "month";
+  const heading = (settings.calendarTitle || "").trim();
+  const eventPageUrl = (settings.eventPageUrl || "").trim();
+  const columns = Math.min(4, Math.max(1, parseInt(settings.columns || "3", 10) || 3));
+  const limit = Math.min(50, Math.max(1, parseInt(settings.limit || "12", 10) || 12));
+  const weekStartsOn: 0 | 1 = settings.weekStartsOn === "1" ? 1 : 0;
+  const showPast = settings.showPast === "true";
+  const showImages = (settings.showImages ?? "true") !== "false";
+  const showLocation = (settings.showLocation ?? "true") !== "false";
+  const showExcerpt = (settings.showExcerpt ?? "true") !== "false";
+  const emptyMessage = (settings.emptyMessage || "").trim()
+    || "No events scheduled just yet — check back soon.";
+
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  // The month on view. Held in state so Prev/Next can move it; seeded to the
+  // month we are actually in.
+  const [cursor, setCursor] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+
+  useEffect(() => {
+    let live = true;
+    fetch("/api/events?status=published&limit=200", {
+      credentials: "include",
+      headers: getCrmProjectHeaders(),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!live) return;
+        const list = (d?.events ?? d?.data ?? []) as CalendarEvent[];
+        if (!Array.isArray(list)) { setFailed(true); return; }
+        setEvents(list);
+      })
+      .catch(() => { if (live) setFailed(true); })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
+  }, []);
+
+  /** A published event only. The API filters too; this is the belt to its braces. */
+  const published = useMemo(
+    () => events.filter((e) => normalizeEventStatus(e.status) === "published"),
+    [events]
+  );
+
+  const listed = useMemo(() => {
+    const now = new Date();
+    const chosen = showPast ? published : published.filter((e) => isUpcomingEvent(e, now));
+    return [...chosen]
+      .sort((a, b) => {
+        // Unscheduled events have nowhere to sit on a timeline, so they go
+        // last rather than to 1970 — which is where a plain Date.parse of an
+        // empty string would put them.
+        if (!a.startsAt && !b.startsAt) return a.title.localeCompare(b.title);
+        if (!a.startsAt) return 1;
+        if (!b.startsAt) return -1;
+        return Date.parse(a.startsAt) - Date.parse(b.startsAt);
+      })
+      .slice(0, limit);
+  }, [published, showPast, limit]);
+
+  function hrefFor(event: CalendarEvent): string | undefined {
+    // The event's own link wins — a ticketing page is where the visitor
+    // actually wants to go. Otherwise the site's event page, if one is set.
+    if (event.url) return event.url;
+    if (!eventPageUrl || !event.slug) return undefined;
+    const sep = eventPageUrl.includes("?") ? "&" : "?";
+    return `${eventPageUrl}${sep}event=${encodeURIComponent(event.slug)}`;
+  }
+
+  const Title = heading
+    ? <h2 className="builder-event-calendar-heading">{heading}</h2>
+    : null;
+
+  if (loading) {
+    return (
+      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+        {Title}
+        <p className="builder-event-calendar-empty">Loading events…</p>
+      </div>
+    );
+  }
+
+  // A failed fetch is NOT the same as an empty calendar and must not wear its
+  // words: "no events scheduled" over a broken request tells a visitor
+  // something false about the club.
+  if (failed) {
+    return (
+      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+        {Title}
+        <p className="builder-event-calendar-empty">Events are unavailable just now. Please try again shortly.</p>
+      </div>
+    );
+  }
+
+  /* ── Month grid ─────────────────────────────────────────────────────── */
+  if (layout === "month") {
+    const weeks = monthGrid(cursor.year, cursor.month, weekStartsOn);
+    const monthName = new Date(cursor.year, cursor.month, 1)
+      .toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    const today = new Date();
+    const dayNames = Array.from({ length: 7 }, (_, i) => WEEKDAY_LABELS[(i + weekStartsOn) % 7]);
+    const step = (by: number) => setCursor((c) => {
+      const d = new Date(c.year, c.month + by, 1);
+      return { year: d.getFullYear(), month: d.getMonth() };
+    });
+
+    return (
+      <div className="builder-event-calendar builder-event-calendar--month" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+        {Title}
+        <div className="builder-event-calendar-nav">
+          <button type="button" className="builder-event-calendar-nav-btn" aria-label="Previous month" onClick={() => step(-1)}>‹</button>
+          <span className="builder-event-calendar-month" aria-live="polite">{monthName}</span>
+          <button type="button" className="builder-event-calendar-nav-btn" aria-label="Next month" onClick={() => step(1)}>›</button>
+        </div>
+        <div className="builder-event-calendar-grid" role="grid" aria-label={monthName}>
+          {dayNames.map((name) => (
+            // The short form is decoration; the full name is what a screen
+            // reader should say, so the letter is hidden from it.
+            <div key={name} className="builder-event-calendar-weekday" role="columnheader">
+              <abbr title={name} aria-label={name}>
+                <span aria-hidden="true">{name.slice(0, 3)}</span>
+              </abbr>
+            </div>
+          ))}
+          {weeks.flat().map((cell) => {
+            const onThisDay = published.filter((e) => eventOccursOn(e, cell.date));
+            const isToday = isSameDay(cell.date, today);
+            return (
+              <div
+                key={cell.date.toISOString()}
+                role="gridcell"
+                className={[
+                  "builder-event-calendar-day",
+                  cell.inMonth ? "" : "builder-event-calendar-day--outside",
+                  isToday ? "builder-event-calendar-day--today" : "",
+                  onThisDay.length ? "builder-event-calendar-day--has-events" : "",
+                ].filter(Boolean).join(" ")}
+              >
+                <span className="builder-event-calendar-daynum">{cell.date.getDate()}</span>
+                {onThisDay.map((event) => {
+                  const href = hrefFor(event);
+                  const label = event.title || "Untitled event";
+                  const body = (
+                    <>
+                      <span className="builder-event-calendar-chip-title">{label}</span>
+                      {!event.allDay && event.startsAt ? (
+                        <span className="builder-event-calendar-chip-time">
+                          {new Date(event.startsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                        </span>
+                      ) : null}
+                    </>
+                  );
+                  return href ? (
+                    <a key={event.id} className="builder-event-calendar-chip" href={href} title={label}>{body}</a>
+                  ) : (
+                    <span key={event.id} className="builder-event-calendar-chip" title={label}>{body}</span>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+        {published.length === 0 ? <p className="builder-event-calendar-empty">{emptyMessage}</p> : null}
+      </div>
+    );
+  }
+
+  /* ── List and cards ─────────────────────────────────────────────────── */
+  if (!listed.length) {
+    return (
+      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+        {Title}
+        <p className="builder-event-calendar-empty">{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  const isCards = layout === "cards";
+
+  return (
+    <div
+      className={`builder-event-calendar builder-event-calendar--${isCards ? "cards" : "list"}`}
+      style={{
+        ["--evt-accent" as string]: accent,
+        ["--evt-columns" as string]: String(columns),
+        ...getAdminDataTableThemeStyle(themePalette, theme),
+      }}
+    >
+      {Title}
+      <ul className="builder-event-calendar-items">
+        {listed.map((event) => {
+          const href = hrefFor(event);
+          const label = event.title || "Untitled event";
+          const start = event.startsAt ? new Date(event.startsAt) : null;
+          const image = showImages && isCards ? resolvePublicBuilderAssetUrl(event.imageUrl) : "";
+          const titleNode = href
+            ? <a className="builder-event-calendar-item-title" href={href}>{label}</a>
+            : <span className="builder-event-calendar-item-title">{label}</span>;
+          return (
+            <li key={event.id} className="builder-event-calendar-item">
+              {image ? (
+                <img
+                  className="builder-event-calendar-item-image"
+                  src={image}
+                  alt={event.imageAlt || ""}
+                  loading="lazy"
+                />
+              ) : null}
+              <div className="builder-event-calendar-item-body">
+                {start && !isCards ? (
+                  <span className="builder-event-calendar-datechip" aria-hidden="true">
+                    <span className="builder-event-calendar-datechip-month">
+                      {start.toLocaleDateString(undefined, { month: "short" }).toUpperCase()}
+                    </span>
+                    <span className="builder-event-calendar-datechip-day">{start.getDate()}</span>
+                  </span>
+                ) : null}
+                <div className="builder-event-calendar-item-text">
+                  {titleNode}
+                  <p className="builder-event-calendar-item-when">{formatEventWhen(event)}</p>
+                  {showLocation && event.locationName ? (
+                    <p className="builder-event-calendar-item-where">{event.locationName}</p>
+                  ) : null}
+                  {showExcerpt && event.excerpt ? (
+                    <p className="builder-event-calendar-item-excerpt">{event.excerpt}</p>
+                  ) : null}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
