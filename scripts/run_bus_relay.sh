@@ -57,6 +57,26 @@ REPO="$REPO" "$REPO/scripts/bus_relay_interval.sh" "interval: " || true
 # quiet; it is silent otherwise. Never allowed to fail the relay.
 npm run --silent heartbeat -- --check || true
 
+# THE OTHER WATCHDOG, IN THE SAME PLACE AND FOR THE SAME REASON (task 86bbqrw3p).
+#
+# The heartbeat above asks "did a job stop firing?". This asks the question a
+# heartbeat structurally cannot: the job fired, and did anything come out?
+#
+# On 2026-08-31 the build loop fired every hour, exited 0 every time, and the
+# queue did not move — 52 queued, 1 in review, the oldest rework PR sitting
+# since Aug 25. Every gate was green and every green was honest. A loop that
+# runs and achieves nothing writes a full, cheerful log, which reads as health
+# and so stops anybody looking; finding it took a morning of reading logs.
+#
+# Before the ownership check for the same reason the heartbeat is: the machine
+# that does NOT own the relay is already awake here doing nothing, and that
+# idle wake is the vantage point that survives the owning machine being dead.
+#
+# Posts to the bus only on a STALLED verdict, once per 6h, cleared by the next
+# run that is not stalled. Silent otherwise, and never allowed to fail the
+# relay — it exits 1 on a stall, which is a finding, not this script's failure.
+npm run --silent throughput -- --check || true
+
 npm run --silent clickup -- bus-relay
 status=$?
 echo "=== exit $status"
