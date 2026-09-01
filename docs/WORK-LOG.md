@@ -1,3 +1,32 @@
+## 2026-08-31 — A branch that was fine no longer gets filed as broken work (#487)
+
+When Dane says "merge" on a finished ticket, the relay checks with GitHub first.
+GitHub sometimes answers that the branch clashes with the live code when it does
+not — its answer can be minutes out of date — so the machine tries the merge
+itself before believing it. That second opinion comes back one of two ways: the
+two really do collide and somebody has to decide what the merged file says, or
+there was nothing to collide about.
+
+The note written on the ticket read that second opinion and said the right thing.
+The part that files a "somebody go fix this branch" job into the work queue never
+read it at all — it filed whenever GitHub used the word conflict. So on 30 August
+a branch that had merged perfectly, and only lost a race sending the result up to
+GitHub, got two notes on its ticket a fifth of a second apart. One said a job had
+been created and named it. The other said it would go through on the next attempt
+and nobody needed to do anything. Both were on the screen at once, and whichever
+one you read last is the one you believed. The job that got created told whoever
+picked it up to go and clean up a mess that was not there. The ticket sat for two
+hours next to it.
+
+Now both halves ask the same single question, so they cannot answer it
+differently — there is only one answer to read. And everywhere the code used to
+ask "did we create a job for this?" it now asks "who is going to act next?"
+Those are not the same question: when there is nothing to fix, the next attempt
+IS the actor, and it is a real one. Treating that as "nobody" is why the system
+had been announcing a healthy branch as blocked every ten minutes and asking for
+hands it did not need. It still speaks up if a branch has not sorted itself out
+within a day, because at that point silence would be the wrong answer too.
+
 ## 2026-08-31 — `npm run ship` now writes the note that lets a PR be merged (#484)
 
 There are two ways a finished change reaches the live site. The loops do it on
