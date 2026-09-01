@@ -154,9 +154,16 @@ async function buildStartFor(taskId) {
     return { action: 'unknown', why: `this ticket's comments could not be read (${whyOf(seen)})` };
   }
   return resolveBuildStart(seen.json.comments, {
-    lookupPr: (number) => {
+    // --repo, ALWAYS (task 86bbqyyfn). This is the second copy of the bug the
+    // ticket was filed for: `resume` unsticks stranded builds by asking the
+    // same question, and it was asking it of whichever repo the process
+    // happened to be running in.
+    lookupPr: (pr) => {
       try {
-        const out = execFileSync('gh', ['pr', 'view', String(number), '--json', 'state,headRefName'], {
+        const out = execFileSync('gh', [
+          'pr', 'view', String(pr.number), '--repo', `${pr.owner}/${pr.repo}`,
+          '--json', 'state,headRefName',
+        ], {
           encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
         });
         return JSON.parse(out);
