@@ -1,3 +1,36 @@
+## 2026-09-01 — Handing you a command to paste is now something the machine refuses to do (#499)
+
+There is a rule here that CC runs the operational commands itself and tells you
+what happened, rather than handing you something to copy and paste. Pasting a
+command at you is really a claim that CC could not run it, so a job that is
+actually finished ends up looking like it is waiting on you. You have raised
+this three times — 7 August, 23 August and 30 August — and it was broken all
+three times, twice by sessions that had read the rule that same day.
+
+So it is no longer only written down. There is now a small program that runs at
+the moment a reply is about to reach you, reads it, and refuses to let the turn
+end if the reply hands over a ready-to-paste command. The agent then has two
+choices: run the thing and report what it said, or write one line naming which
+of the four exceptions applies — a real secret value, a billing screen, a
+browser login, or a decision that is genuinely yours.
+
+It is deliberately narrow. Mentioning a command mid-sentence is fine; that is
+explaining, not handing over. The one command that IS yours to run —
+`pipeline resume`, the switch that hands the deck back after a pause — is
+exempt. And it only watches sessions you are actually sitting in front of, not
+the loops that run overnight and report to a ticket, because there is nobody
+there to hand anything to. It also steps aside after three refusals in a
+session: a guard that can jam a conversation shut is worse than the thing it
+prevents.
+
+Building it turned up a second bug worth mentioning. That "step aside after
+three" counter was going to be stored in a place that only exists in the main
+copy of the code — in a worktree, which is where essentially all work here
+happens, the write would have failed silently and the counter would never have
+counted. The safety valve would have been dead in every folder that uses it.
+Fixed, with a test that builds a real worktree and fails if it stops working.
+The older SQL hand-off hook has the same gap and still needs its own fix.
+
 ## 2026-08-31 — A branch that was fine no longer gets filed as broken work (#487)
 
 When Dane says "merge" on a finished ticket, the relay checks with GitHub first.
