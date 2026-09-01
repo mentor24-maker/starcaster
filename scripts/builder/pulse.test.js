@@ -408,11 +408,64 @@ test('a backed-up review stage names REVIEW', () => {
   assert.match(s, /2 of 3/, 'the count with its denominator, not a bare number');
 });
 
-test('approved work waiting past a day names the OPERATOR, and says the machines kept up', () => {
+/**
+ * THE SENTENCE THIS BLOCK EXISTS FOR (2026-09-01, task 86bbqp68c).
+ *
+ * It used to read, unconditionally:
+ *
+ *   Bottleneck: OPERATOR — N of M approved tickets have waited past 24h for a
+ *   merge. The machine side is keeping up.
+ *
+ * On 86bbkw1mn both halves were false: CI was red, and Dane's approval had
+ * been sitting there for six days. The pulse reads ClickUp status and
+ * date_updated and NOTHING about GitHub, so it never had the evidence that
+ * identifies an actor — it simply asserted one. Three tests, one per state.
+ */
+test('approved work past a day, with NO PR evidence, refuses to name an actor', () => {
   const residency = stageResidency([task('86bb1', 'ready to launch', 40)], { now: NOW });
   const s = bottleneckSentence({ noOp: noOpStreak([claimed()], { queuedCount: 0 }), residency });
+  assert.match(s, /^Bottleneck: READY TO LAUNCH/);
+  assert.match(s, /NOT known here/, 'it must say the actor is unknown, not pick one');
+  assert.match(s, /stale-ready/, 'and name the command that does know');
+  assert.doesNotMatch(s, /Bottleneck: OPERATOR/);
+  assert.doesNotMatch(s, /machine side is keeping up/,
+    'the false half of the old sentence must be unreachable without evidence');
+});
+
+test('BREAK-TEST: a RED build names the MACHINE side, never Dane — the whole point of 86bbqp68c', () => {
+  const residency = stageResidency([task('86bb1', 'ready to launch', 40)], { now: NOW });
+  const s = bottleneckSentence({
+    noOp: noOpStreak([claimed()], { queuedCount: 0 }),
+    residency,
+    readyActors: { operator: 0, machine: 1, cannotTell: 0 },
+  });
+  assert.match(s, /^Bottleneck: MERGE/);
+  assert.match(s, /MACHINE side/);
+  assert.match(s, /none of them waiting on Dane/);
+  assert.doesNotMatch(s, /Bottleneck: OPERATOR/);
+});
+
+test('an unresolvable ticket is CANNOT TELL, never folded into "waiting on Dane"', () => {
+  const residency = stageResidency([task('86bb1', 'ready to launch', 40)], { now: NOW });
+  const s = bottleneckSentence({
+    noOp: noOpStreak([claimed()], { queuedCount: 0 }),
+    residency,
+    readyActors: { operator: 0, machine: 0, cannotTell: 1 },
+  });
+  assert.match(s, /^Bottleneck: CANNOT TELL/);
+  assert.match(s, /not known/);
+});
+
+test('green, reviewed and waiting only on the merge word DOES name the operator — with its evidence', () => {
+  const residency = stageResidency([task('86bb1', 'ready to launch', 40)], { now: NOW });
+  const s = bottleneckSentence({
+    noOp: noOpStreak([claimed()], { queuedCount: 0 }),
+    residency,
+    readyActors: { operator: 1, machine: 0, cannotTell: 0 },
+  });
   assert.match(s, /^Bottleneck: OPERATOR/);
-  assert.match(s, /machine side is keeping up/);
+  assert.match(s, /checked against GitHub, not assumed/,
+    'the claim that the machines kept up must cite how it was established');
 });
 
 test('BREAK-TEST: a healthy pipeline says so out loud — silence is never all-clear', () => {
