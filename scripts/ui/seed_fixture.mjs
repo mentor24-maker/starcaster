@@ -544,6 +544,18 @@ const buildTuned = (ids) => ({
     },
   },
 
+  // The Media Manager panel: a kind chosen, every column toggle on, and an
+  // accent set. With `kinds` unset the select renders its placeholder width
+  // rather than its longest option ("Images and video"), which is the width
+  // the lattice actually has to hold.
+  'media-manager': {
+    name: 'Media Manager',
+    settings: {
+      kinds: 'all', showSize: 'true', showDate: 'true',
+      showDelete: 'true', accentColor: '#0f4f8f',
+    },
+  },
+
   // The Event Manager panel: the picker filled, every column toggle on, and an
   // accent set. An empty picker and unset toggles render the same rectangle as
   // each other, so an unseeded panel would be measured without ever showing

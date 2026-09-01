@@ -131,6 +131,7 @@ export const BUILDER_MODULE_TYPES = [
   "event-manager",
   "event-calendar",
   "event-detail",
+  "media-manager",
   "site-search",
   "site-search-results",
   "messaging-topic-list",
@@ -2140,6 +2141,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "event-manager" ||
     type === "event-calendar" ||
     type === "event-detail" ||
+    type === "media-manager" ||
     type === "site-search" ||
     type === "site-search-results" ||
     type === "messaging-topic-list" ||
@@ -3741,6 +3743,14 @@ export function createEmptyModule(
                             showLocation: "true",
                             showExcerpt: "true",
                             emptyMessage: "No events scheduled just yet — check back soon.",
+                            accentColor: "#0f4f8f"
+                          }
+                      : type === "media-manager"
+                        ? {
+                            kinds: "all",
+                            showSize: "true",
+                            showDate: "true",
+                            showDelete: "true",
                             accentColor: "#0f4f8f"
                           }
                       : type === "event-manager"

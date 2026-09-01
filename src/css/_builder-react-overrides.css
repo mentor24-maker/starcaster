@@ -7689,3 +7689,174 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
     text-align: center;
   }
 }
+
+/* ── Media Manager (admin module) ───────────────────────────────────────────
+   The Media Manager a TENANT admin uses on their own site. Styles live here
+   rather than in _builder-react.css, which is regenerated wholesale by
+   `npm run extract:builder-css` and would silently drop them. */
+
+.builder-react-root .builder-media-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.builder-react-root .builder-media-manager-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.builder-react-root .builder-media-manager-upload {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+/* The real input is kept in the layout (not display:none) so it stays
+   focusable and reachable by keyboard; the visible label sits on top. */
+.builder-react-root .builder-media-manager-file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-media-manager-upload-label {
+  display: inline-block;
+  padding: 0.45rem 0.9rem;
+  border-radius: 6px;
+  background: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.builder-react-root .builder-media-manager-file-input:focus-visible + .builder-media-manager-upload-label {
+  outline: 2px solid var(--builder-media-accent, #0f4f8f);
+  outline-offset: 2px;
+}
+
+.builder-react-root .builder-media-manager-count,
+.builder-react-root .builder-media-manager-meta {
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-media-manager-progress,
+.builder-react-root .builder-media-manager-status,
+.builder-react-root .builder-media-manager-error {
+  font-size: var(--text-sm);
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+}
+
+.builder-react-root .builder-media-manager-progress,
+.builder-react-root .builder-media-manager-status {
+  background: var(--bg-input);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-media-manager-error {
+  background: var(--bg-hover);
+  color: var(--danger, #a03c28);
+}
+
+.builder-react-root .builder-media-manager-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-media-manager-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.builder-react-root .builder-media-manager-card {
+  margin: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-media-manager-thumb {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--bg-input);
+}
+
+.builder-react-root .builder-media-manager-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.builder-react-root .builder-media-manager-badge {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-media-manager-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.builder-react-root .builder-media-manager-name,
+.builder-react-root .builder-media-manager-delete {
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-media-manager-name {
+  color: var(--ink-primary);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.builder-react-root .builder-media-manager-delete {
+  color: var(--danger, #a03c28);
+  align-self: flex-start;
+  font-size: var(--text-xs);
+}
+
+.builder-react-root .builder-media-manager-rename {
+  width: 100%;
+  font-size: var(--text-sm);
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--builder-media-accent, #0f4f8f);
+  border-radius: 4px;
+}
+
+.builder-react-root .builder-media-manager-confirm {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-media-manager-confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
