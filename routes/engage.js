@@ -1161,7 +1161,20 @@ async function resolveBufferChannelId(post) {
 async function publishStoredPost(post, req) {
   if (!post) return { ok: false, status: 404, error: 'Post not found' };
   const scope = requestScopeForPublish(req, post);
-  const credOpts = req?.cronPublish ? { envOnly: true } : {};
+  /**
+   * What every publisher below resolves its credentials against — this
+   * client's own connection first, the shared keys second (Connections 3 of 7,
+   * 86bbpz1ed).
+   *
+   * The cron path keeps `envOnly`, and envOnly deliberately skips the
+   * connection lookup: a scheduled publish that ran as whichever project
+   * happened to be attached to the row is not what "post from Starcaster's own
+   * account" means, and slice 6 is where scheduled posting learns to carry a
+   * grant properly.
+   */
+  const publishCredOpts = req?.cronPublish
+    ? { envOnly: true }
+    : { projectId: safeText(scope?.projectId), userId: safeText(scope?.userId) };
   const channel = String(post.channel || 'x').trim().toLowerCase();
 
   if (!PUBLISH_NOW_CHANNELS.includes(channel)) {
@@ -1203,7 +1216,8 @@ async function publishStoredPost(post, req) {
   if (channel === 'telegram') {
     result = await telegramClient.sendMessage(post.text);
   } else if (channel === 'bluesky') {
-    result = await blueskyClient.createPost(post.text, imageOpts);
+    const bsCreds = await blueskyClient.resolveBlueskyCredentials(publishCredOpts);
+    result = await blueskyClient.createPost(post.text, imageOpts, bsCreds);
   } else if (channel === 'buffer') {
     const resolved = await resolvePostBufferMediaMeta(post, req);
     imageOpts.imageUrl = safeText(resolved.imageUrl);
@@ -1248,7 +1262,7 @@ async function publishStoredPost(post, req) {
           },
         };
       } else if (primaryVideoId && bufferPlatform === 'tiktok') {
-        const creds = bufferClient.getBufferCredentials();
+        const creds = await bufferClient.resolveBufferCredentials(publishCredOpts);
         const staged = await stageCampaignVideoForBuffer(primaryVideoId, scope, req, creds);
         videoStaging = staged;
         if (staged.ok) {
@@ -1271,11 +1285,12 @@ async function publishStoredPost(post, req) {
       }
 
       if (!result) {
+        const bufferCreds = await bufferClient.resolveBufferCredentials(publishCredOpts);
         result = await bufferClient.createQueuedPost(post.text, {
           imageUrl: imageOpts.imageUrl,
           videoUrl: publishVideoUrl,
           channelId: bufferTarget.channelId,
-        });
+        }, bufferCreds);
       }
       if (result && typeof result === 'object') {
         result.data = {
@@ -1334,14 +1349,23 @@ async function publishStoredPost(post, req) {
       }
     }
   } else if (channel === 'facebook') {
-    const fbCreds = await metaClients.resolveFacebookCredentials({ projectId: scope.projectId });
+    const fbCreds = await metaClients.resolveFacebookCredentials(publishCredOpts);
     result = await metaClients.createFacebookPost(post.text, imageOpts, fbCreds);
   } else if (channel === 'threads') {
-    result = await metaClients.createThreadsPost(post.text, imageOpts);
+    const thCreds = await metaClients.resolveThreadsCredentials(publishCredOpts);
+    result = await metaClients.createThreadsPost(post.text, imageOpts, thCreds);
   } else if (channel === 'instagram') {
-    result = await metaClients.createInstagramPost(post.text, imageOpts);
+    const igCreds = await metaClients.resolveInstagramCredentials(publishCredOpts);
+    result = await metaClients.createInstagramPost(post.text, imageOpts, igCreds);
   } else {
-    const authCheck = await xClient.checkAuth(credOpts);
+    // Resolve ONCE for the whole X publish — the auth check, the media upload
+    // and the post itself. Two lookups can disagree if a connection changes
+    // between them, and uploading media under one account then posting under
+    // another fails with no useful error on it: X answers 400 "media id not
+    // found", which names neither account.
+    const xResolved = await xClient.resolveXCredentials(publishCredOpts);
+    const xCredOpts = xResolved.ok ? { credentials: xResolved.creds } : publishCredOpts;
+    const authCheck = await xClient.checkAuth(xCredOpts);
     if (!authCheck.ok) {
       result = {
         ok: false,
@@ -1358,7 +1382,7 @@ async function publishStoredPost(post, req) {
       mediaUpload = { attempted: false, ok: false, status: 0, error: '' };
       if (bytesRes.ok && bytesRes.buffer.length <= maxMediaBytes) {
         mediaUpload.attempted = true;
-        const upload = await xClient.uploadMediaSimple(bytesRes.buffer, bytesRes.contentType, credOpts);
+        const upload = await xClient.uploadMediaSimple(bytesRes.buffer, bytesRes.contentType, xCredOpts);
         mediaUpload = {
           attempted: true,
           ok: Boolean(upload.ok),
@@ -1376,7 +1400,7 @@ async function publishStoredPost(post, req) {
           mediaId: '',
         };
       }
-      result = await xClient.createPost(post.text, { mediaIds, ...credOpts });
+      result = await xClient.createPost(post.text, { mediaIds, ...xCredOpts });
     }
   }
   if (!result.ok) {
