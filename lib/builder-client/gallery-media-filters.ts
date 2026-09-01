@@ -32,6 +32,13 @@ export type GalleryMediaFilters = {
   topic: string;
   aspect: "" | GalleryMediaAspect;
   requirePoll: boolean;
+  /**
+   * Show only files uploaded through the Admin Media Manager. Shaped like
+   * requirePoll — a plain boolean with no `not` negation — because "everything
+   * except Media Manager uploads" is not a question anyone has asked, and an
+   * unused negation is a filter combination nothing tests.
+   */
+  mediaManagerOnly: boolean;
   sort: GalleryMediaSort;
   not: GalleryMediaFilterNegation;
 };
@@ -45,6 +52,7 @@ export const DEFAULT_GALLERY_MEDIA_FILTERS: GalleryMediaFilters = {
   topic: "",
   aspect: "",
   requirePoll: false,
+  mediaManagerOnly: false,
   sort: "name_asc",
   not: DEFAULT_GALLERY_MEDIA_FILTER_NEGATION
 };
@@ -80,6 +88,7 @@ export function hasActiveGalleryMediaFilters(filters: GalleryMediaFilters): bool
     filters.topic.length > 0 ||
     filters.aspect.length > 0 ||
     filters.requirePoll ||
+    filters.mediaManagerOnly ||
     filters.sort !== DEFAULT_GALLERY_MEDIA_FILTERS.sort ||
     (Object.keys(filters.not) as (keyof GalleryMediaFilterNegation)[]).some(
       (key) => filters.not[key] && filterValueActive(filters, key)

@@ -1,6 +1,7 @@
 'use strict';
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
+const { normalizeAssetSource } = require('../lib/assetSource');
 const { listAssets, createAsset, updateAsset, deleteAsset, getAssetById, rowToAsset } = require('../lib/assetsStore');
 const { fetchAssetImageBuffer } = require('../lib/assetImageBytes');
 const {
@@ -258,7 +259,11 @@ async function handle(req, res, pathname, method) {
   }
 
   if (isAssetsPath && requestMethod === 'GET') {
-    const result = await listAssets(scope);
+    // An unrecognised ?source= normalizes to '' and is IGNORED, returning the
+    // full list rather than an empty one — a typo'd filter that silently
+    // returns nothing reads as "the project has no assets".
+    const sourceFilter = normalizeAssetSource(parsedUrl?.searchParams?.get('source'));
+    const result = await listAssets(scope, { source: sourceFilter });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const assets = (Array.isArray(result.data) ? result.data : []).map(rowToAsset);
     return sendOk(res, 200, assets, { assets }, { total: assets.length }), true;
@@ -275,6 +280,7 @@ async function handle(req, res, pathname, method) {
     const imageWidth = Math.max(0, Number(body.imageWidth || body.image_width || 0) || 0);
     const imageHeight = Math.max(0, Number(body.imageHeight || body.image_height || 0) || 0);
     const aspect = String(body.aspect || '').trim();
+    const source = normalizeAssetSource(body.source);
 
     if (!assetName) return sendErr(res, 400, 'assetName is required', { code: 'VALIDATION_ERROR' }), true;
     if (!ASSET_TYPES.has(assetType)) {
@@ -286,7 +292,7 @@ async function handle(req, res, pathname, method) {
       ), true;
     }
 
-    const result = await createAsset({ assetName, assetType, category, location, tags, size, imageWidth, imageHeight, aspect }, scope);
+    const result = await createAsset({ assetName, assetType, category, location, tags, size, imageWidth, imageHeight, aspect, source }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToAsset(created), { asset: rowToAsset(created) }), true;
@@ -748,6 +754,7 @@ async function handle(req, res, pathname, method) {
       ),
       imageWidth: Math.max(0, Number(upload.data.imageWidth || 0) || 0) || null,
       imageHeight: Math.max(0, Number(upload.data.imageHeight || 0) || 0) || null,
+      source: normalizeAssetSource(body.source),
     }, scope);
     if (!save.ok) return sendErr(res, save.status || 500, save.error), true;
 
@@ -794,6 +801,7 @@ async function handle(req, res, pathname, method) {
         category: String(body.category || '').trim(),
         tags: Array.isArray(body.tags) ? body.tags : [],
         aspect: String(body.aspect || '').trim(),
+        source: normalizeAssetSource(body.source),
       },
       scope
     );

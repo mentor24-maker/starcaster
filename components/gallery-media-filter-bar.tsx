@@ -226,6 +226,20 @@ export function GalleryMediaFilterBar({
             />
           </span>
         </label>
+        <label className="admin-gallery-filter-poll-toggle admin-gallery-filter-field-stacked admin-gallery-filter-checkbox-field">
+          <span className="admin-gallery-filter-label admin-gallery-filter-poll-label">Media Mgr</span>
+          <span className="admin-gallery-filter-checkbox-wrap">
+            <input
+              aria-label="Show only files uploaded through the Admin Media Manager"
+              checked={filters.mediaManagerOnly}
+              disabled={bulkEditActive}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, mediaManagerOnly: event.target.checked }))
+              }
+              type="checkbox"
+            />
+          </span>
+        </label>
         {showBulkControls ? (
           <label className="admin-gallery-filter-check-all admin-gallery-filter-field-stacked">
             <span className="admin-gallery-filter-label admin-gallery-filter-check-all-label">
