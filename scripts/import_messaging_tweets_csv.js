@@ -53,7 +53,7 @@ function parseCsv(text) {
     cell += ch; i += 1;
   }
   row.push(cell);
-  if (row.some((c) => c !== '') rows.push(row);
+  if (row.some((c) => c !== '')) rows.push(row);
   return rows;
 }
 
