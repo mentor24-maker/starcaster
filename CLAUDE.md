@@ -169,6 +169,14 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
    pre-commit and CI, but it catches syntax only: a typo like
    `App.assset.foo()` still parses and fails at runtime. Open the app and
    check the browser console after editing these files.
+   **`scripts/` and `lib/` have the same hole**, and it is worse there because
+   most of those files are one-shot tools nothing imports, so no test executes
+   them. On 2026-08-30 a "keep both sides" merge resolution fused two
+   statements in `scripts/clickup_direct.mjs` — valid to git, a SyntaxError to
+   node, and it would have stopped every loop pass on line 1 with no verdict
+   written anywhere. `check:syntax` now parses every hand-written
+   `.js`/`.mjs`/`.cjs` under both (generated artifacts excluded — landmine 14
+   means they do not exist at CI time). `docs/DOCTRINE.md` §6.7.
 10. **Vercel bakes env vars in at build time.** Editing one in the dashboard
     does NOT reach the deployment already serving traffic — it takes a redeploy.
     So "the value is wrong" and "the value is right but not live" look
@@ -660,8 +668,10 @@ Before reporting a task complete, run and state the results of:
 3. The rebuild command for every generated artifact your change affects
 4. `node scripts/check_conventions.cjs` (also runs at pre-commit;
    `SKIP_CONVENTIONS=1` bypasses — if you bypass, say so and why)
-5. `npm run check:syntax` if you touched `public/js/` or `public/shared/`
-   (also runs at pre-commit and gates CI)
+5. `npm run check:syntax` if you touched `public/js/`, `public/shared/`,
+   `scripts/` or `lib/` — a parse gate over every hand-written
+   `.js`/`.mjs`/`.cjs` in those trees (also runs at pre-commit and gates CI).
+   Run it after resolving ANY merge conflict by keeping both sides.
 6. **`npm run check:panels` if you touched ANY settings panel or its CSS**,
    and it is not optional because CI cannot run it — CI has no browser, so
    this check only ever runs if a person runs it. A staggered panel reached

@@ -33,6 +33,244 @@ One step is left over on purpose. The tickets currently sitting in the wrong pil
 get moved by a command that has to run *after* this goes live — until the new
 rule is running, a ticket in "Rework" would be picked up by nothing at all, which
 is worse than where they are now.
+## 2026-08-31 — Posts now go out from the client's own account, not ours (#490)
+
+A client connects their Facebook Page to Starcaster. The screen says
+"connected". Their posts then go out from *our* account, and nobody finds out.
+
+That was the state of things until this change, and it is worth being precise
+about why. The last two pieces of work built the safe where a client's
+permission is kept, and the code that collects it. Neither one ever read it
+back. So the permission sat there, correctly stored, doing nothing, while every
+post carried on using the platform-wide keys — Dane's own accounts.
+
+This adds the missing piece: one function that every publisher now asks before
+it posts, which answers "this client's own connection, if they have a working
+one; ours otherwise". Facebook, Instagram, Threads, Bluesky, X and Buffer all
+go through it now.
+
+The thing that made this worth being careful about is that the failure is
+completely silent. Posting to the wrong account is not an error — the platform
+accepts it, the post appears, the job goes green. There is no log line, no
+alert, and no way to notice except a client eventually asking why their page
+has been quiet. So the new function is deliberately suspicious in three places.
+It refuses to post at all if it could not tell whether a client has a
+connection, rather than shrugging and using ours — "no connection" and "I could
+not check" are different answers, and only one of them is safe to guess at. It
+skips a token that has expired even when the record still claims it is fine,
+because nothing checks those records yet. And when it does refuse, it hands
+back an empty set of credentials rather than a flagged one, because an earlier
+draft handed back *our* working credentials with a flag on them, which reads
+perfectly and would have posted from the wrong account anyway.
+
+Two things were left deliberately alone. The older place a client's Facebook
+Page is stored is still consulted — it is live in production and holds real
+clients today, and quietly skipping it would have moved their pages back onto
+our account without a word. And the client's token replaces only the token: the
+application credentials underneath it stay ours, because permission to post to
+someone's page is not a new app, it is one key to one door.
+
+Every safeguard here was broken on purpose and watched to fail before being
+put back. One of those breaks earned its keep: taking the change out of a
+single channel left every test passing while that channel quietly went back to
+posting from our account. There is now a test watching for exactly that.
+
+Review sent this back once, and the thing it caught is worth writing down,
+because it is the same silent failure wearing a different coat. Some platforms
+do not hand out one key — they hand out two, and both have to match. X is like
+that, and so is Bluesky, where the password only works at the particular server
+that issued it. Our safe has room for exactly one. So the code was taking the
+client's key, noticing the second one was missing, and quietly filling that gap
+from our own — producing a pair made of one key from each of two different
+accounts, which unlocks nothing and reports an error naming neither. Worse, the
+comment above it claimed the case was handled.
+
+It now refuses instead, and says exactly which part it has nowhere to keep. That
+is the same instinct as the rest of this work, one step further in: falling back
+to our account is not the only way to end up posting as the wrong person — you
+can also get there by assembling something half-and-half that merely looks
+complete. Bluesky gets the matching fix, and it is the one that could have bitten
+a real client: rather than sending their password to whatever server *our*
+settings happen to name, it now uses the public one where such a password is
+actually valid. A client running their own Bluesky server cannot connect yet, and
+now gets an honest refusal instead of having their password handed somewhere it
+does not belong.
+
+Two smaller things review asked for are settled here too. A comment claiming an
+account could be filed in the safe exactly as it arrives said the opposite of
+what the safe actually does, so there is now a single small piece of code that
+does that filing properly and one place to change it. And a known rough edge in
+the Facebook code — asking for the list of a client's pages using the wrong one
+of their two keys — is written down where the next piece of work will meet it,
+along with why it is that piece of work's to fix rather than this one's.
+
+Review sent it back a second time, and this one was the opposite kind of
+failure — loud rather than silent, which is the lucky kind. Every post to X
+was refused with "credentials are missing" while the credentials were sitting
+right there, set and complete.
+
+The cause was a translation done twice. Credentials arrive from storage
+labelled one way and get relabelled into the form the posting code reads.
+Because looking them up is worth doing only once for a post — the check, the
+picture upload and the post itself all have to be the same account, or X
+answers with an error naming neither — the code looks them up once and passes
+the result along to all three. But the relabelling step was then handed
+something already relabelled, did not recognise a single field, and returned
+five blanks. Nothing errored; the post simply refused itself. And this was on
+the shared-keys path, which is Dane's own posting, so it was not some future
+client's problem — it was the only X path that runs today.
+
+The relabelling now understands both forms, so doing it twice changes nothing.
+That is the property the test asserts, rather than the one place that happened
+to trip over it, because the next person to translate twice will not know it
+was ever a hazard. The test that should have caught this listed four of the six
+channels; X was missing from it, and X is the one channel that hands its
+credentials along in an unusual shape — so the only unusual case in the file
+was the one nothing was watching. Both gaps are closed.
+
+One more thing review noticed while it was in there. There are two lists of
+the shared keys, and they disagreed about who wins when a value is set both in
+the settings screen and in the server's own configuration. One list preferred
+the settings screen, the other preferred the server. With both set and
+different, the same account posted under one name when a client project was
+named and a different name when it was not — a wrong-account post, arriving as
+success. There is one order now, and a test that fails if the two ever drift
+apart again.
+## 2026-08-31 — A saved section has one name, and renaming it now sticks (#454)
+
+You renamed the Delray site header three times and it snapped back three
+times. That was not stubbornness in the interface — the section genuinely had
+two names. One was the name in the Saved Sections list, which is what you were
+typing into; the other was stamped inside the section's own content, and that
+is the one every page card shows in bold. Renaming changed only the first, and
+then the thing that keeps every following page in sync pushed the section's
+content — old name and all — back over every page. So the rename was undone by
+the very machinery meant to spread it. The only way to move the other name was
+to unlock a section on a page, retitle it there, and save it back to the
+master, which is not something anybody would guess.
+
+There is one name now, and you can move it from either end. Renaming in the
+list changes the name everywhere it appears. Saving a section from a page
+carries that page's title with it, so the two never split apart again. And
+either way, the dialog that already tells you "this updates it on 35 pages"
+now also tells you "this also renames it on 35 pages" — that rename used to
+happen in silence, which is what hid the whole problem in the first place.
+
+Page cards are also titled by the master now rather than by whatever the last
+sync happened to stamp on them, so an old name cannot sit next to the new one
+arguing with it. Nothing was rewritten in the database to fix the sections
+that already disagree; they simply stop showing the wrong name, and they
+correct themselves the next time the section is saved.
+
+**A second round, after review.** The first version opened the same problem
+through a different door. Saving a section from a page takes that page's name
+with it — which is what makes the two names stay together — but on a section
+that still had the old mismatch, the page was carrying the *stale* name, so
+saving it put the old name back on the master and quietly undid a rename you
+had just made in the list. Worse, the warning that was supposed to announce a
+rename stayed silent, because it was comparing the wrong two strings: it
+checked the name stamped in the content instead of the name in the list, and
+on exactly those sections those two look identical. It now compares the name
+you can actually see in the list, so the dialog says what it is about to do.
+(That count went one step too far and is corrected in the third round
+below.)
+
+Second thing review caught: after saving a section from a page back to the
+master, that section on the page immediately showed up as *Changed* — as if
+you had edited it — even though you had just made it match. The relink was
+only flipping a couple of flags, while the server tidies a section as it saves
+it and fills in a few dozen settings the page never sent. So the two sides
+differed the instant they were joined, and every later sync then skipped that
+page on the grounds that somebody had edited it. The page now takes the
+section back exactly as the server stored it, which is what "this is the same
+section again" was always supposed to mean.
+
+Finally, the little "add this saved section under…" list was still labelling
+sections with the old stamped name, so it could offer you a section under a
+different name from the one its own card was showing, one click away.
+
+**A third round, after review.** Fixing the rename put a new wrong sentence
+into the very dialog this whole ticket is about. When you save a section from
+a page back over the master, that dialog lists every page it will change and
+exactly what changes on each — and it was working that list out from the
+section as it sits on your page, while the save itself now stamps the master's
+name on before writing. So it was describing a write that no longer happens.
+On a section with no title of its own it announced that the name was about to
+be wiped off every following page, and named those pages as changing, when in
+truth the name is kept and those pages are untouched. Telling somebody their
+section is about to be renamed to nothing, in the week whose complaint was a
+name behaving unpredictably, is worse than saying nothing. The preview and the
+save are now one and the same thing — worked out once, in one place, so the
+two cannot drift apart again.
+
+The second round had also made the rename warning count only the pages the
+save physically rewrites, skipping any page you had hand-edited. That is the
+right rule for *content* and the wrong one for a *name*: a hand-edited page
+still follows the section, so its card is titled by the master and it renames
+on screen the moment you rename, edits or no edits. Where every page had been
+hand-edited the warning therefore said nothing at all while every card
+changed — the original complaint, one more time. It now counts every page that
+will visibly rename, and says separately how many of them keep their own local
+edits, so the two sentences in that dialog stop disagreeing without either of
+them lying.
+
+Last, creating a saved section was still making one with two names. The name
+comes from a little prompt, and whatever you typed went onto the list entry
+while the section's own content kept whatever title it already had. Answer
+that prompt with anything but the default and the section was born with the
+exact mismatch this ticket exists to remove — invisible at first, because the
+cards now show the master's name either way, and back the moment somebody
+saved a page's copy over it. Both places that create a section now set both
+names together, and a test fails if a third one is ever added that does not.
+## 2026-09-01 — A merge can glue two statements together, and nothing was checking (#491)
+
+When two people change the same lines of a file, git stops and asks a human to
+sort it out. One of the usual answers is "keep both of these" — and that answer
+can quietly weld two separate instructions onto a single line. Git is happy,
+because git only ever asked whether the *text* overlapped. The computer that
+has to run the file is not happy at all, and it refuses to read the file at
+all — not just the broken line, the whole file, every function in it, gone.
+
+That happened on 30 August, in the one file every automated work-pass runs to
+talk to ClickUp. It was caught by luck: an agent happened to check the file by
+hand before committing. Nothing in the project would have caught it otherwise.
+The check we already had for this only looked at the browser code; the tests
+that mention that file only read it as text and never actually run it; and the
+commit checker deliberately looks the other way during a merge. So it could
+have gone live green, and the next work-pass would have died on its first line.
+No error, no alert, nothing to see — just a queue of tickets that had silently
+stopped moving, and no way to tell how long it had been like that.
+
+So the check now reads the tool scripts and the shared code as well as the
+browser code — about 600 files, in under half a second, every time anything is
+committed and again before anything merges. Generated files are left out on
+purpose, because they are rebuilt rather than written by hand, and they are not
+even present at the moment this check runs.
+
+The first time it ran, it found something nobody was looking for: a script for
+importing tweets from a spreadsheet has had a missing bracket since the day it
+was written. It has never once been able to run. One character, fixed. That is
+the same lesson arriving from the other direction — nothing had ever read that
+file either.
+
+Review caught one more thing, and it is the same lesson a third time. The test
+written to prove the check catches the 30 August problem did not actually
+contain that problem. The example it used had a semicolon between the two
+welded instructions — which makes it perfectly ordinary, valid code. The test
+was passing on the strength of a *different* broken line sitting underneath,
+and deleting the example entirely changed nothing. So the one test standing
+guard over the whole incident would not have noticed if the check stopped
+working. It now uses the real shape, on its own line, with a companion test
+using the correctly-separated version to prove the failure comes from the weld
+and nothing else — and both were broken on purpose to watch them fail.
+
+The other fix: the list of "files the computer generates, so leave them alone"
+is meant to be one list both checkers read, so they can never disagree about
+it. One of them was reading only half of it, and the gap was real — a bundling
+script writes six files into one folder and the list names three of them by
+name, relying on a folder rule to cover the rest. Both checkers now ask the
+same question, and a test fails if that ever comes apart again.
+
 ## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
 
 We already had an alarm for a scheduled job that stops running. This adds the
