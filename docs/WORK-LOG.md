@@ -89,6 +89,141 @@ which is right, while the check underneath it permitted exactly what the
 description forbade. It says what it always meant now — and reverting it to the
 old wording makes it fail, which is the proof it was load-bearing in the wrong
 direction.
+## 2026-08-31 — A saved section has one name, and renaming it now sticks (#454)
+
+You renamed the Delray site header three times and it snapped back three
+times. That was not stubbornness in the interface — the section genuinely had
+two names. One was the name in the Saved Sections list, which is what you were
+typing into; the other was stamped inside the section's own content, and that
+is the one every page card shows in bold. Renaming changed only the first, and
+then the thing that keeps every following page in sync pushed the section's
+content — old name and all — back over every page. So the rename was undone by
+the very machinery meant to spread it. The only way to move the other name was
+to unlock a section on a page, retitle it there, and save it back to the
+master, which is not something anybody would guess.
+
+There is one name now, and you can move it from either end. Renaming in the
+list changes the name everywhere it appears. Saving a section from a page
+carries that page's title with it, so the two never split apart again. And
+either way, the dialog that already tells you "this updates it on 35 pages"
+now also tells you "this also renames it on 35 pages" — that rename used to
+happen in silence, which is what hid the whole problem in the first place.
+
+Page cards are also titled by the master now rather than by whatever the last
+sync happened to stamp on them, so an old name cannot sit next to the new one
+arguing with it. Nothing was rewritten in the database to fix the sections
+that already disagree; they simply stop showing the wrong name, and they
+correct themselves the next time the section is saved.
+
+**A second round, after review.** The first version opened the same problem
+through a different door. Saving a section from a page takes that page's name
+with it — which is what makes the two names stay together — but on a section
+that still had the old mismatch, the page was carrying the *stale* name, so
+saving it put the old name back on the master and quietly undid a rename you
+had just made in the list. Worse, the warning that was supposed to announce a
+rename stayed silent, because it was comparing the wrong two strings: it
+checked the name stamped in the content instead of the name in the list, and
+on exactly those sections those two look identical. It now compares the name
+you can actually see in the list, so the dialog says what it is about to do.
+(That count went one step too far and is corrected in the third round
+below.)
+
+Second thing review caught: after saving a section from a page back to the
+master, that section on the page immediately showed up as *Changed* — as if
+you had edited it — even though you had just made it match. The relink was
+only flipping a couple of flags, while the server tidies a section as it saves
+it and fills in a few dozen settings the page never sent. So the two sides
+differed the instant they were joined, and every later sync then skipped that
+page on the grounds that somebody had edited it. The page now takes the
+section back exactly as the server stored it, which is what "this is the same
+section again" was always supposed to mean.
+
+Finally, the little "add this saved section under…" list was still labelling
+sections with the old stamped name, so it could offer you a section under a
+different name from the one its own card was showing, one click away.
+
+**A third round, after review.** Fixing the rename put a new wrong sentence
+into the very dialog this whole ticket is about. When you save a section from
+a page back over the master, that dialog lists every page it will change and
+exactly what changes on each — and it was working that list out from the
+section as it sits on your page, while the save itself now stamps the master's
+name on before writing. So it was describing a write that no longer happens.
+On a section with no title of its own it announced that the name was about to
+be wiped off every following page, and named those pages as changing, when in
+truth the name is kept and those pages are untouched. Telling somebody their
+section is about to be renamed to nothing, in the week whose complaint was a
+name behaving unpredictably, is worse than saying nothing. The preview and the
+save are now one and the same thing — worked out once, in one place, so the
+two cannot drift apart again.
+
+The second round had also made the rename warning count only the pages the
+save physically rewrites, skipping any page you had hand-edited. That is the
+right rule for *content* and the wrong one for a *name*: a hand-edited page
+still follows the section, so its card is titled by the master and it renames
+on screen the moment you rename, edits or no edits. Where every page had been
+hand-edited the warning therefore said nothing at all while every card
+changed — the original complaint, one more time. It now counts every page that
+will visibly rename, and says separately how many of them keep their own local
+edits, so the two sentences in that dialog stop disagreeing without either of
+them lying.
+
+Last, creating a saved section was still making one with two names. The name
+comes from a little prompt, and whatever you typed went onto the list entry
+while the section's own content kept whatever title it already had. Answer
+that prompt with anything but the default and the section was born with the
+exact mismatch this ticket exists to remove — invisible at first, because the
+cards now show the master's name either way, and back the moment somebody
+saved a page's copy over it. Both places that create a section now set both
+names together, and a test fails if a third one is ever added that does not.
+## 2026-09-01 — A merge can glue two statements together, and nothing was checking (#491)
+
+When two people change the same lines of a file, git stops and asks a human to
+sort it out. One of the usual answers is "keep both of these" — and that answer
+can quietly weld two separate instructions onto a single line. Git is happy,
+because git only ever asked whether the *text* overlapped. The computer that
+has to run the file is not happy at all, and it refuses to read the file at
+all — not just the broken line, the whole file, every function in it, gone.
+
+That happened on 30 August, in the one file every automated work-pass runs to
+talk to ClickUp. It was caught by luck: an agent happened to check the file by
+hand before committing. Nothing in the project would have caught it otherwise.
+The check we already had for this only looked at the browser code; the tests
+that mention that file only read it as text and never actually run it; and the
+commit checker deliberately looks the other way during a merge. So it could
+have gone live green, and the next work-pass would have died on its first line.
+No error, no alert, nothing to see — just a queue of tickets that had silently
+stopped moving, and no way to tell how long it had been like that.
+
+So the check now reads the tool scripts and the shared code as well as the
+browser code — about 600 files, in under half a second, every time anything is
+committed and again before anything merges. Generated files are left out on
+purpose, because they are rebuilt rather than written by hand, and they are not
+even present at the moment this check runs.
+
+The first time it ran, it found something nobody was looking for: a script for
+importing tweets from a spreadsheet has had a missing bracket since the day it
+was written. It has never once been able to run. One character, fixed. That is
+the same lesson arriving from the other direction — nothing had ever read that
+file either.
+
+Review caught one more thing, and it is the same lesson a third time. The test
+written to prove the check catches the 30 August problem did not actually
+contain that problem. The example it used had a semicolon between the two
+welded instructions — which makes it perfectly ordinary, valid code. The test
+was passing on the strength of a *different* broken line sitting underneath,
+and deleting the example entirely changed nothing. So the one test standing
+guard over the whole incident would not have noticed if the check stopped
+working. It now uses the real shape, on its own line, with a companion test
+using the correctly-separated version to prove the failure comes from the weld
+and nothing else — and both were broken on purpose to watch them fail.
+
+The other fix: the list of "files the computer generates, so leave them alone"
+is meant to be one list both checkers read, so they can never disagree about
+it. One of them was reading only half of it, and the gap was real — a bundling
+script writes six files into one folder and the list names three of them by
+name, relying on a folder rule to cover the rest. Both checkers now ask the
+same question, and a test fails if that ever comes apart again.
+
 ## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
 
 We already had an alarm for a scheduled job that stops running. This adds the

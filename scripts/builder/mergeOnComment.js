@@ -60,8 +60,32 @@ function isMergeCommand(text) {
  * verdict. A failing verdict reads "REVIEW: sent back to Queued", which
  * matches isReviewVerdict but not isReviewPassed — exactly the distinction
  * the precondition needs.
+ *
+ * IT MUST ALSO CARRY ONE OF THE VERDICT WORDS (2026-09-01, task 86bbrem48).
+ * This used to be `/^\s*REVIEW\b.*$/im` — any line beginning with the word
+ * "Review", which is a shape loop-review itself emits in ordinary prose. The
+ * operator card it posts alongside a PASS contains the line
+ *
+ *   Review re-ran everything independently on the merged code: typecheck ...
+ *
+ * and that card is NEWER than the verdict. `all` is correctly newest-first,
+ * so `.find` returned the CARD, `isReviewPassed` was false, and four approved
+ * tickets were refused overnight with "the most recent review verdict is not
+ * a PASS" — a false statement, while the queue sat still behind a full WIP
+ * cap. The review pass was poisoning its own verdict.
+ *
+ * The refusal was also permanent and self-concealing: it tells the operator
+ * "your approval is still standing ... the moment the reason above is dealt
+ * with it goes through on its own", and the reason can never be dealt with,
+ * because the card is newer than the verdict and always will be.
+ *
+ * `verdictComment` (scripts/builder/loopTrail.js) is the ONE producer, and it
+ * emits exactly two headings. Keying on those words rather than on the bare
+ * prefix is what separates a verdict from prose — and it is STRICTER than
+ * what it replaced, never more willing to merge, which is the only safe
+ * direction for the gate in front of production.
  */
-const REVIEW_VERDICT_RE = /^\s*REVIEW\b.*$/im;
+const REVIEW_VERDICT_RE = /^\s*REVIEW\s*:?\s*(?:PASSED|SENT BACK)\b/im;
 const REVIEW_PASSED_RE = /^\s*REVIEW\s*:?\s*PASSED\b/im;
 
 function isReviewVerdict(text) {

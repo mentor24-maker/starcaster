@@ -856,3 +856,73 @@ test('the relay waits after BOTH catch-up paths, and merges the same way', () =>
   assert.match(src, /reviewGate\.duringRerunWait\(\{\n\s*staleness: reviewGate\.reviewGateStaleness\(\{ rollup: json\.statusCheckRollup, comments \}\),\n\s*gate: githubGate\(json\),/,
     'the stale-gate hook must route through the tested duringRerunWait, composed with githubGate for the actual merge decision');
 });
+
+// ── The operator card must not be read as the verdict (task 86bbrem48) ────
+// 2026-09-01: four approved tickets sat in `Ready to launch` overnight while
+// the queue stood still behind a full WIP cap. The merge step refused each
+// one with "the most recent review verdict is not a PASS" — a false
+// statement. loop-review's own operator card contains a prose line beginning
+// "Review re-ran everything independently on the merged code: ...", the card
+// is NEWER than the verdict, and the old pattern (/^\s*REVIEW\b.*$/im)
+// matched any line starting with the word "Review". The review pass was
+// poisoning its own verdict, permanently: the card can never stop being
+// newer than the verdict it accompanies.
+
+// Verbatim shape from 86bbr1u9v, which is the ticket that jammed.
+const operatorCard = (t) => c(t, AGENT, [
+  'NEEDED FROM DANE: Merge approval on PR #489',
+  '',
+  'Review re-ran everything independently on the merged code: typecheck clean,',
+  '1976 + 1388 tests passing, conventions, syntax, clean build.',
+].join('\n'));
+
+test('an operator card posted AFTER the verdict does not become the verdict', () => {
+  const d = mergeDecision({
+    status: 'ready to launch',
+    operatorId: OPERATOR,
+    comments: [prOpened(1), reviewPassed(2), operatorCard(3), c(4, OPERATOR, 'merge')],
+  });
+  assert.equal(d.act, 'merge', 'the newest PASS still governs — the card is prose, not a verdict');
+  assert.equal(d.pr.number, 362);
+});
+
+test('a prose line beginning "Review" is not a verdict at all', () => {
+  assert.equal(isReviewVerdict('Review re-ran everything independently on the merged code'), false);
+  assert.equal(isReviewVerdict('Reviewed the branch and it looks fine'), false);
+  // Still a verdict, both spellings, both outcomes — the fix narrows the
+  // pattern, it does not move it.
+  assert.equal(isReviewVerdict('REVIEW: PASSED — verified on the merged code'), true);
+  assert.equal(isReviewVerdict('REVIEW PASSED (loop-review, 2026-08-22)'), true);
+  assert.equal(isReviewVerdict('REVIEW: sent back to Queued — a blocking finding.'), true);
+});
+
+test('DELIBERATE: the fix made the gate STRICTER, never more willing to merge', () => {
+  // The one property that must survive: a genuine send-back that is newer
+  // than a pass still refuses, even with an operator card in the mix. A fix
+  // to a merge gate that loosens it is worse than the bug it repairs.
+  const d = mergeDecision({
+    status: 'ready to launch',
+    operatorId: OPERATOR,
+    comments: [
+      prOpened(1),
+      reviewPassed(2),
+      operatorCard(3),
+      c(4, AGENT, 'REVIEW: sent back to Queued — a blocking finding.'),
+      c(5, OPERATOR, 'merge'),
+    ],
+  });
+  assert.equal(d.act, 'refuse');
+  assert.match(d.reason, /not a PASS/);
+});
+
+test('a ticket carrying ONLY a card and no verdict still refuses', () => {
+  // The card must not stand in for a verdict in either direction: it cannot
+  // block a pass, and it cannot substitute for one.
+  const d = mergeDecision({
+    status: 'ready to launch',
+    operatorId: OPERATOR,
+    comments: [prOpened(1), operatorCard(2), c(3, OPERATOR, 'merge')],
+  });
+  assert.equal(d.act, 'refuse');
+  assert.match(d.reason, /no review verdict/);
+});
