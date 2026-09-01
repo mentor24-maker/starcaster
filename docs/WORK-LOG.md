@@ -1,3 +1,34 @@
+## 2026-09-01 — A merge can glue two statements together, and nothing was checking (#491)
+
+When two people change the same lines of a file, git stops and asks a human to
+sort it out. One of the usual answers is "keep both of these" — and that answer
+can quietly weld two separate instructions onto a single line. Git is happy,
+because git only ever asked whether the *text* overlapped. The computer that
+has to run the file is not happy at all, and it refuses to read the file at
+all — not just the broken line, the whole file, every function in it, gone.
+
+That happened on 30 August, in the one file every automated work-pass runs to
+talk to ClickUp. It was caught by luck: an agent happened to check the file by
+hand before committing. Nothing in the project would have caught it otherwise.
+The check we already had for this only looked at the browser code; the tests
+that mention that file only read it as text and never actually run it; and the
+commit checker deliberately looks the other way during a merge. So it could
+have gone live green, and the next work-pass would have died on its first line.
+No error, no alert, nothing to see — just a queue of tickets that had silently
+stopped moving, and no way to tell how long it had been like that.
+
+So the check now reads the tool scripts and the shared code as well as the
+browser code — about 600 files, in under half a second, every time anything is
+committed and again before anything merges. Generated files are left out on
+purpose, because they are rebuilt rather than written by hand, and they are not
+even present at the moment this check runs.
+
+The first time it ran, it found something nobody was looking for: a script for
+importing tweets from a spreadsheet has had a missing bracket since the day it
+was written. It has never once been able to run. One character, fixed. That is
+the same lesson arriving from the other direction — nothing had ever read that
+file either.
+
 ## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
 
 We already had an alarm for a scheduled job that stops running. This adds the
