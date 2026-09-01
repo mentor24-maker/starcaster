@@ -1,0 +1,824 @@
+{
+  "repo": "mentor24-maker/starcaster",
+  "window": {
+    "from": "2026-08-24",
+    "to": "2026-08-30",
+    "days": 7
+  },
+  "dataFile": "2026-08-30.data.json",
+  "originFetch": {
+    "ok": true,
+    "reason": null
+  },
+  "figures": {
+    "merges": {
+      "ok": true,
+      "value": 58,
+      "perDay": [
+        {
+          "date": "2026-08-24",
+          "count": 15
+        },
+        {
+          "date": "2026-08-25",
+          "count": 5
+        },
+        {
+          "date": "2026-08-26",
+          "count": 0
+        },
+        {
+          "date": "2026-08-27",
+          "count": 0
+        },
+        {
+          "date": "2026-08-28",
+          "count": 2
+        },
+        {
+          "date": "2026-08-29",
+          "count": 4
+        },
+        {
+          "date": "2026-08-30",
+          "count": 32
+        }
+      ],
+      "notCountedBecauseNotMerged": 0,
+      "couldNotConfirm": 0,
+      "couldNotConfirmReasons": []
+    },
+    "diffstat": {
+      "ok": true,
+      "value": {
+        "filesChanged": 167,
+        "insertions": 38441,
+        "deletions": 1569
+      }
+    },
+    "tests": {
+      "ok": true,
+      "value": {
+        "pass": 1846,
+        "fail": 0
+      }
+    },
+    "ciMedianSeconds": {
+      "ok": true,
+      "value": 85,
+      "sampleSize": 322,
+      "partial": false,
+      "limit": 1000
+    },
+    "openPrs": {
+      "ok": true,
+      "value": 7
+    },
+    "stages": {
+      "ok": true,
+      "value": {
+        "queued": 48,
+        "live": 150,
+        "in review": 3,
+        "ready to launch": 1
+      },
+      "total": 202,
+      "closedInWindow": 64
+    },
+    "loopPasses": {
+      "ok": true,
+      "value": {
+        "total": 1407,
+        "byLoop": {
+          "/loop-build": 927,
+          "/loop-review": 480
+        }
+      }
+    }
+  },
+  "merges": [
+    {
+      "number": 474,
+      "title": "Builder: video as a fifth background mode, painted as its poster everywhere else",
+      "date": "2026-08-30",
+      "sha": "b964150e379bd2595cfa2c248cdeccc2824f611b",
+      "area": "The Builder"
+    },
+    {
+      "number": 473,
+      "title": "Rotation runbook: tonight's ClickUp rotation, and a log read that prints values",
+      "date": "2026-08-30",
+      "sha": "dc5ea8c03fe01adbcf3f9fe92c9213f3f4e18ae3",
+      "area": "Documentation"
+    },
+    {
+      "number": 472,
+      "title": "Doctrine: three rules the heartbeat slice paid for",
+      "date": "2026-08-30",
+      "sha": "f2dd32fe399c0add8952c2aede86c9b522cfc77c",
+      "area": "Documentation"
+    },
+    {
+      "number": 470,
+      "title": "Secrets doctrine is about exposure, not custody — and restore 146 doctrine lines #467 deleted",
+      "date": "2026-08-30",
+      "sha": "e0f2315954912fbdf8b8bfab3324f08b87c2986d",
+      "area": "Documentation"
+    },
+    {
+      "number": 428,
+      "title": "Sync 7/7: one propagation engine for sections and modules",
+      "date": "2026-08-30",
+      "sha": "03a53ca904179bc29914beef804a79f00ebe8f23",
+      "area": "The Builder"
+    },
+    {
+      "number": 469,
+      "title": "An empty description read as an empty roll call, not as nothing read",
+      "date": "2026-08-30",
+      "sha": "9ab30339b246ad40b81eb897cbd898e0471c8949",
+      "area": "The pipeline"
+    },
+    {
+      "number": 468,
+      "title": "Rotation runbook: find the copies a rotation cannot reach",
+      "date": "2026-08-30",
+      "sha": "ac6de593b80bcb6283de5e06d2792e33ea5bf5b3",
+      "area": "Documentation"
+    },
+    {
+      "number": 467,
+      "title": "Provision a node by script, not by a seven-page document",
+      "date": "2026-08-30",
+      "sha": "7d893bdc4a3d1403d2a31b653dc0fb735f1b076f",
+      "area": "Documentation"
+    },
+    {
+      "number": 466,
+      "title": "Doctrine: a cache must not remember a failed probe as an answer",
+      "date": "2026-08-30",
+      "sha": "24fb658c4df32b90b537bce50b7d1f1a95004df9",
+      "area": "Documentation"
+    },
+    {
+      "number": 465,
+      "title": "Doctrine: derive a hand-off's actor once, or two paths will name two",
+      "date": "2026-08-30",
+      "sha": "2215a742ebdfa0abd8a87b93ad6155bc322bac8f",
+      "area": "Documentation"
+    },
+    {
+      "number": 464,
+      "title": "Record the Connections vault migration as applied",
+      "date": "2026-08-30",
+      "sha": "41637d877a1b8eb3af5c562b79d4c5bd64f6030f",
+      "area": "Documentation"
+    },
+    {
+      "number": 463,
+      "title": "Doctrine 3.12: a guard placed after the refusal it exists to pre-empt is unreachable",
+      "date": "2026-08-30",
+      "sha": "7479497d4f660fdf9503c153d995af0f675cf7bb",
+      "area": "Documentation"
+    },
+    {
+      "number": 448,
+      "title": "Connections 1/7: the vault — one encrypted row per project, provider and account",
+      "date": "2026-08-30",
+      "sha": "93aca7739240ec056787e964e5a7f94fc7a37efa",
+      "area": "The pipeline"
+    },
+    {
+      "number": 443,
+      "title": "The merge step re-runs a stale review-gate instead of merging on it",
+      "date": "2026-08-30",
+      "sha": "cfb1e63d90397dfb5793a3415874f964dfb73f64",
+      "area": "The pipeline"
+    },
+    {
+      "number": 444,
+      "title": "Four holes in the review gate, closed before it is switched on",
+      "date": "2026-08-30",
+      "sha": "f9b50016042942e59ba6db4de0607d23cbc1f1ef",
+      "area": "The pipeline"
+    },
+    {
+      "number": 453,
+      "title": "CC runs the operational commands — the rule where every session reads it",
+      "date": "2026-08-30",
+      "sha": "5c334fdf5d6a77f12fecf0eec1f0d484ddcd891e",
+      "area": "Documentation"
+    },
+    {
+      "number": 462,
+      "title": "WORK-LOG tells the story of Lane A (#438)",
+      "date": "2026-08-30",
+      "sha": "6dbaec02155b7305c97330d38566dca7fef2cb16",
+      "area": "Documentation"
+    },
+    {
+      "number": 460,
+      "title": "Doc note: per-site browser zoom can fake a preview/live rendering mismatch",
+      "date": "2026-08-30",
+      "sha": "459ec429d36f3087153fcf847aba45f5066757c6",
+      "area": "Documentation"
+    },
+    {
+      "number": 461,
+      "title": "Docs: a review pass in flight keeps its claim, and the stall nag is daily",
+      "date": "2026-08-30",
+      "sha": "9f106bbea01a4360a3bf3a5a08da5e8f61e8aeaf",
+      "area": "Documentation"
+    },
+    {
+      "number": 459,
+      "title": "WORK-LOG tells the story of the red banner (#457)",
+      "date": "2026-08-30",
+      "sha": "a40fbd862ba7d739d2e0b23ea1a333be9d4f43f5",
+      "area": "Documentation"
+    },
+    {
+      "number": 452,
+      "title": "A conflict hand-off files the work instead of asking an empty room",
+      "date": "2026-08-30",
+      "sha": "ecbede3e1e9d07a7fb28ce35b124fb95cc453b63",
+      "area": "The pipeline"
+    },
+    {
+      "number": 458,
+      "title": "Builder Preview renders like the live site, under a thin yellow strip",
+      "date": "2026-08-30",
+      "sha": "cd3897157cbff7c8d2bcd1b4e9ea45b0e72708d1",
+      "area": "The Builder"
+    },
+    {
+      "number": 457,
+      "title": "The gate-order wiring test follows the card post to its structured shape",
+      "date": "2026-08-30",
+      "sha": "213833563ca6562361cf0f36a66a26ef404d825f",
+      "area": "The pipeline"
+    },
+    {
+      "number": 456,
+      "title": "Docs: the bus-outage rehearsal switch, and fast-tracking a ticket already in review",
+      "date": "2026-08-30",
+      "sha": "b83fef2ad119b74b71d6988b047f1223f4aff58a",
+      "area": "Documentation"
+    },
+    {
+      "number": 445,
+      "title": "Break the party line on purpose, so the fallback can be watched",
+      "date": "2026-08-30",
+      "sha": "7607ec846af358ef02f4601ab4af1e59e675d63d",
+      "area": "The pipeline"
+    },
+    {
+      "number": 438,
+      "title": "Lane A auto-merge: tests and docs merge themselves after a one-hour window",
+      "date": "2026-08-30",
+      "sha": "21fe8f3046b3727bc4299f1437a1114bc154486e",
+      "area": "The pipeline"
+    },
+    {
+      "number": 439,
+      "title": "Pipeline pulse phase 1: the three checks that measure flow, not status",
+      "date": "2026-08-30",
+      "sha": "80ccb93d1d5a7e61978eca75e39bc04dc6b5ac17",
+      "area": "The pipeline"
+    },
+    {
+      "number": 442,
+      "title": "A send-back says which round it is, and the fourth one asks Dane",
+      "date": "2026-08-30",
+      "sha": "d3deb9fb2f0fdcf90b10ec2e044cf916e5a27da4",
+      "area": "The pipeline"
+    },
+    {
+      "number": 455,
+      "title": "The fast-track lane, written down, and the two rules its first run produced",
+      "date": "2026-08-30",
+      "sha": "d63c167d215118fab172344139b642a438b1d76c",
+      "area": "Documentation"
+    },
+    {
+      "number": 441,
+      "title": "The loop's idle time follows the queue, not a number chosen once",
+      "date": "2026-08-30",
+      "sha": "534bf1c859bf42d43bbae40741934213f9f04204",
+      "area": "The pipeline"
+    },
+    {
+      "number": 431,
+      "title": "WIP cap: count work in flight, not open pull requests",
+      "date": "2026-08-30",
+      "sha": "bb6894c15e5e0574f1d3cccffaa63300597eecfb",
+      "area": "The pipeline"
+    },
+    {
+      "number": 440,
+      "title": "The chrome and the settings column below it share one lattice",
+      "date": "2026-08-30",
+      "sha": "8842562f75a2c46f90766ac1d14843021653f5b7",
+      "area": "Documentation"
+    },
+    {
+      "number": 450,
+      "title": "Say \"agent session\" where the code meant one, not \"a human\"",
+      "date": "2026-08-29",
+      "sha": "3b631b10e11b3c168459ddcf3ac3b34f001eb04f",
+      "area": "The pipeline"
+    },
+    {
+      "number": 434,
+      "title": "A sanctioned way to clear the decks and go fast",
+      "date": "2026-08-29",
+      "sha": "de3dbc210945defbf96edd0bca61772e1d6cda31",
+      "area": "The pipeline"
+    },
+    {
+      "number": 436,
+      "title": "An escalation that costs money must carry the command that proves it",
+      "date": "2026-08-29",
+      "sha": "e510d45efe3f1f29532300e6b9b7bda5c47b11d8",
+      "area": "The pipeline"
+    },
+    {
+      "number": 373,
+      "title": "Public POST endpoints verify the projectId they are handed",
+      "date": "2026-08-29",
+      "sha": "7b48c2936d2c5a5c8ca62b8300fba171e5614296",
+      "area": "Server and data"
+    },
+    {
+      "number": 422,
+      "title": "Studio 1/8: the catalog — video_sessions and video_sources",
+      "date": "2026-08-28",
+      "sha": "f0f5eb1877b7af37796dffcbf29431a072ed8f2c",
+      "area": "Server and data"
+    },
+    {
+      "number": 435,
+      "title": "One command that answers what is actually waiting on Dane",
+      "date": "2026-08-28",
+      "sha": "a08fd4e69ec761465d2d1f2ae9ae7f23a8146edb",
+      "area": "The pipeline"
+    },
+    {
+      "number": 433,
+      "title": "A merge gate the repository enforces, not one every session has to remember",
+      "date": "2026-08-25",
+      "sha": "ddd9bf4edae2cea8a4a69683d643a7303c4ffb2b",
+      "area": "The pipeline"
+    },
+    {
+      "number": 426,
+      "title": "The relay wakes every 10 minutes, not every hour",
+      "date": "2026-08-25",
+      "sha": "c2081a851fd2fb9605b950ecb0744f42e7210dc8",
+      "area": "The pipeline"
+    },
+    {
+      "number": 432,
+      "title": "Module chrome shares one grid; image drop shadow",
+      "date": "2026-08-25",
+      "sha": "c69374c2d46b5ec384a74aaef0d138955ca132f1",
+      "area": "The Builder"
+    },
+    {
+      "number": 395,
+      "title": "Image effects: surface parkour, the two-axis one",
+      "date": "2026-08-25",
+      "sha": "e80771ac17f3defa1a57e57fba09fbdfb88eb774",
+      "area": "The Builder"
+    },
+    {
+      "number": 400,
+      "title": "Ecosystem drift check: probe objects hosted on a reachable remote node",
+      "date": "2026-08-25",
+      "sha": "92e504e48afdc15d136fa8e71980edd909fe4c53",
+      "area": "The pipeline"
+    },
+    {
+      "number": 403,
+      "title": "Bug Report: the builder's own preview must not file a real report",
+      "date": "2026-08-24",
+      "sha": "e4c3fc9a54f100795c680e752a01a2983ed214b4",
+      "area": "The Builder"
+    },
+    {
+      "number": 401,
+      "title": "projectId reaches modules in ordinary rows, not only the overlay layer",
+      "date": "2026-08-24",
+      "sha": "f2f8042ede9d17faaa19a24d44fa1b50507712d4",
+      "area": "The Builder"
+    },
+    {
+      "number": 389,
+      "title": "Panel sweep 2/15: seed real content so check:panels can see the item managers",
+      "date": "2026-08-24",
+      "sha": "b1bcd38fb70a614159f3f59ecc7ddc2c84568123",
+      "area": "The pipeline"
+    },
+    {
+      "number": 430,
+      "title": "End the ?v= problem: no committed file carries a build hash",
+      "date": "2026-08-24",
+      "sha": "91ead88d41f54d818cec979bea47dc59b80c3f4e",
+      "area": "The pipeline"
+    },
+    {
+      "number": 429,
+      "title": "Stop pinning src/layout.html — it is source, and its pins were redundant",
+      "date": "2026-08-24",
+      "sha": "7bb37b259a53702f357f437d5666dca274ef21e0",
+      "area": "The pipeline"
+    },
+    {
+      "number": 416,
+      "title": "Acquire YouTube 2/4: the single-video acquire panel (React island)",
+      "date": "2026-08-24",
+      "sha": "8b7cf6e30519fa87bc3c1b0f67a887198dda5e61",
+      "area": "The admin app"
+    },
+    {
+      "number": 414,
+      "title": "Relay handback: deliver to somewhere durable, not just the party line",
+      "date": "2026-08-24",
+      "sha": "d046a5c80682658d5b7db09e8f965d9655a5dde5",
+      "area": "The pipeline"
+    },
+    {
+      "number": 418,
+      "title": "Bug reports from our own harness stop reaching the operator's lane",
+      "date": "2026-08-24",
+      "sha": "d38d3ec9a95696ead7a45d99966f42c21f921731",
+      "area": "Server and data"
+    },
+    {
+      "number": 413,
+      "title": "Bug Report 5/5: optional email alert to the project's support address",
+      "date": "2026-08-24",
+      "sha": "81891a6b069dbc09df462fe7b6a3a87e011b3744",
+      "area": "Server and data"
+    },
+    {
+      "number": 420,
+      "title": "Catch-up: never push a tree whose asset pins are known stale",
+      "date": "2026-08-24",
+      "sha": "359881633737d5b00812075bd14856756eba1b31",
+      "area": "The pipeline"
+    },
+    {
+      "number": 423,
+      "title": "pr-opened fills in the work-log PR number",
+      "date": "2026-08-24",
+      "sha": "2a7de5209bf5416c72f1e7d01a86f0ff735ede3f",
+      "area": "The pipeline"
+    },
+    {
+      "number": 421,
+      "title": "Hand-off comment: say what happened and what happens next, not 'needs a person'",
+      "date": "2026-08-24",
+      "sha": "5720cbdb2c1590f2c877a4bab967fa755ec871d9",
+      "area": "The pipeline"
+    },
+    {
+      "number": 427,
+      "title": "Panel sweep 4/15: enrol the Table editor in check:panels",
+      "date": "2026-08-24",
+      "sha": "e5b09082925367fa4bb86ee4e3c513fc038ffdc8",
+      "area": "The admin app"
+    },
+    {
+      "number": 424,
+      "title": "Merge in one pass: wait 85 seconds instead of an hour",
+      "date": "2026-08-24",
+      "sha": "9186ad2a6bac3fe6c3cba26de84f473d44e27eef",
+      "area": "The pipeline"
+    },
+    {
+      "number": 425,
+      "title": "Cap work in progress: stop building when the merge side is the bottleneck",
+      "date": "2026-08-24",
+      "sha": "802f77ed6f9060f1c6dd04e75014b3b3a3d94052",
+      "area": "The pipeline"
+    }
+  ],
+  "groups": [
+    {
+      "area": "The Builder",
+      "entries": [
+        {
+          "number": 474,
+          "title": "Builder: video as a fifth background mode, painted as its poster everywhere else",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 428,
+          "title": "Sync 7/7: one propagation engine for sections and modules",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 458,
+          "title": "Builder Preview renders like the live site, under a thin yellow strip",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 432,
+          "title": "Module chrome shares one grid; image drop shadow",
+          "date": "2026-08-25"
+        },
+        {
+          "number": 395,
+          "title": "Image effects: surface parkour, the two-axis one",
+          "date": "2026-08-25"
+        },
+        {
+          "number": 403,
+          "title": "Bug Report: the builder's own preview must not file a real report",
+          "date": "2026-08-24"
+        },
+        {
+          "number": 401,
+          "title": "projectId reaches modules in ordinary rows, not only the overlay layer",
+          "date": "2026-08-24"
+        }
+      ]
+    },
+    {
+      "area": "The pipeline",
+      "entries": [
+        {
+          "number": 469,
+          "title": "An empty description read as an empty roll call, not as nothing read",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 448,
+          "title": "Connections 1/7: the vault — one encrypted row per project, provider and account",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 443,
+          "title": "The merge step re-runs a stale review-gate instead of merging on it",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 444,
+          "title": "Four holes in the review gate, closed before it is switched on",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 452,
+          "title": "A conflict hand-off files the work instead of asking an empty room",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 457,
+          "title": "The gate-order wiring test follows the card post to its structured shape",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 445,
+          "title": "Break the party line on purpose, so the fallback can be watched",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 438,
+          "title": "Lane A auto-merge: tests and docs merge themselves after a one-hour window",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 439,
+          "title": "Pipeline pulse phase 1: the three checks that measure flow, not status",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 442,
+          "title": "A send-back says which round it is, and the fourth one asks Dane",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 441,
+          "title": "The loop's idle time follows the queue, not a number chosen once",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 431,
+          "title": "WIP cap: count work in flight, not open pull requests",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 450,
+          "title": "Say \"agent session\" where the code meant one, not \"a human\"",
+          "date": "2026-08-29"
+        },
+        {
+          "number": 434,
+          "title": "A sanctioned way to clear the decks and go fast",
+          "date": "2026-08-29"
+        },
+        {
+          "number": 436,
+          "title": "An escalation that costs money must carry the command that proves it",
+          "date": "2026-08-29"
+        },
+        {
+          "number": 435,
+          "title": "One command that answers what is actually waiting on Dane",
+          "date": "2026-08-28"
+        },
+        {
+          "number": 433,
+          "title": "A merge gate the repository enforces, not one every session has to remember",
+          "date": "2026-08-25"
+        },
+        {
+          "number": 426,
+          "title": "The relay wakes every 10 minutes, not every hour",
+          "date": "2026-08-25"
+        },
+        {
+          "number": 400,
+          "title": "Ecosystem drift check: probe objects hosted on a reachable remote node",
+          "date": "2026-08-25"
+        },
+        {
+          "number": 389,
+          "title": "Panel sweep 2/15: seed real content so check:panels can see the item managers",
+          "date": "2026-08-24"
+        },
+        {
+          "number": 430,
+          "title": "End the ?v= problem: no committed file carries a build hash",
+          "date": "2026-08-24"
+        },
+        {
+          "number": 429,
+          "title": "Stop pinning src/layout.html — it is source, and its pins were redundant",
+          "date": "2026-08-24"
+        },
+        {
+          "number": 414,
+          "title": "Relay handback: deliver to somewhere durable, not just the party line",
+          "date": "2026-08-24"
+        },
+        {
+          "number": 420,
+          "title": "Catch-up: never push a tree whose asset pins are known stale",
+          "date": "2026-08-24"
+        },
+        {
+          "number": 423,
+          "title": "pr-opened fills in the work-log PR number",
+          "date": "2026-08-24"
+        },
+        {
+          "number": 421,
+          "title": "Hand-off comment: say what happened and what happens next, not 'needs a person'",
+          "date": "2026-08-24"
+        },
+        {
+          "number": 424,
+          "title": "Merge in one pass: wait 85 seconds instead of an hour",
+          "date": "2026-08-24"
+        },
+        {
+          "number": 425,
+          "title": "Cap work in progress: stop building when the merge side is the bottleneck",
+          "date": "2026-08-24"
+        }
+      ]
+    },
+    {
+      "area": "Server and data",
+      "entries": [
+        {
+          "number": 373,
+          "title": "Public POST endpoints verify the projectId they are handed",
+          "date": "2026-08-29"
+        },
+        {
+          "number": 422,
+          "title": "Studio 1/8: the catalog — video_sessions and video_sources",
+          "date": "2026-08-28"
+        },
+        {
+          "number": 418,
+          "title": "Bug reports from our own harness stop reaching the operator's lane",
+          "date": "2026-08-24"
+        },
+        {
+          "number": 413,
+          "title": "Bug Report 5/5: optional email alert to the project's support address",
+          "date": "2026-08-24"
+        }
+      ]
+    },
+    {
+      "area": "The admin app",
+      "entries": [
+        {
+          "number": 416,
+          "title": "Acquire YouTube 2/4: the single-video acquire panel (React island)",
+          "date": "2026-08-24"
+        },
+        {
+          "number": 427,
+          "title": "Panel sweep 4/15: enrol the Table editor in check:panels",
+          "date": "2026-08-24"
+        }
+      ]
+    },
+    {
+      "area": "Documentation",
+      "entries": [
+        {
+          "number": 473,
+          "title": "Rotation runbook: tonight's ClickUp rotation, and a log read that prints values",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 472,
+          "title": "Doctrine: three rules the heartbeat slice paid for",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 470,
+          "title": "Secrets doctrine is about exposure, not custody — and restore 146 doctrine lines #467 deleted",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 468,
+          "title": "Rotation runbook: find the copies a rotation cannot reach",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 467,
+          "title": "Provision a node by script, not by a seven-page document",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 466,
+          "title": "Doctrine: a cache must not remember a failed probe as an answer",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 465,
+          "title": "Doctrine: derive a hand-off's actor once, or two paths will name two",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 464,
+          "title": "Record the Connections vault migration as applied",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 463,
+          "title": "Doctrine 3.12: a guard placed after the refusal it exists to pre-empt is unreachable",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 453,
+          "title": "CC runs the operational commands — the rule where every session reads it",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 462,
+          "title": "WORK-LOG tells the story of Lane A (#438)",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 460,
+          "title": "Doc note: per-site browser zoom can fake a preview/live rendering mismatch",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 461,
+          "title": "Docs: a review pass in flight keeps its claim, and the stall nag is daily",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 459,
+          "title": "WORK-LOG tells the story of the red banner (#457)",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 456,
+          "title": "Docs: the bus-outage rehearsal switch, and fast-tracking a ticket already in review",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 455,
+          "title": "The fast-track lane, written down, and the two rules its first run produced",
+          "date": "2026-08-30"
+        },
+        {
+          "number": 440,
+          "title": "The chrome and the settings column below it share one lattice",
+          "date": "2026-08-30"
+        }
+      ]
+    }
+  ]
+}
