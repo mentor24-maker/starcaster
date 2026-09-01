@@ -1,5 +1,7 @@
 'use strict';
 
+const loopStatuses = require('./loopStatuses.js');
+
 /**
  * The weekly report, minus the writing.
  *
@@ -380,8 +382,16 @@ function renderChart(days) {
   return ['      <div class="chart">', ...bars, '      </div>'].join('\n');
 }
 
-/** The ticket-stage line-up, in the order the pipeline actually moves. */
-const STAGE_ORDER = Object.freeze(['Queued', 'Building', 'In review', 'Needs your input', 'Ready to launch', 'Live']);
+/**
+ * The ticket-stage line-up, in the order the pipeline actually moves.
+ *
+ * Read from `loopStatuses`, not spelled out here (task 86bbr1u9v). The report
+ * is exactly the surface where a missing status is invisible: a stage absent
+ * from this list is not rendered at all, so its tickets simply vanish from the
+ * picture rather than showing as zero. That is how the report would have kept
+ * describing a healthy pipeline while the rework column filled up.
+ */
+const STAGE_ORDER = loopStatuses.STAGE_ORDER;
 
 function renderStages(stages) {
   if (!stages || !stages.ok) {

@@ -140,6 +140,26 @@ test('a send-back verdict does not accidentally read as a pass', () => {
   assert.equal(isReviewPassed(verdictComment(false, 'CI is red')), false);
 });
 
+test('a send-back verdict names Rework, and the OLD wording still counts as one', () => {
+  // Task 86bbr1u9v. Two halves, and the second matters more than the first:
+  // `sendBackRounds` counts these comments to decide when a fourth round goes
+  // to Dane instead of round-tripping again. If renaming the status had
+  // orphaned the history, every ticket sent back before 2026-08-31 would have
+  // silently reset to round 1 — the escalation quietly switched off.
+  const fresh = verdictComment(false, 'the panel is staggered');
+  assert.match(fresh, /sent back to Rework/);
+  assert.doesNotMatch(fresh, /sent back to Queued/);
+
+  const { isReviewVerdict } = require('./mergeOnComment.js');
+  const legacy = 'REVIEW: sent back to Queued — one surviving mutant proves a coverage hole.';
+  for (const text of [fresh, legacy]) {
+    assert.equal(isReviewVerdict(text), true, `must read as a verdict: ${text}`);
+    assert.equal(isReviewPassed(text), false, `must not read as a pass: ${text}`);
+  }
+  // And a PASS is untouched by any of it.
+  assert.equal(isReviewPassed(verdictComment(true, 'gates green')), true);
+});
+
 test('only "Ready to launch" is gated — no other status is touched', () => {
   assert.equal(isReadyToLaunch('Ready to launch'), true);
   assert.equal(isReadyToLaunch('  ready TO launch '), true);

@@ -69,6 +69,7 @@ import branchCatchUp from './builder/branchCatchUp.js';
 import reviewGate from './builder/reviewGate.js';
 import conflictWork from './builder/conflictWork.js';
 import wipCap from './builder/wipCap.js';
+import loopStatuses from './builder/loopStatuses.js';
 import autoMergeLane from './builder/autoMergeLane.js';
 import autoMergeLedgerFile from './builder/autoMergeLedgerFile.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
@@ -122,7 +123,10 @@ const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
 const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
 const OPERATOR_STATUSES = ['needs your input', 'ready to launch'];
 const PRIORITY = { urgent: 1, high: 2, normal: 3, low: 4 };
-const PRIORITY_RANK = { urgent: 1, high: 2, normal: 3, low: 4 };
+// Claim ordering lives in loopStatuses.js — one table, so the queue this
+// prints and the depth the pacing curve counts can never disagree about which
+// ticket is next (task 86bbr1u9v).
+const PRIORITY_RANK = loopStatuses.PRIORITY_RANK;
 
 // bus-relay defaults: the "Agent Response" list in the Dane of Earth space,
 // and the party-line bus channel, so the common case needs no flags at all
@@ -318,8 +322,10 @@ function usage(code = 2) {
   console.error('                                             stand down if `queue`/`get` already shows one that is not stale');
   console.error('  loop-heartbeat --task <id> --in-line N --next "<name>"   one per pass onto the pinned heartbeat ticket');
   console.error('  chat --channel <id> --body-file <file|->');
-  console.error('  queue --list <id> [--status "Queued"]     open tasks, sorted priority-then-oldest, ALL pages:');
+  console.error('  queue --list <id> [--status "Queued" | --claimable]   open tasks, sorted priority-then-oldest, ALL pages:');
   console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name <TAB> loop note');
+  console.error('                                             --claimable is what a BUILD pass asks for: every status loop-build may take,');
+  console.error('                                             in drain order — all Rework first (oldest first, priority ignored), then Queued');
   console.error('                                             the loop note is what a pass in flight looks like (e.g. a review already running)');
   console.error('                                             repo is the declared repo (repo:<name> tag); ?<name> = escalate, do not build');
   console.error('  stage-counts [--list <id>] [--since YYYY-MM-DD] [--until YYYY-MM-DD]');
@@ -330,6 +336,13 @@ function usage(code = 2) {
   console.error('                                             so a report on an older week credits later closures to it');
   console.error('  get --task <id>                            one task: header lines, then "---", then the body markdown');
   console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
+  console.error('  claim --task <id>                          THE build claim: reads the ticket\'s own status, refuses (exit 3) if it is');
+  console.error('                                             not one loop-build may take, else moves it to Building guarded on that');
+  console.error('                                             exact status. Removes the step of remembering which of Rework/Queued it');
+  console.error('                                             was in — guarding on the wrong one refuses every send-back.');
+  console.error('  migrate-rework [--apply] [--list <id>]     one-off: move tickets that are Queued WITH AN OPEN PR into Rework.');
+  console.error('                                             Dry run unless --apply. Run it AFTER the claim rule is live on main —');
+  console.error('                                             a Rework ticket is claimed by nothing until then.');
   console.error('  status --task <id> --status "In review" [--if-status "Queued"] [--assign <userId>] [--clear-assignees] [--no-auto-assign]');
   console.error('                                             move a task; operator statuses auto-assign the operator,');
   console.error('                                             machine statuses auto-clear; --if-status makes it a safe claim;');
@@ -542,20 +555,38 @@ function gh(args) {
  * also what keeps the old last-resort guard here: an unhandled rejection is
  * exit 1, and loop-build reads exit 1 as "proceed, unbounded by the cap".
  */
+/**
+ * Every open pull request, with the fields `classifyPrs` needs.
+ *
+ * ONE PLACE BUILDS THIS LIST, and `wipCap.test.js` fails if a second one
+ * appears. The reason is the 2026-08-31 incident this whole probe was written
+ * for: `next-interval` asked for `number,state` while `wip-check` asked for
+ * `number,state,body`, and because a PR is matched to its ticket THROUGH its
+ * body, the shorter field list silently made every PR look untick-eted and
+ * reported the cap as full while the claim gate reported room. A second copy
+ * of these arguments is not duplication to tidy up later; it is that bug,
+ * pre-built.
+ *
+ * THROWS rather than returning `[]`. An empty list and a failed call look
+ * identical to a caller, and they mean opposite things — "no open PRs" versus
+ * "we have no idea" (DOCTRINE 3.11).
+ */
+function listOpenPullRequests(repo) {
+  const args = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state,body'];
+  if (repo) args.push('--repo', repo);
+  const out = gh(args);
+  if (!out.ok) throw new Error(out.stderr.slice(0, 200) || 'gh failed');
+  try {
+    return JSON.parse(out.stdout);
+  } catch {
+    throw new Error('gh returned output that is not JSON');
+  }
+}
+
 function capProbe({ repo } = {}) {
   return wipCap.probeCap({
     cap: wipCap.resolveCap(process.env),
-    listOpenPrs: async () => {
-      const args = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state,body'];
-      if (repo) args.push('--repo', repo);
-      const out = gh(args);
-      if (!out.ok) throw new Error(out.stderr.slice(0, 200) || 'gh failed');
-      try {
-        return JSON.parse(out.stdout);
-      } catch {
-        throw new Error('gh returned output that is not JSON');
-      }
-    },
+    listOpenPrs: async () => listOpenPullRequests(repo),
     readTicketStatuses: async () => {
       // fatal:false is REQUIRED — see fetchAllTasks. With the default, a
       // routine ClickUp 429 exits 1 before this function can report anything.
@@ -1477,7 +1508,62 @@ async function alreadyAnsweredRefused(task, status) {
   return null;
 }
 
-const cmd = process.argv[2];
+let cmd = process.argv[2];
+
+// ---------------------------------------------------------------------------
+// `claim` — the build loop's claim, with the status guard filled in for it.
+//
+// WHY IT EXISTS (2026-08-31, task 86bbr1u9v). loop-build now drains TWO
+// statuses, `Rework` before `Queued`, and the atomic claim needs `--if-status`
+// to name the one the caller actually read. That leaves a step that must be
+// REMEMBERED — look at column two of the queue, then type it — and this repo
+// has a standing answer to that shape: a pass that must remember is a pass that
+// will forget (buildStart.js, loopTrail.js). Getting it wrong is not cosmetic.
+// Guarding on `Queued` when the ticket is in `Rework` refuses every send-back,
+// which silently reproduces the starvation the status was created to end;
+// loosening the guard to accept either would break the one thing keeping two
+// build sessions off the same ticket (acceptance criterion 5).
+//
+// So it is one read: the status is taken from the ticket itself and handed
+// straight to the SAME `--if-status` guard, which then re-reads and compares
+// before writing. That is exactly the window `status --if-status` has always
+// had — this adds no race, it only removes the typing.
+//
+// It refuses (exit 3) on any status loop-build may not claim, which is the
+// normal "someone got there first" code, and it deliberately does NOT reach
+// into `Building` or `In review` to "help".
+if (cmd === 'claim') {
+  const task = arg('task');
+  if (!task) {
+    console.error('claim needs --task <id>.');
+    process.exit(2);
+  }
+  const seen = await call('GET', `/api/v2/task/${task}`);
+  if (!seen.res.ok) die('read the task before claiming it', seen);
+  const now = seen.json.status?.status ?? '';
+  if (!loopStatuses.isClaimableByBuild(now)) {
+    console.error(`NOT claimed: "${task}" is "${now || '?'}", which loop-build may not claim.`);
+    console.error(`Claimable statuses, in drain order: ${loopStatuses.CLAIMABLE_BY_BUILD.map((x) => loopStatuses.DISPLAY[x]).join(', ')}.`);
+    console.error('Take the next task in the queue.');
+    process.exit(3);
+  }
+  // Hand the exact status it is in to the ordinary guarded write, so there is
+  // one writer, one verifier and one place that clears assignees.
+  if (arg('status') || arg('if-status')) {
+    console.error('claim sets --status and --if-status itself; pass neither.');
+    console.error('If you need to name them by hand, use `status` directly — that is the honest form.');
+    process.exit(2);
+  }
+  process.argv = [
+    ...process.argv.slice(0, 2),
+    'status',
+    ...process.argv.slice(3),
+    '--status', loopStatuses.DISPLAY[loopStatuses.BUILDING],
+    '--if-status', now,
+  ];
+  console.error(`claiming ${task} out of "${now}" (guarded on that exact status)`);
+  cmd = 'status';
+}
 
 if (cmd === 'whoami') {
   const out = await call('GET', '/api/v2/user');
@@ -1720,18 +1806,43 @@ if (cmd === 'whoami') {
   const list = arg('list');
   if (!list) usage();
   const status = arg('status');
+  // `--claimable` is what a build pass asks for (task 86bbr1u9v): every status
+  // loop-build may take, in the order it must take them — all of `Rework`
+  // first, oldest first, then `Queued` by priority-then-oldest.
+  //
+  // IT IS A SEPARATE FLAG AND NOT A CHANGE TO `--status Queued`, because those
+  // are different questions and the old one still has honest answers ("show me
+  // the fresh work"). What is NOT honest any more is using `--status Queued`
+  // as the claim list: it silently hides every sent-back ticket, which is the
+  // bug this whole ticket is about, arriving through the command meant to fix
+  // it. So asking for both at once is refused rather than quietly resolved.
+  const claimable = flag('claimable');
+  if (claimable && status) {
+    console.error('--claimable and --status are two different questions; pass one.');
+    console.error('  --claimable    every status loop-build may take, in claim order (Rework, then Queued)');
+    console.error(`  --status <s>   one status exactly as spelled: ${loopStatuses.STAGE_ORDER.join(' / ')}`);
+    process.exit(2);
+  }
   const { tasks, res } = await fetchAllTasks(list);
   // Filter locally, case-insensitively — the same matching the `status`
   // command's verify uses — so a casing mismatch cannot masquerade as an
   // empty queue the way a server-side filter miss would.
-  const wanted = status
-    ? tasks.filter((t) => (t.status?.status ?? '').toLowerCase() === status.toLowerCase())
-    : tasks;
-  // The loops claim "the oldest Queued task, highest priority first": encode
-  // that rule here, so the first output line IS the task to claim.
-  wanted.sort((a, b) =>
-    (PRIORITY_RANK[a.priority?.priority] ?? 9) - (PRIORITY_RANK[b.priority?.priority] ?? 9)
-    || Number(a.date_created) - Number(b.date_created));
+  let wanted;
+  if (claimable) {
+    // Filtering AND ordering in one call, from the module the pacing curve
+    // reads, so the first line is the ticket the claim rule actually names.
+    wanted = loopStatuses.claimOrder(tasks);
+  } else {
+    wanted = status
+      ? tasks.filter((t) => (t.status?.status ?? '').toLowerCase() === status.toLowerCase())
+      : tasks;
+    // Within one status the rule is unchanged: highest priority first, then
+    // oldest.
+    wanted.sort((a, b) =>
+      (PRIORITY_RANK[a.priority?.priority] ?? loopStatuses.PRIORITY_UNKNOWN)
+        - (PRIORITY_RANK[b.priority?.priority] ?? loopStatuses.PRIORITY_UNKNOWN)
+      || Number(a.date_created) - Number(b.date_created));
+  }
   for (const t of wanted) {
     const created = new Date(Number(t.date_created)).toISOString().slice(0, 10);
     // The repo a task declares (Charter: a task declares its repo). A loop
@@ -1744,8 +1855,142 @@ if (cmd === 'whoami') {
     // keeps working. It is what says "a pass is already running on this one".
     console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', repoCol, created, t.name, loopNoteOf(t)].join('\t'));
   }
-  console.error(`${wanted.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list} (all pages; first line is the one to claim)`);
+  const scope = claimable
+    ? ` claimable by loop-build (${loopStatuses.CLAIMABLE_BY_BUILD.join(' then ')})`
+    : (status ? ` with status "${status}"` : '');
+  console.error(`${wanted.length} task(s)${scope} in list ${list} (all pages; first line is the one to claim)`);
+  if (claimable && wanted.length) {
+    const first = wanted[0];
+    // The claim command, spelled out with THIS ticket's status already in it.
+    // `--if-status` must name the status the caller actually read, and a
+    // build pass that has to remember which of two statuses it just saw is a
+    // pass that will guard on the wrong one — see `claim`, which removes the
+    // step entirely.
+    console.error(`  claim it: npm run clickup -- claim --task ${first.id}`);
+  }
   if (res) reportLimits(res);
+
+} else if (cmd === 'migrate-rework') {
+  // The one-off that puts the existing send-backs where they belong
+  // (task 86bbr1u9v, acceptance criterion 6). Leaving them behind in `Queued`
+  // reproduces this ticket's own bug on day one.
+  //
+  // THE ORDER MATTERS AND IT IS THE TRAP ON THIS TICKET. Until the claim rule
+  // above is live on `main`, a ticket in `Rework` is claimed by NOTHING — it
+  // drops out of `claimableDepth`, out of the pacing curve, and out of the
+  // build loop's reach entirely, which is strictly worse than sitting visible
+  // in `Queued`. So this runs after the merge, never before. It is idempotent
+  // and dry by default, so running it twice is free and running it early is
+  // at worst a listing.
+  //
+  // WHICH TICKETS: `Queued` with an OPEN pull request naming them. That is the
+  // definition of a send-back that nothing else can express — it is exactly
+  // what `wipCap.classifyPrs` already computes for the cap, so it is read from
+  // there rather than re-derived, and the migration cannot disagree with the
+  // number the cap reports.
+  const list = arg('list') || LOOP_QUEUE_LIST;
+  const apply = flag('apply');
+
+  const probe = await capProbe({ repo: arg('repo') || '' });
+  if (!probe.determined) {
+    console.error(`Could not list the open pull requests (${probe.why}), so there is no way to tell which`);
+    console.error('queued tickets are half-built. NOTHING was changed — this refuses rather than guessing,');
+    console.error('because moving a ticket that has no PR into Rework is a lie the next reader acts on.');
+    process.exit(1);
+  }
+  if (!probe.statusesAvailable) {
+    console.error(`The Loop Queue could not be read (${probe.queueFailure}). NOTHING was changed.`);
+    process.exit(1);
+  }
+
+  const { tasks } = await fetchAllTasks(list, { includeClosed: true });
+  const byId = new Map(tasks.map((t) => [String(t.id), t]));
+  const knownIds = tasks.map((t) => String(t.id));
+  const openPrs = probe.decision.groups?.queued || [];
+
+  // Back from PR number to ticket, through the SAME reader the cap uses.
+  const targets = [];
+  const prsByTicket = new Map();
+  let openPrList;
+  try {
+    openPrList = listOpenPullRequests(arg('repo') || '');
+  } catch (err) {
+    console.error(`Could not re-read the open pull requests (${err.message}). NOTHING was changed.`);
+    process.exit(1);
+  }
+  for (const pr of openPrList) {
+    if (!openPrs.includes(pr.number)) continue;
+    const id = wipCap.ticketIdFromPrBody(pr.body, knownIds);
+    if (!id) continue;
+    const task = byId.get(id) || [...byId.values()].find((t) => String(t.id).toLowerCase() === id);
+    if (!task) continue;
+    if (!prsByTicket.has(String(task.id))) {
+      prsByTicket.set(String(task.id), pr.number);
+      targets.push(task);
+    }
+  }
+
+  if (!targets.length) {
+    console.log('Nothing to migrate: no ticket is Queued with an open pull request against it.');
+    process.exit(0);
+  }
+
+  console.log(`${targets.length} ticket(s) are Queued with an open PR — they are send-backs, not fresh work:`);
+  for (const t of targets) console.log(`  ${t.id}  #${prsByTicket.get(String(t.id))}  ${t.name}`);
+  if (!apply) {
+    console.log('\nDRY RUN — nothing was changed. Re-run with --apply once the claim rule is live on main.');
+    process.exit(0);
+  }
+
+  let moved = 0;
+  for (const t of targets) {
+    const rem = (t.assignees || []).map((a) => a.id);
+    const out = await call('PUT', `/api/v2/task/${t.id}`, {
+      status: loopStatuses.DISPLAY[loopStatuses.REWORK],
+      assignees: { add: [], rem },
+    });
+    // Verified from the write response, the same rule `status` follows: a 200
+    // is not evidence the status changed.
+    const now = String(out.json?.status?.status || '').toLowerCase();
+    if (!out.res.ok || now !== loopStatuses.REWORK) {
+      console.error(`  ${t.id}: NOT moved (HTTP ${out.res.status}, status now "${now || '?'}")`);
+      continue;
+    }
+    console.log(`  ${t.id} -> Rework (verified)`);
+    moved += 1;
+  }
+  console.log(`${moved} of ${targets.length} moved.`);
+
+  // The list's own DESCRIPTION documents the flow, and it still describes the
+  // six-status one. A list description that documents the WRONG flow is worse
+  // than none, because a reader has no way to tell — so it moves with the
+  // tickets, in the same post-merge step, rather than being a chore somebody
+  // remembers. Only the flow sentence is rewritten; anything else Dane has
+  // written there is left exactly as it is.
+  const listRead = await call('GET', `/api/v2/list/${list}`);
+  if (!listRead.res.ok) {
+    console.error(`The tickets moved, but the list description could NOT be read (HTTP ${listRead.res.status}) — it still documents the old flow.`);
+    process.exit(1);
+  }
+  const oldFlow = /Statuses:[^\n]*/;
+  const newFlow = 'Statuses: Rework -> Queued -> Building -> In review -> '
+    + 'Needs your input / Ready to launch -> Live (closed). '
+    + 'A build loop drains every Rework ticket (a send-back, with a branch and an open PR already) '
+    + 'before any Queued one, oldest first.';
+  const content = String(listRead.json?.content || '');
+  const nextContent = oldFlow.test(content) ? content.replace(oldFlow, newFlow) : `${content}\n\n${newFlow}`.trim();
+  if (nextContent === content) {
+    console.log('The list description already describes the Rework flow.');
+  } else {
+    const wrote = await call('PUT', `/api/v2/list/${list}`, { content: nextContent });
+    if (!wrote.res.ok || !String(wrote.json?.content || '').includes('Rework ->')) {
+      console.error(`The tickets moved, but the list description did NOT update (HTTP ${wrote.res.status}).`);
+      process.exit(1);
+    }
+    console.log('The list description now documents the Rework flow (verified from the write response).');
+  }
+
+  if (moved !== targets.length) process.exit(1);
 
 } else if (cmd === 'stage-counts') {
   // Every stage of the pipeline, counted, as JSON — for the weekly report

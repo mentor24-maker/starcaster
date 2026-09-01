@@ -366,12 +366,14 @@ he does not costs idle machines and a loud message. Those are not symmetric.
 
 **It drains, it does not kill.** `pause` stops new claims the instant it writes
 the flag and then waits for anything already building, because killing a pass
-mid-build strands its ticket in `Building` forever — the loops only ever claim
-from `Queued`, and that happened twice in the week the switch was written.
-`--now` skips the wait and names exactly what it left running. `resume` also
-unsticks anything a dead pass left behind: a stranded build goes back to
-`Queued` with a note, while a stranded review stays in `In review` — its build
-is finished and its PR is open, so only the stale claim is cleared.
+mid-build strands its ticket in `Building` forever — the loops only claim from
+`Rework` and `Queued`, and that happened twice in the week the switch was
+written. `--now` skips the wait and names exactly what it left running.
+`resume` also unsticks anything a dead pass left behind: a stranded build goes
+back to `Rework` if a pull request is already open for it and to `Queued` if
+nothing was ever built, with a note either way, while a stranded review stays
+in `In review` — its build is finished and its PR is open, so only the stale
+claim is cleared.
 
 **An agent may pause; only Dane resumes.** Anyone should be able to stop the
 line — it is a safety move. Handing the deck back is his, because only the
@@ -390,9 +392,13 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
 1. `npm run pipeline -- check` — exit 3 means stop; say so once.
 2. Read the ticket **and its comments**. On a send-back, the review notes ARE
    the job; the description is context.
-3. Claim it: `npm run clickup -- status --task <id> --status Building
-   --if-status Queued`. **Priority is not a guard** — only status is, and
-   only `--if-status` makes the claim atomic. Leave the priority alone.
+3. Claim it: `npm run clickup -- claim --task <id>` — it reads the ticket's
+   own status, refuses (exit 3) if it is not one a build may take, and guards
+   the write on that exact status. **Priority is not a guard** — only status
+   is, and only the `--if-status` guard `claim` fills in makes it atomic.
+   Leave the priority alone. Two statuses are claimable now, `Rework` and
+   `Queued`; a send-back lands in `Rework`, and `queue --claimable` lists them
+   in the order they must be drained (all rework first, oldest first).
 4. `npm run clickup -- build-start --task <id>` — exit 3 means a branch
    already exists; work on THAT branch (`git worktree add
    .claude/worktrees/<topic> -b <branch> origin/<branch>`, then `npm ci`,
@@ -419,8 +425,10 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
 8. Ticket to Live with the closing note (gates, live probe, what was
    break-tested); `npm run tidy`; one line on the bus.
 
-A ticket already **In review** with an open PR is the review half of this
-lane: skip the claim in step 3 (never drag it back to `Building`), do steps
+A ticket in **Rework** is a send-back: step 4 will find its branch, and the
+review notes on the ticket ARE the job. A ticket already **In review** with an
+open PR is the review half of this lane: skip the claim in step 3 (never drag
+it back to `Building`), do steps
 4–8 on the existing branch, re-run the gates on the *merged* code yourself, and
 close with `--if-status "in review"`. A job another machine owns (`bus-relay`)
 exits 0 here having tested nothing — rehearse it on the owning machine.
@@ -459,9 +467,10 @@ Four rules, in the order they would have broken that chain:
 
 3. **Claim the ticket before building — hand-built work included.** ClickUp
    status is the only surface where two sessions can see each other, and the
-   atomic claim (`--if-status`) exists exactly for this. Hand-building is not
-   an exemption; on 2026-08-20 two sessions built the same epic because
-   neither ticket was ever moved to `Building`.
+   atomic claim (`npm run clickup -- claim`, which fills in `--if-status` from
+   the ticket itself) exists exactly for this. Hand-building is not an
+   exemption; on 2026-08-20 two sessions built the same epic because neither
+   ticket was ever moved to `Building`.
 
 4. **Before starting on an epic, run `npm run map` and read the queue.** Ten
    seconds. It catches the case where somebody else is already on it.

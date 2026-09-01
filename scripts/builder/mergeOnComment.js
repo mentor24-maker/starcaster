@@ -53,9 +53,11 @@ function isMergeCommand(text) {
  * live record — "REVIEW: PASSED (...)" and "REVIEW PASSED (...)" — so the
  * colon is optional. Line-anchored, because a review that merely DISCUSSES
  * the words ("this is not a REVIEW PASSED situation") is prose, not a
- * verdict. A failing verdict reads "REVIEW: sent back to Queued", which
- * matches isReviewVerdict but not isReviewPassed — exactly the distinction
- * the precondition needs.
+ * verdict. A failing verdict reads "REVIEW: sent back to Rework" (and, on
+ * tickets sent back before 2026-08-31, "…to Queued"), which matches
+ * isReviewVerdict but not isReviewPassed — exactly the distinction the
+ * precondition needs. Neither pattern reads the destination, which is what
+ * lets the status be renamed without invalidating the history.
  */
 const REVIEW_VERDICT_RE = /^\s*REVIEW\b.*$/im;
 const REVIEW_PASSED_RE = /^\s*REVIEW\s*:?\s*PASSED\b/im;
