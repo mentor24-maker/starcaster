@@ -49,10 +49,10 @@
  * same check the relay makes, from the same module, so the two cannot drift.
  */
 
-/** The two statuses that belong to the operator. Everything else is a machine
- *  status, and a machine status means a machine owns the next move. */
 const { isMachineComment } = require('./machineComment.js');
 
+/** The two statuses that belong to the operator. Everything else is a machine
+ *  status, and a machine status means a machine owns the next move. */
 const OPERATOR_LANE = ['needs your input', 'ready to launch'];
 
 const WAITING = 'WAITING';
