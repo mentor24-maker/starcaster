@@ -1,3 +1,45 @@
+## 2026-08-31 — Posts now go out from the client's own account, not ours (#490)
+
+A client connects their Facebook Page to Starcaster. The screen says
+"connected". Their posts then go out from *our* account, and nobody finds out.
+
+That was the state of things until this change, and it is worth being precise
+about why. The last two pieces of work built the safe where a client's
+permission is kept, and the code that collects it. Neither one ever read it
+back. So the permission sat there, correctly stored, doing nothing, while every
+post carried on using the platform-wide keys — Dane's own accounts.
+
+This adds the missing piece: one function that every publisher now asks before
+it posts, which answers "this client's own connection, if they have a working
+one; ours otherwise". Facebook, Instagram, Threads, Bluesky, X and Buffer all
+go through it now.
+
+The thing that made this worth being careful about is that the failure is
+completely silent. Posting to the wrong account is not an error — the platform
+accepts it, the post appears, the job goes green. There is no log line, no
+alert, and no way to notice except a client eventually asking why their page
+has been quiet. So the new function is deliberately suspicious in three places.
+It refuses to post at all if it could not tell whether a client has a
+connection, rather than shrugging and using ours — "no connection" and "I could
+not check" are different answers, and only one of them is safe to guess at. It
+skips a token that has expired even when the record still claims it is fine,
+because nothing checks those records yet. And when it does refuse, it hands
+back an empty set of credentials rather than a flagged one, because an earlier
+draft handed back *our* working credentials with a flag on them, which reads
+perfectly and would have posted from the wrong account anyway.
+
+Two things were left deliberately alone. The older place a client's Facebook
+Page is stored is still consulted — it is live in production and holds real
+clients today, and quietly skipping it would have moved their pages back onto
+our account without a word. And the client's token replaces only the token: the
+application credentials underneath it stay ours, because permission to post to
+someone's page is not a new app, it is one key to one door.
+
+Every safeguard here was broken on purpose and watched to fail before being
+put back. One of those breaks earned its keep: taking the change out of a
+single channel left every test passing while that channel quietly went back to
+posting from our account. There is now a test watching for exactly that.
+
 ## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
 
 We already had an alarm for a scheduled job that stops running. This adds the
