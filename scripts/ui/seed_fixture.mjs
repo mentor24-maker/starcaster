@@ -517,6 +517,18 @@ const buildTuned = (ids) => ({
     },
   },
 
+  // The Event Manager panel: the picker filled, every column toggle on, and an
+  // accent set. An empty picker and unset toggles render the same rectangle as
+  // each other, so an unseeded panel would be measured without ever showing
+  // the shapes an operator actually works in.
+  'event-manager': {
+    name: 'Event Manager',
+    settings: {
+      viewPageUrl: '/event', showStatus: 'true', showDate: 'true',
+      showLocation: 'true', showDelete: 'true', accentColor: '#0f4f8f',
+    },
+  },
+
   'blog-category-manager': {
     name: 'Category Manager',
     settings: {

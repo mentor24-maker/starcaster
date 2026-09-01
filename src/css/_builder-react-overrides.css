@@ -7045,3 +7045,199 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-primary, #1a202c);
   font-weight: 600;
 }
+
+/* ── Event Manager (admin module) ──────────────────────────────────────────
+ *
+ * The table itself reuses .builder-admin-data-table, shared with the CRM
+ * contacts table and the blog post manager. Only what is particular to events
+ * lives here: the status pills, the featured marker, and the inline form.
+ *
+ * Layout rules are in this base block, never inside a media query (R1) — the
+ * breakpoint below only narrows the form's two-up rows to one column.
+ */
+
+.builder-react-root .builder-event-manager-title {
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-event-manager-featured {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-input);
+  background: var(--bg-alt);
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.builder-react-root .builder-event-manager-status {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-input);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Three states, three readings: live, not yet live, and called off. Cancelled
+ * shares the danger colour deliberately — it is the one an operator must not
+ * mistake for published at a glance. */
+.builder-react-root .builder-event-manager-status-published {
+  background: var(--bg-alt);
+  color: var(--brand-accent-ink);
+}
+
+.builder-react-root .builder-event-manager-status-draft {
+  background: var(--bg-hover);
+  color: var(--ink-muted);
+}
+
+.builder-react-root .builder-event-manager-status-cancelled {
+  background: var(--bg-hover);
+  color: var(--ink-secondary);
+  text-decoration: line-through;
+}
+
+.builder-react-root .builder-event-manager-notice,
+.builder-react-root .builder-event-manager-error {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-input);
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-event-manager-notice {
+  background: var(--bg-alt);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-event-manager-error {
+  background: var(--bg-hover);
+  color: var(--ink-primary);
+  border: 1px solid var(--border-strong);
+}
+
+.builder-react-root .builder-event-manager-form {
+  margin-top: var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-event-manager-form-title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-event-manager-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+  min-width: 0;
+}
+
+/* Two fields per row on a wide form, one on a narrow one. `minmax(0, 1fr)`
+ * rather than `1fr`: a grid track's default minimum is its content, so a long
+ * value would push the row wider than the module instead of wrapping. */
+.builder-react-root .builder-event-manager-field-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-5);
+  align-items: end;
+}
+
+.builder-react-root .builder-event-manager-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--builder-editor-label, var(--ink-secondary));
+}
+
+.builder-react-root .builder-event-manager-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--bg-input);
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+}
+
+.builder-react-root .builder-event-manager-textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+
+.builder-react-root .builder-event-manager-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+/* A checkbox is not a text field, and something upstream in the public-site
+ * render context stretches bare inputs to fill their container — measured at
+ * 648px, which pushed "All day" to the far right of the row and left a tick
+ * box floating in the middle of nowhere. Declared here rather than fixed
+ * upstream: this module does not own that rule, and a module must not depend
+ * on ambient CSS it does not own (R1's corollary). */
+.builder-react-root .builder-event-manager-check input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.builder-react-root .builder-event-manager-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+@media (max-width: 700px) {
+  .builder-react-root .builder-event-manager-field-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+/* The shared admin-table scroll container is `width: 100%` with a 1px border
+ * and inherits `content-box` on a public page, so it renders 2px wider than
+ * its column — at full page width that is the BODY scrolling sideways, which
+ * R5 forbids. Found building the Event Manager (2026-09-01); the fix belongs
+ * to the shared class because the CRM contacts table and the blog post
+ * manager have exactly the same two pixels.
+ *
+ * Here rather than in _builder-react.css: that file is regenerated wholesale
+ * and a hand edit there disappears silently (R2). */
+.builder-react-root .builder-admin-data-table-wrap {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* The events table carries five columns of real words — a title, a date range,
+ * a place. `table-layout: fixed` + `width: 100%` makes them share whatever
+ * width exists, so at 390px every cell crushed to an ellipsis ("S…", "Ap…",
+ * "C…") and the table was legible at no width at all.
+ *
+ * A floor instead: below it the wrap's own `overflow-x: auto` takes over and
+ * the TABLE scrolls, which is what R5 asks for — wide content scrolls inside
+ * its own container and the page body never does. In the base layer, not a
+ * media query (R1): the floor applies at every width, and it is simply never
+ * reached on a wide screen. */
+.builder-react-root .builder-event-manager-module .builder-admin-data-table {
+  min-width: 620px;
+}

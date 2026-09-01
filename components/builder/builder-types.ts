@@ -20,7 +20,7 @@ import { BUILDER_CAPABILITIES } from "@/lib/capabilities";
 export const PLAIN_TEXT_PLACEHOLDER =
   "Plain text. Line breaks are kept, and inline tags like <em> or <a href=\"…\"> work.";
 
-export type ModulePaletteGroup = BuilderTemplateModuleType | "special-effects" | "blog" | "admin";
+export type ModulePaletteGroup = BuilderTemplateModuleType | "special-effects" | "blog" | "events" | "admin";
 
 export type GalleryTarget =
   | { kind: "module"; sectionId: string; moduleId: string }
@@ -167,6 +167,7 @@ export const modulePaletteGroups: Array<{
     description: "Search the whole site — a search box, and the results list it feeds."
   },
   { value: "blog", label: "Blog", icon: "✍", description: "Blog content modules — post feeds, filters, author bios, and more." },
+  { value: "events", label: "Events", icon: "📅", description: "Event calendar modules — the admin manager, and the calendars visitors see." },
   {
     value: "special-effects",
     label: "Special Effects",
@@ -783,6 +784,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     label: "Post Manager (Admin)",
     icon: "⊞",
     description: "Admin CRUD table listing all blog posts with edit and delete actions. Place on a back-end admin page.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "event-manager-standard",
+    type: "event-manager",
+    group: "events",
+    label: "Event Manager (Admin)",
+    icon: "📅",
+    description: "Admin table of every event, with an inline form to add and edit them. Place on a back-end admin page.",
     name: "",
     text: "",
     settings: {}

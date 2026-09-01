@@ -34,6 +34,7 @@ Mapped from Marinoff production, 2026-08-16:
 | `admin-login` | no | public header | `admin-login` |
 | `admin-dashboard` | yes | Admin Header | `admin-team-users` |
 | `admin-blog-manager` | yes | Admin Header | `blog-post-create`, `blog-post-manager`, `blog-category-manager` |
+| `admin-event-manager` | yes | Admin Header | `event-manager` |
 | `admin-contact-manager` | yes | Admin Header | `crm-contacts-table` |
 | `admin-settings` | yes | Admin Header | `admin-site-settings` |
 | `admin-support` | yes | Admin Header | `admin-support-form` |

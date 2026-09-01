@@ -201,7 +201,7 @@ export type MapOptions = {
  *  slug, explicitly public, and the only slug besides "" that gets served
  *  at the site root. Prefixing it stranded the imported home page at
  *  /imported-home, a URL nothing links to (the Delray import, 2026-08-09). */
-const RESERVED_SLUG_RE = /^(admin|admin-.*|blog-post-edit|blog-create-post|blog-post-manager|blog-category-manager|crm)$/;
+const RESERVED_SLUG_RE = /^(admin|admin-.*|blog-post-edit|blog-create-post|blog-post-manager|blog-category-manager|event-manager|crm)$/;
 
 /** Builder slugs are single-segment (middleware rewrites /{slug}) and
  *  lowercase. Flatten path separators, ascii-fold, strip the rest. */

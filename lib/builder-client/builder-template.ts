@@ -128,6 +128,7 @@ export const BUILDER_MODULE_TYPES = [
   "blog-card-manager",
   "blog-search",
   "blog-search-results",
+  "event-manager",
   "site-search",
   "site-search-results",
   "messaging-topic-list",
@@ -2134,6 +2135,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-card-manager" ||
     type === "blog-search" ||
     type === "blog-search-results" ||
+    type === "event-manager" ||
     type === "site-search" ||
     type === "site-search-results" ||
     type === "messaging-topic-list" ||
@@ -3707,6 +3709,14 @@ export function createEmptyModule(
                             viewPageUrl: "",
                             showStatus: "true",
                             showDate: "true",
+                            showDelete: "true",
+                            accentColor: "#0f4f8f"
+                          }
+                      : type === "event-manager"
+                        ? {
+                            showStatus: "true",
+                            showDate: "true",
+                            showLocation: "true",
                             showDelete: "true",
                             accentColor: "#0f4f8f"
                           }
