@@ -84,6 +84,332 @@ exact mismatch this ticket exists to remove — invisible at first, because the
 cards now show the master's name either way, and back the moment somebody
 saved a page's copy over it. Both places that create a section now set both
 names together, and a test fails if a third one is ever added that does not.
+## 2026-09-01 — A merge can glue two statements together, and nothing was checking (#491)
+
+When two people change the same lines of a file, git stops and asks a human to
+sort it out. One of the usual answers is "keep both of these" — and that answer
+can quietly weld two separate instructions onto a single line. Git is happy,
+because git only ever asked whether the *text* overlapped. The computer that
+has to run the file is not happy at all, and it refuses to read the file at
+all — not just the broken line, the whole file, every function in it, gone.
+
+That happened on 30 August, in the one file every automated work-pass runs to
+talk to ClickUp. It was caught by luck: an agent happened to check the file by
+hand before committing. Nothing in the project would have caught it otherwise.
+The check we already had for this only looked at the browser code; the tests
+that mention that file only read it as text and never actually run it; and the
+commit checker deliberately looks the other way during a merge. So it could
+have gone live green, and the next work-pass would have died on its first line.
+No error, no alert, nothing to see — just a queue of tickets that had silently
+stopped moving, and no way to tell how long it had been like that.
+
+So the check now reads the tool scripts and the shared code as well as the
+browser code — about 600 files, in under half a second, every time anything is
+committed and again before anything merges. Generated files are left out on
+purpose, because they are rebuilt rather than written by hand, and they are not
+even present at the moment this check runs.
+
+The first time it ran, it found something nobody was looking for: a script for
+importing tweets from a spreadsheet has had a missing bracket since the day it
+was written. It has never once been able to run. One character, fixed. That is
+the same lesson arriving from the other direction — nothing had ever read that
+file either.
+
+Review caught one more thing, and it is the same lesson a third time. The test
+written to prove the check catches the 30 August problem did not actually
+contain that problem. The example it used had a semicolon between the two
+welded instructions — which makes it perfectly ordinary, valid code. The test
+was passing on the strength of a *different* broken line sitting underneath,
+and deleting the example entirely changed nothing. So the one test standing
+guard over the whole incident would not have noticed if the check stopped
+working. It now uses the real shape, on its own line, with a companion test
+using the correctly-separated version to prove the failure comes from the weld
+and nothing else — and both were broken on purpose to watch them fail.
+
+The other fix: the list of "files the computer generates, so leave them alone"
+is meant to be one list both checkers read, so they can never disagree about
+it. One of them was reading only half of it, and the gap was real — a bundling
+script writes six files into one folder and the list names three of them by
+name, relying on a folder rule to cover the rest. Both checkers now ask the
+same question, and a test fails if that ever comes apart again.
+
+## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
+
+We already had an alarm for a scheduled job that stops running. This adds the
+one for the sneakier failure: the job runs fine, finishes cleanly, and nothing
+comes out the other end.
+
+That is not hypothetical. On the morning of 31 August the build loop woke up
+every hour, did its work, exited cleanly every single time — and the queue did
+not get any shorter. Fifty-two tickets waiting, one in review, and the oldest
+sent-back pull request had been sitting untouched since the 25th. Nothing was
+broken, so nothing complained. That is what makes this failure worse than a
+crash: a crash writes an error, while a loop achieving nothing writes a long
+cheerful log, and a cheerful log is exactly what stops anyone looking. It took
+a morning of reading logs by hand to spot.
+
+The existing alarm could never have caught it, because it only asks "is this
+thing still alive?" — and it was, gloriously. So there is now a second question
+being asked alongside it: **is the queue actually getting shorter?**
+
+`npm run throughput` answers it. It shows how many tickets finished on each of
+the last seven days, how big the backlog was at the end of each day, and how
+long the oldest sent-back pull request has been waiting. Then it says one of
+four things, and the distinction between the middle two is the entire point:
+things are moving; nothing finished but there was nothing to finish (which is
+perfectly healthy, and it says so rather than showing a worrying zero); nothing
+finished while work sat waiting, which is the alarm; or it could not read
+something and refuses to guess. That last one never gets dressed up as good
+news.
+
+It runs quietly alongside the existing check every ten minutes and only ever
+speaks up when the queue has genuinely stopped moving — at most once every six
+hours, and it goes silent again the moment work starts shipping. No daily
+"everything is fine" messages that nobody reads.
+
+Two mistakes worth recording, because both were caught by pointing the new
+command at real data rather than by trusting the tests. The report printed the
+backlog as 57 on one line and 56 two lines further down — two numbers for the
+same thing, disagreeing, which is the precise sort of quiet wrongness this
+whole feature exists to catch. One real ticket had been marked finished without
+a completion date, and the two counts handled that differently. It now says out
+loud how many tickets it had to make an assumption about instead of silently
+papering over it. The other was smaller: ages were printing as "open 8d 0h ago"
+when they should have read "opened 8d 0h ago".
+
+And the detector itself was deliberately broken before being trusted — rigged
+so it could never report a stall — to confirm the tests actually fail when it
+stops working. Four of them did. A stall detector that cannot detect a stall
+would have been a perfect example of the problem it was built to solve.
+
+## 2026-08-31 — `npm run ship` now writes the note that lets a PR be merged (#484)
+
+There are two ways a finished change reaches the live site. The loops do it on
+their own, and Dane's own lane — `npm run ship` — does it by hand. A guard added
+last week checks, before letting anything merge, that the ticket has a note on
+it saying which pull request belongs to it. No note means the guard cannot tell,
+and it never lets something through it cannot tell about.
+
+The loops have been leaving that note for over a week. `ship` never has — it had
+no connection to ClickUp at all. Nothing was broken yet only because the guard is
+still advisory. The moment it is switched on for real, every change Dane ships by
+hand would have been stuck, waiting on a command nobody would have known to run.
+
+So `ship` writes the note itself now. It already knows which ticket the work is
+for, because starting a piece of work stamps the ticket onto it; it just never
+used that for this. It writes the note before it merges, so even a run that stops
+on a failed check leaves the ticket properly labelled. Running `ship` twice does
+not leave two notes — it asks the guard's own reader whether the note is already
+there, so one written by a loop or typed by hand counts the same. A branch with
+no ticket still ships perfectly well; it just says out loud that nothing was
+recorded, rather than staying quiet, because quiet looks exactly like success.
+And if ClickUp is down, the change still merges — the failure is reported
+loudly with the one command that repairs it, because a note going missing in
+silence is the entire thing being fixed here.
+
+The rules behind all of that were written as their own small piece of code so
+they could be tested, then broken on purpose one at a time — fourteen breaks,
+each of which made a named test fail. Two of those breaks found real bugs before
+the change ever left the branch: one test could not fail at all and was rewritten,
+and the code was reading a ClickUp command that had been killed mid-run as
+though it had succeeded, which is precisely the silent missing note the whole
+job exists to prevent.
+
+Review then found three more holes in that same work, all reproduced live rather
+than reasoned about, and this fixes them. The first is the plainest: when the
+note could not be written, the loud failure message handed over a command to
+repair it — and that command was rejected the moment you ran it, because it named
+the pull request by number where the tool wants the full web address. A repair
+step that does not run is not a repair step, and the tests had been written
+around the broken spelling, so fixing it would have looked like a regression.
+There is now one place that spells out both addresses, `ship` uses it for the
+command it prints and for the command it actually runs, and the two can no longer
+drift apart.
+
+The second was an ordering accident with real teeth. The guard works out which
+ticket a pull request belongs to by taking the FIRST ClickUp link in its
+description, and `ship` was adding its link at the bottom. So a change whose
+commit message happened to mention a related ticket — "follows on from ..." —
+would have sent the guard off to judge the work against the wrong ticket
+entirely. It would have refused rather than waved the wrong thing through, but
+the change it refused is the hand-shipped one, which is the exact thing this job
+exists to unblock. The link goes at the top now, so there is nothing left to get
+in the wrong order.
+
+The third was a cheerful all-clear standing in front of a refusal. Because `ship`
+is meant to be re-run, it asks first whether the note is already there and skips
+writing a second copy — but that skip was jumping over the other half of the
+check too, the one confirming the pull request points back at its ticket. So a
+ticket that already had its note would report success no matter what, and the
+guard would then reject the very same pull request for having no ticket link.
+Now the skip only skips the writing; both halves are checked every time.
+
+A second review pass found two more, and the first is the wrong-ticket problem
+above surviving in the one case the fix stepped over. `ship` puts its link at the
+top now, but it skips a description that already mentions this ticket — and
+"mentions it somewhere" is not the question the guard asks. The guard asks which
+link comes FIRST. So a description naming another ticket at the top and this one
+further down was left exactly as it was, and the guard went off to judge the work
+against somebody else's ticket, telling Dane about a ticket he had nothing to do
+with. The skip now asks the guard's own question, and the test no longer checks
+another example — it checks the rule itself, over five differently-shaped
+descriptions: whatever came in, what comes out points at this ticket.
+
+The second is a message that said more than it knew. When writing the note fails,
+`ship` announced "this ticket now has no note" and handed over a repair command.
+But one of the ways it fails is that the note WAS written and reading it back is
+what broke — so the sentence was false, and the repair command it gave would have
+added a second identical note, which is the duplicate the whole design goes out
+of its way to avoid. It now says what it can actually stand behind: the note may
+or may not be there, go and look. And both repair commands are the safe kind that
+write only if the note is genuinely missing. A repair is by definition run when
+nobody knows what landed, which is exactly when that matters.
+
+One more turned up while testing this on the live ticket, and it is the same
+mistake wearing different clothes. The whole point of the "only write if it is
+missing" option is that running `ship` twice does not leave two notes. To decide
+that, it reads the ticket's comments — and if that read came back without a list
+of comments at all, the code treated it as "there are no comments", which means
+"no note is there", which means write one. So the one check whose entire job is
+to prevent a duplicate would create a duplicate precisely when it could not see.
+It now tells the two apart: a ticket with genuinely no comments still gets its
+note, but a reply it could not read makes it stop and say run this again. One
+re-run costs nothing; a duplicate note sits on the ticket forever. The same
+confusion sat one step further down, where a reply it could not read was
+reported as "the note did not land" moments after the note had in fact been
+posted successfully — it now says what it actually knows, which is that it could
+not check.
+
+## 2026-08-31 — One shape for every social platform, proven on two of them (#471)
+
+Adding a new social network to Starcaster has always meant threading a new
+special case through the whole app. This changes that: every platform now
+answers the same six questions in the same way — where do I send the client to
+say yes, what do I do with their answer, which accounts does this cover, is it
+still working, make it work again, and give the permission back. Adding the
+next platform after this is one new file and one line on a list.
+
+A shape is only proven if something awkward fits it, so it was built against two
+platforms that work nothing alike. Facebook Pages is the flow that already runs
+in production, moved across rather than rewritten — if moving it had broken it,
+that would have meant the shape was wrong, and it is far cheaper to learn that
+with one platform on it than with five. Bluesky was written fresh, and second on
+purpose: it has no browser sign-in, no authorisation code, no expiring token to
+renew, and no way for us to hand the permission back on the client's behalf.
+Every one of those is something a design drawn only from Facebook would have
+assumed without noticing.
+
+One real fix rode along. The address Facebook sends a client back to after they
+agree used to be worked out from whichever web address the request happened to
+arrive on. On a test deployment that address is different every single time, and
+Facebook rejects any address it was not told about in advance — so the sign-in
+would have failed there with an error naming nothing useful. It is now a fixed,
+known address.
+
+Review caught a real hole on the third look, and it is the kind worth writing
+down. When a client connects an account, the code hands back a little record of
+it — which account, what it is called, the key that lets us post. That record is
+then what you pass back in later to ask "is this still working?" or "hand the
+permission back". Except the record came out labelled one way and every later
+question expected the other, so handing an account's own record straight back to
+the code that made it got the account refused. On Bluesky the refusal read
+"Bluesky needs a handle and an app password" — which is not a mismatch, it is a
+sentence that would have sent a client off to replace a password that was never
+wrong. Every test passed, because no test anywhere had ever fed a connection's
+own record back in.
+
+Both halves now use the one set of names — the same names the vault that stores
+these connections already used — and the check that would have caught it walks
+every platform on the list rather than the two that exist today. Platform seven
+either proves its own record can be handed back to itself or it fails the test.
+
+Nothing changes on any screen. The screen where a client actually clicks
+"Connect" is the next piece but one.
+## 2026-08-31 — Parallax was quietly removing a theme's photo tint (#481)
+
+Themes can lay a wash of colour over a photo — the "Photo overlay tint" — and
+it is not decoration. It is the thing that darkens a picture enough for white
+words to be readable on top of it. Review found that switching parallax on
+threw that wash away and left the white text sitting on the raw photo. On a
+dark picture you might not notice; on a light one the words disappear.
+
+The cause is the sort of thing only a browser tells you. The wash is painted
+on the row itself, and the drifting copy of the picture is a separate piece
+sitting inside the row — and a browser always paints the pieces inside a box
+on top of the box's own paint, never underneath it. So the drifting picture
+landed over the wash and hid it. The fix is that the drifting copy now carries
+the same wash, so it looks identical to the still one it covers. Measured with
+a red test tint before and after: the band read as raw photo before and as
+properly tinted after.
+
+Two checks came out of it. A new one photographs a themed row with parallax on
+and fails if the drifting picture is not wearing the row's tint — every
+existing parallax check used a plain untinted row, which is precisely why all
+27 of them were green over this. And an old check that was supposed to prove
+the video half of parallax still worked turned out to accept a video frozen to
+the screen, which is worse than no parallax at all; that hole is closed, and
+proved closed by freezing a video on purpose and watching it fail.
+
+## 2026-08-31 — Backgrounds can drift slower than the page now (#481)
+
+A section with a photo behind it used to look flat, and the reason was that the
+picture scrolled at exactly the same rate as the words on top of it. Everything
+moved as one sheet. Making the background drift a little slower than the text is
+the cheapest thing there is for making a page feel like it has depth, and Delray
+needs it.
+
+It is a checkbox and a number, in the Motion group of a row's Background panel.
+0 pins the picture to the screen, 1 is ordinary scrolling, and about 0.3 is the
+usual look. It works on video backgrounds as well as photos. Nothing that exists
+today changes: it is off unless you turn it on, and six pages were photographed
+before and after to prove it — every pixel identical.
+
+One thing to know before using it. The picture crops in tighter. That is not a
+bug and it cannot be avoided: the picture has to be taller than the row to have
+anywhere to drift to, so the stronger you set the effect the closer it is
+cropped. If the photo has a logo or a face near an edge, use a higher number,
+nearer 0.7. The panel says so in as many words.
+
+There is an obvious one-line way to build this that half the internet uses, and
+it was deliberately not used. It stops working the moment anything above it on
+the page has a blur or a shrink on it — the same six properties that caused the
+`blur(0px)` trouble a fortnight ago — and iPhones ignore it entirely. Both
+failures are silent. The version that shipped moves a real element instead, which
+nothing above it can switch off.
+
+The arithmetic was pulled out into its own file with no page-drawing in it at
+all, which is the house pattern for anything that moves, and for a plain reason:
+nothing in this codebase can test how something LOOKS, so the sums are the only
+part that can be pinned down and kept honest. Eleven checks were broken on
+purpose afterwards and watched to fail, because a check that has never failed has
+not been tested, only written. One of those breaks was worth the whole exercise:
+a check meant to prove the feature stays out of the way passed on the exact bug
+its own note described, and had to be replaced with one that actually looks at
+the right thing.
+
+Review then caught two things worth knowing about. The Speed box could not be
+typed into: clearing it put 0.3 straight back, so typing 0.7 left you looking at
+0.37. The cause was a small thing with a wide moral — the box was asking "what
+does this value mean?" using the rule meant for values coming back out of the
+database, where a blank means "never set, use the usual". Halfway through typing
+a number, a blank means "not finished yet", which is the opposite. Those are now
+two separate questions with two separate answers, and clearing the box leaves it
+empty like every other field on the screen.
+
+The other was the panel telling a small lie. It said parallax runs on phones,
+which is true of a photo and not of a video — a video background is not loaded on
+phones at all unless you switch that on, so there was nothing there to drift. The
+note now says which is which and names the switch. A control that quietly does
+nothing on half the devices people use is worse than one that says so.
+
+A third pass caught something duller and just as real. This work renamed the one
+file that draws a background — it was the "video background" file, and it is not
+video-only any more — but two of the written guides still sent the reader to the
+old name, which is now a file that does not exist. Both were corrected, and the
+video guide was brought up to date to say that one layer now carries photos and
+clips alike, and why that was the point rather than a side effect. A guide that
+points at a deleted file is worse than no guide: it costs somebody the time to
+find out it is wrong before they can start.
 ## 2026-08-29 — The CRM Form settings panel was never being checked (#451)
 
 Back on 8/13 you pointed at a module's settings panel and said the column width

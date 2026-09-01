@@ -1027,7 +1027,7 @@ live on Publish", which is a decision, not a cleanup), or select one row in SQL
 and accept that the publish/private filters and the frame resolution then exist
 twice.
 
-### 5.17 A zero-value filter is not "no filter" — it captures `position: fixed`
+### 5.17 A zero-value filter is not "no filter" — it captures `position: fixed` and disables `background-attachment: fixed`
 
 `position: fixed` means "fixed to the browser window" only while **no ancestor
 has a `transform`, `filter`, `perspective`, `backdrop-filter`, `will-change`
@@ -1066,6 +1066,23 @@ declarations the browser KEPT — and it kept this one; the declaration is
 valid, applied, and doing exactly what it says. The fault is a side effect of
 a valid value, which is a different question from the one that harness asks.
 
+**The same capture has a second symptom, and it looks nothing like the
+first.** Those six properties also turn `background-attachment: fixed` into
+plain `scroll`. Nothing is mispositioned and there is no offset to measure —
+the background simply stops being fixed and scrolls with the page. So the
+"walk the ancestors" advice below is right, but the tell that leads you to it
+is absent: you are not looking at something in the wrong place, you are
+looking at an effect that is not happening.
+
+Worse, it is conditional. Whether a themed column carries a filter decides
+whether a fixed background works, so the same page can be correct under one
+theme and dead under another, with no diff between them.
+
+This is why parallax is a scroll-driven layer here and not the one-line CSS
+version (2026-08-31, 86bbqazxv / PR #481). `docs/VIDEO_BACKGROUNDS.md`,
+under "`background-attachment: fixed` was considered and rejected", carries
+the worked example — and the iOS Safari half of the reason.
+
 **Do this:**
 
 - Never emit a filter, transform or backdrop-filter for a zero setting. Emit
@@ -1075,6 +1092,10 @@ a valid value, which is a different question from the one that harness asks.
 - When a fixed element lands somewhere unexplainable, walk its ancestors for
   those six properties before doubting your own arithmetic. If the offset
   equals some ancestor's origin, that ancestor is the containing block.
+- When a fixed BACKGROUND is not fixed — it scrolls like an ordinary one —
+  walk the same six properties. There is no offset to compare here, so check
+  the ancestors first rather than last; it is the likeliest cause and the
+  cheapest to rule out.
 - Positioning bugs are measured, not eyeballed: read
   `getBoundingClientRect()` against the window centre and compare numbers.
   Both halves of this one were found that way and neither was obvious on
@@ -1439,6 +1460,35 @@ has been in review for days is editing a file `main` has since changed; §6.2
 says the conflict is information, and this is the cheap time to receive it.
 Then look for the asked-for fix on `main` by *behaviour* — search for the
 function, not for the name you were about to give it.
+
+**Addendum (same day, same merge): after resolving a conflict by keeping both
+sides, PARSE the file before you commit it.** The same `git merge origin/main`
+on ticket 86bbmg2tq hit a content conflict in `scripts/clickup_direct.mjs`
+where both branches had added lines in the same place. "Keep both sides" fused
+two separate `const { ... } = X;` statements onto one line — a resolution git
+considers complete and node considers a SyntaxError. It was caught only
+because an agent happened to run `node --check` by hand.
+
+Nothing in the toolchain would have caught it. `check:syntax` parsed only
+`public/js/`. `test:builder` reads `clickup_direct.mjs` as *text* — two
+source-level assertions — and never executes it. `check_conventions` skips its
+added-line checks during a merge, precisely because a merge adds lines it did
+not write. So a file every loop pass runs could have reached `main` green, and
+the next loop pass would have died on line 1: every ticket stuck in whatever
+status it was in, with no verdict written anywhere, and no error anyone would
+see until somebody wondered why the queue had stopped moving.
+
+That gap is now closed — `npm run check:syntax` parses every hand-written
+`.js`/`.mjs`/`.cjs` under `scripts/` and `lib/` as well as `public/js/`, in
+pre-commit and in CI (ticket 86bbq5hwg). Two things follow. First, the fused
+statement is caught for you; you no longer have to remember `node --check`.
+Second, and more general: **a clean merge is a claim about text, not about
+meaning.** Git's job ends at "no overlapping edits"; whether the result is
+still a program is a separate question, and every file class needs something
+that asks it. The first sweep under the new gate found an unrelated file that
+had been unparseable on `main` since it was committed
+(`scripts/import_messaging_tweets_csv.js`, a missing closing paren) — which is
+the same lesson from the other end: nothing had ever parsed it either.
 
 ### 6.8 A fixture must be a shape the real source can produce, and the assertion must name the value
 

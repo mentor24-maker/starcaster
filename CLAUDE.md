@@ -169,6 +169,14 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
    pre-commit and CI, but it catches syntax only: a typo like
    `App.assset.foo()` still parses and fails at runtime. Open the app and
    check the browser console after editing these files.
+   **`scripts/` and `lib/` have the same hole**, and it is worse there because
+   most of those files are one-shot tools nothing imports, so no test executes
+   them. On 2026-08-30 a "keep both sides" merge resolution fused two
+   statements in `scripts/clickup_direct.mjs` — valid to git, a SyntaxError to
+   node, and it would have stopped every loop pass on line 1 with no verdict
+   written anywhere. `check:syntax` now parses every hand-written
+   `.js`/`.mjs`/`.cjs` under both (generated artifacts excluded — landmine 14
+   means they do not exist at CI time). `docs/DOCTRINE.md` §6.7.
 10. **Vercel bakes env vars in at build time.** Editing one in the dashboard
     does NOT reach the deployment already serving traffic — it takes a redeploy.
     So "the value is wrong" and "the value is right but not live" look
@@ -332,6 +340,44 @@ name is not recognised does not quietly skip; it refuses out loud**, because
 "another machine is doing it" and "nobody is doing it" look identical
 otherwise, and only one of them is safe.
 
+### And a job that runs but ships nothing has to say so too
+
+The heartbeat measures **liveness**. There is a failure it structurally cannot
+see, and it is worse, because it writes a full cheerful log:
+
+```
+npm run throughput                          is the queue getting shorter?
+npm run throughput -- --check               the same, and post to the bus if it has STALLED
+npm run throughput -- --check --dry-run     say what it WOULD post, send nothing
+```
+
+On 2026-08-31 the build loop fired every hour, exited 0 every time, and did not
+move the queue — 52 queued, 1 in review, the oldest rework PR sitting since
+Aug 25. Every gate was green and every green was honest. Nothing in the system
+asked *is the queue getting shorter?*, so finding it took a morning of reading
+logs by hand (task 86bbqrw3p).
+
+It prints tickets closed per day, the backlog at the end of each day, and how
+long the oldest rework pull request has sat — and gives one of **four**
+verdicts, never two: `MOVING`, `IDLE` (nothing closed because there was nothing
+to close — healthy, and it says why), `STALLED`, or `UNKNOWN` when a reading
+could not be taken. Exit 0 / 0 / 1 / 2. **"Alive but useless" never renders as
+healthy**, and neither does "could not tell".
+
+`--check` posts to the bus only on `STALLED`, once per 6 hours, cleared by the
+next run that is not stalled — the same discipline the failure alert uses, so
+there is no "all is well" ×365. `scripts/run_bus_relay.sh` runs it **before**
+the ownership check, for the same reason the heartbeat runs there: the machine
+that does not own the relay is already awake doing nothing, and that idle wake
+is the vantage point that survives the owning machine being dead.
+
+Two numbers in that report answer the same question — the last point of the
+backlog curve and "open in total" — so they are computed to agree by
+construction. The first live run had them disagreeing by one, because a single
+ticket sat in `Live` with no closure date; the curve now defers to the status
+and **says how many tickets it had to guess about** rather than adjusting
+quietly.
+
 ## The pipeline can be paused — ask before you claim or merge
 
 Sometimes Dane needs the deck: something is urgent, and the loop lane — spec,
@@ -407,9 +453,15 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
    revert it, watch the named test fail, restore it.
 7. `npm run ship`. **No pause to merge**: merges never collide with the
    loops, `pause` drains for up to half an hour, and a pause older than two
-   hours nags the bus hourly. `ship` re-runs the gates, pushes, waits for CI,
-   merges and tidies; if it stops on a conflict, resolve by hand and run it
-   again.
+   hours nags the bus hourly. `ship` re-runs the gates, pushes, **records the
+   PR on its ticket**, waits for CI, merges and tidies; if it stops on a
+   conflict, resolve by hand and run it again.
+   You do not run `clickup pr-opened` by hand here — `ship` writes that trail
+   itself, from the branch's `clickup-task` stamp, which is why step 4 stamps
+   it even on an existing branch. Without the trail the review gate answers
+   CANNOT TELL and refuses the PR once branch protection is enforcing
+   (`docs/LOOP_ENGINEERING.md`, "Who writes the PR trail"). A branch with no
+   stamp still ships; it says out loud that nothing was recorded.
 8. Ticket to Live with the closing note (gates, live probe, what was
    break-tested); `npm run tidy`; one line on the bus.
 
@@ -607,8 +659,10 @@ Before reporting a task complete, run and state the results of:
 3. The rebuild command for every generated artifact your change affects
 4. `node scripts/check_conventions.cjs` (also runs at pre-commit;
    `SKIP_CONVENTIONS=1` bypasses — if you bypass, say so and why)
-5. `npm run check:syntax` if you touched `public/js/` or `public/shared/`
-   (also runs at pre-commit and gates CI)
+5. `npm run check:syntax` if you touched `public/js/`, `public/shared/`,
+   `scripts/` or `lib/` — a parse gate over every hand-written
+   `.js`/`.mjs`/`.cjs` in those trees (also runs at pre-commit and gates CI).
+   Run it after resolving ANY merge conflict by keeping both sides.
 6. **`npm run check:panels` if you touched ANY settings panel or its CSS**,
    and it is not optional because CI cannot run it — CI has no browser, so
    this check only ever runs if a person runs it. A staggered panel reached

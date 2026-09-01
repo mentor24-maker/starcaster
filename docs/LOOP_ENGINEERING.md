@@ -1204,19 +1204,115 @@ open.
    *unreachable in enforcing mode* because it sat below the red-check refusal
    (`docs/DOCTRINE.md` §3.12). Green tests in advisory mode said nothing about
    the mode that matters.
-3. **`npm run ship` must record the PR on its ticket.** ☐ OPEN — task
-   **86bbq7z1k**, Queued. Since task 86bbmmv7t the gate confirms the ticket
+3. **`npm run ship` must record the PR on its ticket.** ☑ DONE — task
+   **86bbq7z1k**, 2026-08-31. Since task 86bbmmv7t the gate confirms the ticket
    records *this* PR by reading its newest `PR opened:` line
    (`loopTrail.prTrailLanded`); a ticket without one answers CANNOT TELL, which
    is never a pass. That is deliberate and it fails closed — but
-   `scripts/ship_thread.cjs` contains no ClickUp interaction at all, so **every
-   hand-shipped and fast-tracked PR** would be blocked until somebody ran
-   `npm run clickup -- pr-opened --task <id> --pr <url>` by hand. The loops are
-   unaffected; they write the trail already.
+   `scripts/ship_thread.cjs` contained no ClickUp interaction at all, so **every
+   hand-shipped and fast-tracked PR** would have been blocked until somebody ran
+   `npm run clickup -- pr-opened --task <id> --pr <url>` by hand. The loops were
+   never affected; they write the trail already. See "Who writes the PR trail"
+   below.
 
-Ticking the box with 3 still open does not produce a gate that is too strict —
-it produces a pipeline that cannot merge anything at all, which is the same
-deadlock item 2 was written to prevent, arriving through a different door.
+Ticking the box with 3 still open would not have produced a gate that is too
+strict — it would have produced a pipeline that cannot merge anything at all,
+which is the same deadlock item 2 was written to prevent, arriving through a
+different door.
+
+### Who writes the PR trail (2026-08-31, task 86bbq7z1k)
+
+**One answer, and it is never a written step: whoever opens the PR writes the
+trail, using the same command.**
+
+| Lane | Who opens the PR | Who writes `PR opened:` |
+|---|---|---|
+| `loop-build` | the build pass | the build pass, step 8 — `clickup pr-opened` |
+| the hand lane / fast-track | `npm run ship` | **`ship` itself**, step 5b |
+
+Two ways to close the gap were on the table: teach `ship` to write the trail,
+or add an explicit `pr-opened` step to the fast-track lane's step 7 and to the
+hand-ship instructions. `ship` won for the reason that turned both loop traces
+into commands in the first place (task 86bbjt18r) — **a written step is
+followed most of the time, and nothing notices the times it is not.** The two
+lanes cannot drift apart now, because neither of them is prose.
+
+`ship` already knew the ticket: `npm run thread` stamps it onto the branch
+(`branch.<name>.clickup-task`), the same stamp `npm run tidy` reads back. Four
+properties, all in `scripts/builder/shipPrTrail.js` so they can be tested
+without a remote, a PR and a live CI run:
+
+- **Both halves, one moment.** `pr-opened` refuses to write its half until the
+  PR body links back to the ticket, so `ship` adds `ClickUp: <url>` to the body
+  it authors. Without that, every ship on a stamped branch would ask for the
+  trail and be told no.
+- **The ticket link goes FIRST in the body, and that is load-bearing.** The
+  gate resolves which ticket a PR belongs to with `findTicketId`, which returns
+  the **first** ClickUp link it finds — a convention `reviewGate` flags as a
+  hazard in its own docstring, because "loop-built bodies put their own ticket
+  on line 1" is a habit rather than a rule. `ship` originally *appended* the
+  line, which made it depend on that convention while writing the one body
+  shape that breaks it: a commit message citing a related ticket ("Follows
+  .../86bbjt18r") left the other ticket first and the gate judged the PR
+  against it. It failed closed rather than open, but the PR it blocked was the
+  hand-shipped one — the exact thing this work exists to unblock. Prepending
+  removes the dependency instead of restating the convention.
+
+  **And the skip-if-already-linked guard has to ask the gate's question, not a
+  weaker one.** Round 2 prepended correctly but guarded with "is this ticket
+  linked ANYWHERE", so a body naming another ticket first and this one further
+  down was still returned untouched — the same wrong-ticket defect, needing only
+  one extra line in the body to reach. The guard now compares `findTicketId`,
+  which is literally the gate's own reader. The invariant the tests assert,
+  rather than another example: for every input,
+  `findTicketId(bodyWithTicketLink(body, id)) === id`. A second copy of the link
+  further down is harmless; a body that resolves to the wrong ticket is not.
+- **`--if-missing` skips the comment, never the verification.** The PR-body
+  check runs on every invocation, before the idempotence preflight can
+  short-circuit. When it sat inside the skip, a ticket that already carried a
+  trail exited 0 — "already recorded" — whatever its body said, and the gate
+  then failed the same PR for carrying no ClickUp link. A cheerful all-clear in
+  front of a refusal is the failure mode this whole ticket exists to remove.
+- **One spelling of each URL.** The repair command a failed write prints has to
+  RUN when it is pasted: `pr-opened` rejects a bare `--pr 484` outright, so
+  `shipPrTrail` owns both the ticket-URL and PR-URL spellings and `ship`
+  imports them rather than keeping its own copy.
+- **Idempotent.** `ship` is *designed* to be re-run whenever main moves under
+  it, so the same PR reaches the command repeatedly. `pr-opened --if-missing`
+  writes nothing when the merge step's own reader (`prTrailLanded`) can already
+  find this PR on the ticket — whoever put it there, a loop or a hand.
+- **The idempotence guard fails CLOSED, because a duplicate is permanent.** The
+  `--if-missing` preflight read `json.comments || []`, so a 200 carrying no
+  comment list collapsed to an empty array — indistinguishable from a ticket
+  that genuinely has no trail — and it wrote, which is the second `PR opened:`
+  line the flag exists to prevent. An empty ARRAY is a real answer and still
+  writes; a missing one is CANNOT TELL, and the command now refuses and says to
+  run it again. One re-run is cheap; a duplicate is not. (Found on 2026-08-31
+  when two identical `pr-opened --if-missing` calls eleven minutes apart went
+  opposite ways on the same ticket. The one-off would not reproduce — polling and
+  a post-then-read probe both came back consistent — but this is the only path in
+  the command that produces that symptom from a healthy-looking response, and
+  DOCTRINE 3.11 says a check that could not run never reports an answer.) The
+  read-back one branch below had the same coercion: it called an unreadable body
+  "the trail did NOT land" when the write had just succeeded, so it now joins the
+  other UNVERIFIED case.
+- **No stamp is not a failure.** Plenty of branches legitimately have no
+  ticket. `ship` says so out loud and names the consequence, because a silent
+  skip is indistinguishable from a success.
+- **A ClickUp failure never stops the ship.** An outage is not a reason to
+  abandon a green, mergeable PR. But it is LOUD and names the repair — a
+  silently missing trail is the entire defect. Exit 4 (the PR body carries no
+  ticket link) gets its own message, because its fix is to edit the body, not
+  to run the command again.
+- **The failure message claims only what the exit code proves, and every repair
+  it prints carries `--if-missing`.** A non-4 failure is *not* proof the trail
+  is absent: `pr-opened` also exits 1 when the comment POSTED and reading it
+  back failed. Saying "this ticket now has no readable PR trail" was false on
+  that path, and the bare `pr-opened` it handed over would post a second
+  identical line — the duplication `--if-missing` exists to prevent. So the
+  message says the trail may or may not be there and to check by eye, and both
+  repair commands are safe to run twice. A repair is by definition run when
+  nobody knows what landed; that is exactly when idempotence matters.
 
 ### A stale gate is re-run, never merged on (2026-08-26, task 86bbmk7pv)
 
@@ -1549,7 +1645,12 @@ it skips is the queue position.
    numbers ("reverted the clamp: tests 3 and 15 failed; restored: 0"). A fix
    whose test passes both ways is not tested (§6.8).
 7. **`npm run ship`.** It catches up, rebuilds, runs the checks, pushes,
-   reuses the open PR, waits for CI, merges, and tidies. **No pause to merge.**
+   reuses the open PR, **records the PR on its ticket**, waits for CI, merges,
+   and tidies. You do not run `clickup pr-opened` by hand in this lane — `ship`
+   does it from the branch's `clickup-task` stamp, which is why step 4 insists
+   on that stamp even when you build on an existing branch ("Who writes the PR
+   trail", above). A branch with no stamp still ships; it says so. **No pause
+   to merge.**
    Dane's first instinct was to pause the pipeline so the merge would not
    collide with a loop pass; it cannot — the loops never merge, and a merge
    only re-dates their open branches, which `ship` handles by catching up.

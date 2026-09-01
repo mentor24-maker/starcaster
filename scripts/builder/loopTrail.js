@@ -47,6 +47,35 @@ function verdictComment(passed, note) {
 }
 
 /**
+ * Can this ClickUp response even ANSWER "is the trail already here"?
+ *
+ * WHY THIS IS SEPARATE FROM prTrailLanded (2026-08-31, task 86bbq7z1k, round 3).
+ * The `--if-missing` preflight read `json.comments || []`, so a 200 whose body
+ * carried no `comments` list collapsed to an empty array — indistinguishable
+ * from a ticket that genuinely has no trail on it. The guard then wrote, which
+ * is a DUPLICATE `PR opened:` line: precisely what `--if-missing` exists to
+ * prevent (acceptance criterion 2). An idempotence guard that cannot read fails
+ * OPEN, which is the wrong direction; a duplicate is permanent and confusing,
+ * while refusing costs one re-run.
+ *
+ * Observed live on this very ticket: two identical `pr-opened --if-missing`
+ * calls eleven minutes apart, the first skipping correctly and the second
+ * posting a second line. The one-off itself could not be reproduced — repeated
+ * polling and a post-then-read-immediately probe both came back consistent — so
+ * this is not a claim about what happened. It is the only path in the command
+ * that turns a healthy-looking response into that exact symptom, and it should
+ * not exist either way (DOCTRINE 3.11: a check that could not run never reports
+ * a pass).
+ *
+ * An EMPTY array is readable and means "no trail" — that is a real answer, and
+ * a ticket with no comments must still be writable. Only a missing or non-array
+ * `comments` is CANNOT TELL.
+ */
+function commentsReadable(json) {
+  return Array.isArray(json && json.comments);
+}
+
+/**
  * Did the `PR opened:` comment land in a form the merge step can use? Takes
  * the ticket's comments as read back from ClickUp, and the PR number that
  * was supposed to be recorded. Deliberately checks the NUMBER and not merely
@@ -123,6 +152,7 @@ function isReadyToLaunch(status) {
 module.exports = {
   prOpenedComment,
   verdictComment,
+  commentsReadable,
   prTrailLanded,
   prBodyCarriesTicket,
   readyToLaunchGate,

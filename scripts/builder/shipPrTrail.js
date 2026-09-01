@@ -1,0 +1,224 @@
+'use strict';
+
+/**
+ * shipPrTrail — the decision `npm run ship` makes about the ticket's PR trail.
+ *
+ * WHY THIS EXISTS (2026-08-31, task 86bbq7z1k). `scripts/ship_thread.cjs` had
+ * no ClickUp interaction of any kind, so the hand lane and the fast-track lane
+ * never left a `PR opened:` line on the ticket. That was harmless while the
+ * review gate was advisory. It stops being harmless the moment branch
+ * protection is ticked: the gate confirms the ticket records this PR by reading
+ * that line (`loopTrail.prTrailLanded`), and a ticket without one is CANNOT
+ * TELL, which is never a pass — so every hand-shipped PR would be blocked until
+ * somebody remembered to run `clickup pr-opened` by hand.
+ *
+ * Two ways to close that were on the table: teach `ship` to write the trail, or
+ * add a written step to the lane docs. The first one cannot be forgotten, which
+ * is the same argument that turned both loop traces into commands in the first
+ * place (task 86bbjt18r) — a step that says "post a comment" is followed most of
+ * the time, and nothing notices the times it is not.
+ *
+ * `ship` already knows the ticket: `npm run thread` stamps it onto the branch
+ * (`branch.<name>.clickup-task`), the same stamp `npm run tidy` reads back.
+ *
+ * The rules live here, pure and unit-tested, rather than inline in the script,
+ * because everything around them in `ship` needs a remote, a PR and a live CI
+ * run to exercise — which is exactly how an untested rule rots.
+ */
+
+const { findTicketId } = require('./clickupTicketLink.js');
+
+/** The one spelling of a ticket URL, shared with the matcher that reads it. */
+function ticketUrl(taskId) {
+  return `https://app.clickup.com/t/${String(taskId || '').trim()}`;
+}
+
+/** This repository, as `pr-opened` and `gh --repo` both spell it. */
+const PR_REPO = 'mentor24-maker/starcaster';
+
+/**
+ * The one spelling of a pull-request URL — and the reason it lives here rather
+ * than in `ship_thread.cjs` where it started.
+ *
+ * Every repair command this module prints has to RUN when it is pasted, and
+ * `pr-opened` refuses a bare number: "--pr got a bare number, so --repo
+ * owner/name is needed to know which repository" (exit 2, nothing written).
+ * The first version of this file printed `--pr 484`, so criterion 4's promise —
+ * a loud failure that names the exact command that repairs it — handed over a
+ * command that could not repair anything. The tests asserted the broken shape
+ * too, which would have made the fix look like a regression.
+ *
+ * `ship` imports this instead of keeping its own copy, so the URL the command
+ * is TOLD to use and the URL it actually sends cannot drift apart.
+ */
+function prUrl(prNumber, repo = PR_REPO) {
+  return `https://github.com/${repo}/pull/${String(prNumber == null ? '' : prNumber).trim()}`;
+}
+
+/**
+ * Should `ship` record this PR on a ticket, and if not, what does it say?
+ *
+ * Three outcomes, and only one of them writes:
+ *
+ *   record     — there is a stamp and a PR number; go and write the trail.
+ *   no-stamp   — the branch was not made by `npm run thread`, or was made
+ *                before the stamp existed. NOT a failure (acceptance criterion
+ *                3): plenty of legitimate branches have no ticket. But it is
+ *                said out loud, with the consequence named, because the gate
+ *                will refuse this PR once it is enforcing and "nothing was
+ *                printed" is indistinguishable from "it was recorded".
+ *   no-pr      — there is no PR number to record. Only reachable if the PR
+ *                lookup came back empty, which is already odd; saying so beats
+ *                sending `--pr undefined` to ClickUp.
+ */
+function decideTrailWrite({ taskId, prNumber } = {}) {
+  const id = String(taskId == null ? '' : taskId).trim();
+  const pr = String(prNumber == null ? '' : prNumber).trim();
+
+  if (!id) {
+    return {
+      write: false,
+      reason: 'no-stamp',
+      message:
+        'This branch carries no ClickUp ticket, so no "PR opened:" line was written.\n' +
+        'That is fine for a branch that has no ticket. But once branch protection is\n' +
+        'enforcing, the review gate refuses a PR whose ticket does not record it — so if\n' +
+        'this work DOES have a ticket, stamp the branch and run ship again:\n' +
+        `  git config branch.<branch>.clickup-task <task-id>\n` +
+        'or record it once by hand:\n' +
+        '  npm run clickup -- pr-opened --task <task-id> --pr <pr-url>',
+    };
+  }
+  if (!/^\d+$/.test(pr)) {
+    return {
+      write: false,
+      reason: 'no-pr',
+      message:
+        `The ticket is ${id}, but no pull-request number could be read, so nothing was\n` +
+        'written to it. Record it by hand once the PR exists:\n' +
+        `  npm run clickup -- pr-opened --task ${id} --pr <pr-url>`,
+    };
+  }
+  return { write: true, reason: 'record', taskId: id, prNumber: Number(pr), url: ticketUrl(id) };
+}
+
+/**
+ * The PR body `ship` should send, with the ticket link added when it is absent.
+ *
+ * The trail has to run BOTH ways — the ticket names the PR, the PR names the
+ * ticket — and `pr-opened` refuses to write its half until the PR body carries
+ * the other half. Since `ship` is the one authoring this body, adding the line
+ * here is what makes acceptance criterion 1 reachable at all; without it, every
+ * ship on a stamped branch would post the trail request and get exit 4 back.
+ *
+ * Idempotent by the SAME question the gate asks, so a body that already RESOLVES
+ * to this ticket — in either live URL shape, written by hand or by a previous
+ * run — is returned untouched rather than gaining a second copy.
+ *
+ * "Resolves to", not "mentions". Round 2 asked the weaker question
+ * (`bodyNamesTicket`: is this ticket linked ANYWHERE) and so returned untouched
+ * a body that named this ticket further down while naming a DIFFERENT one first
+ * — which is the wrong-ticket defect below, still reachable, just needing one
+ * extra line in the body to trigger. The gate resolves the first link, so the
+ * only guard that can be trusted is the gate's own reader. A second copy of the
+ * link further down is harmless; a body that resolves to the wrong ticket is
+ * not.
+ *
+ * The invariant the tests assert, rather than another example:
+ * `findTicketId(bodyWithTicketLink(body, id)) === id` for every input.
+ *
+ * IT GOES FIRST, AND THAT IS THE WHOLE POINT. The gate resolves which ticket a
+ * PR belongs to with `clickupTicketLink.findTicketId`, which returns the FIRST
+ * ClickUp link in the body — a convention `reviewGate.ticketNamesThisPr` names
+ * as a hazard in its own docstring, because "loop-built bodies put their own
+ * ticket on line 1" is a habit, not a rule. Appending here made `ship` depend on
+ * that convention while writing the one body shape that breaks it: a commit
+ * message citing a related ticket ("Follows .../86bbjt18r") put the OTHER
+ * ticket first, and the gate judged the PR against it.
+ *
+ * It failed closed rather than open — `ticketNamesThisPr` then refuses instead
+ * of passing the wrong PR — but the PR it blocks is the hand-shipped one, which
+ * is the exact thing this ticket exists to unblock. Prepending removes the
+ * dependency instead of restating the convention.
+ */
+function bodyWithTicketLink(body, taskId) {
+  const text = String(body == null ? '' : body);
+  const id = String(taskId || '').trim();
+  if (!id) return text;
+  if (findTicketId(text).toLowerCase() === id.toLowerCase()) return text;
+  const rest = text.replace(/^\s+/, '').replace(/\s+$/, '');
+  const link = `ClickUp: ${ticketUrl(id)}\n`;
+  return rest ? `${link}\n${rest}\n` : link;
+}
+
+/**
+ * What `ship` prints about the trail attempt — and, crucially, whether that
+ * stops the ship.
+ *
+ * It never does (acceptance criterion 4). A ClickUp outage is not a reason to
+ * abandon a green, mergeable PR, and stopping here would leave the operator
+ * with a merge to finish by hand for a reason that has nothing to do with his
+ * change. But it is not swallowed either: a silently missing trail is the whole
+ * defect this work exists to fix, so a failure is LOUD and names the exact
+ * command that repairs it.
+ *
+ * Exit 4 is called out separately because it is the one failure with a
+ * different fix: the PR body has no link back to the ticket, so the repair is
+ * to edit the body, not to re-run the command.
+ *
+ * BOTH repairs carry `--if-missing`, and the generic one does not claim the
+ * trail is missing. Round 2 said "this ticket now has no readable PR trail" and
+ * handed over a bare `pr-opened`, but exit 1 is also reachable AFTER the comment
+ * has posted — `clickup_direct.mjs` exits 1 when the POST succeeded and the
+ * read-back GET failed, printing "the comment posted but reading it back FAILED,
+ * so the trail is UNVERIFIED". On that path the sentence was false and the
+ * command added a SECOND identical "PR opened:" line, which is the duplication
+ * `--if-missing` exists to prevent (criterion 2). A repair should be safe to run
+ * twice by definition, so the flag belongs on both — and what exit 1 actually
+ * proves is that the command could not confirm the trail EITHER WAY, which is
+ * what it now says.
+ */
+function describeTrailResult({ taskId, prNumber, code, output } = {}) {
+  const id = String(taskId || '').trim();
+  const pr = String(prNumber == null ? '' : prNumber).trim();
+  const tail = String(output || '').trim();
+  // `spawnSync` reports `status: null` when the child was killed by a signal
+  // rather than exiting. `Number(null)` is 0, so a plain numeric compare read a
+  // KILLED ClickUp write as a successful one — a silent missing trail, which is
+  // the precise defect this whole module exists to prevent. Only a real, finite
+  // zero counts.
+  const status = (code === null || code === undefined || code === '') ? NaN : Number(code);
+
+  if (status === 0) {
+    return { ok: true, loud: false, message: tail || `Recorded PR #${pr} on ticket ${id}.` };
+  }
+  if (status === 4) {
+    return {
+      ok: false,
+      loud: true,
+      message:
+        `COULD NOT RECORD THE PR ON TICKET ${id}: pull request #${pr} has no link back to\n` +
+        'the ticket in its body, so the trail would only run one way. Nothing was written.\n' +
+        'The ship itself is unaffected. Add this line to the PR body, then run the command:\n' +
+        `  ClickUp: ${ticketUrl(id)}\n` +
+        `  npm run clickup -- pr-opened --task ${id} --pr ${prUrl(pr)} --if-missing` +
+        (tail ? `\n\n${tail}` : ''),
+    };
+  }
+  return {
+    ok: false,
+    loud: true,
+    message:
+      `COULD NOT CONFIRM PR #${pr} IS RECORDED ON TICKET ${id} (the command exited ${Number.isFinite(status) ? status : '?'}).\n` +
+      'The ship itself is unaffected. The trail may or may not be there — this failure is\n' +
+      'also reachable after the comment posted, when reading it back is what went wrong — so\n' +
+      'check the ticket by eye, and run this when ClickUp is reachable again. It writes only\n' +
+      'if the trail is genuinely absent, so it is safe either way:\n' +
+      `  npm run clickup -- pr-opened --task ${id} --pr ${prUrl(pr)} --if-missing` +
+      (tail ? `\n\n${tail}` : ''),
+  };
+}
+
+module.exports = {
+  PR_REPO, ticketUrl, prUrl, decideTrailWrite, bodyWithTicketLink, describeTrailResult,
+};

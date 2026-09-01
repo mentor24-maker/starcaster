@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Starcaster weekly figures — every edition</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2.5rem 1.5rem 4rem;
+      font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      color: #1a1a1a; background: #fbfbfa;
+    }
+    main { max-width: 60rem; margin: 0 auto; }
+    h1 { font-size: 1.9rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+    h2 { font-size: 1.15rem; margin: 2.5rem 0 .9rem; padding-bottom: .4rem; border-bottom: 1px solid #e4e2dd; }
+    h3 { font-size: .95rem; margin: 1.4rem 0 .5rem; }
+    .window { color: #6b6b6b; margin: 0 0 .35rem; }
+    .provenance { color: #6b6b6b; font-size: .85rem; margin: 0 0 2rem; }
+    .provenance code { background: #efeee9; padding: .1rem .35rem; border-radius: 3px; }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .75rem; }
+    .tile { background: #fff; border: 1px solid #e4e2dd; border-radius: 8px; padding: .9rem 1rem; }
+    .tile--unread { background: #fdf6ec; border-color: #e8d4b0; }
+    .tile--partial { background: #fdf6ec; border-color: #e8d4b0; }
+    .tile--partial .tile-value { color: #8a6a2f; }
+    .tile--partial .tile-note { color: #8a6a2f; }
+    .tile-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #7a7a7a; }
+    .tile-value { font-size: 1.5rem; font-weight: 600; margin-top: .25rem; line-height: 1.25; }
+    .tile--unread .tile-value { font-size: .9rem; font-weight: 500; color: #8a6a2f; }
+    .tile-note { font-size: .78rem; color: #7a7a7a; margin-top: .3rem; }
+    .stages { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+    .stage { background: #fff; border: 1px solid #e4e2dd; border-radius: 8px; padding: .6rem .9rem; text-align: center; min-width: 5.5rem; }
+    .stage-count { font-size: 1.35rem; font-weight: 600; }
+    .stage-name { font-size: .72rem; color: #7a7a7a; text-transform: uppercase; letter-spacing: .04em; }
+    .stage-arrow { color: #b9b6ae; }
+    .chart { display: flex; flex-direction: column; gap: .3rem; }
+    .bar-row { display: grid; grid-template-columns: 6.5rem 1fr 2rem; align-items: center; gap: .6rem; }
+    .bar-day { font-size: .8rem; color: #6b6b6b; font-variant-numeric: tabular-nums; }
+    .bar-track { background: #eceae4; border-radius: 4px; height: 1.1rem; overflow: hidden; }
+    .bar-fill { background: #4a7c59; height: 100%; border-radius: 4px; }
+    .bar-count { font-size: .82rem; text-align: right; font-variant-numeric: tabular-nums; color: #4a4a4a; }
+    .area-count { color: #7a7a7a; font-weight: 400; font-size: .8rem; }
+    ul.merges { list-style: none; margin: 0; padding: 0; }
+    ul.merges li { padding: .3rem 0; border-bottom: 1px solid #efeee9; display: flex; gap: .6rem; align-items: baseline; }
+    ul.merges a { color: #2f6f4f; text-decoration: none; font-variant-numeric: tabular-nums; min-width: 3.5rem; }
+    ul.merges a:hover { text-decoration: underline; }
+    .merge-title { flex: 1; }
+    .unread { background: #fdf6ec; border: 1px solid #e8d4b0; border-radius: 8px; padding: .75rem 1rem; color: #8a6a2f; }
+    .narrative { background: #fff; border: 1px dashed #cfcdc6; border-radius: 8px; padding: 1rem 1.2rem; color: #5a5a5a; }
+    footer { margin-top: 3rem; color: #8a8a8a; font-size: .82rem; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #16171a; color: #e8e6e1; }
+      .tile, .stage, .narrative { background: #1e2024; border-color: #34363c; }
+      h2 { border-color: #34363c; }
+      .tile--unread, .tile--partial, .unread { background: #2a2317; border-color: #5a4a26; color: #d8b877; }
+      .tile--partial .tile-value, .tile--partial .tile-note { color: #d8b877; }
+      .bar-track { background: #2a2d33; }
+      ul.merges li { border-color: #26282d; }
+      .provenance code { background: #26282d; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Starcaster weekly figures</h1>
+    <p class="provenance">Newest first. Each edition is the figures for the seven days ending on its date.</p>
+    <h2>Editions</h2>
+    <ul class="merges">
+        <li>
+          <a href="2026-08-30.html">2026-08-30</a>
+          <span class="merge-title">2026-08-24 to 2026-08-30</span>
+        </li>
+    </ul>
+  </main>
+</body>
+</html>
