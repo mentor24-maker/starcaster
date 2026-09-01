@@ -2210,6 +2210,10 @@ function BuilderModulePreview({
   if (module.type === "event-calendar") {
     return <EventCalendarPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
   }
+  if (module.type === "media-manager") {
+    return <MediaManagerPreview settings={module.settings} />;
+  }
+
   if (module.type === "event-manager") {
     return <EventManagerPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
   }
@@ -4388,6 +4392,387 @@ function EventCalendarPreview({
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+/* ── Media Manager (admin) ─────────────────────────────────────────────────── */
+
+/**
+ * The Media Manager a TENANT admin uses, on their own site — e.g.
+ * delraytennis.starcaster.pro/admin-media-manager. Not to be confused with the
+ * Assets screen in the platform admin app, which is Dane's and never loads
+ * here (that confusion is what tickets 1-3 of this series were built against).
+ *
+ * Runs on /api/assets with a project-admin session. Ticket 86bbrqnqu pinned
+ * which asset endpoints a tenant admin may reach and which are refused — the
+ * refused ones spend Alphire's money, quota or compute, and none of them are
+ * used below.
+ *
+ * Every upload declares `source: "admin-media-manager"`, the column added in
+ * 86bbrnz2v. That is what makes these files findable as Media Manager uploads
+ * in the Builder's own gallery picker.
+ */
+
+const MEDIA_MANAGER_SOURCE = "admin-media-manager";
+
+/** Mirrors GALLERY_IMAGE_EXTENSIONS / GALLERY_VIDEO_EXTENSIONS. */
+const MEDIA_IMAGE_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,.svg";
+const MEDIA_VIDEO_ACCEPT = ".mp4,.mov,.m4v,.webm,.ogg";
+
+/**
+ * The base64 upload path tops out around 7MB. Anything larger goes through
+ * Vercel Blob, which is also the only path for video.
+ */
+const MEDIA_DIRECT_UPLOAD_MAX_BYTES = 6 * 1024 * 1024;
+
+type MediaAsset = {
+  id: number;
+  assetName: string;
+  assetType: string;
+  location: string;
+  thumbnailUrl?: string;
+  size?: number;
+  imageWidth?: number;
+  imageHeight?: number;
+  source?: string;
+  createdAt?: string;
+};
+
+type MediaUploadProgress = { name: string; index: number; total: number };
+
+function mediaIsVideo(asset: MediaAsset): boolean {
+  if (String(asset.assetType || "").toLowerCase() === "video") return true;
+  return /\.(mp4|mov|m4v|webm|ogg)(\?|#|$)/i.test(String(asset.location || ""));
+}
+
+function formatMediaSize(bytes?: number): string {
+  const n = Number(bytes || 0);
+  if (!n) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+let mediaBlobClientPromise: Promise<{ upload: (...args: unknown[]) => Promise<{ url: string }> }> | null = null;
+function getMediaBlobClient() {
+  // Loaded from a CDN at runtime rather than bundled — the same technique
+  // public/js/assets.js uses, and what lets a tenant page upload video without
+  // the builder bundle carrying the SDK.
+  if (!mediaBlobClientPromise) {
+    // The specifier is built at runtime so TypeScript does not try to resolve
+    // a URL import at compile time, and esbuild leaves it as a dynamic import
+    // for the browser to fetch.
+    const cdn = "https://esm.sh/@vercel/blob/client?bundle";
+    mediaBlobClientPromise = (new Function("u", "return import(u)")(cdn)) as Promise<{
+      upload: (...args: unknown[]) => Promise<{ url: string }>;
+    }>;
+  }
+  return mediaBlobClientPromise;
+}
+
+function MediaManagerPreview({
+  settings
+}: {
+  settings: Record<string, string>;
+}) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const kinds = String(settings.kinds || "all").toLowerCase();
+  const showSize = (settings.showSize ?? "true") !== "false";
+  const showDate = (settings.showDate ?? "true") !== "false";
+  const showDelete = (settings.showDelete ?? "true") !== "false";
+
+  const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [statusMsg, setStatusMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [uploading, setUploading] = useState<MediaUploadProgress | null>(null);
+  const [renameId, setRenameId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<MediaAsset | null>(null);
+  const [busy, setBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const acceptAttr =
+    kinds === "images" ? MEDIA_IMAGE_ACCEPT
+      : kinds === "videos" ? MEDIA_VIDEO_ACCEPT
+        : `${MEDIA_IMAGE_ACCEPT},${MEDIA_VIDEO_ACCEPT}`;
+
+  function loadAssets() {
+    setLoading(true);
+    setLoadError("");
+    fetch("/api/assets", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, `Failed to load media (${r.status})`));
+        const list = (d?.assets ?? d?.data ?? []) as MediaAsset[];
+        setAssets(Array.isArray(list) ? list : []);
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Failed to load media."))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { loadAssets(); }, []);
+
+  const visible = assets.filter((asset) => {
+    if (kinds === "images") return !mediaIsVideo(asset);
+    if (kinds === "videos") return mediaIsVideo(asset);
+    return true;
+  });
+
+  async function uploadOne(file: File) {
+    const isVideo = /^video\//i.test(file.type) || /\.(mp4|mov|m4v|webm|ogg)$/i.test(file.name);
+    const assetType = isVideo ? "Video" : "Image";
+
+    // Video, and anything past the base64 ceiling, goes through Blob. An
+    // image small enough takes the direct path because it also generates a
+    // thumbnail on the way in.
+    if (isVideo || file.size > MEDIA_DIRECT_UPLOAD_MAX_BYTES) {
+      const { upload } = await getMediaBlobClient();
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/assets/blob-upload",
+        multipart: true,
+        clientPayload: JSON.stringify({ fileName: file.name, assetType, assetName: file.name })
+      });
+      const res = await fetch("/api/assets", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({
+          assetName: file.name,
+          assetType,
+          location: String(blob?.url || ""),
+          size: Number(file.size || 0),
+          source: MEDIA_MANAGER_SOURCE
+        })
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, `Failed to record ${file.name}.`));
+      }
+      return;
+    }
+
+    const res = await fetch("/api/assets/import-image", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType: file.type || "image/jpeg",
+        fileBase64: await fileToBase64(file),
+        assetName: file.name,
+        source: MEDIA_MANAGER_SOURCE
+      })
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      throw new Error(readApiErrorMessage(d, `Failed to upload ${file.name}.`));
+    }
+  }
+
+  async function handleFiles(fileList: FileList | null) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setErrorMsg("");
+    setStatusMsg("");
+    const failures: string[] = [];
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      // A video upload runs for minutes. Silence here is indistinguishable
+      // from a hang, so every file announces itself before it starts.
+      setUploading({ name: file.name, index, total: files.length });
+      try {
+        await uploadOne(file);
+      } catch (err) {
+        failures.push(`${file.name}: ${err instanceof Error ? err.message : "upload failed"}`);
+      }
+    }
+    setUploading(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    const ok = files.length - failures.length;
+    if (failures.length) {
+      setErrorMsg(`${failures.length} of ${files.length} failed — ${failures[0]}`);
+    }
+    if (ok > 0) setStatusMsg(`${ok} file${ok === 1 ? "" : "s"} uploaded.`);
+    loadAssets();
+  }
+
+  async function saveRename(asset: MediaAsset) {
+    const next = renameValue.trim();
+    if (!next || next === asset.assetName) { setRenameId(null); return; }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/assets/${encodeURIComponent(String(asset.id))}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({ assetName: next })
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, "Failed to rename."));
+      }
+      setStatusMsg("Renamed.");
+      setRenameId(null);
+      loadAssets();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to rename.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/assets/${encodeURIComponent(String(deleteTarget.id))}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: getCrmProjectHeaders()
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, "Failed to delete."));
+      }
+      setDeleteTarget(null);
+      setStatusMsg("Deleted.");
+      loadAssets();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to delete.");
+      setDeleteTarget(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="builder-media-manager" style={{ ["--builder-media-accent" as string]: accent }}>
+      <div className="builder-media-manager-toolbar">
+        <label className="builder-media-manager-upload">
+          <input
+            ref={fileInputRef}
+            accept={acceptAttr}
+            className="builder-media-manager-file-input"
+            disabled={Boolean(uploading)}
+            multiple
+            onChange={(e) => { handleFiles(e.target.files); }}
+            type="file"
+          />
+          <span className="builder-media-manager-upload-label">
+            {uploading ? "Uploading…" : "Upload Files"}
+          </span>
+        </label>
+        <span className="builder-media-manager-count">
+          {loading ? "Loading…" : `${visible.length} file${visible.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
+
+      {uploading ? (
+        <div aria-live="polite" className="builder-media-manager-progress">
+          Uploading {uploading.index + 1} of {uploading.total}: {uploading.name}
+        </div>
+      ) : null}
+
+      {statusMsg ? <div className="builder-media-manager-status">{statusMsg}</div> : null}
+      {errorMsg ? <div className="builder-media-manager-error">{errorMsg}</div> : null}
+      {loadError ? <div className="builder-media-manager-error">{loadError}</div> : null}
+
+      {!loading && !visible.length && !loadError ? (
+        <p className="builder-media-manager-empty">
+          No media yet. Use Upload Files to add images or video.
+        </p>
+      ) : null}
+
+      <div className="builder-media-manager-grid">
+        {visible.map((asset) => (
+          <figure className="builder-media-manager-card" key={asset.id}>
+            <div className="builder-media-manager-thumb">
+              {mediaIsVideo(asset) ? (
+                <video className="builder-media-manager-media" preload="metadata" src={asset.location} />
+              ) : (
+                <img
+                  alt={asset.assetName}
+                  className="builder-media-manager-media"
+                  loading="lazy"
+                  src={asset.thumbnailUrl || asset.location}
+                />
+              )}
+              {asset.source === MEDIA_MANAGER_SOURCE ? (
+                <span className="builder-media-manager-badge" title="Uploaded here">Media Mgr</span>
+              ) : null}
+            </div>
+            <figcaption className="builder-media-manager-caption">
+              {renameId === asset.id ? (
+                <input
+                  autoFocus
+                  className="builder-media-manager-rename"
+                  disabled={busy}
+                  onBlur={() => saveRename(asset)}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveRename(asset);
+                    if (e.key === "Escape") setRenameId(null);
+                  }}
+                  value={renameValue}
+                />
+              ) : (
+                <button
+                  className="builder-media-manager-name"
+                  onClick={() => { setRenameId(asset.id); setRenameValue(asset.assetName); }}
+                  title="Click to rename"
+                  type="button"
+                >
+                  {asset.assetName}
+                </button>
+              )}
+              <span className="builder-media-manager-meta">
+                {showSize ? formatMediaSize(asset.size) : null}
+                {showSize && showDate && asset.createdAt ? " · " : null}
+                {showDate && asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : null}
+              </span>
+              {showDelete ? (
+                <button
+                  className="builder-media-manager-delete"
+                  disabled={busy}
+                  onClick={() => setDeleteTarget(asset)}
+                  type="button"
+                >
+                  Delete
+                </button>
+              ) : null}
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+
+      {deleteTarget ? (
+        <div className="builder-media-manager-confirm">
+          <p>Delete “{deleteTarget.assetName}”? This cannot be undone.</p>
+          <div className="builder-media-manager-confirm-actions">
+            <button disabled={busy} onClick={confirmDelete} type="button">
+              {busy ? "Deleting…" : "Delete"}
+            </button>
+            <button disabled={busy} onClick={() => setDeleteTarget(null)} type="button">Cancel</button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
