@@ -38,6 +38,29 @@ down. It now says which of the two it is, the heading above it stops calling a
 branch with nothing wrong a clash, and the test that guards it feeds the two
 halves into each other the way the real code does — checking them one at a time
 was why a fully passing test run still had this in it.
+
+Review then caught something bigger, and it is the reason this went round a third
+time. "The machine looked and found nothing wrong" and "the machine never managed
+to look" had been filed as the same answer. They are not the same answer at all:
+the first is a finding, the second is the absence of one. So when the check
+failed to run — it could not reach the code, or the branch lives in a different
+project this machine does not have a copy of — the note on the ticket honestly
+said it could not check, while the message going to the group chat seconds later
+announced that no clash had been found and nobody needed to do anything. Standing
+the room down on a look nobody took. And a branch in one of the other projects
+hits that every single time, forever, so it had quietly stopped creating any job
+at all for work in those projects.
+
+There are three answers now instead of two, and each one is only allowed to say
+what it actually knows. A clean result still goes quiet and sorts itself out. A
+real clash still gets a job created and a name attached. A check that could not
+run says so plainly, in the same words everywhere it appears, and still gets a
+job created — because somebody has to find out why. The wrong-project case says
+out loud that it will never sort itself out from that machine, rather than
+promising a retry that cannot work. Every outcome the checker can produce now
+needs a decision written down beside it; a test fails if a new one is ever added
+without one, which is how four of these came to be sharing an answer nobody had
+chosen for them.
 ## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
 
 We already had an alarm for a scheduled job that stops running. This adds the

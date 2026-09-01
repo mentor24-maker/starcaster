@@ -88,7 +88,8 @@ const {
 const {
   conflictTicketFiledComment, findConflictTicket, conflictTicketName,
   conflictTicketBody, handOffStalled, stalledHandOffLine, stalledHandOffHeadline,
-  shouldFileConflictTicket,
+  stalledSummaryHeadline, stalledSummaryClause,
+  shouldFileConflictTicket, verdictFromCatchUp, isRealOverlap, isPermanent,
 } = conflictWork;
 const {
   prOpenedComment, verdictComment, prTrailLanded, prBodyCarriesTicket,
@@ -969,7 +970,13 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
         return { outcome: 'waiting', reason: after.reason };
       }
-      gate = { action: after.action, reason: after.reason };
+      // CARRY THE CLEAN VERDICT (review round 2). If GitHub STILL says
+      // conflict after a catch-up that merged and pushed, that is the textbook
+      // stale answer — and this machine has the strongest possible evidence
+      // there is no overlap, because it just did the merge. Dropping the
+      // verdict here left `localVerdict` null, which the hand-off then had to
+      // guess about. It is a finding; it travels.
+      gate = { action: after.action, reason: after.reason, localVerdict: local };
       if (after.prJson) prJson = after.prJson;
     } else {
       // Carry WHY into the hand-off, so the reader learns whether it was a
@@ -989,13 +996,13 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // overlap" and "I could not check" are different problems with different
     // fixes, and reading one as the other is how a machine problem gets
     // diagnosed as a code problem.
-    const verdict = gate.localVerdict;
-    const localVerdict = verdict
-      ? {
-          kind: verdict.code === branchCatchUp.CODES.REAL_CONFLICT ? 'real-conflict' : 'unknown',
-          reason: verdict.reason,
-        }
-      : null;
+    // The code-to-answer table lives in conflictWork beside the predicate that
+    // reads it (review round 2). It used to be inline here and had only two
+    // buckets, so `WRONG_REPO`, `FETCH_FAILED`, `WORKTREE_FAILED` and
+    // `NOT_ANCESTOR` — four ways of never looking — came out wearing the same
+    // answer as a lost push race, which is a finding. The bus post then
+    // asserted that finding.
+    const localVerdict = verdictFromCatchUp(gate.localVerdict);
     const branch = prJson.headRefName;
 
     // OPTION C (Dane's answer on task 86bbq0fh8, 2026-08-30): the resolution
@@ -1036,7 +1043,13 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // notice already decided this from the shared predicate; read its answer
     // rather than re-deriving one (task 86bbq80j5).
     const selfHealing = notice.actor === 'later-pass';
+    // "It found no overlap" and "it never looked" are different facts and only
+    // one of them is a finding — the distinction review round 2 sent this back
+    // for. Both are non-self-healing, so `selfHealing` alone cannot tell the
+    // copy below which sentence it is entitled to write.
+    const isRealOverlapVerdict = isRealOverlap(localVerdict);
     if (lane) return { outcome: 'lane-cancel', reason: gate.reason };
+
 
     // The quiet path — right on the merits, and exactly where three days of
     // silence lived. It stays quiet only while a NAMED actor is plausibly
@@ -1063,7 +1076,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       // and it is the branch that reaches the bus (review round 1).
       const line = stalledHandOffLine({ task, pr, filed, stalled, actor: notice.actor });
       console.error(`  MERGE HAND-OFF STALLED on ${label}: ${stalled.why}`);
-      stalledHandOffs.push(line);
+      stalledHandOffs.push({ line, actor: notice.actor });
       if (dryRun) return { outcome: 'would-report-stalled', reason: stalled.why };
       const busStall = await postToBus(channel, `[CC-starcaster bus-relay] ${stalledHandOffHeadline({ actor: notice.actor })} — ${line}\n\n${pr.url}`);
       // "One pass of noise per day is the price" (conflictWork.js) — and the
@@ -1084,15 +1097,15 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         : ' — NOT FILED, nothing will pick this up';
     console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}${handOffActorLine}`);
     if (dryRun) {
-      // A dry run never attempts the local catch-up, so it has NO verdict —
-      // and no verdict reads as self-healing, which means `selfHealing` is
-      // always true here and this branch cannot know which of the two the
-      // real pass would do. It used to promise a filing it might decline; now
-      // it names both possibilities and says which fact it is missing, rather
-      // than trading one confident guess for another (review round 1).
-      console.error(selfHealing
-        ? `  DRY RUN — would attempt the catch-up on ${branch} and then hand off. A dry run computes no local verdict, so which hand-off it would be is unknown: no overlap means the next pass retries and nothing is filed; a real overlap means a Loop Queue ticket is filed and named.`
-        : `  DRY RUN — would file a Loop Queue ticket to resolve the conflict on ${branch}, then post a hand-off naming it`);
+      // A dry run never attempts the local catch-up, so it has NO verdict, and
+      // no verdict now reads as could-not-check — the honest answer to "what
+      // did you find?" when nothing was looked at (review round 2). That is
+      // also what makes the dry run report a stalled, unfiled hand-off instead
+      // of quietly calling it self-healing.
+      //
+      // It cannot know which of the three the real pass would land on, so it
+      // names all three rather than trading one confident guess for another.
+      console.error(`  DRY RUN — would attempt the catch-up on ${branch} and then hand off. A dry run computes no local verdict, so which hand-off it would be is unknown: no overlap means the next pass retries and nothing is filed; a real overlap, or a check that could not run at all, means a Loop Queue ticket is filed and named.`);
       return { outcome: 'would-hand-off', reason: gate.reason };
     }
     const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
@@ -1102,11 +1115,21 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // Three actors, three sentences. The self-healing one is new: it used to
     // get the UNFILED body, which tells the room to point an agent session at
     // a branch that has nothing wrong with it (task 86bbq80j5).
+    // WHAT THE BUS IS TOLD, and it may only assert what the pass actually
+    // found (review round 2). The self-healing sentence — "this machine found
+    // no overlap ... nobody needs to claim it" — is TRUE only for a proven
+    // no-overlap. It used to be printed for a failed fetch and for a repo this
+    // machine has no checkout of, standing the room down on a look nobody took.
+    // So the middle case is now its own sentence, and it says which it is.
+    const couldNotLook = !selfHealing && !isRealOverlapVerdict;
+    const blockedWhy = couldNotLook
+      ? `GitHub called PR #${pr.number} a conflict and this machine could not check whether that is true — ${localVerdict ? localVerdict.reason : 'no local check was attempted'}${isPermanent(localVerdict) ? '. That answer is permanent from here: the branch is in a repo this machine has no checkout of, so no future pass can settle it either' : ''}`
+      : `PR #${pr.number} conflicts with main`;
     const busBody = selfHealing
-      ? `[CC-starcaster bus-relay] MERGE DEFERRED — ${label} (${task.url}): GitHub called PR #${pr.number} a conflict, but this machine found no overlap between the branch and main. Nothing needs resolving and nobody needs to claim it; the next relay pass retries the catch-up. Ticket left in Ready to launch.\n\n${pr.url}`
+      ? `[CC-starcaster bus-relay] MERGE DEFERRED — ${label} (${task.url}): GitHub called PR #${pr.number} a conflict, but this machine merged it here with no overlap at all. Nothing needs resolving and nobody needs to claim it; the next relay pass retries the catch-up. Ticket left in Ready to launch.\n\n${pr.url}`
       : filed
-        ? `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Resolving it is filed as ${filed.url} in the Loop Queue, which the build loop drains — no session needs to claim this from here. Dane's approval still stands: once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`
-        : `[CC-starcaster bus-relay] MERGE BLOCKED AND UNFILED — ${label} (${task.url}): PR #${pr.number} conflicts with main and the Loop Queue ticket could NOT be filed. Nothing is going to pick this up on its own. An agent session must be pointed at branch ${branch}. Ticket left in Ready to launch.\n\n${pr.url}`;
+        ? `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): ${blockedWhy}. Picking it up is filed as ${filed.url} in the Loop Queue, which the build loop drains — no session needs to claim this from here. Dane's approval still stands: once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`
+        : `[CC-starcaster bus-relay] MERGE BLOCKED AND UNFILED — ${label} (${task.url}): ${blockedWhy}, and the Loop Queue ticket could NOT be filed. Nothing is going to pick this up on its own. An agent session must be pointed at branch ${branch}. Ticket left in Ready to launch.\n\n${pr.url}`;
     const bus = await postToBus(channel, busBody);
     // An unfiled hand-off is NOT cosmetic: the ticket comment says nothing is
     // working on it, and if the bus post fails too, nobody has been told.
@@ -3344,7 +3367,11 @@ if (cmd === 'whoami') {
     : pauseState.paused
       ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
       : ', merging disabled (--no-merge)';
-  const stalledLine = stalledHandOffs.length ? `, ${stalledHandOffs.length} conflict(s) STILL UNRESOLVED` : '';
+  // Counted APART, because calling a self-healing deferral a conflict is the
+  // same overstatement the per-line banner was fixed for, one surface across
+  // (review round 2, item 4).
+  const stalledActors = stalledHandOffs.map((h) => h.actor);
+  const stalledLine = stalledSummaryClause(stalledActors);
   console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}${laneLine}${stalledLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? (simulateBusFailure ? ' (DRY RUN + SIMULATED PARTY-LINE OUTAGE — nothing was merged, posted or moved)' : ' (DRY RUN — nothing was merged, posted or moved)') : ''}`);
 
   // Its own heading, and unmissable. The whole point of task 86bbq0fh8 is
@@ -3352,8 +3379,8 @@ if (cmd === 'whoami') {
   // days. A conflict that has been handed off and is still sitting there now
   // says so on every pass, by name, until it clears.
   if (stalledHandOffs.length) {
-    console.error(`\nCONFLICTS STILL UNRESOLVED — ${stalledHandOffs.length} approved merge(s) are blocked and not moving:`);
-    for (const line of stalledHandOffs) console.error(`  - ${line}`);
+    console.error(`\n${stalledSummaryHeadline(stalledActors)} — ${stalledHandOffs.length} approved merge(s) are not moving:`);
+    for (const h of stalledHandOffs) console.error(`  - ${h.line}`);
   }
   // Its own heading, above the failures and visibly not one of them. A chat
   // outage is worth seeing; it is not worth stopping the pipeline for.

@@ -23,7 +23,7 @@
 
 // The one reading of a local merge verdict, shared with the merge step so the
 // two cannot disagree about it (task 86bbq80j5).
-const { isRealOverlap } = require('./conflictWork');
+const { isRealOverlap, isSelfHealing, isPermanent } = require('./conflictWork');
 
 /**
  * The exact phrases that mean "merge it". Deliberately a closed set matched
@@ -582,29 +582,55 @@ function conflictHandOffNotice({ commentId, pr, localVerdict, filed }) {
   // did not consult it at all, so a lost push race was filed as a conflict
   // while this very body promised it would heal itself. Neither side gets to
   // hold its own copy of the answer any more.
+  // THREE answers, not two (review round 2). `isSelfHealing` is the only one
+  // that licences "no overlap was found"; `couldNotCheck` says plainly that
+  // nothing was looked at, which is what a wrong repo, a failed fetch or a
+  // missing scratch worktree actually is. Collapsing those two produced a
+  // ticket comment saying it could not check beside a bus post asserting a
+  // finding, seconds apart.
   const realOverlap = isRealOverlap(localVerdict);
+  const selfHealing = isSelfHealing(localVerdict);
+  const permanent = isPermanent(localVerdict);
   const because = realOverlap
     ? `this branch and \`main\` have both changed the same lines — ${localVerdict.reason}`
-    : localVerdict
-      ? `GitHub called it a conflict, and this machine could not check whether that is true — ${localVerdict.reason}`
-      : 'GitHub reported that the branch conflicts with newer work on `main`';
-  // Who acts next, said out loud. A real overlap is a code change somebody
-  // has to make; the only honest sentence names who is going to make it. With
-  // a filed ticket that is the build loop, which drains the Loop Queue on a
-  // timer today. Without one it is nobody, and the body must say so rather
-  // than reach for the passive voice that hid the missing actor before.
-  const actor = realOverlap ? (filed ? 'loop-queue' : 'nobody') : 'later-pass';
+    : selfHealing
+      ? `GitHub called it a conflict, but this machine merged it here with no overlap at all — ${localVerdict.reason}`
+      : localVerdict
+        ? `GitHub called it a conflict, and this machine could not check whether that is true — ${localVerdict.reason}`
+        : 'GitHub reported that the branch conflicts with newer work on `main`, and no local check was attempted';
+  // Who acts next, said out loud. Anything that is not a proven no-overlap is
+  // work somebody has to do — deciding what a merged file says, or finding out
+  // why the check could not run — and the only honest sentence names who is
+  // going to do it. With a filed ticket that is the build loop, which drains
+  // the Loop Queue on a timer today. Without one it is nobody, and the body
+  // must say so rather than reach for the passive voice that hid the missing
+  // actor before. This reads the SAME predicate the filing decision reads.
+  const actor = selfHealing ? 'later-pass' : (filed ? 'loop-queue' : 'nobody');
+
+  // What the work IS, and what to CALL it — both differ between the two
+  // non-healing answers. A ticket that tells its builder to resolve an overlap,
+  // when no overlap was ever established, sends them looking for markers that
+  // may not be there: the original 2026-08-30 defect, one level down.
+  //
+  // The real-overlap wording is left EXACTLY as it was. Review round 2
+  // verified those two bodies byte-for-byte against main as evidence that the
+  // round-1 fix had not disturbed them, and that is a property worth keeping
+  // rather than a coincidence to spend.
+  const theWork = realOverlap
+    ? 'Sorting that overlap out is a code change rather than a decision, and a script must never resolve one blind, so it was not attempted.'
+    : `Whether there is anything to resolve is still unknown — the local check did not run${permanent ? ', and it never will from the relay machine: the branch is in a repo that machine has no checkout of, so every future pass returns this same answer' : ''}.`;
+  const theHandOver = realOverlap ? 'Resolving it' : 'Finding out';
 
   let whatHappensNext;
-  if (!realOverlap) {
+  if (selfHealing) {
     whatHappensNext = 'It will be merged on the next run, unless something else is in the way by then — GitHub\'s answer about a branch is often minutes stale.';
   } else if (filed) {
-    whatHappensNext = `Sorting that overlap out is a code change rather than a decision, and a script must never resolve one blind, so it was not attempted. Resolving it is now ticket ${filed.id} (${filed.url}) in the Loop Queue, which the build loop drains every pass. Once that branch is caught up and its checks are green, this merges on a later run.`;
+    whatHappensNext = `${theWork} ${theHandOver} is now ticket ${filed.id} (${filed.url}) in the Loop Queue, which the build loop drains every pass. Once that branch is caught up and its checks are green, this merges on a later run.`;
   } else {
     // The stalled sentence. It is deliberately blunt: this is the state that
     // cost three days, and a reader must not be able to finish this paragraph
     // thinking something is underway.
-    whatHappensNext = `Sorting that overlap out is a code change rather than a decision, and a script must never resolve one blind, so it was not attempted. **Nothing is currently working on it** — filing the resolution as a Loop Queue ticket did not succeed, so no build loop will pick this up and this PR will not merge on its own. It needs an agent session pointed at the branch, which means asking for one.`;
+    whatHappensNext = `${theWork} **Nothing is currently working on it** — filing the resolution as a Loop Queue ticket did not succeed, so no build loop will pick this up and this PR will not merge on its own. It needs an agent session pointed at the branch, which means asking for one.`;
   }
 
   const marker = `refused: conflict hand-off on PR #${pr.number}`;

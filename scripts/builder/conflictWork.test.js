@@ -18,8 +18,17 @@ const {
   stalledHandOffHeadline,
   conflictVerdictKind,
   isRealOverlap,
+  isSelfHealing,
+  couldNotCheck,
+  isPermanent,
   shouldFileConflictTicket,
+  verdictFromCatchUp,
+  CATCH_UP_VERDICTS,
+  VERDICT_KINDS,
+  stalledSummaryHeadline,
+  stalledSummaryClause,
 } = require('./conflictWork.js');
+const { CODES: CATCH_UP_CODES } = require('./branchCatchUp.js');
 const { conflictHandOffNotice } = require('./mergeOnComment.js');
 
 const PR = { number: 434, url: 'https://github.com/mentor24-maker/starcaster/pull/434', repo: 'starcaster' };
@@ -98,9 +107,32 @@ test('the filed ticket tells its builder NOT to ask Dane to approve again', () =
 test('the filed ticket says what it is when the local check could not run', () => {
   const body = conflictTicketBody({
     task: TASK, pr: PR, branch: 'x', commentId: '77',
-    localVerdict: { kind: 'unknown', reason: 'the worktree could not be created' },
+    localVerdict: { kind: 'could-not-check', reason: 'the worktree could not be created' },
   });
   assert.match(body, /could not check whether that is true/);
+  assert.ok(!/no overlap/i.test(body), 'a check that did not run may not report a finding');
+});
+
+test('a WRONG_REPO ticket says the answer is permanent from that machine', () => {
+  // Review round 2, item 2. The queue carries repo:normie, repo:pulse and
+  // repo:vault. A conflicting PR in one of those returns WRONG_REPO from the
+  // relay machine deterministically, every pass, forever — so "the next pass
+  // retries" is a promise no pass can keep, and the ticket has to say so.
+  const body = conflictTicketBody({
+    task: TASK, pr: PR, branch: 'x', commentId: '77',
+    localVerdict: verdictFromCatchUp({ code: CATCH_UP_CODES.WRONG_REPO, reason: 'this checkout is a/b, but the PR is on c/d' }),
+  });
+  assert.match(body, /could not check whether that is true/);
+  assert.match(body, /never clear from that machine on its own/);
+});
+
+test('the filed ticket does NOT claim an overlap it never found', () => {
+  const body = conflictTicketBody({
+    task: TASK, pr: PR, branch: 'x', commentId: '77',
+    localVerdict: { kind: 'no-overlap', reason: 'the catch-up merged cleanly but could not be pushed' },
+  });
+  assert.ok(!/changed the same lines/.test(body), 'only a real overlap may say that');
+  assert.match(body, /with no overlap at all/);
 });
 
 // ------------------------------------------------------------- staleness
@@ -177,18 +209,27 @@ test('the stalled report line names the actor, or says out loud there is none', 
 // the filing decision never consulted the verdict at all. Two comments, two
 // actors, and a ticket describing work that did not exist.
 
-/** Every shape a localVerdict is ever handed to this code in. */
+/**
+ * Every shape a localVerdict is ever handed to this code in.
+ *
+ * `real` = a genuine overlap was found. `healing` = this machine looked and
+ * found nothing to resolve. Anything that is neither never looked, and the
+ * whole of review round 2 is that those last two are NOT the same row.
+ */
 const VERDICTS = [
-  { label: 'a real overlap', v: { kind: 'real-conflict', reason: 'both touched routes/index.js' }, real: true },
-  { label: 'the legacy realConflict flag', v: { realConflict: true, reason: 'both touched routes/index.js' }, real: true },
-  { label: 'a lost push race', v: { kind: 'unknown', reason: 'the catch-up merged cleanly but could not be pushed' }, real: false },
-  { label: 'the legacy flag, false', v: { realConflict: false, reason: 'could not fetch the branch' }, real: false },
-  { label: 'no verdict at all', v: null, real: false },
-  { label: 'an undefined verdict', v: undefined, real: false },
+  { label: 'a real overlap', v: { kind: 'real-conflict', reason: 'both touched routes/index.js' }, real: true, healing: false },
+  { label: 'the legacy realConflict flag', v: { realConflict: true, reason: 'both touched routes/index.js' }, real: true, healing: false },
+  { label: 'a lost push race', v: { kind: 'no-overlap', reason: 'the catch-up merged cleanly but could not be pushed' }, real: false, healing: true },
+  { label: 'a clean merge GitHub has not caught up with', v: { kind: 'no-overlap', reason: 'main merged into feature-x with no conflict' }, real: false, healing: true },
+  { label: 'a failed fetch', v: { kind: 'could-not-check', reason: 'could not fetch feature-x and main' }, real: false, healing: false },
+  { label: 'the wrong repo, permanently', v: { kind: 'could-not-check', permanent: true, reason: 'this checkout is a/b, but the PR is on c/d' }, real: false, healing: false },
+  { label: 'the legacy flag, false', v: { realConflict: false, reason: 'could not fetch the branch' }, real: false, healing: false },
+  { label: 'no verdict at all', v: null, real: false, healing: false },
+  { label: 'an undefined verdict', v: undefined, real: false, healing: false },
 ];
 
-test('THE LOST PUSH RACE: an unknown verdict files nothing', () => {
-  const race = { kind: 'unknown', reason: 'the catch-up merged cleanly but could not be pushed' };
+test('THE LOST PUSH RACE: a proven no-overlap files nothing', () => {
+  const race = { kind: 'no-overlap', reason: 'the catch-up merged cleanly but could not be pushed' };
   assert.equal(shouldFileConflictTicket(race), false, 'nothing needs resolving, so nothing may be filed');
   const notice = conflictHandOffNotice({ commentId: '77', pr: PR, localVerdict: race, filed: null });
   assert.equal(notice.actor, 'later-pass');
@@ -204,25 +245,42 @@ test('THE DRIFT PROOF: the filing decision and the notice actor read one predica
   // Not "they happen to agree on these cases" — they cannot disagree, because
   // conflictHandOffNotice calls isRealOverlap and so does the merge step. This
   // test is the alarm if a future edit gives either side its own copy again.
-  for (const { label, v, real } of VERDICTS) {
+  for (const { label, v, real, healing } of VERDICTS) {
     const files = shouldFileConflictTicket(v);
     const { actor } = conflictHandOffNotice({ commentId: '77', pr: PR, localVerdict: v, filed: null });
-    assert.equal(files, real, `${label}: filing decision`);
-    assert.equal(actor !== 'later-pass', real, `${label}: the notice names a different actor than the filing decision`);
-    assert.equal(files, isRealOverlap(v), `${label}: both sides must be the same function`);
+    assert.equal(files, !healing, `${label}: filing decision`);
+    assert.equal(actor !== 'later-pass', !healing, `${label}: the notice names a different actor than the filing decision`);
+    assert.equal(files, !isSelfHealing(v), `${label}: both sides must be the same function`);
+    assert.equal(isRealOverlap(v), real, `${label}: only a real overlap is a real overlap`);
   }
 });
 
 test('NO VERDICT AT ALL is a decision, and the reason is written down', () => {
-  // Criterion 4. Null happens on a dry run, and when the local catch-up
-  // SUCCEEDED and GitHub's re-read still said conflict — a stale answer. It
-  // reads as 'unknown' and files nothing, on purpose.
-  assert.equal(conflictVerdictKind(null), 'unknown');
-  assert.equal(shouldFileConflictTicket(null), false);
+  // Criterion 4, revisited in review round 2. Null now means exactly one
+  // thing — a dry run, which never attempts the catch-up — because the other
+  // case (the catch-up SUCCEEDED and GitHub's re-read still said conflict) is
+  // carried through as a stated no-overlap instead of being dropped.
+  //
+  // "Nothing was checked" IS could-not-check, so that is what it reads as. It
+  // is also what makes a dry run report an unfiled, actor-less hand-off as
+  // stalled rather than calling it self-healing, which is review item 5.
+  assert.equal(conflictVerdictKind(null), VERDICT_KINDS.COULD_NOT_CHECK);
+  assert.equal(isSelfHealing(null), false, 'a dry run never found anything, so it may not claim it did');
+  assert.equal(couldNotCheck(null), true);
   const src = fs.readFileSync(path.join(__dirname, 'conflictWork.js'), 'utf8');
-  const fn = src.slice(src.indexOf('function conflictVerdictKind'), src.indexOf('function isRealOverlap'));
+  const fn = src.slice(src.indexOf('function conflictVerdictKind'), src.indexOf('/** Did this machine find a genuine overlap?'));
   assert.match(fn, /DELIBERATE/, 'the null choice must be stated, not left to be re-derived by a reader');
   assert.match(fn, /dry run/i);
+});
+
+test('AN UNRECOGNISED KIND FAILS TO "I DID NOT LOOK", never to a finding', () => {
+  // The default bucket is what caused this round: four ways of never looking
+  // wore the same answer as a proven clean merge. Whatever arrives here next
+  // must land on the answer that claims nothing.
+  for (const v of [{ kind: 'unknown' }, { kind: 'weather' }, { kind: '' }, {}]) {
+    assert.equal(isSelfHealing(v), false, JSON.stringify(v));
+    assert.equal(isRealOverlap(v), false, JSON.stringify(v));
+  }
 });
 
 test('a self-healing hand-off is quiet without a ticket — but not forever', () => {
@@ -255,7 +313,7 @@ test('a self-healing hand-off is quiet without a ticket — but not forever', ()
 /** The real 2026-08-30 incident, as the merge step saw it. */
 const PR444 = { number: 444, url: 'https://github.com/mentor24-maker/starcaster/pull/444', repo: 'starcaster' };
 const TASK444 = { id: '86bbmmv7t', name: 'Review gate holes', url: 'https://app.clickup.com/t/86bbmmv7t' };
-const LOST_PUSH_RACE = { kind: 'unknown', reason: 'the catch-up merged cleanly but could not be pushed' };
+const LOST_PUSH_RACE = { kind: 'no-overlap', reason: 'the catch-up merged cleanly but could not be pushed' };
 
 /** What actually goes to the bus, built the one way the merge step builds it. */
 function busLine({ task, pr, filed, stalled, actor }) {
@@ -301,10 +359,13 @@ test('THE DRIFT PROOF EXTENDS TO THE STALL: no message names an actor the notice
   const now = Date.parse('2026-08-31T12:00:00.000Z');
   const threeDaysAgo = '2026-08-28T12:00:00.000Z';
 
-  for (const { label, v, real } of VERDICTS) {
-    // `filed` is not free: the merge step only ever holds a ticket when the
-    // shared predicate allowed one to be filed in the first place.
-    for (const filed of real ? [FILED, null] : [null]) {
+  for (const { label, v, healing } of VERDICTS) {
+    // `filed` IS free, and assuming otherwise is what review round 2 caught.
+    // `findConflictTicket` reads the ticket out of comment history with no
+    // reference to today's verdict, so a ticket filed when the branch really
+    // did conflict is still there on the pass that finds the overlap gone.
+    // Every verdict is therefore paired with both.
+    for (const filed of [FILED, null]) {
       const { actor } = conflictHandOffNotice({ commentId: '77', pr: PR, localVerdict: v, filed });
       const stalled = handOffStalled({ at: threeDaysAgo, now, filed, actor });
       assert.equal(stalled.stalled, true, `${label}: three days is stalled whatever the actor`);
@@ -313,12 +374,167 @@ test('THE DRIFT PROOF EXTENDS TO THE STALL: no message names an actor the notice
 
       assert.equal(/no actor exists for it/.test(posted), actor === 'nobody',
         `${where}: "nobody" may appear exactly when the notice picked nobody\n${posted}`);
-      assert.equal(posted.includes(FILED.url), actor === 'loop-queue',
-        `${where}: the filed ticket is named exactly when the loop queue is the actor\n${posted}`);
+      assert.equal(posted.includes(FILED.url), Boolean(filed),
+        `${where}: an open ticket is named whenever there is one, and never invented\n${posted}`);
       assert.equal(/CONFLICT STILL UNRESOLVED/.test(posted), actor !== 'later-pass',
         `${where}: only a hand-off with a real overlap may be announced as a conflict\n${posted}`);
+
+      // THE INVARIANT EXTENDED TO FACTS, not only to actors (review round 2).
+      // Criterion 3 locked "no message names an actor the notice did not
+      // pick". The half that was missing is that no message may assert a
+      // FINDING the pass did not make.
+      assert.equal(/no overlap was found/.test(posted), healing,
+        `${where}: "no overlap was found" may only be said when one was actually looked for\n${posted}`);
+      assert.ok(!(/was expected to clear itself/.test(posted) && /without clearing this conflict/.test(posted)),
+        `${where}: a self-healing stall may not also be described as an unresolved conflict\n${posted}`);
     }
   }
+});
+
+test('A STALE TICKET DOES NOT MAKE A HEALED BRANCH A CONFLICT — the pairing round 2 found', () => {
+  // Reachable, and it was: a real conflict files a ticket, the build loop
+  // pushes a catch-up, and the next pass finds no overlap while GitHub is
+  // still stale. `filed` is truthy, today's verdict is no-overlap. The old
+  // line read `filed` first and produced:
+  //
+  //   PR #444 was expected to clear itself — filed as <url>. conflict ticket
+  //   86bbq6bam has been open 25 hours without clearing this conflict.
+  const { actor } = conflictHandOffNotice({ commentId: '77', pr: PR444, localVerdict: LOST_PUSH_RACE, filed: FILED });
+  assert.equal(actor, 'later-pass', 'the verdict decides the actor; an old ticket does not');
+
+  const stalled = handOffStalled({
+    at: '2026-08-30T02:00:00.000Z', now: Date.parse('2026-08-31T03:00:00.000Z'), filed: FILED, actor,
+  });
+  const posted = busLine({ task: TASK444, pr: PR444, filed: FILED, stalled, actor });
+
+  assert.ok(!/without clearing this conflict/.test(posted),
+    `nothing is failing to clear a conflict that this pass says is not there:\n${posted}`);
+  assert.match(posted, /no overlap left to resolve/, 'it says what the open ticket now means');
+  assert.match(posted, /86bbzzzzz/, 'and still names it, rather than pretending it is gone');
+});
+
+// ------------------------- three answers, because two of them were one answer
+//
+// REVIEW ROUND 2 of task 86bbq80j5. The first two rounds collapsed "I looked
+// and found nothing" together with "I never looked" into one bucket called
+// 'unknown', and then wrote copy for that bucket which asserted a finding. The
+// bus post said "this machine found no overlap between the branch and main.
+// Nothing needs resolving and nobody needs to claim it" for a verdict whose
+// ticket comment, seconds earlier, said it could not check at all.
+
+test('EVERY catch-up code has a decision — no default bucket', () => {
+  // The default bucket IS the defect. Four ways of never looking fell into it
+  // silently. A new code added to branchCatchUp must be decided here, not
+  // absorbed.
+  for (const code of Object.values(CATCH_UP_CODES)) {
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(CATCH_UP_VERDICTS, code),
+      `catch-up code "${code}" has no verdict decision — add one to CATCH_UP_VERDICTS`,
+    );
+  }
+});
+
+test('ONLY A PROVEN CLEAN MERGE counts as "no overlap was found"', () => {
+  // The whole of review round 2, in one table.
+  const expected = {
+    [CATCH_UP_CODES.CLEAN]: VERDICT_KINDS.NO_OVERLAP,
+    [CATCH_UP_CODES.PUSH_FAILED]: VERDICT_KINDS.NO_OVERLAP,
+    [CATCH_UP_CODES.REAL_CONFLICT]: VERDICT_KINDS.REAL_CONFLICT,
+    [CATCH_UP_CODES.WRONG_REPO]: VERDICT_KINDS.COULD_NOT_CHECK,
+    [CATCH_UP_CODES.FETCH_FAILED]: VERDICT_KINDS.COULD_NOT_CHECK,
+    [CATCH_UP_CODES.WORKTREE_FAILED]: VERDICT_KINDS.COULD_NOT_CHECK,
+    [CATCH_UP_CODES.NOT_ANCESTOR]: VERDICT_KINDS.COULD_NOT_CHECK,
+  };
+  for (const [code, kind] of Object.entries(expected)) {
+    const v = verdictFromCatchUp({ code, reason: 'because' });
+    assert.equal(conflictVerdictKind(v), kind, code);
+    assert.equal(isSelfHealing(v), kind === VERDICT_KINDS.NO_OVERLAP, `${code}: may it claim a finding?`);
+  }
+});
+
+test('A CHECK THAT COULD NOT RUN STILL FILES — the regression round 2 caught', () => {
+  // Before the filing gate, a conflicting PR in a repo this machine has no
+  // checkout of filed a ticket and named an actor. The gate turned that into
+  // "nothing filed, and the bus says nobody needs to claim it", forever,
+  // because WRONG_REPO is deterministic from that machine.
+  for (const code of [CATCH_UP_CODES.WRONG_REPO, CATCH_UP_CODES.FETCH_FAILED, CATCH_UP_CODES.WORKTREE_FAILED, CATCH_UP_CODES.NOT_ANCESTOR]) {
+    const v = verdictFromCatchUp({ code, reason: 'because' });
+    assert.equal(shouldFileConflictTicket(v), true, `${code} must still get an actor`);
+  }
+  // ...and the two findings keep the behaviour the first round shipped.
+  assert.equal(shouldFileConflictTicket(verdictFromCatchUp({ code: CATCH_UP_CODES.PUSH_FAILED, reason: 'r' })), false);
+  assert.equal(shouldFileConflictTicket(verdictFromCatchUp({ code: CATCH_UP_CODES.REAL_CONFLICT, reason: 'r' })), true);
+});
+
+test('WRONG_REPO is permanent, and every surface says so', () => {
+  const v = verdictFromCatchUp({ code: CATCH_UP_CODES.WRONG_REPO, reason: 'this checkout is a/b, but the PR is on c/d' });
+  assert.equal(isPermanent(v), true);
+  assert.equal(isPermanent(verdictFromCatchUp({ code: CATCH_UP_CODES.FETCH_FAILED, reason: 'r' })), false,
+    'a failed fetch may well work next pass — only the wrong checkout never will');
+  const notice = conflictHandOffNotice({ commentId: '77', pr: PR, localVerdict: v, filed: FILED });
+  assert.match(notice.body, /never will from the relay machine/);
+  assert.ok(!/merged on the next run/.test(notice.body), 'a promise no pass can keep must not be made');
+});
+
+test('THE TICKET COMMENT AND THE BUS POST CANNOT DISAGREE about what was found', () => {
+  // The two texts that went out seconds apart on a FETCH_FAILED verdict: one
+  // said it could not check, the other asserted a finding and stood the room
+  // down on it. They read one predicate now, so the pairing is checked here.
+  for (const { label, v, healing } of VERDICTS) {
+    const notice = conflictHandOffNotice({ commentId: '77', pr: PR, localVerdict: v, filed: null });
+    const claimsAFinding = /with no overlap at all/.test(notice.body);
+    assert.equal(claimsAFinding, healing, `${label}: the notice may only report a finding it made`);
+    assert.equal(notice.actor === 'later-pass', healing,
+      `${label}: and may only stand the room down on one`);
+    if (!healing) {
+      assert.ok(!/merged on the next run/.test(notice.body),
+        `${label}: no self-healing promise without a self-healing verdict`);
+    }
+  }
+});
+
+test('THE REAL-OVERLAP WORDING IS LEFT ALONE — it was verified byte-for-byte', () => {
+  // Review round 2 checked both real-overlap bodies against main character by
+  // character, as evidence that round 1 had not disturbed the case it was not
+  // about. Widening a shared sentence to cover could-not-check would have
+  // silently spent that; the two kinds get their own noun instead.
+  const real = conflictHandOffNotice({
+    commentId: '77', pr: PR, filed: FILED,
+    localVerdict: { kind: 'real-conflict', reason: 'it genuinely conflicts, in 1 file(s): routes/index.js' },
+  }).body;
+  assert.match(real, /Sorting that overlap out is a code change rather than a decision, and a script must never resolve one blind, so it was not attempted\. Resolving it is now ticket 86bbzzzzz/);
+
+  const unchecked = conflictHandOffNotice({
+    commentId: '77', pr: PR, filed: FILED,
+    localVerdict: { kind: 'could-not-check', reason: 'could not fetch the branch' },
+  }).body;
+  assert.ok(!/Sorting that overlap out/.test(unchecked),
+    'a check that never ran has no overlap to sort out');
+  assert.match(unchecked, /Whether there is anything to resolve is still unknown/);
+});
+
+// ------------------------------------------------ the end-of-pass summary
+//
+// Review round 2, item 4: `CONFLICTS STILL UNRESOLVED` was hardcoded in the
+// pass report and printed directly above the very lines saying no overlap was
+// found and every pass is retrying. Same contradiction as the per-line banner,
+// one surface across.
+
+test('THE SUMMARY BANNER does not call a deferral a conflict', () => {
+  assert.equal(stalledSummaryHeadline(['later-pass']), 'MERGE STILL NOT CLEARED'.replace('MERGE ', 'MERGES '));
+  assert.equal(stalledSummaryHeadline(['later-pass', 'later-pass']), 'MERGES STILL NOT CLEARED');
+  assert.equal(stalledSummaryHeadline(['nobody', 'loop-queue']), 'CONFLICTS STILL UNRESOLVED');
+  assert.match(stalledSummaryHeadline(['later-pass', 'nobody']), /SOME ARE CONFLICTS, SOME ARE NOT/,
+    'a mixed pass may not be described as either one alone');
+  assert.equal(stalledSummaryHeadline([]), 'MERGES STILL NOT CLEARED');
+});
+
+test('THE SUMMARY CLAUSE counts the two kinds apart, and vanishes at zero', () => {
+  assert.equal(stalledSummaryClause([]), '');
+  assert.equal(stalledSummaryClause(['later-pass']), ', 1 merge(s) STILL NOT CLEARED');
+  assert.equal(stalledSummaryClause(['nobody', 'loop-queue']), ', 2 conflict(s) STILL UNRESOLVED');
+  assert.equal(stalledSummaryClause(['nobody', 'later-pass']),
+    ', 1 conflict(s) STILL UNRESOLVED, 1 merge(s) STILL NOT CLEARED');
 });
 
 // ------------------------------------------------- the wiring, checked flat
@@ -369,7 +585,10 @@ test('a stalled conflict is counted ONCE in the summary line', () => {
   const mergeLine = SCRIPT.slice(SCRIPT.indexOf('const mergeLine'), SCRIPT.indexOf('const stalledLine'));
   assert.ok(mergeLine.length > 0, 'mergeLine must be built before stalledLine');
   assert.ok(!/unresolved/i.test(mergeLine), 'mergeLine must not also count stalled conflicts');
-  assert.match(SCRIPT, /const stalledLine = stalledHandOffs\.length \? `, \$\{stalledHandOffs\.length\} conflict\(s\) STILL UNRESOLVED` : ''/);
+  // The clause is built by the shared helper now (review round 2, item 4), and
+  // the helper is what returns '' at zero — the property this test protects.
+  assert.match(SCRIPT, /const stalledLine = stalledSummaryClause\(stalledActors\);/);
+  assert.equal(stalledSummaryClause([]), '', 'and it must still vanish at zero');
 });
 
 test('announcing a stall re-stamps the marker; a failed announcement does not', () => {
@@ -387,12 +606,69 @@ test('a stalled conflict is reported separately from things the pass could not c
   // ticket is a healthy pass reporting an unhealthy ticket; conflating them
   // would make the relay look permanently broken and get its exit code ignored.
   assert.match(SCRIPT, /const stalledHandOffs = \[\]/);
-  assert.match(SCRIPT, /CONFLICTS STILL UNRESOLVED/);
+  // The banner comes from the shared helper now, so it can no longer say
+  // "conflict" over a body that says no overlap was found (review round 2).
+  assert.match(SCRIPT, /stalledSummaryHeadline\(stalledActors\)/);
+  assert.ok(!/\\nCONFLICTS STILL UNRESOLVED — \$\{/.test(SCRIPT), 'the hardcoded summary banner must not come back');
   const exitBlock = SCRIPT.slice(SCRIPT.indexOf('if (unchecked.length) process.exit(1)') - 400);
   assert.ok(
     !/stalledHandOffs\.length\) process\.exit/.test(exitBlock),
     'a stalled conflict must not fail the relay run',
   );
+});
+
+test('THE MERGE STEP READS ONE VERDICT TABLE, not an inline copy of it', () => {
+  // The two-bucket table used to be written inline at the call site, which is
+  // how four ways of never looking came out wearing a finding's answer. It
+  // lives beside the predicate that reads it now, and the old form must not
+  // come back (review round 2).
+  assert.match(SCRIPT, /const localVerdict = verdictFromCatchUp\(gate\.localVerdict\);/,
+    'the merge step must use the shared mapper');
+  assert.ok(
+    !/kind: verdict\.code === branchCatchUp\.CODES\.REAL_CONFLICT \? 'real-conflict' : 'unknown'/.test(SCRIPT),
+    'the inline two-bucket table must not come back',
+  );
+  assert.ok(!/'unknown'/.test(SCRIPT.slice(SCRIPT.indexOf('async function runMergeStep'), SCRIPT.indexOf("outcome: 'handed-off', reason"))),
+    'and no bucket called "unknown" may survive in the merge step');
+});
+
+test('A CLEAN CATCH-UP CARRIES ITS VERDICT — GitHub disagreeing does not erase it', () => {
+  // If the local catch-up merged AND pushed and GitHub still says conflict,
+  // this machine has the strongest evidence there is that nothing overlaps:
+  // it just did the merge. Dropping the verdict there left it null, which the
+  // hand-off then had to guess about — and guessing is the defect.
+  const from = SCRIPT.indexOf('const local = branchCatchUp.catchUpBranchLocally(');
+  const block = SCRIPT.slice(from, SCRIPT.indexOf('} else {', from));
+  assert.match(block, /gate = \{ action: after\.action, reason: after\.reason, localVerdict: local \};/,
+    'the CLEAN verdict must travel with the gate');
+  assert.ok(!/gate = \{ action: after\.action, reason: after\.reason \};\n\s*if \(after\.prJson\) prJson = after\.prJson;\n\s*\} else \{/.test(SCRIPT),
+    'the verdict-dropping form must not come back');
+});
+
+test('THE BUS POST MAY NOT ASSERT A FINDING THE PASS DID NOT MAKE', () => {
+  // The sentence that sent this back: "this machine found no overlap between
+  // the branch and main. Nothing needs resolving and nobody needs to claim
+  // it" — printed for a FETCH_FAILED verdict, seconds after the ticket comment
+  // said it could not check at all.
+  const from = SCRIPT.indexOf('const couldNotLook =');
+  const block = SCRIPT.slice(from, SCRIPT.indexOf('const bus = await postToBus(', from));
+  assert.ok(block.length > 0, 'the bus body must distinguish the three answers');
+  assert.match(block, /const couldNotLook = !selfHealing && !isRealOverlapVerdict;/,
+    '"it found nothing" and "it never looked" must be separate questions');
+  assert.match(block, /could not check whether that is true/,
+    'and the middle one must say so on the bus, not just on the ticket');
+  assert.ok(!/this machine found no overlap between the branch and main/.test(SCRIPT),
+    'the sentence that asserted an unmade finding must not come back');
+});
+
+test('THE DRY RUN NAMES ALL THREE OUTCOMES, and guesses none of them', () => {
+  // Review round 2, item 5. A dry run computes no verdict, so it cannot know
+  // which hand-off the real pass would make. It used to pick one confidently.
+  const block = SCRIPT.slice(SCRIPT.indexOf('if (dryRun) {\n      // A dry run never attempts'), SCRIPT.indexOf("outcome: 'would-hand-off'"));
+  assert.ok(block.length > 0, 'the dry-run branch must exist');
+  assert.match(block, /a check that could not run at all/, 'the third outcome must be named too');
+  assert.ok(!/console\.error\(selfHealing\n/.test(SCRIPT),
+    'the dry run must not branch on a flag it cannot have computed');
 });
 
 test('THE FILING GATE IS IN THE MERGE STEP, not just in the predicate', () => {

@@ -1,5 +1,7 @@
 'use strict';
 
+const { CODES: CATCH_UP_CODES } = require('./branchCatchUp.js');
+
 /**
  * conflictWork — turning a merge conflict into work somebody actually picks up.
  *
@@ -62,59 +64,172 @@ const STALE_HAND_OFF_MS = 24 * 60 * 60 * 1000;
  *
  * `gate.action === 'conflict'` is GitHub's answer, and GitHub's answer about a
  * branch is often minutes stale. What THIS machine found when it tried the
- * merge itself is the `localVerdict`, and only one of its two kinds is work
- * anybody can do:
+ * merge itself is the `localVerdict`, and there are THREE answers it can
+ * give — not two:
  *
- *   'real-conflict' — the branches genuinely changed the same lines. Somebody
- *                     has to decide what the merged file says.
- *   'unknown'       — the check could not run, or ran and found no overlap at
- *                     all: a lost push race, a stale GitHub answer. There is
- *                     nothing to resolve. The next pass retries and it clears.
+ *   'real-conflict'   — the branches genuinely changed the same lines.
+ *                       Somebody has to decide what the merged file says.
+ *   'no-overlap'      — the local merge really did come back clean. A lost
+ *                       push race, or GitHub answering about a state it has
+ *                       not caught up with. Nothing to resolve; the next pass
+ *                       retries and it clears itself.
+ *   'could-not-check' — the check never ran. Wrong repo, failed fetch, no
+ *                       scratch worktree, a merge result that failed its own
+ *                       ancestor proof. NO FINDING WAS MADE.
  *
- * On 2026-08-30 the merge step filed a resolution ticket on `gate.action`
- * alone, while the hand-off comment built moments later read the verdict and
- * correctly promised the next pass would merge it (PR #444, ticket 86bbmmv7t).
- * Two comments landed 200ms apart naming two different actors, and the filed
- * ticket — "Resolve the merge conflict on PR #444" — described clearing
- * conflict markers that did not exist. `git merge-tree` on that pair exited 0.
+ * WHY THREE AND NOT TWO (review round 2, 2026-08-31). The first fix collapsed
+ * the last two into one bucket called 'unknown' and then wrote copy for it
+ * that asserted a finding. On a `FETCH_FAILED` verdict the ticket comment said
+ * *"this machine could not check whether that is true"* while the bus post,
+ * seconds later, said *"this machine found no overlap between the branch and
+ * main. Nothing needs resolving and nobody needs to claim it."* One says it
+ * could not look; the other stands the room down on the strength of a look it
+ * never took — the same two-comments-200ms-apart shape this ticket exists to
+ * remove, arriving in the one place Dane reads.
  *
- * So the filing decision and the notice's actor read ONE function. They cannot
- * drift, because there is only one answer to read.
+ * It cost a second way too: `WRONG_REPO` is what the relay gets for EVERY
+ * conflicting PR in a repo whose checkout is not on that machine — the queue
+ * carries `repo:normie`, `repo:pulse` and `repo:vault`. Deterministically,
+ * every pass, forever. Read as self-healing, that filed nothing and told the
+ * room nobody needed to claim it, when in fact nothing had been checked and no
+ * retry from that machine could ever succeed.
+ *
+ * So a finding is only ever claimed when a finding was actually made, and the
+ * two decisions that matter — file a ticket? name which actor? — read ONE
+ * function. They cannot drift, because there is only one answer to read.
+ *
+ * The original incident this predicate was written for is still the reason it
+ * gates filing at all: on 2026-08-30 the merge step filed a resolution ticket
+ * on `gate.action` alone, while the hand-off comment built moments later read
+ * the verdict and correctly promised the next pass would merge it (PR #444,
+ * ticket 86bbmmv7t). The filed ticket — "Resolve the merge conflict on PR
+ * #444" — described clearing conflict markers that did not exist.
+ * `git merge-tree` on that pair exited 0.
  */
-function conflictVerdictKind(localVerdict) {
-  // `localVerdict === null` IS A DELIBERATE CHOICE, not a fallthrough
-  // (criterion 4 of task 86bbq80j5). Null means the local check produced no
-  // verdict, which happens two ways and neither is evidence of an overlap:
-  //
-  //   - a dry run, where the check is never attempted (and a dry run files
-  //     nothing regardless);
-  //   - the local catch-up SUCCEEDED and pushed, and GitHub's re-read still
-  //     said conflict — the textbook stale answer.
-  //
-  // Both read as 'unknown', so neither files a ticket. That is the safe
-  // direction and it is not silence: a hand-off still sitting there after
-  // STALE_HAND_OFF_MS announces itself on the bus either way, so a branch that
-  // really is stuck gets escalated by the stall path. Filing on a guess is the
-  // defect this predicate removes — a Queued ticket costs a build-loop pass
-  // and tells whoever claims it to clear markers that may not be there.
-  if (!localVerdict) return 'unknown';
-  if (localVerdict.kind) return localVerdict.kind;
-  return localVerdict.realConflict ? 'real-conflict' : 'unknown';
+const VERDICT_KINDS = Object.freeze({
+  REAL_CONFLICT: 'real-conflict',
+  NO_OVERLAP: 'no-overlap',
+  COULD_NOT_CHECK: 'could-not-check',
+});
+
+/**
+ * Every outcome `catchUpBranchLocally` can return, and which of the three
+ * answers it is. Exhaustive on purpose, and a test fails if a code is added to
+ * branchCatchUp without a decision here — the whole defect above was a default
+ * bucket quietly absorbing cases nobody had thought about.
+ *
+ *   CLEAN / PUSH_FAILED  the merge itself succeeded with nothing to resolve.
+ *                        PUSH_FAILED is the 2026-08-30 lost push race: clean
+ *                        merge, the push lost a race with another session.
+ *                        Both are genuine findings of no overlap.
+ *   REAL_CONFLICT        git said the files overlap. A finding, the other way.
+ *   WRONG_REPO           this checkout is not that repo. Nothing was tried.
+ *   FETCH_FAILED         no fresh refs, so nothing could be merged.
+ *   WORKTREE_FAILED      no scratch tree, so nothing could be merged.
+ *   NOT_ANCESTOR         a merge that does not contain main is a result this
+ *                        module refuses to vouch for. The push was correctly
+ *                        withheld, and so is the finding.
+ */
+const CATCH_UP_VERDICTS = Object.freeze({
+  [CATCH_UP_CODES.CLEAN]: { kind: VERDICT_KINDS.NO_OVERLAP },
+  [CATCH_UP_CODES.PUSH_FAILED]: { kind: VERDICT_KINDS.NO_OVERLAP },
+  [CATCH_UP_CODES.REAL_CONFLICT]: { kind: VERDICT_KINDS.REAL_CONFLICT },
+  [CATCH_UP_CODES.WRONG_REPO]: { kind: VERDICT_KINDS.COULD_NOT_CHECK, permanent: true },
+  [CATCH_UP_CODES.FETCH_FAILED]: { kind: VERDICT_KINDS.COULD_NOT_CHECK },
+  [CATCH_UP_CODES.WORKTREE_FAILED]: { kind: VERDICT_KINDS.COULD_NOT_CHECK },
+  [CATCH_UP_CODES.NOT_ANCESTOR]: { kind: VERDICT_KINDS.COULD_NOT_CHECK },
+});
+
+/**
+ * Turn what `catchUpBranchLocally` returned into the verdict the rest of this
+ * module reads. Lives here, beside the predicate, rather than inline at the
+ * call site: the code-to-answer table IS the decision, and a copy of it in
+ * clickup_direct.mjs is a second place for it to drift.
+ *
+ * `permanent` travels with WRONG_REPO because the copy has to say it. Every
+ * other could-not-check might work on the next pass; that one will not, from
+ * this machine, ever.
+ */
+function verdictFromCatchUp(local) {
+  if (!local || !local.code) return null;
+  // No default bucket. An unrecognised code is a code nobody decided about,
+  // and the safe answer to "did you check?" is always "no".
+  const mapped = CATCH_UP_VERDICTS[local.code] || { kind: VERDICT_KINDS.COULD_NOT_CHECK };
+  return { ...mapped, code: local.code, reason: local.reason };
 }
 
-/** Did this machine find a genuine overlap? The only condition under which
- *  resolving the conflict is work a named actor can be handed. */
+function conflictVerdictKind(localVerdict) {
+  // `localVerdict === null` IS A DELIBERATE CHOICE, not a fallthrough
+  // (criterion 4 of task 86bbq80j5, revisited in review round 2). Null means
+  // no verdict was produced at all, and the only remaining way that happens is
+  // a dry run, which never attempts the catch-up. "Nothing was checked" is
+  // exactly what could-not-check means, so that is what it reads as.
+  //
+  // It used to read as the self-healing answer, which made a dry run claim a
+  // finding it had not made and quietly under-report stalled hand-offs: an
+  // unfiled, actor-less real conflict came out of the dry run looking calm.
+  // A dry run files nothing either way, so this costs nothing and the
+  // diagnostic stops being more confident than the real pass.
+  //
+  // The other case that used to land here — the local catch-up SUCCEEDED and
+  // pushed, and GitHub's re-read still said conflict — is no longer null. The
+  // merge step carries that CLEAN verdict through, so the textbook stale
+  // answer is now a stated 'no-overlap' rather than an absence.
+  if (!localVerdict) return VERDICT_KINDS.COULD_NOT_CHECK;
+  if (localVerdict.kind) {
+    return Object.values(VERDICT_KINDS).includes(localVerdict.kind)
+      ? localVerdict.kind
+      : VERDICT_KINDS.COULD_NOT_CHECK;
+  }
+  // The legacy boolean. `true` is a finding; `false` never distinguished "no
+  // overlap" from "did not look", so it fails to the answer that claims
+  // nothing.
+  return localVerdict.realConflict ? VERDICT_KINDS.REAL_CONFLICT : VERDICT_KINDS.COULD_NOT_CHECK;
+}
+
+/** Did this machine find a genuine overlap? The only condition under which the
+ *  copy may say the two branches changed the same lines. */
 function isRealOverlap(localVerdict) {
-  return conflictVerdictKind(localVerdict) === 'real-conflict';
+  return conflictVerdictKind(localVerdict) === VERDICT_KINDS.REAL_CONFLICT;
 }
 
 /**
- * May the merge step file a Loop Queue ticket for this conflict? Same
- * predicate, named for the decision it makes, so the call site in
- * clickup_direct.mjs reads as the question it is asking.
+ * Did this machine actually look, and find nothing to resolve? The ONLY
+ * condition under which any message is allowed to say "no overlap was found"
+ * and stand the room down. Everything else either found an overlap or found
+ * out nothing.
+ */
+function isSelfHealing(localVerdict) {
+  return conflictVerdictKind(localVerdict) === VERDICT_KINDS.NO_OVERLAP;
+}
+
+/** Was the question left unanswered? Not a finding — the absence of one. */
+function couldNotCheck(localVerdict) {
+  return conflictVerdictKind(localVerdict) === VERDICT_KINDS.COULD_NOT_CHECK;
+}
+
+/** Will this verdict be the same on every future pass from this machine?
+ *  True only for the wrong-repo case, and the copy has to say so out loud —
+ *  "the next pass retries" is a false promise when no retry can ever work. */
+function isPermanent(localVerdict) {
+  return Boolean(localVerdict && localVerdict.permanent) && couldNotCheck(localVerdict);
+}
+
+/**
+ * May the merge step file a Loop Queue ticket for this conflict?
+ *
+ * Everything except a proven no-overlap. A real conflict needs somebody to
+ * decide what the merged file says; a check that could not run needs somebody
+ * to find out WHY, and on 2026-08-31 that half was the regression — a
+ * conflicting PR in another repo went from "filed, with a named actor" to
+ * "nothing filed, and the bus told the room nobody needed to claim it".
+ *
+ * This is the SAME function `conflictHandOffNotice` reads to pick its actor,
+ * which is what makes the ticket and the promise unable to name two different
+ * people. One answer, read twice.
  */
 function shouldFileConflictTicket(localVerdict) {
-  return isRealOverlap(localVerdict);
+  return !isSelfHealing(localVerdict);
 }
 
 /** The comment written on the ORIGINAL ticket, recording where the resolution
@@ -154,11 +269,18 @@ function conflictTicketName({ pr, branch }) {
  * asked for again.
  */
 function conflictTicketBody({ task, pr, branch, localVerdict, commentId }) {
+  // Three answers, three sentences. The middle one used to swallow the third:
+  // a ticket filed off a `PUSH_FAILED` said the machine "could not check" when
+  // it had checked and found nothing, and a ticket filed off `WRONG_REPO` says
+  // it could not check, which is the truth. Only a real overlap gets to claim
+  // the branches changed the same lines.
   const what = isRealOverlap(localVerdict)
     ? `This branch and \`main\` have both changed the same lines — ${localVerdict.reason}`
-    : localVerdict
-      ? `GitHub called it a conflict and the relay machine could not check whether that is true — ${localVerdict.reason}`
-      : 'GitHub reported that the branch conflicts with newer work on `main`.';
+    : isSelfHealing(localVerdict)
+      ? `GitHub called it a conflict, but the relay machine merged it here with no overlap at all — ${localVerdict.reason}`
+      : localVerdict
+        ? `GitHub called it a conflict and the relay machine could not check whether that is true — ${localVerdict.reason}${isPermanent(localVerdict) ? '. This will never clear from that machine on its own: it is the wrong checkout, so every future pass returns the same answer' : ''}`
+        : 'GitHub reported that the branch conflicts with newer work on `main`, and no local check was attempted.';
 
   return [
     '## What is wrong',
@@ -244,11 +366,21 @@ function handOffStalled({ at, now, filed, actor }) {
   }
   const ageMs = Number(now) - then;
   if (ageMs < STALE_HAND_OFF_MS) return { stalled: false, ageMs };
+  // THE ACTOR DECIDES THE SENTENCE, NOT `filed` (review round 2).
+  // `filed` records what a PAST pass found; `actor` is what THIS pass found,
+  // and they can disagree: a real conflict files a ticket, the build loop
+  // pushes a catch-up, and the next pass finds no overlap left while GitHub is
+  // still stale. Reading `filed` there produced "was expected to clear itself"
+  // beside "conflict ticket 86bbq6bam has been open 25 hours without clearing
+  // this conflict" — two actors, one sentence, again.
+  //
+  // A self-healing hand-off that has not healed is still news; what it is NOT
+  // is a conflict somebody is failing to resolve.
   return {
     stalled: true,
-    why: filed
-      ? `conflict ticket ${filed.id} has been open ${ageText(ageMs)} without clearing this conflict`
-      : `no overlap was found, so every pass has been retrying the catch-up on its own — and it has not cleared in ${ageText(ageMs)}`,
+    why: actor === 'later-pass'
+      ? `no overlap was found, so every pass has been retrying the catch-up on its own — and it has not cleared in ${ageText(ageMs)}`
+      : `conflict ticket ${filed.id} has been open ${ageText(ageMs)} without clearing this conflict`,
     ageMs,
   };
 }
@@ -281,11 +413,18 @@ function stalledHandOffLine({ task, pr, filed, stalled, actor }) {
   const what = selfHealing
     ? `PR #${pr.number} was expected to clear itself`
     : `PR #${pr.number} has been waiting on a conflict resolution`;
-  const who = filed
-    ? `filed as ${filed.url}`
-    : selfHealing
-      ? 'no ticket, and none is needed'
-      : 'NOT filed anywhere — no actor exists for it';
+  // FOUR cases, because `filed` and `actor` are answers to different questions
+  // and both can be true at once (review round 2). A ticket filed by an
+  // earlier pass does not become "the actor" just because it is still open —
+  // if this pass found no overlap, nothing is left for it to resolve, and the
+  // line has to say both facts rather than pick whichever reads first.
+  const who = selfHealing
+    ? (filed
+      ? `the earlier ticket ${filed.url} is still open, but this pass found no overlap left to resolve`
+      : 'no ticket, and none is needed')
+    : (filed
+      ? `filed as ${filed.url}`
+      : 'NOT filed anywhere — no actor exists for it');
   return `${task.id} ("${task.name}"): ${what} — ${who}. ${stalled.why}.`;
 }
 
@@ -300,10 +439,46 @@ function stalledHandOffHeadline({ actor }) {
   return actor === 'later-pass' ? 'MERGE STILL NOT CLEARED' : 'CONFLICT STILL UNRESOLVED';
 }
 
+/**
+ * The same word problem one surface across: the END-OF-PASS summary, which
+ * printed `CONFLICTS STILL UNRESOLVED` directly above the very lines saying no
+ * overlap was found and every pass is retrying (review round 2, item 4).
+ *
+ * A pass can stall several hand-offs of different kinds at once, so this reads
+ * all their actors rather than one. Mixed is a real case and gets its own
+ * wording — collapsing it either way would be the same overstatement or
+ * understatement the per-line banner was fixed for.
+ */
+function stalledSummaryHeadline(actors) {
+  const list = Array.isArray(actors) ? actors : [];
+  const anyConflict = list.some((a) => a !== 'later-pass');
+  const anyDeferred = list.some((a) => a === 'later-pass');
+  if (anyConflict && anyDeferred) return 'MERGES STILL NOT CLEARED — SOME ARE CONFLICTS, SOME ARE NOT';
+  return anyConflict ? 'CONFLICTS STILL UNRESOLVED' : 'MERGES STILL NOT CLEARED';
+}
+
+/** The one-line clause in the pass summary, counting the two kinds apart so
+ *  neither is described as the other. Empty at zero, as before. */
+function stalledSummaryClause(actors) {
+  const list = Array.isArray(actors) ? actors : [];
+  const conflicts = list.filter((a) => a !== 'later-pass').length;
+  const deferred = list.length - conflicts;
+  const parts = [];
+  if (conflicts) parts.push(`${conflicts} conflict(s) STILL UNRESOLVED`);
+  if (deferred) parts.push(`${deferred} merge(s) STILL NOT CLEARED`);
+  return parts.length ? `, ${parts.join(', ')}` : '';
+}
+
 module.exports = {
   CONFLICT_TICKET_TRAIL,
+  VERDICT_KINDS,
+  CATCH_UP_VERDICTS,
+  verdictFromCatchUp,
   conflictVerdictKind,
   isRealOverlap,
+  isSelfHealing,
+  couldNotCheck,
+  isPermanent,
   shouldFileConflictTicket,
   CONFLICT_TICKET_RE,
   STALE_HAND_OFF_MS,
@@ -315,4 +490,6 @@ module.exports = {
   handOffStalled,
   stalledHandOffLine,
   stalledHandOffHeadline,
+  stalledSummaryHeadline,
+  stalledSummaryClause,
 };

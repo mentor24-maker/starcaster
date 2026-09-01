@@ -498,15 +498,33 @@ test('no hand-off leans on the passive voice to imply an actor it cannot name', 
   }
 });
 
-test('a stale GitHub answer still retries, filed or not — only a REAL overlap needs an actor', () => {
-  // 'unknown' means the local check could not run. That genuinely does retry
-  // usefully on the next pass, so it keeps its promise and needs nobody.
+test('a stale GitHub answer still retries, filed or not — a PROVEN no-overlap needs nobody', () => {
+  // This used to be written against `localVerdict: null`, on the belief that
+  // "no verdict" meant "the check found nothing". Review round 2 of task
+  // 86bbq80j5 separated those: the retry promise belongs to a verdict that
+  // actually came back clean, which is now stated rather than inferred from an
+  // absence. The old shape sent "nobody needs to claim it" to the bus for a
+  // failed fetch and for a repo the machine has no checkout of.
   for (const filed of [null, FILED]) {
-    const n = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null, filed });
+    const n = conflictHandOffNotice({
+      commentId: '77', pr: SOME_PR, filed,
+      localVerdict: { kind: 'no-overlap', reason: 'the catch-up merged cleanly but could not be pushed' },
+    });
     assert.equal(n.actor, 'later-pass');
     assert.ok(n.body.includes(APPROVAL_CARRIES_OVER));
     assert.match(n.body, /merged on the next run/i);
   }
+});
+
+test('NO VERDICT is not a finding — a dry run may not stand the room down', () => {
+  // The other half of the same separation. Null now means one thing only: a
+  // dry run, which never attempts the catch-up. It gets an actor, which is
+  // what makes the dry run report an unfiled hand-off as stalled instead of
+  // calling it self-healing (review round 2, item 5).
+  const n = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null, filed: null });
+  assert.equal(n.actor, 'nobody');
+  assert.doesNotMatch(n.body, /merged on the next run/i, 'it has no finding to promise on');
+  assert.match(n.body, /no local check was attempted/i, 'and it says so');
 });
 
 test('the two hand-off kinds say two different things', () => {
@@ -514,11 +532,14 @@ test('the two hand-off kinds say two different things', () => {
   // pins; retired 2026-08-24 with the pins themselves (task 86bbkh288).
   const of = (localVerdict) => conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict }).body;
   const real = of({ kind: 'real-conflict', reason: 'both touched routes/index.js' });
-  const unknown = of({ kind: 'unknown', reason: 'the local merge could not run' });
-  assert.notEqual(real, unknown);
+  const couldNotCheck = of({ kind: 'could-not-check', reason: 'the local merge could not run' });
+  const noOverlap = of({ kind: 'no-overlap', reason: 'the catch-up merged cleanly but could not be pushed' });
+  assert.notEqual(real, couldNotCheck);
+  assert.notEqual(couldNotCheck, noOverlap, 'THREE kinds, and the middle two are not one kind');
   assert.match(real, /both changed the same lines/);
   assert.match(real, /never resolve one blind/);
-  assert.match(unknown, /could not check whether that is true/);
+  assert.match(couldNotCheck, /could not check whether that is true/);
+  assert.match(noOverlap, /with no overlap at all/);
 });
 
 test('an old-style realConflict verdict still reads correctly', () => {
@@ -535,7 +556,14 @@ test('THE BUG: the hand-off told him his merge still stood, then threw it away',
   // Verbatim from the 2026-08-23 record: the comment said "then your merge
   // still stands and this goes through", and the marker beside it parsed as
   // terminal, so no later pass ever looked again.
-  const notice = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null });
+  //
+  // The verdict here is the stale-GitHub one that day actually was. It used to
+  // be written as `null` and rely on null reading as self-healing; review
+  // round 2 made that state itself instead of being inferred from an absence.
+  const notice = conflictHandOffNotice({
+    commentId: '77', pr: SOME_PR,
+    localVerdict: { kind: 'no-overlap', reason: 'main merged into the branch with no conflict' },
+  });
   assert.equal(markerKind(notice.marker), 'refused');
   // The opening line says what happened, in the operator's own requested
   // shape (2026-08-24). It used to open "Needs a hand", which read as a
@@ -576,9 +604,20 @@ test('only a REAL overlap is denied the "next run" promise', () => {
   assert.match(real, /on a later run/i);
   assert.match(real, /both changed the same lines/i);
 
+  // Only a PROVEN no-overlap earns the next-run promise (review round 2). The
+  // loop here used to include `null` and the legacy `realConflict: false`,
+  // neither of which is evidence that anything was checked — and a promise
+  // made on no evidence is the family of bug this whole ticket is about.
+  const { body } = conflictHandOffNotice({
+    commentId: '77', pr: SOME_PR,
+    localVerdict: { kind: 'no-overlap', reason: 'the catch-up merged cleanly but could not be pushed' },
+  });
+  assert.match(body, /merged on the next run/i, `no retry promise: ${body}`);
+
   for (const localVerdict of [null, { realConflict: false, reason: 'the catch-up could not be pushed' }]) {
-    const { body } = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict });
-    assert.match(body, /merged on the next run/i, `no retry promise: ${body}`);
+    const n = conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict, filed: FILED });
+    assert.doesNotMatch(n.body, /merged on the next run/i,
+      `a check that never ran may not promise the next run merges it: ${n.body}`);
   }
 });
 
