@@ -7860,3 +7860,12 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
+
+/* The module's Content text, shown above the grid. `pre-line` keeps the line
+   breaks an admin typed without the value ever being treated as markup. */
+.builder-react-root .builder-media-manager-description {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  white-space: pre-line;
+}
