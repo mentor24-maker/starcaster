@@ -38,6 +38,54 @@ down. It now says which of the two it is, the heading above it stops calling a
 branch with nothing wrong a clash, and the test that guards it feeds the two
 halves into each other the way the real code does — checking them one at a time
 was why a fully passing test run still had this in it.
+## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
+
+We already had an alarm for a scheduled job that stops running. This adds the
+one for the sneakier failure: the job runs fine, finishes cleanly, and nothing
+comes out the other end.
+
+That is not hypothetical. On the morning of 31 August the build loop woke up
+every hour, did its work, exited cleanly every single time — and the queue did
+not get any shorter. Fifty-two tickets waiting, one in review, and the oldest
+sent-back pull request had been sitting untouched since the 25th. Nothing was
+broken, so nothing complained. That is what makes this failure worse than a
+crash: a crash writes an error, while a loop achieving nothing writes a long
+cheerful log, and a cheerful log is exactly what stops anyone looking. It took
+a morning of reading logs by hand to spot.
+
+The existing alarm could never have caught it, because it only asks "is this
+thing still alive?" — and it was, gloriously. So there is now a second question
+being asked alongside it: **is the queue actually getting shorter?**
+
+`npm run throughput` answers it. It shows how many tickets finished on each of
+the last seven days, how big the backlog was at the end of each day, and how
+long the oldest sent-back pull request has been waiting. Then it says one of
+four things, and the distinction between the middle two is the entire point:
+things are moving; nothing finished but there was nothing to finish (which is
+perfectly healthy, and it says so rather than showing a worrying zero); nothing
+finished while work sat waiting, which is the alarm; or it could not read
+something and refuses to guess. That last one never gets dressed up as good
+news.
+
+It runs quietly alongside the existing check every ten minutes and only ever
+speaks up when the queue has genuinely stopped moving — at most once every six
+hours, and it goes silent again the moment work starts shipping. No daily
+"everything is fine" messages that nobody reads.
+
+Two mistakes worth recording, because both were caught by pointing the new
+command at real data rather than by trusting the tests. The report printed the
+backlog as 57 on one line and 56 two lines further down — two numbers for the
+same thing, disagreeing, which is the precise sort of quiet wrongness this
+whole feature exists to catch. One real ticket had been marked finished without
+a completion date, and the two counts handled that differently. It now says out
+loud how many tickets it had to make an assumption about instead of silently
+papering over it. The other was smaller: ages were printing as "open 8d 0h ago"
+when they should have read "opened 8d 0h ago".
+
+And the detector itself was deliberately broken before being trusted — rigged
+so it could never report a stall — to confirm the tests actually fail when it
+stops working. Four of them did. A stall detector that cannot detect a stall
+would have been a perfect example of the problem it was built to solve.
 
 ## 2026-08-31 — `npm run ship` now writes the note that lets a PR be merged (#484)
 
