@@ -479,13 +479,11 @@ it back to `Building`), do steps
 close with `--if-status "in review"`. A job another machine owns (`bus-relay`)
 exits 0 here having tested nothing — rehearse it on the owning machine.
 
-## One thread, one topic, one session
+## One topic, one worktree — a session may hold more than one
 
 A worktree keeps two threads from corrupting each other's files. It does
 nothing about the other failure, which is quieter and cost a whole epic on
-2026-08-20: **a single session that starts on one topic and drifts onto
-another.** Nothing objects, because every tool here answers "which folder am
-I in" and none of them answers "is this still the same job".
+2026-08-20: **two sessions building the same thing, neither ticket claimed.**
 
 That day a session opened to set up the Mac Mini — ops work, no repo changes,
 correctly in the main folder. It drifted into building the ecosystem-map epic,
@@ -495,35 +493,50 @@ a *different* session was building the same epic. They collided: the other one
 pushed a commit onto this one's branch, merged its PR, and closed its ticket,
 all discovered afterwards. Neither had any way to see the other.
 
-Four rules, in the order they would have broken that chain:
+Until 2026-09-01 the rule drawn from that day was **one topic per session**,
+with a hard stop at the first commit and a hand-off to a new window. **Dane
+lifted that** (2026-09-01, verbatim: *"I want to override the restriction on
+working on two projects with cc-starcaster"*). It lifts cleanly because
+holding two topics is not what collided that day — *neither ticket was ever
+moved to `Building`* is the whole of it. Rules 3 and 4 below are what would
+have broken the chain, and lifting the other two makes them load-bearing:
+they are now **mandatory, not advisory**.
 
-1. **The agent names the thread, and re-names it when it changes.** Every
-   session states its topic in its first substantive reply. When a request
-   does not belong to that topic, the agent **stops** and says so plainly —
-   *"Topic change: this thread is X, you are asking for Y"* — before touching
-   anything. The operator should never be the one to notice first. He has
-   raised this repeatedly; assume he will not raise it again.
+Four rules, in the order they matter:
 
-2. **One session, one folder — a hard stop at the first commit.** Ops,
-   diagnosis, reading and ClickUp work may happen wherever the session already
-   is. The moment work will produce a **commit**, the session sets up the
-   worktree, hands over the command to open a session there, and **stops
-   building**. It does not `cd` in and continue. A session that builds in a
-   folder it did not open in is invisible to every tool the operator has.
+1. **The agent names every thread it is holding, and names a new one the
+   moment it opens.** Every session states its topic in its first substantive
+   reply. When a request does not belong to any topic in hand, the agent says
+   so plainly — *"Second thread: this session is holding X, you are opening
+   Y"* — and then gets on with it. It no longer stops. What it must never do
+   is let a second topic in silently: the operator's status line names one
+   folder, so the session's own words are the only place two topics are
+   visible at all. He should never be the one to notice first.
+
+2. **One topic, one folder — always, and this one did not lift.** Each topic
+   gets its own worktree, and the session works in it by absolute path. Two
+   topics never share a working tree: one folder is one HEAD and one index, so
+   a branch switch rewrites the other topic's files and `git add <file>`
+   stages the other topic's edits into your commit (landmine 5). A session may
+   drive several folders; a folder may not carry several topics.
 
 3. **Claim the ticket before building — hand-built work included.** ClickUp
    status is the only surface where two sessions can see each other, and the
    atomic claim (`npm run clickup -- claim`, which fills in `--if-status` from
    the ticket itself) exists exactly for this. Hand-building is not an
    exemption; on 2026-08-20 two sessions built the same epic because neither
-   ticket was ever moved to `Building`.
+   ticket was ever moved to `Building`. **A ticket another session already
+   holds is not available to this one** — that is the 8/20 failure exactly,
+   and no amount of folder separation catches it.
 
 4. **Before starting on an epic, run `npm run map` and read the queue.** Ten
-   seconds. It catches the case where somebody else is already on it.
+   seconds. It catches the case where somebody else is already on it. With
+   several sessions live on one machine — there were seven on 2026-09-01 —
+   this is the only cheap check that sees them.
 
-Rules 1 and 2 are the agent's job and cost the operator nothing. Rule 2 costs
-him one window-open per piece of real work, which is the whole price of the
-system.
+Rules 1 and 2 are the agent's job and cost the operator nothing. Rules 3 and 4
+are what the whole arrangement now rests on: the old rule bought its safety by
+keeping each session small enough to see, and that margin is spent.
 
 ## One worktree per thread
 
