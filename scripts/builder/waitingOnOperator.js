@@ -34,10 +34,25 @@
  *
  * This module is the verdict, and only the verdict — no network, no clock, no
  * writes. clickup_direct.mjs does the live reads and hands the raw shapes in.
+ *
+ * AUTHORSHIP IS NOT THE USER ID (2026-09-01, task 86bbqx2xe). The loops post
+ * under Dane's own token, so a card a machine wrote comes back with his user
+ * id on it. That fooled this module in its quieter direction — it
+ * UNDER-reports. A `Ready to launch` ticket always has a machine card as its
+ * newest comment, so rule 1 fired ("his own comment is the newest word on
+ * it") and the ticket came back NOT_WAITING. An agent asking "does anything
+ * need Dane?" before writing its run report was told no while five approved
+ * merges sat parked, invisible. The blindness was already self-confirming
+ * once: an override note on 86bbpz1ed cited `waiting` as its evidence that the
+ * hand-back guard had been fooled — a tool fooled by the same mechanism.
+ * `isMachineComment` is the second half of the question now, and it is the
+ * same check the relay makes, from the same module, so the two cannot drift.
  */
 
 /** The two statuses that belong to the operator. Everything else is a machine
  *  status, and a machine status means a machine owns the next move. */
+const { isMachineComment } = require('./machineComment.js');
+
 const OPERATOR_LANE = ['needs your input', 'ready to launch'];
 
 const WAITING = 'WAITING';
@@ -61,10 +76,14 @@ function newestComment(comments, { operatorId } = {}) {
     .slice()
     .sort((a, b) => Number(b.date || 0) - Number(a.date || 0))[0];
   const authorId = Number(newest.user?.id);
+  const byMachine = isMachineComment(newest.comment_text);
   return {
     none: false,
     author: newest.user?.username || '(unknown)',
-    isOperator: Number.isFinite(authorId) && authorId === Number(operatorId),
+    // His id AND not a machine's writing. The id alone is not authorship here
+    // (task 86bbqx2xe) — see the note at the top of this file.
+    isOperator: Number.isFinite(authorId) && authorId === Number(operatorId) && !byMachine,
+    byMachine,
     text: String(newest.comment_text || '').trim(),
     date: Number(newest.date) || null,
   };
@@ -247,7 +266,11 @@ function renderTicket({ id, name, result }, { formatWhen } = {}) {
     lines.push('  last word:  (no comments)');
   } else {
     const whenTxt = when(f.lastWord.date);
-    lines.push(`  last word:  ${f.lastWord.author}, "${excerpt(f.lastWord.text)}"${whenTxt ? `, ${whenTxt}` : ''}`);
+    // Name the machine ones. The author column reads "Dane" for every card the
+    // loops wrote — that is the whole bug (86bbqx2xe) — so the evidence line
+    // has to say which it was, or the verdict looks wrong to anyone checking.
+    const who = f.lastWord.byMachine ? `${f.lastWord.author} (a machine, under his token)` : f.lastWord.author;
+    lines.push(`  last word:  ${who}, "${excerpt(f.lastWord.text)}"${whenTxt ? `, ${whenTxt}` : ''}`);
   }
   lines.push(`  VERDICT:    ${verdictLine(result)}`);
   return lines.join('\n');
