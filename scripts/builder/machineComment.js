@@ -116,20 +116,54 @@ function stampMachineComment(text) {
 
 /**
  * Does this request body post a comment, and if so which key holds the text?
- * ClickUp's task-comment endpoint takes `comment_text`; the approval-queue
- * post at clickup_direct.mjs uses the rich `comment` array form. Both are
- * machine writes and both must be stamped.
- *
- * Returns the key to stamp, or null when this body is not a comment post.
- * A `comment` value that is not a string (the rich array form) is left ALONE
- * and reported as null: stamping it would need to know that shape, and a
- * wrong guess there corrupts the comment rather than marking it.
+ * ClickUp's task-comment endpoint takes a plain `comment_text`, OR a rich
+ * `comment` array of `{ text, attributes }` blocks. Returns the key, or null
+ * when this body is not a comment post at all.
  */
 function commentTextKey(body) {
   if (!body || typeof body !== 'object') return null;
   if (typeof body.comment_text === 'string') return 'comment_text';
   if (typeof body.comment === 'string') return 'comment';
+  if (Array.isArray(body.comment)) return 'comment';
   return null;
+}
+
+/**
+ * Flatten the rich block form to the text ClickUp will store, which is what
+ * comes back as `comment_text` on a read and what every consumer reads.
+ */
+function blocksToText(blocks) {
+  if (!Array.isArray(blocks)) return '';
+  return blocks.map((b) => String(b && b.text != null ? b.text : '')).join('');
+}
+
+/**
+ * Stamp the rich block form.
+ *
+ * THIS IS THE ONE THAT MATTERED (2026-09-01). The operator card `ask` posts —
+ * the exact comment whose misreading caused this ticket — goes out as blocks,
+ * not as a string. The first cut of this module skipped non-string bodies on
+ * the reasoning that guessing at an unknown shape could corrupt a comment;
+ * the live break-test posted a real card and found it unmarked, with `waiting`
+ * still calling it Dane's word. A guard that skips the case it was written for
+ * is not a cautious guard, it is an absent one.
+ */
+function stampMachineCommentBlocks(blocks) {
+  if (!Array.isArray(blocks)) return blocks;
+  if (isMachineComment(blocksToText(blocks))) return blocks;
+  return blocks.concat([{ text: `\n${MACHINE_MARKER_LINE}` }]);
+}
+
+/**
+ * Stamp whichever shape this body carries. Returns the body unchanged when it
+ * is not a comment post, so the caller can pass everything through.
+ */
+function stampCommentBody(body) {
+  const key = commentTextKey(body);
+  if (!key) return body;
+  const value = body[key];
+  if (typeof value === 'string') return { ...body, [key]: stampMachineComment(value) };
+  return { ...body, [key]: stampMachineCommentBlocks(value) };
 }
 
 /** Is this the path of a comment-creating POST? Task comments and threaded
@@ -146,6 +180,9 @@ module.exports = {
   LEGACY_MACHINE_PREFIXES,
   isMachineComment,
   stampMachineComment,
+  stampMachineCommentBlocks,
+  stampCommentBody,
+  blocksToText,
   commentTextKey,
   isCommentPostPath,
   lastNonEmptyLine,

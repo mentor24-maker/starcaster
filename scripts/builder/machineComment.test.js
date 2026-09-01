@@ -10,6 +10,8 @@ const {
   stampMachineComment,
   commentTextKey,
   isCommentPostPath,
+  stampCommentBody,
+  blocksToText,
 } = require('./machineComment.js');
 
 const { waitingVerdict, newestComment, operatorSpokeLast, WAITING, NOT_WAITING } = require('./waitingOnOperator.js');
@@ -79,11 +81,47 @@ test('task-comment and reply POSTs are comment posts; nothing else is', () => {
   assert.equal(isCommentPostPath('/api/v3/workspaces/1/channels/2/messages'), false);
 });
 
-test('the text key is found in both body shapes, and the rich array form is left alone', () => {
+test('the text key is found in every comment body shape', () => {
   assert.equal(commentTextKey({ comment_text: 'x' }), 'comment_text');
   assert.equal(commentTextKey({ comment: 'x' }), 'comment');
-  assert.equal(commentTextKey({ comment: [{ text: 'x' }] }), null);
+  assert.equal(commentTextKey({ comment: [{ text: 'x' }] }), 'comment');
   assert.equal(commentTextKey(null), null);
+});
+
+/* The `ask` card — the comment whose misreading caused this ticket — is posted
+ * as rich blocks, not as a string. The first cut of this module skipped
+ * non-string bodies; the live break-test posted a real card and found it
+ * unmarked. These exist so that hole cannot reopen. */
+
+const cardBlocks = [
+  { text: "DANE'S WORDS", attributes: { bold: true } },
+  { text: '\n\nWhich option?\n' },
+];
+
+test('an operator card posted as rich blocks IS stamped', () => {
+  const out = stampCommentBody({ comment: cardBlocks });
+  assert.equal(isMachineComment(blocksToText(out.comment)), true);
+});
+
+test('stamping blocks preserves every original block untouched', () => {
+  const out = stampCommentBody({ comment: cardBlocks });
+  assert.deepEqual(out.comment.slice(0, cardBlocks.length), cardBlocks);
+  assert.equal(out.comment.length, cardBlocks.length + 1);
+});
+
+test('stamping blocks is idempotent', () => {
+  const once = stampCommentBody({ comment: cardBlocks });
+  const twice = stampCommentBody(once);
+  assert.deepEqual(twice.comment, once.comment);
+});
+
+test('a body that posts no comment is passed through untouched', () => {
+  const body = { name: 'a task', status: 'Queued' };
+  assert.deepEqual(stampCommentBody(body), body);
+});
+
+test('the plain-string body shape is stamped too', () => {
+  assert.equal(isMachineComment(stampCommentBody({ comment_text: 'hello' }).comment_text), true);
 });
 
 /* ------------------------------------------------------------------ *

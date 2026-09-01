@@ -109,7 +109,7 @@ const {
 const { readLedgerFile, saveLedgerIfReadable } = autoMergeLedgerFile;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
 const {
-  isMachineComment, stampMachineComment, commentTextKey, isCommentPostPath,
+  isMachineComment, stampCommentBody, isCommentPostPath,
 } = machineComment;
 const { resolveTaskRepo } = taskRepo;
 const {
@@ -264,11 +264,9 @@ async function call(method, path, body) {
   // this file and a fifteenth would fail silently in the dangerous direction,
   // so the stamp goes on at the door rather than at each of them. See
   // scripts/builder/machineComment.js.
-  let sendBody = body;
-  if (method === 'POST' && isCommentPostPath(path)) {
-    const key = commentTextKey(body);
-    if (key) sendBody = { ...body, [key]: stampMachineComment(body[key]) };
-  }
+  const sendBody = (method === 'POST' && isCommentPostPath(path))
+    ? stampCommentBody(body)
+    : body;
   let res;
   try {
     res = await fetch(`https://api.clickup.com${path}`, {
