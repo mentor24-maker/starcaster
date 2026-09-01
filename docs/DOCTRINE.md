@@ -301,6 +301,37 @@ The tell is a condition that stops short of the value it is deciding about:
 a real run, and never asks the one question it is answering — *is there anything
 to resolve?* Closing it is task 86bbq80j5.
 
+### 2.7 Every time quoted to the operator is Mountain time — never UTC
+
+Dane works in **Mountain time (`America/Denver` — MDT in summer, MST in
+winter)**. So does everything he reads: the Mac Mini's clock, the loop logs
+under `~/loop-logs/`, the launchd logs, and every ClickUp Loop note. GitHub and
+the ClickUp API do not — they hand back UTC, with a trailing `Z`.
+
+On 2026-09-01 a report to him quoted `mergedAt=2026-09-01T17:21:59Z` in the
+same breath as a Mini-log line reading `10:37`, and he had to ask which clock
+was which. He had asked before. His words that morning: *"You are back to
+using UTC as a basis. It is now 11:12 AM my time. Please make note of this in
+doctrine so we don't have to keep discussing time zones."* A standing
+instruction given verbatim is a keeper.
+
+**Do this:** convert every API timestamp to Mountain time before it reaches a
+reply, a ticket note, a bus post or an operator card — `mergedAt`, `date`,
+`createdAt`, `date_updated`, all of them. Mini-log and Loop-note times are
+already local; leave them alone. If a raw value must be quoted (a log excerpt,
+a `gh` line pasted as evidence), label it once with the zone so the reader is
+never left converting. The `@@MEASURED 8:04pm` line on an operator card is the
+same rule from the other side: it is the clock that dates the card, and it is
+his clock.
+
+```
+TZ=America/Denver date -r 1756747319                       # shell, from an epoch
+new Date(x).toLocaleString('en-US', { timeZone: 'America/Denver' })   # node
+```
+
+Two clocks in one report is one question he has to ask every time, and this
+section exists so that he never has to ask it again.
+
 ---
 
 ## 3. Designing checks
