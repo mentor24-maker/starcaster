@@ -71,7 +71,22 @@ function splitTopLevel(text, separator = ',') {
   let depth = 0;
   let current = '';
   let inString = false;
-  for (const char of text) {
+  // A `$$ ... $$` function body is one token, semicolons and all. Without
+  // this, splitting a schema on ';' cuts a trigger function into fragments
+  // and every one of them reads as an unsupported statement.
+  let inDollarQuote = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (!inString && char === '$' && text[i + 1] === '$') {
+      inDollarQuote = !inDollarQuote;
+      current += '$$';
+      i += 1;
+      continue;
+    }
+    if (inDollarQuote) {
+      current += char;
+      continue;
+    }
     if (char === "'") inString = !inString;
     if (!inString) {
       if (char === '(') depth += 1;
@@ -343,6 +358,10 @@ function parseSchemaText(sqlText) {
   const tables = new Map();
   const indexes = [];
   const rlsEnabled = new Set();
+  /** function name → the column its before-update trigger stamps. */
+  const triggerFunctions = new Map();
+  /** table → (trigger name → column stamped on every update). */
+  const triggers = new Map();
 
   for (const statement of statements) {
     const normalized = statement.replace(/\s+/g, ' ').trim();
@@ -468,10 +487,54 @@ function parseSchemaText(sqlText) {
       continue;
     }
 
+    /*
+     * The `updated_at` trigger idiom, IMPLEMENTED rather than skipped.
+     *
+     * Every table here maintains updated_at with a before-update trigger, so
+     * the stores do not send the column on a PATCH. A fake that quietly
+     * ignored the trigger would leave updated_at frozen at its insert value
+     * and any test asserting "this row was touched" would pass over a
+     * database that never touched it. Only this exact shape is recognised —
+     * anything else still refuses loudly below.
+     */
+    match = /^create or replace function (?:public\.)?([a-z_][a-z0-9_]*)\(\) returns trigger language plpgsql as \$\$ begin new\.([a-z_][a-z0-9_]*) = now\(\); return new; end; \$\$$/i.exec(normalized);
+    if (match) {
+      triggerFunctions.set(match[1].toLowerCase(), match[2].toLowerCase());
+      continue;
+    }
+
+    match = /^drop trigger if exists ([a-z_][a-z0-9_]*) on (?:public\.)?([a-z_][a-z0-9_]*)$/i.exec(normalized);
+    if (match) {
+      const dropped = triggers.get(match[2].toLowerCase());
+      if (dropped) dropped.delete(match[1].toLowerCase());
+      continue;
+    }
+
+    match = /^create trigger ([a-z_][a-z0-9_]*) before update on (?:public\.)?([a-z_][a-z0-9_]*) for each row execute function (?:public\.)?([a-z_][a-z0-9_]*)\(\)$/i.exec(normalized);
+    if (match) {
+      const [, triggerName, tableName, functionName] = match;
+      const column = triggerFunctions.get(functionName.toLowerCase());
+      if (!column) {
+        throw new Error(
+          `sqlSchemaFake: trigger ${triggerName} calls ${functionName}(), which this fake did not parse. `
+          + 'Implement it or the fake would be enforcing less than the SQL says.'
+        );
+      }
+      if (!tables.has(tableName)) {
+        throw new Error(`sqlSchemaFake: trigger ${triggerName} on ${tableName} before it is created`);
+      }
+      if (!tables.get(tableName).columns.has(column)) {
+        throw new Error(`sqlSchemaFake: trigger ${triggerName} maintains ${tableName}.${column}, which does not exist`);
+      }
+      if (!triggers.has(tableName)) triggers.set(tableName, new Map());
+      triggers.get(tableName).set(triggerName.toLowerCase(), column);
+      continue;
+    }
+
     throw new Error(`sqlSchemaFake: unsupported statement — ${normalized.slice(0, 120)}`);
   }
 
-  return { tables, indexes, rlsEnabled, statements: statements.map((s) => s.trim()).filter(Boolean) };
+  return { tables, indexes, rlsEnabled, triggers, statements: statements.map((s) => s.trim()).filter(Boolean) };
 }
 
 function parseSchemaFile(filePath) {
@@ -1023,6 +1086,10 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         const dangling = foreignKeyViolation(tableName, next);
         if (dangling) return { ok: false, status: 409, error: dangling };
         Object.assign(row, body);
+        // Before-update triggers, after the write, as Postgres does.
+        for (const column of (schema.triggers?.get(tableName) || new Map()).values()) {
+          row[column] = new Date().toISOString();
+        }
         updated.push({ ...row });
       }
       // PostgREST answers 204, not 200, when no representation was asked for.

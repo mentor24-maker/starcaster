@@ -91,6 +91,7 @@ import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blo
 import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-module-settings";
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
+import { BuilderEventManagerModuleSettings } from "./builder-event-manager-module-settings";
 import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-category-manager-module-settings";
 import { BuilderBlogCardManagerModuleSettings } from "./builder-blog-card-manager-module-settings";
 import { BuilderBlogSearchModuleSettings } from "./builder-blog-search-module-settings";
@@ -1987,6 +1988,36 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "event-manager") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    const rows = [
+      { title: "Spring Member Mixer", status: "published", date: "Apr 12", place: "Center Court" },
+      { title: "Junior Clinic Open House", status: "draft", date: "Apr 19", place: "Courts 1–4" },
+      { title: "Summer Kickoff Social", status: "cancelled", date: "May 03", place: "Clubhouse" },
+    ];
+    const statusColor = (s: string) => s === "published" ? "#16a34a" : s === "cancelled" ? "#c0392b" : "#6b7280";
+    const statusBg   = (s: string) => s === "published" ? "#f0fdf4" : s === "cancelled" ? "#fef2f2" : "#f3f4f6";
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto auto", gap: "0 12px", padding: "8px 12px", background: "#f8fafc", borderBottom: "1px solid #e4ecf2", fontSize: 10, fontWeight: 700, color: "#587592", textTransform: "uppercase" }}>
+          <span>Event</span><span>Status</span><span>Starts</span><span>Where</span><span>Actions</span>
+        </div>
+        {rows.map((row, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto auto", gap: "0 12px", padding: "8px 12px", borderBottom: i < rows.length - 1 ? "1px solid #f0f4f8" : undefined, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "#18324a", fontWeight: 500 }}>{row.title}</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: statusColor(row.status), background: statusBg(row.status), borderRadius: 4, padding: "2px 6px" }}>{row.status}</span>
+            <span style={{ fontSize: 11, color: "#8ba9be" }}>{row.date}</span>
+            <span style={{ fontSize: 11, color: "#8ba9be" }}>{row.place}</span>
+            <span style={{ display: "flex", gap: 6 }}>
+              <span style={{ fontSize: 13, color: accent, cursor: "default" }}>✎</span>
+              <span style={{ fontSize: 13, color: "#c0392b", cursor: "default" }}>✕</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (module.type === "blog-category-manager") {
     const accent = module.settings.accentColor || "#0f4f8f";
     const rows = [
@@ -3027,6 +3058,7 @@ export function BuilderModuleCard({
     const isBlogPostTagsModule = module.type === "blog-post-tags";
     const isBlogPostCreateModule = module.type === "blog-post-create";
     const isBlogPostManagerModule = module.type === "blog-post-manager";
+    const isEventManagerModule = module.type === "event-manager";
     const isBlogCategoryManagerModule = module.type === "blog-category-manager";
     const isBlogCardManagerModule = module.type === "blog-card-manager";
     const isBlogSearchModule = module.type === "blog-search";
@@ -3092,6 +3124,7 @@ export function BuilderModuleCard({
       isBlogPostTagsModule ||
       isBlogPostCreateModule ||
       isBlogPostManagerModule ||
+      isEventManagerModule ||
       isBlogCategoryManagerModule ||
       isBlogCardManagerModule ||
       isBlogSearchModule ||
@@ -3314,6 +3347,8 @@ export function BuilderModuleCard({
               <BuilderBlogPostCreateModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostManagerModule ? (
               <BuilderBlogPostManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isEventManagerModule ? (
+              <BuilderEventManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryManagerModule ? (
               <BuilderBlogCategoryManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCardManagerModule ? (

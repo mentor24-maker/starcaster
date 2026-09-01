@@ -130,6 +130,12 @@ import { BuilderCodeEmbed } from "@/components/builder/builder-code-embed";
 import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import { BuilderImagePickerField } from "@/components/builder/builder-image-picker-field";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
+import {
+  formatEventWhen,
+  isoToLocalInput,
+  localInputToIso,
+  normalizeEventStatus,
+} from "@/lib/event-format";
 import { BuilderImagePreview } from "@/components/builder/builder-image-preview";
 import {
   BuilderFloatingImageRuntime,
@@ -2194,6 +2200,9 @@ function BuilderModulePreview({
   if (module.type === "blog-post-manager") {
     return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
   }
+  if (module.type === "event-manager") {
+    return <EventManagerPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
+  }
   if (module.type === "blog-category-manager") {
     return <BlogCategoryManagerPreview settings={module.settings} />;
   }
@@ -3805,6 +3814,630 @@ function BlogCardManagerPreview() {
         ) : null}
         <span className="bcm-save-note">Applies to all Post Feed modules on your site</span>
       </div>
+    </div>
+  );
+}
+
+/* ── Event Manager (admin) ─────────────────────────────────────────────────── */
+
+type EventRecord = {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  description: string;
+  excerpt: string;
+  imageUrl: string;
+  imageAlt: string;
+  url: string;
+  featured: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  allDay: boolean;
+  timezone: string;
+  locationName: string;
+  locationAddress: string;
+  locationUrl: string;
+  organizerName: string;
+  organizerContact: string;
+  seoTitle: string;
+  seoDescription: string;
+};
+
+type EventFormValues = Record<string, string>;
+
+const EVENT_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "draft", label: "Draft" },
+  { value: "published", label: "Published" },
+  // Cancelled rather than deleted, on purpose: an event people already put in
+  // their diary must keep its page and say it is off, not vanish and leave
+  // them turning up.
+  { value: "cancelled", label: "Cancelled" },
+];
+
+const EMPTY_EVENT_FORM: EventFormValues = {
+  title: "", slug: "", status: "draft",
+  startsAt: "", endsAt: "", allDay: "false", timezone: "",
+  locationName: "", locationAddress: "", locationUrl: "",
+  imageUrl: "", imageAlt: "", url: "",
+  excerpt: "", description: "",
+  organizerName: "", organizerContact: "",
+  seoTitle: "", seoDescription: "",
+  featured: "false",
+};
+
+/** The viewer's own zone, offered as the default for a new event. */
+function localTimeZoneName(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
+}
+
+function eventStatusClass(status: string): string {
+  return `builder-event-manager-status builder-event-manager-status-${normalizeEventStatus(status)}`;
+}
+
+function EventManagerPreview({
+  settings,
+  theme,
+  themePalette,
+}: {
+  settings: Record<string, string>;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+}) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const viewBaseUrl = String(settings.viewPageUrl || "").trim();
+  const showStatus = (settings.showStatus ?? "true") !== "false";
+  const showDate = (settings.showDate ?? "true") !== "false";
+  const showLocation = (settings.showLocation ?? "true") !== "false";
+  const showDelete = (settings.showDelete ?? "true") !== "false";
+
+  const [events, setEvents] = useState<EventRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<EventFormValues>(EMPTY_EVENT_FORM);
+  const [saving, setSaving] = useState(false);
+  const [statusMsg, setStatusMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<EventRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  function loadEvents() {
+    setLoading(true);
+    setLoadError("");
+    fetch("/api/events?limit=200", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, `Failed to load events (${r.status})`));
+        const list = (d?.events ?? d?.data ?? []) as EventRecord[];
+        setEvents(Array.isArray(list) ? list : []);
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Failed to load events."))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { loadEvents(); }, []);
+
+  function setField(key: string, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditId(null);
+    setForm(EMPTY_EVENT_FORM);
+    setErrorMsg("");
+  }
+
+  function startCreate() {
+    setEditId(null);
+    setForm({ ...EMPTY_EVENT_FORM, timezone: localTimeZoneName() });
+    setErrorMsg("");
+    setStatusMsg("");
+    setFormOpen(true);
+  }
+
+  function startEdit(event: EventRecord) {
+    const allDay = Boolean(event.allDay);
+    setEditId(event.id);
+    setForm({
+      title: event.title ?? "",
+      slug: event.slug ?? "",
+      status: event.status || "draft",
+      startsAt: isoToLocalInput(event.startsAt, allDay),
+      endsAt: isoToLocalInput(event.endsAt, allDay),
+      allDay: allDay ? "true" : "false",
+      timezone: event.timezone ?? "",
+      locationName: event.locationName ?? "",
+      locationAddress: event.locationAddress ?? "",
+      locationUrl: event.locationUrl ?? "",
+      imageUrl: event.imageUrl ?? "",
+      imageAlt: event.imageAlt ?? "",
+      url: event.url ?? "",
+      excerpt: event.excerpt ?? "",
+      description: event.description ?? "",
+      organizerName: event.organizerName ?? "",
+      organizerContact: event.organizerContact ?? "",
+      seoTitle: event.seoTitle ?? "",
+      seoDescription: event.seoDescription ?? "",
+      featured: event.featured ? "true" : "false",
+    });
+    setErrorMsg("");
+    setStatusMsg("");
+    setFormOpen(true);
+  }
+
+  /**
+   * Switching All Day converts what is already typed rather than discarding
+   * it: a date survives losing its clock, and gains midnight coming back.
+   */
+  function toggleAllDay(next: boolean) {
+    setForm((prev) => ({
+      ...prev,
+      allDay: next ? "true" : "false",
+      startsAt: prev.startsAt ? isoToLocalInput(localInputToIso(prev.startsAt), next) : "",
+      endsAt: prev.endsAt ? isoToLocalInput(localInputToIso(prev.endsAt), next) : "",
+    }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.title.trim()) { setErrorMsg("Event name is required."); return; }
+    const startsAt = localInputToIso(form.startsAt);
+    const endsAt = localInputToIso(form.endsAt);
+    // An end before its start is the one date mistake worth refusing: it makes
+    // every calendar view render the event backwards or not at all.
+    if (startsAt && endsAt && Date.parse(endsAt) < Date.parse(startsAt)) {
+      setErrorMsg("The end of an event cannot come before its start.");
+      return;
+    }
+    setSaving(true);
+    setErrorMsg("");
+    setStatusMsg("");
+    const payload = {
+      title: form.title.trim(),
+      slug: form.slug.trim() || textToSlug(form.title.trim()),
+      status: form.status || "draft",
+      startsAt,
+      endsAt,
+      allDay: form.allDay === "true",
+      timezone: form.timezone.trim(),
+      locationName: form.locationName.trim(),
+      locationAddress: form.locationAddress.trim(),
+      locationUrl: form.locationUrl.trim(),
+      imageUrl: form.imageUrl.trim(),
+      imageAlt: form.imageAlt.trim(),
+      url: form.url.trim(),
+      excerpt: form.excerpt.trim(),
+      description: form.description || "",
+      organizerName: form.organizerName.trim(),
+      organizerContact: form.organizerContact.trim(),
+      seoTitle: form.seoTitle.trim(),
+      seoDescription: form.seoDescription.trim(),
+      featured: form.featured === "true",
+    };
+    try {
+      const res = await fetch(
+        editId ? `/api/events/${encodeURIComponent(editId)}` : "/api/events",
+        {
+          method: editId ? "PUT" : "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(readApiErrorMessage(data, editId ? "Failed to update event." : "Failed to create event."));
+      setStatusMsg(editId ? "Event updated." : "Event created.");
+      closeForm();
+      loadEvents();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/events/${encodeURIComponent(deleteTarget.id)}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: getCrmProjectHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(data, "Failed to delete event."));
+      }
+      if (editId === deleteTarget.id) closeForm();
+      setDeleteTarget(null);
+      setStatusMsg("Event deleted.");
+      loadEvents();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to delete event.");
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const isAllDay = form.allDay === "true";
+  const dateInputType = isAllDay ? "date" : "datetime-local";
+
+  const eventForm = formOpen ? (
+    <form className="builder-event-manager-form" onSubmit={handleSubmit}>
+      <h3 className="builder-event-manager-form-title">{editId ? "Edit Event" : "New Event"}</h3>
+
+      <div className="builder-event-manager-field">
+        <label className="builder-event-manager-label" htmlFor="event-title">Event Name *</label>
+        <input
+          id="event-title"
+          className="builder-event-manager-input"
+          value={form.title}
+          onChange={(e) => {
+            const next = e.target.value;
+            setForm((f) => ({ ...f, title: next, slug: f.slug || textToSlug(next) }));
+          }}
+        />
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-slug">Slug</label>
+          <input
+            id="event-slug"
+            className="builder-event-manager-input"
+            value={form.slug}
+            onChange={(e) => setField("slug", e.target.value)}
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-status">Status</label>
+          <select
+            id="event-status"
+            className="builder-event-manager-input"
+            value={form.status}
+            onChange={(e) => setField("status", e.target.value)}
+          >
+            {EVENT_STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-starts">Starts</label>
+          <input
+            id="event-starts"
+            className="builder-event-manager-input"
+            type={dateInputType}
+            value={form.startsAt}
+            onChange={(e) => setField("startsAt", e.target.value)}
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-ends">Ends</label>
+          <input
+            id="event-ends"
+            className="builder-event-manager-input"
+            type={dateInputType}
+            value={form.endsAt}
+            onChange={(e) => setField("endsAt", e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <label className="builder-event-manager-check">
+          <input
+            type="checkbox"
+            checked={isAllDay}
+            onChange={(e) => toggleAllDay(e.target.checked)}
+          />
+          <span>All day</span>
+        </label>
+        <label className="builder-event-manager-check">
+          <input
+            type="checkbox"
+            checked={form.featured === "true"}
+            onChange={(e) => setField("featured", e.target.checked ? "true" : "false")}
+          />
+          <span>Featured</span>
+        </label>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-timezone">Time Zone</label>
+          <input
+            id="event-timezone"
+            className="builder-event-manager-input"
+            value={form.timezone}
+            onChange={(e) => setField("timezone", e.target.value)}
+            placeholder="America/Denver"
+          />
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-location-name">Location</label>
+          <input
+            id="event-location-name"
+            className="builder-event-manager-input"
+            value={form.locationName}
+            onChange={(e) => setField("locationName", e.target.value)}
+            placeholder="Center Court"
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-location-address">Address</label>
+          <input
+            id="event-location-address"
+            className="builder-event-manager-input"
+            value={form.locationAddress}
+            onChange={(e) => setField("locationAddress", e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-location-url">Map Link</label>
+          <input
+            id="event-location-url"
+            className="builder-event-manager-input"
+            value={form.locationUrl}
+            onChange={(e) => setField("locationUrl", e.target.value)}
+            placeholder="https://…"
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-url">Event Link</label>
+          <input
+            id="event-url"
+            className="builder-event-manager-input"
+            value={form.url}
+            onChange={(e) => setField("url", e.target.value)}
+            placeholder="Tickets or registration"
+          />
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field">
+        <label className="builder-event-manager-label">Image</label>
+        <BuilderImagePickerField
+          value={form.imageUrl}
+          onChange={(url) => setField("imageUrl", url)}
+          placeholder="https://…"
+        />
+      </div>
+
+      {form.imageUrl ? (
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-image-alt">Image Alt Text</label>
+          <input
+            id="event-image-alt"
+            className="builder-event-manager-input"
+            value={form.imageAlt}
+            onChange={(e) => setField("imageAlt", e.target.value)}
+            placeholder="What the picture shows"
+          />
+        </div>
+      ) : null}
+
+      <div className="builder-event-manager-field">
+        <label className="builder-event-manager-label" htmlFor="event-excerpt">Summary</label>
+        <textarea
+          id="event-excerpt"
+          className="builder-event-manager-input builder-event-manager-textarea"
+          value={form.excerpt}
+          onChange={(e) => setField("excerpt", e.target.value)}
+          placeholder="One or two lines for calendar cards"
+        />
+      </div>
+
+      <div className="builder-event-manager-field">
+        <label className="builder-event-manager-label">Description</label>
+        <BuilderRichTextEditor
+          value={form.description}
+          onChange={(html) => setField("description", html)}
+          placeholder="Full event details…"
+        />
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-organizer">Organizer</label>
+          <input
+            id="event-organizer"
+            className="builder-event-manager-input"
+            value={form.organizerName}
+            onChange={(e) => setField("organizerName", e.target.value)}
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-organizer-contact">Organizer Contact</label>
+          <input
+            id="event-organizer-contact"
+            className="builder-event-manager-input"
+            value={form.organizerContact}
+            onChange={(e) => setField("organizerContact", e.target.value)}
+            placeholder="Email or phone"
+          />
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-seo-title">SEO Title</label>
+          <input
+            id="event-seo-title"
+            className="builder-event-manager-input"
+            value={form.seoTitle}
+            onChange={(e) => setField("seoTitle", e.target.value)}
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-seo-description">SEO Description</label>
+          <input
+            id="event-seo-description"
+            className="builder-event-manager-input"
+            value={form.seoDescription}
+            onChange={(e) => setField("seoDescription", e.target.value)}
+          />
+        </div>
+      </div>
+
+      {errorMsg ? <div className="builder-event-manager-error">{errorMsg}</div> : null}
+
+      <div className="builder-event-manager-form-actions">
+        <button type="button" className="btn btn-ghost" onClick={closeForm} disabled={saving}>Cancel</button>
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={saving}
+          style={{ background: accent, borderColor: accent }}
+        >
+          {saving ? "Saving…" : editId ? "Update Event" : "Create Event"}
+        </button>
+      </div>
+    </form>
+  ) : null;
+
+  const columnCount = 1 + (showStatus ? 1 : 0) + (showDate ? 1 : 0) + (showLocation ? 1 : 0) + 1;
+
+  return (
+    <div
+      className="builder-event-manager-module builder-admin-data-table-module"
+      style={getAdminDataTableThemeStyle(themePalette, theme)}
+    >
+      <h2 className="builder-admin-data-table-title">Events</h2>
+
+      {statusMsg ? <div className="builder-event-manager-notice">{statusMsg}</div> : null}
+      {loadError ? <div className="builder-event-manager-error">{loadError}</div> : null}
+      {errorMsg && !formOpen ? <div className="builder-event-manager-error">{errorMsg}</div> : null}
+
+      <div className="builder-admin-data-table-wrap">
+        <table className="builder-admin-data-table">
+          <thead>
+            {/*
+              * The Add button lives in the FILTER row, not the header row —
+              * the same place the CRM contacts table puts "Add Contact". The
+              * header row is dark, so a button there renders black on black
+              * and reads as a fifth column heading rather than a control.
+              */}
+            <tr className="builder-admin-data-table-filter-row table-filter-row">
+              <th />
+              {showStatus ? <th /> : null}
+              {showDate ? <th /> : null}
+              {showLocation ? <th /> : null}
+              <th className="builder-admin-data-table-actions-col actions-col">
+                <button type="button" className="btn tiny-btn" onClick={startCreate}>Add Event</button>
+              </th>
+            </tr>
+            <tr className="builder-admin-data-table-header-row">
+              <th>Event</th>
+              {showStatus ? <th>Status</th> : null}
+              {showDate ? <th>When</th> : null}
+              {showLocation ? <th>Where</th> : null}
+              <th className="builder-admin-data-table-actions-col actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={columnCount} className="builder-admin-data-table-empty">Loading events…</td>
+              </tr>
+            ) : events.length === 0 ? (
+              <tr>
+                <td colSpan={columnCount} className="builder-admin-data-table-empty">
+                  No events yet. Choose Add Event to create your first one.
+                </td>
+              </tr>
+            ) : events.map((event) => {
+              const viewHref = viewBaseUrl && event.slug
+                ? `${viewBaseUrl}${viewBaseUrl.includes("?") ? "&" : "?"}event=${encodeURIComponent(event.slug)}`
+                : undefined;
+              return (
+                <tr key={event.id}>
+                  <td className="builder-admin-data-table-cell">
+                    <span className="builder-event-manager-title">{event.title || "Untitled event"}</span>
+                    {event.featured ? <span className="builder-event-manager-featured">Featured</span> : null}
+                  </td>
+                  {showStatus ? (
+                    <td className="builder-admin-data-table-cell">
+                      <span className={eventStatusClass(event.status)}>{event.status || "draft"}</span>
+                    </td>
+                  ) : null}
+                  {showDate ? (
+                    <td className="builder-admin-data-table-cell builder-admin-data-table-date">
+                      {formatEventWhen(event)}
+                    </td>
+                  ) : null}
+                  {showLocation ? (
+                    <td className="builder-admin-data-table-cell">{event.locationName || "—"}</td>
+                  ) : null}
+                  <td className="builder-admin-data-table-actions">
+                    <div className="table-actions-row" role="group">
+                      <AdminTableIconButton
+                        icon="view"
+                        label="View"
+                        href={viewHref}
+                        linkTarget="_blank"
+                        disabled={!viewHref}
+                        onClick={!viewHref ? () => {} : undefined}
+                      />
+                      <AdminTableIconButton icon="edit" label="Edit" onClick={() => startEdit(event)} />
+                      {showDelete ? (
+                        <AdminTableIconButton
+                          icon="delete"
+                          label="Delete"
+                          danger
+                          onClick={() => setDeleteTarget(event)}
+                        />
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {eventForm}
+
+      {deleteTarget ? (
+        <BuilderBodyPortal>
+          <div className="crm-contacts-modal-overlay" onClick={() => !deleting && setDeleteTarget(null)}>
+            <div className="crm-contacts-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="crm-contacts-modal-header">
+                <strong>Delete Event</strong>
+                <button type="button" className="crm-contacts-modal-close" onClick={() => setDeleteTarget(null)} disabled={deleting}>✕</button>
+              </div>
+              <div className="crm-contacts-modal-body">
+                <p className="builder-admin-data-table-delete-copy">
+                  Delete <strong>{deleteTarget.title || "this event"}</strong>? This cannot be undone.
+                  To take an event off the calendar without losing it, set its status to Cancelled instead.
+                </p>
+              </div>
+              <div className="crm-contacts-modal-footer">
+                <button type="button" className="crm-contacts-modal-btn" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button>
+                <button type="button" className="crm-contacts-modal-btn crm-contacts-modal-btn-danger" onClick={confirmDelete} disabled={deleting}>
+                  {deleting ? "Deleting…" : "Delete Event"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </BuilderBodyPortal>
+      ) : null}
     </div>
   );
 }
@@ -7522,6 +8155,7 @@ function AdminNavLinkPreview({ settings }: { settings: Record<string, string> })
 const PREMIUM_MODULE_GROUPS: Array<{ key: string; label: string; description: string }> = [
   { key: "crm",  label: "CRM",  description: "Lead capture forms and contact table" },
   { key: "blog", label: "Blog", description: "Blog post feeds, editors, and author bios" },
+  { key: "events", label: "Events", description: "Event calendar with an admin manager" },
 ];
 
 /** Mirrors MAX_CONTACT_ALERT_RECIPIENTS in lib/projectSiteSettingsStore.js. */
