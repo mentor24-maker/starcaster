@@ -830,6 +830,34 @@ const buildPanelCheckSection = (ids) => {
     posterUrl: '/images/render-fixture-background-poster.jpg',
     videoSpeed: 1,
     videoLoop: true,
+    /*
+     * Parallax ON, for the same reason the mode is "video": the Motion
+     * sub-panel's Speed box is DISABLED until the checkbox is ticked, and a
+     * disabled input is a different rectangle from an enabled one. Seeding it
+     * off would measure the panel in the state an operator only ever sees for
+     * a moment, and report green over the one he actually works in.
+     */
+    parallax: true,
+    parallaxSpeed: 0.3,
+  },
+  /*
+   * AND AN OVERLAY SCREEN, for exactly the reason above one level along.
+   *
+   * The Overlay group's dependent controls — the colour picker, the opacity
+   * select — only exist while the type is something other than "none", so on
+   * an unseeded row the whole group is ONE label/field pair. A group of one
+   * always agrees with itself, which means `check_panels` would measure it,
+   * find nothing to disagree, and report a confident green over a lattice it
+   * had never actually tested (the same shape as #432). Breaking the group's
+   * layout on purpose passes without this; with it, it fails.
+   *
+   * Colour rather than image so the fixture does not depend on a seeded
+   * asset, and 45 rather than 100 so the opacity select shows a value that
+   * would be visibly wrong if it stopped being read.
+   */
+  overlayScreen: {
+    background: { mode: 'color', color: '#1b2a4a' },
+    opacity: 45,
   },
   modules: [
     ...BUILDER_MODULE_TYPES.map((type) => {

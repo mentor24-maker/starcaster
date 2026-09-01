@@ -5,6 +5,12 @@ import {
   createDefaultBackgroundSettings,
   normalizeBuilderAssetUrl
 } from "@/lib/builder-template";
+import {
+  BACKGROUND_PARALLAX_SPEED_MAX,
+  BACKGROUND_PARALLAX_SPEED_MIN,
+  backgroundParallaxSpeedFromInput,
+  DEFAULT_BACKGROUND_PARALLAX_SPEED
+} from "@/lib/background-parallax";
 import { BuilderGalleryModal } from "./builder-gallery-modal";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderSettingRow } from "./builder-setting-row";
@@ -12,6 +18,16 @@ import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 type BuilderBackgroundControlsProps = {
   label: string;
+  /**
+   * What the MODE picker is called, when that differs from the group's own
+   * `label`. The overlay group is one control set worn twice — the same
+   * picker choosing a background on one row and a screen painted over it on
+   * the next — and "Background Type" sitting inside a group headed Overlay
+   * reads as the row's own background. The frozen vanilla builder solved it
+   * with `sectionLabel`; this is the same idea with a name that says which
+   * label it is. Defaults to `label`, so every existing caller is unchanged.
+   */
+  modeLabel?: string;
   background: BackgroundSettings;
   onChange: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
   onChooseImage?: () => void;
@@ -34,10 +50,25 @@ type BuilderBackgroundControlsProps = {
    * an option in front of an operator that does nothing where he clicked it.
    */
   allowVideo?: boolean;
+  /**
+   * Whether Parallax is offered here. OFF by default, on the same reasoning as
+   * `allowVideo` and NOT folded into it: `BackgroundSettings` is one shared
+   * object worn by six surfaces — the page background, a section, a column, a
+   * module, a BUTTON and the overlay-screen dimmer — and parallax on a button
+   * is nonsense. The field lives on the type; the control is surfaced only
+   * where it means something, which in this slice is section backgrounds.
+   *
+   * A separate flag rather than a reuse of `allowVideo` because the two
+   * questions genuinely differ: a surface can be able to play a video and have
+   * nothing to parallax against, and the page background will be the reverse
+   * the moment 86bbqa7a5 lands.
+   */
+  allowParallax?: boolean;
 };
 
 export function BuilderBackgroundControls({
   label,
+  modeLabel,
   background,
   onChange,
   onChooseImage,
@@ -50,9 +81,21 @@ export function BuilderBackgroundControls({
   themeBackgroundColor,
   themePrimaryColor,
   themeColors = [],
-  allowVideo = false
+  allowVideo = false,
+  allowParallax = false
 }: BuilderBackgroundControlsProps) {
   const [isFallbackGalleryOpen, setIsFallbackGalleryOpen] = useState(false);
+  /*
+   * What is in the Parallax Speed box WHILE it is being typed in, which is not
+   * the same thing as the stored setting and cannot be derived from it.
+   * `<input type="number">` reports an empty string for every value it cannot
+   * yet parse, so a cleared box and the "0." on the way to "0.7" arrive
+   * identically — and normalising either one back to a number is what made
+   * backspace snap the field to 0.3 and turn the next keystrokes into 0.37.
+   * `null` means "not being typed in": the box shows the stored value, which
+   * is what it goes back to on blur.
+   */
+  const [parallaxSpeedDraft, setParallaxSpeedDraft] = useState<string | null>(null);
   const [openVideoPicker, setOpenVideoPicker] = useState<"clip" | "poster" | null>(null);
 
   function handleModeChange(newMode: BackgroundSettings["mode"]) {
@@ -311,6 +354,90 @@ export function BuilderBackgroundControls({
     );
   }
 
+  /**
+   * The Motion panel — parallax, and nothing else so far.
+   *
+   * One definition rendered by both layouts below, for the reason the Video
+   * panel's own header gives: a second hand-written copy is how the horizontal
+   * and stacked forms of this component drift into offering different
+   * controls, which has already happened once here with the mode dropdown.
+   *
+   * Shown only for modes `image` and `video`, because those are the only two
+   * backgrounds that are a picture. A gradient has nothing to drift.
+   */
+  function renderParallaxControls() {
+    if (!allowParallax) return null;
+    if (background.mode !== "image" && background.mode !== "video") return null;
+
+    const parallaxOn = background.parallax === true;
+
+    return (
+      <div className="builder-schema-panel-column builder-parallax-background-controls">
+        <div className="builder-schema-group-title">Motion</div>
+
+        <BuilderSettingRow label="Parallax">
+          <input
+            type="checkbox"
+            checked={parallaxOn}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, parallax: event.target.checked }))
+            }
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Parallax Speed">
+          <input
+            type="number"
+            min={BACKGROUND_PARALLAX_SPEED_MIN}
+            max={BACKGROUND_PARALLAX_SPEED_MAX}
+            step={0.05}
+            disabled={!parallaxOn}
+            value={
+              parallaxSpeedDraft ??
+              String(background.parallaxSpeed ?? DEFAULT_BACKGROUND_PARALLAX_SPEED)
+            }
+            onChange={(event) => {
+              // The box holds the keystroke either way; only a readable number
+              // is written to the setting. A half-typed one leaves the stored
+              // value exactly as it was rather than resetting it to the
+              // default, which is what used to eat the backspace.
+              const typed = event.target.value;
+              setParallaxSpeedDraft(typed);
+              const parsed = backgroundParallaxSpeedFromInput(typed);
+              if (parsed === null) return;
+              onChange((current) => ({ ...current, parallaxSpeed: parsed }));
+            }}
+            onBlur={() => setParallaxSpeedDraft(null)}
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="" fullWidth>
+          <p className="builder-parallax-background-note">
+            Parallax makes the background drift slower than the words over it, which is what
+            gives a page depth. 0 pins the picture to the screen; 1 is ordinary scrolling.
+            Around 0.3 is the usual look. Expect the picture to CROP IN: it has to be taller
+            than the row to have somewhere to drift to, so the stronger the effect the more
+            closely it is cropped — a photo with a logo or a face near the edge wants a
+            higher number, nearer 0.7. Turning it on also trims anything that overhangs the
+            row&rsquo;s edges.{" "}
+            {background.mode === "video" ? (
+              <>
+                On phones this drift only happens if <strong>Play On Phones</strong> is on:
+                with it off the clip is never loaded there, so the still picture is what
+                visitors see and nothing moves. An image background drifts on phones either
+                way.
+              </>
+            ) : (
+              <>It runs on phones as well as desktops.</>
+            )}{" "}
+            It switches itself off completely for visitors who have asked their device for
+            reduced motion, so nothing here can make somebody ill.
+          </p>
+        </BuilderSettingRow>
+      </div>
+    );
+  }
+
   // When no external gallery callback is wired (e.g. cell/page/poll
   // backgrounds), fall back to the standard self-contained gallery picker so
   // backgrounds are chosen the same way as every other image.
@@ -356,7 +483,7 @@ export function BuilderBackgroundControls({
       <div className="builder-background-controls builder-background-controls-horizontal">
         <BuilderModuleFieldStrip>
           {!hideModeRow ? (
-            <BuilderModuleField label={label} width="select-md">
+            <BuilderModuleField label={modeLabel ?? label} width="select-md">
               <select
                 value={background.mode}
                 onChange={(event) => handleModeChange(event.target.value as BackgroundSettings["mode"])}
@@ -486,6 +613,7 @@ export function BuilderBackgroundControls({
         ) : null}
 
         {renderVideoControls()}
+        {renderParallaxControls()}
       </div>
     );
   }
@@ -494,7 +622,7 @@ export function BuilderBackgroundControls({
     <div className="builder-background-controls">
       <div className={compact ? "builder-background-inline-row" : undefined}>
         <label className="field">
-          <span>{label}</span>
+          <span>{modeLabel ?? label}</span>
           <select
             value={background.mode}
             /*
@@ -624,6 +752,7 @@ export function BuilderBackgroundControls({
       ) : null}
 
       {renderVideoControls()}
+      {renderParallaxControls()}
     </div>
   );
 }

@@ -22,6 +22,11 @@ export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from
 import { backgroundImageUrlFor } from "@/lib/image-renditions";
 import { normalizeProximityEffectSettings } from "./proximity-effects";
 import {
+  BACKGROUND_PARALLAX_SPEED_INERT,
+  clampBackgroundParallaxSpeed,
+  DEFAULT_BACKGROUND_PARALLAX_SPEED
+} from "./background-parallax";
+import {
   imageEffectBounces,
   imageEffectRotates,
   imageEffectTravels
@@ -200,6 +205,29 @@ export type BackgroundSettings = {
   /** Percent, 0–100 — which part of the frame survives the crop. */
   videoFocalX?: number;
   videoFocalY?: number;
+  /**
+   * PARALLAX — the background drifting slower than the content over it.
+   * Meaningful for modes "image" and "video" only.
+   *
+   * This type is one shared object worn by SIX surfaces: the page background,
+   * a section, a column, a module, a BUTTON, and the overlay-screen dimmer.
+   * Parallax on a button is nonsense, so the field lives here on the type and
+   * the CONTROL is surfaced only where it means something — section
+   * backgrounds, via `allowParallax` on BuilderBackgroundControls. Every other
+   * surface ignores the field. That is deliberate; do not "fix" it by exposing
+   * the control everywhere.
+   *
+   * Off by default, and the default is load-bearing: a page saved before this
+   * shipped renders byte-identically, because absent means no layer at all
+   * rather than a layer at some speed.
+   */
+  parallax?: boolean;
+  /**
+   * 0 to 1. 0 pins the background to the screen, 1 is ordinary scrolling.
+   * Bigger means more movement — see `background-parallax.ts` for why the
+   * field is named after the speed rather than after the lag it produces.
+   */
+  parallaxSpeed?: number;
 };
 
 /** StarCaster: dimmer/tint screen layered over a section's background. */
@@ -1200,7 +1228,9 @@ export function createDefaultBackgroundSettings(): BackgroundSettings {
     videoBlur: 0,
     videoPlayOnMobile: false,
     videoFocalX: 50,
-    videoFocalY: 50
+    videoFocalY: 50,
+    parallax: false,
+    parallaxSpeed: DEFAULT_BACKGROUND_PARALLAX_SPEED
   };
 }
 
@@ -1238,7 +1268,13 @@ export function normalizeBackgroundSettings(value: unknown): BackgroundSettings 
     videoBlur: clampBackgroundNumber(background.videoBlur, 0, BUILDER_VIDEO_BLUR_MAX, 0),
     videoPlayOnMobile: background.videoPlayOnMobile === true,
     videoFocalX: Math.round(clampBackgroundNumber(background.videoFocalX, 0, 100, 50)),
-    videoFocalY: Math.round(clampBackgroundNumber(background.videoFocalY, 0, 100, 50))
+    videoFocalY: Math.round(clampBackgroundNumber(background.videoFocalY, 0, 100, 50)),
+    // Only an explicit `true` turns it on. Every other value — absent, null,
+    // the string "false" a form control might hand back — reads as off, so the
+    // millions of stored backgrounds that predate this key cannot acquire a
+    // layer by accident.
+    parallax: background.parallax === true,
+    parallaxSpeed: clampBackgroundParallaxSpeed(background.parallaxSpeed)
   };
 }
 
@@ -1707,6 +1743,47 @@ export function builderVideoCrossfades(
     return false;
   }
   return resolveBuilderVideoLoopFade(background, windowSeconds) > 0;
+}
+
+/**
+ * Does this background parallax, and does it have anything to parallax WITH?
+ *
+ * One answer, read by both the section renderer (which decides whether to
+ * mount a layer and contain it) and the layer itself (which decides what to
+ * paint). Two implementations of this question would disagree the first time
+ * one of them learned about a new mode, and the failure would be a section
+ * that reserves a containing block for a layer that never arrives.
+ *
+ * Modes "image" and "video" only. Page-background and cell parallax are
+ * follow-ups and wait on those surfaces growing a layer at all.
+ */
+export function builderBackgroundParallaxActive(background: BackgroundSettings | undefined): boolean {
+  if (!background || background.parallax !== true) {
+    return false;
+  }
+  if (background.mode === "image") {
+    return Boolean(background.imageUrl);
+  }
+  if (background.mode === "video") {
+    return Boolean(background.videoUrl);
+  }
+  return false;
+}
+
+/**
+ * The speed the renderer should actually use, in one place so "off" and
+ * "reduce motion" cannot drift apart: both return the inert speed, at which
+ * the overscan and the offset are both exactly zero and the layer sits
+ * precisely where the section's own CSS background already is.
+ */
+export function builderBackgroundParallaxSpeed(
+  background: BackgroundSettings | undefined,
+  reducedMotion = false
+): number {
+  if (reducedMotion || !builderBackgroundParallaxActive(background)) {
+    return BACKGROUND_PARALLAX_SPEED_INERT;
+  }
+  return clampBackgroundParallaxSpeed(background?.parallaxSpeed);
 }
 
 export function builderVideoBackgroundPosition(background: BackgroundSettings | undefined): string {

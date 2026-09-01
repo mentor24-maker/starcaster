@@ -5,6 +5,7 @@ import type { BackgroundSettings, BuilderTemplateLayout, BuilderTemplateSection 
 import {
   getLayoutColumnPercents,
   getLayoutColumns,
+  normalizeRowOverlayScreenSettings,
   normalizeSignedOffsetValue,
   seedVideoBackgroundOverlayScreen
 } from "@/lib/builder-template";
@@ -34,6 +35,39 @@ function updateSectionBackground(
   updater: (background: BackgroundSettings) => BackgroundSettings
 ) {
   onUpdateSection((current) => ({ ...current, background: updater(current.background) }));
+}
+
+/**
+ * The same move for the overlay screen — the layer of colour, gradient or
+ * image painted OVER the row's own background.
+ *
+ * It normalizes first because `overlayScreen` is optional on the section: a
+ * row saved before the screen existed carries nothing at all, and
+ * `updater(undefined.background)` is the crash. Normalizing also keeps the
+ * opacity that is already there, which spreading a bare `{ background }`
+ * would drop — the operator sets strength once and changes type twice, and
+ * losing 45% back to 100% on a type change is the kind of silent edit this
+ * panel exists to make visible.
+ */
+function updateSectionOverlayBackground(
+  onUpdateSection: BuilderSectionControlsProps["onUpdateSection"],
+  updater: (background: BackgroundSettings) => BackgroundSettings
+) {
+  onUpdateSection((current) => {
+    const overlay = normalizeRowOverlayScreenSettings(current.overlayScreen);
+    return { ...current, overlayScreen: { ...overlay, background: updater(overlay.background) } };
+  });
+}
+
+/** Strength of that screen, 0-100. Same normalize-first reason as above. */
+function updateSectionOverlayOpacity(
+  onUpdateSection: BuilderSectionControlsProps["onUpdateSection"],
+  opacity: number
+) {
+  onUpdateSection((current) => {
+    const overlay = normalizeRowOverlayScreenSettings(current.overlayScreen);
+    return { ...current, overlayScreen: { ...overlay, opacity } };
+  });
 }
 
 /**
@@ -109,6 +143,12 @@ export function BuilderSectionControls({
     return stored > 0 ? stored : layoutPercents[index] ?? 0;
   });
 
+  // Read through the normalizer rather than off the section: `overlayScreen`
+  // is optional, and a row saved before the screen existed has none at all.
+  // The normalizer is also what the renderer and the serializer read it
+  // through, so the panel shows exactly the value that will be painted.
+  const overlayScreen = normalizeRowOverlayScreenSettings(section.overlayScreen);
+
   return (
     <div className="builder-section-settings is-lattice">
       {/*
@@ -126,7 +166,7 @@ export function BuilderSectionControls({
        * `check_panels` all come with it, and a row editor now reads like a
        * module editor (S1 — learn one, know them all).
        */}
-      <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "4" } as CSSProperties}>
+      <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "5" } as CSSProperties}>
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Structure</div>
           <BuilderSettingRow label="Layout">
@@ -290,7 +330,7 @@ export function BuilderSectionControls({
             use, so spacing is one thing to learn everywhere (S1/C8). The
             values live on the section itself rather than in a settings
             record, which is all the adapter below is doing.
-          */}
+         */}
           <BuilderModuleSpacingFields
             box="margin"
             max={160}
@@ -424,6 +464,52 @@ export function BuilderSectionControls({
                     />
                   </BuilderSettingRow>
         </div>
+        {/*
+         * OVERLAY — the screen painted over this row's own background.
+          *
+         * A lattice column rather than a trailing block under the Row
+         * Background strip, and that is the whole reason it is here:
+         * `check_panels` measures `.builder-schema-panel-column` (plus item
+         * managers and chrome strips) and NOTHING else, so the trailing
+         * strip at the bottom of this panel is not measured today. A group
+         * placed there could stagger and the check would still go green —
+         * the exact shape that put two broken panels in front of the
+         * operator in August. In a column it is measured like every other
+         * group, and breaking it on purpose fails the check.
+          *
+         * The picker itself is the shared `BuilderBackgroundControls`, not a
+         * copy: image overlays already render because `BackgroundSettings`
+         * is the same type on both layers. `allowVideo` is deliberately off
+         * (a video screen over a video background is a second <video>), and
+         * no gallery callbacks are passed, so the component uses its own
+         * picker and writes to the OVERLAY — handing it the row's
+         * `onOpenSectionBackgroundGallery` would quietly set the row's
+         * background instead.
+         */}
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Overlay</div>
+          <BuilderBackgroundControls
+            horizontal
+            label="Overlay"
+            modeLabel="Overlay Type"
+            background={overlayScreen.background}
+            onChange={(updater) => updateSectionOverlayBackground(onUpdateSection, updater)}
+            themeBackgroundColor={themeBackgroundColor}
+            themeColors={themeColors}
+            themePrimaryColor={themePrimaryColor}
+          />
+          {overlayScreen.background.mode !== "none" ? (
+            <BuilderSettingRow label="Opacity">
+              <BuilderNumberSelectControl
+                value={String(overlayScreen.opacity)}
+                min={0}
+                max={100}
+                fallback="100"
+                onChange={(value) => updateSectionOverlayOpacity(onUpdateSection, Number(value))}
+              />
+            </BuilderSettingRow>
+          ) : null}
+        </div>
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Visibility</div>
           <BuilderSettingRow label="Visibility">
@@ -464,6 +550,7 @@ export function BuilderSectionControls({
       <BuilderBackgroundControls
         hideModeRow
         allowVideo
+        allowParallax
         label="Row Background"
         background={section.background}
         horizontal

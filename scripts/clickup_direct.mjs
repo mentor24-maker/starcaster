@@ -91,7 +91,7 @@ const {
 } = conflictWork;
 const {
   prOpenedComment, verdictComment, prTrailLanded, prBodyCarriesTicket,
-  readyToLaunchGate, isReadyToLaunch,
+  commentsReadable, readyToLaunchGate, isReadyToLaunch,
 } = loopTrail;
 // Lane A (task 86bbkw2au). Every DECISION is in the module and tested there;
 // what lives out here is the network and the file, nothing else.
@@ -350,10 +350,14 @@ function usage(code = 2) {
   console.error('                                             this loop could actually CLAIM. Prints one integer on stdout');
   console.error('                                             and the reason on stderr; always exits 0 (an unreadable queue');
   console.error('                                             answers with the configured fallback). Floor 900s.');
-  console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->]');
+  console.error('  pr-opened --task <id> --pr <url|number> [--repo owner/name] [--body-file <file|->] [--if-missing]');
   console.error('                                             record the PR on the ticket in the ONE shape the merge step');
   console.error('                                             can read. Refuses first if the PR body carries no link back');
   console.error('                                             to the ticket, then verifies the comment by parsing it back.');
+  console.error('                                             --if-missing writes nothing when the merge step can ALREADY');
+  console.error('                                             find this PR on the ticket, whoever put it there — for');
+  console.error('                                             `npm run ship`, which is meant to be re-run and would');
+  console.error('                                             otherwise leave one line per catch-up round.');
   console.error('  send-back-rounds --task <id>               how many times this ticket has been sent back, what each round found,');
   console.error('                                             and whether the next one escalates. Exit 3 = escalate, do not send back.');
   console.error('  verdict --task <id> --pass|--fail --if-status "In review" [--body-file <file|->] [--no-guard] [--fourth-round-anyway]');
@@ -509,6 +513,61 @@ function gh(args) {
     stdout: String(out.stdout || ''),
     stderr: String(out.stderr || out.stdout || '').trim(),
   };
+}
+
+/**
+ * "Is the merge side full?" — the ONE probe, wired to this script's `gh` and
+ * `fetchAllTasks`.
+ *
+ * WHY IT IS A FUNCTION AND NOT TWO CALL SITES (2026-08-31, task 86bbq8br2).
+ * `wip-check` and `next-interval` each asked that question in their own words
+ * and got opposite answers: the claim gate reported room to claim while the
+ * sleep timer wrote "the work-in-progress cap is full" into the log and slept
+ * the maximum hour, with 38 tickets waiting. Neither was buggy in isolation.
+ * `next-interval` simply asked GitHub for `number,state` and passed no ticket
+ * statuses, so it took the documented conservative fallback of counting every
+ * open PR — including the four whose tickets were `Queued` for rework, which
+ * is the exact deadlock task 86bbm4zwd had already fixed for the claim gate.
+ *
+ * So the two things that have to match now live in one place: the `--json`
+ * field list (it MUST include `body` — that is how `classifyPrs` finds a PR's
+ * ticket, and without it every PR falls into "no ticket found" and counts),
+ * and `include_closed` on the queue read (a zombie PR's ticket is `Live`, and
+ * without it that PR reports as having no ticket at all).
+ *
+ * The callers still differ in the direction they fail, which is deliberate and
+ * lives with them: `wip-check` fails open, `next-interval` fails toward capped.
+ *
+ * Both I/O calls THROW on failure and `wipCap.probeCap` catches them, which is
+ * also what keeps the old last-resort guard here: an unhandled rejection is
+ * exit 1, and loop-build reads exit 1 as "proceed, unbounded by the cap".
+ */
+function capProbe({ repo } = {}) {
+  return wipCap.probeCap({
+    cap: wipCap.resolveCap(process.env),
+    listOpenPrs: async () => {
+      const args = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state,body'];
+      if (repo) args.push('--repo', repo);
+      const out = gh(args);
+      if (!out.ok) throw new Error(out.stderr.slice(0, 200) || 'gh failed');
+      try {
+        return JSON.parse(out.stdout);
+      } catch {
+        throw new Error('gh returned output that is not JSON');
+      }
+    },
+    readTicketStatuses: async () => {
+      // fatal:false is REQUIRED — see fetchAllTasks. With the default, a
+      // routine ClickUp 429 exits 1 before this function can report anything.
+      const listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+      if (!Array.isArray(listed.tasks) || !listed.tasks.length) {
+        throw new Error(listed.failed || 'no tasks came back');
+      }
+      const byId = Object.create(null);
+      for (const t of listed.tasks) byId[String(t.id)] = t.status?.status ?? '';
+      return byId;
+    },
+  });
 }
 
 /** Post to the party line. Returns ok/why so a caller can report a failure
@@ -1513,79 +1572,26 @@ if (cmd === 'whoami') {
   //
   // Reads only. A capped pass must leave the queue exactly as it found it, so
   // nothing here writes to ClickUp — no status, no comment, no Loop note.
-  const cap = wipCap.resolveCap(process.env);
-  const repoArg = arg('repo') || '';
-  // `body` carries the ticket link every loop-opened PR must have (pr-opened
-  // refuses without one), which is how a PR is matched to its ticket status.
-  const listArgs = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state,body'];
-  if (repoArg) listArgs.push('--repo', repoArg);
+  // One shared probe (`capProbe`), so this and `next-interval` cannot answer
+  // the same question differently again — task 86bbq8br2. What stays here is
+  // only what is genuinely this command's own: it fails OPEN.
+  const probe = await capProbe({ repo: arg('repo') || '' });
 
-  const out = gh(listArgs);
-  if (!out.ok) {
-    const undecided = wipCap.undeterminedDecision(out.stderr.slice(0, 200) || 'gh failed');
-    console.error(undecided.message);
-    process.exit(undecided.code);
-  }
-  let prs;
-  try { prs = JSON.parse(out.stdout); } catch {
-    const undecided = wipCap.undeterminedDecision('gh returned output that is not JSON');
+  if (!probe.determined) {
+    const undecided = wipCap.undeterminedDecision(probe.why);
     console.error(undecided.message);
     process.exit(undecided.code);
   }
 
-  // An open PR only counts when its TICKET says the work is in flight
-  // (task 86bbm4zwd). A ticket sent back to Queued with its PR still open is
-  // rework the loop must be free to claim; counting it deadlocked the build
-  // loop for four hourly passes on 2026-08-25.
-  //
-  // If the queue cannot be read, ticketStatusById stays undefined and
-  // wipDecision falls back to counting every open PR — the older, MORE
-  // restrictive reading. Failing toward the cap costs idle time; failing away
-  // from it costs the churn the cap exists to prevent.
-  //
-  // include_closed:true is REQUIRED here — a zombie PR's ticket is `Live`, and
-  // without it the ticket is simply absent from the map and the PR reports as
-  // "no ticket found", sending the reader after drift that does not exist.
-  //
-  // fatal:false is REQUIRED here — see fetchAllTasks. With the default, a
-  // routine ClickUp 429 exits 1, which loop-build reads as "proceed, uncapped".
-  //
-  // The try/catch below is a LAST RESORT, and it is worth being precise about
-  // what it is and is not (review round 2). `fatal:false` covers a response
-  // that arrived and was not ok. `call()` covers a request that never arrived,
-  // by converting the rejection into a non-ok response. Between them every
-  // known failure already lands in the conservative fallback — this catch
-  // exists only so that a FUTURE change to any of that plumbing still cannot
-  // let an exception out of here, because an unhandled rejection is exit 1 and
-  // loop-build reads exit 1 as "proceed, unbounded by the cap".
-  //
-  // Being a backstop, it is the one layer here no test can isolate: with the
-  // two above it working, nothing reaches it. It also actively HID a bug once
-  // — the JSON guard in fetchAllTasks was break-tested and passed anyway,
-  // because this catch swallowed the TypeError and produced the same exit
-  // code. That is why the tests in wipCapOutage.test.js assert the REASON
-  // reported, not just the exit code: every guard is pinned by wording only it
-  // can produce, so this one cannot mask another one going missing again.
-  let ticketStatusById;
-  let listed = null;
-  try {
-    listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
-  } catch (err) {
-    listed = { tasks: null, res: null, failed: String(err?.message || err) };
-  }
-  if (Array.isArray(listed.tasks) && listed.tasks.length) {
-    ticketStatusById = Object.create(null);
-    for (const t of listed.tasks) ticketStatusById[String(t.id)] = t.status?.status ?? '';
-  } else {
-    // Say WHY the stricter reading is in force. "6 open, cap 5" with no
-    // explanation is how the original deadlock stayed invisible for four
-    // passes; the same silence about a failed read would do it again.
-    console.error(`The Loop Queue could not be read (${listed.failed || 'no tasks came back'}), so every open PR is counted.`);
+  // Say WHY the stricter reading is in force. "6 open, cap 5" with no
+  // explanation is how the original deadlock stayed invisible for four
+  // passes; the same silence about a failed read would do it again.
+  if (!probe.statusesAvailable) {
+    console.error(`The Loop Queue could not be read (${probe.queueFailure}), so every open PR is counted.`);
   }
 
-  const decision = wipCap.wipDecision({ prs, cap, ticketStatusById });
-  console.log(decision.message);
-  process.exit(decision.code);
+  console.log(probe.decision.message);
+  process.exit(probe.decision.code);
 
 } else if (cmd === 'next-interval') {
   // How long should this loop sleep before its next pass? Prints ONE INTEGER
@@ -1636,22 +1642,30 @@ if (cmd === 'whoami') {
   // only `loop-build` pays for asking.
   let capReached = false;
   if (loop === 'loop-build') {
-    // `--repo` pins the probe to a repository the way `wip-check` allows, so
-    // it is not silently cwd-dependent (review round 1).
-    const repo = arg('repo');
-    const capOut = gh(['pr', 'list', ...(repo ? ['--repo', repo] : []), '--state', 'open', '--limit', '200', '--json', 'number,state']);
-    let prs = null;
-    if (capOut.ok) { try { prs = JSON.parse(capOut.stdout); } catch { prs = null; } }
-    if (prs === null) {
+    // The SAME probe `wip-check` uses — ticket statuses and all. Before task
+    // 86bbq8br2 this read `number,state` and passed no statuses, so it counted
+    // PRs whose tickets were `Queued` for rework and reported a full cap while
+    // the claim gate reported room. `--repo` pins it to a repository the way
+    // `wip-check` allows, so it is not silently cwd-dependent (review round 1).
+    const probe = await capProbe({ repo: arg('repo') || '' });
+    if (!probe.determined) {
       // Unlike `wip-check`, this one assumes the cap IS full when it cannot
       // count. `wip-check` fails open because refusing there would stop all
       // work on a transient `gh` hiccup; here the pass has already run and the
       // only question is how long to sleep, so the safe direction is the long
       // one. Never silent.
       capReached = true;
-      console.error(`  (could not count open PRs — assuming the WIP cap is full, which lengthens this sleep rather than shortening it)`);
+      console.error(`  (could not count open PRs — ${probe.why}; assuming the WIP cap is full, which lengthens this sleep rather than shortening it)`);
     } else {
-      capReached = wipCap.wipDecision({ prs, cap: wipCap.resolveCap(process.env) }).code === 3;
+      if (!probe.statusesAvailable) {
+        console.error(`  (the Loop Queue could not be read — ${probe.queueFailure}; every open PR is counted, the conservative reading)`);
+      }
+      capReached = probe.decision.code === 3;
+      // Print the cap sentence itself, not just its effect. This is the line
+      // that makes a disagreement with `wip-check` visible in the log instead
+      // of having to be inferred from an interval, which is how the original
+      // took a morning to spot.
+      console.error(`  (cap: ${String(probe.decision.message).split('\n')[0]})`);
     }
   }
 
@@ -2135,6 +2149,19 @@ if (cmd === 'whoami') {
   // reading titles. Checked before the comment is posted: a PR that cannot be
   // traced back to its ticket is not a finished hand-off, and fixing the body
   // afterwards is a step nobody remembers.
+  //
+  // IT RUNS BEFORE --if-missing CAN SHORT-CIRCUIT (task 86bbq7z1k, round 2).
+  // This check used to sit inside the idempotence skip below, so a
+  // ticket that already carried a trail was reported as "already recorded",
+  // exit 0, whatever its PR body said. Ship then declared success and the
+  // review gate FAILED the same PR with "the PR body carries no ClickUp ticket
+  // link, so there is no review to check" — a cheerful all-clear standing in
+  // front of a refusal, which is the precise failure mode this ticket exists to
+  // eliminate. Reachable whenever ship reuses an already-open PR whose body
+  // predates this change and whose trail was written by hand.
+  //
+  // So `--if-missing` skips the COMMENT, never the verification. Both halves of
+  // the trail are checked on every run; only the write is idempotent.
   const view = gh(['pr', 'view', String(prNumber), '--repo', repo, '--json', 'body,url,title,number']);
   if (!view.ok) {
     console.error(`Could not read PR #${prNumber} from ${repo}: ${view.stderr.slice(0, 300)}`);
@@ -2155,27 +2182,65 @@ if (cmd === 'whoami') {
     process.exit(4);
   }
 
-  const text = prOpenedComment(prUrl, arg('body-file') ? readBody(arg('body-file')) : '');
-  const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: text });
-  if (!out.res.ok) die('post the "PR opened" comment', out);
+  // IDEMPOTENCE (--if-missing, task 86bbq7z1k). `npm run ship` now records the
+  // trail itself, and ship is designed to be run again whenever main moves
+  // under it — so the SAME PR reaches this command repeatedly. Without a
+  // preflight each run posts another identical line, and the ticket collects
+  // one per catch-up round. The question is not "did I already post" but the
+  // consumer's own question, asked with the consumer's own reader: can the
+  // merge step already find THIS PR here? A line written by a loop, or by hand,
+  // counts exactly the same — it is the trail that matters, not its author.
+  let alreadyRecorded = false;
+  if (flag('if-missing')) {
+    const pre = await call('GET', `/api/v2/task/${task}/comment`);
+    if (!pre.res.ok) die('read the task comments', pre);
+    // CANNOT TELL IS NOT "NOT RECORDED". This used to read
+    // `pre.json.comments || []`, so a 200 carrying no comments list collapsed
+    // to an empty array, read as "no trail here", and wrote — a duplicate
+    // "PR opened:" line, which is the one thing --if-missing exists to prevent.
+    // An empty ARRAY is a real answer and still writes; a missing one is not.
+    if (!commentsReadable(pre.json)) {
+      console.error(`\nCould not read task ${task}'s comments: HTTP ${pre.res.status} with no comment list in the body.`);
+      console.error('--if-missing cannot tell whether this PR is already recorded, and a guard that');
+      console.error('cannot tell must not write — that is how a SECOND "PR opened:" line gets posted.');
+      console.error('Nothing was written. Run the same command again.\n');
+      process.exit(1);
+    }
+    if (prTrailLanded(pre.json.comments, prNumber).ok) {
+      alreadyRecorded = true;
+      console.log(`Task ${task}: PR #${prNumber} is already recorded on this ticket — nothing written.`);
+    }
+  }
 
-  // Read it back and parse it with the SAME function the merge step uses.
-  // "The write returned 200" is not the question; "can the merge step find
-  // this PR tomorrow" is (DOCTRINE 3.10).
-  const check = await call('GET', `/api/v2/task/${task}/comment`);
-  if (!check.res.ok) {
-    console.error(`WARNING: the comment posted but reading it back FAILED, so the trail is UNVERIFIED.`);
-    console.error('Check the ticket by eye before treating this task as handed off.');
-    process.exit(1);
+  let lastRes = null;
+  if (!alreadyRecorded) {
+    const text = prOpenedComment(prUrl, arg('body-file') ? readBody(arg('body-file')) : '');
+    const out = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: text });
+    if (!out.res.ok) die('post the "PR opened" comment', out);
+
+    // Read it back and parse it with the SAME function the merge step uses.
+    // "The write returned 200" is not the question; "can the merge step find
+    // this PR tomorrow" is (DOCTRINE 3.10).
+    const check = await call('GET', `/api/v2/task/${task}/comment`);
+    // An unreadable body belongs HERE, with the other "could not check" case —
+    // not below with "the trail did NOT land". The write already succeeded, so
+    // the trail is UNVERIFIED, not absent, and saying absent sends whoever
+    // reads it off to fix a comment that is probably fine.
+    if (!check.res.ok || !commentsReadable(check.json)) {
+      console.error(`WARNING: the comment posted but reading it back FAILED, so the trail is UNVERIFIED.`);
+      console.error('Check the ticket by eye before treating this task as handed off.');
+      process.exit(1);
+    }
+    const landed = prTrailLanded(check.json.comments, prNumber);
+    if (!landed.ok) {
+      console.error(`\nThe "PR opened" trail did NOT land: ${landed.why}.`);
+      console.error('The merge step will refuse this ticket, and the operator\'s approval will sit');
+      console.error('there doing nothing. Fix the comment by hand before handing this to review.\n');
+      process.exit(1);
+    }
+    console.log(`Task ${task}: PR #${prNumber} recorded (${prUrl}), read back and parsed by the merge step's own reader.`);
+    lastRes = check.res;
   }
-  const landed = prTrailLanded(check.json.comments || [], prNumber);
-  if (!landed.ok) {
-    console.error(`\nThe "PR opened" trail did NOT land: ${landed.why}.`);
-    console.error('The merge step will refuse this ticket, and the operator\'s approval will sit');
-    console.error('there doing nothing. Fix the comment by hand before handing this to review.\n');
-    process.exit(1);
-  }
-  console.log(`Task ${task}: PR #${prNumber} recorded (${prUrl}), read back and parsed by the merge step's own reader.`);
 
   // Now the number exists, so fill it into the work-log entry that was written
   // before it did. This is the whole point of doing it HERE: it is the one
@@ -2221,7 +2286,11 @@ if (cmd === 'whoami') {
     process.exit(1);
   }
 
-  reportLimits(check.res);
+  // Deliberately OUTSIDE the skip above: the placeholder fill has to run even
+  // when the comment was already there. The one state that would otherwise be
+  // unreachable is a run that posted the trail and then failed to fill the
+  // work-log — a second run would skip straight past the repair it exists for.
+  if (lastRes) reportLimits(lastRes);
 
 } else if (cmd === 'verdict') {
   // loop-review's verdict, made into a command for the same reason as

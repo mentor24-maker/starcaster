@@ -23,6 +23,7 @@ const bufferClient = require('../lib/bufferClient');
 const { stageCampaignVideoForBuffer } = require('../lib/bufferVideoStaging');
 const metaClients = require('../lib/metaClients');
 const metaOAuth = require('../lib/metaOAuth');
+const connectionsRegistry = require('../lib/connections/registry');
 const { verifyOAuthState } = require('../lib/metaOAuthState');
 const projectSocialCredentialsStore = require('../lib/projectSocialCredentialsStore');
 const { getAppPublicOrigin } = require('../lib/appOrigin');
@@ -1903,12 +1904,20 @@ async function handle(req, res, pathname, method) {
     if (!scope.projectId) {
       return sendErr(res, 400, 'Active project is required', { code: 'PROJECT_REQUIRED' }), true;
     }
-    if (!metaOAuth.isMetaAppConfigured()) {
+    // Through the registry rather than straight at Meta: this endpoint is the
+    // proof that the adapter contract can carry a flow that already worked
+    // (Connections 2 of 7). Its URL, its errors and its response body are
+    // deliberately unchanged — if anything here reads differently to the
+    // browser, the port is wrong.
+    const adapterRes = connectionsRegistry.getAdapter('facebook_page');
+    if (!adapterRes.ok) {
+      return sendErr(res, adapterRes.status || 500, adapterRes.error, { code: 'FACEBOOK_ADAPTER_UNAVAILABLE' }), true;
+    }
+    const facebookAdapter = adapterRes.data;
+    if (!facebookAdapter.isConfigured()) {
       return sendErr(res, 400, 'Meta app_id and app_secret are required (Vercel env or Settings > APIs > Meta)', { code: 'META_APP_NOT_CONFIGURED' }), true;
     }
-    const origin = getAppPublicOrigin(req);
-    const start = metaOAuth.buildOAuthStartUrl({
-      origin,
+    const start = facebookAdapter.authorizeUrl({
       projectId: scope.projectId,
       userId: scope.userId,
     });
@@ -1920,8 +1929,20 @@ async function handle(req, res, pathname, method) {
 
   if (pathname === '/api/promote/social/facebook/oauth/callback' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
+    // The origin the BROWSER is sent back to when this is over — the admin app
+    // the client is standing in, so it stays request-based and a local sign-in
+    // returns locally. The redirect_uri below is a different thing entirely:
+    // it is registered with Meta, so it comes from the adapter's pinned origin.
     const origin = getAppPublicOrigin(req);
-    const redirectUri = metaOAuth.buildRedirectUri(origin);
+    const callbackAdapterRes = connectionsRegistry.getAdapter('facebook_page');
+    if (!callbackAdapterRes.ok) {
+      return sendRedirect(res, settingsOAuthReturnUrl(origin, {
+        fb_oauth: 'error',
+        fb_error: callbackAdapterRes.error,
+      })), true;
+    }
+    const callbackAdapter = callbackAdapterRes.data;
+    const redirectUri = callbackAdapter.callbackUrl();
     const oauthError = safeText(urlObj.searchParams.get('error'));
     const oauthErrorDesc = safeText(urlObj.searchParams.get('error_description'));
     if (oauthError) {
@@ -1948,7 +1969,7 @@ async function handle(req, res, pathname, method) {
       })), true;
     }
 
-    const exchange = await metaOAuth.completeOAuthCodeExchange(code, redirectUri);
+    const exchange = await callbackAdapter.exchange({ code, redirectUri });
     if (!exchange.ok) {
       return sendRedirect(res, settingsOAuthReturnUrl(origin, {
         fb_oauth: 'error',
