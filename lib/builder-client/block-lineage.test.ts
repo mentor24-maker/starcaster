@@ -131,6 +131,33 @@ describe("describeBlockLineage", () => {
     expect(lineage.line).toBeNull();
   });
 
+  it("drops the repeated name when the heading already shows the master's", () => {
+    // Since the card titles a following copy by its master
+    // (`resolveSharedSectionTitle`), `Copy of "2a - Header"` sat directly under
+    // a heading reading `2a - Header`. Keep the reach, drop the repeat.
+    const lineage = describeBlockLineage({
+      isFollowing: true,
+      masterName: "2a - Header",
+      usage: usage({ pages: 35, following: 35 }),
+      namedInTitle: true,
+    });
+    expect(lineage.line).toBe("Used on 35 pages");
+    expect(lineage.line).not.toContain("Copy of");
+  });
+
+  it("says nothing at all when the heading names the master and nothing follows", () => {
+    // Not an empty string and not "used on 0 pages" — the same negative rule
+    // the Independent state is held to.
+    expect(
+      describeBlockLineage({
+        isFollowing: true,
+        masterName: "2a - Header",
+        usage: usage(),
+        namedInTitle: true,
+      }).line
+    ).toBeNull();
+  });
+
   it("reads its count from the real usage index, not a second counter", () => {
     // Guards the wiring as well as the wording: if the index shape ever moves,
     // this fails here rather than showing a wrong number in the header.

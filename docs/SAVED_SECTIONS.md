@@ -56,6 +56,68 @@ regenerated as a plain copy.
 
 ---
 
+## 1a. One name, and where it is kept
+
+A saved section carries a name in two places: the manager row's `name`, and
+`section.title` inside the content it stores. Nothing kept them together until
+2026-08-30, and the fan-out actively pulled them apart — a rename wrote `name`
+alone, then `propagateCanonicalSection` pushed the master's content, stale
+title included, over every following page. Dane renamed the Delray site header
+three times on 2026-08-29 and watched every page card snap back to the old
+name each time. The only thing that had ever moved the stamped title was a push
+FROM a page (§2, "Overwrite the original"), which nobody would guess.
+
+The rule now is that there is **one name**, and it can be moved from either
+end — `lib/builder-client/saved-section-name.ts`:
+
+- **Renaming the master stamps the content too.** `applySavedSectionName` runs
+  before the PATCH in both places that write a master (`saveSavedSection` in
+  `components/admin-builder-editor.tsx`, `handleSave` in
+  `components/builder/saved-section-editor-modal.tsx`), so the fan-out that
+  used to undo the rename now carries it.
+- **A push from a page moves the name with the title.** That save already
+  carried the page's `title`; the row name follows it rather than being left
+  behind as a second, stale string. An untitled section keeps the name the
+  original already has — a push must never blank it.
+- **Either way the dialog says so.** `describeSavedSectionRename` adds one
+  line — "This also renames it on 35 pages" — to the manager's confirm and to
+  `BuilderSectionSaveModal`. Null when the name is not moving, or when nothing
+  follows the master.
+
+  It compares the master's **row name** against the name the save will leave on
+  it — never a stamped content title, and this is the whole correctness of it.
+  Asking the stamps instead was silent on exactly the rows that needed it: on a
+  legacy master where `name` is "2a - Header" and `section.title` is still
+  "Menu Banner", a push from a page carrying the stale stamp compared
+  "Menu Banner" with "Menu Banner", saw nothing moving, and said nothing —
+  while the row name went to "Menu Banner" and the manager rename was undone.
+  The reported bug again, reached through the other door (review send-back,
+  2026-08-30).
+
+  Its count also subtracts the drifted followers, because they are skipped by
+  the fan-out and keep their old stamp. It sits directly under
+  `describePushImpact`, which already subtracts them, and two different numbers
+  in one dialog is worse than either number alone.
+- **Every list shows the master's name, not the stamp.** `resolveSharedSectionTitle`
+  titles a following copy by its master, so a stale stamp cannot contradict the
+  manager on screen. No migration is being run over the rows that already
+  diverge; they simply stop being visible, and converge the next time the
+  section is saved. A copy whose master was deleted falls back to its stamp,
+  because then the stamp is the only name there is. The same resolver names a
+  section in the "add saved section under…" picker (`sectionDisplayName`), which
+  listed raw `section.title` and so offered a section under a different name
+  from the one its own card was showing, one click away.
+- The lineage line beneath drops `Copy of "…"` when the heading already names
+  the master (`namedInTitle`, `./block-lineage.ts`) and keeps the reach.
+
+It lives in `lib/builder-client/` rather than in `routes/builder.js` because
+those two clients are the only things that PATCH a master, and putting it on
+the server would need a hand-ported CommonJS twin of the kind `hasSectionDrifted`
+already carries — a second copy to keep in sync, for no reach it does not
+already have.
+
+---
+
 ## 2. The two saves
 
 The 💾 button on an unlinked instance can mean two entirely different things,
@@ -68,6 +130,20 @@ write the saved-section manager makes. The route rewrites the original and then
 **and what changes on each** (§3a); the message afterwards gives the tally and
 an **Undo this update** button. The instance you saved from is relinked,
 because the original now holds exactly its content.
+
+**The relink takes the master back as the SERVER stored it**
+(`relinkPushedSection`), keeping only the copy's own `id`. Setting
+`savedSectionId` and `canonical` on the copy and stopping there is not enough,
+and the gap is not small: the save route normalises a section on write, filling
+in some forty defaults the client never sent, so the copy differed from the
+master the moment it rejoined it. `hasSectionDrifted` compares content verbatim,
+so the card flipped to **Changed** on the spot and every later fan-out skipped
+that page — the state the relink exists to prevent, created by the relink. The
+title could differ on its own too, whenever the page's section was untitled, or
+padded, or past the 255-character truncation. Taking the stored master wholesale
+answers all of it at once, and cannot be reopened by a new default appearing in
+the normaliser. It is the same move `handleToggleSectionCanonical` already makes
+when it reverts a copy to its master.
 
 **Save as a new section.** `POST /api/builder/saved-sections` — files a separate
 original under a name you type. The old, and until 2026-08-16 the only,
@@ -173,6 +249,10 @@ you are editing holds a second following copy of the same section.
 
 ## 4. Landmines
 
+0. **A saved section used to have two names and only one was renameable.**
+   Fixed 2026-08-30 (§1a). If you add a third place that writes a master, it
+   must go through `applySavedSectionName` or the rename it makes will be
+   undone by its own fan-out — silently, and only on the OTHER pages.
 1. **Nothing stops two originals sharing a name.** There is no unique
    constraint on `name` and no collision check on create. Before 2026-08-16 the
    only save available from a page was "create", so typing the original's name
@@ -205,6 +285,7 @@ you are editing holds a second following copy of the same section.
 | The dialog | `components/builder/builder-section-save-modal.tsx` |
 | Impact + outcome wording, drift counts | `lib/builder-client/shared-block-usage.ts` — `driftedFollowingPages` |
 | Per-page diff before the click | `lib/builder-client/saved-section-diff.ts` |
+| One name: stamp, notice, display | `lib/builder-client/saved-section-name.ts` |
 | Card states, badges, buttons | `components/builder/builder-section-card.tsx` |
 | Routes | `routes/builder.js` — `/api/builder/saved-sections*`, `/force-propagate` |
 | Store | `lib/builderSavedSectionsStore.js` — `getSavedSection` reads the pre-save original |
