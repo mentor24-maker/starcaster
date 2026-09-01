@@ -57,6 +57,66 @@ const CONFLICT_TICKET_RE = /CONFLICT TICKET FILED:\s*PR\s*#(\d+)\s*—\s*(\S+)/i
  *  impossible; one pass of noise per day is the price. */
 const STALE_HAND_OFF_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * THE ONE PREDICATE (2026-08-31, task 86bbq80j5).
+ *
+ * `gate.action === 'conflict'` is GitHub's answer, and GitHub's answer about a
+ * branch is often minutes stale. What THIS machine found when it tried the
+ * merge itself is the `localVerdict`, and only one of its two kinds is work
+ * anybody can do:
+ *
+ *   'real-conflict' — the branches genuinely changed the same lines. Somebody
+ *                     has to decide what the merged file says.
+ *   'unknown'       — the check could not run, or ran and found no overlap at
+ *                     all: a lost push race, a stale GitHub answer. There is
+ *                     nothing to resolve. The next pass retries and it clears.
+ *
+ * On 2026-08-30 the merge step filed a resolution ticket on `gate.action`
+ * alone, while the hand-off comment built moments later read the verdict and
+ * correctly promised the next pass would merge it (PR #444, ticket 86bbmmv7t).
+ * Two comments landed 200ms apart naming two different actors, and the filed
+ * ticket — "Resolve the merge conflict on PR #444" — described clearing
+ * conflict markers that did not exist. `git merge-tree` on that pair exited 0.
+ *
+ * So the filing decision and the notice's actor read ONE function. They cannot
+ * drift, because there is only one answer to read.
+ */
+function conflictVerdictKind(localVerdict) {
+  // `localVerdict === null` IS A DELIBERATE CHOICE, not a fallthrough
+  // (criterion 4 of task 86bbq80j5). Null means the local check produced no
+  // verdict, which happens two ways and neither is evidence of an overlap:
+  //
+  //   - a dry run, where the check is never attempted (and a dry run files
+  //     nothing regardless);
+  //   - the local catch-up SUCCEEDED and pushed, and GitHub's re-read still
+  //     said conflict — the textbook stale answer.
+  //
+  // Both read as 'unknown', so neither files a ticket. That is the safe
+  // direction and it is not silence: a hand-off still sitting there after
+  // STALE_HAND_OFF_MS announces itself on the bus either way, so a branch that
+  // really is stuck gets escalated by the stall path. Filing on a guess is the
+  // defect this predicate removes — a Queued ticket costs a build-loop pass
+  // and tells whoever claims it to clear markers that may not be there.
+  if (!localVerdict) return 'unknown';
+  if (localVerdict.kind) return localVerdict.kind;
+  return localVerdict.realConflict ? 'real-conflict' : 'unknown';
+}
+
+/** Did this machine find a genuine overlap? The only condition under which
+ *  resolving the conflict is work a named actor can be handed. */
+function isRealOverlap(localVerdict) {
+  return conflictVerdictKind(localVerdict) === 'real-conflict';
+}
+
+/**
+ * May the merge step file a Loop Queue ticket for this conflict? Same
+ * predicate, named for the decision it makes, so the call site in
+ * clickup_direct.mjs reads as the question it is asking.
+ */
+function shouldFileConflictTicket(localVerdict) {
+  return isRealOverlap(localVerdict);
+}
+
 /** The comment written on the ORIGINAL ticket, recording where the resolution
  *  work now lives. */
 function conflictTicketFiledComment({ id, url, prNumber }) {
@@ -94,10 +154,7 @@ function conflictTicketName({ pr, branch }) {
  * asked for again.
  */
 function conflictTicketBody({ task, pr, branch, localVerdict, commentId }) {
-  const kind = localVerdict
-    ? (localVerdict.kind || (localVerdict.realConflict ? 'real-conflict' : 'unknown'))
-    : '';
-  const what = kind === 'real-conflict'
+  const what = isRealOverlap(localVerdict)
     ? `This branch and \`main\` have both changed the same lines — ${localVerdict.reason}`
     : localVerdict
       ? `GitHub called it a conflict and the relay machine could not check whether that is true — ${localVerdict.reason}`
@@ -166,9 +223,19 @@ function ageText(ms) {
  * unreadable or missing one counts as stalled, on the same fail-safe reasoning
  * as everywhere else here — "nobody is working on it" and "I cannot tell" look
  * identical, and only one of them is safe to sit on.
+ *
+ * `actor` (2026-08-31, task 86bbq80j5) is the notice's own answer to "who acts
+ * next". It matters because `later-pass` is a NAMED, REAL actor with no ticket
+ * behind it: the verdict said there is no overlap to resolve, so the next relay
+ * pass retries the catch-up and it clears itself. Reading that as "no ticket,
+ * therefore nobody" would nag the bus every ten minutes about a branch that is
+ * healing on its own — the false-alarm class this ticket exists to remove. It
+ * still stalls on AGE: a self-healing hand-off that has not healed in a day is
+ * news, and the sentence says which of the two it is. Any other actor — and an
+ * absent one — keeps the original filed-ticket rule, which fails toward noise.
  */
-function handOffStalled({ at, now, filed }) {
-  if (!filed) {
+function handOffStalled({ at, now, filed, actor }) {
+  if (!filed && actor !== 'later-pass') {
     return { stalled: true, why: 'no conflict ticket has been filed, so nothing is going to pick this up', ageMs: null };
   }
   const then = Date.parse(String(at || ''));
@@ -179,7 +246,9 @@ function handOffStalled({ at, now, filed }) {
   if (ageMs < STALE_HAND_OFF_MS) return { stalled: false, ageMs };
   return {
     stalled: true,
-    why: `conflict ticket ${filed.id} has been open ${ageText(ageMs)} without clearing this conflict`,
+    why: filed
+      ? `conflict ticket ${filed.id} has been open ${ageText(ageMs)} without clearing this conflict`
+      : `no overlap was found, so every pass has been retrying the catch-up on its own — and it has not cleared in ${ageText(ageMs)}`,
     ageMs,
   };
 }
@@ -195,6 +264,9 @@ function stalledHandOffLine({ task, pr, filed, stalled }) {
 
 module.exports = {
   CONFLICT_TICKET_TRAIL,
+  conflictVerdictKind,
+  isRealOverlap,
+  shouldFileConflictTicket,
   CONFLICT_TICKET_RE,
   STALE_HAND_OFF_MS,
   conflictTicketFiledComment,

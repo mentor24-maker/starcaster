@@ -87,7 +87,7 @@ const {
 } = mergeOnComment;
 const {
   conflictTicketFiledComment, findConflictTicket, conflictTicketName,
-  conflictTicketBody, handOffStalled, stalledHandOffLine,
+  conflictTicketBody, handOffStalled, stalledHandOffLine, shouldFileConflictTicket,
 } = conflictWork;
 const {
   prOpenedComment, verdictComment, prTrailLanded, prBodyCarriesTicket,
@@ -1003,9 +1003,20 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // room — nothing reads the bus — and PR #434 sat three days as a result.
     // Filing FIRST matters: the hand-off comment's promise is decided by
     // whether a ticket exists, so it must be settled before the body is built.
+    //
+    // ...but ONLY for a conflict that is real (2026-08-31, task 86bbq80j5).
+    // This used to file on `gate.action === 'conflict'` alone, never reading
+    // the verdict the block above had just computed. On 2026-08-30 a lost push
+    // race — the merge was clean, the push lost a race, `PUSH_FAILED` — was
+    // filed as "Resolve the merge conflict on PR #444", 200ms before the
+    // hand-off comment beside it correctly said the next pass would merge it.
+    // The acceptance criteria on that filed ticket described clearing conflict
+    // markers that did not exist. `shouldFileConflictTicket` is the same
+    // function `conflictHandOffNotice` reads to pick its actor, so the ticket
+    // and the promise cannot name two different people again.
     let filed = findConflictTicket(comments, pr.number);
     const alreadyFiled = Boolean(filed);
-    if (!filed && !dryRun) {
+    if (shouldFileConflictTicket(localVerdict) && !filed && !dryRun) {
       filed = await fileConflictTicket({
         task, pr, branch, localVerdict, commentId: decision.commentId, unchecked,
       });
@@ -1018,6 +1029,12 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       filed,
     });
     const handOffReason = notice.marker.replace(/^refused:\s*/, '');
+    // WHO ACTS NEXT, asked once. Every branch below used to key off `filed`,
+    // which conflates "no ticket" with "no actor" — wrong for a verdict that
+    // found no overlap, where the actor is the next pass and is real. The
+    // notice already decided this from the shared predicate; read its answer
+    // rather than re-deriving one (task 86bbq80j5).
+    const selfHealing = notice.actor === 'later-pass';
     if (lane) return { outcome: 'lane-cancel', reason: gate.reason };
 
     // The quiet path — right on the merits, and exactly where three days of
@@ -1034,7 +1051,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     const freshlyFiled = Boolean(filed) && !alreadyFiled;
     if (alreadySaid(handOffReason) && !freshlyFiled) {
       const stalled = handOffStalled({
-        at: decision.priorRefusalAt, now: Date.now(), filed,
+        at: decision.priorRefusalAt, now: Date.now(), filed, actor: notice.actor,
       });
       if (!stalled.stalled) {
         console.error(`  MERGE HANDED OFF (unchanged, nothing posted) on ${label}: ${gate.reason}`);
@@ -1056,23 +1073,38 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       return { outcome: 'handed-off-stalled', reason: stalled.why };
     }
 
-    console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}${filed ? ` — filed as ${filed.id}` : ' — NOT FILED, nothing will pick this up'}`);
+    const handOffActorLine = filed
+      ? ` — filed as ${filed.id}`
+      : selfHealing
+        ? ' — no overlap found; the next pass retries the catch-up'
+        : ' — NOT FILED, nothing will pick this up';
+    console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}${handOffActorLine}`);
     if (dryRun) {
-      console.error(`  DRY RUN — would file a Loop Queue ticket to resolve the conflict on ${branch}, then post a hand-off naming it`);
+      // A dry run never attempts the local catch-up, so it has no verdict and
+      // reads as self-healing. Say what it would actually do rather than
+      // promising a filing the real pass would decline to make.
+      console.error(selfHealing
+        ? `  DRY RUN — would post a hand-off saying the next pass retries the catch-up on ${branch}; no ticket filed`
+        : `  DRY RUN — would file a Loop Queue ticket to resolve the conflict on ${branch}, then post a hand-off naming it`);
       return { outcome: 'would-hand-off', reason: gate.reason };
     }
     const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
     if (!cOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} conflicts, but the hand-off comment FAILED to post`);
     // The bus post names the actor now instead of asking the room for one.
     // It is a notification, not a request — the work is already filed.
-    const busBody = filed
-      ? `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Resolving it is filed as ${filed.url} in the Loop Queue, which the build loop drains — no session needs to claim this from here. Dane's approval still stands: once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`
-      : `[CC-starcaster bus-relay] MERGE BLOCKED AND UNFILED — ${label} (${task.url}): PR #${pr.number} conflicts with main and the Loop Queue ticket could NOT be filed. Nothing is going to pick this up on its own. An agent session must be pointed at branch ${branch}. Ticket left in Ready to launch.\n\n${pr.url}`;
+    // Three actors, three sentences. The self-healing one is new: it used to
+    // get the UNFILED body, which tells the room to point an agent session at
+    // a branch that has nothing wrong with it (task 86bbq80j5).
+    const busBody = selfHealing
+      ? `[CC-starcaster bus-relay] MERGE DEFERRED — ${label} (${task.url}): GitHub called PR #${pr.number} a conflict, but this machine found no overlap between the branch and main. Nothing needs resolving and nobody needs to claim it; the next relay pass retries the catch-up. Ticket left in Ready to launch.\n\n${pr.url}`
+      : filed
+        ? `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Resolving it is filed as ${filed.url} in the Loop Queue, which the build loop drains — no session needs to claim this from here. Dane's approval still stands: once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`
+        : `[CC-starcaster bus-relay] MERGE BLOCKED AND UNFILED — ${label} (${task.url}): PR #${pr.number} conflicts with main and the Loop Queue ticket could NOT be filed. Nothing is going to pick this up on its own. An agent session must be pointed at branch ${branch}. Ticket left in Ready to launch.\n\n${pr.url}`;
     const bus = await postToBus(channel, busBody);
     // An unfiled hand-off is NOT cosmetic: the ticket comment says nothing is
     // working on it, and if the bus post fails too, nobody has been told.
-    if (!bus.ok) reportBusFailure({ cosmetic: Boolean(filed), unchecked, busSkipped, line: `${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})` });
-    if (!filed) unchecked.push(`${task.id}: PR #${pr.number} conflicts and NO Loop Queue ticket could be filed for it — no actor exists for this conflict, and it will not merge on its own`);
+    if (!bus.ok) reportBusFailure({ cosmetic: Boolean(filed) || selfHealing, unchecked, busSkipped, line: `${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})` });
+    if (!filed && !selfHealing) unchecked.push(`${task.id}: PR #${pr.number} conflicts and NO Loop Queue ticket could be filed for it — no actor exists for this conflict, and it will not merge on its own`);
     if (alreadyFiled) console.error(`  (conflict ticket ${filed.id} was already on file — not filed twice)`);
     await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'handed-off', reason: gate.reason, filed: filed ? filed.id : null };

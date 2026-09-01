@@ -15,7 +15,11 @@ const {
   ageText,
   handOffStalled,
   stalledHandOffLine,
+  conflictVerdictKind,
+  isRealOverlap,
+  shouldFileConflictTicket,
 } = require('./conflictWork.js');
+const { conflictHandOffNotice } = require('./mergeOnComment.js');
 
 const PR = { number: 434, url: 'https://github.com/mentor24-maker/starcaster/pull/434', repo: 'starcaster' };
 const TASK = { id: '86bbmfc15', name: 'A sanctioned way to clear the decks', url: 'https://app.clickup.com/t/86bbmfc15' };
@@ -163,6 +167,81 @@ test('the stalled report line names the actor, or says out loud there is none', 
   assert.match(without, /NOT filed anywhere — no actor exists for it/);
 });
 
+// ------------------------------------------- one predicate, two decisions
+//
+// TASK 86bbq80j5 (2026-08-31). On 2026-08-30 PR #444's catch-up merged cleanly
+// and lost a race on the PUSH. The hand-off comment read the verdict and said,
+// correctly, that the next pass would merge it. 200ms earlier the same pass had
+// filed "Resolve the merge conflict on PR #444" into the Loop Queue, because
+// the filing decision never consulted the verdict at all. Two comments, two
+// actors, and a ticket describing work that did not exist.
+
+/** Every shape a localVerdict is ever handed to this code in. */
+const VERDICTS = [
+  { label: 'a real overlap', v: { kind: 'real-conflict', reason: 'both touched routes/index.js' }, real: true },
+  { label: 'the legacy realConflict flag', v: { realConflict: true, reason: 'both touched routes/index.js' }, real: true },
+  { label: 'a lost push race', v: { kind: 'unknown', reason: 'the catch-up merged cleanly but could not be pushed' }, real: false },
+  { label: 'the legacy flag, false', v: { realConflict: false, reason: 'could not fetch the branch' }, real: false },
+  { label: 'no verdict at all', v: null, real: false },
+  { label: 'an undefined verdict', v: undefined, real: false },
+];
+
+test('THE LOST PUSH RACE: an unknown verdict files nothing', () => {
+  const race = { kind: 'unknown', reason: 'the catch-up merged cleanly but could not be pushed' };
+  assert.equal(shouldFileConflictTicket(race), false, 'nothing needs resolving, so nothing may be filed');
+  const notice = conflictHandOffNotice({ commentId: '77', pr: PR, localVerdict: race, filed: null });
+  assert.equal(notice.actor, 'later-pass');
+  assert.match(notice.body, /merged on the next run/i, 'and the promise it already made is unchanged');
+});
+
+test('a real overlap still files, exactly as before', () => {
+  assert.equal(shouldFileConflictTicket({ kind: 'real-conflict', reason: 'both touched routes/index.js' }), true);
+  assert.equal(shouldFileConflictTicket({ realConflict: true, reason: 'both touched routes/index.js' }), true);
+});
+
+test('THE DRIFT PROOF: the filing decision and the notice actor read one predicate', () => {
+  // Not "they happen to agree on these cases" — they cannot disagree, because
+  // conflictHandOffNotice calls isRealOverlap and so does the merge step. This
+  // test is the alarm if a future edit gives either side its own copy again.
+  for (const { label, v, real } of VERDICTS) {
+    const files = shouldFileConflictTicket(v);
+    const { actor } = conflictHandOffNotice({ commentId: '77', pr: PR, localVerdict: v, filed: null });
+    assert.equal(files, real, `${label}: filing decision`);
+    assert.equal(actor !== 'later-pass', real, `${label}: the notice names a different actor than the filing decision`);
+    assert.equal(files, isRealOverlap(v), `${label}: both sides must be the same function`);
+  }
+});
+
+test('NO VERDICT AT ALL is a decision, and the reason is written down', () => {
+  // Criterion 4. Null happens on a dry run, and when the local catch-up
+  // SUCCEEDED and GitHub's re-read still said conflict — a stale answer. It
+  // reads as 'unknown' and files nothing, on purpose.
+  assert.equal(conflictVerdictKind(null), 'unknown');
+  assert.equal(shouldFileConflictTicket(null), false);
+  const src = fs.readFileSync(path.join(__dirname, 'conflictWork.js'), 'utf8');
+  const fn = src.slice(src.indexOf('function conflictVerdictKind'), src.indexOf('function isRealOverlap'));
+  assert.match(fn, /DELIBERATE/, 'the null choice must be stated, not left to be re-derived by a reader');
+  assert.match(fn, /dry run/i);
+});
+
+test('a self-healing hand-off is quiet without a ticket — but not forever', () => {
+  // handOffStalled read "no ticket" as "no actor". For a later-pass hand-off
+  // the actor is the next pass and it is real, so nagging the bus every ten
+  // minutes would be the same false alarm one level down. Age still applies.
+  const now = Date.parse('2026-08-30T12:00:00.000Z');
+  const fresh = handOffStalled({ at: '2026-08-30T11:00:00.000Z', now, filed: null, actor: 'later-pass' });
+  assert.equal(fresh.stalled, false, 'a branch that is healing itself is not news');
+
+  const old = handOffStalled({ at: '2026-08-28T11:00:00.000Z', now, filed: null, actor: 'later-pass' });
+  assert.equal(old.stalled, true, 'but one that has not healed in a day is');
+  assert.match(old.why, /has not cleared in 2 days/);
+
+  // Any other actor keeps the original rule, which fails toward noise.
+  for (const actor of ['nobody', 'loop-queue', undefined]) {
+    assert.equal(handOffStalled({ at: '2026-08-30T11:00:00.000Z', now, filed: null, actor }).stalled, true, String(actor));
+  }
+});
+
 // ------------------------------------------------- the wiring, checked flat
 
 const SCRIPT = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
@@ -235,4 +314,28 @@ test('a stalled conflict is reported separately from things the pass could not c
     !/stalledHandOffs\.length\) process\.exit/.test(exitBlock),
     'a stalled conflict must not fail the relay run',
   );
+});
+
+test('THE FILING GATE IS IN THE MERGE STEP, not just in the predicate', () => {
+  // The predicate is only a fix if the call site asks it. This is the exact
+  // line that filed on `gate.action` alone for PR #444.
+  assert.match(
+    SCRIPT,
+    /if \(shouldFileConflictTicket\(localVerdict\) && !filed && !dryRun\) \{/,
+    'fileConflictTicket must be gated on the shared predicate',
+  );
+  assert.ok(
+    !/if \(!filed && !dryRun\) \{\n\s*filed = await fileConflictTicket/.test(SCRIPT),
+    'the ungated form must not come back',
+  );
+});
+
+test('the hand-off messages read the notice actor, never `filed` alone', () => {
+  // "No ticket" and "no actor" are different things, and every branch that
+  // conflated them told the room to point a session at a healthy branch.
+  const block = SCRIPT.slice(SCRIPT.indexOf('const selfHealing = notice.actor'), SCRIPT.indexOf("outcome: 'handed-off', reason"));
+  assert.match(SCRIPT, /const selfHealing = notice\.actor === 'later-pass';/);
+  assert.match(block, /actor: notice\.actor/, 'the stall check must know which actor it is waiting on');
+  assert.match(block, /const busBody = selfHealing/, 'the bus post must not call a self-healing branch blocked');
+  assert.match(block, /if \(!filed && !selfHealing\) unchecked\.push\(/, 'a self-healing hand-off is not an unchecked pass');
 });

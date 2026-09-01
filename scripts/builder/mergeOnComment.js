@@ -21,6 +21,10 @@
  * eligible, and a script never resolves a merge conflict.
  */
 
+// The one reading of a local merge verdict, shared with the merge step so the
+// two cannot disagree about it (task 86bbq80j5).
+const { isRealOverlap } = require('./conflictWork');
+
 /**
  * The exact phrases that mean "merge it". Deliberately a closed set matched
  * as a WHOLE comment, never as a substring: "do not merge this yet" and
@@ -573,10 +577,12 @@ function conflictHandOffNotice({ commentId, pr, localVerdict, filed }) {
   // remove — so the two get different sentences, and the difference comes from
   // the localVerdict rather than from a guess.
   //
-  const kind = localVerdict
-    ? (localVerdict.kind || (localVerdict.realConflict ? 'real-conflict' : 'unknown'))
-    : '';
-  const realOverlap = kind === 'real-conflict';
+  // ONE predicate, shared with the filing decision in clickup_direct.mjs
+  // (task 86bbq80j5). This function used to derive it here and the merge step
+  // did not consult it at all, so a lost push race was filed as a conflict
+  // while this very body promised it would heal itself. Neither side gets to
+  // hold its own copy of the answer any more.
+  const realOverlap = isRealOverlap(localVerdict);
   const because = realOverlap
     ? `this branch and \`main\` have both changed the same lines — ${localVerdict.reason}`
     : localVerdict
