@@ -62,6 +62,7 @@ import mergeOnComment from './builder/mergeOnComment.js';
 import loopTrail from './builder/loopTrail.js';
 import buildStart from './builder/buildStart.js';
 import operatorCard from './builder/operatorCard.js';
+import machineComment from './builder/machineComment.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
 import loopInterval from './builder/loopInterval.js';
@@ -107,6 +108,9 @@ const {
 } = autoMergeLane;
 const { readLedgerFile, saveLedgerIfReadable } = autoMergeLedgerFile;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
+const {
+  isMachineComment, stampMachineComment, commentTextKey, isCommentPostPath,
+} = machineComment;
 const { resolveTaskRepo } = taskRepo;
 const {
   ESCALATE_AT_ROUND, currentRound, nextRound, wouldEscalate,
@@ -253,12 +257,24 @@ function unreachable(err) {
 
 async function call(method, path, body) {
   requestCount += 1;
+  // THE ONE PLACE A MACHINE COMMENT IS MARKED (task 86bbqx2xe). The loops post
+  // under Dane's own token, so nothing downstream can tell their writing from
+  // his; the relay read an `ask` card as his answer and released the
+  // escalation within ten minutes. There are fourteen comment-posting sites in
+  // this file and a fifteenth would fail silently in the dangerous direction,
+  // so the stamp goes on at the door rather than at each of them. See
+  // scripts/builder/machineComment.js.
+  let sendBody = body;
+  if (method === 'POST' && isCommentPostPath(path)) {
+    const key = commentTextKey(body);
+    if (key) sendBody = { ...body, [key]: stampMachineComment(body[key]) };
+  }
   let res;
   try {
     res = await fetch(`https://api.clickup.com${path}`, {
       method,
       headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
+      body: sendBody ? JSON.stringify(sendBody) : undefined,
     });
   } catch (err) {
     return unreachable(err);
@@ -3165,8 +3181,14 @@ if (cmd === 'whoami') {
     for (const t of open) {
       const commentsOut = await call('GET', `/api/v2/task/${t.id}/comment`);
       if (!commentsOut.res.ok) { unchecked.push(`${t.id} (${t.name}): could not read comments`); continue; }
+      // Authorship is id AND marker (task 86bbqx2xe). The loops write under
+      // his token, so the id alone said yes to their own cards: an `ask` card
+      // came back here as a fresh answer from him, was relayed to the bus as
+      // "Dane replied", and handed the ticket out of `Needs your input` ten
+      // minutes after it was escalated.
       const fromOperator = (commentsOut.json.comments || [])
-        .filter((c) => Number(c.user?.id) === OPERATOR_ID);
+        .filter((c) => Number(c.user?.id) === OPERATOR_ID)
+        .filter((c) => !isMachineComment(c.comment_text));
 
       // The kill switch, as he may have set it on a ticket rather than on the
       // party line (standing condition 1: "on the bus or any Loop Queue
