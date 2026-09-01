@@ -267,6 +267,50 @@ test('a rework PR whose age cannot be read is still listed, sorted last', () => 
   assert.equal(oldest.number, 2, 'oldest is the oldest KNOWN age, never the unreadable one');
 });
 
+test('a ticket in Rework counts as claimable depth, never as work in flight', () => {
+  // Task 86bbr1u9v. `queued` here means "what a build loop can claim", and
+  // loop-build claims Rework AND Queued. Counting a send-back as in-flight
+  // would make the stall detector report a healthy pipeline while the rework
+  // pile rotted — the precise failure the Rework status was created to end.
+  const tasks = [
+    task({ id: 'r1', status: 'rework' }),
+    task({ id: 'r2', status: 'Rework' }),
+    task({ id: 'q1', status: 'queued' }),
+    task({ id: 'b1', status: 'building' }),
+  ];
+  const queue = lt.queueShape(tasks);
+  assert.equal(queue.queued, 3, 'two rework tickets plus one queued are all claimable');
+  assert.equal(queue.inFlight, 1, 'only the one being built is in flight');
+  assert.equal(queue.byStatus.rework, 2, 'and the census still names the status');
+
+  // The verdict must follow: three claimable tickets and nothing closing is a
+  // stall, not the "nothing to close" all-clear.
+  const v = lt.verdict({ closedLast24h: 0, queue, loopsFiring: true });
+  assert.equal(v.state, 'STALLED');
+});
+
+test('the rework bucket reads the real Rework status, not just tickets left in Queued', () => {
+  // BREAK TEST: change `[...groups.rework, ...groups.queued]` back to
+  // `groups.queued` and this reports an empty bucket on the day the status
+  // shipped. Watched fail.
+  const prs = [
+    { number: 1, state: 'OPEN', body: 'https://app.clickup.com/t/sentback', createdAt: new Date(NOW - 6 * DAY).toISOString() },
+    { number: 2, state: 'OPEN', body: 'https://app.clickup.com/t/notmigrated', createdAt: new Date(NOW - 2 * DAY).toISOString() },
+    { number: 3, state: 'OPEN', body: 'https://app.clickup.com/t/building', createdAt: new Date(NOW - HOUR).toISOString() },
+  ];
+  const { rows, oldest } = lt.reworkPrs({
+    prs,
+    // Both sides of the migration at once: one ticket already moved to Rework,
+    // one still sitting in Queued with its PR open. Both are half-built work
+    // nothing is finishing, and reading only one of them is a silent zero on
+    // one side of the migration or the other.
+    ticketStatusById: { sentback: 'Rework', notmigrated: 'Queued', building: 'Building' },
+    now: NOW,
+  });
+  assert.deepEqual(rows.map((r) => r.number), [1, 2], 'the in-flight PR is not rework');
+  assert.equal(oldest.number, 1, 'oldest first');
+});
+
 test('no rework PRs is an empty bucket, not a crash', () => {
   const r = lt.reworkPrs({ prs: [], ticketStatusById: {}, now: NOW });
   assert.deepEqual(r.rows, []);

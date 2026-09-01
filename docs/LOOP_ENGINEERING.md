@@ -62,11 +62,12 @@ earns ClickUp's misleading "Team not authorized" 401. When in doubt,
 The everyday commands (run `npm run clickup` bare for the full list):
 
 ```bash
-npm run clickup -- queue --list 901418546619 --status Queued   # first line = the task to claim
+npm run clickup -- queue --list 901418546619 --claimable       # first line = the task to claim (all Rework, then Queued)
 npm run clickup -- get --task <id>                             # header + body
 npm run clickup -- comments --task <id>                        # where the PR URL lives
 npm run clickup -- waiting [--task <id>]                        # is this ACTUALLY waiting on Dane? read-only; run it BEFORE saying so
-npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
+npm run clickup -- claim --task <id>                           # safe claim: reads the ticket's own status and guards on it
+npm run clickup -- status --task <id> --status Building --if-status Queued   # the long form, when you know the status
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
 npm run clickup -- pr-opened --task <id> --pr <pr-url>          # record the PR (loop-build step 7 — required)
 npm run clickup -- verdict --task <id> --pass|--fail --if-status "In review" --body-file -  # the review verdict (loop-review step 4)
@@ -158,7 +159,7 @@ The two rules that came out of it, and where each one lives:
    then stand down — no verdict, no status move, take the next task.
    `--no-guard` opts out and says so in the transcript.
 
-   The send-back path carries the same guard (`status --status Queued
+   The send-back path carries the same guard (`status --status Rework
    --if-status "In review"`). The pass path needs no second guard, because
    `ask --status "Ready to launch"` already refuses unless the newest verdict
    is a PASS — so a verdict the guard refused blocks the status move behind it.
@@ -581,13 +582,14 @@ this list's id is hard-coded in 18 places across 11 files, so moving approvals
 off it is its own epic, and it buys a tab. A saved view does the same job with
 nothing moved.
 
-## The six statuses — and the two that are yours
+## The seven statuses — and the two that are yours
 
 The task list lives in a ClickUp list called **"Loop Queue"** in the
-**Starcaster** space. Every ticket sits in exactly one of six statuses:
+**Starcaster** space. Every ticket sits in exactly one of seven statuses:
 
 | Status | What it means | Whose move |
 |---|---|---|
+| `Rework` | review sent it back — a branch and a PR already exist | machine |
 | `Queued` | waiting for a build loop to pick it up | machine |
 | `Building` | a loop is writing the code | machine |
 | `In review` | a loop is checking that code against the task | machine |
@@ -602,7 +604,27 @@ plain-language question in the ticket comments. `Ready to launch` wants a
 authorize.
 
 Everything else is the machine talking to itself. On a normal day you can
-ignore four of these six.
+ignore five of these seven.
+
+**`Rework` is new (2026-08-31, task 86bbr1u9v), and it exists because a
+send-back used to go back to `Queued`, where it was indistinguishable from work
+nobody had started.** Three things followed. It was invisible — "52 queued, 1 in
+review" read as 52 fresh tickets when six of them were half-built with open
+PRs. It lost its place in line, because a sent-back ticket re-entered the
+priority contest from scratch, so normal-priority rework never won against
+fresh high-priority work: #419 (25 August), #446, #447 and #449 did not go stale
+by accident, *the claim rule did it to them*. And the work-in-progress cap could
+not report honestly, saying "1 in flight" while five real branches sat open.
+
+**loop-build drains every `Rework` ticket before any `Queued` one, oldest
+first, priority ignored inside the rework tier.** Priority says what to
+*start*; rework is not started, it is finished — and ordering rework by
+priority would recreate the same starvation one tier down. A ticket in `Rework`
+does **not** count against the work-in-progress cap (Dane's call, 2026-08-31):
+the cap answers "how many NEW things may I start", and counting rework is
+exactly what deadlocked the build loop for four hourly passes on 2026-08-25.
+It is named separately in every message that counts anything, which is the
+whole point — the omission has to be visible.
 
 Two rules keep it honest:
 
@@ -710,8 +732,8 @@ it asks the queue how long to sleep after each pass. See **"How often the
 LOOPS wake"** below for the curve, the 900 s floor and why that floor exists.
 
 `/loop 30m X` means "run X, then run it again every 30 minutes." Build drains
-the `Queued` pile into PRs; review drains the `In review` pile into
-`Ready to launch` PRs that ping you.
+the `Rework` pile and then the `Queued` pile into PRs; review drains the
+`In review` pile into `Ready to launch` PRs that ping you.
 
 Your day:
 1. **Morning:** run `loop-spec`, answer its questions, approve the task list.
@@ -745,7 +767,7 @@ scoped to one space, so it could see Loop Queue or Agent Response but never
 both — and the workspace-wide level made a status filter unwieldy, since it
 offers every status in the workspace at once. Assignment sidesteps all of it.
 
-If you ever see a ticket assigned to you sitting in `Queued`, `Building`, or
+If you ever see a ticket assigned to you sitting in `Rework`, `Queued`, `Building`, or
 `In review`, that is a bug in a loop, not a job for you — tell CC.
 
 ### No agent says something is waiting on you without running `waiting` first
@@ -1585,10 +1607,12 @@ missing the flag you just typed, and `pause --now` waits the full half hour.
 `pipelinePause.test.js` fails if a documented form ever loses it again.
 
 **It drains, it does not kill.** A pass killed mid-build leaves its ticket in
-`Building` forever, because the loops only ever claim from `Queued` — that
+`Building` forever, because the loops only claim from `Rework` and `Queued` — that
 happened twice in the week this was built. So `pause` writes the flag (which
 stops every new claim that instant) and then waits for whatever was already
-running. `resume` sweeps any ticket that was stranded back into `Queued` with a
+running. `resume` sweeps any ticket that was stranded back into the claim line —
+`Rework` if a pull request is already open for it, `Queued` if nothing was ever
+built — with a
 note telling the next builder to look for an existing branch first.
 
 **Every actor asks, not just the loops.** The flag is a comment trail on one
@@ -1633,7 +1657,9 @@ it skips is the queue position.
    is the specification — it names the defects, how they were proved, and
    what it already verified so you do not redo it. The description is context.
 3. **Claim it, atomically.** `npm run clickup -- status --task <id> --status
-   Building --if-status Queued`. **Priority is not a guard** — an Urgent
+   Building --if-status <the status it is in>` (or just `npm run clickup --
+   claim --task <id>`, which reads that status for you). **Priority is not a
+   guard** — an Urgent
    ticket is still claimable by a loop pass; only the status is, and only
    `--if-status` makes the write refuse if a pass got there first (the same
    check-then-act guard the loops use). Leave the priority where it is.
@@ -1714,7 +1740,7 @@ While a live pass reads the branch, do not push to it, write a status, or
 post anything to the ticket — a push hands the reviewer a moving target.
 Everything local is fair game in the meantime: set up the worktree, merge
 `origin/main` in, resolve the conflict, run the gates, break-test. Then act
-on the verdict. A send-back drops the ticket to `Queued`, which is a clean
+on the verdict. A send-back drops the ticket to `Rework`, which is a clean
 step-3 claim and turns the review notes into the specification; a pass
 leaves the green-PR case above. On 86bbq0fh8 the verdict landed nine minutes
 in, the send-back's two findings were fixed on top of the already-resolved
@@ -2422,6 +2448,7 @@ How long each ticket has sat where it is.
 | In review | **4 h** | A review takes about 10 minutes on an hourly poll, so 4 hours is already several missed polls. |
 | Ready to launch | **24 h** (notice, not alarm) | Operator-held. Surface it; do not alarm — only Dane moves a ticket out of it. |
 | Queued | **7 days** (notice) | Long is fine. Forgotten is not. |
+| Rework | **3 days** (alarm) | Half the queued allowance: a send-back has an open branch going stale against a moving `main`, so waiting costs real work here in a way it does not for fresh tickets. |
 
 **`date_updated` is a proxy for stage entry, not a measurement of it.** ClickUp
 bumps it on any edit, so a comment or a Loop-note stamp resets the clock. The
@@ -2449,7 +2476,7 @@ while writing the design and since repaired by hand.
 Two distinctions cost false positives on the first production run, and both are
 now guarded by tests:
 
-- **`Queued` is neither in-flight nor terminal.** A queued ticket with an open
+- **Neither `Rework` nor `Queued` is in-flight or terminal.** A ticket in either with an open
   PR is a **send-back** — the ordinary state of work a review handed back, and
   the exact state `build-start` exists to recognise. Reading "not in flight" as
   "finished" called two of them zombies.
@@ -2526,7 +2553,11 @@ direction. The list lives in `IN_FLIGHT_STATUSES` (`scripts/builder/wipCap.js`).
 
 A PR counts **zero** when:
 
-* the ticket is **`Queued`** — that is rework the loop must be free to claim;
+* the ticket is **`Rework`** — a send-back the loop must be free to claim first,
+  and named as rework rather than counted (since 2026-08-31 it is a real status
+  rather than a guess from the ticket being queued);
+* the ticket is **`Queued`** with a stray PR against it — still work the loop
+  must be free to claim;
 * the ticket is **`Live`** — the work shipped by another route and the PR is a
   leftover;
 * **no ticket can be found** for it — reported by number, never counted;

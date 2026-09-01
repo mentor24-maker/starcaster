@@ -89,6 +89,41 @@ which is right, while the check underneath it permitted exactly what the
 description forbade. It says what it always meant now — and reverting it to the
 old wording makes it fail, which is the proof it was load-bearing in the wrong
 direction.
+## 2026-08-31 — Work sent back for a fix stopped hiding in the queue (#489)
+
+When a review found a problem, the ticket went back to the "Queued" pile — the
+same pile as work nobody had started yet. Nothing on the board could tell the
+two apart, and that turned out to cost more than it looked like it would.
+
+Three things went wrong at once. The queue lied about its own size: fifty-two
+tickets sitting in "Queued" looked like fifty-two fresh jobs, when six of them
+were already half-built with the code sitting in a pull request waiting for one
+small fix. Worse, a returned ticket went to the back of the line — the machines
+pick by priority, and a returned ordinary job never beat a fresh urgent one. Four
+of them had been waiting weeks that way, one since 25 August. They did not get
+forgotten; the rule sent them to the back every single time. And the safety limit
+that stops the machines starting more than five things at once was reporting "one
+thing in progress" while five real branches sat open.
+
+So returned work now has a status of its own — **Rework** — and the build
+machines empty that pile first, oldest first, before touching anything new.
+Finishing something half-built is cheaper than starting something fresh: the
+branch is already there, the notes about what to fix are already there, and every
+day it waits it drifts further from the live site and needs re-syncing. Rework
+still does not count against the limit of five, because that limit is about how
+many *new* things to start — but the count is now printed in plain sight on every
+message rather than left out silently, which was the actual complaint.
+
+The rest is plumbing that had to follow: the sleep timer counts rework as work
+waiting (otherwise a queue full of returned tickets read as empty and the
+machines dozed for an hour), the pause-and-resume tool puts a half-built ticket
+back in the right pile, the daily health report measures rework on a shorter
+fuse, and the weekly report draws the new column.
+
+One step is left over on purpose. The tickets currently sitting in the wrong pile
+get moved by a command that has to run *after* this goes live — until the new
+rule is running, a ticket in "Rework" would be picked up by nothing at all, which
+is worse than where they are now.
 ## 2026-08-31 — Posts now go out from the client's own account, not ours (#490)
 
 A client connects their Facebook Page to Starcaster. The screen says

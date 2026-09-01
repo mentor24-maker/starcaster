@@ -331,3 +331,68 @@ test('every answer this module gives is a plain positive integer of seconds', ()
     assert.ok(String(a.reason).length > 0, 'an answer with no reason');
   }
 });
+
+// ---------------------------------------------------------------------------
+// Rework counts toward loop-build's depth (task 86bbr1u9v, criterion 4)
+// ---------------------------------------------------------------------------
+
+test('loop-build drains two statuses, loop-review one', () => {
+  assert.deepEqual([...li.LOOP_STATUS['loop-build']], ['rework', 'queued']);
+  assert.deepEqual([...li.LOOP_STATUS['loop-review']], ['in review']);
+});
+
+test('a queue full of rework does not read as empty', () => {
+  // The failure this guards is quiet and self-reinforcing: with the depth
+  // reading 0 the curve sleeps the maximum hour, so the tickets the Rework
+  // status exists to rescue would be the ones the pacing curve stopped waking
+  // up for. `intervalForDepth` is asserted alongside, because "the depth is
+  // right" and "the sleep is right" are two claims.
+  const reworkOnly = [
+    { id: 'r1', status: { status: 'Rework', type: 'custom' }, tags: [] },
+    { id: 'r2', status: { status: 'rework', type: 'custom' }, tags: [] },
+    { id: 'r3', status: { status: 'Rework', type: 'custom' }, tags: [] },
+    { id: 'r4', status: { status: 'Rework', type: 'custom' }, tags: [] },
+  ];
+  const r = li.claimableDepth({ loop: 'loop-build', tasks: reworkOnly, resolveRepo: fakeRepo });
+  assert.equal(r.depth, 4, 'four rework tickets are four claimable tickets');
+  assert.equal(li.intervalForDepth(r.depth).seconds, 900, 'and the curve must treat that as a deep queue');
+
+  // The control: the same four under the OLD single-status rule read as zero.
+  const asQueuedOnly = reworkOnly.filter((t) => t.status.status.toLowerCase() === 'queued');
+  assert.equal(asQueuedOnly.length, 0, 'none of them is Queued — this is the reading that used to be taken');
+  assert.equal(li.intervalForDepth(0).seconds, 3600, 'which sleeps the maximum hour');
+});
+
+test('rework and queued are counted together, and the list comes back in claim order', () => {
+  const mixed = [
+    { id: 'q-urgent', status: { status: 'Queued', type: 'custom' }, tags: [], priority: { priority: 'urgent' }, date_created: '9000' },
+    { id: 'r-old', status: { status: 'Rework', type: 'custom' }, tags: [], priority: { priority: 'normal' }, date_created: '1000' },
+  ];
+  const r = li.claimableDepth({ loop: 'loop-build', tasks: mixed, resolveRepo: fakeRepo });
+  assert.equal(r.depth, 2);
+  assert.equal(r.claimable[0].id, 'r-old',
+    'the depth reading and the queue listing must name the same next ticket');
+});
+
+test('a rework ticket in the wrong repo is excluded and SAID, exactly like a queued one', () => {
+  const foreign = [
+    { id: 'r1', status: { status: 'Rework', type: 'custom' }, tags: [{ name: 'repo:nope' }] },
+  ];
+  const r = li.claimableDepth({ loop: 'loop-build', tasks: foreign, resolveRepo: fakeRepo });
+  assert.equal(r.depth, 0);
+  assert.equal(r.excluded.length, 1, 'a rework ticket must be reportable, not silently dropped');
+  assert.equal(r.excluded[0].id, 'r1');
+});
+
+test('loop-review is not woken by rework', () => {
+  const reworkOnly = [{ id: 'r1', status: { status: 'Rework', type: 'custom' }, tags: [] }];
+  assert.equal(li.claimableDepth({ loop: 'loop-review', tasks: reworkOnly, resolveRepo: fakeRepo }).depth, 0);
+});
+
+test('wantedStatuses still accepts a bare string, so one status never means none', () => {
+  // The failure mode of getting this wrong is a depth of 0, which sleeps the
+  // maximum hour and is indistinguishable from an empty queue.
+  assert.deepEqual(li.wantedStatuses('Queued'), ['queued']);
+  assert.deepEqual(li.wantedStatuses(['Rework', ' QUEUED ']), ['rework', 'queued']);
+  assert.deepEqual(li.wantedStatuses([null, '', 'x']), ['x']);
+});

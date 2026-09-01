@@ -37,6 +37,8 @@
  *      the cadence is never a mystery the way the WIP cap's bare total was.
  */
 
+const loopStatuses = require('./loopStatuses.js');
+
 /**
  * The floor, in seconds. NOT to be lowered without recording the decision on
  * task 86bbmg2fb and in docs/LOOP_ENGINEERING.md.
@@ -69,14 +71,20 @@ const CURVE = [
 ];
 
 /**
- * Which ClickUp status each loop drains. `loop-build` is paced by how much
+ * Which ClickUp statuses each loop drains. `loop-build` is paced by how much
  * work is waiting to be BUILT; `loop-review` by how much is waiting to be
- * CHECKED. Pacing review on `Queued` depth would wake it for work it cannot
+ * CHECKED. Pacing review on build depth would wake it for work it cannot
  * touch.
+ *
+ * A LIST, NOT A STRING, since 2026-08-31 (task 86bbr1u9v). `loop-build` drains
+ * two statuses now — `Rework` before `Queued` — and a queue full of rework
+ * must not read as empty. That is not a cosmetic worry: with the depth reading
+ * 0 the curve sleeps the maximum hour, so the tickets the new status exists to
+ * rescue would be the ones the pacing curve stopped waking up for.
  */
 const LOOP_STATUS = {
-  'loop-build': 'queued',
-  'loop-review': 'in review',
+  'loop-build': loopStatuses.CLAIMABLE_BY_BUILD,
+  'loop-review': ['in review'],
 };
 
 /** The loops this module knows how to pace, for error messages. */
@@ -138,6 +146,20 @@ function intervalForDepth(depth) {
 }
 
 /**
+ * Normalise the "which statuses does this loop drain" argument to a list of
+ * lower-cased names. A bare string is accepted because one caller passing a
+ * single status must not silently match nothing — the failure mode there is a
+ * depth of 0, which sleeps the maximum hour and looks exactly like an empty
+ * queue.
+ */
+function wantedStatuses(wantStatus) {
+  const raw = Array.isArray(wantStatus) ? wantStatus : [wantStatus];
+  return raw
+    .map((s) => String(s ?? '').trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
  * Is this task actually claimable by this loop right now?
  *
  * "Claimable", not "queued" — a queue full of tickets the loop CANNOT take is
@@ -147,7 +169,10 @@ function intervalForDepth(depth) {
  *
  * @param {object} task            a ClickUp task as the list endpoint returns it
  * @param {object} opts
- * @param {string} opts.wantStatus the status this loop drains, lower-cased
+ * @param {string|string[]} opts.wantStatus the status(es) this loop drains.
+ *   A LIST since task 86bbr1u9v — `loop-build` drains `Rework` and `Queued`.
+ *   A bare string is still accepted so a caller passing one status is not a
+ *   silent no-match.
  * @param {(tags:any)=>{action:string}} opts.resolveRepo  taskRepo.resolveTaskRepo
  * @param {Map<string,object>} opts.byId  every task in the list, for blockers
  * @param {Map<string,object>} [opts.blockers]  blockers read from OUTSIDE the
@@ -156,8 +181,9 @@ function intervalForDepth(depth) {
 function unclaimableReason(task, { wantStatus, resolveRepo, byId, blockers } = {}) {
   if (!task || typeof task !== 'object') return 'not a task';
 
+  const wanted = wantedStatuses(wantStatus);
   const status = String(task.status?.status ?? '').toLowerCase();
-  if (status !== String(wantStatus ?? '').toLowerCase()) return `status is "${status || '?'}"`;
+  if (!wanted.includes(status)) return `status is "${status || '?'}"`;
 
   // Wrong repo, unknown repo, two repo tags, or a repo not checked out on this
   // machine. Every one of those makes the loop ESCALATE rather than build
@@ -241,6 +267,7 @@ function claimableDepth({ loop, tasks, capReached = false, resolveRepo, blockers
   if (!wantStatus) {
     throw new Error(`unknown loop "${loop}" — known: ${KNOWN_LOOPS.join(', ')}`);
   }
+  const wanted = wantedStatuses(wantStatus);
 
   // The work-in-progress cap zeroes the whole reading rather than filtering
   // ticket by ticket: when the merge side is full, `loop-build` claims NOTHING
@@ -273,12 +300,16 @@ function claimableDepth({ loop, tasks, capReached = false, resolveRepo, blockers
     // Only worth reporting the ones that are the RIGHT status but still
     // unclaimable. Every other ticket in the list has a different status and
     // was never a candidate; listing those is noise.
-    else if (String(t?.status?.status ?? '').toLowerCase() === wantStatus) {
+    else if (wanted.includes(String(t?.status?.status ?? '').toLowerCase())) {
       excluded.push({ id: String(t.id), why });
     }
   }
 
-  return { depth: claimable.length, claimable, excluded, note: null };
+  // In CLAIM ORDER for loop-build — rework before queued — so a caller that
+  // reads `claimable[0]` gets the ticket the claim rule actually names rather
+  // than whichever one ClickUp's paging happened to return first.
+  const ordered = loop === 'loop-build' ? loopStatuses.claimOrder(claimable) : claimable;
+  return { depth: ordered.length, claimable: ordered, excluded, note: null };
 }
 
 /**
@@ -379,6 +410,7 @@ module.exports = {
   clampToFloor,
   normalizeDepth,
   intervalForDepth,
+  wantedStatuses,
   unclaimableReason,
   outsideBlockerIds,
   claimableDepth,

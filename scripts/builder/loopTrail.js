@@ -37,12 +37,23 @@ function prOpenedComment(prUrl, extra) {
   return `PR opened: ${prUrl}${tail ? `\n\n${tail}` : ''}`;
 }
 
-/** The one shape `mergeOnComment.isReviewPassed` will accept as a PASS. */
+/**
+ * The one shape `mergeOnComment.isReviewPassed` will accept as a PASS.
+ *
+ * The send-back names `Rework` since 2026-08-31 (task 86bbr1u9v) — that is
+ * where a send-back goes now, and a verdict that says "sent back to Queued"
+ * while the ticket sits in `Rework` is a trail that contradicts the board.
+ * Both readers are wording-agnostic (`REVIEW\b` for a verdict, `REVIEW:
+ * PASSED` for a pass, both line-anchored in mergeOnComment.js), so the older
+ * `sent back to Queued` comments already on live tickets keep counting as the
+ * send-backs they are — which matters, because `sendBackRounds` counts them to
+ * decide when a fourth round escalates to Dane instead.
+ */
 function verdictComment(passed, note) {
   const tail = String(note || '').trim();
   const head = passed
     ? 'REVIEW: PASSED'
-    : 'REVIEW: sent back to Queued';
+    : 'REVIEW: sent back to Rework';
   return `${head}${tail ? ` — ${tail}` : ''}`;
 }
 
