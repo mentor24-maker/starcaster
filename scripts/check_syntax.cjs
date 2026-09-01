@@ -61,9 +61,9 @@ const ROOT = path.resolve(__dirname, '..');
 
 /**
  * Hand-written browser JS: flat directories, `.js` only, loaded by <script src>.
- * Generated bundles here are named outright — they are not in the artifact
- * list because `public/js/richtext-vendor.js` IS, but the shape of this scan
- * predates it, so both paths are covered.
+ * Generated bundles in here are skipped by `isGenerated` like everything else —
+ * there is no second mechanism. This scan used to carry its own basename
+ * skip-list beside it; that was redundant with the artifact list, so it is gone.
  */
 const BROWSER_DIRS = ['public/js', 'public/shared'];
 

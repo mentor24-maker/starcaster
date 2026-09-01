@@ -50,10 +50,16 @@ function stagedFiles(filter) {
 // 1. Build artifacts must never be committed
 // ---------------------------------------------------------------------------
 
-const { GENERATED } = require('./lib/generated_files.cjs');
+// `isGenerated` is the test; `GENERATED` is only for `git ls-files`, which
+// needs concrete paths and cannot take a prefix. Asking the array directly is
+// how the two gates drifted apart: it names three of the six files
+// `build_site_import_bundle.mjs` emits into `lib/site-import/dist/`, so
+// map.js, reconcile.js and image-topup.js were invisible here while
+// check_syntax.cjs — which does use `isGenerated` — skipped all six.
+const { GENERATED, isGenerated } = require('./lib/generated_files.cjs');
 
 function checkNoArtifactsStaged(files) {
-  const offenders = files.filter((f) => GENERATED.includes(f));
+  const offenders = files.filter((f) => isGenerated(f));
   if (offenders.length) {
     failures.push(
       `Build artifacts must not be committed: ${offenders.join(', ')}\n` +

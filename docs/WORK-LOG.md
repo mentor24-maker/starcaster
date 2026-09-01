@@ -29,6 +29,24 @@ was written. It has never once been able to run. One character, fixed. That is
 the same lesson arriving from the other direction — nothing had ever read that
 file either.
 
+Review caught one more thing, and it is the same lesson a third time. The test
+written to prove the check catches the 30 August problem did not actually
+contain that problem. The example it used had a semicolon between the two
+welded instructions — which makes it perfectly ordinary, valid code. The test
+was passing on the strength of a *different* broken line sitting underneath,
+and deleting the example entirely changed nothing. So the one test standing
+guard over the whole incident would not have noticed if the check stopped
+working. It now uses the real shape, on its own line, with a companion test
+using the correctly-separated version to prove the failure comes from the weld
+and nothing else — and both were broken on purpose to watch them fail.
+
+The other fix: the list of "files the computer generates, so leave them alone"
+is meant to be one list both checkers read, so they can never disagree about
+it. One of them was reading only half of it, and the gap was real — a bundling
+script writes six files into one folder and the list names three of them by
+name, relying on a folder rule to cover the rest. Both checkers now ask the
+same question, and a test fails if that ever comes apart again.
+
 ## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
 
 We already had an alarm for a scheduled job that stops running. This adds the
