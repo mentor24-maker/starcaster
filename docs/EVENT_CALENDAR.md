@@ -1,6 +1,6 @@
 # Event Calendar
 
-**Shipped:** 2026-09-01 — the `event-manager` module, the first of the set.
+**Shipped:** 2026-09-01 — `event-manager` (1/3) and `event-calendar` (2/3).
 
 The Event Calendar follows the Blog's shape: a table of records the tenant
 owns, an admin module that manages them, and public modules that display them.
@@ -14,6 +14,8 @@ This document covers what exists now and what deliberately does not.
 | Store | [`lib/eventsStore.js`](../lib/eventsStore.js) |
 | API | [`routes/events.js`](../routes/events.js) — `/api/events` |
 | Admin module `event-manager` | renderer in [`components/builder-template-preview.tsx`](../components/builder-template-preview.tsx), settings panel in [`components/builder/builder-event-manager-module-settings.tsx`](../components/builder/builder-event-manager-module-settings.tsx) |
+| Public module `event-calendar` | renderer in the same file, settings panel in [`components/builder/builder-event-calendar-module-settings.tsx`](../components/builder/builder-event-calendar-module-settings.tsx) |
+| Dates and calendar geometry | [`lib/builder-client/event-format.ts`](../lib/builder-client/event-format.ts) — unit-tested |
 | Tenant admin page | `admin-event-manager`, in [`lib/projectAdminScaffold.js`](../lib/projectAdminScaffold.js) |
 
 The module is one surface, not two: the table and the add/edit form live in
@@ -54,24 +56,62 @@ start, end. The rest exist because a calendar without them misreports:
   it belongs with the module that filters by it.
 - **Ticketing, RSVP, capacity, attachments.** All real; all their own feature.
 
+## The public calendar (2/3)
+
+`event-calendar` is one module with three layouts, because "a calendar" means
+different things on different pages:
+
+- **Month grid** — the default. Seven columns of whole weeks, events as chips
+  on their days, previous/next paging. Days from the neighbouring months are
+  drawn but muted: hiding them leaves ragged holes, and drawing them unmarked
+  lies about which month you are looking at.
+- **Upcoming list** — a date block and a title per row, the thing a visitor
+  scans down.
+- **Cards** — a one-to-four column grid with images, for a landing page.
+
+**An event is "upcoming" until it has FINISHED, not until it has started.**
+A festival on its second day, or a party half way through its evening, is
+exactly what a visitor is looking for; judging by start time drops an event
+from the list at the moment it is most relevant.
+
+**A failed request does not wear the empty state's words.** "No events
+scheduled" printed over a broken fetch tells a visitor something false about
+the tenant, so the two states say different things.
+
+**The geometry is arithmetic, and it is unit-tested** in
+`lib/builder-client/event-format.ts` — the month grid covers every day of a
+month exactly once, adds no empty trailing week, and honours a Sunday or
+Monday start. An off-by-one in the lead puts every date under the wrong
+weekday: a calendar that is confidently, silently wrong, which is worse than
+one that fails to draw. `check:render` covers the half a unit test cannot see
+— that the grid reaches the page as seven columns.
+
+## The public read exemption — a security decision, made here
+
+`event-calendar` is read by visitors with no login, so
+[`lib/projectAdminApiAuth.js`](../lib/projectAdminApiAuth.js) now opens
+exactly two doors, both mirroring the blog's:
+
+| Opened | Not opened |
+|---|---|
+| `GET /api/events?status=published` | the unfiltered list — the admin manager's call |
+| `GET /api/events/<slug>?by=slug` | `GET /api/events/<id>` |
+| | every write: POST, PUT, DELETE |
+
+The list is public **only when it explicitly asks for published events**, so an
+unauthenticated caller cannot reach drafts by leaving the filter off. The
+single-event read is public **only by slug**, and `routes/events.js`
+additionally 404s anything not published when there is no session. Both
+directions are asserted in `scripts/project-admin-api-auth.test.js`, and both
+were broken on purpose to watch the assertions fail.
+
 ## Still to build
 
-1. **`event-calendar`** — the public module: month grid or list, filtering.
-2. **`event-detail`** — the single event's page, which is what the manager's
-   *Event Page URL* setting points at. Until it exists, that setting is empty
-   and the View button on each row is disabled rather than pointing at a page
-   that is not there.
-
-Both will need a **public read exemption** in
-[`lib/projectAdminApiAuth.js`](../lib/projectAdminApiAuth.js), the way
-`/api/blog/posts?status=published` has one. That has deliberately NOT been
-added yet: it is a security decision, and it should be made with the module
-that needs it in front of you, not in advance. Today every `/api/events` route
-requires a session — a platform one, or a tenant's project-admin one.
-
-The route already refuses a draft or cancelled event to an unauthenticated
-slug read, so the exemption, when it comes, is about *which* route may be
-called without a login and not about what it discloses.
+1. **`event-detail`** — the single event's page, which is what the calendar's
+   and the manager's *Event Page URL* settings point at. Until it exists,
+   leave that setting empty: the calendar then links an event only to its own
+   `url` (a ticketing page), and the manager's View button stays disabled
+   rather than pointing at a page that is not there.
 
 ## Things worth knowing
 

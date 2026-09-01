@@ -789,6 +789,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "event-calendar-standard",
+    type: "event-calendar",
+    group: "events",
+    label: "Event Calendar",
+    icon: "📅",
+    description: "The events visitors see — a month grid, an upcoming list, or a row of cards.",
+    name: "",
+    text: "",
+    settings: { layout: "month" }
+  },
+  {
     id: "event-manager-standard",
     type: "event-manager",
     group: "events",

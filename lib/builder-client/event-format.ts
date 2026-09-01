@@ -94,3 +94,93 @@ export function normalizeEventStatus(value: string | null | undefined): EventSta
   const text = String(value || "").trim().toLowerCase();
   return (EVENT_STATUSES as readonly string[]).includes(text) ? (text as EventStatus) : "draft";
 }
+
+/* ── Calendar geometry ─────────────────────────────────────────────────────
+ *
+ * A month grid is arithmetic, and arithmetic is the one part of a calendar a
+ * test can hold still. It lives here, beside the formatting, so the public
+ * calendar module can be a renderer rather than a renderer with a date
+ * library inside it.
+ */
+
+/** Midnight local on the day `value` falls in — the unit a calendar counts in. */
+export function startOfDay(value: Date | string | number): Date {
+  const d = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+export function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
+/**
+ * The weeks a month grid draws: whole weeks, so the first row starts on the
+ * grid's first weekday and the last row ends on its last.
+ *
+ * `weekStartsOn` is 0 for Sunday (the US default this platform's tenants use)
+ * or 1 for Monday. The leading and trailing days belong to the neighbouring
+ * months and are marked, because a calendar that hides them leaves ragged
+ * holes and a calendar that draws them unmarked lies about the month.
+ */
+export type CalendarCell = { date: Date; inMonth: boolean };
+
+export function monthGrid(year: number, month: number, weekStartsOn: 0 | 1 = 0): CalendarCell[][] {
+  const first = new Date(year, month, 1);
+  const lead = (first.getDay() - weekStartsOn + 7) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const weekCount = Math.ceil((lead + daysInMonth) / 7);
+
+  const weeks: CalendarCell[][] = [];
+  const cursor = new Date(year, month, 1 - lead);
+  for (let week = 0; week < weekCount; week += 1) {
+    const row: CalendarCell[] = [];
+    for (let day = 0; day < 7; day += 1) {
+      row.push({ date: new Date(cursor.getTime()), inMonth: cursor.getMonth() === month && cursor.getFullYear() === year });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    weeks.push(row);
+  }
+  return weeks;
+}
+
+/**
+ * Does this event touch this day?
+ *
+ * Compared by DAY, not by instant: an event running 6pm–9pm is on that day
+ * even though most of the day is not inside it, and a three-day festival is
+ * on all three of its days. An event with no start is on no day at all — it
+ * is unscheduled, and a calendar has nowhere to put it.
+ */
+export function eventOccursOn(event: EventTimes, day: Date): boolean {
+  if (!event.startsAt) return false;
+  const start = new Date(event.startsAt);
+  if (Number.isNaN(start.getTime())) return false;
+  const target = startOfDay(day).getTime();
+  const from = startOfDay(start).getTime();
+  if (target < from) return false;
+  const end = event.endsAt ? new Date(event.endsAt) : null;
+  if (!end || Number.isNaN(end.getTime())) return target === from;
+  return target <= startOfDay(end).getTime();
+}
+
+/**
+ * Is this event still worth showing as "coming up"?
+ *
+ * An event is upcoming until it has FINISHED, not until it has started — a
+ * three-day festival on its second day, or a party half way through its
+ * evening, is exactly the thing a visitor is looking for. Judging by start
+ * time would drop it from the list at the moment it becomes most relevant.
+ */
+export function isUpcomingEvent(event: EventTimes, now: Date = new Date()): boolean {
+  if (!event.startsAt) return false;
+  const start = new Date(event.startsAt);
+  if (Number.isNaN(start.getTime())) return false;
+  const end = event.endsAt ? new Date(event.endsAt) : null;
+  const finish = end && !Number.isNaN(end.getTime())
+    ? end
+    : (event.allDay ? new Date(startOfDay(start).getTime() + 86400000 - 1) : start);
+  return finish.getTime() >= now.getTime();
+}

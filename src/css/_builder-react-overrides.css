@@ -7241,3 +7241,298 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-event-manager-module .builder-admin-data-table {
   min-width: 620px;
 }
+
+/* ── Event Calendar (public) ───────────────────────────────────────────────
+ *
+ * Three layouts, one module: a month grid, an upcoming list, and cards. All
+ * structural rules are in this base block; the one media query below only
+ * adjusts what the base already established (R1).
+ *
+ * `--evt-accent` is set inline by the renderer from the module's Accent
+ * Color, so the tenant's own colour reaches every piece of chrome here
+ * without a second stylesheet.
+ */
+
+.builder-react-root .builder-event-calendar {
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--bx-text, var(--ink-primary));
+  font-family: inherit;
+}
+
+.builder-react-root .builder-event-calendar-heading {
+  margin: 0 0 var(--space-4);
+  color: var(--bx-heading, var(--ink-primary));
+}
+
+.builder-react-root .builder-event-calendar-empty {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-container);
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* ── Month grid ─────────────────────────────────────────────────────────── */
+
+.builder-react-root .builder-event-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.builder-react-root .builder-event-calendar-month {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--bx-heading, var(--ink-primary));
+  min-width: 12ch;
+  text-align: center;
+}
+
+.builder-react-root .builder-event-calendar-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  background: var(--bg-surface);
+  color: var(--evt-accent, var(--accent));
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-event-calendar-nav-btn:hover {
+  background: var(--bg-hover);
+}
+
+.builder-react-root .builder-event-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--border-light);
+  overflow: hidden;
+}
+
+.builder-react-root .builder-event-calendar-weekday {
+  padding: var(--space-2) var(--space-1);
+  background: var(--bg-alt);
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.builder-react-root .builder-event-calendar-weekday abbr {
+  text-decoration: none;
+  border: 0;
+}
+
+.builder-react-root .builder-event-calendar-day {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 92px;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  background: var(--bg-surface);
+}
+
+/* A day from the neighbouring month is drawn, but muted — hiding it leaves
+ * ragged holes, and drawing it unmarked lies about which month you are in. */
+.builder-react-root .builder-event-calendar-day--outside {
+  background: var(--bg-alt);
+  color: var(--ink-muted);
+}
+
+.builder-react-root .builder-event-calendar-day--outside .builder-event-calendar-daynum {
+  opacity: 0.5;
+}
+
+.builder-react-root .builder-event-calendar-day--today .builder-event-calendar-daynum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.55em;
+  height: 1.55em;
+  border-radius: 50%;
+  background: var(--evt-accent, var(--accent));
+  color: var(--btn-text, #fff);
+}
+
+.builder-react-root .builder-event-calendar-daynum {
+  /* The day cell is a flex COLUMN, whose children stretch to its full width
+   * by default — so today's round marker below rendered as an ellipse the
+   * width of the whole cell. The number sizes to itself and the chips keep
+   * the full width. */
+  align-self: flex-start;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: inherit;
+}
+
+.builder-react-root .builder-event-calendar-chip {
+  display: block;
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--evt-accent, #0f4f8f) 12%, transparent);
+  border-left: 3px solid var(--evt-accent, var(--accent));
+  color: inherit;
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+  text-decoration: none;
+  /* One line per event: a long title must not stretch the whole column, and
+   * the day cell must stay the same height whatever is in it. */
+  overflow: hidden;
+}
+
+.builder-react-root .builder-event-calendar-chip:hover {
+  background: color-mix(in srgb, var(--evt-accent, #0f4f8f) 22%, transparent);
+}
+
+.builder-react-root .builder-event-calendar-chip-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.builder-react-root .builder-event-calendar-chip-time {
+  display: block;
+  color: var(--ink-muted);
+}
+
+/* ── List and cards ─────────────────────────────────────────────────────── */
+
+.builder-react-root .builder-event-calendar-items {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.builder-react-root .builder-event-calendar--cards .builder-event-calendar-items {
+  grid-template-columns: repeat(var(--evt-columns, 3), minmax(0, 1fr));
+}
+
+.builder-react-root .builder-event-calendar-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.builder-react-root .builder-event-calendar-item-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.builder-react-root .builder-event-calendar-item-body {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  padding: var(--space-4);
+}
+
+.builder-react-root .builder-event-calendar-item-text {
+  min-width: 0;
+}
+
+/* The date block on a list row — the thing a visitor scans down. */
+.builder-react-root .builder-event-calendar-datechip {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  padding: var(--space-2) 0;
+  border-radius: var(--radius-input);
+  background: var(--evt-accent, var(--accent));
+  color: var(--btn-text, #fff);
+  line-height: var(--leading-tight);
+}
+
+.builder-react-root .builder-event-calendar-datechip-month {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.builder-react-root .builder-event-calendar-datechip-day {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.builder-react-root .builder-event-calendar-item-title {
+  display: block;
+  color: var(--bx-heading, var(--ink-primary));
+  font-size: var(--text-md);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a.builder-react-root .builder-event-calendar-item-title:hover,
+.builder-react-root a.builder-event-calendar-item-title:hover {
+  color: var(--evt-accent, var(--accent));
+  text-decoration: underline;
+}
+
+.builder-react-root .builder-event-calendar-item-when {
+  margin: 2px 0 0;
+  color: var(--evt-accent, var(--accent));
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.builder-react-root .builder-event-calendar-item-where,
+.builder-react-root .builder-event-calendar-item-excerpt {
+  margin: 2px 0 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Below this the month grid cannot show words in a 7th of the width, so each
+ * day keeps its number and its events become dots. The grid itself, its
+ * columns and the cards' single column are adjustments to the base layer
+ * above, never the only place those rules exist (R1). */
+@media (max-width: 700px) {
+  .builder-react-root .builder-event-calendar--cards .builder-event-calendar-items {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .builder-react-root .builder-event-calendar-day {
+    min-height: 52px;
+    padding: var(--space-1);
+  }
+
+  .builder-react-root .builder-event-calendar-chip {
+    height: 6px;
+    padding: 0;
+    border-left: 0;
+    border-radius: 3px;
+    background: var(--evt-accent, var(--accent));
+  }
+
+  .builder-react-root .builder-event-calendar-chip-title,
+  .builder-react-root .builder-event-calendar-chip-time {
+    display: none;
+  }
+}
