@@ -6919,6 +6919,32 @@ button.builder-inline-asset-status-btn:focus-visible {
   margin: 0;
 }
 
+.asset-image-editor-mirror-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.asset-image-editor-mirror-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.asset-image-editor-flip-btn {
+  white-space: nowrap;
+  width: fit-content;
+}
+
+/* A pressed flip button has to read as ON at a glance — the canvas above it
+   is the only other clue, and a symmetrical photo gives none at all. */
+.asset-image-editor-flip-btn[aria-pressed="true"] {
+  background: var(--btn-bg);
+  border-color: var(--btn-bg);
+  color: var(--btn-text);
+}
+
 .asset-image-editor-crop-meta {
   font-size: 0.82rem;
   color: #587592;
