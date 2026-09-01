@@ -89,6 +89,109 @@ which is right, while the check underneath it permitted exactly what the
 description forbade. It says what it always meant now — and reverting it to the
 old wording makes it fail, which is the proof it was load-bearing in the wrong
 direction.
+## 2026-08-31 — Posts now go out from the client's own account, not ours (#490)
+
+A client connects their Facebook Page to Starcaster. The screen says
+"connected". Their posts then go out from *our* account, and nobody finds out.
+
+That was the state of things until this change, and it is worth being precise
+about why. The last two pieces of work built the safe where a client's
+permission is kept, and the code that collects it. Neither one ever read it
+back. So the permission sat there, correctly stored, doing nothing, while every
+post carried on using the platform-wide keys — Dane's own accounts.
+
+This adds the missing piece: one function that every publisher now asks before
+it posts, which answers "this client's own connection, if they have a working
+one; ours otherwise". Facebook, Instagram, Threads, Bluesky, X and Buffer all
+go through it now.
+
+The thing that made this worth being careful about is that the failure is
+completely silent. Posting to the wrong account is not an error — the platform
+accepts it, the post appears, the job goes green. There is no log line, no
+alert, and no way to notice except a client eventually asking why their page
+has been quiet. So the new function is deliberately suspicious in three places.
+It refuses to post at all if it could not tell whether a client has a
+connection, rather than shrugging and using ours — "no connection" and "I could
+not check" are different answers, and only one of them is safe to guess at. It
+skips a token that has expired even when the record still claims it is fine,
+because nothing checks those records yet. And when it does refuse, it hands
+back an empty set of credentials rather than a flagged one, because an earlier
+draft handed back *our* working credentials with a flag on them, which reads
+perfectly and would have posted from the wrong account anyway.
+
+Two things were left deliberately alone. The older place a client's Facebook
+Page is stored is still consulted — it is live in production and holds real
+clients today, and quietly skipping it would have moved their pages back onto
+our account without a word. And the client's token replaces only the token: the
+application credentials underneath it stay ours, because permission to post to
+someone's page is not a new app, it is one key to one door.
+
+Every safeguard here was broken on purpose and watched to fail before being
+put back. One of those breaks earned its keep: taking the change out of a
+single channel left every test passing while that channel quietly went back to
+posting from our account. There is now a test watching for exactly that.
+
+Review sent this back once, and the thing it caught is worth writing down,
+because it is the same silent failure wearing a different coat. Some platforms
+do not hand out one key — they hand out two, and both have to match. X is like
+that, and so is Bluesky, where the password only works at the particular server
+that issued it. Our safe has room for exactly one. So the code was taking the
+client's key, noticing the second one was missing, and quietly filling that gap
+from our own — producing a pair made of one key from each of two different
+accounts, which unlocks nothing and reports an error naming neither. Worse, the
+comment above it claimed the case was handled.
+
+It now refuses instead, and says exactly which part it has nowhere to keep. That
+is the same instinct as the rest of this work, one step further in: falling back
+to our account is not the only way to end up posting as the wrong person — you
+can also get there by assembling something half-and-half that merely looks
+complete. Bluesky gets the matching fix, and it is the one that could have bitten
+a real client: rather than sending their password to whatever server *our*
+settings happen to name, it now uses the public one where such a password is
+actually valid. A client running their own Bluesky server cannot connect yet, and
+now gets an honest refusal instead of having their password handed somewhere it
+does not belong.
+
+Two smaller things review asked for are settled here too. A comment claiming an
+account could be filed in the safe exactly as it arrives said the opposite of
+what the safe actually does, so there is now a single small piece of code that
+does that filing properly and one place to change it. And a known rough edge in
+the Facebook code — asking for the list of a client's pages using the wrong one
+of their two keys — is written down where the next piece of work will meet it,
+along with why it is that piece of work's to fix rather than this one's.
+
+Review sent it back a second time, and this one was the opposite kind of
+failure — loud rather than silent, which is the lucky kind. Every post to X
+was refused with "credentials are missing" while the credentials were sitting
+right there, set and complete.
+
+The cause was a translation done twice. Credentials arrive from storage
+labelled one way and get relabelled into the form the posting code reads.
+Because looking them up is worth doing only once for a post — the check, the
+picture upload and the post itself all have to be the same account, or X
+answers with an error naming neither — the code looks them up once and passes
+the result along to all three. But the relabelling step was then handed
+something already relabelled, did not recognise a single field, and returned
+five blanks. Nothing errored; the post simply refused itself. And this was on
+the shared-keys path, which is Dane's own posting, so it was not some future
+client's problem — it was the only X path that runs today.
+
+The relabelling now understands both forms, so doing it twice changes nothing.
+That is the property the test asserts, rather than the one place that happened
+to trip over it, because the next person to translate twice will not know it
+was ever a hazard. The test that should have caught this listed four of the six
+channels; X was missing from it, and X is the one channel that hands its
+credentials along in an unusual shape — so the only unusual case in the file
+was the one nothing was watching. Both gaps are closed.
+
+One more thing review noticed while it was in there. There are two lists of
+the shared keys, and they disagreed about who wins when a value is set both in
+the settings screen and in the server's own configuration. One list preferred
+the settings screen, the other preferred the server. With both set and
+different, the same account posted under one name when a client project was
+named and a different name when it was not — a wrong-account post, arriving as
+success. There is one order now, and a test that fails if the two ever drift
+apart again.
 ## 2026-08-31 — A saved section has one name, and renaming it now sticks (#454)
 
 You renamed the Delray site header three times and it snapped back three
