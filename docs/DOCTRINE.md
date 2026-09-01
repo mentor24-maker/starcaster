@@ -1461,6 +1461,35 @@ says the conflict is information, and this is the cheap time to receive it.
 Then look for the asked-for fix on `main` by *behaviour* — search for the
 function, not for the name you were about to give it.
 
+**Addendum (same day, same merge): after resolving a conflict by keeping both
+sides, PARSE the file before you commit it.** The same `git merge origin/main`
+on ticket 86bbmg2tq hit a content conflict in `scripts/clickup_direct.mjs`
+where both branches had added lines in the same place. "Keep both sides" fused
+two separate `const { ... } = X;` statements onto one line — a resolution git
+considers complete and node considers a SyntaxError. It was caught only
+because an agent happened to run `node --check` by hand.
+
+Nothing in the toolchain would have caught it. `check:syntax` parsed only
+`public/js/`. `test:builder` reads `clickup_direct.mjs` as *text* — two
+source-level assertions — and never executes it. `check_conventions` skips its
+added-line checks during a merge, precisely because a merge adds lines it did
+not write. So a file every loop pass runs could have reached `main` green, and
+the next loop pass would have died on line 1: every ticket stuck in whatever
+status it was in, with no verdict written anywhere, and no error anyone would
+see until somebody wondered why the queue had stopped moving.
+
+That gap is now closed — `npm run check:syntax` parses every hand-written
+`.js`/`.mjs`/`.cjs` under `scripts/` and `lib/` as well as `public/js/`, in
+pre-commit and in CI (ticket 86bbq5hwg). Two things follow. First, the fused
+statement is caught for you; you no longer have to remember `node --check`.
+Second, and more general: **a clean merge is a claim about text, not about
+meaning.** Git's job ends at "no overlapping edits"; whether the result is
+still a program is a separate question, and every file class needs something
+that asks it. The first sweep under the new gate found an unrelated file that
+had been unparseable on `main` since it was committed
+(`scripts/import_messaging_tweets_csv.js`, a missing closing paren) — which is
+the same lesson from the other end: nothing had ever parsed it either.
+
 ### 6.8 A fixture must be a shape the real source can produce, and the assertion must name the value
 
 **The incident (same ticket).** The test that pinned "a ticket waiting on a

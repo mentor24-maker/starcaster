@@ -26,8 +26,10 @@
  * `npm run check:models` are exactly that. Pre-commit does block, so checks
  * surfaced here still gate local commits.
  *
- * Generated-file list: keep in sync with .gitignore ("Build artifacts"
- * block), CLAUDE.md, and scripts/hooks/block_generated_edits.cjs.
+ * Generated-file list: scripts/lib/generated_files.cjs, shared with
+ * check_syntax.cjs so the two gates cannot disagree about what an artifact is.
+ * Keep it in sync with .gitignore ("Build artifacts" block), CLAUDE.md, and
+ * scripts/hooks/block_generated_edits.cjs.
  */
 
 const { execSync } = require('child_process');
@@ -48,26 +50,7 @@ function stagedFiles(filter) {
 // 1. Build artifacts must never be committed
 // ---------------------------------------------------------------------------
 
-const GENERATED = [
-  'public/app-shell.html',
-  'public/about.html',
-  'public/site.html',
-  'public/explore.html',
-  'public/builder-preview.html',
-  'public/privacy-policy.html',
-  'public/terms-of-service.html',
-  'public/data-deletion.html',
-  'public/styles.css',
-  'public/bundle.js',
-  'public/builder-bundle.js',
-  'public/js/richtext-vendor.js',
-  'lib/builder/template.js',
-  'lib/builder/email-template.js',
-  'lib/builder/email-render.js',
-  'lib/site-import/dist/normalize.js',
-  'lib/site-import/dist/crawl.js',
-  'lib/site-import/dist/capture-playwright.js',
-];
+const { GENERATED } = require('./lib/generated_files.cjs');
 
 function checkNoArtifactsStaged(files) {
   const offenders = files.filter((f) => GENERATED.includes(f));
