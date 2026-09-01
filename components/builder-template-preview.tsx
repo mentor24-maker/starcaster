@@ -4432,6 +4432,7 @@ type MediaAsset = {
   assetType: string;
   location: string;
   thumbnailUrl?: string;
+  tags?: string[];
   size?: number;
   imageWidth?: number;
   imageHeight?: number;
@@ -4440,6 +4441,21 @@ type MediaAsset = {
 };
 
 type MediaUploadProgress = { name: string; index: number; total: number };
+
+type MediaTag = { id: number; tag: string };
+
+/**
+ * One spelling of a tag, matching lib/assetTagsStore.js. Comparison is
+ * case-insensitive but the casing an admin typed is kept — "Courts" reads as
+ * "Courts", while "courts " never becomes a second entry.
+ */
+function normalizeMediaTag(value: string): string {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function mediaTagKey(value: string): string {
+  return normalizeMediaTag(value).toLowerCase();
+}
 
 function mediaIsVideo(asset: MediaAsset): boolean {
   if (String(asset.assetType || "").toLowerCase() === "video") return true;
@@ -4496,6 +4512,7 @@ function MediaManagerPreview({
   const showSize = (settings.showSize ?? "true") !== "false";
   const showDate = (settings.showDate ?? "true") !== "false";
   const showDelete = (settings.showDelete ?? "true") !== "false";
+  const showTags = (settings.showTags ?? "true") !== "false";
 
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -4507,6 +4524,10 @@ function MediaManagerPreview({
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<MediaAsset | null>(null);
   const [busy, setBusy] = useState(false);
+  const [projectTags, setProjectTags] = useState<MediaTag[]>([]);
+  const [tagTarget, setTagTarget] = useState<MediaAsset | null>(null);
+  const [tagDraft, setTagDraft] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // The module card offers a generic Content box bound to module.text, and it
@@ -4534,7 +4555,91 @@ function MediaManagerPreview({
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadAssets(); }, []);
+  function loadProjectTags() {
+    fetch("/api/asset-tags", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, "Failed to load tags"));
+        const list = (d?.tags ?? d?.data ?? []) as MediaTag[];
+        setProjectTags(Array.isArray(list) ? list : []);
+      })
+      // A tag list that will not load must not stop the grid rendering: the
+      // media is the point, tagging is an extra. The modal reports it instead.
+      .catch(() => setProjectTags([]));
+  }
+
+  useEffect(() => { loadAssets(); loadProjectTags(); }, []);
+
+  function openTagEditor(asset: MediaAsset) {
+    setTagTarget(asset);
+    setTagDraft(Array.isArray(asset.tags) ? [...asset.tags] : []);
+    setNewTag("");
+    setErrorMsg("");
+    loadProjectTags();
+  }
+
+  function toggleDraftTag(tag: string) {
+    const key = mediaTagKey(tag);
+    setTagDraft((prev) => (
+      prev.some((t) => mediaTagKey(t) === key)
+        ? prev.filter((t) => mediaTagKey(t) !== key)
+        : [...prev, normalizeMediaTag(tag)]
+    ));
+  }
+
+  /** Adds to the project registry AND applies to this file, in one action. */
+  async function addNewTag() {
+    const tag = normalizeMediaTag(newTag);
+    if (!tag) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/asset-tags", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({ tag })
+      });
+      const d = await res.json().catch(() => null);
+      // 200 means it already existed, 201 means it is new. Both are success —
+      // two admins typing "Courts" is normal use, not a conflict.
+      if (!res.ok) throw new Error(readApiErrorMessage(d, "Failed to add tag."));
+      const saved = (d?.tag ?? d?.data) as MediaTag | undefined;
+      const name = normalizeMediaTag(saved?.tag || tag);
+      setNewTag("");
+      loadProjectTags();
+      setTagDraft((prev) => (
+        prev.some((t) => mediaTagKey(t) === mediaTagKey(name)) ? prev : [...prev, name]
+      ));
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to add tag.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveTags() {
+    if (!tagTarget) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/assets/${encodeURIComponent(String(tagTarget.id))}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({ tags: tagDraft })
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, "Failed to save tags."));
+      }
+      setTagTarget(null);
+      setStatusMsg("Tags saved.");
+      loadAssets();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to save tags.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const visible = assets.filter((asset) => {
     if (kinds === "images") return !mediaIsVideo(asset);
@@ -4760,7 +4865,35 @@ function MediaManagerPreview({
                 {showSize ? formatMediaSize(asset.size) : null}
                 {showSize && showDate && asset.createdAt ? " · " : null}
                 {showDate && asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : null}
+                {showTags ? (
+                  <button
+                    aria-label={`Tag ${asset.assetName}`}
+                    className="builder-media-manager-tag-btn"
+                    onClick={() => openTagEditor(asset)}
+                    title="Tags"
+                    type="button"
+                  >
+                    {/* An outline tag glyph. Inline SVG rather than an emoji so
+                        it inherits the accent colour and renders identically
+                        on every platform. */}
+                    <svg aria-hidden="true" fill="none" height="14" viewBox="0 0 16 16" width="14">
+                      <path
+                        d="M1.5 7.1V2.4a.9.9 0 0 1 .9-.9h4.7c.24 0 .47.1.64.26l6.1 6.1a.9.9 0 0 1 0 1.28l-4.7 4.7a.9.9 0 0 1-1.28 0l-6.1-6.1a.9.9 0 0 1-.26-.64Z"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                      />
+                      <circle cx="4.6" cy="4.6" fill="currentColor" r="1" />
+                    </svg>
+                  </button>
+                ) : null}
               </span>
+              {showTags && Array.isArray(asset.tags) && asset.tags.length ? (
+                <span className="builder-media-manager-tags">
+                  {asset.tags.map((tag) => (
+                    <span className="builder-media-manager-tag" key={tag}>{tag}</span>
+                  ))}
+                </span>
+              ) : null}
               {showDelete ? (
                 <button
                   className="builder-media-manager-delete"
@@ -4776,14 +4909,111 @@ function MediaManagerPreview({
         ))}
       </div>
 
+      {tagTarget ? (
+        <div
+          aria-label={`Tags for ${tagTarget.assetName}`}
+          aria-modal="true"
+          className="builder-media-manager-tag-modal"
+          onKeyDown={(e) => { if (e.key === "Escape") setTagTarget(null); }}
+          role="dialog"
+        >
+          <div className="builder-media-manager-tag-modal-inner">
+            <h3 className="builder-media-manager-tag-modal-title">
+              Tags — {tagTarget.assetName}
+            </h3>
+
+            {projectTags.length ? (
+              <div className="builder-media-manager-tag-choices">
+                {projectTags.map((tag) => {
+                  const on = tagDraft.some((t) => mediaTagKey(t) === mediaTagKey(tag.tag));
+                  return (
+                    <button
+                      aria-pressed={on}
+                      className="builder-media-manager-tag-choice"
+                      disabled={busy}
+                      key={tag.id}
+                      onClick={() => toggleDraftTag(tag.tag)}
+                      type="button"
+                    >
+                      {tag.tag}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="builder-media-manager-tag-empty">
+                No tags yet. Add the first one below.
+              </p>
+            )}
+
+            <div className="builder-media-manager-tag-add">
+              <input
+                aria-label="New tag"
+                className="builder-media-manager-tag-input"
+                disabled={busy}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter adds the tag rather than submitting anything — this
+                  // modal is not inside a form on the public site.
+                  if (e.key === "Enter") { e.preventDefault(); addNewTag(); }
+                }}
+                placeholder="Add a new tag"
+                value={newTag}
+              />
+              <button
+                className="builder-media-manager-tag-add-btn"
+                disabled={busy || !normalizeMediaTag(newTag)}
+                onClick={addNewTag}
+                type="button"
+              >
+                Add
+              </button>
+            </div>
+
+            {errorMsg ? <div className="builder-media-manager-error">{errorMsg}</div> : null}
+
+            <div className="builder-media-manager-confirm-actions">
+              <button
+                className="builder-media-manager-btn builder-media-manager-btn-primary"
+                disabled={busy}
+                onClick={saveTags}
+                type="button"
+              >
+                {busy ? "Saving…" : "Save Tags"}
+              </button>
+              <button
+                className="builder-media-manager-btn"
+                disabled={busy}
+                onClick={() => setTagTarget(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {deleteTarget ? (
         <div className="builder-media-manager-confirm">
           <p>Delete “{deleteTarget.assetName}”? This cannot be undone.</p>
           <div className="builder-media-manager-confirm-actions">
-            <button disabled={busy} onClick={confirmDelete} type="button">
+            <button
+              className="builder-media-manager-btn builder-media-manager-btn-danger"
+              disabled={busy}
+              onClick={confirmDelete}
+              type="button"
+            >
               {busy ? "Deleting…" : "Delete"}
             </button>
-            <button disabled={busy} onClick={() => setDeleteTarget(null)} type="button">Cancel</button>
+            <button
+              className="builder-media-manager-btn"
+              disabled={busy}
+              onClick={() => setDeleteTarget(null)}
+              type="button"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       ) : null}
