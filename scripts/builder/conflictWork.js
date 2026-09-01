@@ -216,6 +216,105 @@ function isPermanent(localVerdict) {
 }
 
 /**
+ * THE ONE VOCABULARY (2026-08-31, task 86bbq80j5, review round 3).
+ *
+ * The three-way answer above reached the hand-off comment and stopped there.
+ * Four other surfaces still asked a TWO-way question — they branched on the
+ * actor (`later-pass` or not), which cannot tell "this machine looked and
+ * found an overlap" apart from "this machine never looked at all". So a
+ * `WRONG_REPO` verdict produced a hand-off comment saying *"Whether there is
+ * anything to resolve is still unknown"* directly above a link to a ticket
+ * titled *"Resolve the merge conflict on PR #501"*, whose acceptance criteria
+ * told its builder to clear conflict markers. That is the 2026-08-30 PR #444
+ * defect word for word, reproduced one level down — and it is deterministic,
+ * because `WRONG_REPO` is what the relay machine returns for EVERY conflicting
+ * PR on a `repo:normie`, `repo:pulse` or `repo:vault` ticket, every pass.
+ *
+ * So the nouns live in ONE table, keyed by the one verdict kind. A surface
+ * cannot describe a verdict as something the verdict did not say, because no
+ * surface holds its own words any more. Adding a verdict kind without giving
+ * it a full entry here fails a test.
+ *
+ * The `real-conflict` column is the wording that shipped before any of this,
+ * kept byte-for-byte: review rounds 2 and 3 both verified those bodies against
+ * `main` as evidence the fixes had not disturbed the case that was always
+ * right. That is a property worth keeping rather than a coincidence to spend.
+ */
+const WORK_VOCABULARY = Object.freeze({
+  [VERDICT_KINDS.REAL_CONFLICT]: Object.freeze({
+    /** The filed ticket's title. */
+    ticketName: (prNumber, where) => `Resolve the merge conflict on PR #${prNumber}${where}`,
+    /** What the hand-off comment calls the work when it points at that ticket. */
+    handOver: 'Resolving it',
+    /** The same, as a sentence opener on the original ticket. */
+    filedWork: (prNumber) => `Resolving the conflict on PR #${prNumber}`,
+    /** The banner a stalled hand-off wears on the bus. */
+    stallHeadline: 'CONFLICT STILL UNRESOLVED',
+    /** What the stalled line says is being waited on. */
+    stallWhat: (prNumber) => `PR #${prNumber} has been waiting on a conflict resolution`,
+    /** Why an aged hand-off is news, when a ticket IS on file. */
+    stallWhy: (filed, age) => `conflict ticket ${filed.id} has been open ${age} without clearing this conflict`,
+    /** How the end-of-pass summary counts it. */
+    summaryCount: (n) => `${n} conflict(s) STILL UNRESOLVED`,
+  }),
+  [VERDICT_KINDS.NO_OVERLAP]: Object.freeze({
+    // UNREACHABLE THROUGH THE FILING GATE, and written truthfully anyway.
+    // `shouldFileConflictTicket` returns false here, so no ticket is ever
+    // filed off a proven no-overlap — a test pins that. These two entries
+    // exist so that a future caller which reaches them cannot be handed a
+    // sentence claiming a conflict nobody found; the whole class of defect
+    // in this ticket is copy that outran its verdict.
+    ticketName: (prNumber, where) => `Check why PR #${prNumber}${where} has not merged — no overlap was found`,
+    handOver: 'Retrying it',
+    filedWork: (prNumber) => `Retrying the merge of PR #${prNumber}`,
+    stallHeadline: 'MERGE STILL NOT CLEARED',
+    stallWhat: (prNumber) => `PR #${prNumber} was expected to clear itself`,
+    stallWhy: (filed, age) => `no overlap was found, so every pass has been retrying the catch-up on its own — and it has not cleared in ${age}`,
+    summaryCount: (n) => `${n} merge(s) STILL NOT CLEARED`,
+  }),
+  [VERDICT_KINDS.COULD_NOT_CHECK]: Object.freeze({
+    // NOT "resolve" and NOT "conflict" — nothing has been established. The
+    // work is to find out, and only then to act on the answer.
+    ticketName: (prNumber, where) => `Find out why PR #${prNumber}${where} will not merge`,
+    handOver: 'Finding out',
+    filedWork: (prNumber) => `Finding out why PR #${prNumber} will not merge`,
+    stallHeadline: 'MERGE STILL BLOCKED — THE CHECK NEVER RAN',
+    stallWhat: (prNumber) => `PR #${prNumber} has been waiting for somebody to find out whether it conflicts at all`,
+    stallWhy: (filed, age) => `ticket ${filed.id} has been open ${age} and nobody has established whether there is a conflict at all`,
+    summaryCount: (n) => `${n} merge(s) NEVER CHECKED`,
+  }),
+});
+
+/** The words this verdict is entitled to. The ONE lookup — every surface goes
+ *  through here rather than branching on an actor it cannot read the kind off
+ *  of. */
+function verdictCopy(localVerdict) {
+  return WORK_VOCABULARY[conflictVerdictKind(localVerdict)];
+}
+
+/**
+ * WHO ACTS NEXT — asked once, in one place (review round 3).
+ *
+ * The notice used to compute this inline and hand the answer down as a string,
+ * which made `actor` the only thing the stall surfaces could see. Two values
+ * of it (`loop-queue`, `nobody`) each cover two different verdicts, so those
+ * surfaces were reading a two-valued shadow of a three-valued answer and
+ * guessing the rest. Now every one of them takes the `localVerdict` itself and
+ * derives BOTH facts from these two functions, so "who acts" and "what was
+ * found" can never come apart: there is only one place either is decided.
+ *
+ *   'later-pass' — a proven no-overlap. The next relay pass retries and it
+ *                  clears itself. A real actor with no ticket behind it.
+ *   'loop-queue' — a ticket is on file; the build loop drains that list.
+ *   'nobody'     — filing failed. Nothing is going to pick this up, and the
+ *                  copy has to say so rather than reach for the passive voice.
+ */
+function conflictActor({ localVerdict, filed }) {
+  if (isSelfHealing(localVerdict)) return 'later-pass';
+  return filed ? 'loop-queue' : 'nobody';
+}
+
+/**
  * May the merge step file a Loop Queue ticket for this conflict?
  *
  * Everything except a proven no-overlap. A real conflict needs somebody to
@@ -232,10 +331,19 @@ function shouldFileConflictTicket(localVerdict) {
   return !isSelfHealing(localVerdict);
 }
 
-/** The comment written on the ORIGINAL ticket, recording where the resolution
- *  work now lives. */
-function conflictTicketFiledComment({ id, url, prNumber }) {
-  return `${CONFLICT_TICKET_TRAIL} PR #${prNumber} — ${url}\n\nResolving the conflict on PR #${prNumber} is now ticket ${id} in the Loop Queue, which the build loop drains every pass. This ticket stays in Ready to launch and needs nothing from you.`;
+/**
+ * The comment written on the ORIGINAL ticket, recording where the work now
+ * lives — and calling that work what it actually is (review round 3). It said
+ * "Resolving the conflict" for every verdict, including the ones where no
+ * conflict had been established, which is the sentence the reader believes
+ * before they ever click through to the ticket.
+ *
+ * The trail line above it is machine-read by `findConflictTicket` and does not
+ * vary: one shape, written and read by this module, as in loopTrail.js.
+ */
+function conflictTicketFiledComment({ id, url, prNumber, localVerdict }) {
+  const work = verdictCopy(localVerdict).filedWork(prNumber);
+  return `${CONFLICT_TICKET_TRAIL} PR #${prNumber} — ${url}\n\n${work} is now ticket ${id} in the Loop Queue, which the build loop drains every pass. This ticket stays in Ready to launch and needs nothing from you.`;
 }
 
 /**
@@ -256,10 +364,16 @@ function findConflictTicket(comments, prNumber) {
   return null;
 }
 
-/** The filed ticket's name. Says the branch, because that is what the session
- *  picking it up has to check out. */
-function conflictTicketName({ pr, branch }) {
-  return `Resolve the merge conflict on PR #${pr.number}${branch ? ` (${branch})` : ''}`;
+/**
+ * The filed ticket's name. Says the branch, because that is what the session
+ * picking it up has to check out — and says the right VERB, which is the
+ * defect review round 3 sent this back for. A ticket titled "Resolve the merge
+ * conflict on PR #501" filed off a verdict that never looked sends its builder
+ * hunting for conflict markers that may not exist, under a hand-off comment
+ * two clicks away saying the question is still open.
+ */
+function conflictTicketName({ pr, branch, localVerdict }) {
+  return verdictCopy(localVerdict).ticketName(pr.number, branch ? ` (${branch})` : '');
 }
 
 /**
@@ -282,6 +396,27 @@ function conflictTicketBody({ task, pr, branch, localVerdict, commentId }) {
         ? `GitHub called it a conflict and the relay machine could not check whether that is true — ${localVerdict.reason}${isPermanent(localVerdict) ? '. This will never clear from that machine on its own: it is the wrong checkout, so every future pass returns the same answer' : ''}`
         : 'GitHub reported that the branch conflicts with newer work on `main`, and no local check was attempted.';
 
+  // THE JOB THIS TICKET IS ASKING FOR, and it is not the same job for all
+  // three verdicts (review round 3, the blocking finding). "Resolve the
+  // overlap by hand" was printed unconditionally — so a ticket filed because
+  // the check could NOT run told its builder to clear markers whose existence
+  // had never been established, while the comment that linked to it said the
+  // question was still open. Deterministic for every `repo:normie`,
+  // `repo:pulse` and `repo:vault` conflict, because that is `WRONG_REPO`.
+  //
+  // The real-overlap branch is the wording that shipped, unchanged.
+  const where = branch || 'the branch';
+  const realOverlap = isRealOverlap(localVerdict);
+  const scope = realOverlap
+    ? `Catch \`${where}\` up with \`main\`, resolve the overlap by hand, and push. Nothing else — this is not a licence to change what the PR does.`
+    : `FIRST find out whether \`${where}\` and \`main\` actually conflict — the relay machine never established that. Then act on the answer: if they do overlap, resolve it by hand and push; if they do not, catch the branch up and push. Nothing else — this is not a licence to change what the PR does.${isPermanent(localVerdict) ? ` Do this on a machine that HAS a checkout of that repo; the relay machine does not, which is why the question is still open.` : ''}`;
+  const criteria = realOverlap
+    ? [`- [ ] The branch merges cleanly into \`main\` (\`git merge origin/main\` on the branch, no conflict markers left anywhere)`]
+    : [
+      `- [ ] The question is answered OUT LOUD first: run \`git merge-tree --write-tree origin/main origin/${where}\` (exit 0 means git found nothing to resolve) and say in a comment what it found`,
+      `- [ ] The branch merges cleanly into \`main\` — resolve an overlap only if there turns out to be one; no conflict markers left anywhere`,
+    ];
+
   return [
     '## What is wrong',
     '',
@@ -297,11 +432,11 @@ function conflictTicketBody({ task, pr, branch, localVerdict, commentId }) {
     '',
     '## Scope',
     '',
-    `Catch \`${branch || 'the branch'}\` up with \`main\`, resolve the overlap by hand, and push. Nothing else — this is not a licence to change what the PR does.`,
+    scope,
     '',
     '## Acceptance criteria',
     '',
-    `- [ ] The branch merges cleanly into \`main\` (\`git merge origin/main\` on the branch, no conflict markers left anywhere)`,
+    ...criteria,
     '- [ ] Only ordinary pushes — merge `origin/main` in, never rebase-and-force (`docs/DOCTRINE.md` §6.6)',
     `- [ ] CI is green on PR #${pr.number}`,
     `- [ ] Nothing on ${task.url} is changed — its status stays Ready to launch`,
@@ -356,7 +491,8 @@ function ageText(ms) {
  * news, and the sentence says which of the two it is. Any other actor — and an
  * absent one — keeps the original filed-ticket rule, which fails toward noise.
  */
-function handOffStalled({ at, now, filed, actor }) {
+function handOffStalled({ at, now, filed, localVerdict }) {
+  const actor = conflictActor({ localVerdict, filed });
   if (!filed && actor !== 'later-pass') {
     return { stalled: true, why: 'no conflict ticket has been filed, so nothing is going to pick this up', ageMs: null };
   }
@@ -376,13 +512,11 @@ function handOffStalled({ at, now, filed, actor }) {
   //
   // A self-healing hand-off that has not healed is still news; what it is NOT
   // is a conflict somebody is failing to resolve.
-  return {
-    stalled: true,
-    why: actor === 'later-pass'
-      ? `no overlap was found, so every pass has been retrying the catch-up on its own — and it has not cleared in ${ageText(ageMs)}`
-      : `conflict ticket ${filed.id} has been open ${ageText(ageMs)} without clearing this conflict`,
-    ageMs,
-  };
+  // THE VERDICT DECIDES THE SENTENCE (review round 3). It read `actor`, which
+  // is two-valued here — so a hand-off whose check never ran was described as
+  // "a conflict ticket ... without clearing this conflict", naming a conflict
+  // nobody had found. Three verdicts, three sentences, all from one table.
+  return { stalled: true, why: verdictCopy(localVerdict).stallWhy(filed, ageText(ageMs)), ageMs };
 }
 
 /**
@@ -408,11 +542,11 @@ function handOffStalled({ at, now, filed, actor }) {
  * reads. `filed` still discriminates the other two actors; `later-pass` gets
  * its own clause, and it agrees with the `why` beside it.
  */
-function stalledHandOffLine({ task, pr, filed, stalled, actor }) {
-  const selfHealing = actor === 'later-pass';
-  const what = selfHealing
-    ? `PR #${pr.number} was expected to clear itself`
-    : `PR #${pr.number} has been waiting on a conflict resolution`;
+function stalledHandOffLine({ task, pr, filed, stalled, localVerdict }) {
+  const selfHealing = isSelfHealing(localVerdict);
+  // Three, not two (review round 3): "waiting on a conflict resolution" was
+  // printed for a verdict that never looked for one.
+  const what = verdictCopy(localVerdict).stallWhat(pr.number);
   // FOUR cases, because `filed` and `actor` are answers to different questions
   // and both can be true at once (review round 2). A ticket filed by an
   // earlier pass does not become "the actor" just because it is still open —
@@ -435,8 +569,8 @@ function stalledHandOffLine({ task, pr, filed, stalled, actor }) {
  * self-healing hand-off that has not healed IS news — it just is not a
  * conflict, and calling it one sends a reader looking for markers to clear.
  */
-function stalledHandOffHeadline({ actor }) {
-  return actor === 'later-pass' ? 'MERGE STILL NOT CLEARED' : 'CONFLICT STILL UNRESOLVED';
+function stalledHandOffHeadline({ localVerdict }) {
+  return verdictCopy(localVerdict).stallHeadline;
 }
 
 /**
@@ -449,23 +583,33 @@ function stalledHandOffHeadline({ actor }) {
  * wording — collapsing it either way would be the same overstatement or
  * understatement the per-line banner was fixed for.
  */
-function stalledSummaryHeadline(actors) {
-  const list = Array.isArray(actors) ? actors : [];
-  const anyConflict = list.some((a) => a !== 'later-pass');
-  const anyDeferred = list.some((a) => a === 'later-pass');
-  if (anyConflict && anyDeferred) return 'MERGES STILL NOT CLEARED — SOME ARE CONFLICTS, SOME ARE NOT';
-  return anyConflict ? 'CONFLICTS STILL UNRESOLVED' : 'MERGES STILL NOT CLEARED';
+function stalledSummaryHeadline(kinds) {
+  const list = Array.isArray(kinds) ? kinds : [];
+  // It read actors, where everything-but-`later-pass` was "a conflict" — so a
+  // pass that stalled only on checks it could not run announced CONFLICTS
+  // STILL UNRESOLVED above lines saying nothing had been checked (round 3).
+  const real = list.includes(VERDICT_KINDS.REAL_CONFLICT);
+  const never = list.includes(VERDICT_KINDS.COULD_NOT_CHECK);
+  const healing = list.includes(VERDICT_KINDS.NO_OVERLAP);
+  if (real && (never || healing)) return 'MERGES STILL NOT CLEARED — SOME ARE CONFLICTS, SOME ARE NOT';
+  if (real) return 'CONFLICTS STILL UNRESOLVED';
+  if (never && healing) return 'MERGES STILL NOT CLEARED — SOME WERE NEVER CHECKED';
+  if (never) return 'MERGES STILL BLOCKED — THE CHECK NEVER RAN';
+  return 'MERGES STILL NOT CLEARED';
 }
 
 /** The one-line clause in the pass summary, counting the two kinds apart so
  *  neither is described as the other. Empty at zero, as before. */
-function stalledSummaryClause(actors) {
-  const list = Array.isArray(actors) ? actors : [];
-  const conflicts = list.filter((a) => a !== 'later-pass').length;
-  const deferred = list.length - conflicts;
-  const parts = [];
-  if (conflicts) parts.push(`${conflicts} conflict(s) STILL UNRESOLVED`);
-  if (deferred) parts.push(`${deferred} merge(s) STILL NOT CLEARED`);
+function stalledSummaryClause(kinds) {
+  const list = Array.isArray(kinds) ? kinds : [];
+  // Counted apart, in the fixed order real / never-checked / deferred, so no
+  // group is ever described as one of the others. Each count is worded by the
+  // same table the per-line banner reads.
+  const order = [VERDICT_KINDS.REAL_CONFLICT, VERDICT_KINDS.COULD_NOT_CHECK, VERDICT_KINDS.NO_OVERLAP];
+  const parts = order
+    .map((kind) => [kind, list.filter((k) => k === kind).length])
+    .filter(([, n]) => n > 0)
+    .map(([kind, n]) => WORK_VOCABULARY[kind].summaryCount(n));
   return parts.length ? `, ${parts.join(', ')}` : '';
 }
 
@@ -479,6 +623,9 @@ module.exports = {
   isSelfHealing,
   couldNotCheck,
   isPermanent,
+  WORK_VOCABULARY,
+  verdictCopy,
+  conflictActor,
   shouldFileConflictTicket,
   CONFLICT_TICKET_RE,
   STALE_HAND_OFF_MS,

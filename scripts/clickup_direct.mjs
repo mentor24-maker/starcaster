@@ -738,7 +738,7 @@ async function fileConflictTicket({ task, pr, branch, localVerdict, commentId, u
       : []);
 
   const out = await call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
-    name: conflictTicketName({ pr, branch }),
+    name: conflictTicketName({ pr, branch, localVerdict }),
     markdown_description: conflictTicketBody({ task, pr, branch, localVerdict, commentId }),
     status: 'Queued',
     // High, not Urgent: Urgent is the operator's lane (ratified 2026-08-18)
@@ -767,7 +767,7 @@ async function fileConflictTicket({ task, pr, branch, localVerdict, commentId, u
   // The trail on the WAITING ticket. Without it the next pass cannot tell that
   // this conflict is already filed and would file another one every hour.
   const trail = await call('POST', `/api/v2/task/${task.id}/comment`, {
-    comment_text: conflictTicketFiledComment({ id, url, prNumber: pr.number }),
+    comment_text: conflictTicketFiledComment({ id, url, prNumber: pr.number, localVerdict }),
   });
   if (!trail.res.ok) {
     unchecked.push(`${task.id}: filed conflict ticket ${id} but could NOT record it on this ticket — the next pass will file a duplicate. Add the line by hand: "CONFLICT TICKET FILED: PR #${pr.number} — ${url}"`);
@@ -1065,20 +1065,23 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     const freshlyFiled = Boolean(filed) && !alreadyFiled;
     if (alreadySaid(handOffReason) && !freshlyFiled) {
       const stalled = handOffStalled({
-        at: decision.priorRefusalAt, now: Date.now(), filed, actor: notice.actor,
+        at: decision.priorRefusalAt, now: Date.now(), filed, localVerdict,
       });
       if (!stalled.stalled) {
         console.error(`  MERGE HANDED OFF (unchanged, nothing posted) on ${label}: ${gate.reason}`);
         return { outcome: 'handed-off-quiet', reason: gate.reason };
       }
-      // `notice.actor`, not `filed`. This call is the one branch of the
-      // hand-off that still derived its actor from whether a ticket exists,
-      // and it is the branch that reaches the bus (review round 1).
-      const line = stalledHandOffLine({ task, pr, filed, stalled, actor: notice.actor });
+      // THE VERDICT, not `filed` and not the actor. These three surfaces reach
+      // the BUS, and each of them used to ask a two-way question of a
+      // three-way answer: round 1 caught them reading `filed`, round 3 caught
+      // them reading a two-valued `actor`, which cannot tell a found overlap
+      // apart from a check that never ran. They take `localVerdict` now and
+      // derive what they need from the one table in conflictWork.js.
+      const line = stalledHandOffLine({ task, pr, filed, stalled, localVerdict });
       console.error(`  MERGE HAND-OFF STALLED on ${label}: ${stalled.why}`);
-      stalledHandOffs.push({ line, actor: notice.actor });
+      stalledHandOffs.push({ line, kind: notice.kind });
       if (dryRun) return { outcome: 'would-report-stalled', reason: stalled.why };
-      const busStall = await postToBus(channel, `[CC-starcaster bus-relay] ${stalledHandOffHeadline({ actor: notice.actor })} — ${line}\n\n${pr.url}`);
+      const busStall = await postToBus(channel, `[CC-starcaster bus-relay] ${stalledHandOffHeadline({ localVerdict })} — ${line}\n\n${pr.url}`);
       // "One pass of noise per day is the price" (conflictWork.js) — and the
       // clock that meters it is the marker's timestamp, so a stall that has
       // been ANNOUNCED re-stamps the marker and the next nag is a day away.
@@ -1134,7 +1137,13 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // An unfiled hand-off is NOT cosmetic: the ticket comment says nothing is
     // working on it, and if the bus post fails too, nobody has been told.
     if (!bus.ok) reportBusFailure({ cosmetic: Boolean(filed) || selfHealing, unchecked, busSkipped, line: `${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})` });
-    if (!filed && !selfHealing) unchecked.push(`${task.id}: PR #${pr.number} conflicts and NO Loop Queue ticket could be filed for it — no actor exists for this conflict, and it will not merge on its own`);
+    // IT MAY NOT ASSERT THE FINDING EITHER (review round 3, item 3). This line
+    // said "conflicts" and "this conflict" for every non-healing verdict,
+    // including the ones where nothing was looked at — the same sentence the
+    // bus post beside it had already been fixed not to write.
+    if (!filed && !selfHealing) unchecked.push(isRealOverlapVerdict
+      ? `${task.id}: PR #${pr.number} conflicts and NO Loop Queue ticket could be filed for it — no actor exists for this conflict, and it will not merge on its own`
+      : `${task.id}: GitHub called PR #${pr.number} a conflict, this machine could not check whether that is true, and NO Loop Queue ticket could be filed to find out — no actor exists for it, and it will not merge on its own`);
     if (alreadyFiled) console.error(`  (conflict ticket ${filed.id} was already on file — not filed twice)`);
     await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'handed-off', reason: gate.reason, filed: filed ? filed.id : null };
@@ -3370,8 +3379,8 @@ if (cmd === 'whoami') {
   // Counted APART, because calling a self-healing deferral a conflict is the
   // same overstatement the per-line banner was fixed for, one surface across
   // (review round 2, item 4).
-  const stalledActors = stalledHandOffs.map((h) => h.actor);
-  const stalledLine = stalledSummaryClause(stalledActors);
+  const stalledKinds = stalledHandOffs.map((h) => h.kind);
+  const stalledLine = stalledSummaryClause(stalledKinds);
   console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}${laneLine}${stalledLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? (simulateBusFailure ? ' (DRY RUN + SIMULATED PARTY-LINE OUTAGE — nothing was merged, posted or moved)' : ' (DRY RUN — nothing was merged, posted or moved)') : ''}`);
 
   // Its own heading, and unmissable. The whole point of task 86bbq0fh8 is
@@ -3379,7 +3388,7 @@ if (cmd === 'whoami') {
   // days. A conflict that has been handed off and is still sitting there now
   // says so on every pass, by name, until it clears.
   if (stalledHandOffs.length) {
-    console.error(`\n${stalledSummaryHeadline(stalledActors)} — ${stalledHandOffs.length} approved merge(s) are not moving:`);
+    console.error(`\n${stalledSummaryHeadline(stalledKinds)} — ${stalledHandOffs.length} approved merge(s) are not moving:`);
     for (const h of stalledHandOffs) console.error(`  - ${h.line}`);
   }
   // Its own heading, above the failures and visibly not one of them. A chat

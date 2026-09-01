@@ -23,7 +23,7 @@
 
 // The one reading of a local merge verdict, shared with the merge step so the
 // two cannot disagree about it (task 86bbq80j5).
-const { isRealOverlap, isSelfHealing, isPermanent } = require('./conflictWork');
+const { isRealOverlap, isSelfHealing, isPermanent, conflictActor, verdictCopy, conflictVerdictKind } = require('./conflictWork');
 
 /**
  * The exact phrases that mean "merge it". Deliberately a closed set matched
@@ -555,10 +555,19 @@ function refusalNotice({ commentId, why, plainEnglish }) {
  * body says so, and says plainly what the person has to do first.
  *
  * `localVerdict` is what THIS machine found when it tried the merge itself:
- * two outcomes, and collapsing them sends the reader after the wrong thing:
+ * THREE outcomes, and collapsing any two of them sends the reader after the
+ * wrong thing (the kinds live in conflictWork.js, which is the only place that
+ * decides them — this list is a reader's summary, not a second definition):
  *
- *   'real-conflict' — the branches genuinely overlap. A person must decide.
- *   'unknown'       — the check could not run at all.
+ *   'real-conflict'   — the branches genuinely overlap. Somebody must decide
+ *                       what the merged file says.
+ *   'no-overlap'      — the local merge came back clean; it heals itself.
+ *   'could-not-check' — the check never ran. NO FINDING WAS MADE, so no
+ *                       message here may claim one.
+ *
+ * (An earlier 'unknown' kind fused the last two and was retired on 2026-08-31,
+ * review round 2 of task 86bbq80j5: copy written for it asserted a finding the
+ * pass had not made.)
  *
  * (A third kind, 'needs-rebuild', existed while committed HTML carried
  * ?v= asset pins; retired 2026-08-24 with the pins themselves, task 86bbkh288.)
@@ -605,7 +614,7 @@ function conflictHandOffNotice({ commentId, pr, localVerdict, filed }) {
   // the Loop Queue on a timer today. Without one it is nobody, and the body
   // must say so rather than reach for the passive voice that hid the missing
   // actor before. This reads the SAME predicate the filing decision reads.
-  const actor = selfHealing ? 'later-pass' : (filed ? 'loop-queue' : 'nobody');
+  const actor = conflictActor({ localVerdict, filed });
 
   // What the work IS, and what to CALL it — both differ between the two
   // non-healing answers. A ticket that tells its builder to resolve an overlap,
@@ -619,7 +628,11 @@ function conflictHandOffNotice({ commentId, pr, localVerdict, filed }) {
   const theWork = realOverlap
     ? 'Sorting that overlap out is a code change rather than a decision, and a script must never resolve one blind, so it was not attempted.'
     : `Whether there is anything to resolve is still unknown — the local check did not run${permanent ? ', and it never will from the relay machine: the branch is in a repo that machine has no checkout of, so every future pass returns this same answer' : ''}.`;
-  const theHandOver = realOverlap ? 'Resolving it' : 'Finding out';
+  // From the shared table, not from a local ternary (review round 3). This is
+  // the noun the FILED TICKET's title has to agree with, and it did not: the
+  // comment said "Finding out" and pointed at a ticket titled "Resolve the
+  // merge conflict on...". Both read one entry now, so they cannot disagree.
+  const theHandOver = verdictCopy(localVerdict).handOver;
 
   let whatHappensNext;
   if (selfHealing) {
@@ -640,6 +653,9 @@ function conflictHandOffNotice({ commentId, pr, localVerdict, filed }) {
   return {
     marker,
     actor,
+    // The verdict travels WITH the actor so the merge step never has to
+    // re-derive either one (review round 3).
+    kind: conflictVerdictKind(localVerdict),
     body: `This task was not able to merge on the last attempt, because ${because}.\n\n${whatHappensNext}\n\n${promise}Nothing was merged and nothing was changed; the ticket stays Ready to launch.\n\n${pr.url}\n\n(Automatic — bus-relay merge step, authorized by your comment ${commentId}.)`,
   };
 }

@@ -61,6 +61,34 @@ promising a retry that cannot work. Every outcome the checker can produce now
 needs a decision written down beside it; a test fails if a new one is ever added
 without one, which is how four of these came to be sharing an answer nobody had
 chosen for them.
+
+And a fourth time, for the most embarrassing version of the same thing. Splitting
+those three answers apart fixed the note written on the ticket — and stopped
+there. The ticket that note LINKS TO, the one somebody actually opens and works
+from, still had a single set of words for all three. So the note would say
+"whether there is anything to resolve is still unknown", you would click through
+to find out, and land on a job titled "Resolve the merge conflict on PR #501"
+telling you to leave no conflict markers behind. Word for word the mistake this
+whole job was written to remove, one more level down — and for the branches that
+live in the other projects it happened on every single pass, not occasionally.
+Three more places had it too: the once-a-day chat message about a stuck branch,
+the end-of-run summary above it, and the "things I could not check" list at the
+bottom of every run.
+
+The fix is one change rather than four, and it is the only shape that stays fixed.
+Every one of those places used to hold its own words and pick between them by
+asking a question that only had two answers — so none of them could tell "we
+looked and found a clash" apart from "we never looked". The words now live in one
+table, one row per answer, and every surface reads its row. Nothing writes its own
+sentences any more, so nothing can describe a situation as something it is not.
+Adding a fourth answer without filling in its whole row fails the tests.
+
+One of the guard tests turned out to be holding the mistake in place: its written
+description said "only a branch with a real clash may be announced as a clash",
+which is right, while the check underneath it permitted exactly what the
+description forbade. It says what it always meant now — and reverting it to the
+old wording makes it fail, which is the proof it was load-bearing in the wrong
+direction.
 ## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
 
 We already had an alarm for a scheduled job that stops running. This adds the
