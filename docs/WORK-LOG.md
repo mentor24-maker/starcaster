@@ -31,6 +31,31 @@ counted. The safety valve would have been dead in every folder that uses it.
 Fixed, with a test that builds a real worktree and fails if it stops working.
 The older SQL hand-off hook has the same gap and still needs its own fix.
 
+Review then caught the same counter failing a second way, and this one was
+worse: the "step aside after three" limit only existed when the guard could
+work out which folder it was in. If it could not — because the session was
+started outside the code folder, or because the `git` command simply was not
+available, which is the normal starting state for an agent on the Mac Mini —
+the limit was skipped entirely and the guard would have refused **every** turn,
+forever, with no way out. A safety brake that disappears in the one situation
+it exists for. It now keeps its count in a scratch folder when it cannot find a
+better place, and it also listens to the signal Claude Code itself sends after
+a guard has already blocked once, so there are two independent brakes rather
+than one. Both were measured over five turns in a row before and after, because
+"it stops after three" and "it never stops" look identical if you only try it
+twice.
+
+Three smaller things came out of the same review. Naming an exception on a line
+that started with a dash — an ordinary way to write a bullet point — was being
+rejected, which would have pushed agents toward the override switch for no
+reason. A command hidden behind a setting, like `PORT=3058 npm run something`,
+was sailing through because the guard only looked at the very start of the
+line. And it only ever read the first line of a pasted block, so the exact
+two-line shape the project's own handbook prints slipped past untouched. All
+three are closed, and the last one was checked against 11,803 real replies from
+this project's history first to make sure the wider net does not start crying
+wolf: it flagged the same 152 and not one more.
+
 ## 2026-08-31 — A branch that was fine no longer gets filed as broken work (#487)
 
 When Dane says "merge" on a finished ticket, the relay checks with GitHub first.

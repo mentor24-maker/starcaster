@@ -12,6 +12,7 @@ const {
   offendingCommands,
   statedException,
   splitFences,
+  stripEnvPrefix,
   lastAssistantTurn,
   isInteractive,
 } = require('../lib/operator_handoff.cjs');
@@ -48,17 +49,42 @@ function makeTranscript(text, entrypoint = 'cli') {
   return file;
 }
 
-function runHook(text, { entrypoint = 'cli', sessionId = 's1', cwd = os.tmpdir() } = {}) {
+/**
+ * A session id no other test (or earlier run of this suite) can collide with.
+ *
+ * The refusal counter is keyed by session id, and since it now falls back to
+ * the temp directory when there is no git dir, a FIXED id would persist across
+ * tests and across runs -- three refusals anywhere would silently stand the
+ * hook down everywhere after. Tests that need several turns to share a session
+ * take one id from here and pass it to each call.
+ */
+let sessionSeq = 0;
+function nextSession(tag = 'test') {
+  sessionSeq += 1;
+  return `${tag}-${process.pid}-${sessionSeq}`;
+}
+
+function runHook(
+  text,
+  { entrypoint = 'cli', sessionId = nextSession(), cwd = os.tmpdir(), payload = {}, env } = {}
+) {
   const result = spawnSync('node', [HOOK], {
     input: JSON.stringify({
       hook_event_name: 'Stop',
       session_id: sessionId,
       cwd,
       transcript_path: makeTranscript(text, entrypoint),
+      ...payload,
     }),
     encoding: 'utf8',
+    ...(env ? { env } : {}),
   });
   return { code: result.status, stderr: result.stderr || '' };
+}
+
+/** Five turns in a row, so a counter that never advances is visible as a run. */
+function fiveTurns(message, opts) {
+  return [0, 1, 2, 3, 4].map(() => runHook(message, opts).code);
 }
 
 // ---------------------------------------------------------------------------
@@ -151,14 +177,62 @@ test('near-misses are left alone', () => {
   }
 });
 
-test('only the first non-blank line of a block is judged', () => {
-  const block = fenced('# a note\nnpm run build');
-  assert.deepEqual(
-    offendingCommands(block), [],
-    'the spec keys off the first line; a comment first is not a hand-off shape'
+test('EVERY line of a block is judged, not only the first', () => {
+  // The shape CLAUDE.md itself prints: a setup line, then the real command.
+  // `node server.js` is not a hand-off, so first-line-only judged this clean
+  // and never looked at the `npm run` underneath it.
+  const harness = fenced(
+    'PORT=3058 node server.js\n'
+    + 'UI_HARNESS_BASE_URL=http://localhost:3058 npm run check:render'
   );
+  assert.deepEqual(
+    offendingCommands(harness).map((o) => o.command),
+    ['npm run check:render'],
+    'a command on the second line of a fence is still handed over'
+  );
+
+  assert.equal(offendingCommands(fenced('# a note\nnpm run build')).length, 1,
+    'a comment above the command does not hide it');
   assert.equal(offendingCommands(fenced('\n\nnpm run build')).length, 1,
     'blank lines before the command do not hide it');
+});
+
+test('pasted npm OUTPUT is not read as a hand-off', () => {
+  // The one false positive every-line scanning introduced, and why stripPrompt
+  // no longer treats `>` as a shell prompt: `>` is npm's own log marker, so a
+  // pasted run log looked like a hand-off of the command it was REPORTING.
+  const log = fenced(
+    '> starcaster@1.0.0 clickup\n'
+    + '> doppler run --project starcaster -- node scripts/clickup_direct.mjs queue'
+  );
+  assert.deepEqual(
+    offendingCommands(log), [],
+    'reporting what a command said is the opposite of handing it over'
+  );
+  assert.equal(offendingCommands(fenced('$ npm run build')).length, 1,
+    'control: a real `$` prompt is still stripped and still caught');
+});
+
+test('a leading VAR=value prefix does not hide the command', () => {
+  const cases = [
+    ['UI_HARNESS_BASE_URL=http://localhost:3057 npm run check:panels', 'npm run check:panels'],
+    ['FOO=1 BAR=2 npm run build', 'npm run build'],
+    ['PORT=3057 node scripts/x.mjs', 'node scripts/x.mjs'],
+  ];
+  for (const [line, bare] of cases) {
+    assert.equal(stripEnvPrefix(line), bare, `should peel to \`${bare}\``);
+    assert.equal(offendingCommands(fenced(line)).length, 1, `should be caught: ${line}`);
+  }
+
+  assert.deepEqual(
+    offendingCommands(fenced('SKIP_CONVENTIONS=1 npm run pipeline -- resume --operator-asked')),
+    [],
+    'peeling the prefix must not peel away the operator-only exemption'
+  );
+  assert.deepEqual(
+    offendingCommands(fenced('PORT=3058 node server.js')), [],
+    'node server.js is not a hand-off shape with or without the prefix'
+  );
 });
 
 test('a pasted shell prompt does not hide the command', () => {
@@ -187,6 +261,26 @@ test('all four exceptions are accepted, and nothing else is', () => {
 
 test('markdown emphasis on the exception line is tolerated', () => {
   assert.equal(statedException('**Exception:** decision — your call\n'), 'decision');
+});
+
+test('a bullet in front of the exception line does not invalidate it', () => {
+  // A hyphen bullet is a normal way to write this line, and `-` was not in the
+  // strip set: naming an exception correctly and being refused anyway is the
+  // surest way to send an agent to SKIP_OPERATOR_HANDOFF=1 for no reason.
+  for (const bullet of ['-', '*', '+', '>', '  -  ']) {
+    assert.equal(
+      statedException(`${bullet} Exception: secret value\n`), 'secret value',
+      `a \`${bullet.trim()}\` bullet must not invalidate the claim`
+    );
+  }
+  assert.equal(
+    statedException('- Exception: I was busy\n'), null,
+    'a bullet does not make an unlisted reason acceptable'
+  );
+  assert.equal(
+    runHook(`- Exception: secret value\n\n${fenced('doppler run -- printenv TOKEN')}`).code, 0,
+    'and it works through the real hook, not just the helper'
+  );
 });
 
 test('an exception line inside a code fence does not count', () => {
@@ -222,7 +316,7 @@ test('an unreadable transcript steps aside rather than wedging the turn', () => 
   const result = spawnSync('node', [HOOK], {
     input: JSON.stringify({
       hook_event_name: 'Stop',
-      session_id: 's-missing',
+      session_id: nextSession('missing'),
       cwd: os.tmpdir(),
       transcript_path: path.join(os.tmpdir(), 'does-not-exist-12345.jsonl'),
     }),
@@ -240,7 +334,7 @@ test('SKIP_OPERATOR_HANDOFF=1 stands it down', () => {
   const result = spawnSync('node', [HOOK], {
     input: JSON.stringify({
       hook_event_name: 'Stop',
-      session_id: 's-skip',
+      session_id: nextSession('skip'),
       cwd: os.tmpdir(),
       transcript_path: makeTranscript(fenced('npm run db:refresh'), 'cli'),
     }),
@@ -272,7 +366,7 @@ test('the stand-down also works from inside a WORKTREE', () => {
   assert.ok(fs.statSync(path.join(wt, '.git')).isFile(), 'precondition: .git is a file in a worktree');
 
   const message = fenced('npm run db:refresh');
-  const opts = { sessionId: 'worktree-test', cwd: wt };
+  const opts = { sessionId: nextSession('worktree'), cwd: wt };
 
   assert.equal(runHook(message, opts).code, 2);
   assert.equal(runHook(message, opts).code, 2);
@@ -287,7 +381,7 @@ test('it stands down after three refusals in one session', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ophandoff-repo-'));
   spawnSync('git', ['init', '-b', 'main'], { cwd: dir, stdio: 'ignore' });
   const message = fenced('npm run db:refresh');
-  const opts = { sessionId: 'wedge-test', cwd: dir };
+  const opts = { sessionId: nextSession('wedge'), cwd: dir };
 
   assert.equal(runHook(message, opts).code, 2);
   assert.equal(runHook(message, opts).code, 2);
@@ -295,6 +389,65 @@ test('it stands down after three refusals in one session', () => {
   assert.equal(
     runHook(message, opts).code, 0,
     'a hook that can wedge a conversation shut is worse than the miss it prevents'
+  );
+});
+
+test('the stand-down still engages when the git dir cannot be resolved', () => {
+  // The counter used to live inside `if (stateDir(cwd))`. `stateDir` shells out
+  // to git, so in both conditions below it came back empty, the `if` was
+  // skipped, and the hook refused EVERY turn with no limit at all -- the brake
+  // missing in exactly the cases it exists for. Measured before the fix:
+  // 2,2,2,2,2 for both. Five turns, so "no cap" cannot hide behind three.
+  const message = fenced('npm run db:refresh');
+  const capped = [2, 2, 2, 0, 0];
+
+  // (a) cwd outside any git repository at all.
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'ophandoff-nogit-'));
+  assert.deepEqual(
+    fiveTurns(message, { sessionId: nextSession('nogit-dir'), cwd: outside }), capped,
+    'outside a repo there is no git dir, and the brake must not depend on one'
+  );
+
+  // (b) `git` not on PATH -- a documented condition in agent shells here,
+  // where a bare PATH without /opt/homebrew/bin is the normal starting state.
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'ophandoff-bin-'));
+  fs.symlinkSync(process.execPath, path.join(bin, 'node'));
+  assert.equal(
+    spawnSync('git', ['--version'], { env: { PATH: bin }, encoding: 'utf8' }).status, null,
+    'precondition: git really is unreachable on this PATH'
+  );
+  assert.deepEqual(
+    fiveTurns(message, {
+      sessionId: nextSession('nogit-path'),
+      cwd: os.tmpdir(),
+      env: { ...process.env, PATH: bin },
+    }),
+    capped,
+    'no git means no git dir, and still no unlimited refusal'
+  );
+});
+
+test('stop_hook_active stands the hook down immediately', () => {
+  // The harness's own infinite-loop guard. Ignoring it left the refusal
+  // counter as the only brake in the system -- and that was the brake that
+  // disappeared whenever the git dir could not be resolved. Two independent
+  // limits, so neither one failing alone can wedge the session.
+  const message = fenced('npm run db:refresh');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ophandoff-active-'));
+  spawnSync('git', ['init', '-b', 'main'], { cwd: dir, stdio: 'ignore' });
+
+  assert.equal(
+    runHook(message, { sessionId: nextSession('active-control'), cwd: dir }).code, 2,
+    'control: the same reply refuses when the flag is absent'
+  );
+  assert.deepEqual(
+    fiveTurns(message, {
+      sessionId: nextSession('active-test'),
+      cwd: dir,
+      payload: { stop_hook_active: true },
+    }),
+    [0, 0, 0, 0, 0],
+    'the harness says it has already blocked once; do not block again'
   );
 });
 

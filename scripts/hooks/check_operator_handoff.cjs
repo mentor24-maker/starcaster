@@ -32,6 +32,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const {
   offendingCommands,
@@ -60,9 +61,45 @@ function readState(file) {
 function writeState(file, state) {
   try {
     fs.writeFileSync(file, JSON.stringify(state));
+    return true;
   } catch {
-    // Best-effort: losing the state costs at worst one extra refusal.
+    return false;
   }
+}
+
+/**
+ * Claim one of this session's three refusals. `true` means this turn may
+ * refuse; `false` means stand aside.
+ *
+ * THE COUNTER MUST NOT SIT BEHIND `if (stateDir(...))`.
+ * It used to, and that made the brake vanish in precisely the conditions where
+ * it is needed most. `stateDir()` shells out to git, so it comes back empty
+ * when the cwd is outside any repo, or when `git` is not on PATH -- a
+ * documented condition in agent shells on this machine, where a bare PATH
+ * without /opt/homebrew/bin is the normal starting state. With no counter the
+ * hook refuses EVERY turn, forever, which is the wedged conversation this
+ * file's header calls worse than the miss it prevents. So the state falls back
+ * to the temp directory: a worse place to keep it, and infinitely better than
+ * nowhere.
+ *
+ * If nothing at all is writable there is no brake to be had, and the honest
+ * response is to let the turn end rather than refuse without a limit.
+ */
+function takeRefusalSlot(cwd, sessionId) {
+  const candidates = [];
+  for (const dir of [stateDir(cwd), os.tmpdir()]) {
+    if (dir && !candidates.includes(dir)) candidates.push(dir);
+  }
+
+  for (const dir of candidates) {
+    const file = stateFile(dir, sessionId);
+    const state = readState(file);
+    if (state.refusals >= MAX_REFUSALS) return false; // stood down deliberately
+    if (writeState(file, { ...state, refusals: state.refusals + 1 })) return true;
+    // Unwritable -- try the next place rather than refusing with no count.
+  }
+
+  return false;
 }
 
 function main(input) {
@@ -74,6 +111,12 @@ function main(input) {
   } catch {
     process.exit(0); // unparseable -- never wedge the session
   }
+
+  // The harness's OWN infinite-loop guard: it sets this when the turn is
+  // continuing because a Stop hook already blocked it once. Honouring it is
+  // what keeps the refusal counter from being the only brake in the system --
+  // two independent limits, so neither one failing can wedge the session.
+  if (payload && payload.stop_hook_active) process.exit(0);
 
   // Only the main agent's Stop event. A subagent's reply is read by this
   // session, not by Dane.
@@ -104,18 +147,7 @@ function main(input) {
   if (statedException(message)) process.exit(0);
 
   const cwd = String((payload && payload.cwd) || process.env.CLAUDE_PROJECT_DIR || process.cwd());
-  const dir = stateDir(cwd);
-
-  if (dir) {
-    const file = stateFile(dir, payload && payload.session_id);
-    const state = readState(file);
-    if (state.refusals >= MAX_REFUSALS) {
-      // Stood down deliberately: a wedged conversation is worse than a miss.
-      process.exit(0);
-    }
-    state.refusals += 1;
-    writeState(file, state);
-  }
+  if (!takeRefusalSlot(cwd, payload && payload.session_id)) process.exit(0);
 
   process.stderr.write(refusalMessage(offenders) + '\n');
   process.exit(2);

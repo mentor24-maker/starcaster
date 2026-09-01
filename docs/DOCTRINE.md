@@ -1611,6 +1611,17 @@ Four things it deliberately does **not** do, each for a reason:
 - **An inline mention is not a hand-off.** `` `npm run doctor` `` in backticks
   is a reference — naming a command while explaining something. The rule was
   never against mentioning one. Only a fenced block, ready to paste, counts.
+  Inside a fence, though, **every line is judged, not just the first**. The
+  first draft read only the first non-blank line, which let the exact shape
+  `CLAUDE.md` itself prints walk straight through — `PORT=3058 node server.js`
+  on line one (not a hand-off), the real `npm run check:render` on line two,
+  never looked at. Widening it risks false positives on pasted *output*, so it
+  was measured rather than argued: across 11,803 real assistant messages in
+  this project's transcripts, every-line scanning flagged exactly the same 152
+  messages as first-line scanning — zero newly refused — while a control on
+  synthetic two-line blocks confirmed the two can still tell each other apart.
+  The one output shape that did read as a hand-off was npm's own `>` log
+  prefix, so `>` is no longer stripped as a shell prompt (`$` and `%` are).
 - **`npm run pipeline -- resume` is exempt.** An agent may pause the line;
   only Dane hands the deck back (§6.9's "a decision that is genuinely his",
   and the pipeline switch's own rule). Handing him that one command is right.
@@ -1620,27 +1631,47 @@ Four things it deliberately does **not** do, each for a reason:
   trip it. Measured across 1,594 transcripts in this project on 2026-09-01:
   every loop pass was `sdk-cli`, and the interactive sessions were `cli`, so
   the two are genuinely distinguishable rather than scoped away by assumption.
-- **It fails OPEN, and stands down after three refusals in a session.** This
-  is the opposite of the pipeline switch's fail-safe (§6.8) and the asymmetry
-  really is reversed: a wrong refusal wedges a turn and can strand an
-  unattended pass in `Building`, while a miss just leaves the written rule
-  doing the work it was already doing. If the transcript cannot be read or the
-  entrypoint cannot be determined, it steps aside. The refusal counter lives in
-  the **absolute git dir** (`git rev-parse --absolute-git-dir`), not in
-  `<toplevel>/.git/` — in a worktree `.git` is a one-line *file*, so the older
-  path failed with `ENOTDIR` inside a `try/catch` and the counter never
-  advanced. Every thread here runs in a worktree, so the stand-down would have
-  been inoperative in exactly the folders that use it: §3.11's shape again, a
-  safety valve that silently does not run. `require_sql_handoff.cjs` still
-  writes to the old path and has the same gap.
+- **It fails OPEN, and it has two independent brakes.** This is the opposite
+  of the pipeline switch's fail-safe (§6.8) and the asymmetry really is
+  reversed: a wrong refusal wedges a turn and can strand an unattended pass in
+  `Building`, while a miss just leaves the written rule doing the work it was
+  already doing. If the transcript cannot be read or the entrypoint cannot be
+  determined, it steps aside.
+
+  The brakes are `stop_hook_active` — the harness's own infinite-loop flag,
+  honoured by exiting 0 the moment it is set — and a per-session counter that
+  stands the hook down after three refusals. **Two, on purpose, because each
+  one alone has already failed.** The counter is the older of the pair and it
+  has now been inoperative twice, both times silently:
+
+  1. It wrote to `<toplevel>/.git/`, which is a *directory* only in the main
+     checkout. In a worktree `.git` is a one-line file, so the write failed
+     with `ENOTDIR` inside a `try/catch` and the counter never advanced. Every
+     thread here runs in a worktree. Fixed with
+     `git rev-parse --absolute-git-dir`.
+  2. The counter then sat inside `if (dir)`, so when `git rev-parse` could not
+     run at all — cwd outside any repo, or `git` simply not on PATH, which is
+     the normal starting state of an agent shell on the Mac Mini — the whole
+     block was skipped and the hook refused **every** turn with no limit.
+     Measured over five turns before the fix: `2,2,2,2,2` in both conditions,
+     against `2,2,2,0,0` inside a repo. The state now falls back to the temp
+     directory: a worse place to keep it, and infinitely better than nowhere.
+
+  Both are §3.11's shape — a safety valve that silently does not run — and
+  both were found by asking what happens when the *measurement* fails, not the
+  feature. `require_sql_handoff.cjs` still writes to the old path and has
+  gap (1).
 
 **The sanctioned way through is to name the exception**, on its own line,
 outside any code fence — `Exception: secret value | billing | browser login |
 decision`. That is the whole contract, and it is the same one §6.9 states in
 prose: not *may I hand this over*, but *say out loud which of the four this
 is*. An `Exception:` line inside a fence does not count, because an example is
-not a claim. `SKIP_OPERATOR_HANDOFF=1` is the deliberate one-off override, and
-per `CLAUDE.md` using it means saying so and why.
+not a claim. Markdown around it is tolerated — emphasis, and a leading `-`,
+`*`, `+` or `>` bullet — because being refused while correctly naming an
+exception is the surest way to send an agent to the escape hatch for no
+reason. `SKIP_OPERATOR_HANDOFF=1` is that deliberate one-off override, and per
+`CLAUDE.md` using it means saying so and why.
 
 Tests are `scripts/hooks/check_operator_handoff.test.js`, run by
 `npm run test:hooks` in CI alongside the other three hook suites. They drive
