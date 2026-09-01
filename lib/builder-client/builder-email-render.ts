@@ -116,7 +116,14 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     // frame with paging buttons nobody can press. A calendar in an email is
     // a real want — it needs a nested-table renderer written against a
     // snapshot of the events, which is its own task, not a footnote here.
-    module.type === "event-calendar"
+    module.type === "event-calendar" ||
+    // Standard 11, decided 2026-09-01: skipped. The event page renders
+    // whichever event the ADDRESS names (`?event=<slug>`), fetched after the
+    // page loads. An email has no address bar and no browser to run the
+    // query, so it would render its own "we could not find that event"
+    // message to every reader. An event in an email wants the event's details
+    // baked in at send time, which is a different renderer, not this one.
+    module.type === "event-detail"
   ) {
     return "";
   }

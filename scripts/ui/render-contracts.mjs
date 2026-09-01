@@ -318,6 +318,28 @@ export const RENDER_DIFFERENTIALS = [
 
 export const RENDER_CONTRACTS = [
   {
+    id: 'event-detail-without-a-slug-explains-itself',
+    why:
+      'The event page renders whichever event the ADDRESS names. On this page there is no ?event= ' +
+      'in the URL and no database, which is exactly the state an operator meets the moment they drop ' +
+      'the module on a page — and the state a visitor meets if a link is built wrong. A blank panel ' +
+      'here reads as a broken module; R4 says that state is designed. It is also the only one of this ' +
+      "module's states a fixture-free check can reach, the other two needing a real event.",
+    module: { type: 'event-detail', settings: { backLinkUrl: '/whats-on', backLinkLabel: 'All events' } },
+    selector: '.builder-event-detail-note',
+    read: ['height'],
+    expect(sample) {
+      if (sample.box.height < 20) {
+        return `the no-slug state is ${sample.box.height}px tall — the event page is rendering as a blank box.`;
+      }
+      if (!/single event/.test(sample.text)) {
+        return `the no-slug state reads "${sample.text.slice(0, 70)}" — it no longer explains what the page is for.`;
+      }
+      return null;
+    },
+  },
+
+  {
     id: 'event-calendar-month-grid-is-a-month',
     why:
       'The month grid is arithmetic wearing a layout: seven columns of whole weeks, with the ' +

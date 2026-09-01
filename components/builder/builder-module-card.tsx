@@ -93,6 +93,7 @@ import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
 import { BuilderEventManagerModuleSettings } from "./builder-event-manager-module-settings";
 import { BuilderEventCalendarModuleSettings } from "./builder-event-calendar-module-settings";
+import { BuilderEventDetailModuleSettings } from "./builder-event-detail-module-settings";
 import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-category-manager-module-settings";
 import { BuilderBlogCardManagerModuleSettings } from "./builder-blog-card-manager-module-settings";
 import { BuilderBlogSearchModuleSettings } from "./builder-blog-search-module-settings";
@@ -1989,6 +1990,22 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "event-detail") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden", padding: 12 }}>
+        <div style={{ fontSize: 9, color: "#8ba9be", marginBottom: 6 }}>← Back to all events</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#18324a" }}>Spring Member Mixer</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: accent, marginTop: 2 }}>Apr 12, 2026, 6:00 PM – 9:00 PM</div>
+        <div style={{ fontSize: 10, color: "#8ba9be", marginTop: 1 }}>Center Court</div>
+        <div style={{ height: 34, background: "#f4f8fb", borderRadius: 4, margin: "8px 0" }} />
+        <div style={{ height: 5, background: "#eef3f7", borderRadius: 3, marginBottom: 4 }} />
+        <div style={{ height: 5, background: "#eef3f7", borderRadius: 3, width: "72%", marginBottom: 8 }} />
+        <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#fff", background: accent, borderRadius: 4, padding: "4px 10px" }}>Get Tickets</span>
+      </div>
+    );
+  }
+
   if (module.type === "event-calendar") {
     const accent = module.settings.accentColor || "#0f4f8f";
     const layout = module.settings.layout || "month";
@@ -3111,6 +3128,7 @@ export function BuilderModuleCard({
     const isBlogPostTagsModule = module.type === "blog-post-tags";
     const isBlogPostCreateModule = module.type === "blog-post-create";
     const isBlogPostManagerModule = module.type === "blog-post-manager";
+    const isEventDetailModule = module.type === "event-detail";
     const isEventCalendarModule = module.type === "event-calendar";
     const isEventManagerModule = module.type === "event-manager";
     const isBlogCategoryManagerModule = module.type === "blog-category-manager";
@@ -3178,6 +3196,7 @@ export function BuilderModuleCard({
       isBlogPostTagsModule ||
       isBlogPostCreateModule ||
       isBlogPostManagerModule ||
+      isEventDetailModule ||
       isEventCalendarModule ||
       isEventManagerModule ||
       isBlogCategoryManagerModule ||
@@ -3402,6 +3421,8 @@ export function BuilderModuleCard({
               <BuilderBlogPostCreateModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostManagerModule ? (
               <BuilderBlogPostManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isEventDetailModule ? (
+              <BuilderEventDetailModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isEventCalendarModule ? (
               <BuilderEventCalendarModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isEventManagerModule ? (

@@ -789,6 +789,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "event-detail-standard",
+    type: "event-detail",
+    group: "events",
+    label: "Event Page",
+    icon: "🎟",
+    description: "One event in full — when, where, the details and a link to book. Reads the event from the page address, so one page serves them all.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "event-calendar-standard",
     type: "event-calendar",
     group: "events",

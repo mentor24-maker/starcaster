@@ -1,6 +1,6 @@
 # Event Calendar
 
-**Shipped:** 2026-09-01 — `event-manager` (1/3) and `event-calendar` (2/3).
+**Shipped:** 2026-09-01 — all three modules.
 
 The Event Calendar follows the Blog's shape: a table of records the tenant
 owns, an admin module that manages them, and public modules that display them.
@@ -15,6 +15,7 @@ This document covers what exists now and what deliberately does not.
 | API | [`routes/events.js`](../routes/events.js) — `/api/events` |
 | Admin module `event-manager` | renderer in [`components/builder-template-preview.tsx`](../components/builder-template-preview.tsx), settings panel in [`components/builder/builder-event-manager-module-settings.tsx`](../components/builder/builder-event-manager-module-settings.tsx) |
 | Public module `event-calendar` | renderer in the same file, settings panel in [`components/builder/builder-event-calendar-module-settings.tsx`](../components/builder/builder-event-calendar-module-settings.tsx) |
+| Public module `event-detail` | renderer in the same file, settings panel in [`components/builder/builder-event-detail-module-settings.tsx`](../components/builder/builder-event-detail-module-settings.tsx) |
 | Dates and calendar geometry | [`lib/builder-client/event-format.ts`](../lib/builder-client/event-format.ts) — unit-tested |
 | Tenant admin page | `admin-event-manager`, in [`lib/projectAdminScaffold.js`](../lib/projectAdminScaffold.js) |
 
@@ -105,13 +106,65 @@ additionally 404s anything not published when there is no session. Both
 directions are asserted in `scripts/project-admin-api-auth.test.js`, and both
 were broken on purpose to watch the assertions fail.
 
-## Still to build
+## The event page (3/3)
 
-1. **`event-detail`** — the single event's page, which is what the calendar's
-   and the manager's *Event Page URL* settings point at. Until it exists,
-   leave that setting empty: the calendar then links an event only to its own
-   `url` (a ticketing page), and the manager's View button stays disabled
-   rather than pointing at a page that is not there.
+`event-detail` renders **whichever event the address names** — it reads
+`?event=<slug>`, which is exactly the link the calendar and the manager build.
+One page therefore serves every event; there is no page per event to create or
+keep in step.
+
+Point the calendar's and the manager's *Event Page URL* at whatever page
+carries this module (`/event`, say) and the links join up.
+
+**Which link the calendar builds, and the bug that took three slices to see.**
+The site's own event page wins; an event's external `url` is the *fallback*.
+It shipped the other way round in 2/3 and looked perfectly reasonable —
+"a ticketing page is where the visitor wants to go" — until the event page
+existed and could be tested end to end. Nearly every real event has a ticket
+link, so preferring it sent every visitor straight off-site and made the event
+page unreachable from the calendar it belongs to. With no event page
+configured the external link is still better than a dead title, so it stays as
+the fallback. The Get Tickets button on the event page is where the external
+link now belongs.
+
+**Four states, all designed** (R4), because three of them are what somebody
+meets when something is wrong:
+
+| State | What it says |
+|---|---|
+| no `?event=` in the address | what the page is for, and how to address it |
+| loading | "Loading event…" |
+| not found, or not published | the operator's own *If Not Found* message |
+| found | the event |
+
+A draft never reaches the fourth state: `routes/events.js` 404s anything not
+published to a slug read with no session, so an unpublished event is
+indistinguishable from a wrong link — which is the correct disclosure.
+
+**The cancelled banner is the point of the `cancelled` status.** A cancelled
+event keeps its page and says, at the top, that it is off; it also loses its
+booking button, because a page that says "cancelled" above a live "Get
+Tickets" button is worse than either alone. Deleting the event instead would
+make everyone who diarised it turn up.
+
+**The event's SEO fields are applied to the page showing it** — its SEO Title
+becomes the browser title, its SEO Description the meta description, both
+restored when the visitor navigates away. Without this those two fields would
+be controls an operator fills in that render nowhere at all (Standard 13).
+
+**The description is sanitized** through `formatRichTextContent`, which runs
+`sanitizeRichTextHtml` — never raw (Standard 9).
+
+## Not built, and worth a ticket
+
+- **"Add to calendar"** (an `.ics` download, and Google/Outlook links). The
+  single most-expected control on an event page, and deliberately left out of
+  this slice to keep it shippable. Everything it needs is already on the row.
+- **Recurrence** — see above; it changes what a row IS.
+- **Categories** with colours, for filtering the public calendar.
+- **A month grid that lists a day's events on tap** at phone width. Today the
+  grid degrades to dots per day below 700px, which says *that* something is on
+  but not *what*.
 
 ## Things worth knowing
 

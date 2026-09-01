@@ -517,6 +517,18 @@ const buildTuned = (ids) => ({
     },
   },
 
+  // The Event Page panel with a back link SET, because Back Label is
+  // `visibleWhen` there is somewhere to go back to — an unseeded panel hides
+  // it and the check would pass having never measured it.
+  'event-detail': {
+    name: 'Event Page',
+    settings: {
+      backLinkUrl: '/whats-on', backLinkLabel: LONG, ctaLabel: 'Book your place',
+      showImage: 'true', showDescription: 'true', showLocation: 'true',
+      showOrganizer: 'true', notFoundMessage: LONG, accentColor: '#0f4f8f',
+    },
+  },
+
   // The Event Calendar panel in CARDS layout, not the month default: Columns,
   // How Many, Images and Summary are all `visibleWhen` a card layout, so the
   // default month grid hides four of the nine controls and a check over it
