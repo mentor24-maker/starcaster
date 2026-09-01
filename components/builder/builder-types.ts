@@ -811,6 +811,21 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: { layout: "month" }
   },
   {
+    id: "media-manager-standard",
+    type: "media-manager",
+    // "admin", not a media-specific group. The operator went looking for the
+    // Event Manager under Admin and it was filed under Events (open question,
+    // 2026-09-01) — so a management panel goes where he actually looks, beside
+    // Team Users and Site Settings, rather than beside the Image module.
+    group: "admin",
+    label: "Media Manager (Admin)",
+    icon: "\ud83d\uddbc\ufe0f",
+    description: "Upload images and video, and browse the project's gallery. Place on a back-end admin page.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "event-manager-standard",
     type: "event-manager",
     group: "events",
