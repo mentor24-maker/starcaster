@@ -1,5 +1,25 @@
 'use strict';
 
+/**
+ * Asset API.
+ *
+ * Auth is decided centrally in routes/index.js. These routes run behind
+ * EITHER a platform session (Dane in the admin app) or a **project-admin
+ * session** (a tenant admin on their own site, e.g. the Media Manager module
+ * at delraytennis.starcaster.pro/admin-media-manager).
+ *
+ * That second caller is easy to miss, because nothing here opts into it:
+ * `lib/projectAdminApiAuth.js` is a DENY-list, so every asset endpoint is
+ * reachable by a tenant admin unless it is named there. The endpoints that
+ * are named — AI generation, stock video search, anything touching Alphire's
+ * Google Drive, server-side bulk resize — are excluded because they spend the
+ * PLATFORM's money, quota or compute, not because of whose data they read.
+ *
+ * So when adding an endpoint here, ask which of those two it is. Tenant
+ * isolation itself is not this file's job: every read and write goes through
+ * lib/projectScope.js, which scopes on req.projectContext either way.
+ */
+
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { normalizeAssetSource } = require('../lib/assetSource');
 const { listAssets, createAsset, updateAsset, deleteAsset, getAssetById, rowToAsset } = require('../lib/assetsStore');
