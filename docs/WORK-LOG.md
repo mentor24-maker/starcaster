@@ -19,13 +19,25 @@ picked it up to go and clean up a mess that was not there. The ticket sat for tw
 hours next to it.
 
 Now both halves ask the same single question, so they cannot answer it
-differently — there is only one answer to read. And everywhere the code used to
-ask "did we create a job for this?" it now asks "who is going to act next?"
-Those are not the same question: when there is nothing to fix, the next attempt
-IS the actor, and it is a real one. Treating that as "nobody" is why the system
-had been announcing a healthy branch as blocked every ten minutes and asking for
+differently — there is only one answer to read. And where the code used to ask
+"did we create a job for this?" it now asks "who is going to act next?" Those
+are not the same question: when there is nothing to fix, the next attempt IS the
+actor, and it is a real one. Treating that as "nobody" is why the system had
+been announcing a healthy branch as blocked every ten minutes and asking for
 hands it did not need. It still speaks up if a branch has not sorted itself out
 within a day, because at that point silence would be the wrong answer too.
+
+Review caught that "where" being written as "everywhere" the first time round.
+Four places had to change and only three did. The one that was missed is the
+message that goes to the group chat Dane actually reads, and it is the message
+sent when a branch has been stuck for a day — so once a day, about the branches
+that matter most, it would have posted a single sentence saying both "nothing is
+looking after this" and "every attempt has been retrying it on its own." The
+same two-answers-at-once problem this whole job was written to remove, one level
+down. It now says which of the two it is, the heading above it stops calling a
+branch with nothing wrong a clash, and the test that guards it feeds the two
+halves into each other the way the real code does — checking them one at a time
+was why a fully passing test run still had this in it.
 
 ## 2026-08-31 — `npm run ship` now writes the note that lets a PR be merged (#484)
 

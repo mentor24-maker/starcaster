@@ -253,13 +253,51 @@ function handOffStalled({ at, now, filed, actor }) {
   };
 }
 
-/** The line a stalled hand-off puts in the pass report and on the bus. Names
- *  the actor, or says plainly that there is not one. */
-function stalledHandOffLine({ task, pr, filed, stalled }) {
+/**
+ * The line a stalled hand-off puts in the pass report and on the bus. Names
+ * the actor, or says plainly that there is not one.
+ *
+ * IT READS THE ACTOR, NOT `filed` (2026-08-31, task 86bbq80j5, review round 1).
+ * Every other branch of the hand-off was converted to read the notice's actor;
+ * this one was missed, and it is the branch that reaches the BUS. Before the
+ * filing gate existed, `filed` was a safe stand-in for the actor here — a
+ * conflict hand-off always had a ticket unless filing had actually failed, so
+ * "NOT filed anywhere" was true whenever it printed. The gate created a second
+ * way for `filed` to be null: the self-healing one, where the verdict found no
+ * overlap and the actor is the next relay pass. Reaching this line down that
+ * path produced one sentence naming two actors —
+ *
+ *     PR #444 has been waiting on a conflict resolution — NOT filed anywhere
+ *     — no actor exists for it. no overlap was found, so every pass has been
+ *     retrying the catch-up on its own — and it has not cleared in 25 hours.
+ *
+ * — which is the exact failure shape of the two comments 200ms apart that this
+ * whole ticket exists to remove, arriving in the one place Dane actually
+ * reads. `filed` still discriminates the other two actors; `later-pass` gets
+ * its own clause, and it agrees with the `why` beside it.
+ */
+function stalledHandOffLine({ task, pr, filed, stalled, actor }) {
+  const selfHealing = actor === 'later-pass';
+  const what = selfHealing
+    ? `PR #${pr.number} was expected to clear itself`
+    : `PR #${pr.number} has been waiting on a conflict resolution`;
   const who = filed
     ? `filed as ${filed.url}`
-    : 'NOT filed anywhere — no actor exists for it';
-  return `${task.id} ("${task.name}"): PR #${pr.number} has been waiting on a conflict resolution — ${who}. ${stalled.why}.`;
+    : selfHealing
+      ? 'no ticket, and none is needed'
+      : 'NOT filed anywhere — no actor exists for it';
+  return `${task.id} ("${task.name}"): ${what} — ${who}. ${stalled.why}.`;
+}
+
+/**
+ * The banner the bus post wears above that line. Actor-aware for the same
+ * reason the line is: "CONFLICT STILL UNRESOLVED" over a body that says no
+ * overlap was ever found is the contradiction one word higher up. A
+ * self-healing hand-off that has not healed IS news — it just is not a
+ * conflict, and calling it one sends a reader looking for markers to clear.
+ */
+function stalledHandOffHeadline({ actor }) {
+  return actor === 'later-pass' ? 'MERGE STILL NOT CLEARED' : 'CONFLICT STILL UNRESOLVED';
 }
 
 module.exports = {
@@ -276,4 +314,5 @@ module.exports = {
   ageText,
   handOffStalled,
   stalledHandOffLine,
+  stalledHandOffHeadline,
 };

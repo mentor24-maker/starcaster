@@ -15,6 +15,7 @@ const {
   ageText,
   handOffStalled,
   stalledHandOffLine,
+  stalledHandOffHeadline,
   conflictVerdictKind,
   isRealOverlap,
   shouldFileConflictTicket,
@@ -242,6 +243,84 @@ test('a self-healing hand-off is quiet without a ticket — but not forever', ()
   }
 });
 
+// ----------------------------- the two halves, joined the way the code joins
+//
+// REVIEW ROUND 1 of task 86bbq80j5 sent the first attempt back. Every test
+// above checks `handOffStalled` and `stalledHandOffLine` SEPARATELY, and both
+// were correct on their own — which is why the defect survived a green suite.
+// It exists only where the merge step feeds one into the other, so these tests
+// compose them exactly as `runMergeStep` does and assert on the finished bus
+// line rather than on either half.
+
+/** The real 2026-08-30 incident, as the merge step saw it. */
+const PR444 = { number: 444, url: 'https://github.com/mentor24-maker/starcaster/pull/444', repo: 'starcaster' };
+const TASK444 = { id: '86bbmmv7t', name: 'Review gate holes', url: 'https://app.clickup.com/t/86bbmmv7t' };
+const LOST_PUSH_RACE = { kind: 'unknown', reason: 'the catch-up merged cleanly but could not be pushed' };
+
+/** What actually goes to the bus, built the one way the merge step builds it. */
+function busLine({ task, pr, filed, stalled, actor }) {
+  return `[CC-starcaster bus-relay] ${stalledHandOffHeadline({ actor })} — ${stalledHandOffLine({ task, pr, filed, stalled, actor })}`;
+}
+
+test('THE COMPOSED BUS LINE: a self-healing stall names ONE actor, end to end', () => {
+  // The sentence review round 1 produced, verbatim, was:
+  //
+  //   PR #444 has been waiting on a conflict resolution — NOT filed anywhere
+  //   — no actor exists for it. no overlap was found, so every pass has been
+  //   retrying the catch-up on its own — and it has not cleared in 25 hours.
+  //
+  // Two clauses, one sentence, two different actors — the same failure shape
+  // as the two comments 200ms apart, arriving where Dane reads.
+  const notice = conflictHandOffNotice({ commentId: '77', pr: PR444, localVerdict: LOST_PUSH_RACE, filed: null });
+  assert.equal(notice.actor, 'later-pass');
+
+  const stalled = handOffStalled({
+    at: '2026-08-30T02:00:00.000Z',
+    now: Date.parse('2026-08-31T03:00:00.000Z'),
+    filed: null,
+    actor: notice.actor,
+  });
+  assert.equal(stalled.stalled, true, '25 hours is past the threshold, so this line really does get posted');
+
+  const posted = busLine({ task: TASK444, pr: PR444, filed: null, stalled, actor: notice.actor });
+
+  assert.ok(!/no actor exists for it/.test(posted),
+    `a self-healing stall must not say nobody is on it:\n${posted}`);
+  assert.ok(!/CONFLICT STILL UNRESOLVED/.test(posted),
+    `and must not call a branch with no overlap a conflict:\n${posted}`);
+  assert.match(posted, /no ticket, and none is needed/, 'it says why there is no ticket');
+  assert.match(posted, /every pass has been retrying the catch-up on its own/, 'and who is acting');
+  assert.match(posted, /has not cleared in 25 hours/, 'and that it is still news');
+});
+
+test('THE DRIFT PROOF EXTENDS TO THE STALL: no message names an actor the notice did not pick', () => {
+  // The invariant worth locking, one loop over the same VERDICTS table: the
+  // stalled announcement — banner included — may only describe the actor
+  // `conflictHandOffNotice` chose. Any future branch that reaches for `filed`
+  // again fails here rather than on the bus a day later.
+  const now = Date.parse('2026-08-31T12:00:00.000Z');
+  const threeDaysAgo = '2026-08-28T12:00:00.000Z';
+
+  for (const { label, v, real } of VERDICTS) {
+    // `filed` is not free: the merge step only ever holds a ticket when the
+    // shared predicate allowed one to be filed in the first place.
+    for (const filed of real ? [FILED, null] : [null]) {
+      const { actor } = conflictHandOffNotice({ commentId: '77', pr: PR, localVerdict: v, filed });
+      const stalled = handOffStalled({ at: threeDaysAgo, now, filed, actor });
+      assert.equal(stalled.stalled, true, `${label}: three days is stalled whatever the actor`);
+      const posted = busLine({ task: TASK, pr: PR, filed, stalled, actor });
+      const where = `${label} (filed=${Boolean(filed)}, actor=${actor})`;
+
+      assert.equal(/no actor exists for it/.test(posted), actor === 'nobody',
+        `${where}: "nobody" may appear exactly when the notice picked nobody\n${posted}`);
+      assert.equal(posted.includes(FILED.url), actor === 'loop-queue',
+        `${where}: the filed ticket is named exactly when the loop queue is the actor\n${posted}`);
+      assert.equal(/CONFLICT STILL UNRESOLVED/.test(posted), actor !== 'later-pass',
+        `${where}: only a hand-off with a real overlap may be announced as a conflict\n${posted}`);
+    }
+  }
+});
+
 // ------------------------------------------------- the wiring, checked flat
 
 const SCRIPT = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
@@ -328,6 +407,22 @@ test('THE FILING GATE IS IN THE MERGE STEP, not just in the predicate', () => {
     !/if \(!filed && !dryRun\) \{\n\s*filed = await fileConflictTicket/.test(SCRIPT),
     'the ungated form must not come back',
   );
+});
+
+test('THE STALL BRANCH PASSES THE ACTOR TOO — the branch round 1 caught', () => {
+  // Three branches were converted to read the notice's actor and this fourth
+  // one was not, so it kept deriving the actor from `filed`. It is also the
+  // only one of the four that posts to the bus.
+  const block = SCRIPT.slice(SCRIPT.indexOf('const stalled = handOffStalled('), SCRIPT.indexOf("outcome: 'handed-off-stalled'"));
+  assert.ok(block.length > 0, 'the stall branch must exist');
+  assert.match(block, /stalledHandOffLine\(\{ task, pr, filed, stalled, actor: notice\.actor \}\)/,
+    'the bus line must be built from the actor, not from `filed` alone');
+  assert.ok(!/stalledHandOffLine\(\{ task, pr, filed, stalled \}\)/.test(SCRIPT),
+    'the actor-blind form must not come back');
+  assert.match(block, /stalledHandOffHeadline\(\{ actor: notice\.actor \}\)/,
+    'and so must the banner above it');
+  assert.ok(!/CONFLICT STILL UNRESOLVED — \$\{line\}/.test(SCRIPT),
+    'the hardcoded conflict banner must not come back');
 });
 
 test('the hand-off messages read the notice actor, never `filed` alone', () => {

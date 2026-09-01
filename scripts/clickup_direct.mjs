@@ -87,7 +87,8 @@ const {
 } = mergeOnComment;
 const {
   conflictTicketFiledComment, findConflictTicket, conflictTicketName,
-  conflictTicketBody, handOffStalled, stalledHandOffLine, shouldFileConflictTicket,
+  conflictTicketBody, handOffStalled, stalledHandOffLine, stalledHandOffHeadline,
+  shouldFileConflictTicket,
 } = conflictWork;
 const {
   prOpenedComment, verdictComment, prTrailLanded, prBodyCarriesTicket,
@@ -1057,11 +1058,14 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         console.error(`  MERGE HANDED OFF (unchanged, nothing posted) on ${label}: ${gate.reason}`);
         return { outcome: 'handed-off-quiet', reason: gate.reason };
       }
-      const line = stalledHandOffLine({ task, pr, filed, stalled });
+      // `notice.actor`, not `filed`. This call is the one branch of the
+      // hand-off that still derived its actor from whether a ticket exists,
+      // and it is the branch that reaches the bus (review round 1).
+      const line = stalledHandOffLine({ task, pr, filed, stalled, actor: notice.actor });
       console.error(`  MERGE HAND-OFF STALLED on ${label}: ${stalled.why}`);
       stalledHandOffs.push(line);
       if (dryRun) return { outcome: 'would-report-stalled', reason: stalled.why };
-      const busStall = await postToBus(channel, `[CC-starcaster bus-relay] CONFLICT STILL UNRESOLVED — ${line}\n\n${pr.url}`);
+      const busStall = await postToBus(channel, `[CC-starcaster bus-relay] ${stalledHandOffHeadline({ actor: notice.actor })} — ${line}\n\n${pr.url}`);
       // "One pass of noise per day is the price" (conflictWork.js) — and the
       // clock that meters it is the marker's timestamp, so a stall that has
       // been ANNOUNCED re-stamps the marker and the next nag is a day away.
@@ -1080,11 +1084,14 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         : ' — NOT FILED, nothing will pick this up';
     console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}${handOffActorLine}`);
     if (dryRun) {
-      // A dry run never attempts the local catch-up, so it has no verdict and
-      // reads as self-healing. Say what it would actually do rather than
-      // promising a filing the real pass would decline to make.
+      // A dry run never attempts the local catch-up, so it has NO verdict —
+      // and no verdict reads as self-healing, which means `selfHealing` is
+      // always true here and this branch cannot know which of the two the
+      // real pass would do. It used to promise a filing it might decline; now
+      // it names both possibilities and says which fact it is missing, rather
+      // than trading one confident guess for another (review round 1).
       console.error(selfHealing
-        ? `  DRY RUN — would post a hand-off saying the next pass retries the catch-up on ${branch}; no ticket filed`
+        ? `  DRY RUN — would attempt the catch-up on ${branch} and then hand off. A dry run computes no local verdict, so which hand-off it would be is unknown: no overlap means the next pass retries and nothing is filed; a real overlap means a Loop Queue ticket is filed and named.`
         : `  DRY RUN — would file a Loop Queue ticket to resolve the conflict on ${branch}, then post a hand-off naming it`);
       return { outcome: 'would-hand-off', reason: gate.reason };
     }
