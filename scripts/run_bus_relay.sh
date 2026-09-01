@@ -25,18 +25,27 @@ cd "$REPO" || exit 1
 
 echo "=== bus-relay $(date '+%Y-%m-%d %H:%M:%S') — $REPO"
 
-branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
-if [ "$branch" != "main" ]; then
-  echo "update: skipped — checkout is on '$branch', not main. Running the code that is here."
-elif [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-  echo "update: skipped — uncommitted changes present; a background job does not touch them."
-elif ! git fetch --quiet origin main 2>/dev/null; then
-  echo "update: skipped — could not reach origin. Running the code that is here."
-elif ! git merge --ff-only origin/main 2>&1; then
-  echo "update: skipped — main has diverged from origin and only a person should sort that out."
-else
-  echo "update: checkout is at $(git rev-parse --short HEAD)"
-fi
+# THE UPDATE, AND THE ALARM WHEN IT CANNOT HAPPEN (task 86bbrf2vf).
+#
+# The five conditions above are unchanged and live in scripts/checkout_currency.mjs
+# now: only main, only clean, only fast-forward. That timidity was never the
+# bug. What was wrong is what happened AFTER a refusal — an `echo` into a log
+# nobody reads, carrying a reason that was sometimes flatly wrong.
+#
+# On 2026-09-01 this machine could not fast-forward for hours because three
+# untracked weekly-report files had become tracked paths in a later commit.
+# The branch it fell through to printed "main has diverged from origin", which
+# was false: main had not diverged. It was found by hand, and only because
+# somebody happened to watch a pull.
+#
+# So a blocked update now posts to the bus (once per 6h, cleared by the next
+# success) and NAMES the blocking files. `--fix` is deliberately NOT passed
+# here: displacing a file is reversible, but it is still a decision, and the
+# rule that a background job may not rewrite someone's work is the reason this
+# step is trusted at all. It reports; a person or an agent session repairs.
+#
+# Never allowed to fail the relay, like its neighbours below.
+npm run --silent checkout:current -- --check || true
 
 # Does the machine still agree with the repo about how often to wake?
 # Three answers, never two — and "could not tell" is one of them, said out
