@@ -87,7 +87,7 @@ const ENV_VALUES = {
  * connection" and "I could not tell", and the resolver must treat those two
  * completely differently.
  */
-function withResolver() {
+function withResolver(envOverrides = {}) {
   const schema = parseSchemaFile(SQL_PATH);
   const db = createFakeDb(schema);
   const fault = { failNextList: false, failNextRead: false, listFailures: 0 };
@@ -118,7 +118,11 @@ function withResolver() {
   const fakeApiSettings = {
     getProviderValues: (provider, options = {}) => {
       envCalls.push({ provider, options });
-      return { ...(ENV_VALUES[provider] || {}) };
+      // `envOverrides` lets one test change what the PLATFORM holds without
+      // rewriting the shared table — needed for the Bluesky PDS test, where the
+      // whole question is what happens when the environment names a different
+      // server from the client's.
+      return { ...(ENV_VALUES[provider] || {}), ...(envOverrides[provider] || {}) };
     },
   };
 
@@ -550,6 +554,103 @@ test('Bluesky: a refusal blocks createSession with the resolver\'s own sentence'
   } finally { h.restore(); }
 });
 
+/**
+ * Dane's carried-forward item 1 (his comment, 2026-08-31 21:14), settled.
+ *
+ * `lib/connections/contract.js` used to claim an account "is storable as it
+ * stands". Measured, it was not: every account carries `raw`, and
+ * `saveConnection` runs a strict allowlist without it, so spreading an account
+ * in answers `400 Unknown field: raw`. The comment now says so, and
+ * `storableAccount()` is the one place the translation lives.
+ *
+ * Both halves are asserted, because a helper that works while the claim it
+ * replaced is still false would leave the next reader exactly where round 1
+ * left this reviewer.
+ */
+test('contract: an adapter account is NOT storable raw, and storableAccount is what makes it storable', async () => {
+  const h = withResolver();
+  try {
+    const contract = require('../../lib/connections/contract.js');
+    // A real account, built the way every adapter builds one.
+    const account = contract.account({
+      accountId: 'delray.bsky.social',
+      accountLabel: 'delray.bsky.social',
+      accessToken: 'CLIENT_APP_PASSWORD',
+      raw: { serviceUrl: 'https://bsky.social' },
+    });
+    assert.ok('raw' in account, 'accounts no longer carry raw — this test now proves nothing');
+
+    // Half one: spread as-is, the real store refuses it.
+    const spread = await h.store.saveConnection(
+      { provider: 'bluesky', ...account }, SCOPE_A
+    );
+    assert.equal(spread.ok, false, 'saveConnection accepted `raw` — the contract comment can be simplified');
+    assert.equal(spread.status, 400);
+    assert.match(spread.error, /raw/);
+
+    // Half two: through the helper, the same account stores.
+    const viaHelper = await h.store.saveConnection(
+      { provider: 'bluesky', ...contract.storableAccount(account) }, SCOPE_A
+    );
+    assert.equal(viaHelper.ok, true, viaHelper.error);
+
+    // And the helper drops `raw` rather than smuggling it through under
+    // another name — which is what would make the resolver's parts refusal a
+    // lie later on.
+    assert.equal('raw' in contract.storableAccount(account), false);
+  } finally { h.restore(); }
+});
+
+/**
+ * Review round 1's second half, and the one that is reachable TODAY.
+ *
+ * Bluesky is the only `ready` adapter in the registry, so this is not a
+ * hypothetical. An app password is only valid at the server that minted it. The
+ * adapter knows which server (it parks it in the account's `raw`), the store
+ * drops `raw` on the way in, so a stored connection cannot say.
+ *
+ * The dangerous fallback is not "no server" — it is the ENVIRONMENT's server.
+ * If Alphire's own settings name a self-hosted PDS, inheriting it would send a
+ * CLIENT's app password to Alphire's server: a live credential handed to a
+ * third party, which is worse than any failed post. The connection path pins
+ * the public default instead.
+ */
+test('Bluesky: a client\'s app password is never aimed at the platform\'s own PDS', async () => {
+  const h = withResolver({ bluesky: { service_url: 'https://pds.alphire-internal.example' } });
+  try {
+    await grant(h.store, SCOPE_A, {
+      provider: 'bluesky', accountId: 'delray.bsky.social', accountLabel: 'delray.bsky.social',
+      status: 'connected', accessToken: 'CLIENT_APP_PASSWORD',
+    });
+    const res = await h.resolver.resolveCredentials('bluesky', SCOPE_A.projectId);
+    assert.equal(res.ok, true, res.error);
+    assert.equal(res.data.source, 'connection');
+    assert.equal(res.data.values.app_password, 'CLIENT_APP_PASSWORD');
+    assert.equal(res.data.values.identifier, 'delray.bsky.social');
+    // The assertion this test exists for.
+    assert.equal(
+      res.data.values.service_url, 'https://bsky.social',
+      "a client's app password was aimed at the platform's own PDS"
+    );
+    assert.notEqual(res.data.values.service_url, 'https://pds.alphire-internal.example');
+  } finally { h.restore(); }
+});
+
+/**
+ * And the pin must be narrow: with NO connection, the environment's own PDS
+ * still governs. That is Dane's own posting, and a self-hosted server he set on
+ * purpose must not be silently rewritten to bsky.social.
+ */
+test('Bluesky: with no connection, the environment\'s own PDS is left exactly as it is', async () => {
+  const h = withResolver({ bluesky: { service_url: 'https://pds.alphire-internal.example' } });
+  try {
+    const res = await h.resolver.resolveCredentials('bluesky', SCOPE_A.projectId);
+    assert.equal(res.ok, true);
+    assert.equal(res.data.source, 'environment');
+    assert.equal(res.data.values.service_url, 'https://pds.alphire-internal.example');
+  } finally { h.restore(); }
+});
+
 test('Buffer: the project\'s own key is used, and the shared channel id survives', async () => {
   const h = withResolver();
   try {
@@ -567,7 +668,20 @@ test('Buffer: the project\'s own key is used, and the shared channel id survives
   } finally { h.restore(); }
 });
 
-test('X: the project\'s token pair is used, and the app keys are not replaced', async () => {
+/**
+ * Review round 1's defect, pinned.
+ *
+ * The old test here was called "the project's token pair is used" and asserted
+ * `accessToken`, `accountName`, `apiKey` and `apiSecret` — everything EXCEPT
+ * `accessTokenSecret`, which was the one value that was wrong. It passed while
+ * the resolver handed back a client's access token paired with Alphire's token
+ * secret, and its name told the next reader the pair was covered.
+ *
+ * An X credential is a PAIR and a connection can carry one secret, so the pair
+ * cannot be completed from storage. The resolver now refuses. The assertion
+ * that matters is the negative one: our secret must not travel.
+ */
+test('X: a connection is REFUSED rather than paired with the platform\'s own token secret', async () => {
   const h = withResolver();
   try {
     await grant(h.store, SCOPE_A, {
@@ -575,14 +689,54 @@ test('X: the project\'s token pair is used, and the app keys are not replaced', 
       status: 'connected', accessToken: 'CLIENT_X_TOKEN',
     });
     const res = await h.publishers.x.resolveXCredentials({ projectId: SCOPE_A.projectId });
-    assert.equal(res.ok, true, res.error);
-    assert.equal(res.creds.source, 'connection');
-    assert.equal(res.creds.accessToken, 'CLIENT_X_TOKEN');
-    assert.equal(res.creds.accountName, 'delraytennis');
-    // OAuth 1.0a signs with the APP keys plus the user pair. Losing the app
-    // half produces a 401 that names neither.
-    assert.equal(res.creds.apiKey, 'ALPHIRE_X_API_KEY');
-    assert.equal(res.creds.apiSecret, 'ALPHIRE_X_API_SECRET');
+    assert.equal(res.ok, false, 'an X connection resolved to a usable credential, which it cannot be');
+    assert.equal(res.code, 'CONNECTION_INCOMPLETE');
+    assert.equal(res.status, 501, 'a permanent gap must not be dressed as a retryable 503');
+    // The whole point: nothing of ours leaks into the answer, and the message
+    // says which part is missing rather than "credentials are invalid".
+    assert.doesNotMatch(res.error, /ENV_X_SECRET_dane/);
+    assert.doesNotMatch(res.error, /CLIENT_X_TOKEN/);
+    assert.match(res.error, /access_token_secret/);
+  } finally { h.restore(); }
+});
+
+/**
+ * The same defect at the resolver's own door, asserting on the VALUES map
+ * rather than through a publisher — because a publisher could hide it by
+ * dropping the field on the way through.
+ */
+test('X: the refusal carries no values at all, so nothing can be posted with half a pair', async () => {
+  const h = withResolver();
+  try {
+    await grant(h.store, SCOPE_A, {
+      provider: 'x', accountId: '4455', accountLabel: 'delraytennis',
+      status: 'connected', accessToken: 'CLIENT_X_TOKEN',
+    });
+    const res = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
+    assert.equal(res.ok, false);
+    assert.equal(res.data, null, 'a refusal handed back values a caller could post with');
+
+    // resolveValues throws rather than quietly returning the environment.
+    await assert.rejects(
+      () => h.resolver.resolveValues('x', SCOPE_A.projectId),
+      (err) => err.code === 'CONNECTION_INCOMPLETE'
+    );
+  } finally { h.restore(); }
+});
+
+/**
+ * The refusal must be narrow. A provider whose credential is ONE secret is
+ * unaffected, and so is X itself when the project has no connection — which is
+ * Dane's own posting, and the path this slice must not disturb.
+ */
+test('X: with no connection stored, the environment pair is returned whole', async () => {
+  const h = withResolver();
+  try {
+    const res = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
+    assert.equal(res.ok, true, 'the parts refusal fired with no connection to refuse');
+    assert.equal(res.data.source, 'environment');
+    assert.equal(res.data.values.access_token, 'ENV_X_TOKEN_dane');
+    assert.equal(res.data.values.access_token_secret, 'ENV_X_SECRET_dane');
   } finally { h.restore(); }
 });
 

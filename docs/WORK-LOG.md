@@ -40,6 +40,35 @@ put back. One of those breaks earned its keep: taking the change out of a
 single channel left every test passing while that channel quietly went back to
 posting from our account. There is now a test watching for exactly that.
 
+Review sent this back once, and the thing it caught is worth writing down,
+because it is the same silent failure wearing a different coat. Some platforms
+do not hand out one key — they hand out two, and both have to match. X is like
+that, and so is Bluesky, where the password only works at the particular server
+that issued it. Our safe has room for exactly one. So the code was taking the
+client's key, noticing the second one was missing, and quietly filling that gap
+from our own — producing a pair made of one key from each of two different
+accounts, which unlocks nothing and reports an error naming neither. Worse, the
+comment above it claimed the case was handled.
+
+It now refuses instead, and says exactly which part it has nowhere to keep. That
+is the same instinct as the rest of this work, one step further in: falling back
+to our account is not the only way to end up posting as the wrong person — you
+can also get there by assembling something half-and-half that merely looks
+complete. Bluesky gets the matching fix, and it is the one that could have bitten
+a real client: rather than sending their password to whatever server *our*
+settings happen to name, it now uses the public one where such a password is
+actually valid. A client running their own Bluesky server cannot connect yet, and
+now gets an honest refusal instead of having their password handed somewhere it
+does not belong.
+
+Two smaller things review asked for are settled here too. A comment claiming an
+account could be filed in the safe exactly as it arrives said the opposite of
+what the safe actually does, so there is now a single small piece of code that
+does that filing properly and one place to change it. And a known rough edge in
+the Facebook code — asking for the list of a client's pages using the wrong one
+of their two keys — is written down where the next piece of work will meet it,
+along with why it is that piece of work's to fix rather than this one's.
+
 ## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
 
 We already had an alarm for a scheduled job that stops running. This adds the
