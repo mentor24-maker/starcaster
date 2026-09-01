@@ -1,6 +1,6 @@
 ---
 name: loop-review
-description: Pick the next "In review" task from the Starcaster "Loop Queue" ClickUp list, independently verify its pull request (build gates + code review + a real test pass), then either mark it "Ready to launch" and ping the operator to merge, or send it back to "Queued" with notes. Designed to be run on a timer with `/loop 30m loop-review`. Never merges on its own.
+description: Pick the next "In review" task from the Starcaster "Loop Queue" ClickUp list, independently verify its pull request (build gates + code review + a real test pass), then either mark it "Ready to launch" and ping the operator to merge, or send it back to "Rework" with notes. Designed to be run on a timer with `/loop 30m loop-review`. Never merges on its own.
 ---
 
 # Loop: Review
@@ -81,7 +81,7 @@ npm run clickup -- verdict --task <id> --fail --if-status "In review" --body-fil
 npm run clickup -- send-back-rounds --task <id>                     # how many rounds already? exit 3 = escalate, do not send back
 npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -   # pass: card + status together
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file -  # a judgment call only he can settle
-npm run clickup -- status --task <id> --status Queued --if-status "In review" # send back (assignees auto-cleared)
+npm run clickup -- status --task <id> --status Rework --if-status "In review" # send back (assignees auto-cleared)
 npm run clickup -- comment --task <id> --body-file -                # a plain note
 npm run clickup -- waiting [--task <id>]                            # read-only: is this ACTUALLY waiting on Dane? run it before saying so
 npm run clickup -- describe --task <id> --body-file -               # REPLACE the description (left column)
@@ -178,7 +178,7 @@ The **Loop note** is the only place a review IN FLIGHT is visible. `queue` and
 ```bash
 npm run clickup -- loop-note --task <id> --transition review-started  # CLAIM — before you verify anything
 npm run clickup -- loop-note --task <id> --transition verified    # PASS -> Ready to launch
-npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back to Queued
+npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back to Rework
 ```
 
 The send-back note carries its **round** and reason — `↩ round 3 — three docs
@@ -220,7 +220,7 @@ pass by hand.
    at the same time — neither could see the other — and the second one then
    overwrote the first one's verdict. See step 4 for the other half of the fix.
 
-   The list's six statuses, in order, are `Queued → Building → In review →
+   The list's seven statuses, in order, are `Rework → Queued → Building → In review →
    Needs your input / Ready to launch → Live`. Match them case-insensitively.
 
    **Assignment is the handoff signal.** Dane finds his work through ClickUp's
@@ -228,7 +228,7 @@ pass by hand.
    the Starcaster and Dane of Earth spaces, but assignment does.
    `npm run clickup -- status` enforces the mapping automatically and
    verifies it stuck: `Ready to launch` / `Needs your input` assign Dane,
-   `Queued` clears assignees. Flags exist only to deviate.
+   `Rework` and `Queued` clear assignees. Flags exist only to deviate.
 
 2. **Check out the PR in a worktree — in the task's repo.** A task declares
    its repo with a `repo:<name>` tag (`starcaster` default; also `normie`,
@@ -237,7 +237,7 @@ pass by hand.
    (`docs/LOOP_ENGINEERING.md` → "Per-repo gates") — verifying a vault task
    against starcaster's gates proves nothing. An unknown/ambiguous repo tag is
    the build loop's to escalate, not review's; if you meet one In review,
-   send it back to `Queued` with a note. Reuse the build worktree if present,
+   send it back to `Rework` with a note. Reuse the build worktree if present,
    or add one from the PR branch. Run `npm ci` if dependencies changed.
 
 3. **Verify independently — do not trust the build loop's word.**
@@ -293,7 +293,7 @@ pass by hand.
      Do **NOT** merge — per standing rule, CC merges only on the operator's
      explicit command, and only with all checks green.
    - **Fail, and a machine can fix it** → `verdict --fail` first, then set the
-     task back to `Queued` (`status --status Queued --if-status "In review"`),
+     task back to `Rework` (`status --status Rework --if-status "In review"`),
      **clear its assignees**, and add a ClickUp comment listing precisely what
      to fix and why. The `loop-build` skill will pick it up again. Do not fix
      it yourself inside the review step — keep build and review separate so the
@@ -348,7 +348,7 @@ pass by hand.
   genuinely right; it is a written claim, not a way past a refusal you did not
   want. A ticket going round a fourth time is the loop failing to notice it is
   stuck.
-- If the PR has merge conflicts with main, send it back to `Queued` with a note
+- If the PR has merge conflicts with main, send it back to `Rework` with a note
   to rebase — don't resolve conflicts blind.
 - Keep review comments plain-language and specific enough that the next build
   pass can act on them without re-reading the code.

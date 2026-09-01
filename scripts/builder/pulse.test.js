@@ -237,6 +237,41 @@ test('every threshold carries the derivation of its number', () => {
   assert.equal(STAGE_THRESHOLDS['in review'].hours, 4);
   assert.equal(STAGE_THRESHOLDS['ready to launch'].hours, 24);
   assert.equal(STAGE_THRESHOLDS.queued.hours, 24 * 7);
+  assert.equal(STAGE_THRESHOLDS.rework.hours, 24 * 3);
+});
+
+test('rework is measured, and on a shorter fuse than queued', () => {
+  // Task 86bbr1u9v. A status with NO threshold lands in `unmeasured` — it is
+  // reported, but it never raises a finding, so four tickets could rot there
+  // exactly as they did in Queued. The number is half the queued allowance
+  // because waiting is cheap for fresh work and expensive here: a send-back
+  // has an open branch going stale against a moving `main`.
+  assert.ok(STAGE_THRESHOLDS.rework, 'rework must be measured at all');
+  assert.ok(STAGE_THRESHOLDS.rework.hours < STAGE_THRESHOLDS.queued.hours,
+    'rework must not be allowed to sit as long as fresh work');
+  assert.equal(STAGE_THRESHOLDS.rework.severity, 'alarm',
+    'it is the stage four tickets rotted in — a notice is what they already got');
+
+  const out = stageResidency([task('86bbstale', 'rework', 24 * 5, 'a send-back nobody re-claimed')], { now: NOW });
+  assert.equal(out.findings.length, 1, 'five days in rework must raise a finding');
+  assert.equal(out.findings[0].status, 'rework');
+  assert.deepEqual(out.unmeasured, [], 'and it must not fall through to "unmeasured"');
+
+  const fresh = stageResidency([task('86bbnew', 'rework', 2)], { now: NOW });
+  assert.equal(fresh.findings.length, 0, 'a rework ticket claimed the same morning is fine');
+});
+
+test('the bottleneck sentence never hides the rework count', () => {
+  // This is the one line of the report most likely to be the only line read.
+  const census = [
+    task('r1', 'rework', 1), task('r2', 'rework', 1),
+    task('q1', 'queued', 1),
+    task('v1', 'in review', 1),
+  ];
+  const residency = stageResidency(census, { now: NOW });
+  const noOp = { verdict: 'ok', queuedCount: 1 };
+  const sentence = bottleneckSentence({ noOp, residency });
+  assert.match(sentence, /2 in rework/, 'the rework count must appear even when nothing is wrong');
 });
 
 test('BREAK-TEST: a ticket 70 hours in Building is found, with its measurement and threshold', () => {

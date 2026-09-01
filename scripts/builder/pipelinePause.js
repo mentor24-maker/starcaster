@@ -17,7 +17,7 @@
  * Four properties, each of which the design turns on:
  *
  *   IT DRAINS, IT DOES NOT KILL. Stopping a pass mid-build strands its ticket
- *   in "Building" forever — the loops only ever claim from "Queued" — and
+ *   in "Building" forever — the loops claim only from "Rework" and "Queued" — and
  *   that happened twice in the week this was written. So a pause stops new
  *   CLAIMS immediately and lets work in flight finish.
  *
@@ -78,7 +78,7 @@ const NAG_EVERY_MS = 60 * 60 * 1000;
  *
  * Generous on purpose. A build pass stamps its Loop note when it claims and
  * then says nothing until the PR is open, which is routinely half an hour of
- * real work; calling that "stranded" and yanking the ticket back to Queued
+ * real work; calling that "stranded" and yanking the ticket back into the claim line
  * would hand the same job to a second builder. Ninety minutes is longer than
  * any pass observed to date and far shorter than "forever", which is what the
  * two stranded tickets of 2026-08-25 actually got.
@@ -306,8 +306,9 @@ function pauseVerdict({ readable = true, why = '', switchFound = true, comments 
  * Is a ticket in a machine status a pass in flight, or one that was stranded?
  *
  * The distinction is the whole of acceptance criterion 7. A pass in flight
- * must be waited for; a stranded ticket must be handed back to Queued, because
- * nothing will ever pick it up again on its own.
+ * must be waited for; a stranded ticket must be handed back to a claimable
+ * status, because nothing will ever pick it up again on its own. WHICH
+ * claimable status is `strandedBuildDestination`'s call, not this one's.
  */
 function classifyTicket(task, { nowMs, strandedAfterMs = STRANDED_AFTER_MS } = {}) {
   const status = String(task?.status?.status || task?.status || '').toLowerCase();
@@ -460,13 +461,57 @@ function resumedMessage({ by, pausedForMs, swept = [] } = {}) {
 }
 
 /**
- * The note left on a ticket that was swept back to Queued.
+ * Where a stranded BUILD belongs — `Rework` or `Queued`.
+ *
+ * WHY THE DISTINCTION (2026-08-31, task 86bbr1u9v). Both statuses are claimable
+ * by loop-build, so this is not about visibility. It is about ORDER and about
+ * telling the truth: rework drains first, because a half-built ticket has a
+ * branch, a PR and review notes already, and every day it waits costs another
+ * catch-up merge against a moving `main`. Sweeping a half-built ticket into
+ * `Queued` puts it back at the end of the priority contest it has already been
+ * losing — the exact staleness the Rework status was created to end.
+ *
+ * It takes `buildStart.resolveBuildStart`'s answer rather than re-deriving one,
+ * so the sweep and the next build pass can never disagree about whether work
+ * exists. The three answers map cleanly:
+ *
+ *   continue  an OPEN PR — half-built, so Rework
+ *   fresh     no PR at all, or one already merged/closed — genuinely new work
+ *   unknown   a PR is named but its state could not be read
+ *
+ * `unknown` goes to REWORK, and that is the safe direction here rather than a
+ * contradiction of buildStart's "never guess": buildStart refuses because the
+ * cost of guessing wrong is a duplicate branch, which is a correctness problem.
+ * Here the ticket is going to a claimable status either way and `build-start`
+ * will ask the same question again before a line is written — so the only thing
+ * at stake is which queue it waits in, and a ticket that NAMES a PR belongs
+ * with the half-built ones. The caller says out loud that it could not read the
+ * state.
+ */
+function strandedBuildDestination(buildStartAction) {
+  switch (String(buildStartAction || '')) {
+    case 'continue':
+      return { status: 'Rework', why: 'its pull request is still open, so this is half-built work to be finished' };
+    case 'unknown':
+      return { status: 'Rework', why: 'it names a pull request whose state could not be read — a ticket that names a PR belongs with the half-built work' };
+    case 'fresh':
+      return { status: 'Queued', why: 'nothing has been built for it that a new branch would duplicate' };
+    default:
+      // An answer nobody anticipated is not a licence to pick one. Rework is
+      // the conservative choice for the same reason `unknown` is: it cannot
+      // lose work, only order it ahead of fresh tickets.
+      return { status: 'Rework', why: `the build-start check answered "${buildStartAction}", which is not one of its three answers — treated as half-built rather than guessed away` };
+  }
+}
+
+/**
+ * The note left on a ticket the sweep unstuck.
  *
  * A returned ticket with no explanation is how a builder rebuilds work that
  * was already half done. Say what happened and what the next pass should
  * check before it starts over.
  */
-function sweptTicketNote({ at, by, kind = 'a build' } = {}) {
+function sweptTicketNote({ at, by, kind = 'a build', destination = 'Queued', why = '' } = {}) {
   const signature = `\n\n(Automatic — pipeline resume${by ? `, ${by}` : ''}${at ? `, ${at}` : ''}.)`;
 
   // A stranded REVIEW keeps its status. It is already in "In review", which is
@@ -481,9 +526,11 @@ function sweptTicketNote({ at, by, kind = 'a build' } = {}) {
       'it up instead of the work being rebuilt.' + signature;
   }
 
-  return 'Returned to Queued by the pipeline pause sweep.\n\n' +
+  const where = String(destination || 'Queued');
+  return `Returned to ${where} by the pipeline pause sweep.\n\n` +
     'This ticket was sitting in a machine status with nothing working on it — its pass ended without ' +
-    'handing it on, which leaves it invisible to the loops (they only ever claim from Queued). ' +
+    'handing it on, which leaves it invisible to the loops (they only claim from Rework and Queued). ' +
+    `It went to **${where}**${why ? ` because ${why}` : ''}. ` +
     'Nothing has been undone: **check for an existing branch and PR before building** ' +
     '(`npm run clickup -- build-start --task <id>`), because part of the work may already be pushed.' +
     signature;
@@ -563,6 +610,7 @@ module.exports = {
   nagDecision,
   nagMessage,
   resumedMessage,
+  strandedBuildDestination,
   sweptTicketNote,
   resumeAuthorization,
   numericOption,

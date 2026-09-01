@@ -147,15 +147,23 @@ test('the wip-check command reads only — no ClickUp writes anywhere in it', ()
     assert.ok(!block.includes(forbidden), `wip-check must not ${forbidden} — it is a read-only check`);
   }
 
-  // "Open PRs only" is still the rule; since task 86bbq8br2 it is enforced in
-  // the one shared probe rather than in this block, because both callers need
-  // it and two copies of a rule are how they drifted in the first place.
+  // "Open PRs only" is still the rule; since task 86bbq8br2 it is enforced
+  // once rather than in this block, because every caller needs it and two
+  // copies of a rule are how they drifted in the first place. It moved one
+  // level further down in task 86bbr1u9v, into the shared list builder, when
+  // `migrate-rework` became a third reader of the same PR list.
+  const ls = src.indexOf('function listOpenPullRequests(');
+  assert.ok(ls > -1, 'listOpenPullRequests must exist — it is the single PR reading');
+  const lister = src.slice(ls, src.indexOf('\n}\n', ls));
+  assert.match(lister, /'--state', 'open'/, 'it must ask gh for open PRs only');
+
   const ps = src.indexOf('function capProbe(');
   assert.ok(ps > -1, 'capProbe must exist — it is the single cap reading');
   const probe = src.slice(ps, src.indexOf('\n}\n', ps));
-  assert.match(probe, /'--state', 'open'/, 'it must ask gh for open PRs only');
+  assert.match(probe, /listOpenPullRequests\(/, 'capProbe must read PRs through that one builder');
   for (const forbidden of ["call('POST'", "call('PUT'", "call('DELETE'"]) {
     assert.ok(!probe.includes(forbidden), `capProbe must not ${forbidden} — it is a read-only probe`);
+    assert.ok(!lister.includes(forbidden), `listOpenPullRequests must not ${forbidden} — it is a read-only probe`);
   }
 });
 
@@ -301,13 +309,59 @@ test('THE DEADLOCK: the real 2026-08-25 state must let the loop claim', () => {
 test('the message names the split, never a bare total', () => {
   // A bare "7 open, cap 5" is true and useless: it hid the deadlock for four
   // passes. Whatever the verdict, the uncounted PRs must be itemised.
-  const prs = [pr(1, 'a'), pr(2, 'b'), pr(3, 'c')];
-  const byId = { a: 'Building', b: 'Queued', c: 'Live' };
+  const prs = [pr(1, 'a'), pr(2, 'b'), pr(3, 'c'), pr(4, 'd')];
+  const byId = { a: 'Building', b: 'Queued', c: 'Live', d: 'Rework' };
   const { message } = wipDecision({ prs, cap: 5, ticketStatusById: byId });
   assert.match(message, /1 in flight, cap 5/);
-  assert.match(message, /queued for rework \(#2\)/);
+  assert.match(message, /1 in rework, waiting to be re-claimed \(#4\)/);
+  assert.match(message, /1 queued with a PR already open \(#2\)/);
   assert.match(message, /already live \(#3\)/);
-  assert.doesNotMatch(message, /3 PR\(s\) open/, 'the old bare-total phrasing must be gone');
+  assert.doesNotMatch(message, /4 PR\(s\) open/, 'the old bare-total phrasing must be gone');
+});
+
+test('the rework count is in the headline of BOTH messages, and zero is stated', () => {
+  // Acceptance criterion 3 of task 86bbr1u9v. "1 in flight, cap 5" while five
+  // real branches sat open is the statement the Rework status exists to end,
+  // and a number that only ever appears in a trailing clause is a number that
+  // gets skimmed past. The headline is the sentence a log line quotes.
+  const rework = [pr(10, 'r1'), pr(11, 'r2')];
+
+  const roomy = wipDecision({
+    prs: [pr(1, 'a'), ...rework],
+    cap: 5,
+    ticketStatusById: { a: 'Building', r1: 'Rework', r2: 'Rework' },
+  });
+  assert.match(roomy.message.split('\n')[0], /2 in rework/, 'the uncapped headline must carry it');
+  assert.equal(roomy.rework, 2);
+  assert.equal(roomy.claim, true, 'rework must never count against the cap');
+
+  const capped = wipDecision({
+    prs: [...[1, 2, 3, 4, 5].map((n) => pr(n, `t${n}`)), ...rework],
+    cap: 5,
+    ticketStatusById: {
+      ...Object.fromEntries([1, 2, 3, 4, 5].map((n) => [`t${n}`, 'In review'])),
+      r1: 'Rework', r2: 'Rework',
+    },
+  });
+  assert.equal(capped.claim, false);
+  assert.match(capped.message.split('\n')[0], /2 in rework/, 'the capped headline must carry it too');
+
+  // Zero is stated rather than omitted: a clause that vanishes when it is zero
+  // tells the reader nothing about whether it was checked at all.
+  const none = wipDecision({ prs: [pr(1, 'a')], cap: 5, ticketStatusById: { a: 'Building' } });
+  assert.match(none.message, /0 in rework/);
+});
+
+test('rework is read from the real status, never inferred from queued', () => {
+  // The bug this ticket closes: before `Rework` existed, "queued with an open
+  // PR" was the ONLY way to spot a send-back, so a send-back and work nobody
+  // had started were the same reading. They are two buckets now, and they must
+  // not collapse back into one.
+  const prs = [pr(1, 'r'), pr(2, 'q')];
+  const g = classifyPrs({ prs, ticketStatusById: { r: 'Rework', q: 'Queued' } });
+  assert.deepEqual(g.rework, [1]);
+  assert.deepEqual(g.queued, [2]);
+  assert.deepEqual(g.inFlight, [], 'neither may count against the cap');
 });
 
 test('a genuinely full pipeline still caps', () => {
@@ -568,7 +622,13 @@ test('every cap probe goes through capProbe — no command reads the cap its own
   assert.doesNotMatch(CD, /wipCap\.wipDecision\(/,
     'wipDecision must be reached only through wipCap.probeCap, or the two callers can drift apart again');
   const probes = CD.match(/await capProbe\(/g) || [];
-  assert.equal(probes.length, 2, 'exactly two callers: wip-check and next-interval');
+  // Three callers since task 86bbr1u9v: `wip-check`, `next-interval` and
+  // `migrate-rework`, which asks the SAME probe which queued tickets have an
+  // open PR rather than re-deriving "this one is really a send-back". The
+  // count is pinned so a FOURTH reader has to come here and justify itself —
+  // the failure this guards is a caller that answers the cap question its own
+  // way, which is what took a morning to spot on 2026-08-31.
+  assert.equal(probes.length, 3, 'exactly three callers: wip-check, next-interval and migrate-rework');
 });
 
 test('the PR list asks for the body, or every PR counts as having no ticket', () => {

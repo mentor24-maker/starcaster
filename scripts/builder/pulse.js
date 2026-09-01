@@ -457,6 +457,16 @@ const STAGE_THRESHOLDS = {
     severity: 'notice',
     why: 'long is fine, forgotten is not — a week is the point where nobody remembers filing it',
   },
+  // Rework is HALF the queued allowance, and the shorter number is the point
+  // (task 86bbr1u9v). A ticket here has a branch, an open PR and review notes;
+  // every day it waits costs another catch-up merge against a moving `main`,
+  // and it is the stage where four tickets rotted for weeks while looking like
+  // ordinary queued work. Waiting is cheap for fresh work and expensive here.
+  rework: {
+    hours: 24 * 3,
+    severity: 'alarm',
+    why: 'a send-back has an open branch going stale against main; three days is already several catch-up merges',
+  },
 };
 
 /**
@@ -761,14 +771,20 @@ function bottleneckSentence({ noOp, residency } = {}) {
   const queued = Number.isFinite(noOp?.queuedCount) ? noOp.queuedCount : count('queued');
   const ready = count('ready to launch');
   const review = count('in review');
+  // Rework is named separately everywhere it is counted (task 86bbr1u9v).
+  // Folding it into "queued" is what let six half-built tickets read as fresh
+  // work for a morning, and this sentence is the one line of the report most
+  // likely to be the only line read.
+  const rework = count('rework');
+  const reworkClause = rework ? ` ${rework} in rework.` : '';
 
   if (noOp?.verdict === 'finding' && noOp.stale) {
-    return `Bottleneck: BUILD — ${noOp.message}. Ready to launch holds ${ready}.`;
+    return `Bottleneck: BUILD — ${noOp.message}. Ready to launch holds ${ready}.${reworkClause}`;
   }
   if (noOp?.verdict === 'finding') {
     return (
       `Bottleneck: BUILD — ${noOp.streak} consecutive claimless passes with ${queued} queued ` +
-      `(${describeBreakdown(noOp.breakdown)}). Ready to launch holds ${ready}.`
+      `(${describeBreakdown(noOp.breakdown)}). Ready to launch holds ${ready}.${reworkClause}`
     );
   }
   // A cannot-tell on the loop log OUTRANKS the review and operator branches.
@@ -783,16 +799,16 @@ function bottleneckSentence({ noOp, residency } = {}) {
   if (overIn('in review') >= 2) {
     return (
       `Bottleneck: REVIEW — ${overIn('in review')} of ${review} tickets in review are past ` +
-      `${STAGE_THRESHOLDS['in review'].hours}h. Not the builder; ${queued} still queued and the loop is claiming.`
+      `${STAGE_THRESHOLDS['in review'].hours}h. Not the builder; ${queued} still queued and the loop is claiming.${reworkClause}`
     );
   }
   if (overIn('ready to launch') >= 1) {
     return (
       `Bottleneck: OPERATOR — ${overIn('ready to launch')} of ${ready} approved tickets have waited past ` +
-      `${STAGE_THRESHOLDS['ready to launch'].hours}h for a merge. The machine side is keeping up.`
+      `${STAGE_THRESHOLDS['ready to launch'].hours}h for a merge. The machine side is keeping up.${reworkClause}`
     );
   }
-  return `No bottleneck: the loop is claiming, ${review} in review, ${ready} awaiting merge, ${queued} queued.`;
+  return `No bottleneck: the loop is claiming, ${review} in review, ${ready} awaiting merge, ${queued} queued, ${rework} in rework.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

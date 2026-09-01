@@ -53,9 +53,11 @@ function isMergeCommand(text) {
  * live record — "REVIEW: PASSED (...)" and "REVIEW PASSED (...)" — so the
  * colon is optional. Line-anchored, because a review that merely DISCUSSES
  * the words ("this is not a REVIEW PASSED situation") is prose, not a
- * verdict. A failing verdict reads "REVIEW: sent back to Queued", which
- * matches isReviewVerdict but not isReviewPassed — exactly the distinction
- * the precondition needs.
+ * verdict. A failing verdict reads "REVIEW: sent back to Rework" (and, on
+ * tickets sent back before 2026-08-31, "…to Queued"), which matches
+ * isReviewVerdict but not isReviewPassed — exactly the distinction the
+ * precondition needs. Neither pattern reads the DESTINATION, which is what
+ * lets the status be renamed without invalidating the history.
  *
  * IT MUST ALSO CARRY ONE OF THE VERDICT WORDS (2026-09-01, task 86bbrem48).
  * This used to be `/^\s*REVIEW\b.*$/im` — any line beginning with the word
@@ -80,6 +82,12 @@ function isMergeCommand(text) {
  * prefix is what separates a verdict from prose — and it is STRICTER than
  * what it replaced, never more willing to merge, which is the only safe
  * direction for the gate in front of production.
+ *
+ * THE TWO CHANGES MEET HERE ON PURPOSE (2026-09-01, ticket 86bbrf2y3). The
+ * Rework rename and the prose fix landed within an hour of each other and
+ * conflicted on this comment alone. They are compatible in substance: the
+ * pattern keys on "SENT BACK" and never on what follows it, so renaming the
+ * destination status cannot invalidate a verdict written before the rename.
  */
 const REVIEW_VERDICT_RE = /^\s*REVIEW\s*:?\s*(?:PASSED|SENT BACK)\b/im;
 const REVIEW_PASSED_RE = /^\s*REVIEW\s*:?\s*PASSED\b/im;

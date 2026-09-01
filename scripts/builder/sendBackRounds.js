@@ -51,9 +51,11 @@ const ESCALATE_AT_ROUND = 4;
  * send-back wording directly, so this can never drift from the two shapes
  * mergeOnComment already arbitrates. There are exactly two verdicts a loop
  * writes (loopTrail.verdictComment): `REVIEW: PASSED` and
- * `REVIEW: sent back to Queued`. Anything else that calls itself a REVIEW
- * verdict and is not a pass is, for counting purposes, a round the ticket did
- * not survive — which is the honest reading.
+ * `REVIEW: sent back to Rework` (`…to Queued` before 2026-08-31, task
+ * 86bbr1u9v — the wording changed with the status, and neither reader parses
+ * the destination, so the older rounds still count). Anything else that calls
+ * itself a REVIEW verdict and is not a pass is, for counting purposes, a round
+ * the ticket did not survive — which is the honest reading.
  */
 function isSendBack(text) {
   return isReviewVerdict(text) && !isReviewPassed(text);
@@ -67,7 +69,7 @@ function commentDate(c) {
 /**
  * The reason clause out of a send-back verdict, as the review pass wrote it.
  *
- * `verdictComment(false, note)` renders `REVIEW: sent back to Queued — <note>`
+ * `verdictComment(false, note)` renders `REVIEW: sent back to Rework — <note>`
  * and the note may run to several lines (it is read from a body file). Only
  * the first line is a reason; the rest is the detail that belongs in the
  * ticket, not on a one-line board column.
