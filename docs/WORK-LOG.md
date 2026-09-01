@@ -69,6 +69,39 @@ the Facebook code — asking for the list of a client's pages using the wrong on
 of their two keys — is written down where the next piece of work will meet it,
 along with why it is that piece of work's to fix rather than this one's.
 
+Review sent it back a second time, and this one was the opposite kind of
+failure — loud rather than silent, which is the lucky kind. Every post to X
+was refused with "credentials are missing" while the credentials were sitting
+right there, set and complete.
+
+The cause was a translation done twice. Credentials arrive from storage
+labelled one way and get relabelled into the form the posting code reads.
+Because looking them up is worth doing only once for a post — the check, the
+picture upload and the post itself all have to be the same account, or X
+answers with an error naming neither — the code looks them up once and passes
+the result along to all three. But the relabelling step was then handed
+something already relabelled, did not recognise a single field, and returned
+five blanks. Nothing errored; the post simply refused itself. And this was on
+the shared-keys path, which is Dane's own posting, so it was not some future
+client's problem — it was the only X path that runs today.
+
+The relabelling now understands both forms, so doing it twice changes nothing.
+That is the property the test asserts, rather than the one place that happened
+to trip over it, because the next person to translate twice will not know it
+was ever a hazard. The test that should have caught this listed four of the six
+channels; X was missing from it, and X is the one channel that hands its
+credentials along in an unusual shape — so the only unusual case in the file
+was the one nothing was watching. Both gaps are closed.
+
+One more thing review noticed while it was in there. There are two lists of
+the shared keys, and they disagreed about who wins when a value is set both in
+the settings screen and in the server's own configuration. One list preferred
+the settings screen, the other preferred the server. With both set and
+different, the same account posted under one name when a client project was
+named and a different name when it was not — a wrong-account post, arriving as
+success. There is one order now, and a test that fails if the two ever drift
+apart again.
+
 ## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
 
 We already had an alarm for a scheduled job that stops running. This adds the

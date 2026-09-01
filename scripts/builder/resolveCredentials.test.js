@@ -775,6 +775,135 @@ test('X: a refusal stops createPost rather than posting from the shared account'
   } finally { h.restore(); }
 });
 
+/**
+ * Review round 2's defect, pinned behaviourally.
+ *
+ * routes/engage.js resolves ONCE for the whole X publish and then hands the
+ * resolved object back in as `{ credentials }` for three separate calls. That
+ * object is already camelCase; `shapeXCredentials` read snake_case only, so the
+ * second shaping returned five empty strings and all three calls refused with
+ * "X credentials are missing" — with the credentials set and complete, on the
+ * ENVIRONMENT path, which is Dane's own posting and the only X path that fires
+ * today.
+ *
+ * Every test above passed while that was true, because the X tests only ever
+ * called the entry points with `{ projectId }` — `credentialsFor`'s *resolve*
+ * branch. Nothing exercised the `{ credentials }` branch the route uses.
+ *
+ * So this test performs the route's own sequence, and asserts on the OAuth
+ * header rather than on `ok` alone: a refusal never reaches fetch at all, and
+ * "it did not error" is a weaker claim than "it signed with the token I
+ * resolved".
+ */
+test('X: the route resolves once, and all three entry points still have the credentials', async () => {
+  const h = withResolver();
+  const realFetch = global.fetch;
+  const seen = [];
+  global.fetch = async (url, init = {}) => {
+    const href = String(url);
+    seen.push({ url: href, auth: String(init.headers?.Authorization || '') });
+    const body = href.includes('/media/upload') ? { media_id_string: 'media_99' }
+      : href.includes('/2/tweets') ? { data: { id: '1799', text: 'hello' } }
+      : { data: { id: '4455', username: 'daneofearth' } };
+    return { ok: true, status: 200, json: async () => body };
+  };
+  try {
+    // Exactly what routes/engage.js:1367 does.
+    const xResolved = await h.publishers.x.resolveXCredentials({ projectId: SCOPE_A.projectId });
+    assert.equal(xResolved.ok, true, xResolved.error);
+    assert.equal(xResolved.creds.source, 'environment', 'no X connection is stored, so this is the shared-keys path');
+    const xCredOpts = { credentials: xResolved.creds };
+
+    const auth = await h.publishers.x.checkAuth(xCredOpts);
+    assert.equal(auth.ok, true, `checkAuth refused a complete credential: ${auth.error || ''}`);
+
+    const upload = await h.publishers.x.uploadMediaSimple(Buffer.from('png-bytes'), 'image/png', xCredOpts);
+    assert.equal(upload.ok, true, `uploadMediaSimple refused a complete credential: ${upload.error || ''}`);
+
+    const posted = await h.publishers.x.createPost('hello', { mediaIds: [upload.mediaId], ...xCredOpts });
+    assert.equal(posted.ok, true, `createPost refused a complete credential: ${posted.error || ''}`);
+
+    // Three requests actually left, and each one signed with the values that
+    // were resolved — not with blanks, and not with some other account's.
+    assert.equal(seen.length, 3, 'a call refused before reaching X: ' + seen.map((s) => s.url).join(', '));
+    for (const call of seen) {
+      assert.match(call.auth, /oauth_consumer_key="ALPHIRE_X_API_KEY"/, `${call.url} signed without the resolved API key`);
+      assert.match(call.auth, /oauth_token="ENV_X_TOKEN_dane"/, `${call.url} signed without the resolved access token`);
+      assert.doesNotMatch(call.auth, /oauth_token=""/, `${call.url} signed with a blank token`);
+    }
+  } finally { global.fetch = realFetch; h.restore(); }
+});
+
+/**
+ * The same defect stated as the property that was violated, rather than as the
+ * one call site that happened to hit it.
+ *
+ * `shapeXCredentials` is not exported, so this goes through the public door:
+ * resolve, then feed the answer back in, twice. If shaping ever stops being
+ * idempotent, the second and third passes disagree with the first and this
+ * fails — including for a caller that does not exist yet.
+ */
+test('X: shaping an already-shaped credential returns it unchanged', async () => {
+  const h = withResolver();
+  const realFetch = global.fetch;
+  const captured = [];
+  global.fetch = async (url, init = {}) => {
+    captured.push(String(init.headers?.Authorization || ''));
+    return { ok: true, status: 200, json: async () => ({ data: { id: '1799' } }) };
+  };
+  try {
+    const once = await h.publishers.x.resolveXCredentials({ projectId: SCOPE_A.projectId });
+    assert.equal(once.ok, true, once.error);
+
+    // Round-trip it through the entry point twice, feeding each answer back in.
+    let bag = { credentials: once.creds };
+    for (let pass = 0; pass < 2; pass += 1) {
+      const posted = await h.publishers.x.createPost('hello', bag);
+      assert.equal(posted.ok, true, `pass ${pass + 1} lost the credentials: ${posted.error || ''}`);
+      bag = { credentials: { ...bag.credentials } };
+    }
+
+    // Every signature identical in the values that came from the credential.
+    const keys = captured.map((h2) => (h2.match(/oauth_consumer_key="([^"]*)"/) || [])[1]);
+    const tokens = captured.map((h2) => (h2.match(/oauth_token="([^"]*)"/) || [])[1]);
+    assert.deepEqual(keys, ['ALPHIRE_X_API_KEY', 'ALPHIRE_X_API_KEY'], 'the API key changed between shapings');
+    assert.deepEqual(tokens, ['ENV_X_TOKEN_dane', 'ENV_X_TOKEN_dane'], 'the access token changed between shapings');
+  } finally { global.fetch = realFetch; h.restore(); }
+});
+
+/**
+ * Round 2's secondary finding: two precedence orders for the same shared keys.
+ *
+ * `getBlueskyCredentials` gives the ENV VAR priority; `getProviderValues` gives
+ * a value saved on the Settings screen priority. The resolver's environment
+ * fallback used to read the second, so with both set and different, the same
+ * account posted as one handle unscoped and the other handle project-scoped.
+ * Nothing goes blank, so nothing errors — it is a wrong-account post, which
+ * looks exactly like success.
+ */
+test('Bluesky: the shared-keys path answers the same whether or not a project is named', async () => {
+  const h = withResolver({ bluesky: { identifier: 'settings-screen.bsky.social' } });
+  const had = Object.prototype.hasOwnProperty.call(process.env, 'BLUESKY_IDENTIFIER');
+  const previous = process.env.BLUESKY_IDENTIFIER;
+  process.env.BLUESKY_IDENTIFIER = 'env-var.bsky.social';
+  try {
+    const unscoped = h.publishers.bluesky.getBlueskyCredentials();
+    const scoped = await h.publishers.bluesky.resolveBlueskyCredentials({ projectId: SCOPE_A.projectId });
+    assert.equal(scoped.source, 'environment', 'no Bluesky connection is stored, so this is the shared-keys path');
+    assert.equal(
+      scoped.identifier, unscoped.identifier,
+      'a project-scoped call and an unscoped call disagreed about which account posts'
+    );
+    assert.equal(scoped.identifier, 'env-var.bsky.social');
+    assert.equal(scoped.appPassword, unscoped.appPassword);
+    assert.equal(scoped.serviceUrl, unscoped.serviceUrl);
+  } finally {
+    if (had) process.env.BLUESKY_IDENTIFIER = previous;
+    else delete process.env.BLUESKY_IDENTIFIER;
+    h.restore();
+  }
+});
+
 test('the publish dispatch hands every channel its project', () => {
   const fs = require('fs');
   /**
@@ -812,12 +941,32 @@ test('the publish dispatch hands every channel its project', () => {
 
   // And the resolved credentials must actually be PASSED to the publish call —
   // resolving into a variable nobody reads is the same bug with more steps.
+  //
+  // `x` and `buffer` were missing from this list until round 3, and X is the
+  // one channel that does NOT pass them as a third argument: it wraps them in
+  // an options bag and reuses it across three calls. That shape is what round
+  // 2's defect lived in, so leaving X out of the list left the only unusual
+  // hand-off in the file unwatched.
   for (const [channel, call] of [
     ['bluesky', /createPost\(post\.text, imageOpts, bsCreds\)/],
     ['facebook', /createFacebookPost\(post\.text, imageOpts, fbCreds\)/],
     ['threads', /createThreadsPost\(post\.text, imageOpts, thCreds\)/],
     ['instagram', /createInstagramPost\(post\.text, imageOpts, igCreds\)/],
+    ['x', /const xCredOpts = xResolved\.ok \? \{ credentials: xResolved\.creds \}/],
+    ['buffer', /createQueuedPost\(post\.text, \{[\s\S]*?\}, bufferCreds\)/],
   ]) {
     assert.ok(call.test(body), `the ${channel} branch resolves credentials but does not pass them to the publish call`);
+  }
+
+  // X reuses that one bag for all three of its calls. Any of them falling back
+  // to `publishCredOpts` would resolve a SECOND time, and two lookups can
+  // disagree — media uploaded under one account and posted under another comes
+  // back as X's 400 "media id not found", which names neither.
+  for (const entry of [
+    /xClient\.checkAuth\(xCredOpts\)/,
+    /xClient\.uploadMediaSimple\(bytesRes\.buffer, bytesRes\.contentType, xCredOpts\)/,
+    /xClient\.createPost\(post\.text, \{ mediaIds, \.\.\.xCredOpts \}\)/,
+  ]) {
+    assert.ok(entry.test(body), `an X entry point no longer uses the credentials resolved for the publish: ${entry}`);
   }
 });
