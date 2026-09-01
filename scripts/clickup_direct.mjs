@@ -2418,10 +2418,7 @@ if (cmd === 'whoami') {
   // working directory, which is always starcaster — so a `repo:pulse` ticket
   // was answered with starcaster's PR of the same number.
   const lookupPr = (pr) => {
-    const out = spawnSync('gh', [
-      'pr', 'view', String(pr.number), '--repo', `${pr.owner}/${pr.repo}`,
-      '--json', 'state,headRefName',
-    ], {
+    const out = spawnSync('gh', buildStart.prLookupArgs(pr), {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     });
     if (out.status !== 0) return null; // could not tell — NOT "no PR"

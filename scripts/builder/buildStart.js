@@ -126,6 +126,24 @@ function resolveBuildStart(comments, { lookupPr } = {}) {
   };
 }
 
+/**
+ * The exact `gh` arguments for looking one pull request up.
+ *
+ * IT LIVES HERE SO THE `--repo` CANNOT BE DROPPED QUIETLY (task 86bbqyyfn).
+ * Two callers ask this question — the `build-start` command and
+ * `pipeline.mjs`'s `buildStartFor` — and both built their own argument list.
+ * A unit test cannot reach either closure, so removing `--repo` from one of
+ * them passed the entire suite: the break-test for this very fix did exactly
+ * that and nothing went red. One builder, pinned by one test, is what makes
+ * "break it on purpose and watch it fail" possible at all here.
+ */
+function prLookupArgs(pr) {
+  if (!pr || !pr.owner || !pr.repo || !pr.number) {
+    throw new Error('prLookupArgs needs a pull request with an owner, a repo and a number');
+  }
+  return ['pr', 'view', String(pr.number), '--repo', `${pr.owner}/${pr.repo}`, '--json', 'state,headRefName'];
+}
+
 /** One line for a run report, so the choice is visible rather than implied. */
 function describeBuildStart(decision) {
   if (!decision) return '';
@@ -137,4 +155,4 @@ function describeBuildStart(decision) {
   return `${prefix} — ${decision.why}`;
 }
 
-module.exports = { resolveBuildStart, describeBuildStart };
+module.exports = { resolveBuildStart, describeBuildStart, prLookupArgs };

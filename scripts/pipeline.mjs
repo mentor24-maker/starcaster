@@ -46,7 +46,7 @@ const {
   resumedMessage, sweptTicketNote, resumeAuthorization, numericOption,
   strandedBuildDestination,
 } = pipelinePause;
-const { resolveBuildStart } = buildStart;
+const { resolveBuildStart, prLookupArgs } = buildStart;
 // The switch is READ in exactly one place, shared with bus-relay, so the two
 // can never hold different ideas of where the flag is or what counts as
 // unreadable (pipelinePauseStore.js says why that matters).
@@ -160,10 +160,7 @@ async function buildStartFor(taskId) {
     // happened to be running in.
     lookupPr: (pr) => {
       try {
-        const out = execFileSync('gh', [
-          'pr', 'view', String(pr.number), '--repo', `${pr.owner}/${pr.repo}`,
-          '--json', 'state,headRefName',
-        ], {
+        const out = execFileSync('gh', prLookupArgs(pr), {
           encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
         });
         return JSON.parse(out);

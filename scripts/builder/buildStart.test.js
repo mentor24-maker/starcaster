@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { resolveBuildStart, describeBuildStart } = require('./buildStart.js');
+const { resolveBuildStart, describeBuildStart, prLookupArgs } = require('./buildStart.js');
 
 /**
  * 2026-08-23: a loop-build pass opened two duplicate pull requests in one
@@ -263,4 +263,20 @@ test('the lookup is NEVER called without a repo, whatever the comment said', () 
     });
     assert.ok(called, `the lookup never ran for: ${line}`);
   }
+});
+
+/* The argv itself, pinned. Both callers build their `gh` command through
+ * prLookupArgs, so removing `--repo` is a change to THIS, and this fails. */
+
+test('the gh lookup always names the repo', () => {
+  assert.deepEqual(
+    prLookupArgs({ owner: 'mentor24-maker', repo: 'pulse', number: 1 }),
+    ['pr', 'view', '1', '--repo', 'mentor24-maker/pulse', '--json', 'state,headRefName'],
+  );
+});
+
+test('the argv refuses to be built without a repo — it cannot silently omit one', () => {
+  assert.throws(() => prLookupArgs({ number: 1 }), /owner, a repo and a number/);
+  assert.throws(() => prLookupArgs({ owner: 'x', number: 1 }), /owner, a repo and a number/);
+  assert.throws(() => prLookupArgs(null), /owner, a repo and a number/);
 });
