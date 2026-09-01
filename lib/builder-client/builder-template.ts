@@ -130,6 +130,7 @@ export const BUILDER_MODULE_TYPES = [
   "blog-search-results",
   "event-manager",
   "event-calendar",
+  "event-detail",
   "site-search",
   "site-search-results",
   "messaging-topic-list",
@@ -2138,6 +2139,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-search-results" ||
     type === "event-manager" ||
     type === "event-calendar" ||
+    type === "event-detail" ||
     type === "site-search" ||
     type === "site-search-results" ||
     type === "messaging-topic-list" ||
@@ -3712,6 +3714,18 @@ export function createEmptyModule(
                             showStatus: "true",
                             showDate: "true",
                             showDelete: "true",
+                            accentColor: "#0f4f8f"
+                          }
+                      : type === "event-detail"
+                        ? {
+                            backLinkUrl: "",
+                            backLinkLabel: "Back to all events",
+                            ctaLabel: "Get Tickets",
+                            showImage: "true",
+                            showLocation: "true",
+                            showDescription: "true",
+                            showOrganizer: "true",
+                            notFoundMessage: "We could not find that event. It may have been removed.",
                             accentColor: "#0f4f8f"
                           }
                       : type === "event-calendar"

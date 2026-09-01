@@ -2204,6 +2204,9 @@ function BuilderModulePreview({
   if (module.type === "blog-post-manager") {
     return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
   }
+  if (module.type === "event-detail") {
+    return <EventDetailPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
+  }
   if (module.type === "event-calendar") {
     return <EventCalendarPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
   }
@@ -3825,6 +3828,280 @@ function BlogCardManagerPreview() {
   );
 }
 
+/* ── Event Detail (public) ─────────────────────────────────────────────────
+ *
+ * One event's own page. It reads `?event=<slug>` from the URL — the same link
+ * the calendar and the manager build — and asks
+ * `/api/events/<slug>?by=slug`, which is public for a PUBLISHED event only:
+ * routes/events.js 404s a draft to a visitor with no session.
+ */
+
+type DetailEvent = {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  description: string;
+  excerpt: string;
+  imageUrl: string;
+  imageAlt: string;
+  url: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  allDay: boolean;
+  timezone: string;
+  locationName: string;
+  locationAddress: string;
+  locationUrl: string;
+  organizerName: string;
+  organizerContact: string;
+  seoTitle: string;
+  seoDescription: string;
+};
+
+/**
+ * A contact as something to act on: an email becomes mailto:, a phone number
+ * tel:, anything else stays plain text. Guessing wrong is worse than not
+ * linking — a dead mailto: on a phone number is a link that goes nowhere.
+ */
+function organizerContactHref(contact: string): string | undefined {
+  const text = contact.trim();
+  if (!text) return undefined;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)) return `mailto:${text}`;
+  const digits = text.replace(/[\s().-]/g, "");
+  if (/^\+?\d{7,15}$/.test(digits)) return `tel:${digits}`;
+  return undefined;
+}
+
+function EventDetailPreview({
+  settings,
+  theme,
+  themePalette,
+}: {
+  settings: Record<string, string>;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+}) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const backLinkUrl = (settings.backLinkUrl || "").trim();
+  const backLinkLabel = (settings.backLinkLabel || "").trim() || "Back to all events";
+  const ctaLabel = (settings.ctaLabel || "").trim() || "Get Tickets";
+  const showImage = (settings.showImage ?? "true") !== "false";
+  const showLocation = (settings.showLocation ?? "true") !== "false";
+  const showDescription = (settings.showDescription ?? "true") !== "false";
+  const showOrganizer = (settings.showOrganizer ?? "true") !== "false";
+  const notFoundMessage = (settings.notFoundMessage || "").trim()
+    || "We could not find that event. It may have been removed.";
+
+  const [slug, setSlug] = useState("");
+  const [event, setEvent] = useState<DetailEvent | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+
+  // The slug comes from the URL and can change under a single-page navigation,
+  // so popstate is listened for rather than read once at mount.
+  useEffect(() => {
+    function syncSlugFromUrl() {
+      setSlug(new URLSearchParams(window.location.search).get("event") ?? "");
+    }
+    syncSlugFromUrl();
+    window.addEventListener("popstate", syncSlugFromUrl);
+    return () => window.removeEventListener("popstate", syncSlugFromUrl);
+  }, []);
+
+  useEffect(() => {
+    if (!slug) {
+      setEvent(null);
+      setNotFound(false);
+      setLoading(false);
+      return;
+    }
+    let live = true;
+    setLoading(true);
+    setNotFound(false);
+    fetch(`/api/events/${encodeURIComponent(slug)}?by=slug`, {
+      credentials: "include",
+      headers: getCrmProjectHeaders(),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!live) return;
+        const raw = d?.event ?? d?.data ?? null;
+        if (!raw || typeof raw !== "object") { setEvent(null); setNotFound(true); return; }
+        setEvent(raw as DetailEvent);
+      })
+      .catch(() => { if (live) { setEvent(null); setNotFound(true); } })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
+  }, [slug]);
+
+  /*
+   * The event's own SEO fields, applied to the page that is showing it.
+   *
+   * Without this the SEO Title and SEO Description an operator fills in on
+   * every event render nowhere at all — fields that look like they work and
+   * do nothing (Standard 13). The previous title is restored on the way out,
+   * so browsing away from an event does not leave its name in the tab.
+   */
+  useEffect(() => {
+    if (!event) return;
+    const previousTitle = document.title;
+    const heading = event.seoTitle?.trim() || event.title?.trim();
+    if (heading) document.title = heading;
+
+    const description = event.seoDescription?.trim() || event.excerpt?.trim();
+    let meta = document.querySelector('meta[name="description"]');
+    const ownsMeta = !meta && Boolean(description);
+    let previousDescription: string | null = null;
+    if (description) {
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.setAttribute("name", "description");
+        document.head.appendChild(meta);
+      } else {
+        previousDescription = meta.getAttribute("content");
+      }
+      meta.setAttribute("content", description);
+    }
+
+    return () => {
+      document.title = previousTitle;
+      if (ownsMeta && meta?.parentNode) meta.parentNode.removeChild(meta);
+      else if (meta && previousDescription !== null) meta.setAttribute("content", previousDescription);
+    };
+  }, [event]);
+
+  const frameStyle = {
+    ["--evt-accent" as string]: accent,
+    ...getAdminDataTableThemeStyle(themePalette, theme),
+  };
+
+  const backLink = backLinkUrl ? (
+    <a className="builder-event-detail-back" href={backLinkUrl}>← {backLinkLabel}</a>
+  ) : null;
+
+  // No slug at all: the page has been opened directly rather than through a
+  // calendar link. Said plainly, because a blank panel here reads as broken.
+  if (!slug) {
+    return (
+      <div className="builder-event-detail" style={frameStyle}>
+        <p className="builder-event-detail-note">
+          This page shows a single event. Open it from the calendar, or add
+          <code> ?event=your-event-slug </code> to the address.
+        </p>
+        {backLink}
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="builder-event-detail" style={frameStyle}>
+        <p className="builder-event-detail-note">Loading event…</p>
+      </div>
+    );
+  }
+
+  if (notFound || !event) {
+    return (
+      <div className="builder-event-detail" style={frameStyle}>
+        <p className="builder-event-detail-note">{notFoundMessage}</p>
+        {backLink}
+      </div>
+    );
+  }
+
+  const cancelled = normalizeEventStatus(event.status) === "cancelled";
+  const imageUrl = showImage ? resolvePublicBuilderAssetUrl(event.imageUrl) : "";
+  const contactHref = organizerContactHref(event.organizerContact || "");
+  const hasLocation = showLocation && Boolean(event.locationName || event.locationAddress);
+  const descriptionHtml = showDescription ? formatRichTextContent(event.description) : "";
+
+  return (
+    <article className="builder-event-detail" style={frameStyle}>
+      {backLink}
+
+      {/*
+        * The whole reason `cancelled` exists as a status rather than a delete:
+        * an event people have already put in their diary keeps its page and
+        * says, at the top, that it is off. Deleting it makes them turn up.
+        */}
+      {cancelled ? (
+        <p className="builder-event-detail-cancelled" role="status">
+          <strong>This event has been cancelled.</strong>
+        </p>
+      ) : null}
+
+      <h1 className="builder-event-detail-title">{event.title || "Untitled event"}</h1>
+
+      <p className="builder-event-detail-when">
+        {formatEventWhen(event)}
+        {event.timezone ? (
+          <span className="builder-event-detail-timezone"> ({event.timezone.replace(/_/g, " ")})</span>
+        ) : null}
+      </p>
+
+      {hasLocation ? (
+        <p className="builder-event-detail-where">
+          {event.locationUrl ? (
+            <a href={event.locationUrl} target="_blank" rel="noopener noreferrer">
+              {event.locationName || event.locationAddress}
+            </a>
+          ) : (
+            <span>{event.locationName}</span>
+          )}
+          {event.locationName && event.locationAddress ? (
+            <span className="builder-event-detail-address">{event.locationAddress}</span>
+          ) : null}
+        </p>
+      ) : null}
+
+      {imageUrl ? (
+        <img
+          className="builder-event-detail-image"
+          src={imageUrl}
+          alt={event.imageAlt || ""}
+        />
+      ) : null}
+
+      {/* Sanitized by formatRichTextContent (Standard 9) — never raw. */}
+      {descriptionHtml ? (
+        <div
+          className="builder-event-detail-body"
+          dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+        />
+      ) : event.excerpt ? (
+        <p className="builder-event-detail-body">{event.excerpt}</p>
+      ) : null}
+
+      {/* A cancelled event keeps its page, but never its "buy a ticket" button. */}
+      {event.url && !cancelled ? (
+        <p className="builder-event-detail-cta-row">
+          <a
+            className="builder-event-detail-cta"
+            href={event.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {ctaLabel}
+          </a>
+        </p>
+      ) : null}
+
+      {showOrganizer && (event.organizerName || event.organizerContact) ? (
+        <p className="builder-event-detail-organizer">
+          {event.organizerName ? <span>Organised by {event.organizerName}</span> : null}
+          {event.organizerContact ? (
+            contactHref
+              ? <a href={contactHref}>{event.organizerContact}</a>
+              : <span>{event.organizerContact}</span>
+          ) : null}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
 /* ── Event Calendar (public) ───────────────────────────────────────────────
  *
  * What a visitor sees. Three layouts over one fetch: a month grid, an
@@ -3927,12 +4204,25 @@ function EventCalendarPreview({
   }, [published, showPast, limit]);
 
   function hrefFor(event: CalendarEvent): string | undefined {
-    // The event's own link wins — a ticketing page is where the visitor
-    // actually wants to go. Otherwise the site's event page, if one is set.
-    if (event.url) return event.url;
-    if (!eventPageUrl || !event.slug) return undefined;
-    const sep = eventPageUrl.includes("?") ? "&" : "?";
-    return `${eventPageUrl}${sep}event=${encodeURIComponent(event.slug)}`;
+    /*
+     * The site's own event page wins, and the event's external link is the
+     * FALLBACK — not the other way round.
+     *
+     * This was backwards when the calendar shipped (2/3) and only became
+     * visible once the event page existed (3/3): nearly every real event has
+     * a ticketing link, so preferring it sent every visitor straight off-site
+     * and the event page — with the description, the location, the organiser
+     * and its own Get Tickets button — was unreachable from the calendar it
+     * belongs to.
+     *
+     * With no event page configured the external link is still better than a
+     * dead title, so it stays as the fallback.
+     */
+    if (eventPageUrl && event.slug) {
+      const sep = eventPageUrl.includes("?") ? "&" : "?";
+      return `${eventPageUrl}${sep}event=${encodeURIComponent(event.slug)}`;
+    }
+    return event.url || undefined;
   }
 
   const Title = heading
