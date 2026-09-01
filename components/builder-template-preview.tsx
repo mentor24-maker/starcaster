@@ -2211,7 +2211,7 @@ function BuilderModulePreview({
     return <EventCalendarPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
   }
   if (module.type === "media-manager") {
-    return <MediaManagerPreview settings={module.settings} />;
+    return <MediaManagerPreview settings={module.settings} text={module.text} />;
   }
 
   if (module.type === "event-manager") {
@@ -4485,9 +4485,11 @@ function getMediaBlobClient() {
 }
 
 function MediaManagerPreview({
-  settings
+  settings,
+  text
 }: {
   settings: Record<string, string>;
+  text?: string;
 }) {
   const accent = settings.accentColor || "#0f4f8f";
   const kinds = String(settings.kinds || "all").toLowerCase();
@@ -4506,6 +4508,12 @@ function MediaManagerPreview({
   const [deleteTarget, setDeleteTarget] = useState<MediaAsset | null>(null);
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // The module card offers a generic Content box bound to module.text, and it
+  // is a plain <textarea> for every type but "text" — so this is TEXT, never
+  // HTML. Rendered through React's own escaping, with line breaks preserved by
+  // CSS rather than by building markup out of the value.
+  const description = String(text || "").trim();
 
   const acceptAttr =
     kinds === "images" ? MEDIA_IMAGE_ACCEPT
@@ -4619,7 +4627,10 @@ function MediaManagerPreview({
     setBusy(true);
     try {
       const res = await fetch(`/api/assets/${encodeURIComponent(String(asset.id))}`, {
-        method: "PUT",
+        // PATCH, not PUT. routes/assets.js handles PATCH and DELETE for this
+        // path and nothing else, so a PUT falls through unmatched and the
+        // rename silently does not happen.
+        method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
         body: JSON.stringify({ assetName: next })
@@ -4664,6 +4675,9 @@ function MediaManagerPreview({
 
   return (
     <div className="builder-media-manager" style={{ ["--builder-media-accent" as string]: accent }}>
+      {description ? (
+        <p className="builder-media-manager-description">{description}</p>
+      ) : null}
       <div className="builder-media-manager-toolbar">
         <label className="builder-media-manager-upload">
           <input
