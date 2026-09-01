@@ -1597,6 +1597,58 @@ human when it had not; here, an agent implies a human is needed when none is.
 Canon home for this rule is the vault `doctrine/OPERATIONS.md`; this section is
 the repo-side copy, which is the one actually loaded into every session.
 
+**The tripwire.** Written down three times, broken three times — twice by
+sessions that had read it that day. So it is no longer only written down:
+`scripts/hooks/check_operator_handoff.cjs` is a **Stop hook** that reads the
+reply about to be delivered and refuses to end the turn when it hands over a
+fenced `doppler run`, `ssh`, `npm run`, `node scripts/`, or the
+`cd ~/WebApps/starcaster && …` copy-paste preamble. Same family as
+`check_conventions`, `check:syntax` and the terminology guard: a rule that
+depends on being remembered is not a control, it is a hope.
+
+Four things it deliberately does **not** do, each for a reason:
+
+- **An inline mention is not a hand-off.** `` `npm run doctor` `` in backticks
+  is a reference — naming a command while explaining something. The rule was
+  never against mentioning one. Only a fenced block, ready to paste, counts.
+- **`npm run pipeline -- resume` is exempt.** An agent may pause the line;
+  only Dane hands the deck back (§6.9's "a decision that is genuinely his",
+  and the pipeline switch's own rule). Handing him that one command is right.
+- **Headless runs are exempt.** A hand-off is only a hand-off if somebody is
+  being handed something. The loops run with `entrypoint: "sdk-cli"` and
+  report to a ticket; only `cli`, a terminal he is sitting in front of, can
+  trip it. Measured across 1,594 transcripts in this project on 2026-09-01:
+  every loop pass was `sdk-cli`, and the interactive sessions were `cli`, so
+  the two are genuinely distinguishable rather than scoped away by assumption.
+- **It fails OPEN, and stands down after three refusals in a session.** This
+  is the opposite of the pipeline switch's fail-safe (§6.8) and the asymmetry
+  really is reversed: a wrong refusal wedges a turn and can strand an
+  unattended pass in `Building`, while a miss just leaves the written rule
+  doing the work it was already doing. If the transcript cannot be read or the
+  entrypoint cannot be determined, it steps aside. The refusal counter lives in
+  the **absolute git dir** (`git rev-parse --absolute-git-dir`), not in
+  `<toplevel>/.git/` — in a worktree `.git` is a one-line *file*, so the older
+  path failed with `ENOTDIR` inside a `try/catch` and the counter never
+  advanced. Every thread here runs in a worktree, so the stand-down would have
+  been inoperative in exactly the folders that use it: §3.11's shape again, a
+  safety valve that silently does not run. `require_sql_handoff.cjs` still
+  writes to the old path and has the same gap.
+
+**The sanctioned way through is to name the exception**, on its own line,
+outside any code fence — `Exception: secret value | billing | browser login |
+decision`. That is the whole contract, and it is the same one §6.9 states in
+prose: not *may I hand this over*, but *say out loud which of the four this
+is*. An `Exception:` line inside a fence does not count, because an example is
+not a claim. `SKIP_OPERATOR_HANDOFF=1` is the deliberate one-off override, and
+per `CLAUDE.md` using it means saying so and why.
+
+Tests are `scripts/hooks/check_operator_handoff.test.js`, run by
+`npm run test:hooks` in CI alongside the other three hook suites. They drive
+the real hook process with real JSON and assert the actual exit code, and the
+one that matters most removes the `Exception:` line from an otherwise
+identical reply and watches the same message flip from pass to refusal — a
+guard that only proves it stays quiet has proved nothing.
+
 ### 6.10 A behaviour proven in an uncommitted file does not move when its job moves
 
 On 2026-08-20 the `bus-relay` failure alert was built, break-tested and watched
