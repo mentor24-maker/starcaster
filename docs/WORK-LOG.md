@@ -1,3 +1,94 @@
+## 2026-08-31 — A branch that was fine no longer gets filed as broken work (#487)
+
+When Dane says "merge" on a finished ticket, the relay checks with GitHub first.
+GitHub sometimes answers that the branch clashes with the live code when it does
+not — its answer can be minutes out of date — so the machine tries the merge
+itself before believing it. That second opinion comes back one of two ways: the
+two really do collide and somebody has to decide what the merged file says, or
+there was nothing to collide about.
+
+The note written on the ticket read that second opinion and said the right thing.
+The part that files a "somebody go fix this branch" job into the work queue never
+read it at all — it filed whenever GitHub used the word conflict. So on 30 August
+a branch that had merged perfectly, and only lost a race sending the result up to
+GitHub, got two notes on its ticket a fifth of a second apart. One said a job had
+been created and named it. The other said it would go through on the next attempt
+and nobody needed to do anything. Both were on the screen at once, and whichever
+one you read last is the one you believed. The job that got created told whoever
+picked it up to go and clean up a mess that was not there. The ticket sat for two
+hours next to it.
+
+Now both halves ask the same single question, so they cannot answer it
+differently — there is only one answer to read. And where the code used to ask
+"did we create a job for this?" it now asks "who is going to act next?" Those
+are not the same question: when there is nothing to fix, the next attempt IS the
+actor, and it is a real one. Treating that as "nobody" is why the system had
+been announcing a healthy branch as blocked every ten minutes and asking for
+hands it did not need. It still speaks up if a branch has not sorted itself out
+within a day, because at that point silence would be the wrong answer too.
+
+Review caught that "where" being written as "everywhere" the first time round.
+Four places had to change and only three did. The one that was missed is the
+message that goes to the group chat Dane actually reads, and it is the message
+sent when a branch has been stuck for a day — so once a day, about the branches
+that matter most, it would have posted a single sentence saying both "nothing is
+looking after this" and "every attempt has been retrying it on its own." The
+same two-answers-at-once problem this whole job was written to remove, one level
+down. It now says which of the two it is, the heading above it stops calling a
+branch with nothing wrong a clash, and the test that guards it feeds the two
+halves into each other the way the real code does — checking them one at a time
+was why a fully passing test run still had this in it.
+
+Review then caught something bigger, and it is the reason this went round a third
+time. "The machine looked and found nothing wrong" and "the machine never managed
+to look" had been filed as the same answer. They are not the same answer at all:
+the first is a finding, the second is the absence of one. So when the check
+failed to run — it could not reach the code, or the branch lives in a different
+project this machine does not have a copy of — the note on the ticket honestly
+said it could not check, while the message going to the group chat seconds later
+announced that no clash had been found and nobody needed to do anything. Standing
+the room down on a look nobody took. And a branch in one of the other projects
+hits that every single time, forever, so it had quietly stopped creating any job
+at all for work in those projects.
+
+There are three answers now instead of two, and each one is only allowed to say
+what it actually knows. A clean result still goes quiet and sorts itself out. A
+real clash still gets a job created and a name attached. A check that could not
+run says so plainly, in the same words everywhere it appears, and still gets a
+job created — because somebody has to find out why. The wrong-project case says
+out loud that it will never sort itself out from that machine, rather than
+promising a retry that cannot work. Every outcome the checker can produce now
+needs a decision written down beside it; a test fails if a new one is ever added
+without one, which is how four of these came to be sharing an answer nobody had
+chosen for them.
+
+And a fourth time, for the most embarrassing version of the same thing. Splitting
+those three answers apart fixed the note written on the ticket — and stopped
+there. The ticket that note LINKS TO, the one somebody actually opens and works
+from, still had a single set of words for all three. So the note would say
+"whether there is anything to resolve is still unknown", you would click through
+to find out, and land on a job titled "Resolve the merge conflict on PR #501"
+telling you to leave no conflict markers behind. Word for word the mistake this
+whole job was written to remove, one more level down — and for the branches that
+live in the other projects it happened on every single pass, not occasionally.
+Three more places had it too: the once-a-day chat message about a stuck branch,
+the end-of-run summary above it, and the "things I could not check" list at the
+bottom of every run.
+
+The fix is one change rather than four, and it is the only shape that stays fixed.
+Every one of those places used to hold its own words and pick between them by
+asking a question that only had two answers — so none of them could tell "we
+looked and found a clash" apart from "we never looked". The words now live in one
+table, one row per answer, and every surface reads its row. Nothing writes its own
+sentences any more, so nothing can describe a situation as something it is not.
+Adding a fourth answer without filling in its whole row fails the tests.
+
+One of the guard tests turned out to be holding the mistake in place: its written
+description said "only a branch with a real clash may be announced as a clash",
+which is right, while the check underneath it permitted exactly what the
+description forbade. It says what it always meant now — and reverting it to the
+old wording makes it fail, which is the proof it was load-bearing in the wrong
+direction.
 ## 2026-08-31 — Work sent back for a fix stopped hiding in the queue (#489)
 
 When a review found a problem, the ticket went back to the "Queued" pile — the

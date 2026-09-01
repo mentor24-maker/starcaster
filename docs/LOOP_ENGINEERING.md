@@ -243,12 +243,27 @@ designed and the design had no actor in it.
 Dane picked **option C** on 2026-08-30: file it into the queue that already has
 a consumer.
 
-- **A conflict files a Loop Queue ticket.** On a real overlap the merge step
-  creates an ordinary `Queued` task — *"Resolve the merge conflict on PR #N
-  (branch)"* — carrying the branch, why it conflicts, and an explicit
-  instruction not to ask Dane to approve again. The build loop drains that
-  list on a timer today, so the actor already exists and is already running.
-  No new consumer, and no second queue beside the one that works.
+- **A conflict files a Loop Queue ticket — and calls the work what it is.**
+  GitHub saying `CONFLICTING` is not a finding; what the relay machine found
+  when it tried the merge itself is. There are **three** answers it can give,
+  and each gets its own ticket, comment and bus wording, all from one table in
+  `scripts/builder/conflictWork.js`:
+  - **a real overlap** — *"Resolve the merge conflict on PR #N (branch)"*,
+    carrying the branch, why it conflicts, and an explicit instruction not to
+    ask Dane to approve again.
+  - **no overlap** — nothing is filed at all. The local merge came back clean
+    (a lost push race, or GitHub answering about a state it has not caught up
+    with), so the next relay pass retries and it clears itself.
+  - **the check could not run** — wrong repo, failed fetch, no scratch
+    worktree — *"Find out why PR #N (branch) will not merge"*, whose first
+    acceptance criterion is to answer that question out loud before touching
+    anything. It must NOT say "resolve the conflict": nobody has established
+    there is one. `WRONG_REPO` also says the answer is permanent from the
+    relay machine and names what would settle it.
+
+  The build loop drains that list on a timer today, so the actor already
+  exists and is already running. No new consumer, and no second queue beside
+  the one that works.
 - **The comment names that ticket, or says nobody is on it.** Every notice now
   declares an `actor` beside its marker, and the two together decide whether
   the body may promise the approval carries over. `actor: 'nobody'` — filing
@@ -261,12 +276,18 @@ a consumer.
   does not file twenty-four tickets. If the ticket cannot be filed, that goes
   in the pass's `could not be checked` list and the bus post says
   `MERGE BLOCKED AND UNFILED`.
-- **Silence has a shelf life.** A hand-off with no ticket behind it is stalled
-  immediately; one whose ticket has not cleared the conflict in 24 hours stops
-  being quiet and reports every pass under `CONFLICTS STILL UNRESOLVED`, by
-  name. That bucket is deliberately separate from `could not be checked` — the
-  latter exits 1 because it describes an unhealthy *pass*, while a stalled
-  conflict is a healthy pass reporting an unhealthy *ticket*.
+- **Silence has a shelf life, and the banner says which kind of silence.** A
+  hand-off with no ticket behind it is stalled immediately — *unless* the
+  verdict was a proven no-overlap, where the next relay pass IS the actor and
+  is real, so nagging about it would be a false alarm. Anything that has not
+  moved in 24 hours stops being quiet and reports every pass, by name, under
+  the banner its own verdict earns: `CONFLICTS STILL UNRESOLVED` for a real
+  overlap, `MERGE STILL NOT CLEARED` for one that was supposed to heal itself,
+  and `MERGE STILL BLOCKED — THE CHECK NEVER RAN` when nothing was ever
+  established. A mixed pass says so rather than rounding to either. That
+  bucket is deliberately separate from `could not be checked` — the latter
+  exits 1 because it describes an unhealthy *pass*, while a stalled hand-off
+  is a healthy pass reporting an unhealthy *ticket*.
 
 **These heal themselves too.** A hand-off already sitting in the record with no
 ticket behind it gets one filed on the next pass, and that counts as news even
