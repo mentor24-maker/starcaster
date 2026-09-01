@@ -28,7 +28,7 @@
                   <option value="Video">Video</option>
                   <option value="Audio">Audio</option>
                   <option value="Lead Magnet">PDF</option>
-                  <option value="Screenshot">Screenshot</option>
+                  <option value="File">File</option>
                 </select>
                 
                 <label for="assetUploadCategory">Category</label>
@@ -52,11 +52,15 @@
               </form>
             </div>
             <div class="stack-form" style="margin: 0;">
-              <h3>Bulk Import Images</h3>
-              <p class="meta" style="margin: 0 0 0.5rem;">Uploads each image and generates a thumbnail. Set Asset Type to Image. Leave Aspect on Auto to detect wide / square / tall from each file.</p>
+              <h3>Bulk Import</h3>
+              <p class="meta" style="margin: 0 0 0.5rem;">Uploads each file. Pick the Asset Type first — the file picker then offers only the file kinds that type accepts. Images also get a thumbnail; leave Aspect on Auto to detect wide / square / tall from each file.</p>
               <form id="assetMultiUploadForm" class="standard-form-grid">
-                <label for="assetMultiUploadFiles">Image Files</label>
-                <input id="assetMultiUploadFiles" name="files" type="file" accept="image/*" multiple required />
+                <label for="assetMultiUploadFiles">Files</label>
+                <!-- `accept` is set from the Asset Type selection by
+                     applyUploadAccept() in public/js/assets.js. A hardcoded
+                     accept="image/*" here made Video, PDF and File unselectable
+                     in the picker even though the upload handler supported them. -->
+                <input id="assetMultiUploadFiles" name="files" type="file" multiple required />
                 
                 <label for="assetMultiUploadType">Asset Type</label>
                 <select id="assetMultiUploadType" name="asset_type" required>
@@ -65,7 +69,7 @@
                   <option value="Video">Video</option>
                   <option value="Audio">Audio</option>
                   <option value="Lead Magnet">PDF</option>
-                  <option value="Screenshot">Screenshot</option>
+                  <option value="File">File</option>
                 </select>
                 
                 <label for="assetMultiUploadCategory">Category</label>
@@ -82,7 +86,7 @@
                 </select>
                 
                 <div></div>
-                <button type="submit" class="btn btn-primary">Import Images</button>
+                <button type="submit" class="btn btn-primary">Import Files</button>
                 
                 <div id="assetMultiUploadProgressWrap" class="standard-form-grid-full asset-upload-progress hidden" aria-live="polite">
                   <div id="assetMultiUploadProgressText" class="asset-upload-progress-text">Importing...</div>
@@ -159,7 +163,7 @@
                     <option value="Video">Video</option>
                     <option value="Audio">Audio</option>
                     <option value="Lead Magnet">PDF</option>
-                    <option value="Screenshot">Screenshot</option>
+                    <option value="File">File</option>
                   </select>
                 </th>
                 <th>
@@ -317,7 +321,7 @@
                 <option value="Video">Video</option>
                 <option value="Audio">Audio</option>
                 <option value="Lead Magnet">PDF</option>
-                <option value="Screenshot">Screenshot</option>
+                <option value="File">File</option>
               </select>
             
             
@@ -400,9 +404,14 @@
                   <span>Lock Proportions</span>
                 </label>
               </div>
+              <div class="asset-image-editor-mirror-row">
+                <span class="asset-image-editor-mirror-label">Mirror</span>
+                <button type="button" id="assetImageEditorFlipHBtn" class="btn btn-ghost asset-image-editor-flip-btn" aria-pressed="false">Flip Horizontal</button>
+                <button type="button" id="assetImageEditorFlipVBtn" class="btn btn-ghost asset-image-editor-flip-btn" aria-pressed="false">Flip Vertical</button>
+              </div>
               <div class="asset-image-editor-crop-meta" id="assetImageEditorCropMeta">Crop: full image</div>
               <div class="asset-image-editor-actions">
-                <button type="button" id="assetImageEditorResetBtn" class="btn btn-ghost">Reset Crop</button>
+                <button type="button" id="assetImageEditorResetBtn" class="btn btn-ghost">Reset Crop &amp; Mirror</button>
                 <button type="button" id="assetImageEditorSaveBtn" class="btn btn-primary">Save Edited Image</button>
               </div>
             </div>
