@@ -79,7 +79,7 @@ import pipelinePause from './builder/pipelinePause.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
-  defaultWatches, handbackTarget, mergeEnabled,
+  defaultWatches, handbackTarget, mergeEnabled, operatorComments,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
   SIMULATED_BUS_WHY, simulationGuard, simulationLine,
 } = busRelayPlan;
@@ -3181,14 +3181,12 @@ if (cmd === 'whoami') {
     for (const t of open) {
       const commentsOut = await call('GET', `/api/v2/task/${t.id}/comment`);
       if (!commentsOut.res.ok) { unchecked.push(`${t.id} (${t.name}): could not read comments`); continue; }
-      // Authorship is id AND marker (task 86bbqx2xe). The loops write under
-      // his token, so the id alone said yes to their own cards: an `ask` card
-      // came back here as a fresh answer from him, was relayed to the bus as
-      // "Dane replied", and handed the ticket out of `Needs your input` ten
-      // minutes after it was escalated.
-      const fromOperator = (commentsOut.json.comments || [])
-        .filter((c) => Number(c.user?.id) === OPERATOR_ID)
-        .filter((c) => !isMachineComment(c.comment_text));
+      // Authorship is id AND marker (task 86bbqx2xe) — the rule lives in
+      // busRelayPlan.operatorComments so a test can reach it without a network.
+      const fromOperator = operatorComments(commentsOut.json.comments, {
+        operatorId: OPERATOR_ID,
+        isMachine: isMachineComment,
+      });
 
       // The kill switch, as he may have set it on a ticket rather than on the
       // party line (standing condition 1: "on the bus or any Loop Queue
