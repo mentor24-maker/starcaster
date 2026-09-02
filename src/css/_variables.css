@@ -8,6 +8,7 @@
   --ink-primary: #000000;
   --ink-secondary: #475569;
   --ink-muted: #94a3b8;
+  --ink-warning: #b45309; /* advisory flags — amber; --error stays for actual failures */
   
   --border-light: #e2e8f0;
   --border-strong: #cbd5e1;
