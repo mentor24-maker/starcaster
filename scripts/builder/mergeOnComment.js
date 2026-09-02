@@ -377,14 +377,64 @@ function checkState(rollup) {
 }
 
 /**
+ * Every value GitHub's `mergeStateStatus` can hold. Eight situations, eight
+ * owners — and this gate answers for each of them separately, because
+ * collapsing them into one sentence is the defect this list was written
+ * against (2026-09-01, task 86bbrg9v0).
+ *
+ * `mergeOnComment.test.js` walks this array and fails if any value reaches
+ * the gate without a sentence of its own, so adding a value here without
+ * handling it is caught rather than merged on.
+ */
+const MERGE_STATE_STATUSES = Object.freeze([
+  'BEHIND', 'BLOCKED', 'CLEAN', 'DIRTY', 'DRAFT', 'HAS_HOOKS', 'UNKNOWN', 'UNSTABLE',
+]);
+
+/**
+ * The branch-protection rule GitHub is holding the merge on — but ONLY when
+ * GitHub actually named one.
+ *
+ * `reviewDecision` is the single piece of branch protection `gh pr view`
+ * exposes, so an unmet review requirement can be named exactly and every
+ * other rule cannot be named at all. The second case is a CANNOT TELL, never
+ * a guess at a review: guessing at a review is precisely what happened to
+ * PR #487.
+ *
+ * Returns null when the field is absent, which is also what an older caller
+ * that never asked for `reviewDecision` produces — absent reads as "could not
+ * tell", not as "no rule".
+ */
+function unmetProtectionRule(pr) {
+  const decision = String((pr && pr.reviewDecision) || '').toUpperCase();
+  if (decision === 'REVIEW_REQUIRED') return 'a required review has not been given';
+  if (decision === 'CHANGES_REQUESTED') return 'a reviewer requested changes';
+  return null;
+}
+
+/**
  * What to do with the PR itself, given `gh pr view --json
- * state,mergeStateStatus,mergeable,statusCheckRollup`.
+ * state,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup`.
  *
  *   'merge'         — go
  *   'update-branch' — behind main; catch it up, then re-run the gate
- *   'conflict'      — hand it to a human; a script never resolves conflicts
+ *   'conflict'      — hand it to an agent session; a script never resolves conflicts
  *   'wait'          — checks still running; say nothing, try next pass
  *   'refuse'        — terminal; comment on the ticket and stop
+ *
+ * THE REASON IS THE PRODUCT (2026-09-01, task 86bbrg9v0). Dane's "merge" on
+ * PR #487 came back with "GitHub reports the merge is blocked (a required
+ * review or check is missing)". Both halves were false: every check was
+ * green, and `gh pr view` read CONFLICTING / DIRTY — the branch had a merge
+ * conflict. The sentence sent him looking for a missing review that did not
+ * exist. A refusal that names the wrong reason is worse than one that names
+ * none, because it looks answered — the same defect as 86bbrem48 (the gate
+ * read its own card as the verdict) and 86bbrf2vf (a blocked pull called
+ * "uncommitted changes").
+ *
+ * So no sentence below asserts a cause this function did not read. Where
+ * GitHub's answer does not determine the cause, the reason says CANNOT TELL
+ * and names what it saw (DOCTRINE 3.11) — never a pass, and never a plausible
+ * reason, for a question that could not be answered.
  */
 function githubGate(pr) {
   const state = String((pr && pr.state) || '').toUpperCase();
@@ -407,7 +457,10 @@ function githubGate(pr) {
   // not a failure — it is "ask again", and asking again is what the next
   // pass is for.
   if (mergeable === 'UNKNOWN' || mergeStateStatus === 'UNKNOWN') {
-    return { action: 'wait', reason: 'GitHub is still computing whether the branch merges cleanly' };
+    return {
+      action: 'wait',
+      reason: 'CANNOT TELL yet — GitHub is still computing whether the branch merges cleanly; the next pass asks again',
+    };
   }
 
   const checks = checkState(pr.statusCheckRollup);
@@ -424,14 +477,56 @@ function githubGate(pr) {
     return { action: 'refuse', reason: 'the PR reports no checks at all — nothing verified this branch' };
   }
 
+  // Behind main: the machine's own job, and it does it this pass.
   if (mergeStateStatus === 'BEHIND') {
-    return { action: 'update-branch', reason: 'the branch is behind main' };
-  }
-  if (mergeStateStatus === 'BLOCKED') {
-    return { action: 'refuse', reason: 'GitHub reports the merge is blocked (a required review or check is missing)' };
+    return {
+      action: 'update-branch',
+      reason: 'the branch is behind main — this machine catches it up and the checks re-run',
+    };
   }
 
-  return { action: 'merge', reason: `open, ${checks.total} check(s) green, no conflicts` };
+  // UNSTABLE means GitHub can see a check on this branch that is not passing.
+  // Every check this gate can read is green (the two branches above already
+  // named a red or a running one), so the two readings disagree — and merging
+  // on the greener of two disagreeing readings is acting on a contradiction.
+  if (mergeStateStatus === 'UNSTABLE') {
+    return {
+      action: 'refuse',
+      reason: 'CANNOT TELL — GitHub reports a check on this branch is not passing, but every check this gate can read is green, so it cannot name which one; read the PR\'s checks on GitHub',
+    };
+  }
+
+  if (mergeStateStatus === 'BLOCKED') {
+    const rule = unmetProtectionRule(pr);
+    if (rule) {
+      return { action: 'refuse', reason: `GitHub is holding the merge because ${rule}` };
+    }
+    // The #487 sentence used to live here, and it was a guess wearing a
+    // fact's clothes. GitHub reports BLOCKED for any unsatisfied protection
+    // rule AND for a conflict it has not finished recomputing, and it named
+    // neither, so neither may be named back.
+    return {
+      action: 'refuse',
+      reason: 'CANNOT TELL which rule — GitHub reports the merge is blocked while every check this gate can read is green, and it did not name the rule. It is not necessarily a missing review: a conflict GitHub has not finished recomputing reads exactly like this, so re-read the PR before acting on it',
+    };
+  }
+
+  if (mergeStateStatus === 'DRAFT') {
+    return { action: 'refuse', reason: 'GitHub still reports the PR as a draft' };
+  }
+
+  if (mergeStateStatus === 'CLEAN' || mergeStateStatus === 'HAS_HOOKS') {
+    return { action: 'merge', reason: `open, ${checks.total} check(s) green, no conflicts` };
+  }
+
+  // Not one of the eight values this gate knows how to read. The old code
+  // fell through to 'merge' here, which is the same guess in the safest-
+  // sounding direction — and "it merged, so it must have been fine" is not
+  // evidence.
+  return {
+    action: 'refuse',
+    reason: `CANNOT TELL — GitHub reported a merge state this gate does not know how to read (${mergeStateStatus ? `mergeStateStatus "${mergeStateStatus}"` : 'no mergeStateStatus at all'}, mergeable "${mergeable || 'absent'}")`,
+  };
 }
 
 /**
@@ -762,6 +857,8 @@ module.exports = {
   mergeDecision,
   checkState,
   githubGate,
+  MERGE_STATE_STATUSES,
+  unmetProtectionRule,
   markerKind,
   mayPromiseApproval,
   refusalNotice,

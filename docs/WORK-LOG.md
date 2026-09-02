@@ -1,3 +1,41 @@
+## 2026-09-02 — A refusal that named the wrong reason, on a pull request whose real problem was a conflict (#525)
+
+On 1 September Dane told the system to merge a piece of finished work, and it
+came back and said no. The reason it gave was that "a required review or check
+is missing". That was not true, and it was not true in two separate ways: every
+check on that work was green, and the actual problem was a **merge conflict** —
+the branch and the live site's code had both changed the same lines, which is a
+thing only a person can untangle.
+
+A wrong reason is worse than no reason at all, because it looks like an answer.
+Told a review was missing, the natural next move is to go looking for the review
+— and there was never a review to find. The half-hour that costs is the whole
+point of this fix; it is the third time in a week the same shape has bitten
+(a gate reading its own note as the verdict, a blocked pull being called
+"uncommitted changes"), and each time the machine sounded certain about
+something it had not actually checked.
+
+The cause was small and ordinary. GitHub reports the state of a pull request in
+one word, and it has eight of them — behind, blocked, conflicted, clean, still
+computing, and so on. The code was treating five of those as if they were one
+thing and printing a single sentence for all of them. So now each word gets its
+own sentence, saying what is actually true and whose hands it needs: *the branch
+is behind, this machine will catch it up*; *this check failed, here is its name*;
+*the branch conflicts, here are the files*. And where GitHub does not say enough
+to know — it will happily report "blocked" without saying which rule — the
+answer is now the honest one, **CANNOT TELL**, along with a note that a conflict
+it has not finished working out looks exactly like this. It also stops guessing
+in one more place: a state the code has never seen before used to quietly count
+as "fine, merge it", and now it says so and stops.
+
+The proof came from the real thing rather than a rehearsal. Two pull requests
+sitting open right now were read twice a few seconds apart: the first read said
+"still computing", the second said "conflicted". That is the exact sequence that
+produced the wrong message in the first place — and this time it produced "I
+cannot tell yet, I'll ask again" followed by "this is a conflict". Each fix was
+also deliberately broken again afterwards to watch the tests that guard it fail,
+so a future change cannot quietly put the old sentence back.
+
 ## 2026-09-02 — The Carousel settings panel, and a green check that could not say what it had looked at (#446)
 
 The Carousel editor — the panel you open to edit a slideshow's slides — had been

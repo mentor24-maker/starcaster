@@ -951,7 +951,10 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
 
   const pr = decision.pr;
   const repo = `${pr.owner}/${pr.repo}`;
-  const fields = 'number,state,isDraft,mergeable,mergeStateStatus,headRefName,title,url,statusCheckRollup';
+  // `reviewDecision` is here so a BLOCKED merge can name the rule that is
+  // unmet instead of guessing at one (task 86bbrg9v0). Without it the gate
+  // still answers, but it answers CANNOT TELL.
+  const fields = 'number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,title,url,statusCheckRollup';
   const view = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
   if (!view.ok) {
     // A read that failed is not a red PR — it is a PR nobody checked. Say so
