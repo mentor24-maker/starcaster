@@ -108,6 +108,33 @@ function humanTime(ms) {
   return new Date(Number(ms)).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+/**
+ * A LENGTH OF TIME, in the words a person uses for it — as distinct from
+ * `humanTime`, which formats an INSTANT. Mixing the two produces
+ * "untouched for Dec 31, 1969, 5:06 PM", which is what the first live run of
+ * the sweep printed for a ticket stranded six minutes.
+ *
+ * The unit changes with the size because the reader's question changes with
+ * it. Under an hour he wants to know whether a pass is merely slow; over one
+ * he wants to know whether something died last night, and "487 minutes" makes
+ * him do the division. The scale is deliberately coarse: this number is only
+ * ever used to judge "is anything still working on this", and a false sense of
+ * precision would invite it to be read as a measurement.
+ */
+function humanDuration(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n < 0) return null;
+  const mins = n / 60000;
+  if (mins < 1) return 'under a minute';
+  if (mins < 60) {
+    const m = Math.round(mins);
+    return `${m} minute${m === 1 ? '' : 's'}`;
+  }
+  const hours = n / 3600000;
+  if (hours < 24) return `${hours.toFixed(1)} hours`;
+  return `${(n / 86400000).toFixed(1)} days`;
+}
+
 function line(label, value) {
   return value == null || value === '' ? null : `${label}: ${value}`;
 }
@@ -497,13 +524,21 @@ function nagMessage({ by, why, sinceMs, nowMs } = {}) {
  * id-only array still prints an id rather than "[object Object]" — this is a
  * safety tool's report, and a garbled one is worse than a terse one.
  */
-function sweptTicketPhrase(entry) {
+function sweptTicketPhrase(entry, { applied = true } = {}) {
   if (typeof entry === 'string') return entry;
   const id = String(entry?.id ?? '');
   const kind = String(entry?.kind ?? '');
   const destination = String(entry?.destination ?? '');
-  if (kind === 'a review') return `${id} (released in "${destination || 'In review'}")`;
-  if (destination) return `${id} (returned to ${destination})`;
+  // A dry run has moved nothing, so it may not use the past tense. The two
+  // wordings are generated from ONE place for the same reason the summary is:
+  // a second copy drifts the first time a destination is reworded, and the
+  // reader cannot tell a report of what happened from a report of what would.
+  if (kind === 'a review') {
+    return applied
+      ? `${id} (released in "${destination || 'In review'}")`
+      : `${id} (would be released in "${destination || 'In review'}")`;
+  }
+  if (destination) return `${id} (${applied ? 'returned' : 'would return'} to ${destination})`;
   return id;
 }
 
@@ -538,7 +573,7 @@ function sweptTicketPhrase(entry) {
  * was LEFT BEHIND is structurally invisible to a function that is only ever
  * shown what was taken. `why` names the reason nothing was checked.
  */
-function sweptSummary(swept = [], { checked = true, left = 0, why = '' } = {}) {
+function sweptSummary(swept = [], { checked = true, left = 0, why = '', applied = true } = {}) {
   const rows = Array.isArray(swept) ? swept : [];
   const stuck = Number.isFinite(left) && left > 0 ? Math.trunc(left) : 0;
 
@@ -548,13 +583,57 @@ function sweptSummary(swept = [], { checked = true, left = 0, why = '' } = {}) {
   }
 
   const noun = rows.length === 1 ? '1 stranded ticket' : `${rows.length} stranded tickets`;
-  const unstuck = rows.length ? `${noun} unstuck: ${rows.map(sweptTicketPhrase).join(', ')}.` : '';
+  const verb = applied ? 'unstuck' : 'WOULD be unstuck';
+  const unstuck = rows.length
+    ? `${noun} ${verb}: ${rows.map((r) => sweptTicketPhrase(r, { applied })).join(', ')}.`
+    : '';
+
+  // A DRY RUN MAY NOT REPORT AN OUTCOME IT DID NOT CAUSE. Everything below the
+  // `checked` gate is the same news either way — what is stranded and where it
+  // belongs — but the verb is not, and neither is the ending: a reader who
+  // takes "2 stranded tickets unstuck" from a run that wrote nothing will not
+  // run the command again, which is the whole failure this ticket is about
+  // (`resume` reporting nothing to do and doing nothing being the other half).
+  if (!applied) {
+    const nothingChanged = 'Nothing has been changed — add `--apply` to do it.';
+    return unstuck
+      ? `${unstuck} ${nothingChanged}`
+      : 'No stranded tickets need unsticking.';
+  }
+
   if (!stuck) return unstuck || 'No stranded tickets needed unsticking.';
 
   const stillStranded = `${stuck} stranded ticket${stuck === 1 ? '' : 's'} could NOT be unstuck`
     + ` and ${stuck === 1 ? 'is' : 'are'} STILL stranded.`
     + ' Run `npm run pipeline -- status` to see which.';
   return unstuck ? `${unstuck} ${stillStranded}` : stillStranded;
+}
+
+/**
+ * What the standalone `sweep` command exits with.
+ *
+ * WHY IT IS NOT JUST 0-OR-1. The sweep exists to be reachable at any time —
+ * including from a script, which is the point of splitting it out of `resume`
+ * (this ticket). Four outcomes matter to a caller and collapsing any two of
+ * them loses the distinction the command was written to make:
+ *
+ *   0  clean — nothing was stranded, or everything stranded was unstuck.
+ *   1  a sweep step FAILED: something is still stranded. A real problem.
+ *   2  the queue could not be read, so NOTHING IS KNOWN. Never 0 — "could not
+ *      tell" reading as an all-clear is DOCTRINE 3.11, and this file already
+ *      carries two scars from it (`sweptSummary`'s three empty-list causes).
+ *   3  a dry run found stranded work and deliberately did not act. A normal,
+ *      expected decline, and 3 is what a normal decline exits with everywhere
+ *      else here (`pipeline check`, `node:owns`).
+ *
+ * `found` is how many stranded tickets were SEEN, which is what separates a
+ * dry run with work to do from a dry run with none.
+ */
+function sweepExitCode({ checked = true, left = 0, found = 0, applied = true } = {}) {
+  if (!checked) return 2;
+  if (Number(left) > 0) return 1;
+  if (!applied && Number(found) > 0) return 3;
+  return 0;
 }
 
 /**
@@ -624,8 +703,14 @@ function strandedBuildDestination(buildStartAction) {
  * was already half done. Say what happened and what the next pass should
  * check before it starts over.
  */
-function sweptTicketNote({ at, by, kind = 'a build', destination = 'Queued', why = '' } = {}) {
-  const signature = `\n\n(Automatic — pipeline resume${by ? `, ${by}` : ''}${at ? `, ${at}` : ''}.)`;
+function sweptTicketNote({ at, by, kind = 'a build', destination = 'Queued', why = '', command = 'resume' } = {}) {
+  // WHICH COMMAND RAN, named. The signature said "pipeline resume" for every
+  // sweep until 2026-09-02, when the sweep became runnable on its own — and
+  // the very first live `sweep --apply` wrote a note crediting a resume that
+  // never happened. A trail that names the wrong actor is the defect, not a
+  // wording preference (DOCTRINE 2.5/2.6: a hand-off names the actor).
+  const ran = `pipeline ${String(command || 'resume')}`;
+  const signature = `\n\n(Automatic — ${ran}${by ? `, ${by}` : ''}${at ? `, ${at}` : ''}.)`;
 
   // A stranded REVIEW keeps its status. It is already in "In review", which is
   // where a ticket waits for a reviewer; the only thing wrong with it is the
@@ -702,6 +787,7 @@ function resumeAuthorization({ operatorAsked } = {}) {
 
 module.exports = {
   humanTime,
+  humanDuration,
   PAUSE_MARKER,
   RESUME_MARKER,
   NAG_MARKER,
@@ -726,6 +812,7 @@ module.exports = {
   resumedMessage,
   sweptTicketPhrase,
   sweptSummary,
+  sweepExitCode,
   strandedBuildDestination,
   sweptTicketNote,
   resumeAuthorization,
