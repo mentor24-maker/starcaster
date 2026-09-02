@@ -35,6 +35,110 @@ July. This session could not read the production settings to check whether it is
 there. If it is not, the Connect button will fail — for the earlier slices as
 much as this one.
 
+## 2026-09-02 — The pipeline's own health check finally runs on a timer (#524)
+
+We have a command, `npm run pulse`, that looks the whole build pipeline over and
+says whether anything is stuck: is the build loop still picking up work, has any
+ticket been sitting in one stage too long, does every ticket and its pull
+request point at each other. It was built, checked, and marked finished back in
+July — and it had never once run on its own, because nobody ever set up the
+timer. It even ends with a line saying "if a scheduled run does not print this,
+that absence IS the alert." There were no scheduled runs, so the absence was
+permanent and told nobody anything. Run by hand on 31 August it turned up two
+real problems and a third worth knowing about, none of which anyone had seen.
+
+It now runs every hour on the Mac Mini. Every hour it writes its full report to
+a single ClickUp ticket called "Pipeline pulse", replacing what was there before
+— so there is exactly one of it and it is always today's. Only the things that
+actually need somebody get announced on the party line, once each per six hours,
+and they stop being announced when they clear. A clean report posted daily would
+be 365 messages a year, which is how a channel stops getting read.
+
+Two smaller things came with it. The job now records a heartbeat every time it
+finishes, so if the Mini is ever switched off the missing heartbeat is noticed
+by whichever machine is awake — a watchdog sitting on the machine it watches
+cannot spot that machine going dark, and this closes that. And the whole
+schedule is a committed script rather than something typed into one Mac by
+hand, which is the mistake that lost the failure alert the last time a job moved
+machines.
+
+A review pass sent this back once and found seven things worth fixing, all of
+them the same shape: ways this health check could go quiet without saying so.
+The largest was that it treated "Dane has paused the pipeline" and "I could not
+tell whether the pipeline is paused" as the same event. The first is normal —
+the check looks, finds the line is stopped, and stays quiet. The second means
+the check is blindfolded, and left as it was it would have published nothing,
+every hour, indefinitely, with no alert; the only thing that would eventually
+have noticed is the daily roll call, which would have said the job had stopped
+running when it was running fine and being silenced. Those are now different
+outcomes, and only the second is loud. A paused hour also records its heartbeat
+now, so a day where Dane has the deck no longer reads on the roll call as the
+job having died.
+
+The rest: the rule for forgetting an old alarm is now the one that is actually
+tested rather than a second copy of it living in the script; the report's
+headline is counted from the findings printed underneath it, so it can no longer
+say "nothing to report" above a line saying the queue could not be read; and the
+"is it installed?" command stops printing the number zero twice on a log that is
+empty, which is exactly the state it is in the first time anyone runs it.
+
+A second review pass found that the deadlines went on the three big helpers and
+not on the eight-thousand-odd calls a year this thing makes to ClickUp itself.
+That matters more than it sounds. A request to a website does not always fail
+when something goes wrong at the other end — sometimes the connection simply
+opens and then nothing ever comes back, and the code sits there waiting, with no
+error, for as long as the machine is on. If that happens on an hourly job, the
+Mac will not start the next hour's copy while this one is still going, so the
+check stops running entirely and nothing complains: no output, no failure, no
+alert. The one thing that would eventually notice is the daily roll call, and it
+would report that the job had stopped running — sending whoever read it to look
+at the timer, which is fine, rather than at the stuck call, which is not. Every
+call out now gives up after a set time and says plainly that it timed out, which
+turns a permanent silence into an ordinary noisy failure that retries next hour.
+
+The same pass added a check that the report actually arrived. ClickUp answers
+"saved" to a write that in fact saved nothing, which we have been bitten by
+before, and this report is the only thing the whole job produces — so it is now
+read back afterwards and compared. If it comes back empty or a fraction of its
+size, the run says so loudly instead of finishing cheerfully over a blank
+ticket.
+
+A third review pass found the last shape of the same problem, and it is the one
+that sounds least like a bug: the check could run perfectly, find everything,
+deliver none of it, and report a clean pass. If the message to the party line
+failed to send, the code wrote a line about it in a log nobody reads and then
+carried on to record its heartbeat and finish successfully. So a day where
+ClickUp was refusing messages — it has a daily limit, and the chat has gone down
+before — would have been a full day of real alarms reaching nobody, with every
+surface saying the job was healthy. A run that ships nothing now ends as a
+failure: it raises the ordinary failure alert straight away, and it withholds
+its heartbeat, so the daily roll call notices too if the party line itself is the
+thing that is down. Those two surfaces fail for different reasons, which is why
+it takes both. What has not changed is that a failed message is never marked as
+sent, so the next hour simply tries again and a one-off blip fixes itself.
+
+The same pass fixed a bug that had not happened yet but had a date on it. When
+one program prints something and another reads it, the pipe between them holds
+64 kilobytes, and the printing program was quitting the instant it finished
+writing rather than waiting for the reader to take it — so anything past 64
+kilobytes was thrown away. Today's report is 39 kilobytes, comfortably under.
+But it grows by about 145 bytes for every finished ticket, and there are 195 of
+them; at somewhere around 380 the report would have crossed the line, and from
+that hour on every single run would have failed to be read, posted an alarm
+about a fault that did not exist, and gone blind to the real ones. It now waits
+for its output to be taken before it leaves. Measured rather than reasoned
+about: with the fix a 135-kilobyte report arrives whole, and without it the same
+report arrives cut off at exactly 65,536 bytes and unreadable.
+
+And the third: when the Mini cannot tell which machine it is — a one-line file
+that says so has gone missing — the job correctly refuses to run rather than
+guess. Its own comment said it refuses "out loud." It did not: it stopped one
+step before the part that raises the alert, so the refusal went into a system
+log and nowhere a person looks. Nothing would have surfaced for up to 25 hours,
+and then as "the job has stopped firing," which points whoever reads it at the
+timer rather than at the missing file. It now leaves by the same door as every
+other failure, and a test fails if a future change ever adds a second exit ahead
+of the alert again.
 ## 2026-09-01 — Handing you a command to paste is now something the machine refuses to do (#499)
 
 There is a rule here that CC runs the operational commands itself and tells you
