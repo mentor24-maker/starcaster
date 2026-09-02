@@ -174,3 +174,34 @@ test('THE UNDER-REPORT: Ready to launch with a machine verdict card still report
   }, { operatorId: DANE });
   assert.equal(verdict.verdict, WAITING);
 });
+
+// ── ClickUp's chat api escapes the brackets every prefix starts with ─────────
+//
+// Task 86bbt038u. The party-line api returns "\[CC-starcaster bus-relay\] ..."
+// — it escapes what it would otherwise read as markdown. Every entry in
+// LEGACY_MACHINE_PREFIXES begins with "[", so before this every agent post on
+// the bus classified as Dane's own words. Checked against live channel content
+// rather than assumed: all six most recent messages read as "his word",
+// including three the relay had posted itself.
+
+test('an escaped bus-relay prefix is recognised as machine-written', () => {
+  assert.equal(isMachineComment('\\[CC-starcaster bus-relay\\] MERGED on Dane\'s say-so'), true);
+});
+
+test('the unescaped form still works — this did not replace the old reading', () => {
+  assert.equal(isMachineComment('[CC-starcaster bus-relay] MERGED on Dane\'s say-so'), true);
+});
+
+test('the other agents posting to the same party line under his token', () => {
+  assert.equal(isMachineComment('\\[CC-pulse\\] Steward digest — reviewed 4 messages'), true);
+  assert.equal(isMachineComment('\\[CC-starcaster\\] Review PASSED'), true);
+});
+
+test('HIS OWN WORDS ARE STILL HIS — unescaping must not swallow the operator', () => {
+  // The exact message the switch was supposed to read on 2026-09-01.
+  assert.equal(isMachineComment('```cpp\nresume auto-merging\n```'), false);
+  assert.equal(isMachineComment('resume auto-merging'), false);
+  assert.equal(isMachineComment('merge'), false);
+  // A backslash he typed himself in ordinary prose does not make it machine.
+  assert.equal(isMachineComment('the path is C:\\Users\\Dane — merge when you can'), false);
+});

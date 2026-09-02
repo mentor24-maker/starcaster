@@ -1413,8 +1413,18 @@ async function readBusSwitchSignals(channel) {
     // Only HIS words. An agent post quoting the phrase is a machine talking to
     // itself, and a bus full of agents discussing the kill switch would hold
     // it down permanently.
+    //
+    // THE USER ID IS NOT ENOUGH, AND SAYING SO WAS NOT ENOUGH EITHER. Every
+    // agent posts to the party line under Dane's token, so `user_id` says
+    // "his account", never "his words" — the sentence above described an
+    // intent this function did not enforce, and the ticket path next door
+    // (operatorComments) had been enforcing it with the machine marker all
+    // along. Two readings of "only HIS words", one guarded and one not, and
+    // the unguarded one is the channel nobody watches (task 86bbt038u).
+    const body = m.content ?? m.text_content ?? m.comment_text;
     if (Number(m.user_id ?? m.userId ?? m.user?.id) !== OPERATOR_ID) continue;
-    const kind = switchCommand(m.content ?? m.text_content ?? m.comment_text);
+    if (isMachineComment(body)) continue;
+    const kind = switchCommand(body);
     if (kind) signals.push({ kind, at: Number(new Date(m.date ?? m.created_at ?? 0)) || 0, where: 'on the party line' });
   }
   return { readable: true, signals };
