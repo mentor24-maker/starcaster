@@ -691,8 +691,13 @@ already merged (moves it to Live), and a branch stamped with a task
 (`npm run thread`) that has since closed but is still on the Mac (flags it to
 the bus — `npm run tidy`'s own closed-task cleanup should have caught it).
 Dry-run by default (`npm run reconcile`); `-- --live` performs the repairs.
-Meant to run on a schedule — see the Mac Mini engine-room task for when that
-lands; today it's a command to run by hand.
+**Scheduled since 2026-09-02** (task 86bbtnk3k): `npm run repair` runs it —
+with the loop's dropped-claim backstop before it and a DRY stranded-ticket
+sweep after it — on the relay's ten-minute idle wake, throttled to one fresh
+reading per half hour. Findings reach the bus once per 6h; unmarked stranded
+work is reported with the apply command, never moved unattended, because the
+pass marker is the only machine-readable difference between a dead loop claim
+and a hand session mid-build.
 
 **Dev servers collide on port 3001, and `pkill` is a shared-resource action.**
 Every worktree's `npm run dev` wants the same port, so the first one started

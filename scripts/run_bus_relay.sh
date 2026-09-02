@@ -114,6 +114,18 @@ npm run --silent throughput -- --check || true
 # fail the relay: it exits 1 on a finding and 2 on a cannot-tell, both of which
 # are readings, not this script's failure.
 npm run --silent stale-ready -- --check || true
+# THE ONE REPAIR, on the idle wake (task 86bbtnk3k — audit Phase 4). The sweep
+# became reachable on 2026-09-02 and was then called by nothing, which is the
+# defect that opened that morning's stall report wearing a new coat. It rides
+# here for the same reason every sentinel above does: this wake happens on the
+# machine that does NOT own the loops too, and that vantage survives the
+# owning machine being dead — which is precisely when the marker step's usual
+# runner (the next loop pass) no longer exists. Writes are evidence-based
+# only; unmarked strandings are POSTED, never auto-applied
+# (scripts/builder/repair.js carries the whole safety argument). Throttled to
+# one fresh reading per half hour; findings post once per 6h, cleared by the
+# next clean run. Never allowed to fail the relay, like its neighbours.
+npm run --silent repair -- --check || true
 
 npm run --silent clickup -- bus-relay
 status=$?
