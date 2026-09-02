@@ -1432,22 +1432,6 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-secondary);
 }
 
-/* --- The settings panel's item sub-row ---
-   Link, link label, alt/caption title and description ride a row spanning the
-   item grid, which is what the sub-row mechanism exists for (see the item
-   grid block below). W0: the COLUMN is the grid — these fields declare no
-   widths of their own, the auto-fit tracks measure them. */
-.builder-react-root .builder-carousel-item-sub {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16ch, 1fr));
-  gap: var(--space-2, 6px) var(--space-3, 8px);
-  align-items: start;
-}
-
-.builder-react-root .builder-carousel-item-sub-full {
-  grid-column: 1 / -1;
-}
-
 /* --- Carousel: alignment and narrow screens ---
    The retired types were named in alignment and mobile rules inside
    _builder-react.css, which is regenerated wholesale and must not be
@@ -2889,8 +2873,11 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * row spanning the grid under its item's primary row. Columns use minmax(...,
  * 1fr) so they expand rather than crop (L4/W5). Adopted by: breadcrumb.
  * Feature Cards left this system on 2026-08-12 for a labelled lattice — see
- * .builder-card-editor below. New managers add a modifier here rather than a
- * new system.
+ * .builder-card-editor below — and Carousel followed it in the panel sweep,
+ * for the reason L6a gives: a manager with a picker, a textarea and a spanning
+ * sub-row is the shape this system stops holding. New managers add a modifier
+ * here rather than a new system; a manager that needs a sub-row should ask
+ * whether it wants the labelled lattice instead.
  * ------------------------------------------------------------------------ */
 .builder-react-root .builder-item-grid {
   display: grid;
@@ -2902,17 +2889,6 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-item-grid--crumbs {
   grid-template-columns: minmax(12ch, 1fr) minmax(12ch, 1.4fr) max-content;
 }
-/* Slideshow: a slide is an image and its alt text, nothing else, so both fit
-   the primary row and there is no sub-row. The image column is wider because
-   it carries the URL and the Choose From Gallery button together. */
-.builder-react-root .builder-item-grid--carousel {
-  /* The image column carries a URL AND the Choose From Gallery button, which
-     is ~200px of that track before the input gets any. At 1.6fr the input came
-     out around 140px — "https://astujhe2h" and nothing more. 2.4fr is what
-     leaves it a readable width while the alt text keeps a usable one. */
-  grid-template-columns: minmax(16ch, 2.4fr) minmax(12ch, 1fr) max-content;
-}
-
 /* The image picker renders its input and its Gallery button as siblings, so
    the grid cell has to be their flex row — dropped straight into the grid
    they would land in two different columns and push the actions out. */
@@ -8142,4 +8118,81 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   color: var(--builder-media-accent, #0f4f8f);
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ── Card Manager: the controls bar, grouped ──────────────────────────────
+   Task 86bbt52fa (2026-09-02). The bar was one flat row of six controls;
+   fifteen of them needed the Content / Structure / Frame grouping the rest of
+   the builder uses. These rules are HAND-WRITTEN and live here on purpose:
+   _builder-react.css is rewritten whole by `npm run extract:builder-css`
+   (CLAUDE.md, "committed but regenerated wholesale"). */
+
+.builder-react-root .bcm-controls-bar {
+  align-items: stretch;
+  gap: 12px;
+}
+
+.builder-react-root .bcm-group {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--bg-surface);
+}
+
+.builder-react-root .bcm-group-title {
+  padding: 0 4px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .bcm-group-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: flex-end;
+}
+
+/* A number and its unit read as one control, so they stay on one line. */
+.builder-react-root .bcm-num-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* A control that does nothing in the current layout is dimmed rather than
+   removed — a control that vanishes reads as a bug, and its title says which
+   layout brings it back. */
+.builder-react-root .bcm-control input:disabled,
+.builder-react-root .bcm-control select:disabled {
+  background: var(--bg-hover);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+/* ── Card Manager: the designer, inside the module ────────────────────────
+   Task 86bbt62dy (2026-09-02). The designer now renders in the module's own
+   expanded panel rather than only through the public renderer, so its intro
+   line sits on the builder's blue panel instead of a white page — where the
+   inherited mid-grey was effectively invisible. Hand-written and here
+   on purpose: _builder-react.css is rewritten whole by extract:builder-css. */
+
+.builder-react-root .builder-blog-card-manager-settings-designer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.builder-react-root .builder-blog-card-manager-settings-designer
+  .builder-blog-card-manager-settings-note {
+  color: var(--bg-surface);
+  font-size: var(--text-sm);
+  opacity: 0.9;
 }

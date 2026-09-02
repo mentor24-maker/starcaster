@@ -70,7 +70,7 @@ describe("Carousel settings editor", () => {
     const format = html.indexOf(">Format<");
     const playback = html.indexOf(">Playback<");
     const items = html.indexOf(">Slides<");
-    const grid = html.indexOf("builder-item-grid--carousel");
+    const grid = html.indexOf("builder-cards-panel-fields");
     expect(heading).toBeGreaterThan(-1);
     expect(heading).toBeLessThan(format);
     // Format governs which other controls exist, so it cannot sit among them.
@@ -82,15 +82,43 @@ describe("Carousel settings editor", () => {
     expect(html).toContain("builder-schema-panel-column");
   });
 
-  it("puts the items in a titled-column item grid, one row per item", () => {
+  /**
+   * The manager was a titled-column grid (L6) with a spanning sub-row of
+   * `label.field` boxes until the panel sweep; L6a names that combination —
+   * picker, textarea, sub-row — as the one to convert, so it is one labelled
+   * block per item on the shared Feature Cards lattice now.
+   *
+   * `data-lattice-pairs` is asserted because it is the whole difference
+   * between a manager `check_panels` measures and one it skips in silence:
+   * the check selects on that attribute, found neither it nor
+   * `data-lattice-columns` here, and passed every sweep without ever looking
+   * at this panel.
+   */
+  it("puts the items in one labelled block each, on a declared lattice", () => {
     const html = panelHtml();
-    expect(html).toContain("builder-item-grid--carousel");
-    for (const header of ["Image", "Alt text", "Action"]) {
-      expect(html).toContain(`>${header}</span>`);
-    }
-    // Two items seeded, so two of each per-row control.
+    expect(html).toContain('class="builder-cards-panel-fields" data-lattice-pairs="2"');
+    // The old shape is gone, not merely joined by the new one.
+    expect(html).not.toContain("builder-item-grid--carousel");
+    expect(html).not.toContain("builder-carousel-item-sub");
+    // Two items seeded, so two of each per-item control and two head rows.
+    expect([...html.matchAll(/builder-card-editor-head/g)]).toHaveLength(2);
     expect([...html.matchAll(/aria-label="Slide \d+ alt text"/g)]).toHaveLength(2);
-    expect([...html.matchAll(/builder-item-grid-picker/g)]).toHaveLength(2);
+    expect([...html.matchAll(/builder-card-field--picker/g)]).toHaveLength(2);
+    // Every field is a lattice field with a declared pair-column — a field
+    // that lands in neither track is what put the sub-row out of phase with
+    // the columns above it.
+    for (const label of ["Alt text", "Link", "Image"]) {
+      expect(html).toContain(`>${label}</span>`);
+    }
+  });
+
+  it("names each block by the field that identifies it, position as fallback", () => {
+    // The seeded items are one filled and one blank, so both branches render.
+    const html = panelHtml({ showCaptions: "true" });
+    expect(html).toContain(">First slide<");
+    expect(html).toContain(">Slide 2<");
+    // A card is known by its title, a slide by its alt text.
+    expect(panelHtml({ format: "cards" })).toContain(">Junior programs<");
   });
 });
 

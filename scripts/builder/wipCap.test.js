@@ -15,7 +15,13 @@ const {
   undeterminedDecision,
   ticketIdFromPrBody,
   classifyPrs,
+  STRANDABLE_STATUS,
+  STRANDED_ENV,
+  resolveStrandedAfterMs,
+  isStrandedBuild,
+  normalizeTicketInfo,
 } = require('./wipCap');
+const pipelinePause = require('./pipelinePause.js');
 
 /**
  * Task 86bbk2fkp. Branch protection is strict:true, so every merge invalidates
@@ -647,4 +653,166 @@ test('next-interval logs the cap sentence itself, not just its effect', () => {
   // comparable at a glance.
   assert.match(CD, /\(cap: \$\{String\(probe\.decision\.message\)/,
     'the interval log must quote the same sentence wip-check prints');
+});
+
+// ---------------------------------------------------------------------------
+// A stranded build must not count against the cap (2026-09-02, task 86bbtmbum).
+//
+// On the night of 2026-09-01 the cap sat full for five consecutive passes with
+// 48 tickets queued. Two of its five slots were builds whose pass had died —
+// #447 and #449, both with finished green PRs, both in "Building" where no
+// loop can claim them. They were not a queue, they were a deadlock.
+// ---------------------------------------------------------------------------
+
+const NOW = Date.parse('2026-09-02T14:17:00.000Z');
+const STALE = NOW - 8 * 60 * 60 * 1000;
+const FRESH = NOW - 5 * 60 * 1000;
+const prOf = (n, id) => ({ number: n, state: 'OPEN', body: `ClickUp: https://app.clickup.com/t/${id}` });
+
+test('the night of 2026-09-01, replayed: the loop keeps claiming', () => {
+  // The five real PRs, their real statuses, at the real moment the loop said
+  // "WIP cap reached" for the fifth time.
+  const prs = [prOf(524, 'aaa'), prOf(525, 'bbb'), prOf(499, 'ccc'), prOf(449, 'ddd'), prOf(447, 'eee')];
+  const ticketStatusById = {
+    aaa: { status: 'in review', dateUpdated: FRESH },
+    bbb: { status: 'in review', dateUpdated: FRESH },
+    ccc: { status: 'ready to launch', dateUpdated: STALE },
+    ddd: { status: 'Building', dateUpdated: STALE, loopNote: 'building — claimed 12:10am' },
+    eee: { status: 'Building', dateUpdated: STALE, loopNote: 'PR #447 open — waiting for a review pass' },
+  };
+  const d = wipDecision({ prs, cap: 5, ticketStatusById, nowMs: NOW });
+  assert.equal(d.claim, true, 'the loop must be free to claim — this is the whole ticket');
+  assert.equal(d.code, 0);
+  assert.equal(d.inFlight, 3, 'three genuinely in flight, not five');
+  assert.equal(d.stranded, 2);
+  assert.deepEqual(d.groups.strandedBuilds, [449, 447]);
+});
+
+test('an operator-held ticket keeps counting however old it gets', () => {
+  // The load-bearing limit on this discount. "Ready to launch" and "Needs your
+  // input" are MOVING — Dane or Lane A will merge them — and the file is right
+  // that if his inbox is full the pipeline genuinely is full. Discounting them
+  // would uncap the loop against work that is really there.
+  for (const status of ['ready to launch', 'needs your input']) {
+    const d = wipDecision({
+      prs: [prOf(1, 'a')], cap: 5, nowMs: NOW,
+      ticketStatusById: { a: { status, dateUpdated: NOW - 30 * 24 * 3600 * 1000 } },
+    });
+    assert.equal(d.inFlight, 1, `${status} must still count after a month`);
+    assert.equal(d.stranded, 0);
+  }
+});
+
+test('a ticket resting in review keeps counting too', () => {
+  // "In review" is a resting status as well as a working one: a ticket waits
+  // there for a reviewer, and its PR is real and still needs catching up.
+  const d = wipDecision({
+    prs: [prOf(1, 'a')], cap: 5, nowMs: NOW,
+    ticketStatusById: { a: { status: 'in review', dateUpdated: STALE } },
+  });
+  assert.equal(d.inFlight, 1);
+  assert.equal(d.stranded, 0);
+  assert.equal(STRANDABLE_STATUS, 'building', 'only Building may be discounted');
+});
+
+test('a review whose pass died still counts — only a BUILD may be discounted', () => {
+  // Found by break-testing: removing the status guard changed nothing in any
+  // test, because `classifyTicket` already returns null for the operator-held
+  // statuses. The one case it does NOT filter is an "In review" ticket
+  // carrying a stale review claim note — the sweep treats that as stranded and
+  // RELEASES it where it stands, without moving it. Its build is finished and
+  // its PR is open, so the work really is in flight and the cap must keep
+  // counting it. That is the whole reason the guard names one status instead
+  // of trusting the shared classifier's answer.
+  const { REVIEW_CLAIM_NOTE } = require('./loopNote.js');
+  const d = wipDecision({
+    prs: [prOf(1, 'a')], cap: 5, nowMs: NOW,
+    ticketStatusById: { a: { status: 'In review', dateUpdated: STALE, loopNote: `${REVIEW_CLAIM_NOTE} — a review pass started 2:00am` } },
+  });
+  assert.equal(d.stranded, 0, 'a dead review is not a dead build');
+  assert.equal(d.inFlight, 1, 'its PR is real and still needs catching up');
+  // And the shared classifier really would have called it stranded, so this
+  // test is proving the guard rather than restating the classifier.
+  const viaSweep = pipelinePause.classifyTicket(
+    { id: 'x', status: { status: 'In review' }, date_updated: STALE, loopNote: `${REVIEW_CLAIM_NOTE} — started` },
+    { nowMs: NOW },
+  );
+  assert.equal(viaSweep.stranded, true, 'the sweep does see it — the cap deliberately does not act on it');
+});
+
+test('a build in progress still counts — the discount is for DEAD work only', () => {
+  const d = wipDecision({
+    prs: [prOf(1, 'a')], cap: 5, nowMs: NOW,
+    ticketStatusById: { a: { status: 'Building', dateUpdated: FRESH, loopNote: 'building — claimed 5 min ago' } },
+  });
+  assert.equal(d.inFlight, 1, 'a pass that is genuinely running must not be discounted out from under itself');
+  assert.equal(d.stranded, 0);
+});
+
+test('freshness unknown means NO discount, and the message says it was not checked', () => {
+  // Every caller before this change passed a bare status string, and one still
+  // does (loop_throughput.mjs). They must get the old, conservative answer —
+  // and must not be told "0 stranded", which is a claim nobody verified.
+  const prs = [prOf(1, 'a'), prOf(2, 'b')];
+  const d = wipDecision({ prs, cap: 5, nowMs: NOW, ticketStatusById: { a: 'Building', b: 'Building' } });
+  assert.equal(d.inFlight, 2, 'unknown freshness counts, as before');
+  assert.equal(d.stranded, 0);
+  assert.match(d.message, /stranded builds NOT checked/);
+  assert.doesNotMatch(d.message, /0 stranded/, '"could not tell" must never render as "none"');
+});
+
+test('the cap and the sweep agree about which builds are stranded', () => {
+  // Two definitions of "how old is dead" would drift the first time one was
+  // tuned, and then the cap would forgive a ticket the sweep will not rescue —
+  // the deadlock simply moves. So the rule is imported, not restated.
+  const code = fs.readFileSync(path.join(__dirname, 'wipCap.js'), 'utf8');
+  assert.match(code, /require\('\.\/pipelinePause\.js'\)/, 'the staleness rule is imported');
+  assert.match(code, /pipelinePause\.classifyTicket\(/, 'and applied through the shared classifier');
+  assert.match(code, /pipelinePause\.STRANDED_AFTER_MS/, 'and the threshold is the shared constant');
+  // And they really do agree, not merely share a file.
+  const info = { status: 'Building', dateUpdated: STALE, loopNote: '' };
+  const viaCap = isStrandedBuild(info, NOW, pipelinePause.STRANDED_AFTER_MS);
+  const viaSweep = pipelinePause.classifyTicket(
+    { id: 'x', status: { status: 'Building' }, date_updated: STALE, loopNote: '' }, { nowMs: NOW },
+  );
+  assert.equal(viaCap, viaSweep.stranded);
+});
+
+test('the discounted PRs are named, and the reader is told what to run', () => {
+  const d = wipDecision({
+    prs: [prOf(447, 'e')], cap: 5, nowMs: NOW,
+    ticketStatusById: { e: { status: 'Building', dateUpdated: STALE } },
+  });
+  assert.match(d.message, /#447/, 'a bare total is what hid the 2026-08-25 deadlock for four passes');
+  assert.match(d.message, /build pass died/);
+  assert.match(d.message, /pipeline -- sweep/, 'and the repair is named');
+});
+
+test('a bad staleness override is ignored, never obeyed', () => {
+  // A typo here would discount every in-flight build at once and uncap the
+  // loop — the direction this file calls dangerous.
+  const base = pipelinePause.STRANDED_AFTER_MS;
+  assert.equal(resolveStrandedAfterMs({}), base);
+  assert.equal(resolveStrandedAfterMs({ [STRANDED_ENV]: '' }), base);
+  assert.equal(resolveStrandedAfterMs({ [STRANDED_ENV]: 'soon' }), base);
+  assert.equal(resolveStrandedAfterMs({ [STRANDED_ENV]: '-5' }), base);
+  assert.equal(resolveStrandedAfterMs({ [STRANDED_ENV]: '30' }), 30 * 60000);
+  assert.equal(resolveStrandedAfterMs({ [STRANDED_ENV]: '0' }), 0, 'zero is a real answer, for a live test');
+});
+
+test('a status string and a record are read the same way', () => {
+  assert.deepEqual(normalizeTicketInfo('Building').status, 'Building');
+  assert.equal(Number.isFinite(normalizeTicketInfo('Building').dateUpdated), false);
+  const rec = normalizeTicketInfo({ status: ' Building ', dateUpdated: 12, loopNote: 'n' });
+  assert.deepEqual(rec, { status: 'Building', dateUpdated: 12, loopNote: 'n' });
+});
+
+test('the cap probe reads freshness from the tasks it already fetched', () => {
+  // If the caller keeps sending bare statuses, every rule above is inert in
+  // production — which is exactly the defect 86bbtmbnr was about: a fix that
+  // is correct in the module and unreachable in the thing that runs.
+  const code = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+  const probe = code.slice(code.indexOf('function capProbe('), code.indexOf('function capProbe(') + 2000);
+  assert.match(probe, /dateUpdated: Number\(t\.date_updated\)/, 'the probe must supply freshness');
+  assert.match(probe, /loopNote: loopNoteOf\(t\)/, 'and the loop note the shared classifier reads');
 });

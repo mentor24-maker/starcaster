@@ -238,12 +238,46 @@ function measure(page, nonStretch) {
         ...(shared.length > 1 ? [{ els: shared, origin: panel, shared: true }] : []),
       ];
 
+      /*
+       * WHICH PANEL IS #18? Until 2026-09-02 a failure said only `panel #18`,
+       * and the index is an ordinal in a 594-panel sweep — it names nothing a
+       * person can search for. That cost this ticket a whole round: a reviewer
+       * broke the Carousel lattice four ways, could not find the word
+       * "carousel" anywhere in the output, and concluded the check never
+       * opened the panel. It does open it; the breaks had been swallowed by a
+       * `max-width` and a flex-shrink, so nothing over-wide was ever rendered
+       * to report. The pass was honest and the diagnosis was not, and the only
+       * reason the two could not be told apart is that the failure text does
+       * not say what it is looking at.
+       *
+       * The editor already carries its own type as a modifier class, so this
+       * is a read, not a new attribute to remember to add.
+       */
+      const panelName = (
+        [...panel.classList].find((c) => c.startsWith('builder-module-editor--'))
+          ?.replace('builder-module-editor--', '')
+        || [...panel.classList].find((c) => c !== 'is-lattice' && c.endsWith('-settings'))
+        || [...panel.classList].find((c) => c !== 'is-lattice')
+        || ''
+      );
+
       return units.map((unit, gi) => {
       const group = unit.els[0];
+      /*
+       * An item manager's title is its SIBLING, not its child — the heading
+       * ("Slides", "Cards") sits above `.builder-cards-panel-fields` rather
+       * than inside it. So the child lookup below found nothing and a
+       * declared manager was reported as `chrome strip 3`, which reads as
+       * anonymous chrome and is the opposite of what it is.
+       */
+      const ownTitle = ((group.querySelector('.builder-schema-group-title') || {}).textContent || '').trim();
+      const siblingTitle = ((group.previousElementSibling?.matches?.('.builder-schema-group-title, .builder-cards-panel-heading')
+        ? group.previousElementSibling.textContent : '') || '').trim();
       const groupName = unit.shared
         ? `shared lattice — chrome + settings, ${unit.els.length} boxes`
-        : ((group.querySelector('.builder-schema-group-title') || {}).textContent || '').trim()
-        || `chrome strip ${gi}`;
+        : ownTitle
+        || siblingTitle
+        || (group.hasAttribute('data-lattice-pairs') ? `item manager ${gi}` : `chrome strip ${gi}`);
       // Legacy BuilderSettingRow pairs are measured too. They were not,
       // and on 2026-08-11 the heading panel's offsets sat 12px right of
       // every field label above them while this reported a clean pass —
@@ -345,7 +379,7 @@ function measure(page, nonStretch) {
       // tell "declared one column" from "declared nothing" — and that
       // distinction is what makes an unmeasured manager detectable below.
       const declaredManager = group.hasAttribute('data-lattice-pairs');
-      return { index, group: groupName, pairs: declaredPairs, declaredManager, fields };
+      return { index, panelName, group: groupName, pairs: declaredPairs, declaredManager, fields };
       });
     });
   }, nonStretch);
@@ -373,6 +407,15 @@ function measureWidths(page) {
     ) || 560;
 
     return panels.flatMap((panel, index) => {
+      // Same reason as the lattice failures name their panel: an index alone
+      // sends a reader hunting through 594 panels for the one that failed.
+      const panelName = (
+        [...panel.classList].find((c) => c.startsWith('builder-module-editor--'))
+          ?.replace('builder-module-editor--', '')
+        || [...panel.classList].find((c) => c !== 'is-lattice' && c.endsWith('-settings'))
+        || [...panel.classList].find((c) => c !== 'is-lattice')
+        || ''
+      );
       const controls = [...panel.querySelectorAll(
         'input[type="text"], input[type="url"], input[type="search"], input[type="number"], textarea, select'
       )];
@@ -385,7 +428,7 @@ function measureWidths(page) {
             ?.textContent?.trim()
           || el.getAttribute('placeholder')
           || el.tagName.toLowerCase();
-        return { index, name: named, width: w, cap };
+        return { index, panelName, name: named, width: w, cap };
       }).filter(Boolean);
     });
   });
@@ -393,7 +436,7 @@ function measureWidths(page) {
 
 function assertCeiling(overflows, width) {
   return overflows.map((o) =>
-    `${width}px panel #${o.index}: "${o.name}" renders ${o.width}px wide, over the ` +
+    `${width}px panel #${o.index}${o.panelName ? ` (${o.panelName})` : ''}: "${o.name}" renders ${o.width}px wide, over the ` +
     `${o.cap}px ceiling (W9) — a field with no size constraint. The cap is ` +
     '--builder-field-long-max; raise the field\'s own width token, never the cap.'
   );
@@ -421,7 +464,7 @@ function assertLattice(panels, width) {
     // never be the mechanism that discovers a staggered form.
     if (panel.declaredManager && !allFields.length) {
       failures.push(
-        `${width}px panel #${panel.index} / ${panel.group}: declares data-lattice-pairs but rendered no ` +
+        `${width}px panel #${panel.index}${panel.panelName ? ` (${panel.panelName})` : ''} / ${panel.group}: declares data-lattice-pairs but rendered no ` +
         `label/field pairs — nothing was measured. Seed real content for this module in ` +
         `scripts/ui/seed_fixture.mjs; an empty manager cannot verify anything.`
       );
@@ -445,13 +488,13 @@ function assertLattice(panels, width) {
 
     if (declared > 1 && buckets.length > declared) {
       failures.push(
-        `${width}px panel #${panel.index} / ${panel.group}: declares ${declared} pair-column(s) but its labels ` +
+        `${width}px panel #${panel.index}${panel.panelName ? ` (${panel.panelName})` : ''} / ${panel.group}: declares ${declared} pair-column(s) but its labels ` +
         `start at ${buckets.length} different x-positions — the extra one is a stagger, not a column`
       );
     }
 
     for (const [bi, fields] of buckets.entries()) {
-    const where = `${width}px panel #${panel.index} / ${panel.group}`
+    const where = `${width}px panel #${panel.index}${panel.panelName ? ` (${panel.panelName})` : ''} / ${panel.group}`
       + (declared > 1 ? ` pair-column ${bi + 1}` : '');
 
     const labelWidths = [...new Set(fields.map((f) => f.labelW))];

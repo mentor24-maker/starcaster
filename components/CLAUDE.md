@@ -173,6 +173,22 @@ Six traps, and none of them announced itself:
   module's `position: fixed` — see DOCTRINE §5.17, which is a platform trap,
   not a module one.
 
+## Media Manager — read `docs/MEDIA_MANAGER.md` first
+
+The `media-manager` module a TENANT admin uses on their own site. Read it
+before touching anything called a "media manager", because that phrase points
+at two different surfaces and three tickets were built against the wrong one:
+the **platform Assets screen** (`starcaster.pro`, vanilla JS in `public/js/`,
+Dane's) and this **module** (`delraytennis.starcaster.pro/admin-media-manager`,
+React, a tenant admin's). They share the `assets` table and nothing else, and
+neither one's code loads on the other's page.
+
+The doc carries the data model (`assets.source`, the `asset_tags` registry),
+why the source value is client-declared rather than stamped per endpoint, which
+asset endpoints a tenant admin may reach and why the line sits there, and seven
+traps — including the one that produced DOCTRINE §5.20 (`/api/assets/:id` takes
+PATCH and DELETE; a PUT falls through unmatched and silently does nothing).
+
 ## Saved sections — read `docs/SAVED_SECTIONS.md` first
 
 `savedSectionId` and `canonical` are two different questions ("where did this
