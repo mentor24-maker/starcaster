@@ -43,9 +43,27 @@ const { findPullRequest } = require('./mergeOnComment.js');
  * check follow).
  *
  * @param comments  the ticket's comments, as ClickUp returns them
- * @param lookupPr  (number) => { state, headRefName } | null — `null` means
- *                  the lookup itself failed. A PR that genuinely does not
- *                  exist should come back as { state: 'MISSING' }.
+ * @param lookupPr  (pr) => { state, headRefName } | null, where `pr` is the
+ *                  WHOLE parsed pull request — `{ url, owner, repo, number }`,
+ *                  not just its number. `null` means the lookup itself failed.
+ *                  A PR that genuinely does not exist should come back as
+ *                  { state: 'MISSING' }.
+ *
+ * IT IS HANDED THE REPO, NOT JUST THE NUMBER (2026-09-01, task 86bbqyyfn).
+ * This used to pass `found.number` alone, and every caller then ran
+ * `gh pr view <number>` with no `--repo`, so gh resolved the repo from the
+ * working directory — always starcaster. On a `repo:pulse` ticket that read
+ * STARCASTER's PR of the same number and answered about the wrong repo
+ * entirely: on 2026-08-31, building 86bbq83j0, it reported "FRESH BRANCH —
+ * PR #1 is merged" (starcaster's #1, merged in July) while pulse's #1 was open
+ * with unmerged review work on it.
+ *
+ * It fails toward the unsafe side, which is what makes it worth a guard rather
+ * than a note. Low PR numbers collide across repos almost by definition —
+ * every repo has a #1, the newer repos are in single digits while starcaster
+ * is past #500 — so the overlap is exactly the range cross-repo tickets live
+ * in, and starcaster's early PRs are all merged, so the wrong answer is nearly
+ * always the permissive one: "go ahead and branch".
  */
 function resolveBuildStart(comments, { lookupPr } = {}) {
   const found = findPullRequest(comments);
@@ -57,9 +75,21 @@ function resolveBuildStart(comments, { lookupPr } = {}) {
     };
   }
 
+  // A PR line we could parse but cannot place in a repo is a CANNOT TELL, not
+  // a fresh branch. "I do not know which repo" and "there is no PR" must never
+  // share an answer — that is the same conflation one layer down.
+  if (!found.owner || !found.repo) {
+    return {
+      action: 'unknown',
+      pr: found,
+      why: `this ticket names PR #${found.number} but not which repo it is in — `
+        + 'do NOT look it up in whichever repo happens to be the working directory',
+    };
+  }
+
   let info;
   try {
-    info = typeof lookupPr === 'function' ? lookupPr(found.number) : null;
+    info = typeof lookupPr === 'function' ? lookupPr(found) : null;
   } catch {
     info = null;
   }
@@ -68,7 +98,7 @@ function resolveBuildStart(comments, { lookupPr } = {}) {
     return {
       action: 'unknown',
       pr: found,
-      why: `this ticket names PR #${found.number} but its state could not be read — do NOT start a branch on a guess`,
+      why: `this ticket names ${found.owner}/${found.repo} PR #${found.number} but its state could not be read — do NOT start a branch on a guess`,
     };
   }
 
@@ -77,7 +107,7 @@ function resolveBuildStart(comments, { lookupPr } = {}) {
     return {
       action: 'continue',
       pr: { ...found, branch: info.headRefName || '' },
-      why: `PR #${found.number} is still OPEN — continue that branch, do not start a second one`,
+      why: `${found.owner}/${found.repo} PR #${found.number} is still OPEN — continue that branch, do not start a second one`,
     };
   }
 
@@ -85,7 +115,7 @@ function resolveBuildStart(comments, { lookupPr } = {}) {
     return {
       action: 'fresh',
       pr: found,
-      why: `PR #${found.number} is ${state.toLowerCase()} — a new branch is right`,
+      why: `${found.owner}/${found.repo} PR #${found.number} is ${state.toLowerCase()} — a new branch is right`,
     };
   }
 
@@ -94,6 +124,24 @@ function resolveBuildStart(comments, { lookupPr } = {}) {
     pr: found,
     why: `PR #${found.number} reports an unrecognised state "${info.state}" — do NOT guess`,
   };
+}
+
+/**
+ * The exact `gh` arguments for looking one pull request up.
+ *
+ * IT LIVES HERE SO THE `--repo` CANNOT BE DROPPED QUIETLY (task 86bbqyyfn).
+ * Two callers ask this question — the `build-start` command and
+ * `pipeline.mjs`'s `buildStartFor` — and both built their own argument list.
+ * A unit test cannot reach either closure, so removing `--repo` from one of
+ * them passed the entire suite: the break-test for this very fix did exactly
+ * that and nothing went red. One builder, pinned by one test, is what makes
+ * "break it on purpose and watch it fail" possible at all here.
+ */
+function prLookupArgs(pr) {
+  if (!pr || !pr.owner || !pr.repo || !pr.number) {
+    throw new Error('prLookupArgs needs a pull request with an owner, a repo and a number');
+  }
+  return ['pr', 'view', String(pr.number), '--repo', `${pr.owner}/${pr.repo}`, '--json', 'state,headRefName'];
 }
 
 /** One line for a run report, so the choice is visible rather than implied. */
@@ -107,4 +155,4 @@ function describeBuildStart(decision) {
   return `${prefix} — ${decision.why}`;
 }
 
-module.exports = { resolveBuildStart, describeBuildStart };
+module.exports = { resolveBuildStart, describeBuildStart, prLookupArgs };

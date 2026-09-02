@@ -29,6 +29,7 @@
  */
 
 const { findPullRequest, isReviewVerdict, isReviewPassed } = require('./mergeOnComment.js');
+const { bodyNamesTicket } = require('./clickupTicketLink.js');
 
 /** The one shape `mergeOnComment.findPullRequest` will find. */
 function prOpenedComment(prUrl, extra) {
@@ -36,13 +37,53 @@ function prOpenedComment(prUrl, extra) {
   return `PR opened: ${prUrl}${tail ? `\n\n${tail}` : ''}`;
 }
 
-/** The one shape `mergeOnComment.isReviewPassed` will accept as a PASS. */
+/**
+ * The one shape `mergeOnComment.isReviewPassed` will accept as a PASS.
+ *
+ * The send-back names `Rework` since 2026-08-31 (task 86bbr1u9v) — that is
+ * where a send-back goes now, and a verdict that says "sent back to Queued"
+ * while the ticket sits in `Rework` is a trail that contradicts the board.
+ * Both readers are wording-agnostic (`REVIEW\b` for a verdict, `REVIEW:
+ * PASSED` for a pass, both line-anchored in mergeOnComment.js), so the older
+ * `sent back to Queued` comments already on live tickets keep counting as the
+ * send-backs they are — which matters, because `sendBackRounds` counts them to
+ * decide when a fourth round escalates to Dane instead.
+ */
 function verdictComment(passed, note) {
   const tail = String(note || '').trim();
   const head = passed
     ? 'REVIEW: PASSED'
-    : 'REVIEW: sent back to Queued';
+    : 'REVIEW: sent back to Rework';
   return `${head}${tail ? ` — ${tail}` : ''}`;
+}
+
+/**
+ * Can this ClickUp response even ANSWER "is the trail already here"?
+ *
+ * WHY THIS IS SEPARATE FROM prTrailLanded (2026-08-31, task 86bbq7z1k, round 3).
+ * The `--if-missing` preflight read `json.comments || []`, so a 200 whose body
+ * carried no `comments` list collapsed to an empty array — indistinguishable
+ * from a ticket that genuinely has no trail on it. The guard then wrote, which
+ * is a DUPLICATE `PR opened:` line: precisely what `--if-missing` exists to
+ * prevent (acceptance criterion 2). An idempotence guard that cannot read fails
+ * OPEN, which is the wrong direction; a duplicate is permanent and confusing,
+ * while refusing costs one re-run.
+ *
+ * Observed live on this very ticket: two identical `pr-opened --if-missing`
+ * calls eleven minutes apart, the first skipping correctly and the second
+ * posting a second line. The one-off itself could not be reproduced — repeated
+ * polling and a post-then-read-immediately probe both came back consistent — so
+ * this is not a claim about what happened. It is the only path in the command
+ * that turns a healthy-looking response into that exact symptom, and it should
+ * not exist either way (DOCTRINE 3.11: a check that could not run never reports
+ * a pass).
+ *
+ * An EMPTY array is readable and means "no trail" — that is a real answer, and
+ * a ticket with no comments must still be writable. Only a missing or non-array
+ * `comments` is CANNOT TELL.
+ */
+function commentsReadable(json) {
+  return Array.isArray(json && json.comments);
 }
 
 /**
@@ -67,16 +108,18 @@ function prTrailLanded(comments, prNumber) {
 }
 
 /**
- * Does the PR body carry its ClickUp ticket? Accepts the full URL or the
- * bare task id — ClickUp short links and the `app.clickup.com/t/<id>` form
- * both resolve, and an id alone is enough to find the ticket by search.
- * Case-insensitive because ids are quoted in mixed case in the wild.
+ * Does the PR body carry its ClickUp ticket?
+ *
+ * A full `app.clickup.com/t/<id>` link is required. It used to accept a bare
+ * id as well, and that was the one place this command disagreed with the
+ * review gate, which has always required the URL: `ClickUp: 86bbjt18r` passed
+ * here and was then refused by the gate with "the PR body carries no ClickUp
+ * ticket link" (task 86bbmmv7t, finding 2). Both now read the SAME matcher, so
+ * the disagreement cannot come back — the reasoning for settling it on the URL
+ * is in `clickupTicketLink.js`.
  */
 function prBodyCarriesTicket(body, taskId, taskUrl) {
-  const text = String(body || '').toLowerCase();
-  if (!text.trim()) return false;
-  if (taskUrl && text.includes(String(taskUrl).toLowerCase())) return true;
-  return Boolean(taskId) && text.includes(String(taskId).toLowerCase());
+  return bodyNamesTicket(body, taskId, taskUrl);
 }
 
 /**
@@ -120,6 +163,7 @@ function isReadyToLaunch(status) {
 module.exports = {
   prOpenedComment,
   verdictComment,
+  commentsReadable,
   prTrailLanded,
   prBodyCarriesTicket,
   readyToLaunchGate,

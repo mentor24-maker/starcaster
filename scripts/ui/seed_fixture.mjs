@@ -517,6 +517,57 @@ const buildTuned = (ids) => ({
     },
   },
 
+  // The Event Page panel with a back link SET, because Back Label is
+  // `visibleWhen` there is somewhere to go back to — an unseeded panel hides
+  // it and the check would pass having never measured it.
+  'event-detail': {
+    name: 'Event Page',
+    settings: {
+      backLinkUrl: '/whats-on', backLinkLabel: LONG, ctaLabel: 'Book your place',
+      showImage: 'true', showDescription: 'true', showLocation: 'true',
+      showOrganizer: 'true', notFoundMessage: LONG, accentColor: '#0f4f8f',
+    },
+  },
+
+  // The Event Calendar panel in CARDS layout, not the month default: Columns,
+  // How Many, Images and Summary are all `visibleWhen` a card layout, so the
+  // default month grid hides four of the nine controls and a check over it
+  // would report a confident green having never measured them. A second
+  // module below covers the month-only field.
+  'event-calendar': {
+    name: 'Event Calendar',
+    settings: {
+      calendarTitle: LONG, eventPageUrl: '/event', layout: 'cards',
+      columns: '3', limit: '12', showPast: 'false', showImages: 'true',
+      showLocation: 'true', showExcerpt: 'true', emptyMessage: LONG,
+      accentColor: '#0f4f8f',
+    },
+  },
+
+  // The Media Manager panel: a kind chosen, every column toggle on, and an
+  // accent set. With `kinds` unset the select renders its placeholder width
+  // rather than its longest option ("Images and video"), which is the width
+  // the lattice actually has to hold.
+  'media-manager': {
+    name: 'Media Manager',
+    settings: {
+      kinds: 'all', showFilters: 'true', showSize: 'true', showDate: 'true',
+      showTags: 'true', showDelete: 'true', accentColor: '#0f4f8f',
+    },
+  },
+
+  // The Event Manager panel: the picker filled, every column toggle on, and an
+  // accent set. An empty picker and unset toggles render the same rectangle as
+  // each other, so an unseeded panel would be measured without ever showing
+  // the shapes an operator actually works in.
+  'event-manager': {
+    name: 'Event Manager',
+    settings: {
+      viewPageUrl: '/event', showStatus: 'true', showDate: 'true',
+      showLocation: 'true', showDelete: 'true', accentColor: '#0f4f8f',
+    },
+  },
+
   'blog-category-manager': {
     name: 'Category Manager',
     settings: {
@@ -817,6 +868,48 @@ const buildPanelCheckSection = (ids) => {
   locked: false,
   alignment: 'left',
   widthMode: 'contained',
+  /*
+   * A VIDEO row background, so the Video sub-panel in Row Background actually
+   * renders and gets measured. Its controls only exist while the mode is
+   * "video", so on any other background this check would report a confident
+   * green having never seen them — the exact hole that let two staggered
+   * panels reach the operator in August 2026.
+   */
+  background: {
+    mode: 'video',
+    videoUrl: '/images/render-fixture-background.mp4',
+    posterUrl: '/images/render-fixture-background-poster.jpg',
+    videoSpeed: 1,
+    videoLoop: true,
+    /*
+     * Parallax ON, for the same reason the mode is "video": the Motion
+     * sub-panel's Speed box is DISABLED until the checkbox is ticked, and a
+     * disabled input is a different rectangle from an enabled one. Seeding it
+     * off would measure the panel in the state an operator only ever sees for
+     * a moment, and report green over the one he actually works in.
+     */
+    parallax: true,
+    parallaxSpeed: 0.3,
+  },
+  /*
+   * AND AN OVERLAY SCREEN, for exactly the reason above one level along.
+   *
+   * The Overlay group's dependent controls — the colour picker, the opacity
+   * select — only exist while the type is something other than "none", so on
+   * an unseeded row the whole group is ONE label/field pair. A group of one
+   * always agrees with itself, which means `check_panels` would measure it,
+   * find nothing to disagree, and report a confident green over a lattice it
+   * had never actually tested (the same shape as #432). Breaking the group's
+   * layout on purpose passes without this; with it, it fails.
+   *
+   * Colour rather than image so the fixture does not depend on a seeded
+   * asset, and 45 rather than 100 so the opacity select shows a value that
+   * would be visibly wrong if it stopped being read.
+   */
+  overlayScreen: {
+    background: { mode: 'color', color: '#1b2a4a' },
+    opacity: 45,
+  },
   modules: [
     ...BUILDER_MODULE_TYPES.map((type) => {
       const base = createEmptyModule(type, 'main');
@@ -829,6 +922,19 @@ const buildPanelCheckSection = (ids) => {
         settings: { ...base.settings, ...(tuned.settings || {}) },
       };
     }),
+    // A SECOND calendar, in MONTH layout. `weekStartsOn` is `visibleWhen` the
+    // month grid, so the cards-layout module above hides it — the same hole
+    // the mega menu below covers, one module along. One per type is the
+    // floor, not the ceiling.
+    (() => {
+      const base = createEmptyModule('event-calendar', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-event-calendar-month',
+        name: 'Event Calendar (Month)',
+        settings: { ...base.settings, layout: 'month', weekStartsOn: '1', calendarTitle: LONG },
+      };
+    })(),
     // A SECOND menu, in Mega Panel mode. Half the Panel controls (Columns,
     // Width, Placement) are `visibleWhen: isMegaMenu`, so the list-mode menu
     // above hides them and the check would report a pass over fields it never

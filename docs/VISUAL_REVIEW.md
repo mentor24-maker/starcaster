@@ -113,3 +113,13 @@ the only question left once every other gate is green.
 
 Equally, "no scenes changed" means *these six scenes* did not change. A module
 with no scene has no coverage here at all.
+
+One trap sits outside every gate, in the operator's own browser: **Chrome
+remembers zoom per site.** On 86bbq2y7x (2026-08-30) a side-by-side check
+showed the Builder Preview uniformly smaller than the live page — nav, hero,
+fonts, everything scaled by the same factor — and the cause was a saved
+zoom-out on `www.starcaster.pro`, not CSS. The admin app and a tenant site
+live on different addresses, so their zoom levels can disagree. The tell is
+uniformity: a CSS bug shrinks some things and not others; when *everything*
+differs by one factor, press Cmd+0 (reset zoom) in both tabs before reading
+a single pixel.

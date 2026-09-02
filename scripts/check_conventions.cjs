@@ -26,8 +26,10 @@
  * `npm run check:models` are exactly that. Pre-commit does block, so checks
  * surfaced here still gate local commits.
  *
- * Generated-file list: keep in sync with .gitignore ("Build artifacts"
- * block), CLAUDE.md, and scripts/hooks/block_generated_edits.cjs.
+ * Generated-file list: scripts/lib/generated_files.cjs, shared with
+ * check_syntax.cjs so the two gates cannot disagree about what an artifact is.
+ * Keep it in sync with .gitignore ("Build artifacts" block), CLAUDE.md, and
+ * scripts/hooks/block_generated_edits.cjs.
  */
 
 const { execSync } = require('child_process');
@@ -48,29 +50,16 @@ function stagedFiles(filter) {
 // 1. Build artifacts must never be committed
 // ---------------------------------------------------------------------------
 
-const GENERATED = [
-  'public/app-shell.html',
-  'public/about.html',
-  'public/site.html',
-  'public/explore.html',
-  'public/builder-preview.html',
-  'public/privacy-policy.html',
-  'public/terms-of-service.html',
-  'public/data-deletion.html',
-  'public/styles.css',
-  'public/bundle.js',
-  'public/builder-bundle.js',
-  'public/js/richtext-vendor.js',
-  'lib/builder/template.js',
-  'lib/builder/email-template.js',
-  'lib/builder/email-render.js',
-  'lib/site-import/dist/normalize.js',
-  'lib/site-import/dist/crawl.js',
-  'lib/site-import/dist/capture-playwright.js',
-];
+// `isGenerated` is the test; `GENERATED` is only for `git ls-files`, which
+// needs concrete paths and cannot take a prefix. Asking the array directly is
+// how the two gates drifted apart: it names three of the six files
+// `build_site_import_bundle.mjs` emits into `lib/site-import/dist/`, so
+// map.js, reconcile.js and image-topup.js were invisible here while
+// check_syntax.cjs — which does use `isGenerated` — skipped all six.
+const { GENERATED, isGenerated } = require('./lib/generated_files.cjs');
 
 function checkNoArtifactsStaged(files) {
-  const offenders = files.filter((f) => GENERATED.includes(f));
+  const offenders = files.filter((f) => isGenerated(f));
   if (offenders.length) {
     failures.push(
       `Build artifacts must not be committed: ${offenders.join(', ')}\n` +

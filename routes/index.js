@@ -63,6 +63,7 @@ const polls       = require('./polls');
 const platformScreenshots = require('./platformScreenshots');
 const crm         = require('./crm');
 const blog        = require('./blog');
+const events      = require('./events');
 const admin       = require('./admin');
 const associations = require('./associations');
 const siteImport  = require('./siteImport');
@@ -113,6 +114,7 @@ const ROUTE_MODULES = [
   polls,
   crm,
   blog,
+  events,
   publicSite,
 ];
 

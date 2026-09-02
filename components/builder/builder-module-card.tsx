@@ -14,6 +14,7 @@ import {
   resolveCarouselFormat
 } from "./builder-carousel-module-settings";
 import { getCarouselImageFrameStyle } from "@/lib/builder-carousel-image-frame";
+import { moduleFollowsMaster, setFollowsMaster } from "@/lib/canonical-follow";
 import {
   createBuilderCardItem,
   parseBuilderCardItems,
@@ -90,6 +91,10 @@ import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blo
 import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-module-settings";
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
+import { BuilderEventManagerModuleSettings } from "./builder-event-manager-module-settings";
+import { BuilderMediaManagerModuleSettings } from "./builder-media-manager-module-settings";
+import { BuilderEventCalendarModuleSettings } from "./builder-event-calendar-module-settings";
+import { BuilderEventDetailModuleSettings } from "./builder-event-detail-module-settings";
 import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-category-manager-module-settings";
 import { BuilderBlogCardManagerModuleSettings } from "./builder-blog-card-manager-module-settings";
 import { BuilderBlogSearchModuleSettings } from "./builder-blog-search-module-settings";
@@ -1986,6 +1991,132 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "event-detail") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden", padding: 12 }}>
+        <div style={{ fontSize: 9, color: "#8ba9be", marginBottom: 6 }}>← Back to all events</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#18324a" }}>Spring Member Mixer</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: accent, marginTop: 2 }}>Apr 12, 2026, 6:00 PM – 9:00 PM</div>
+        <div style={{ fontSize: 10, color: "#8ba9be", marginTop: 1 }}>Center Court</div>
+        <div style={{ height: 34, background: "#f4f8fb", borderRadius: 4, margin: "8px 0" }} />
+        <div style={{ height: 5, background: "#eef3f7", borderRadius: 3, marginBottom: 4 }} />
+        <div style={{ height: 5, background: "#eef3f7", borderRadius: 3, width: "72%", marginBottom: 8 }} />
+        <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#fff", background: accent, borderRadius: 4, padding: "4px 10px" }}>Get Tickets</span>
+      </div>
+    );
+  }
+
+  if (module.type === "event-calendar") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    const layout = module.settings.layout || "month";
+    if (layout === "month") {
+      // A miniature April: the 1st on a Wednesday, so the leading blanks are
+      // visible and the shape reads as a real month rather than a plain grid.
+      const lead = 3;
+      const cells = Array.from({ length: 35 }, (_, i) => i - lead + 1).map((d) => (d >= 1 && d <= 30 ? d : null));
+      const marked = new Set([12, 19, 27]);
+      return (
+        <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden", padding: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, fontSize: 8, fontWeight: 700, color: "#587592", textAlign: "center", marginBottom: 3 }}>
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <span key={i}>{d}</span>)}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+            {cells.map((d, i) => (
+              <span
+                key={i}
+                style={{
+                  fontSize: 8, textAlign: "center", padding: "3px 0", borderRadius: 2,
+                  color: d === null ? "transparent" : marked.has(d) ? "#fff" : "#18324a",
+                  background: d === null ? "transparent" : marked.has(d) ? accent : "#f4f8fb",
+                  fontWeight: d !== null && marked.has(d) ? 700 : 400,
+                }}
+              >
+                {d ?? "·"}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    const rows = [
+      { date: "APR 12", title: "Spring Member Mixer", place: "Center Court" },
+      { date: "APR 19", title: "Junior Clinic Open House", place: "Courts 1–4" },
+      { date: "MAY 03", title: "Summer Kickoff Social", place: "Clubhouse" },
+    ];
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden" }}>
+        {rows.map((row, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 12px", borderBottom: i < rows.length - 1 ? "1px solid #f0f4f8" : undefined }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: accent, borderRadius: 4, padding: "4px 6px", whiteSpace: "nowrap" }}>{row.date}</span>
+            <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+              <span style={{ fontSize: 12, color: "#18324a", fontWeight: 600 }}>{row.title}</span>
+              <span style={{ fontSize: 10, color: "#8ba9be" }}>{row.place}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (module.type === "media-manager") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    const tiles = [
+      { label: "court-1.jpg", kind: "image" },
+      { label: "clinic.mp4", kind: "video" },
+      { label: "clubhouse.jpg", kind: "image" },
+      { label: "team-2026.jpg", kind: "image" },
+    ];
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#f8fafc", borderBottom: "1px solid #e4ecf2" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: accent, borderRadius: 4, padding: "3px 8px" }}>Upload Files</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "#587592", textTransform: "uppercase" }}>4 files</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, padding: 12 }}>
+          {tiles.map((tile, i) => (
+            <div key={i} style={{ border: "1px solid #e4ecf2", borderRadius: 6, overflow: "hidden" }}>
+              <div style={{ height: 34, background: tile.kind === "video" ? "#18324a" : "#dbe9f5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: tile.kind === "video" ? "#dbe9f5" : "#587592" }}>
+                {tile.kind === "video" ? "▶" : "🖼"}
+              </div>
+              <div style={{ fontSize: 9, color: "#8ba9be", padding: "4px 5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tile.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "event-manager") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    const rows = [
+      { title: "Spring Member Mixer", status: "published", date: "Apr 12", place: "Center Court" },
+      { title: "Junior Clinic Open House", status: "draft", date: "Apr 19", place: "Courts 1–4" },
+      { title: "Summer Kickoff Social", status: "cancelled", date: "May 03", place: "Clubhouse" },
+    ];
+    const statusColor = (s: string) => s === "published" ? "#16a34a" : s === "cancelled" ? "#c0392b" : "#6b7280";
+    const statusBg   = (s: string) => s === "published" ? "#f0fdf4" : s === "cancelled" ? "#fef2f2" : "#f3f4f6";
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto auto", gap: "0 12px", padding: "8px 12px", background: "#f8fafc", borderBottom: "1px solid #e4ecf2", fontSize: 10, fontWeight: 700, color: "#587592", textTransform: "uppercase" }}>
+          <span>Event</span><span>Status</span><span>Starts</span><span>Where</span><span>Actions</span>
+        </div>
+        {rows.map((row, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto auto", gap: "0 12px", padding: "8px 12px", borderBottom: i < rows.length - 1 ? "1px solid #f0f4f8" : undefined, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "#18324a", fontWeight: 500 }}>{row.title}</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: statusColor(row.status), background: statusBg(row.status), borderRadius: 4, padding: "2px 6px" }}>{row.status}</span>
+            <span style={{ fontSize: 11, color: "#8ba9be" }}>{row.date}</span>
+            <span style={{ fontSize: 11, color: "#8ba9be" }}>{row.place}</span>
+            <span style={{ display: "flex", gap: 6 }}>
+              <span style={{ fontSize: 13, color: accent, cursor: "default" }}>✎</span>
+              <span style={{ fontSize: 13, color: "#c0392b", cursor: "default" }}>✕</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (module.type === "blog-category-manager") {
     const accent = module.settings.accentColor || "#0f4f8f";
     const rows = [
@@ -3026,6 +3157,10 @@ export function BuilderModuleCard({
     const isBlogPostTagsModule = module.type === "blog-post-tags";
     const isBlogPostCreateModule = module.type === "blog-post-create";
     const isBlogPostManagerModule = module.type === "blog-post-manager";
+    const isEventDetailModule = module.type === "event-detail";
+    const isEventCalendarModule = module.type === "event-calendar";
+    const isEventManagerModule = module.type === "event-manager";
+    const isMediaManagerModule = module.type === "media-manager";
     const isBlogCategoryManagerModule = module.type === "blog-category-manager";
     const isBlogCardManagerModule = module.type === "blog-card-manager";
     const isBlogSearchModule = module.type === "blog-search";
@@ -3091,6 +3226,9 @@ export function BuilderModuleCard({
       isBlogPostTagsModule ||
       isBlogPostCreateModule ||
       isBlogPostManagerModule ||
+      isEventDetailModule ||
+      isEventCalendarModule ||
+      isEventManagerModule ||
       isBlogCategoryManagerModule ||
       isBlogCardManagerModule ||
       isBlogSearchModule ||
@@ -3313,6 +3451,14 @@ export function BuilderModuleCard({
               <BuilderBlogPostCreateModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostManagerModule ? (
               <BuilderBlogPostManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isEventDetailModule ? (
+              <BuilderEventDetailModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isEventCalendarModule ? (
+              <BuilderEventCalendarModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isEventManagerModule ? (
+              <BuilderEventManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isMediaManagerModule ? (
+              <BuilderMediaManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryManagerModule ? (
               <BuilderBlogCategoryManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCardManagerModule ? (
@@ -3480,18 +3626,25 @@ export function BuilderModuleCard({
             <span>{module.type}</span>
           </div>
           {module.savedModuleId ? (
-            <button
-              aria-label={module.canonicalLocked ? "Unlock: allow push updates from canonical" : "Lock: block push updates from canonical"}
-              className={`builder-canonical-badge${module.canonicalLocked ? " builder-canonical-badge-locked" : ""}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onUpdateModule((m) => ({ ...m, canonicalLocked: !m.canonicalLocked }));
-              }}
-              title={module.canonicalLocked ? "Custom (push updates blocked) — click to re-link" : "Linked to canonical — click to lock"}
-              type="button"
-            >
-              {module.canonicalLocked ? "Custom" : "Linked"}
-            </button>
+            // Reads every spelling, writes only `canonical` — see
+            // lib/builder-client/canonical-follow.ts and its server twin.
+            (() => {
+              const following = moduleFollowsMaster(module);
+              return (
+                <button
+                  aria-label={following ? "Lock: block push updates from canonical" : "Unlock: allow push updates from canonical"}
+                  className={`builder-canonical-badge${following ? "" : " builder-canonical-badge-locked"}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdateModule((m) => setFollowsMaster(m, !moduleFollowsMaster(m)));
+                  }}
+                  title={following ? "Linked to canonical — click to lock" : "Custom (push updates blocked) — click to re-link"}
+                  type="button"
+                >
+                  {following ? "Linked" : "Custom"}
+                </button>
+              );
+            })()
           ) : null}
         </div>
         {hideHeaderActions ? (

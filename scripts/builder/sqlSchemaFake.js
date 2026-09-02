@@ -42,8 +42,16 @@
  * 2/8-8/8; each of those was six more chances to ship a bug with a green run
  * behind it.
  *
- * The one thing still declared and not exercised is `on delete cascade`:
- * DELETE is not implemented, and says so when called rather than pretending.
+ * TABLE-LEVEL `primary key (a, b, c)` LANDED 2026-08-29, same shape again: it
+ * fell out of parseColumn as a null and was dropped, so a composite key — the
+ * only kind that cannot be written inline — was declared in the SQL and
+ * enforced by nothing. Any other table-level constraint now throws instead of
+ * being skipped. DELETE landed with it, for tables no other table references.
+ *
+ * The one thing still declared and not exercised is `on delete cascade`. A
+ * DELETE from a table something else points at refuses out loud rather than
+ * deleting the parent and orphaning the children, which is a database Postgres
+ * is not.
  */
 
 const fs = require('fs');
@@ -63,7 +71,22 @@ function splitTopLevel(text, separator = ',') {
   let depth = 0;
   let current = '';
   let inString = false;
-  for (const char of text) {
+  // A `$$ ... $$` function body is one token, semicolons and all. Without
+  // this, splitting a schema on ';' cuts a trigger function into fragments
+  // and every one of them reads as an unsupported statement.
+  let inDollarQuote = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (!inString && char === '$' && text[i + 1] === '$') {
+      inDollarQuote = !inDollarQuote;
+      current += '$$';
+      i += 1;
+      continue;
+    }
+    if (inDollarQuote) {
+      current += char;
+      continue;
+    }
     if (char === "'") inString = !inString;
     if (!inString) {
       if (char === '(') depth += 1;
@@ -335,6 +358,10 @@ function parseSchemaText(sqlText) {
   const tables = new Map();
   const indexes = [];
   const rlsEnabled = new Set();
+  /** function name → the column its before-update trigger stamps. */
+  const triggerFunctions = new Map();
+  /** table → (trigger name → column stamped on every update). */
+  const triggers = new Map();
 
   for (const statement of statements) {
     const normalized = statement.replace(/\s+/g, ' ').trim();
@@ -344,12 +371,53 @@ function parseSchemaText(sqlText) {
     if (match) {
       const [, name, body] = match;
       const columns = new Map();
+      // Table-level `primary key (a, b, c)`. It used to fall out of parseColumn
+      // as a plain null and be dropped on the floor — the exact "read past in
+      // silence" this file promises never to do, and the one that mattered
+      // most, because a composite key is the only kind that CANNOT be written
+      // inline. project_connections is keyed on (project_id, provider,
+      // account_id); with the line ignored, two grants for the same account
+      // could both be inserted and every test about re-authorising a
+      // connection would have passed while enforcing nothing.
+      let compositePrimaryKey = null;
       for (const definition of splitTopLevel(body)) {
         const column = parseColumn(definition);
-        if (column) columns.set(column.name, column);
+        if (column) {
+          columns.set(column.name, column);
+          continue;
+        }
+        const composite = /^primary\s+key\s*\(([^)]*)\)$/i.exec(definition.trim());
+        if (composite) {
+          compositePrimaryKey = composite[1].split(',').map((part) => part.trim()).filter(Boolean);
+          continue;
+        }
+        throw new Error(
+          `sqlSchemaFake: unsupported table-level constraint on "${name}" — "${definition.trim()}". `
+          + 'Implement it or the fake would be enforcing less than the SQL says.'
+        );
+      }
+      if (compositePrimaryKey) {
+        for (const columnName of compositePrimaryKey) {
+          const column = columns.get(columnName);
+          if (!column) {
+            throw new Error(`sqlSchemaFake: primary key on ${name} names no column "${columnName}"`);
+          }
+          // A primary key is NOT NULL in Postgres whether or not it says so —
+          // the same rule parseColumn applies to the inline form.
+          column.notNull = true;
+        }
       }
       if (!tables.has(name)) {
         const foreignKeys = [];
+        if (compositePrimaryKey) {
+          indexes.push({
+            name: `${name}_pkey`,
+            table: name,
+            unique: true,
+            columns: compositePrimaryKey,
+            predicate: () => true,
+          });
+        }
         for (const column of columns.values()) {
           // An inline primary key or unique IS a unique index; expressing it as
           // one means uniqueViolation() enforces it with no second code path.
@@ -419,10 +487,54 @@ function parseSchemaText(sqlText) {
       continue;
     }
 
+    /*
+     * The `updated_at` trigger idiom, IMPLEMENTED rather than skipped.
+     *
+     * Every table here maintains updated_at with a before-update trigger, so
+     * the stores do not send the column on a PATCH. A fake that quietly
+     * ignored the trigger would leave updated_at frozen at its insert value
+     * and any test asserting "this row was touched" would pass over a
+     * database that never touched it. Only this exact shape is recognised —
+     * anything else still refuses loudly below.
+     */
+    match = /^create or replace function (?:public\.)?([a-z_][a-z0-9_]*)\(\) returns trigger language plpgsql as \$\$ begin new\.([a-z_][a-z0-9_]*) = now\(\); return new; end; \$\$$/i.exec(normalized);
+    if (match) {
+      triggerFunctions.set(match[1].toLowerCase(), match[2].toLowerCase());
+      continue;
+    }
+
+    match = /^drop trigger if exists ([a-z_][a-z0-9_]*) on (?:public\.)?([a-z_][a-z0-9_]*)$/i.exec(normalized);
+    if (match) {
+      const dropped = triggers.get(match[2].toLowerCase());
+      if (dropped) dropped.delete(match[1].toLowerCase());
+      continue;
+    }
+
+    match = /^create trigger ([a-z_][a-z0-9_]*) before update on (?:public\.)?([a-z_][a-z0-9_]*) for each row execute function (?:public\.)?([a-z_][a-z0-9_]*)\(\)$/i.exec(normalized);
+    if (match) {
+      const [, triggerName, tableName, functionName] = match;
+      const column = triggerFunctions.get(functionName.toLowerCase());
+      if (!column) {
+        throw new Error(
+          `sqlSchemaFake: trigger ${triggerName} calls ${functionName}(), which this fake did not parse. `
+          + 'Implement it or the fake would be enforcing less than the SQL says.'
+        );
+      }
+      if (!tables.has(tableName)) {
+        throw new Error(`sqlSchemaFake: trigger ${triggerName} on ${tableName} before it is created`);
+      }
+      if (!tables.get(tableName).columns.has(column)) {
+        throw new Error(`sqlSchemaFake: trigger ${triggerName} maintains ${tableName}.${column}, which does not exist`);
+      }
+      if (!triggers.has(tableName)) triggers.set(tableName, new Map());
+      triggers.get(tableName).set(triggerName.toLowerCase(), column);
+      continue;
+    }
+
     throw new Error(`sqlSchemaFake: unsupported statement — ${normalized.slice(0, 120)}`);
   }
 
-  return { tables, indexes, rlsEnabled, statements: statements.map((s) => s.trim()).filter(Boolean) };
+  return { tables, indexes, rlsEnabled, triggers, statements: statements.map((s) => s.trim()).filter(Boolean) };
 }
 
 function parseSchemaFile(filePath) {
@@ -974,6 +1086,10 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         const dangling = foreignKeyViolation(tableName, next);
         if (dangling) return { ok: false, status: 409, error: dangling };
         Object.assign(row, body);
+        // Before-update triggers, after the write, as Postgres does.
+        for (const column of (schema.triggers?.get(tableName) || new Map()).values()) {
+          row[column] = new Date().toISOString();
+        }
         updated.push({ ...row });
       }
       // PostgREST answers 204, not 200, when no representation was asked for.
@@ -983,11 +1099,32 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
     }
 
     if (String(method).toUpperCase() === 'DELETE') {
-      throw new Error(
-        'sqlSchemaFake: DELETE is not implemented, so `on delete cascade` is declared in the '
-        + 'SQL and NOT exercised by any test here. Cascade behaviour has to be proved against '
-        + 'real Postgres — see the "How to test" step on the ticket.'
-      );
+      // Implemented for tables NOTHING references. `on delete cascade` is still
+      // not simulated, and a table that some other table points at still
+      // refuses loudly rather than deleting the parent and leaving the children
+      // behind — which would be the fake inventing a database Postgres is not.
+      // Everything else about a DELETE is ordinary: match the filter, drop the
+      // rows, and answer 204 unless a representation was asked for, exactly as
+      // PostgREST does.
+      const referenced = [...schema.tables.values()].filter((other) =>
+        (other.foreignKeys || []).some((fk) => fk.refTable === tableName));
+      if (referenced.length) {
+        throw new Error(
+          `sqlSchemaFake: DELETE from "${tableName}" is not implemented, because `
+          + `${referenced.map((other) => other.name).join(', ')} reference(s) it and `
+          + '`on delete cascade` is not simulated. Cascade behaviour has to be proved '
+          + 'against real Postgres — see the "How to test" step on the ticket.'
+        );
+      }
+      const rows = filterRows(tableName, params);
+      if (rows && rows.error) return { ok: false, status: 400, error: rows.error };
+      const remaining = data.get(tableName).filter((row) => !rows.includes(row));
+      const removed = rows.map((row) => ({ ...row }));
+      data.set(tableName, remaining);
+      // PostgREST answers 204 with an empty body unless asked for the rows.
+      return representation
+        ? { ok: true, status: 200, data: removed }
+        : { ok: true, status: 204, data: null };
     }
     throw new Error(`sqlSchemaFake: unsupported method ${method}`);
   }

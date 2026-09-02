@@ -14,6 +14,8 @@ App.assetImageEditor = (function () {
     cropMeta: null,
     resetBtn: null,
     saveBtn: null,
+    flipHBtn: null,
+    flipVBtn: null,
   };
 
   let ctx = null;
@@ -25,6 +27,10 @@ App.assetImageEditor = (function () {
   let crop = { x: 0, y: 0, w: 0, h: 0 };
   let drag = null;
   let lockAspect = true;
+  // Mirroring is a DRAW-TIME transform only. `crop` always stays in unflipped
+  // source coordinates, so the crop maths below never has to know about it.
+  let flipH = false;
+  let flipV = false;
 
   function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
@@ -51,8 +57,25 @@ App.assetImageEditor = (function () {
     }
   }
 
+  function updateFlipButtons() {
+    if (els.flipHBtn) els.flipHBtn.setAttribute('aria-pressed', flipH ? 'true' : 'false');
+    if (els.flipVBtn) els.flipVBtn.setAttribute('aria-pressed', flipV ? 'true' : 'false');
+  }
+
+  function toggleFlip(axis) {
+    if (!image) return;
+    if (axis === 'vertical') flipV = !flipV;
+    else flipH = !flipH;
+    updateFlipButtons();
+    updateCropMeta();
+    renderCanvas();
+  }
+
   function resetCropToFull() {
     if (!image) return;
+    flipH = false;
+    flipV = false;
+    updateFlipButtons();
     crop = { x: 0, y: 0, w: image.naturalWidth, h: image.naturalHeight };
     if (els.outputWidth) els.outputWidth.value = String(crop.w);
     if (els.outputHeight) els.outputHeight.value = String(crop.h);
@@ -62,7 +85,9 @@ App.assetImageEditor = (function () {
 
   function updateCropMeta() {
     if (!els.cropMeta || !image) return;
-    els.cropMeta.textContent = `Crop: ${crop.w} x ${crop.h} px at (${crop.x}, ${crop.y}) · Source ${image.naturalWidth} x ${image.naturalHeight}`;
+    const mirrored = [flipH ? 'horizontal' : '', flipV ? 'vertical' : ''].filter(Boolean).join(' + ');
+    const mirrorNote = mirrored ? ` · Mirrored: ${mirrored}` : '';
+    els.cropMeta.textContent = `Crop: ${crop.w} x ${crop.h} px at (${crop.x}, ${crop.y}) · Source ${image.naturalWidth} x ${image.naturalHeight}${mirrorNote}`;
   }
 
   function displayPointFromEvent(event) {
@@ -73,9 +98,13 @@ App.assetImageEditor = (function () {
   }
 
   function imagePointFromDisplay(point) {
+    // The operator drags on what they SEE, which may be mirrored. Undo the
+    // mirror here so `crop` stays in unflipped source space.
+    const rawX = point.x / displayScale;
+    const rawY = point.y / displayScale;
     return {
-      x: clamp(Math.round(point.x / displayScale), 0, image.naturalWidth),
-      y: clamp(Math.round(point.y / displayScale), 0, image.naturalHeight),
+      x: clamp(Math.round(flipH ? image.naturalWidth - rawX : rawX), 0, image.naturalWidth),
+      y: clamp(Math.round(flipV ? image.naturalHeight - rawY : rawY), 0, image.naturalHeight),
     };
   }
 
@@ -99,12 +128,18 @@ App.assetImageEditor = (function () {
     els.canvas.height = displayHeight;
 
     ctx.clearRect(0, 0, displayWidth, displayHeight);
+    ctx.save();
+    ctx.translate(flipH ? displayWidth : 0, flipV ? displayHeight : 0);
+    ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
     ctx.drawImage(image, 0, 0, displayWidth, displayHeight);
+    ctx.restore();
 
-    const cropX = crop.x * displayScale;
-    const cropY = crop.y * displayScale;
+    // The overlay is drawn unmirrored, so the crop rect is converted from
+    // source space into what the operator is looking at.
     const cropW = crop.w * displayScale;
     const cropH = crop.h * displayScale;
+    const cropX = (flipH ? image.naturalWidth - (crop.x + crop.w) : crop.x) * displayScale;
+    const cropY = (flipV ? image.naturalHeight - (crop.y + crop.h) : crop.y) * displayScale;
 
     ctx.fillStyle = 'rgba(7, 33, 66, 0.45)';
     ctx.fillRect(0, 0, displayWidth, cropY);
@@ -275,6 +310,9 @@ App.assetImageEditor = (function () {
     exportCanvas.height = outputHeight;
     const exportCtx = exportCanvas.getContext('2d');
     if (!exportCtx) throw new Error('Canvas is not available in this browser');
+    exportCtx.save();
+    exportCtx.translate(flipH ? outputWidth : 0, flipV ? outputHeight : 0);
+    exportCtx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
     exportCtx.drawImage(
       image,
       crop.x,
@@ -286,6 +324,7 @@ App.assetImageEditor = (function () {
       outputWidth,
       outputHeight
     );
+    exportCtx.restore();
     const mimeType = 'image/jpeg';
     const blob = await new Promise((resolve, reject) => {
       exportCanvas.toBlob((value) => {
@@ -396,6 +435,8 @@ App.assetImageEditor = (function () {
     els.cropMeta = document.getElementById('assetImageEditorCropMeta');
     els.resetBtn = document.getElementById('assetImageEditorResetBtn');
     els.saveBtn = document.getElementById('assetImageEditorSaveBtn');
+    els.flipHBtn = document.getElementById('assetImageEditorFlipHBtn');
+    els.flipVBtn = document.getElementById('assetImageEditorFlipVBtn');
     if (!els.panel || !els.canvas) return;
     ctx = els.canvas.getContext('2d');
 
@@ -404,6 +445,16 @@ App.assetImageEditor = (function () {
     els.resetBtn?.addEventListener('click', () => {
       resetCropToFull();
     });
+
+    els.flipHBtn?.addEventListener('click', () => {
+      toggleFlip('horizontal');
+    });
+
+    els.flipVBtn?.addEventListener('click', () => {
+      toggleFlip('vertical');
+    });
+
+    updateFlipButtons();
 
     els.saveBtn?.addEventListener('click', () => {
       saveEditedImage();
