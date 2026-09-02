@@ -87,7 +87,7 @@ test('2026-08-31: a week of closures, then 24h of nothing with 52 queued — STA
   const closedLast24h = lt.closedSince({ tasks, now: NOW });
   assert.equal(closedLast24h, 0);
 
-  const v = lt.verdict({ closedLast24h, queue, loopsFiring: true });
+  const v = lt.verdict({ closedLast24h, queue, queueTouched: true });
   assert.equal(v.state, 'STALLED');
   assert.equal(v.stalled, true);
   assert.notEqual(v.exitCode, 0, 'a stall must not exit 0 — scripts branch on this');
@@ -98,7 +98,7 @@ test('2026-08-31: a week of closures, then 24h of nothing with 52 queued — STA
 
 test('nothing closed and nothing to close is IDLE, not a stall — and says why', () => {
   const tasks = [task({ id: 'a', status: 'live', closed: NOW - 5 * DAY })];
-  const v = lt.verdict({ closedLast24h: 0, queue: lt.queueShape(tasks), loopsFiring: true });
+  const v = lt.verdict({ closedLast24h: 0, queue: lt.queueShape(tasks), queueTouched: true });
   assert.equal(v.state, 'IDLE');
   assert.equal(v.stalled, false);
   assert.equal(v.exitCode, 0);
@@ -116,7 +116,7 @@ test('an empty Queued column is NOT an empty queue — work parked in review sti
   const queue = lt.queueShape(tasks);
   assert.equal(queue.queued, 0);
   assert.equal(queue.inFlight, 2);
-  const v = lt.verdict({ closedLast24h: 0, queue, loopsFiring: true });
+  const v = lt.verdict({ closedLast24h: 0, queue, queueTouched: true });
   assert.equal(v.state, 'STALLED');
 });
 
@@ -140,15 +140,57 @@ test('an unreadable queue is UNKNOWN and never healthy', () => {
   assert.match(v.why, /429/);
 });
 
-test('loopsFiring changes where the reader is sent, never whether it is a stall', () => {
+test('queueTouched changes where the reader is sent, never whether it is a stall', () => {
   const queue = lt.queueShape([task({ id: 'q' })]);
-  const firing = lt.verdict({ closedLast24h: 0, queue, loopsFiring: true });
-  const dead = lt.verdict({ closedLast24h: 0, queue, loopsFiring: false });
-  const unsure = lt.verdict({ closedLast24h: 0, queue, loopsFiring: null });
-  for (const v of [firing, dead, unsure]) assert.equal(v.state, 'STALLED');
-  assert.match(firing.why, /loops ARE firing/);
+  const touched = lt.verdict({ closedLast24h: 0, queue, queueTouched: true });
+  const dead = lt.verdict({ closedLast24h: 0, queue, queueTouched: false });
+  const unsure = lt.verdict({ closedLast24h: 0, queue, queueTouched: null });
+  for (const v of [touched, dead, unsure]) assert.equal(v.state, 'STALLED');
+  assert.match(touched.why, /does\s+NOT show that a loop pass ran/);
   assert.match(dead.why, /npm run heartbeat/);
   assert.match(unsure.why, /could not be determined/);
+});
+
+/**
+ * FINDING 3 (2026-09-01, task 86bbr2jpq). The signal behind this used to be
+ * called `loopsFiring` and the STALLED text said "The loops ARE firing, so the
+ * blockage is in the pipeline rather than the schedule." The only evidence is
+ * `date_updated`, which ClickUp bumps on ANY edit — a comment, a priority
+ * change — so that sentence asserted something the data cannot support, in the
+ * direction that costs a reader the most: the loop lanes run inside long-lived
+ * agent sessions, so "nobody opened one" is a leading cause of a stall, and
+ * that is the case the old wording sent them away from.
+ *
+ * BREAK TEST, run before this was believed. Putting the old sentence back —
+ * `'The loops ARE firing, so the blockage is in the pipeline rather than the
+ * schedule.'` — fails this test on both assertions (2 failed of 2 here), and
+ * the assertion above it as well. Restoring the honest text returns them.
+ */
+test('a stall never claims the loops are firing on evidence of a bare edit', () => {
+  const queue = lt.queueShape([task({ id: 'q' })]);
+  const touched = lt.verdict({ closedLast24h: 0, queue, queueTouched: true });
+  assert.doesNotMatch(touched.why, /loops ARE firing/,
+    'the timestamp proves an edit happened, never that a loop pass ran');
+  assert.match(touched.why, /ANY edit/,
+    'and it says what the timestamp actually proves, rather than going silent');
+});
+
+/**
+ * The other half of finding 3, and the gain that came with it: naming the
+ * signal after the evidence made `false` sayable. The old question ("did a
+ * loop pass run?") could never be answered no, because a pass that finds the
+ * WIP cap full writes nothing. "Was anything in the queue edited?" can.
+ *
+ * BREAK TEST. Collapsing the caller's `queueTouched` back to
+ * `touched ? true : null` fails the second assertion here (1 failed of 2).
+ */
+test('the caller can say "nothing touched the queue at all", which it never could before', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const code = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8');
+  assert.doesNotMatch(code, /const loopsFiring/, 'the misleading name is gone from the caller too');
+  assert.match(code, /queueTouched = withTimestamps\.length/,
+    'and false is reachable: a queue with timestamps and none recent is a real finding');
 });
 
 // --- reading the tickets ----------------------------------------------------
@@ -285,7 +327,7 @@ test('a ticket in Rework counts as claimable depth, never as work in flight', ()
 
   // The verdict must follow: three claimable tickets and nothing closing is a
   // stall, not the "nothing to close" all-clear.
-  const v = lt.verdict({ closedLast24h: 0, queue, loopsFiring: true });
+  const v = lt.verdict({ closedLast24h: 0, queue, queueTouched: true });
   assert.equal(v.state, 'STALLED');
 });
 
@@ -350,7 +392,7 @@ test('the report names the verdict, the depth and the oldest rework PR', () => {
     ticketStatusById: { aaa: 'Queued' },
     now: NOW,
   });
-  const v = lt.verdict({ closedLast24h: 0, queue, loopsFiring: true });
+  const v = lt.verdict({ closedLast24h: 0, queue, queueTouched: true });
   const out = lt.renderReport({
     verdict: v, closed, curve, plateau: lt.depthPlateau(curve), rework, queue, now: NOW,
   });
@@ -366,7 +408,7 @@ test('the bus post explains itself to somebody who was not already suspicious', 
   const closed = lt.closedPerDay({ tasks, now: NOW, days: 7, calendar: UTC });
   const curve = lt.depthPerDay({ tasks, now: NOW, days: 7, calendar: UTC });
   const text = lt.renderStallPost({
-    verdict: lt.verdict({ closedLast24h: 0, queue, loopsFiring: true }),
+    verdict: lt.verdict({ closedLast24h: 0, queue, queueTouched: true }),
     closed,
     plateau: lt.depthPlateau(curve),
     rework: { rows: [], oldest: null },
@@ -575,7 +617,7 @@ test('IDLE and STALLED are untouched by any of this', () => {
   const idle = lt.verdict({ closedLast24h: 0, queue: { openWork: 0, queued: 0, inFlight: 0 }, lastClose: { at: 0, ms: 40 * HOUR } });
   assert.strictEqual(idle.state, 'IDLE');
   assert.strictEqual(idle.exitCode, 0);
-  const stalled = lt.verdict({ closedLast24h: 0, queue: { openWork: 12, queued: 10, inFlight: 2 }, loopsFiring: true });
+  const stalled = lt.verdict({ closedLast24h: 0, queue: { openWork: 12, queued: 10, inFlight: 2 }, queueTouched: true });
   assert.strictEqual(stalled.state, 'STALLED');
   assert.strictEqual(stalled.exitCode, 1);
   const unknown = lt.verdict({ unreadable: 'ClickUp said 429' });
@@ -589,6 +631,205 @@ test('the caller reports the last closure and the trend, or none of this is visi
   const code = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8');
   assert.match(code, /throughput\.sinceLastClose\(\{ tasks, now: NOW \}\)/);
   assert.match(code, /throughput\.depthTrend\(curve\)/);
-  assert.match(code, /verdict\(\{ closedLast24h, queue, loopsFiring, trend, lastClose \}\)/,
+  assert.match(code, /closedLast24h, queue, queueTouched, trend, lastClose, undatedRecent,/,
     'both must reach the verdict, or the fix is inert in the thing that runs');
+});
+
+// --- the six quiet failures of 2026-09-01 (task 86bbr2jpq) -------------------
+
+/**
+ * FINDING 1: an UNKNOWN verdict reached nobody.
+ *
+ * `verdict` has always had four states and the caller has always exited 2 on
+ * UNKNOWN — but `run_bus_relay.sh` discards that exit code with `|| true`, so
+ * the one state whose entire purpose is "a monitor must not fail quietly" was
+ * the state that failed quietly. A rotated ClickUp token left the stall
+ * detector permanently dead while every other job on the board looked fine.
+ *
+ * BREAK TEST. Making `renderUnknownPost` return `v.why` alone fails the second
+ * and third assertions here (1 failed of 22 in the file); deleting the
+ * `announceUnknown(v)` call from either exit path in loop_throughput.mjs fails
+ * the caller test below it.
+ */
+test('an unknown reading is a bus message, with the reason in it', () => {
+  const v = lt.verdict({ unreadable: 'ClickUp returned HTTP 429' });
+  const text = lt.renderUnknownPost({ verdict: v, now: NOW, node: 'mac-mini' });
+  assert.match(text, /429/, 'the reason is the whole point — a bare "unknown" is not actionable');
+  assert.match(text, /NOT a stall and NOT an all-clear/,
+    'it must not be mistakable for either of the two states it sits between');
+  assert.match(text, /npm run throughput/, 'it names the command that says more');
+  assert.match(text, /\[CC-starcaster\]/, 'and signs itself, like every other bus post');
+});
+
+test('the caller actually posts the unknown, on BOTH paths that can produce one', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const code = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8');
+  assert.match(code, /function announceUnknown\(v\)/);
+  // Once for the unreadable queue, once for the undated-closure verdict.
+  const calls = code.match(/^\s*announceUnknown\(v\);$/gm) || [];
+  assert.equal(calls.length, 2,
+    'an unreadable queue AND an untrustworthy zero both have to reach the bus');
+  assert.match(code, /unknownStampFile/, 'and it is suppressed on the same 6h discipline');
+});
+
+/**
+ * FINDING 2: the read throttle made a rate limit self-reinforcing.
+ *
+ * The hourly read stamp was written only AFTER a successful read, so a ClickUp
+ * 429 skipped it — and the relay wakes every ten minutes, so the check went
+ * back six times an hour instead of once, hammering the very limit that broke
+ * it and keeping itself broken. #1 and #2 together are one silent failure.
+ *
+ * BREAK TEST. Moving the `if (CHECK) writeStamp(readStampFile, ...)` line back
+ * below the `if (!queueRead.tasks)` early exit fails this test (1 failed).
+ */
+test('the hourly read clock restarts on the ATTEMPT, not on a success', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const code = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8');
+  const stampAt = code.indexOf('if (CHECK) writeStamp(readStampFile');
+  const readAt = code.indexOf('const queueRead = await readQueue();');
+  const bailAt = code.indexOf('if (!queueRead.tasks) {');
+  assert.ok(stampAt > 0 && readAt > 0 && bailAt > 0, 'all three lines still exist');
+  assert.ok(stampAt < readAt,
+    'the stamp is taken before the read, so a failed read costs the same hour a good one does');
+  assert.ok(stampAt < bailAt, 'and the unreadable-queue exit cannot skip past it');
+});
+
+/**
+ * FINDING 5: the bus post dropped the oldest-rework number without saying so.
+ *
+ * When `gh` cannot be read, the rework bucket is empty — and an omitted bullet
+ * reads as "there are no rework PRs", which is the opposite of what is known.
+ * It is the alert's most actionable line: the one that names a branch somebody
+ * could go and finish. The terminal report already handled this correctly;
+ * only the post did not (docs/DOCTRINE.md 3.11).
+ *
+ * BREAK TEST. Deleting the `if (reworkUnreadable)` branch from
+ * `renderStallPost` fails the first two assertions here (1 failed).
+ */
+test('a stall post says out loud when the rework bucket could not be read', () => {
+  const tasks = [task({ id: 'q', status: 'queued' })];
+  const queue = lt.queueShape(tasks);
+  const closed = lt.closedPerDay({ tasks, now: NOW, days: 7, calendar: UTC });
+  const curve = lt.depthPerDay({ tasks, now: NOW, days: 7, calendar: UTC });
+  const common = {
+    verdict: lt.verdict({ closedLast24h: 0, queue, queueTouched: true }),
+    closed, plateau: lt.depthPlateau(curve), queue, now: NOW, node: 'mac-mini',
+  };
+
+  const blind = lt.renderStallPost({
+    ...common,
+    rework: { rows: [], oldest: null },
+    reworkUnreadable: 'the `gh` command is not installed on this machine',
+  });
+  assert.match(blind, /could NOT be read/, 'the missing number must say it is missing');
+  assert.match(blind, /gh` command is not installed/, 'and name why, so it can be fixed');
+  assert.doesNotMatch(blind, /was opened/, 'and it must not invent an age it does not have');
+
+  // The readable case is untouched: no caveat, and the number is still there.
+  const seeing = lt.renderStallPost({
+    ...common,
+    rework: { rows: [{ number: 449, ageMs: 3 * DAY }], oldest: { number: 449, ageMs: 3 * DAY } },
+  });
+  assert.match(seeing, /#449/);
+  assert.doesNotMatch(seeing, /could NOT be read/);
+});
+
+/**
+ * FINDING 4: an undated closure could cause a FALSE stall.
+ *
+ * `closedSince` counts `date_closed` and nothing else, so a ticket that ships
+ * without one is invisible to the stall test — and a day on which everything
+ * shipped that way reports STALLED with total confidence. 86bb4uyvp is a real
+ * one, documented in lib/loopThroughput.js itself.
+ *
+ * THE NARROWING IS THE DESIGN, and the second test below is the one that
+ * matters more. "Any undated closure means we cannot tell" would have switched
+ * the stall alarm off forever, because that ticket sits in `live` with no
+ * closure date and is never going to grow one. That trades a rare false alarm
+ * for a permanent silent failure — the worse of the two, by the standard this
+ * whole file is written to.
+ *
+ * BREAK TEST. Deleting the `if (Number(undatedRecent) > 0)` block from
+ * `verdict` fails the first test (1 failed); widening
+ * `recentUndatedClosures` to ignore `date_updated` fails the second (1 failed).
+ */
+test('an undated closure inside the window cannot by itself produce a STALLED verdict', () => {
+  const tasks = [
+    task({ id: 'q', status: 'queued', created: NOW - 5 * DAY, updated: NOW - 2 * HOUR }),
+    // Shipped today, and ClickUp recorded no closure date for it.
+    task({ id: 'shipped', status: 'live', created: NOW - 5 * DAY, closed: null, updated: NOW - HOUR }),
+  ];
+  const queue = lt.queueShape(tasks);
+  const closedLast24h = lt.closedSince({ tasks, now: NOW });
+  assert.equal(closedLast24h, 0, 'the undated closure is genuinely invisible to the count');
+
+  const v = lt.verdict({
+    closedLast24h, queue, queueTouched: true,
+    undatedRecent: lt.recentUndatedClosures({ tasks, now: NOW }),
+  });
+  assert.equal(v.state, 'UNKNOWN', 'a zero it cannot stand behind is not a stall');
+  assert.equal(v.stalled, false, 'and it must not post a stall it cannot substantiate');
+  assert.equal(v.exitCode, 2, 'nor exit 0 — this is not health either');
+  assert.match(v.why, /no closure date/, 'and it names the cause, so it can be fixed by hand');
+});
+
+test('an OLD undated closure does not switch the alarm off — 86bb4uyvp is permanent', () => {
+  const tasks = [
+    task({ id: 'q', status: 'queued', created: NOW - 9 * DAY, updated: NOW - 2 * HOUR }),
+    // The real one: in `live`, no closure date, and last edited a fortnight ago.
+    task({ id: '86bb4uyvp', status: 'live', created: NOW - 30 * DAY, closed: null, updated: NOW - 14 * DAY }),
+  ];
+  assert.equal(lt.undatedClosures(tasks), 1, 'it is still counted and still printed');
+  assert.equal(lt.recentUndatedClosures({ tasks, now: NOW }), 0,
+    'but it certainly did not close in the last 24h, so it cannot excuse a zero');
+
+  const v = lt.verdict({
+    closedLast24h: 0, queue: lt.queueShape(tasks), queueTouched: true,
+    undatedRecent: lt.recentUndatedClosures({ tasks, now: NOW }),
+  });
+  assert.equal(v.state, 'STALLED', 'the stall detector still detects stalls');
+});
+
+test('a ticket with no readable date_updated is counted, because nothing rules it out', () => {
+  const tasks = [{ id: 'x', status: { status: 'live' }, date_created: String(NOW - DAY), date_closed: null, date_updated: null }];
+  assert.equal(lt.recentUndatedClosures({ tasks, now: NOW }), 1,
+    'for a stall detector the safe direction is admitting the doubt');
+});
+
+/**
+ * FINDING 4, second half: the caveat has to reach the message Dane reads.
+ * `renderReport` carried it; `renderStallPost` did not.
+ *
+ * BREAK TEST. Deleting the `if (Number(undated) > 0)` block from
+ * `renderStallPost` fails the first assertion (1 failed).
+ */
+test('a stall post carries the undated-closure caveat when there is one', () => {
+  const tasks = [task({ id: 'q', status: 'queued' })];
+  const queue = lt.queueShape(tasks);
+  const closed = lt.closedPerDay({ tasks, now: NOW, days: 7, calendar: UTC });
+  const curve = lt.depthPerDay({ tasks, now: NOW, days: 7, calendar: UTC });
+  const common = {
+    verdict: lt.verdict({ closedLast24h: 0, queue, queueTouched: true }),
+    closed, plateau: lt.depthPlateau(curve), rework: { rows: [], oldest: null },
+    queue, now: NOW, node: 'mac-mini',
+  };
+  const withCaveat = lt.renderStallPost({ ...common, undated: 2 });
+  assert.match(withCaveat, /2 finished ticket\(s\) carry no closure date/);
+  assert.match(withCaveat, /reads a little low/, 'and says which way the error points');
+  // None to guess about means no caveat: a report that always hedges teaches
+  // the reader to skip the hedge.
+  assert.doesNotMatch(lt.renderStallPost({ ...common, undated: 0 }), /no closure date/);
+});
+
+test('the caller feeds the report and the post everything it just computed', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const code = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8');
+  assert.match(code, /const undated = throughput\.undatedClosures\(tasks\)/);
+  assert.match(code, /const undatedRecent = throughput\.recentUndatedClosures\(\{ tasks, now: NOW \}\)/);
+  assert.match(code, /reworkUnreadable: prRead\.why/,
+    'the stall post must be told when gh could not be read, or the caveat is inert');
 });
