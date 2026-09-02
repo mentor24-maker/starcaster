@@ -4,6 +4,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  EMPTY_MEDIA_FILTERS,
+  MEDIA_ASPECTS,
+  mediaAssetMatchesFilters,
+  mediaFiltersActive,
+  mediaTagKey,
+  mediaTagOptions,
+  normalizeMediaTag,
+  type MediaFilters
+} from "@/lib/media-manager-filters";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import {
   builderBackgroundParallaxActive,
@@ -2210,6 +2220,10 @@ function BuilderModulePreview({
   if (module.type === "event-calendar") {
     return <EventCalendarPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
   }
+  if (module.type === "media-manager") {
+    return <MediaManagerPreview settings={module.settings} text={module.text} />;
+  }
+
   if (module.type === "event-manager") {
     return <EventManagerPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
   }
@@ -4388,6 +4402,747 @@ function EventCalendarPreview({
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+/* ── Media Manager (admin) ─────────────────────────────────────────────────── */
+
+/**
+ * The Media Manager a TENANT admin uses, on their own site — e.g.
+ * delraytennis.starcaster.pro/admin-media-manager. Not to be confused with the
+ * Assets screen in the platform admin app, which is Dane's and never loads
+ * here (that confusion is what tickets 1-3 of this series were built against).
+ *
+ * Runs on /api/assets with a project-admin session. Ticket 86bbrqnqu pinned
+ * which asset endpoints a tenant admin may reach and which are refused — the
+ * refused ones spend Alphire's money, quota or compute, and none of them are
+ * used below.
+ *
+ * Every upload declares `source: "admin-media-manager"`, the column added in
+ * 86bbrnz2v. That is what makes these files findable as Media Manager uploads
+ * in the Builder's own gallery picker.
+ */
+
+const MEDIA_MANAGER_SOURCE = "admin-media-manager";
+
+/** Mirrors GALLERY_IMAGE_EXTENSIONS / GALLERY_VIDEO_EXTENSIONS. */
+const MEDIA_IMAGE_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,.svg";
+const MEDIA_VIDEO_ACCEPT = ".mp4,.mov,.m4v,.webm,.ogg";
+
+/**
+ * The base64 upload path tops out around 7MB. Anything larger goes through
+ * Vercel Blob, which is also the only path for video.
+ */
+const MEDIA_DIRECT_UPLOAD_MAX_BYTES = 6 * 1024 * 1024;
+
+type MediaAsset = {
+  id: number;
+  assetName: string;
+  assetType: string;
+  category?: string;
+  aspect?: string;
+  location: string;
+  thumbnailUrl?: string;
+  tags?: string[];
+  size?: number;
+  imageWidth?: number;
+  imageHeight?: number;
+  source?: string;
+  createdAt?: string;
+};
+
+type MediaUploadProgress = { name: string; index: number; total: number };
+
+type MediaTag = { id: number; tag: string };
+
+type MediaCategory = { id: number; assetType: string; category: string };
+
+function mediaIsVideo(asset: MediaAsset): boolean {
+  if (String(asset.assetType || "").toLowerCase() === "video") return true;
+  return /\.(mp4|mov|m4v|webm|ogg)(\?|#|$)/i.test(String(asset.location || ""));
+}
+
+function formatMediaSize(bytes?: number): string {
+  const n = Number(bytes || 0);
+  if (!n) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+let mediaBlobClientPromise: Promise<{ upload: (...args: unknown[]) => Promise<{ url: string }> }> | null = null;
+function getMediaBlobClient() {
+  // Loaded from a CDN at runtime rather than bundled — the same technique
+  // public/js/assets.js uses, and what lets a tenant page upload video without
+  // the builder bundle carrying the SDK.
+  if (!mediaBlobClientPromise) {
+    // The specifier is built at runtime so TypeScript does not try to resolve
+    // a URL import at compile time, and esbuild leaves it as a dynamic import
+    // for the browser to fetch.
+    const cdn = "https://esm.sh/@vercel/blob/client?bundle";
+    mediaBlobClientPromise = (new Function("u", "return import(u)")(cdn)) as Promise<{
+      upload: (...args: unknown[]) => Promise<{ url: string }>;
+    }>;
+  }
+  return mediaBlobClientPromise;
+}
+
+function MediaManagerPreview({
+  settings,
+  text
+}: {
+  settings: Record<string, string>;
+  text?: string;
+}) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const kinds = String(settings.kinds || "all").toLowerCase();
+  const showSize = (settings.showSize ?? "true") !== "false";
+  const showDate = (settings.showDate ?? "true") !== "false";
+  const showDelete = (settings.showDelete ?? "true") !== "false";
+  const showTags = (settings.showTags ?? "true") !== "false";
+  const showFilters = (settings.showFilters ?? "true") !== "false";
+
+  const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [statusMsg, setStatusMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [uploading, setUploading] = useState<MediaUploadProgress | null>(null);
+  const [renameId, setRenameId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<MediaAsset | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [projectTags, setProjectTags] = useState<MediaTag[]>([]);
+  const [projectCategories, setProjectCategories] = useState<string[]>([]);
+  const [filters, setFilters] = useState<MediaFilters>(EMPTY_MEDIA_FILTERS);
+  const [tagTarget, setTagTarget] = useState<MediaAsset | null>(null);
+  const [tagDraft, setTagDraft] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // The module card offers a generic Content box bound to module.text, and it
+  // is a plain <textarea> for every type but "text" — so this is TEXT, never
+  // HTML. Rendered through React's own escaping, with line breaks preserved by
+  // CSS rather than by building markup out of the value.
+  const description = String(text || "").trim();
+
+  const acceptAttr =
+    kinds === "images" ? MEDIA_IMAGE_ACCEPT
+      : kinds === "videos" ? MEDIA_VIDEO_ACCEPT
+        : `${MEDIA_IMAGE_ACCEPT},${MEDIA_VIDEO_ACCEPT}`;
+
+  function loadAssets() {
+    setLoading(true);
+    setLoadError("");
+    fetch("/api/assets", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, `Failed to load media (${r.status})`));
+        const list = (d?.assets ?? d?.data ?? []) as MediaAsset[];
+        setAssets(Array.isArray(list) ? list : []);
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Failed to load media."))
+      .finally(() => setLoading(false));
+  }
+
+  function loadProjectTags() {
+    fetch("/api/asset-tags", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, "Failed to load tags"));
+        const list = (d?.tags ?? d?.data ?? []) as MediaTag[];
+        setProjectTags(Array.isArray(list) ? list : []);
+      })
+      // A tag list that will not load must not stop the grid rendering: the
+      // media is the point, tagging is an extra. The modal reports it instead.
+      .catch(() => setProjectTags([]));
+  }
+
+  function loadProjectCategories() {
+    fetch("/api/asset-categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, "Failed to load categories"));
+        const list = (d?.categories ?? d?.data ?? []) as MediaCategory[];
+        // The endpoint returns one entry per (assetType, category) pair, so the
+        // same category arrives once per type it is used on. De-duplicated by
+        // name here or the select lists "Logos" three times.
+        const seen = new Map<string, string>();
+        (Array.isArray(list) ? list : []).forEach((c) => {
+          const name = String(c?.category || "").trim();
+          if (name && !seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+        });
+        setProjectCategories([...seen.values()].sort((a, b) => a.localeCompare(b)));
+      })
+      // A category list that will not load must not stop the grid rendering.
+      .catch(() => setProjectCategories([]));
+  }
+
+  useEffect(() => { loadAssets(); loadProjectTags(); loadProjectCategories(); }, []);
+
+  function setFilter(key: keyof MediaFilters, value: string) {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function openTagEditor(asset: MediaAsset) {
+    setTagTarget(asset);
+    setTagDraft(Array.isArray(asset.tags) ? [...asset.tags] : []);
+    setNewTag("");
+    setErrorMsg("");
+    loadProjectTags();
+  }
+
+  function toggleDraftTag(tag: string) {
+    const key = mediaTagKey(tag);
+    setTagDraft((prev) => (
+      prev.some((t) => mediaTagKey(t) === key)
+        ? prev.filter((t) => mediaTagKey(t) !== key)
+        : [...prev, normalizeMediaTag(tag)]
+    ));
+  }
+
+  /** Adds to the project registry AND applies to this file, in one action. */
+  async function addNewTag() {
+    const tag = normalizeMediaTag(newTag);
+    if (!tag) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/asset-tags", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({ tag })
+      });
+      const d = await res.json().catch(() => null);
+      // 200 means it already existed, 201 means it is new. Both are success —
+      // two admins typing "Courts" is normal use, not a conflict.
+      if (!res.ok) throw new Error(readApiErrorMessage(d, "Failed to add tag."));
+      const saved = (d?.tag ?? d?.data) as MediaTag | undefined;
+      const name = normalizeMediaTag(saved?.tag || tag);
+      setNewTag("");
+      loadProjectTags();
+      setTagDraft((prev) => (
+        prev.some((t) => mediaTagKey(t) === mediaTagKey(name)) ? prev : [...prev, name]
+      ));
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to add tag.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveTags() {
+    if (!tagTarget) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/assets/${encodeURIComponent(String(tagTarget.id))}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({ tags: tagDraft })
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, "Failed to save tags."));
+      }
+      setTagTarget(null);
+      setStatusMsg("Tags saved.");
+      loadAssets();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to save tags.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // What the module is configured to hold at all. Separate from the operator's
+  // filters below, so an empty grid can say WHICH of the two emptied it.
+  const inScope = assets.filter((asset) => {
+    if (kinds === "images") return !mediaIsVideo(asset);
+    if (kinds === "videos") return mediaIsVideo(asset);
+    return true;
+  });
+
+  const filtersOn = showFilters && mediaFiltersActive(filters);
+
+  const visible = !filtersOn
+    ? inScope
+    : inScope.filter((asset) => mediaAssetMatchesFilters(asset, filters));
+
+  async function uploadOne(file: File) {
+    const isVideo = /^video\//i.test(file.type) || /\.(mp4|mov|m4v|webm|ogg)$/i.test(file.name);
+    const assetType = isVideo ? "Video" : "Image";
+
+    // Video, and anything past the base64 ceiling, goes through Blob. An
+    // image small enough takes the direct path because it also generates a
+    // thumbnail on the way in.
+    if (isVideo || file.size > MEDIA_DIRECT_UPLOAD_MAX_BYTES) {
+      const { upload } = await getMediaBlobClient();
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/assets/blob-upload",
+        multipart: true,
+        clientPayload: JSON.stringify({ fileName: file.name, assetType, assetName: file.name })
+      });
+      const res = await fetch("/api/assets", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({
+          assetName: file.name,
+          assetType,
+          location: String(blob?.url || ""),
+          size: Number(file.size || 0),
+          source: MEDIA_MANAGER_SOURCE
+        })
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, `Failed to record ${file.name}.`));
+      }
+      return;
+    }
+
+    const res = await fetch("/api/assets/import-image", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType: file.type || "image/jpeg",
+        fileBase64: await fileToBase64(file),
+        assetName: file.name,
+        source: MEDIA_MANAGER_SOURCE
+      })
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      throw new Error(readApiErrorMessage(d, `Failed to upload ${file.name}.`));
+    }
+  }
+
+  async function handleFiles(fileList: FileList | null) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setErrorMsg("");
+    setStatusMsg("");
+    const failures: string[] = [];
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      // A video upload runs for minutes. Silence here is indistinguishable
+      // from a hang, so every file announces itself before it starts.
+      setUploading({ name: file.name, index, total: files.length });
+      try {
+        await uploadOne(file);
+      } catch (err) {
+        failures.push(`${file.name}: ${err instanceof Error ? err.message : "upload failed"}`);
+      }
+    }
+    setUploading(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    const ok = files.length - failures.length;
+    if (failures.length) {
+      setErrorMsg(`${failures.length} of ${files.length} failed — ${failures[0]}`);
+    }
+    if (ok > 0) setStatusMsg(`${ok} file${ok === 1 ? "" : "s"} uploaded.`);
+    loadAssets();
+  }
+
+  async function saveRename(asset: MediaAsset) {
+    const next = renameValue.trim();
+    if (!next || next === asset.assetName) { setRenameId(null); return; }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/assets/${encodeURIComponent(String(asset.id))}`, {
+        // PATCH, not PUT. routes/assets.js handles PATCH and DELETE for this
+        // path and nothing else, so a PUT falls through unmatched and the
+        // rename silently does not happen.
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({ assetName: next })
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, "Failed to rename."));
+      }
+      setStatusMsg("Renamed.");
+      setRenameId(null);
+      loadAssets();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to rename.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/assets/${encodeURIComponent(String(deleteTarget.id))}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: getCrmProjectHeaders()
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, "Failed to delete."));
+      }
+      setDeleteTarget(null);
+      setStatusMsg("Deleted.");
+      loadAssets();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to delete.");
+      setDeleteTarget(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="builder-media-manager" style={{ ["--builder-media-accent" as string]: accent }}>
+      {description ? (
+        <p className="builder-media-manager-description">{description}</p>
+      ) : null}
+      <div className="builder-media-manager-toolbar">
+        <label className="builder-media-manager-upload">
+          <input
+            ref={fileInputRef}
+            accept={acceptAttr}
+            className="builder-media-manager-file-input"
+            disabled={Boolean(uploading)}
+            multiple
+            onChange={(e) => { handleFiles(e.target.files); }}
+            type="file"
+          />
+          <span className="builder-media-manager-upload-label">
+            {uploading ? "Uploading…" : "Upload Files"}
+          </span>
+        </label>
+        <span className="builder-media-manager-count">
+          {loading
+            ? "Loading…"
+            : filtersOn
+              // "0 files" while 40 sit behind a filter is the same lie as the
+              // wrong empty state, in a smaller space.
+              ? `${visible.length} of ${inScope.length} file${inScope.length === 1 ? "" : "s"}`
+              : `${visible.length} file${visible.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
+
+      {uploading ? (
+        <div aria-live="polite" className="builder-media-manager-progress">
+          Uploading {uploading.index + 1} of {uploading.total}: {uploading.name}
+        </div>
+      ) : null}
+
+      {showFilters ? (
+        <div className="builder-media-manager-filters">
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Name</span>
+            <input
+              className="builder-media-manager-filter-input"
+              onChange={(e) => setFilter("name", e.target.value)}
+              placeholder="Search filenames"
+              type="search"
+              value={filters.name}
+            />
+          </label>
+
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Aspect</span>
+            <select
+              className="builder-media-manager-filter-select"
+              onChange={(e) => setFilter("aspect", e.target.value)}
+              value={filters.aspect}
+            >
+              <option value="">All</option>
+              {MEDIA_ASPECTS.map((a) => (
+                <option key={a.value} value={a.value}>{a.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Tag</span>
+            <select
+              className="builder-media-manager-filter-select"
+              onChange={(e) => setFilter("tag", e.target.value)}
+              value={filters.tag}
+            >
+              <option value="">All</option>
+              {mediaTagOptions(projectTags, assets).map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Category</span>
+            <select
+              className="builder-media-manager-filter-select"
+              onChange={(e) => setFilter("category", e.target.value)}
+              value={filters.category}
+            >
+              <option value="">All</option>
+              {projectCategories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+
+          {/* Only when there is something to clear — a permanently visible
+              Clear reads as an action with no effect. */}
+          {mediaFiltersActive(filters) ? (
+            <button
+              className="builder-media-manager-btn builder-media-manager-clear"
+              onClick={() => setFilters(EMPTY_MEDIA_FILTERS)}
+              type="button"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {statusMsg ? <div className="builder-media-manager-status">{statusMsg}</div> : null}
+      {errorMsg ? <div className="builder-media-manager-error">{errorMsg}</div> : null}
+      {loadError ? <div className="builder-media-manager-error">{loadError}</div> : null}
+
+      {/* Two different emptinesses, and they must never be confused: nothing
+          uploaded, versus everything hidden by a filter. */}
+      {!loading && !visible.length && !loadError && !filtersOn ? (
+        <p className="builder-media-manager-empty">
+          No media yet. Use Upload Files to add images or video.
+        </p>
+      ) : null}
+
+      {!loading && !visible.length && !loadError && filtersOn ? (
+        <p className="builder-media-manager-empty">
+          No files match these filters.{" "}
+          <button
+            className="builder-media-manager-clear-inline"
+            onClick={() => setFilters(EMPTY_MEDIA_FILTERS)}
+            type="button"
+          >
+            Clear filters
+          </button>
+        </p>
+      ) : null}
+
+      <div className="builder-media-manager-grid">
+        {visible.map((asset) => (
+          <figure className="builder-media-manager-card" key={asset.id}>
+            <div className="builder-media-manager-thumb">
+              {mediaIsVideo(asset) ? (
+                <video className="builder-media-manager-media" preload="metadata" src={asset.location} />
+              ) : (
+                <img
+                  alt={asset.assetName}
+                  className="builder-media-manager-media"
+                  loading="lazy"
+                  src={asset.thumbnailUrl || asset.location}
+                />
+              )}
+              {asset.source === MEDIA_MANAGER_SOURCE ? (
+                <span className="builder-media-manager-badge" title="Uploaded here">Media Mgr</span>
+              ) : null}
+            </div>
+            <figcaption className="builder-media-manager-caption">
+              {renameId === asset.id ? (
+                <input
+                  autoFocus
+                  className="builder-media-manager-rename"
+                  disabled={busy}
+                  onBlur={() => saveRename(asset)}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveRename(asset);
+                    if (e.key === "Escape") setRenameId(null);
+                  }}
+                  value={renameValue}
+                />
+              ) : (
+                <button
+                  className="builder-media-manager-name"
+                  onClick={() => { setRenameId(asset.id); setRenameValue(asset.assetName); }}
+                  title="Click to rename"
+                  type="button"
+                >
+                  {asset.assetName}
+                </button>
+              )}
+              <span className="builder-media-manager-meta">
+                {showSize ? formatMediaSize(asset.size) : null}
+                {showSize && showDate && asset.createdAt ? " · " : null}
+                {showDate && asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : null}
+                {showTags ? (
+                  <button
+                    aria-label={`Tag ${asset.assetName}`}
+                    className="builder-media-manager-tag-btn"
+                    onClick={() => openTagEditor(asset)}
+                    title="Tags"
+                    type="button"
+                  >
+                    {/* An outline tag glyph. Inline SVG rather than an emoji so
+                        it inherits the accent colour and renders identically
+                        on every platform. */}
+                    <svg aria-hidden="true" fill="none" height="14" viewBox="0 0 16 16" width="14">
+                      <path
+                        d="M1.5 7.1V2.4a.9.9 0 0 1 .9-.9h4.7c.24 0 .47.1.64.26l6.1 6.1a.9.9 0 0 1 0 1.28l-4.7 4.7a.9.9 0 0 1-1.28 0l-6.1-6.1a.9.9 0 0 1-.26-.64Z"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                      />
+                      <circle cx="4.6" cy="4.6" fill="currentColor" r="1" />
+                    </svg>
+                  </button>
+                ) : null}
+              </span>
+              {showTags && Array.isArray(asset.tags) && asset.tags.length ? (
+                <span className="builder-media-manager-tags">
+                  {asset.tags.map((tag) => (
+                    <span className="builder-media-manager-tag" key={tag}>{tag}</span>
+                  ))}
+                </span>
+              ) : null}
+              {showDelete ? (
+                <button
+                  className="builder-media-manager-delete"
+                  disabled={busy}
+                  onClick={() => setDeleteTarget(asset)}
+                  type="button"
+                >
+                  Delete
+                </button>
+              ) : null}
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+
+      {tagTarget ? (
+        <div
+          aria-label={`Tags for ${tagTarget.assetName}`}
+          aria-modal="true"
+          className="builder-media-manager-tag-modal"
+          onKeyDown={(e) => { if (e.key === "Escape") setTagTarget(null); }}
+          role="dialog"
+        >
+          <div className="builder-media-manager-tag-modal-inner">
+            <h3 className="builder-media-manager-tag-modal-title">
+              Tags — {tagTarget.assetName}
+            </h3>
+
+            {projectTags.length ? (
+              <div className="builder-media-manager-tag-choices">
+                {projectTags.map((tag) => {
+                  const on = tagDraft.some((t) => mediaTagKey(t) === mediaTagKey(tag.tag));
+                  return (
+                    <button
+                      aria-pressed={on}
+                      className="builder-media-manager-tag-choice"
+                      disabled={busy}
+                      key={tag.id}
+                      onClick={() => toggleDraftTag(tag.tag)}
+                      type="button"
+                    >
+                      {tag.tag}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="builder-media-manager-tag-empty">
+                No tags yet. Add the first one below.
+              </p>
+            )}
+
+            <div className="builder-media-manager-tag-add">
+              <input
+                aria-label="New tag"
+                className="builder-media-manager-tag-input"
+                disabled={busy}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter adds the tag rather than submitting anything — this
+                  // modal is not inside a form on the public site.
+                  if (e.key === "Enter") { e.preventDefault(); addNewTag(); }
+                }}
+                placeholder="Add a new tag"
+                value={newTag}
+              />
+              <button
+                className="builder-media-manager-tag-add-btn"
+                disabled={busy || !normalizeMediaTag(newTag)}
+                onClick={addNewTag}
+                type="button"
+              >
+                Add
+              </button>
+            </div>
+
+            {errorMsg ? <div className="builder-media-manager-error">{errorMsg}</div> : null}
+
+            <div className="builder-media-manager-confirm-actions">
+              <button
+                className="builder-media-manager-btn builder-media-manager-btn-primary"
+                disabled={busy}
+                onClick={saveTags}
+                type="button"
+              >
+                {busy ? "Saving…" : "Save Tags"}
+              </button>
+              <button
+                className="builder-media-manager-btn"
+                disabled={busy}
+                onClick={() => setTagTarget(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <div className="builder-media-manager-confirm">
+          <p>Delete “{deleteTarget.assetName}”? This cannot be undone.</p>
+          <div className="builder-media-manager-confirm-actions">
+            <button
+              className="builder-media-manager-btn builder-media-manager-btn-danger"
+              disabled={busy}
+              onClick={confirmDelete}
+              type="button"
+            >
+              {busy ? "Deleting…" : "Delete"}
+            </button>
+            <button
+              className="builder-media-manager-btn"
+              disabled={busy}
+              onClick={() => setDeleteTarget(null)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

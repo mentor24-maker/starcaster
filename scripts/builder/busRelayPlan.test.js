@@ -487,3 +487,50 @@ test('the guard is checked before the relay reads anything', () => {
   assert.ok(guardAt < firstWatchRead,
     'a refused run must do nothing at all, not even look');
 });
+
+/* ------------------------------------------------------------------ *
+ * Whose word is it? (task 86bbqx2xe)
+ *
+ * The loops post under Dane's own API token, so his user id is on comments he
+ * never wrote. These pin the filter the relay actually uses.
+ * ------------------------------------------------------------------ */
+
+const { operatorComments } = require('./busRelayPlan.js');
+const { isMachineComment, stampMachineComment } = require('./machineComment.js');
+
+const DANE = 48012725;
+const opts = { operatorId: DANE, isMachine: isMachineComment };
+
+const hisWord = { id: 'h', user: { id: DANE }, comment_text: 'B, go with the marker' };
+const itsOwnCard = { id: 'm', user: { id: DANE }, comment_text: stampMachineComment('@@ASKED Which option?') };
+const someoneElse = { id: 'x', user: { id: 999 }, comment_text: 'drive-by' };
+
+test('a machine-authored comment is not a fresh operator answer', () => {
+  assert.deepEqual(operatorComments([itsOwnCard], opts), []);
+});
+
+test("the relay still hears Dane when he actually answers", () => {
+  assert.deepEqual(operatorComments([itsOwnCard, hisWord, someoneElse], opts).map((c) => c.id), ['h']);
+});
+
+test('an escalated ticket with only its own ask card has nothing fresh, so it is never handed back', () => {
+  const fresh = operatorComments([itsOwnCard], opts).length;
+  assert.equal(handbackTarget(loopQueue, 'needs your input', fresh), null);
+});
+
+test('...and the same ticket IS handed back once he answers for real', () => {
+  const fresh = operatorComments([itsOwnCard, hisWord], opts).length;
+  assert.equal(handbackTarget(loopQueue, 'needs your input', fresh), 'Queued');
+});
+
+test('an unreadable comment list is not somebody\'s word', () => {
+  assert.deepEqual(operatorComments(null, opts), []);
+  assert.deepEqual(operatorComments(undefined, opts), []);
+});
+
+test('without an isMachine predicate the filter is id-only — the caller must pass the guard', () => {
+  // Pinned deliberately: this is the OLD behaviour, and it is what the relay
+  // would fall back to if a future edit dropped the predicate. If this ever
+  // needs changing, the relay's call site is what to look at first.
+  assert.equal(operatorComments([itsOwnCard], { operatorId: DANE }).length, 1);
+});
