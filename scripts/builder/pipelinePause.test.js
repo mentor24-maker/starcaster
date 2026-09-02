@@ -294,7 +294,12 @@ test('the announcement says how to end it', () => {
 });
 
 test('the resumed message is said once and reports what was swept', () => {
-  assert.match(pause.resumedMessage({ by: 'Dane', pausedForMs: 30 * MIN, swept: ['a1', 'b2'] }), /a1, b2/);
+  const swept = [
+    { id: 'a1', kind: 'a build', destination: 'Rework' },
+    { id: 'b2', kind: 'a review', destination: 'In review' },
+  ];
+  assert.match(pause.resumedMessage({ by: 'Dane', pausedForMs: 30 * MIN, swept }), /a1/);
+  assert.match(pause.resumedMessage({ by: 'Dane', pausedForMs: 30 * MIN, swept }), /b2/);
   assert.match(pause.resumedMessage({ by: 'Dane', pausedForMs: 30 * MIN, swept: [] }), /Nothing was left stranded/);
 });
 
@@ -793,4 +798,73 @@ test('the swept note names the destination it actually moved to', () => {
   const review = pause.sweptTicketNote({ kind: 'a review' });
   assert.match(review, /stays in "In review"/);
   assert.doesNotMatch(review, /Returned to/);
+});
+
+// ---------------------------------------------------------------------------
+// The report must match the sweep (task 86bbqw49y). The sweep itself was
+// already right on 2026-08-31; the summary printed underneath it was not, and
+// announced a ticket correctly left in "In review" as "returned to Queued".
+// ---------------------------------------------------------------------------
+
+test('a swept REVIEW is reported as released where it stands, never as Queued', () => {
+  const line = pause.sweptSummary([{ id: '86bbq2y73', kind: 'a review', destination: 'In review' }]);
+  assert.match(line, /86bbq2y73/);
+  assert.match(line, /released in "In review"/);
+  assert.doesNotMatch(line, /Queued/, 'a released review never went to Queued — saying so sends a reader to the wrong list');
+  assert.doesNotMatch(line, /returned to/i);
+});
+
+test('a swept BUILD is still reported as returned to the status it went to', () => {
+  const rework = pause.sweptSummary([{ id: 'a1', kind: 'a build', destination: 'Rework' }]);
+  assert.match(rework, /a1 \(returned to Rework\)/);
+
+  const queued = pause.sweptSummary([{ id: 'a1', kind: 'a build', destination: 'Queued' }]);
+  assert.match(queued, /a1 \(returned to Queued\)/);
+});
+
+test('a MIXED sweep reports each kind accurately in one summary', () => {
+  const line = pause.sweptSummary([
+    { id: 'bld', kind: 'a build', destination: 'Queued' },
+    { id: 'rev', kind: 'a review', destination: 'In review' },
+  ]);
+  assert.match(line, /2 stranded tickets unstuck/);
+  assert.match(line, /bld \(returned to Queued\)/);
+  assert.match(line, /rev \(released in "In review"\)/);
+  // The failure this replaces: one destination asserted over the whole group.
+  assert.doesNotMatch(line, /rev \(returned to Queued\)/);
+});
+
+test('an empty sweep says so rather than counting to zero', () => {
+  assert.match(pause.sweptSummary([]), /No stranded tickets/);
+  assert.doesNotMatch(pause.sweptSummary([]), /Queued/);
+});
+
+test('a bare id still prints as an id, not as [object Object]', () => {
+  assert.match(pause.sweptSummary(['a1', 'b2']), /a1, b2/);
+});
+
+test('the stranded reason matches each kind, and a mixed list gets both', () => {
+  const build = { id: 'bld', name: 'x', kind: 'a build' };
+  const review = { id: 'rev', name: 'y', kind: 'a review' };
+
+  const buildOnly = pause.strandedExplanation([build]).join('\n');
+  assert.match(buildOnly, /bld/);
+  assert.match(buildOnly, /only claim from Rework and Queued/);
+
+  // The review's status is the one thing about it that is RIGHT. Telling a
+  // reader the loops only claim from Queued sends them hunting for a status
+  // problem that does not exist; the stale claim note is the actual fault.
+  const reviewOnly = pause.strandedExplanation([review]).join('\n');
+  assert.match(reviewOnly, /rev/);
+  assert.match(reviewOnly, /stale claim note/);
+  assert.doesNotMatch(reviewOnly, /only claim from Rework and Queued/);
+
+  const both = pause.strandedExplanation([build, review]);
+  assert.equal(both.length, 2, 'a mixed list needs both reasons, not one applied to both');
+  assert.match(both.join('\n'), /only claim from Rework and Queued/);
+  assert.match(both.join('\n'), /stale claim note/);
+});
+
+test('nothing stranded means nothing to explain', () => {
+  assert.deepEqual(pause.strandedExplanation([]), []);
 });

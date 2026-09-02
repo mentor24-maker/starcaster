@@ -42,8 +42,8 @@ import nodeRoles from '../lib/nodeRoles.js';
 const {
   SWITCH_TASK_NAME, STRANDED_AFTER_MS,
   pauseRecord, resumeRecord, readTrail, pauseVerdict,
-  inFlight, describeTickets, drainReport,
-  resumedMessage, sweptTicketNote, resumeAuthorization, numericOption,
+  inFlight, describeTickets, strandedExplanation, drainReport,
+  resumedMessage, sweptTicketNote, sweptSummary, resumeAuthorization, numericOption,
   strandedBuildDestination,
 } = pipelinePause;
 const { resolveBuildStart, prLookupArgs } = buildStart;
@@ -305,7 +305,11 @@ if (cmd === 'check') {
       : 'in flight:     nothing — the decks are clear');
     if (stranded.length) {
       console.log(`STRANDED:      ${describeTickets(stranded)}`);
-      console.log('               nothing is working on these and nothing ever will — the loops only claim from Queued.');
+      // WHY each one is stuck differs by kind, so it is said per kind. A build
+      // is stuck because of its status; a review's status is already correct
+      // and only its stale claim note is wrong. One reason over both sent a
+      // reader hunting for a status problem that was not there (86bbqw49y).
+      for (const line of strandedExplanation(stranded)) console.log(`               ${line}`);
       console.log('               `npm run pipeline -- resume --operator-asked` puts them right.');
     }
   } else {
@@ -467,7 +471,7 @@ if (cmd === 'check') {
           continue;
         }
         console.error(`  ${s.id} ("${s.name}") released in "In review" — its review pass died, but its build is finished and its PR is open.`);
-        swept.push(s.id);
+        swept.push({ id: s.id, kind: s.kind, destination: 'In review' }); // matches the per-ticket line above, verbatim
         continue;
       }
 
@@ -479,7 +483,7 @@ if (cmd === 'check') {
         continue;
       }
       console.error(`  ${s.id} ("${s.name}") returned to ${where.status} — it was ${s.kind} with nothing working on it; ${where.why}.`);
-      swept.push(s.id);
+      swept.push({ id: s.id, kind: s.kind, destination: where.status });
     }
   } else if (!flag('no-sweep')) {
     console.error('  the queue could not be read, so nothing was swept — run `npm run pipeline -- status` after this.');
@@ -492,11 +496,12 @@ if (cmd === 'check') {
   const pausedForMs = Number.isFinite(before.atMs) ? Date.now() - before.atMs : null;
   await announce(resumedMessage({ by, pausedForMs, swept }));
 
-  // "returned to Queued" is no longer true of every swept ticket — a
-  // half-built one goes to Rework — and a summary that names one destination
-  // for both is the kind of confident wrong sentence the per-ticket lines
-  // above exist to avoid. Those lines say where each one actually went.
-  console.log(`The pipeline is RUNNING again. ${swept.length} stranded ticket(s) unstuck${swept.length ? `: ${swept.join(', ')}` : ''}.`);
+  // No destination is true of every swept ticket — a half-built one goes to
+  // Rework, a fresh one to Queued, and a stranded REVIEW does not move at all.
+  // So the summary carries each ticket's own outcome rather than naming one
+  // for the group, which is how a released review came to be announced as
+  // "returned to Queued" one line under the truth (86bbqw49y).
+  console.log(`The pipeline is RUNNING again. ${sweptSummary(swept)}`);
   console.error(`  requests this pass: ${requestCount}`);
 
 } else {
