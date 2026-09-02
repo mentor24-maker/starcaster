@@ -836,3 +836,35 @@ test('LOOP_ENGINEERING documents the lane, the window, the switch and the digest
     assert.ok(doc.includes(needle), `LOOP_ENGINEERING.md must document: ${needle}`);
   }
 });
+
+// ── The editor's formatting is not part of what he said (task 86bbt038u) ─────
+//
+// 2026-09-01: Dane posted `resume auto-merging` on the party line three times
+// and the lane stayed latched off for two days. ClickUp's message box turns a
+// PASTED phrase into a fenced code block and guesses a language, so what the
+// switch actually received was "```cpp\nresume auto-merging\n```". `resume`
+// is matched as the WHOLE message — correctly, and that asymmetry with `stop`
+// stays — so the backticks made his words unreadable.
+
+test('a fenced resume, with the language tag ClickUp guesses, is still his word', () => {
+  assert.equal(switchCommand('```cpp\nresume auto-merging\n```'), 'resume');
+});
+
+test('a fenced resume with no language tag reads the same', () => {
+  assert.equal(switchCommand('```\nresume auto-merging\n```'), 'resume');
+});
+
+test('inline backticks around the phrase read the same', () => {
+  assert.equal(switchCommand('`resume auto-merging`'), 'resume');
+});
+
+test('stripping the fence does NOT loosen resume into a substring match', () => {
+  // The whole point of the asymmetry: a resume that fires when he was only
+  // TALKING about resuming costs an unwanted merge.
+  assert.equal(switchCommand('I was thinking about resume auto-merging tomorrow'), null);
+  assert.equal(switchCommand('```\nremind me to resume auto-merging in the morning\n```'), null);
+});
+
+test('a fenced stop still stops', () => {
+  assert.equal(switchCommand('```\nstop auto-merging\n```'), 'stop');
+});

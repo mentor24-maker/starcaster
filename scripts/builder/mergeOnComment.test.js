@@ -926,3 +926,26 @@ test('a ticket carrying ONLY a card and no verdict still refuses', () => {
   assert.equal(d.act, 'refuse');
   assert.match(d.reason, /no review verdict/);
 });
+
+// ── A pasted merge word is still the merge word (task 86bbt038u) ─────────────
+//
+// The same ClickUp behaviour that swallowed Dane's `resume auto-merging` on
+// 2026-09-01 applies here: his `merge` worked only because he typed it by
+// hand. Pasting it would have produced a fenced block and been ignored, with
+// the ticket sitting in Ready to launch looking like he had never answered.
+
+test('a fenced merge word is a merge command', () => {
+  assert.equal(isMergeCommand('```\nmerge\n```'), true);
+  assert.equal(isMergeCommand('```cpp\nmerge\n```'), true);
+});
+
+test('inline backticks around a merge phrase still count', () => {
+  assert.equal(isMergeCommand('`merge it`'), true);
+  assert.equal(isMergeCommand('`ship it`'), true);
+});
+
+test('stripping the fence does NOT turn the closed set into a substring match', () => {
+  assert.equal(isMergeCommand('do not merge this yet'), false);
+  assert.equal(isMergeCommand('```\ndo not merge this yet\n```'), false);
+  assert.equal(isMergeCommand("I'll approve the design later"), false);
+});
