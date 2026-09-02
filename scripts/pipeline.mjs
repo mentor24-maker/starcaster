@@ -307,7 +307,7 @@ const fmt = pipelinePause.humanTime;
  * looked at at all. Not looking and finding nothing are different answers
  * (86bbqw49y).
  */
-async function sweepStranded({ by, queue, apply = false, strandedAfterMs = STRANDED_AFTER_MS, command = 'resume' }) {
+async function sweepStranded({ by, queue, apply = false, strandedAfterMs = STRANDED_AFTER_MS, command = 'npm run pipeline -- resume' }) {
   // Sweep first, then lift the flag. In this order a ticket that was stranded
   // is back in the line BEFORE the loops start claiming again, so the very
   // next pass can pick it up rather than finding it a minute later.
@@ -508,7 +508,7 @@ if (cmd === 'check') {
   console.log('');
 
   noteThreshold();
-  const { swept, found, sweepState } = await sweepStranded({ by, queue: sw.queue, apply, strandedAfterMs, command: 'sweep' });
+  const { swept, found, sweepState } = await sweepStranded({ by, queue: sw.queue, apply, strandedAfterMs, command: 'npm run pipeline -- sweep --apply' });
   console.log(sweptSummary(swept, { ...sweepState, applied: apply }));
 
   // Only a sweep that CHANGED something is worth the party line. A dry run is
