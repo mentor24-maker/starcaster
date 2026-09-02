@@ -1850,6 +1850,96 @@ stale by the time it finished.
 
 ---
 
+### 6.14 A pull request opened without a claim is invisible to every other session
+
+On 2026-09-01 a hand-driven session was asked to finish ticket 86bbjve6q. It did
+what the rules say: read the ticket, found it **`Queued`, unassigned, with no loop
+note** — every signal a session can check said the work was free — and claimed it.
+One command later, while checking whether the Vercel variables still needed
+setting, it found them already there, **created eight minutes earlier**, a
+production deployment `Ready` seven minutes earlier, and **PR #517** open ten
+minutes earlier. Another session had been building the ticket the whole time and
+had never claimed it.
+
+This is the 2026-08-20 two-sessions-one-epic collision, reproduced exactly, five
+weeks after the rule written to prevent it. Note which guards did and did not
+fire. **Worktree separation did not help, and could not**: both threads were
+scrupulous about it, each in its own folder on its own branch. Separate folders
+stop two threads corrupting each other's *files*; they say nothing about two
+threads building the same *thing*.
+
+What surfaced it was the claim — made by the session that was **not** doing the
+work. That is the whole lesson, and it inverts the way the rule is usually read:
+
+- **The claim is not a lock you take for your own benefit. It is a signal you
+  emit for everyone else.** A session that skips it loses nothing itself and
+  removes the only evidence anyone else could have used.
+- **So the session that opens the pull request must be the session that claimed
+  the ticket.** Not "a claim happened at some point" — the actor that builds is
+  the actor that claims, because the claim is what makes that actor visible.
+- **Every signal reading "free" is not evidence of free.** Status, assignee and
+  loop note all agreed and all three were wrong together, because they are one
+  source: whatever last wrote to the ticket. Three consistent readings from one
+  unwritten source is one silence, not three confirmations.
+
+What actually caught it was an unrelated read of *external* state — Vercel — one
+step before a duplicate deploy. That is luck, not a control, and it should not be
+relied on again. Until something enforces this, the cheap habits are
+`npm run map` and the queue before starting an epic (THREAD-DISCIPLINE rule 4), and
+treating **any** ticket whose work you can see evidence of as claimed by somebody,
+whatever its status says.
+
+Related: the same night produced two more tickets whose status disagreed with
+reality — one `Queued` with an open PR, one `Queued` with a **merged** PR and its
+closing note already posted. `npm run reconcile` could report none of them, because
+`Queued` and `Rework` satisfy neither `isInFlight` nor `isTerminal` and so fall out
+of both of its scans (task 86bbt3wzk). Three instances in one evening of *the
+ticket does not know what happened to it* is a systems answer waiting to be built,
+not three slips.
+
+### 6.15 An abandoned branch's unique file is evidence of a rejected plan until proven otherwise
+
+Clearing out stale branches on 2026-09-01, one of eight held a file that existed
+nowhere else in the repository: `workers/youtube-media/fly.toml`, deploy
+configuration for the YouTube media worker, with a comment explaining that it
+existed so nobody would have to answer the `fly launch` wizard. The reasoning
+wrote itself — unique, unrecoverable if deleted, and the very next ticket in that
+epic was *deploy the worker*. The recommendation was nearly to ship it.
+
+It was configuration for **Fly.io, a rented datacenter host**, and `main`'s README
+for that same worker — rewritten fifty minutes earlier — opens like this:
+
+> **It runs on the Mac Mini.** Dane chose that over a rented server on 2026-08-24
+> (ticket `86bbjve6b`), and the reason is the address: YouTube blocks datacenter
+> IPs, which is the whole reason this work cannot live on Vercel in the first
+> place.
+
+The file was not orphaned treasure. It was a five-week-old artifact of **the plan
+that was rejected**, and shipping it would have put two contradictory deploy
+stories in one folder with the wrong one looking freshly committed — plus a second
+cost the README names, since a rented host needs a logged-in YouTube session stored
+on it.
+
+- **Uniqueness is not value.** "This exists nowhere else" and "this is wanted" are
+  different questions, and only the second one matters. A branch is usually
+  abandoned *because* its idea was dropped, so the unique files on it are the most
+  likely to encode the rejected approach, not the least.
+- **Find the decision before you value the artifact.** The answer took one look at
+  the README that the artifact's own subject already had in `main`. Check what the
+  current code says about the same subject before deciding an old file is a
+  survivor.
+- **Verify a branch by content, never by `git cherry`.** Squash-merging rewrites
+  commits, so patch-equivalence calls shipped work unshipped — six of the eight
+  branches looked like they held unshipped commits and every one was superseded.
+  Compare the files against `main` and count what is actually there: two of them
+  held test files with 8 and 6 cases where `main` had 16 and 19.
+
+The reason this is worth a rule rather than a shrug: the failure is asymmetric and
+silent in one direction. Deleting a wanted file announces itself the moment someone
+needs it, and the restore line is one command away. **Shipping an unwanted one
+announces nothing at all** — it lands looking current, and the next session reads
+it as the plan.
+
 ## 7. Operator-facing gotchas
 
 Worth knowing before they cost an hour.
