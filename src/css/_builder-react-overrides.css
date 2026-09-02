@@ -8135,3 +8135,14 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   font-size: var(--text-sm);
   opacity: 0.9;
 }
+
+/* The Card Manager's one checkbox. Sized and aligned to sit on the same
+   baseline as the text and select controls beside it, rather than at the
+   browser default, which reads as a stray tick floating in the group. */
+.builder-react-root .bcm-checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 6px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
