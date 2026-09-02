@@ -62,6 +62,7 @@ import mergeOnComment from './builder/mergeOnComment.js';
 import loopTrail from './builder/loopTrail.js';
 import buildStart from './builder/buildStart.js';
 import operatorCard from './builder/operatorCard.js';
+import machineComment from './builder/machineComment.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
 import loopInterval from './builder/loopInterval.js';
@@ -78,7 +79,7 @@ import pipelinePause from './builder/pipelinePause.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
-  defaultWatches, handbackTarget, mergeEnabled,
+  defaultWatches, handbackTarget, mergeEnabled, operatorComments,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
   SIMULATED_BUS_WHY, simulationGuard, simulationLine,
 } = busRelayPlan;
@@ -107,6 +108,9 @@ const {
 } = autoMergeLane;
 const { readLedgerFile, saveLedgerIfReadable } = autoMergeLedgerFile;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
+const {
+  isMachineComment, stampCommentBody, isCommentPostPath,
+} = machineComment;
 const { resolveTaskRepo } = taskRepo;
 const {
   ESCALATE_AT_ROUND, currentRound, nextRound, wouldEscalate,
@@ -253,12 +257,22 @@ function unreachable(err) {
 
 async function call(method, path, body) {
   requestCount += 1;
+  // THE ONE PLACE A MACHINE COMMENT IS MARKED (task 86bbqx2xe). The loops post
+  // under Dane's own token, so nothing downstream can tell their writing from
+  // his; the relay read an `ask` card as his answer and released the
+  // escalation within ten minutes. There are fourteen comment-posting sites in
+  // this file and a fifteenth would fail silently in the dangerous direction,
+  // so the stamp goes on at the door rather than at each of them. See
+  // scripts/builder/machineComment.js.
+  const sendBody = (method === 'POST' && isCommentPostPath(path))
+    ? stampCommentBody(body)
+    : body;
   let res;
   try {
     res = await fetch(`https://api.clickup.com${path}`, {
       method,
       headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
+      body: sendBody ? JSON.stringify(sendBody) : undefined,
     });
   } catch (err) {
     return unreachable(err);
@@ -2400,8 +2414,11 @@ if (cmd === 'whoami') {
 
   // gh, not the GitHub API directly: it is already the repo's authenticated
   // path everywhere else, and a second auth story is a second thing to break.
-  const lookupPr = (number) => {
-    const out = spawnSync('gh', ['pr', 'view', String(number), '--json', 'state,headRefName'], {
+  // --repo, ALWAYS (task 86bbqyyfn). Without it gh resolves the repo from the
+  // working directory, which is always starcaster — so a `repo:pulse` ticket
+  // was answered with starcaster's PR of the same number.
+  const lookupPr = (pr) => {
+    const out = spawnSync('gh', buildStart.prLookupArgs(pr), {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     });
     if (out.status !== 0) return null; // could not tell — NOT "no PR"
@@ -3165,8 +3182,12 @@ if (cmd === 'whoami') {
     for (const t of open) {
       const commentsOut = await call('GET', `/api/v2/task/${t.id}/comment`);
       if (!commentsOut.res.ok) { unchecked.push(`${t.id} (${t.name}): could not read comments`); continue; }
-      const fromOperator = (commentsOut.json.comments || [])
-        .filter((c) => Number(c.user?.id) === OPERATOR_ID);
+      // Authorship is id AND marker (task 86bbqx2xe) — the rule lives in
+      // busRelayPlan.operatorComments so a test can reach it without a network.
+      const fromOperator = operatorComments(commentsOut.json.comments, {
+        operatorId: OPERATOR_ID,
+        isMachine: isMachineComment,
+      });
 
       // The kill switch, as he may have set it on a ticket rather than on the
       // party line (standing condition 1: "on the bus or any Loop Queue

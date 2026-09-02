@@ -92,6 +92,7 @@ import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-modu
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
 import { BuilderEventManagerModuleSettings } from "./builder-event-manager-module-settings";
+import { BuilderMediaManagerModuleSettings } from "./builder-media-manager-module-settings";
 import { BuilderEventCalendarModuleSettings } from "./builder-event-calendar-module-settings";
 import { BuilderEventDetailModuleSettings } from "./builder-event-detail-module-settings";
 import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-category-manager-module-settings";
@@ -2058,6 +2059,34 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "media-manager") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    const tiles = [
+      { label: "court-1.jpg", kind: "image" },
+      { label: "clinic.mp4", kind: "video" },
+      { label: "clubhouse.jpg", kind: "image" },
+      { label: "team-2026.jpg", kind: "image" },
+    ];
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#f8fafc", borderBottom: "1px solid #e4ecf2" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: accent, borderRadius: 4, padding: "3px 8px" }}>Upload Files</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "#587592", textTransform: "uppercase" }}>4 files</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, padding: 12 }}>
+          {tiles.map((tile, i) => (
+            <div key={i} style={{ border: "1px solid #e4ecf2", borderRadius: 6, overflow: "hidden" }}>
+              <div style={{ height: 34, background: tile.kind === "video" ? "#18324a" : "#dbe9f5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: tile.kind === "video" ? "#dbe9f5" : "#587592" }}>
+                {tile.kind === "video" ? "▶" : "🖼"}
+              </div>
+              <div style={{ fontSize: 9, color: "#8ba9be", padding: "4px 5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tile.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   if (module.type === "event-manager") {
     const accent = module.settings.accentColor || "#0f4f8f";
     const rows = [
@@ -3131,6 +3160,7 @@ export function BuilderModuleCard({
     const isEventDetailModule = module.type === "event-detail";
     const isEventCalendarModule = module.type === "event-calendar";
     const isEventManagerModule = module.type === "event-manager";
+    const isMediaManagerModule = module.type === "media-manager";
     const isBlogCategoryManagerModule = module.type === "blog-category-manager";
     const isBlogCardManagerModule = module.type === "blog-card-manager";
     const isBlogSearchModule = module.type === "blog-search";
@@ -3427,6 +3457,8 @@ export function BuilderModuleCard({
               <BuilderEventCalendarModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isEventManagerModule ? (
               <BuilderEventManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isMediaManagerModule ? (
+              <BuilderMediaManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryManagerModule ? (
               <BuilderBlogCategoryManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCardManagerModule ? (

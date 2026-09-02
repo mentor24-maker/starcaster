@@ -48,6 +48,30 @@ function defaultWatches({ agentResponseList, loopQueueList }) {
   ];
 }
 
+/**
+ * The comments on a ticket that are ACTUALLY the operator's word.
+ *
+ * Two conditions, and the second one is not optional (task 86bbqx2xe). The
+ * loops post under Dane's own API token, so a card a machine wrote comes back
+ * from ClickUp carrying HIS user id. Filtering on the id alone, which is what
+ * this did until 2026-09-01, meant the relay read its own `ask` card as a
+ * fresh answer from him: it relayed the card to the bus as "Dane replied" and
+ * handed the ticket out of `Needs your input` ten minutes after it had been
+ * escalated to him.
+ *
+ * A comment whose text could not be read is NOT counted as his. An unread
+ * comment is an unknown, and the one thing it must never do is release an
+ * escalation on the strength of something nobody looked at.
+ */
+function operatorComments(comments, { operatorId, isMachine } = {}) {
+  if (!Array.isArray(comments)) return [];
+  const machine = typeof isMachine === 'function' ? isMachine : () => false;
+  return comments.filter((c) => {
+    if (Number(c?.user?.id) !== Number(operatorId)) return false;
+    return !machine(c.comment_text);
+  });
+}
+
 /** Where a task should be moved after its fresh operator comments were
  *  relayed — or null for "do not touch it". freshRelayed is the count of
  *  comments relayed THIS run: zero means nothing new from the operator,
@@ -289,6 +313,7 @@ function busFailureBucket({ delivered, cosmetic } = {}) {
 }
 
 module.exports = {
+  operatorComments,
   defaultWatches,
   handbackTarget,
   mergeEnabled,

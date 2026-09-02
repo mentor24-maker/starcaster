@@ -1336,6 +1336,17 @@ App.assets = (function () {
         nameTd.textContent = nameText;
       }
       if (canPreviewImage && nameEl) bindAssetImageHover(nameEl, asset);
+      // Files uploaded through this screen carry a mark, so an operator can see
+      // at a glance which of a mixed gallery came from the Media Manager and
+      // which arrived from Drive, the Builder, AI generation or Site Import.
+      if (asset.source === MEDIA_MANAGER_SOURCE) {
+        const badge = document.createElement('span');
+        badge.className = 'asset-source-badge';
+        badge.textContent = 'Media Mgr';
+        badge.title = 'Uploaded through the Admin Media Manager';
+        nameTd.appendChild(document.createTextNode(' '));
+        nameTd.appendChild(badge);
+      }
       tr.appendChild(nameTd);
 
       appendCell(tr, asset.imageWidth > 0 ? String(asset.imageWidth) : '-');
@@ -1398,6 +1409,12 @@ App.assets = (function () {
   function isImageMimeType(mimeType) {
     return String(mimeType || '').toLowerCase().startsWith('image/');
   }
+
+  // This screen IS the Admin Media Manager, so everything uploaded through it
+  // declares that origin. The server validates the value against the allowlist
+  // in lib/assetSource.js; the two endpoints below are shared with the Builder
+  // and the asset picker, which send nothing and stay unmarked.
+  const MEDIA_MANAGER_SOURCE = 'admin-media-manager';
 
   // What the file picker should offer for each Asset Type. The image and video
   // lists mirror GALLERY_IMAGE_EXTENSIONS / GALLERY_VIDEO_EXTENSIONS in
@@ -1480,6 +1497,7 @@ App.assets = (function () {
       tags: Array.isArray(options?.tags) ? options.tags : [],
     };
     if (aspect) payload.aspect = aspect;
+    payload.source = MEDIA_MANAGER_SOURCE;
 
     const result = await api('/api/assets/import-image', {
       method: 'POST',
@@ -1511,6 +1529,7 @@ App.assets = (function () {
       assetName: String(options?.assetName || '').trim() || file.name,
       category: String(options?.category || '').trim(),
       tags: Array.isArray(options?.tags) ? options.tags : [],
+      source: MEDIA_MANAGER_SOURCE,
     };
 
     await api('/api/assets/upload-google-drive', {
@@ -1548,6 +1567,7 @@ App.assets = (function () {
         location: String(blob?.url || '').trim(),
         tags,
         size: Number(file.size || 0) || 0,
+        source: MEDIA_MANAGER_SOURCE,
       }),
     });
     return created?.asset || created?.data || null;

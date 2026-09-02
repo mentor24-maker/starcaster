@@ -1674,11 +1674,12 @@ it skips is the queue position.
    git config branch.<branch>.clickup-task <id>     # what tidy reads back
    ```
 
-   Then hand over the command to open a session in that folder and stop
-   building in the current window (CLAUDE.md, "One thread, one topic, one
-   session", rule 2). A session that was opened by "fast track" with nothing
-   else in it may keep going from the worktree by absolute path — the rule's
-   purpose is that the folder and the topic stay one thing, and they do.
+   Then build in that folder, by absolute path (CLAUDE.md, "One topic, one
+   worktree — a session may hold more than one", rule 2). The hand-off to a
+   fresh window is no longer required: since 2026-09-01 a session may carry
+   more than one topic, provided each topic has its own worktree and its own
+   claimed ticket. What has not changed is that the folder and the topic stay
+   one thing.
 5. **On a send-back, merge `origin/main` in FIRST.** Before touching a line.
    The branch has been sitting in review while `main` moved; the fix review
    asked for may already be there under another name. On 2026-08-30, ticket

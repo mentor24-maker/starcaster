@@ -659,6 +659,21 @@ somewhere a person or a log could read it?**
   model for tooling that must not cross the line — it prints lengths and
   first/last four characters, never a value.
 
+**The pipe has a direction, and only one end is safe** (2026-09-01). The example
+above works because `doppler secrets get --plain` writes to stdout, where a pipe
+swallows it, and `gh secret set` echoes nothing. Reverse it and the rule inverts:
+**`doppler secrets set` prints the value it just wrote**, and `doppler secrets
+delete` prints the remaining secrets table — full values, all of them. `--silent`
+suppresses info messages, not those tables. An agent moving a credential INTO
+Doppler that way exposed a live ClickUp token and a Google API key in one
+session, while believing it was following this section.
+
+So: Doppler belongs on the `get` side of a pipe, never the `set` side. A value
+that has to be *entered* into Doppler goes in through the dashboard, by Dane —
+that is the "makes a value new" case, and it always was. And before piping a
+secret anywhere, check what the receiving command prints on success; "it moves
+between two stores" is not the test, "does anything render it" is.
+
 Deleting a GitHub secret is refused outright by the session's safety classifier
 (three attempts, 2026-08-31). That is correct behaviour, not a bug to route
 around: hand the click over and say in one line why.
