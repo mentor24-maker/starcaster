@@ -46,7 +46,7 @@ const {
   resumedMessage, sweptTicketNote, resumeAuthorization, numericOption,
   strandedBuildDestination,
 } = pipelinePause;
-const { resolveBuildStart } = buildStart;
+const { resolveBuildStart, prLookupArgs } = buildStart;
 // The switch is READ in exactly one place, shared with bus-relay, so the two
 // can never hold different ideas of where the flag is or what counts as
 // unreadable (pipelinePauseStore.js says why that matters).
@@ -154,9 +154,13 @@ async function buildStartFor(taskId) {
     return { action: 'unknown', why: `this ticket's comments could not be read (${whyOf(seen)})` };
   }
   return resolveBuildStart(seen.json.comments, {
-    lookupPr: (number) => {
+    // --repo, ALWAYS (task 86bbqyyfn). This is the second copy of the bug the
+    // ticket was filed for: `resume` unsticks stranded builds by asking the
+    // same question, and it was asking it of whichever repo the process
+    // happened to be running in.
+    lookupPr: (pr) => {
       try {
-        const out = execFileSync('gh', ['pr', 'view', String(number), '--json', 'state,headRefName'], {
+        const out = execFileSync('gh', prLookupArgs(pr), {
           encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
         });
         return JSON.parse(out);
