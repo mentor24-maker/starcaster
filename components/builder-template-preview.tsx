@@ -2585,6 +2585,10 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
             const imageUrl = post.featuredImageUrl || post.featured_image_url;
             const isSideBySide = cardLayout === "side-by-side" || layout === "list";
             const hasFeaturedImageInRows = tplRows.some((r) => r.slots.includes("featured_image"));
+            // Full-bleed pulls up over the card's TOP padding only when the
+            // image is the first thing in the card. It used to do so
+            // unconditionally, which slid the image up over whatever sat above it.
+            const firstFilledSlot = tplRows.flatMap((r) => r.slots.slice(0, r.cols)).find(Boolean) ?? null;
 
             function renderEl(id: CardElementId): React.ReactNode {
               switch (id) {
@@ -2603,13 +2607,19 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                       {post.title}
                     </h3>
                   );
-                case "featured_image":
+                case "featured_image": {
                   if (isSideBySide || !imageUrl) return null;
+                  const { frame, img } = featuredImageStyles(tpl, {
+                    cardPaddingX: "1.25rem",
+                    cardPaddingTop: "1.125rem",
+                    topOfCard: firstFilledSlot === "featured_image",
+                  });
                   return (
-                    <div style={{ width: "calc(100% + 2.5rem)", marginLeft: "-1.25rem", marginTop: "-1.125rem", overflow: "hidden", aspectRatio: aspectRatioMap[tplAspect] ?? "16/9" }}>
-                      <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    <div style={frame}>
+                      <img alt={post.title} src={imageUrl} style={img} />
                     </div>
                   );
+                }
                 case "excerpt":
                   return post.excerpt ? (
                     <p style={{ margin: 0, fontSize: "0.875rem", color: "#4a5568", lineHeight: 1.5 }}>{post.excerpt}</p>
@@ -2634,13 +2644,17 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
             }
 
             return (
-              <article key={post.id} style={{ ...cardBorder, borderRadius: cardRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? "row" : "column" }}>
+              <article key={post.id} style={{ ...cardBorder, borderRadius: cardRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? sideBySideDirection(tpl) : "column" }}>
                 {isSideBySide && imageUrl && hasFeaturedImageInRows ? (
-                  <div style={{ flexShrink: 0, width: 220, overflow: "hidden" }}>
-                    <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  <div style={sideStripStyle(tpl)}>
+                    <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
                   </div>
                 ) : null}
-                <div style={{ padding: "1.125rem 1.25rem", flex: 1, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+                {/* minWidth 0 is load-bearing: a flex item defaults to
+                    min-width:auto, so the text column refuses to shrink below its
+                    content and the card overflows sideways once the image strip is
+                    wide. Reachable now that the strip's width is an operator control. */}
+                <div style={{ padding: "1.125rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
                   {tplRows.map((row) => {
                     const hasContent = row.slots.some((s) => s && !(isSideBySide && s === "featured_image"));
                     if (!hasContent) return null;
@@ -3486,6 +3500,19 @@ type CardTemplate = {
   cardBorderRadius: number;
   readMoreLabel: string;
   accentColor: string;
+  // Featured-image controls (2026-09-02, task 86bbt52fa). Mirrored in
+  // lib/blogCardTemplateStore.js, which is the server's copy of this shape —
+  // add a key in one and it must be added in the other, or the server's
+  // mergeTemplate drops it on the next save.
+  imageBorderWidth: number;
+  imageBorderColor: string;
+  imageBorderRadius: number;
+  imageShadow: string;
+  imageBleed: string;
+  imageSide: string;
+  imageSideWidth: number;
+  imageHeight: number;
+  imageCrop: string;
   rows: CardRow[];
 };
 
@@ -3509,6 +3536,18 @@ const DEFAULT_CARD_TEMPLATE: CardTemplate = {
   cardBorderRadius: 12,
   readMoreLabel: "Read More",
   accentColor: "#0f4f8f",
+  // These nine reproduce the rendering that used to be hard-coded into the
+  // image element: no border, no shadow, full-bleed to the card edges, on the
+  // left at 220px when side-by-side, aspect-ratio height, cover crop.
+  imageBorderWidth: 0,
+  imageBorderColor: "#e2e8f0",
+  imageBorderRadius: 0,
+  imageShadow: "none",
+  imageBleed: "full",
+  imageSide: "left",
+  imageSideWidth: 220,
+  imageHeight: 0,
+  imageCrop: "cover",
   rows: [
     { id: "r1", cols: 1, slots: ["categories"] },
     { id: "r2", cols: 1, slots: ["headline"] },
@@ -3517,6 +3556,120 @@ const DEFAULT_CARD_TEMPLATE: CardTemplate = {
     { id: "r5", cols: 3, slots: ["author", "date", "read_more"] },
   ],
 };
+
+const IMAGE_SHADOWS = ["none", "soft", "medium", "strong"];
+const IMAGE_BLEEDS  = ["full", "inset"];
+const IMAGE_SIDES   = ["left", "right", "top"];
+const IMAGE_CROPS   = ["cover", "contain"];
+
+const IMAGE_SHADOW_CSS: Record<string, string> = {
+  none:   "none",
+  soft:   "0 2px 8px rgba(0,0,0,0.10)",
+  medium: "0 6px 18px rgba(0,0,0,0.16)",
+  strong: "0 12px 32px rgba(0,0,0,0.24)",
+};
+
+const CARD_ASPECT_RATIOS: Record<string, string> = { "16:9": "16/9", "4:3": "4/3", "3:2": "3/2", "1:1": "1/1" };
+
+function cardNum(value: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function cardOneOf(value: unknown, allowed: string[], fallback: string): string {
+  const v = String(value ?? "");
+  return allowed.includes(v) ? v : fallback;
+}
+
+/**
+ * The featured image's frame and photo styles, derived once from the card
+ * template and used by BOTH the Card Manager's Live Preview and the published
+ * post list. They are one function on purpose: an acceptance criterion of task
+ * 86bbt52fa is that the two agree, and two copies of this arithmetic is exactly
+ * how they would stop agreeing.
+ *
+ * `cardPadding` is the card's own horizontal padding, which differs between the
+ * two surfaces (1.25rem live, 1.25rem preview) — full-bleed cancels it with a
+ * negative margin, inset leaves it alone.
+ */
+function featuredImageStyles(
+  tpl: CardTemplate,
+  opts: { cardPaddingX: string; cardPaddingTop: string; topOfCard: boolean }
+): { frame: CSSProperties; img: CSSProperties } {
+  const bleed = tpl.imageBleed === "inset" ? false : true;
+  const border = tpl.imageBorderWidth > 0
+    ? `${tpl.imageBorderWidth}px solid ${tpl.imageBorderColor}`
+    : undefined;
+
+  const frame: CSSProperties = {
+    overflow: "hidden",
+    border,
+    borderRadius: tpl.imageBorderRadius || undefined,
+    boxShadow: IMAGE_SHADOW_CSS[tpl.imageShadow] === "none" ? undefined : IMAGE_SHADOW_CSS[tpl.imageShadow],
+    // A fixed height wins over the aspect ratio when one is set; height 0 means
+    // "no fixed height", which is how an untouched template keeps its 16:9.
+    ...(tpl.imageHeight > 0
+      ? { height: tpl.imageHeight }
+      : { aspectRatio: CARD_ASPECT_RATIOS[tpl.imageAspectRatio] ?? "16/9" }),
+  };
+
+  if (bleed) {
+    // Full-bleed: pull out past the card's padding on both sides, and up over
+    // the top padding when the image is the card's first element.
+    frame.width = `calc(100% + ${opts.cardPaddingX} + ${opts.cardPaddingX})`;
+    frame.marginLeft = `-${opts.cardPaddingX}`;
+    if (opts.topOfCard) frame.marginTop = `-${opts.cardPaddingTop}`;
+  } else {
+    frame.width = "100%";
+  }
+
+  const img: CSSProperties = {
+    width: "100%",
+    height: "100%",
+    objectFit: tpl.imageCrop === "contain" ? "contain" : "cover",
+    display: "block",
+  };
+
+  return { frame, img };
+}
+
+/**
+ * The side strip in Side-by-side layout. `imageSide: "top"` means the card
+ * stacks instead — the caller reads that off `sideBySideDirection`.
+ */
+function sideBySideDirection(tpl: CardTemplate): "row" | "row-reverse" | "column" {
+  if (tpl.imageSide === "top") return "column";
+  return tpl.imageSide === "right" ? "row-reverse" : "row";
+}
+
+/**
+ * The image strip in Side-by-side layout: a fixed-width column beside the text,
+ * or a full-width band above it when the operator picks "top".
+ */
+function sideStripStyle(tpl: CardTemplate): CSSProperties {
+  const shadow = IMAGE_SHADOW_CSS[tpl.imageShadow];
+  const base: CSSProperties = {
+    flexShrink: 0,
+    overflow: "hidden",
+    border: tpl.imageBorderWidth > 0 ? `${tpl.imageBorderWidth}px solid ${tpl.imageBorderColor}` : undefined,
+    borderRadius: tpl.imageBorderRadius || undefined,
+    boxShadow: shadow === "none" ? undefined : shadow,
+    // Inset gives the strip breathing room inside the card; full-bleed keeps it
+    // flush to the card edge, which is how it rendered before these controls.
+    margin: tpl.imageBleed === "inset" ? "0.75rem" : undefined,
+  };
+  if (tpl.imageSide === "top") {
+    return {
+      ...base,
+      width: "auto",
+      ...(tpl.imageHeight > 0
+        ? { height: tpl.imageHeight }
+        : { aspectRatio: CARD_ASPECT_RATIOS[tpl.imageAspectRatio] ?? "16/9" }),
+    };
+  }
+  return { ...base, width: tpl.imageSideWidth };
+}
 
 function migrateTemplate(raw: unknown): CardTemplate {
   if (!raw || typeof raw !== "object") return DEFAULT_CARD_TEMPLATE;
@@ -3547,24 +3700,39 @@ function migrateTemplate(raw: unknown): CardTemplate {
     cardBorderRadius: Number(d.cardBorderRadius ?? DEFAULT_CARD_TEMPLATE.cardBorderRadius),
     readMoreLabel:    String(d.readMoreLabel     || DEFAULT_CARD_TEMPLATE.readMoreLabel),
     accentColor:      String(d.accentColor       || DEFAULT_CARD_TEMPLATE.accentColor),
+    imageBorderWidth:  cardNum(d.imageBorderWidth,  0, 16,  DEFAULT_CARD_TEMPLATE.imageBorderWidth),
+    imageBorderColor:  String(d.imageBorderColor  || DEFAULT_CARD_TEMPLATE.imageBorderColor),
+    imageBorderRadius: cardNum(d.imageBorderRadius, 0, 48,  DEFAULT_CARD_TEMPLATE.imageBorderRadius),
+    imageShadow:       cardOneOf(d.imageShadow, IMAGE_SHADOWS, DEFAULT_CARD_TEMPLATE.imageShadow),
+    imageBleed:        cardOneOf(d.imageBleed,  IMAGE_BLEEDS,  DEFAULT_CARD_TEMPLATE.imageBleed),
+    imageSide:         cardOneOf(d.imageSide,   IMAGE_SIDES,   DEFAULT_CARD_TEMPLATE.imageSide),
+    imageSideWidth:    cardNum(d.imageSideWidth,   80, 600, DEFAULT_CARD_TEMPLATE.imageSideWidth),
+    imageHeight:       cardNum(d.imageHeight,       0, 800, DEFAULT_CARD_TEMPLATE.imageHeight),
+    imageCrop:         cardOneOf(d.imageCrop,   IMAGE_CROPS,   DEFAULT_CARD_TEMPLATE.imageCrop),
     rows,
   };
 }
 
-function renderSampleElement(id: CardElementId, accentColor: string, readMoreLabel: string, imgAspect: string, isSideBySide: boolean): React.ReactNode {
+function renderSampleElement(id: CardElementId, accentColor: string, readMoreLabel: string, tpl: CardTemplate, isSideBySide: boolean, isTopOfCard: boolean): React.ReactNode {
   const sampleImageUrl = "https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=600&q=70";
   switch (id) {
     case "categories":
       return <span style={{ fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: accentColor }}>Technology</span>;
     case "headline":
       return <span style={{ fontSize: "0.95rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700, display: "block" }}>Sample Blog Post Title</span>;
-    case "featured_image":
+    case "featured_image": {
       if (isSideBySide) return null;
+      const { frame, img } = featuredImageStyles(tpl, {
+        cardPaddingX: "1.25rem",
+        cardPaddingTop: "1rem",
+        topOfCard: isTopOfCard,
+      });
       return (
-        <div style={{ width: "calc(100% + 2.5rem)", marginLeft: "-1.25rem", overflow: "hidden", aspectRatio: imgAspect }}>
-          <img alt="" src={sampleImageUrl} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        <div style={frame}>
+          <img alt="" src={sampleImageUrl} style={img} />
         </div>
       );
+    }
     case "excerpt":
       return <span style={{ fontSize: "0.78rem", color: "#4a5568", lineHeight: 1.5, display: "block" }}>A brief excerpt giving readers a preview of the content inside this post.</span>;
     case "author":
@@ -3586,32 +3754,34 @@ function renderSampleElement(id: CardElementId, accentColor: string, readMoreLab
 }
 
 function renderCardPreview(tpl: CardTemplate) {
-  const { cardLayout, imageAspectRatio, cardStyle, cardBorderRadius, readMoreLabel, accentColor, rows } = tpl;
-  const aspectRatioMap: Record<string, string> = { "16:9": "16/9", "4:3": "4/3", "3:2": "3/2", "1:1": "1/1" };
-  const imgAspect = aspectRatioMap[imageAspectRatio] ?? "16/9";
+  const { cardLayout, cardStyle, cardBorderRadius, readMoreLabel, accentColor, rows } = tpl;
   const cardBorder: CSSProperties =
     cardStyle === "bordered" ? { border: `1px solid ${accentColor}40`, boxShadow: "none" }
     : cardStyle === "shadow"  ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
     : { border: "1px solid #e2e8f0", boxShadow: "none" };
   const isSideBySide = cardLayout === "side-by-side";
   const hasFeaturedImage = rows.some((r) => r.slots.includes("featured_image"));
+  const firstFilledSlot = rows.flatMap((r) => r.slots.slice(0, r.cols)).find(Boolean) ?? null;
   const sampleImageUrl = "https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=600&q=70";
 
   return (
-    <article style={{ ...cardBorder, borderRadius: cardBorderRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? "row" : "column", maxWidth: 340 }}>
+    <article style={{ ...cardBorder, borderRadius: cardBorderRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? sideBySideDirection(tpl) : "column", maxWidth: 340 }}>
       {isSideBySide && hasFeaturedImage ? (
-        <div style={{ flexShrink: 0, width: 110, overflow: "hidden" }}>
-          <img alt="" src={sampleImageUrl} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        // The preview card is 340px wide against a full-width real one, so the
+        // strip is shown at half its configured width — the proportion is what
+        // the operator is judging here, not the pixel count.
+        <div style={{ ...sideStripStyle(tpl), ...(tpl.imageSide === "top" ? {} : { width: Math.round(tpl.imageSideWidth / 2) }) }}>
+          <img alt="" src={sampleImageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
         </div>
       ) : null}
-      <div style={{ padding: "1rem 1.25rem", flex: 1, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      <div style={{ padding: "1rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {rows.map((row) => {
           const filledSlots = row.slots.filter(Boolean);
           if (filledSlots.length === 0) return null;
           return (
             <div key={row.id} style={row.cols > 1 ? { display: "grid", gridTemplateColumns: `repeat(${row.cols}, 1fr)`, gap: "0.5rem", alignItems: "center" } : {}}>
               {row.slots.map((slot, si) => slot ? (
-                <div key={si}>{renderSampleElement(slot, accentColor, readMoreLabel, imgAspect, isSideBySide)}</div>
+                <div key={si}>{renderSampleElement(slot, accentColor, readMoreLabel, tpl, isSideBySide, slot === firstFilledSlot)}</div>
               ) : <div key={si} />)}
             </div>
           );
@@ -3709,56 +3879,158 @@ function BlogCardManagerPreview() {
   }
 
   const sel: CSSProperties = { padding: "4px 8px", border: "1px solid #cbd5e0", borderRadius: 5, fontSize: "0.8rem", background: "#fff", width: "100%" };
+  // The image-position and image-width controls only do anything in
+  // Side-by-side. They are disabled rather than hidden, so the operator can see
+  // the setting exists and why it is not available (the title says which layout).
+  const isSideBySide = tpl.cardLayout === "side-by-side";
 
   return (
     <div className="builder-blog-card-manager-module builder-admin-data-table-module">
       <h3 className="builder-admin-data-table-title">Blog Card Template Manager</h3>
 
-      {/* ── Card style controls ── */}
+      {/*
+        Grouped to the Content / Structure / Frame axes every other module's
+        settings use (2026-09-02, task 86bbt52fa). It was one undifferentiated
+        strip of six controls; adding nine more image controls to that strip
+        would have made it unreadable, and the operator could not find a control
+        by reasoning about what kind of thing it was.
+      */}
       <div className="bcm-controls-bar">
-        <div className="bcm-control">
-          <span className="bcm-label">Layout</span>
-          <div className="bcm-btn-group">
-            {(["single", "side-by-side"] as const).map((v) => (
-              <button key={v} type="button" className={`bcm-toggle-btn${tpl.cardLayout === v ? " is-on" : ""}`} onClick={() => setField("cardLayout", v)}>
-                {v === "single" ? "Single" : "Side-by-side"}
-              </button>
-            ))}
+
+        <fieldset className="bcm-group">
+          <legend className="bcm-group-title">Content</legend>
+          <div className="bcm-group-controls">
+            <div className="bcm-control">
+              <span className="bcm-label">Read More</span>
+              <input type="text" style={{ ...sel, width: 110 }} value={tpl.readMoreLabel} onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
+            </div>
+            <label className="bcm-control">
+              <span className="bcm-label">Accent</span>
+              <input type="color" className="builder-color-wheel-input builder-color-wheel-input-sm" title="Open the color picker" value={tpl.accentColor} onChange={(e) => setField("accentColor", e.target.value)} />
+            </label>
           </div>
-        </div>
-        <div className="bcm-control">
-          <span className="bcm-label">Style</span>
-          <select style={sel} value={tpl.cardStyle} onChange={(e) => setField("cardStyle", e.target.value)}>
-            <option value="default">Default</option>
-            <option value="bordered">Bordered</option>
-            <option value="shadow">Shadow</option>
-          </select>
-        </div>
-        <div className="bcm-control">
-          <span className="bcm-label">Image</span>
-          <select style={sel} value={tpl.imageAspectRatio} onChange={(e) => setField("imageAspectRatio", e.target.value)}>
-            <option value="16:9">16:9</option>
-            <option value="4:3">4:3</option>
-            <option value="3:2">3:2</option>
-            <option value="1:1">1:1</option>
-          </select>
-        </div>
-        <div className="bcm-control">
-          <span className="bcm-label">Radius</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <input type="number" min={0} max={32} step={2} style={{ ...sel, width: 52 }}
-              value={tpl.cardBorderRadius} onChange={(e) => setField("cardBorderRadius", parseInt(e.target.value, 10) || 0)} />
-            <span className="bcm-unit">px</span>
+        </fieldset>
+
+        <fieldset className="bcm-group">
+          <legend className="bcm-group-title">Structure</legend>
+          <div className="bcm-group-controls">
+            <div className="bcm-control">
+              <span className="bcm-label">Layout</span>
+              <div className="bcm-btn-group">
+                {(["single", "side-by-side"] as const).map((v) => (
+                  <button key={v} type="button" className={`bcm-toggle-btn${tpl.cardLayout === v ? " is-on" : ""}`} onClick={() => setField("cardLayout", v)}>
+                    {v === "single" ? "Single" : "Side-by-side"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="bcm-control">
+              <span className="bcm-label">Image Position</span>
+              <select style={sel} value={tpl.imageSide} onChange={(e) => setField("imageSide", e.target.value)} disabled={!isSideBySide}
+                title={isSideBySide ? undefined : "Side-by-side layout only"}>
+                <option value="left">Left of text</option>
+                <option value="right">Right of text</option>
+                <option value="top">Above text</option>
+              </select>
+            </div>
+            <div className="bcm-control">
+              <span className="bcm-label">Image Width</span>
+              <div className="bcm-num-row">
+                <input type="number" min={80} max={600} step={10} style={{ ...sel, width: 64 }}
+                  value={tpl.imageSideWidth} disabled={!isSideBySide || tpl.imageSide === "top"}
+                  title={isSideBySide && tpl.imageSide !== "top" ? undefined : "Side-by-side layout, image left or right"}
+                  onChange={(e) => setField("imageSideWidth", parseInt(e.target.value, 10) || 220)} />
+                <span className="bcm-unit">px</span>
+              </div>
+            </div>
+            <div className="bcm-control">
+              <span className="bcm-label">Image Edge</span>
+              <select style={sel} value={tpl.imageBleed} onChange={(e) => setField("imageBleed", e.target.value)}>
+                <option value="full">Full bleed</option>
+                <option value="inset">Inset</option>
+              </select>
+            </div>
+            <div className="bcm-control">
+              <span className="bcm-label">Aspect</span>
+              <select style={sel} value={tpl.imageAspectRatio} onChange={(e) => setField("imageAspectRatio", e.target.value)}
+                disabled={tpl.imageHeight > 0} title={tpl.imageHeight > 0 ? "A fixed height is set, which overrides the aspect ratio" : undefined}>
+                <option value="16:9">16:9</option>
+                <option value="4:3">4:3</option>
+                <option value="3:2">3:2</option>
+                <option value="1:1">1:1</option>
+              </select>
+            </div>
+            <div className="bcm-control">
+              <span className="bcm-label">Fixed Height</span>
+              <div className="bcm-num-row">
+                <input type="number" min={0} max={800} step={10} style={{ ...sel, width: 64 }}
+                  value={tpl.imageHeight} title="0 keeps the aspect ratio above"
+                  onChange={(e) => setField("imageHeight", parseInt(e.target.value, 10) || 0)} />
+                <span className="bcm-unit">{tpl.imageHeight > 0 ? "px" : "auto"}</span>
+              </div>
+            </div>
+            <div className="bcm-control">
+              <span className="bcm-label">Crop</span>
+              <select style={sel} value={tpl.imageCrop} onChange={(e) => setField("imageCrop", e.target.value)}>
+                <option value="cover">Fill frame</option>
+                <option value="contain">Fit whole photo</option>
+              </select>
+            </div>
           </div>
-        </div>
-        <label className="bcm-control">
-          <span className="bcm-label">Color</span>
-          <input type="color" className="builder-color-wheel-input builder-color-wheel-input-sm" title="Open the color picker" value={tpl.accentColor} onChange={(e) => setField("accentColor", e.target.value)} />
-        </label>
-        <div className="bcm-control">
-          <span className="bcm-label">Read More</span>
-          <input type="text" style={{ ...sel, width: 100 }} value={tpl.readMoreLabel} onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
-        </div>
+        </fieldset>
+
+        <fieldset className="bcm-group">
+          <legend className="bcm-group-title">Frame</legend>
+          <div className="bcm-group-controls">
+            <div className="bcm-control">
+              <span className="bcm-label">Card Style</span>
+              <select style={sel} value={tpl.cardStyle} onChange={(e) => setField("cardStyle", e.target.value)}>
+                <option value="default">Default</option>
+                <option value="bordered">Bordered</option>
+                <option value="shadow">Shadow</option>
+              </select>
+            </div>
+            <div className="bcm-control">
+              <span className="bcm-label">Card Radius</span>
+              <div className="bcm-num-row">
+                <input type="number" min={0} max={32} step={2} style={{ ...sel, width: 56 }}
+                  value={tpl.cardBorderRadius} onChange={(e) => setField("cardBorderRadius", parseInt(e.target.value, 10) || 0)} />
+                <span className="bcm-unit">px</span>
+              </div>
+            </div>
+            <div className="bcm-control">
+              <span className="bcm-label">Image Border</span>
+              <div className="bcm-num-row">
+                <input type="number" min={0} max={16} step={1} style={{ ...sel, width: 56 }}
+                  value={tpl.imageBorderWidth} onChange={(e) => setField("imageBorderWidth", parseInt(e.target.value, 10) || 0)} />
+                <span className="bcm-unit">px</span>
+              </div>
+            </div>
+            <label className="bcm-control">
+              <span className="bcm-label">Border Color</span>
+              <input type="color" className="builder-color-wheel-input builder-color-wheel-input-sm" title="Open the color picker"
+                value={tpl.imageBorderColor} onChange={(e) => setField("imageBorderColor", e.target.value)} />
+            </label>
+            <div className="bcm-control">
+              <span className="bcm-label">Image Radius</span>
+              <div className="bcm-num-row">
+                <input type="number" min={0} max={48} step={2} style={{ ...sel, width: 56 }}
+                  value={tpl.imageBorderRadius} onChange={(e) => setField("imageBorderRadius", parseInt(e.target.value, 10) || 0)} />
+                <span className="bcm-unit">px</span>
+              </div>
+            </div>
+            <div className="bcm-control">
+              <span className="bcm-label">Image Shadow</span>
+              <select style={sel} value={tpl.imageShadow} onChange={(e) => setField("imageShadow", e.target.value)}>
+                <option value="none">None</option>
+                <option value="soft">Soft</option>
+                <option value="medium">Medium</option>
+                <option value="strong">Strong</option>
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
       </div>
 
       {/* ── Two-column: row editor + live preview ── */}
