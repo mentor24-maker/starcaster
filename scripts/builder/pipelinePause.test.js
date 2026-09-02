@@ -1128,16 +1128,25 @@ test('the hand-back note names the command that actually ran', () => {
   // The first live `sweep --apply` wrote "(Automatic — pipeline resume …)" for
   // a resume that never happened. The trail is the only account of who moved a
   // ticket, and a wrong actor in it is the defect itself (DOCTRINE 2.5/2.6).
-  assert.match(pause.sweptTicketNote({ command: 'sweep', by: 'an agent session' }), /Automatic — pipeline sweep/);
-  assert.match(pause.sweptTicketNote({ command: 'resume' }), /Automatic — pipeline resume/);
-  assert.match(pause.sweptTicketNote({}), /Automatic — pipeline resume/, 'the default stays resume, so resume is unchanged');
+  const SWEEP = 'npm run pipeline -- sweep --apply';
+  assert.match(pause.sweptTicketNote({ command: SWEEP, by: 'an agent session' }), /Automatic — npm run pipeline -- sweep --apply/);
+  assert.match(pause.sweptTicketNote({}), /Automatic — npm run pipeline -- resume/, 'the default stays resume, so resume is unchanged');
   // Both kinds carry it, not just the build arm.
-  assert.match(pause.sweptTicketNote({ kind: 'a review', command: 'sweep' }), /Automatic — pipeline sweep/);
+  assert.match(pause.sweptTicketNote({ kind: 'a review', command: SWEEP }), /Automatic — npm run pipeline -- sweep --apply/);
+  // AND THE BODY, not only the signature. The body kept the same bug one
+  // layer down for a day: it opened "by the pipeline pause sweep" whatever had
+  // actually moved the ticket, so pass-reconcile's first live hand-back blamed
+  // a sweep that never ran.
+  const byReconcile = pause.sweptTicketNote({ command: 'npm run clickup -- pass-reconcile', destination: 'Queued' });
+  assert.match(byReconcile.split('\n')[0], /by `npm run clickup -- pass-reconcile`/);
+  assert.doesNotMatch(byReconcile, /pipeline pause sweep/, 'nothing may credit a sweep that did not run');
+  assert.match(pause.sweptTicketNote({ kind: 'a review', command: 'npm run clickup -- pass-reconcile' }).split('\n')[0],
+    /Released by `npm run clickup -- pass-reconcile`/, 'the review arm too');
 });
 
 test('each caller tells the note which command it is', () => {
   const code = withoutComments(read('scripts/pipeline.mjs'));
-  assert.match(code, /command: 'sweep'/, 'the standalone command must identify itself');
+  assert.match(code, /command: 'npm run pipeline -- sweep --apply'/, 'the standalone command must identify itself');
   assert.match(code, /kind: s\.kind, command,/, 'and the sweep must pass it through to the note');
 });
 

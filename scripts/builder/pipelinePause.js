@@ -703,13 +703,21 @@ function strandedBuildDestination(buildStartAction) {
  * was already half done. Say what happened and what the next pass should
  * check before it starts over.
  */
-function sweptTicketNote({ at, by, kind = 'a build', destination = 'Queued', why = '', command = 'resume' } = {}) {
-  // WHICH COMMAND RAN, named. The signature said "pipeline resume" for every
-  // sweep until 2026-09-02, when the sweep became runnable on its own — and
-  // the very first live `sweep --apply` wrote a note crediting a resume that
-  // never happened. A trail that names the wrong actor is the defect, not a
-  // wording preference (DOCTRINE 2.5/2.6: a hand-off names the actor).
-  const ran = `pipeline ${String(command || 'resume')}`;
+function sweptTicketNote({ at, by, kind = 'a build', destination = 'Queued', why = '', command = 'npm run pipeline -- resume' } = {}) {
+  // WHICH COMMAND RAN, named — in the BODY as well as the signature.
+  //
+  // The signature said "pipeline resume" for every sweep until 2026-09-02,
+  // when the sweep became runnable on its own, and the first live
+  // `sweep --apply` credited a resume that never happened. The body kept the
+  // same bug one layer down for the rest of that day: it opened "Returned to
+  // Queued by the pipeline pause sweep" no matter what had actually moved the
+  // ticket, so `pass-reconcile`'s first live hand-back blamed a sweep that
+  // never ran. A trail that names the wrong actor is the defect, not a wording
+  // preference (DOCTRINE 2.5/2.6: a hand-off names the actor).
+  //
+  // `command` is the WHOLE invocation now, not a word to be prefixed, so the
+  // note tells the reader exactly what to type to watch it happen again.
+  const ran = String(command || 'npm run pipeline -- resume');
   const signature = `\n\n(Automatic — ${ran}${by ? `, ${by}` : ''}${at ? `, ${at}` : ''}.)`;
 
   // A stranded REVIEW keeps its status. It is already in "In review", which is
@@ -717,7 +725,7 @@ function sweptTicketNote({ at, by, kind = 'a build', destination = 'Queued', why
   // stale claim note. Sending it to Queued would throw away a finished build
   // with an open PR and hand the same job to a second builder.
   if (kind === 'a review') {
-    return 'Released by the pipeline pause sweep.\n\n' +
+    return `Released by \`${ran}\`.\n\n` +
       'A review pass claimed this ticket and then ended without leaving a verdict, so it sat here looking ' +
       'like it was being checked when nothing was. **Nothing about the build has changed** — the branch and ' +
       'its PR are exactly as they were, and this ticket stays in "In review" so the next review pass picks ' +
@@ -725,7 +733,7 @@ function sweptTicketNote({ at, by, kind = 'a build', destination = 'Queued', why
   }
 
   const where = String(destination || 'Queued');
-  return `Returned to ${where} by the pipeline pause sweep.\n\n` +
+  return `Returned to ${where} by \`${ran}\`.\n\n` +
     'This ticket was sitting in a machine status with nothing working on it — its pass ended without ' +
     'handing it on, which leaves it invisible to the loops (they only claim from Rework and Queued). ' +
     `It went to **${where}**${why ? ` because ${why}` : ''}. ` +
