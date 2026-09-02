@@ -1,3 +1,31 @@
+## 2026-09-01 — Two changes that never touched each other still broke the build (#503)
+
+A piece of work was checked over, approved, and then sat for four days waiting
+for Dane to say the word that puts it live. Nobody touched it in that time. When
+he said the word, the automatic safety checks refused it — the work had gone from
+fine to broken while sitting perfectly still.
+
+What happened is that another job finished and went live during those four days.
+The two pieces of work did not overlap: not one shared file, not one shared line.
+The usual warning a machine gives you — "these two edits collide, decide which
+one wins" — never fired, because there was nothing to collide about. What
+collided was the *rule*. The waiting work had tightened a rule about how a job
+ticket must be named; the other work had shipped a test that still expected the
+old, looser rule. Each was correct on its own. Put them in the same place and one
+of them has to be wrong.
+
+Nothing in the written rules of this project covered that. The two entries that
+come closest both start from "when the machine warns you about a clash, listen to
+it" — and here the machine had nothing to warn about. So this adds a new entry
+that starts from the opposite end: a quiet merge is not proof the two sides
+agree. It also writes down the thing that made the four days matter — being
+signed off is not a permanent condition. It says something was true about the
+work on the day it was read, and the ground can move underneath it afterwards.
+The practical habits that follow are: when you change a rule, go hunting for
+anywhere else that already relies on it; and when an old test argues with a new
+rule, don't just change the test's answer — make it say plainly which rule it is
+now guarding, so the next time the two drift apart somebody hears about it.
+
 ## 2026-08-31 — A branch that was fine no longer gets filed as broken work (#487)
 
 When Dane says "merge" on a finished ticket, the relay checks with GitHub first.
