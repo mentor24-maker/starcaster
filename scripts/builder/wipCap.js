@@ -117,9 +117,9 @@ function resolveCap(env = process.env) {
  * honest answer — if his inbox is full, the pipeline genuinely is full, and a
  * cap that hid that would be lying in the more dangerous direction.
  */
-const IN_FLIGHT_STATUSES = Object.freeze([
-  'building', 'in review', 'ready to launch', 'needs your input',
-]);
+// A VIEW of the one taxonomy since 2026-09-02 (task 86bbtujed) — the WHY
+// above is unchanged; the list itself now has a single home.
+const IN_FLIGHT_STATUSES = loopStatuses.IN_FLIGHT_STATUSES;
 
 /**
  * The one status a STRANDED ticket may be discounted from — and why it is only
@@ -148,10 +148,17 @@ const IN_FLIGHT_STATUSES = Object.freeze([
  * difference between work that is slow and work that is dead, and it is the
  * whole of what this discount is allowed to act on.
  */
-const STRANDABLE_STATUS = 'building';
+const STRANDABLE_STATUS = loopStatuses.BUILDING;
 
-/** Statuses that mean the work is finished and the PR is a leftover. */
-const TERMINAL_STATUSES = Object.freeze(['live', 'complete', 'closed', 'done']);
+/**
+ * Statuses that mean the work is finished and the PR is a leftover — `live`
+ * only, per decision D1 (2026-09-02, task 86bbtujed; recorded in
+ * loopStatuses.js). This list used to also hold complete/closed/done; a PR
+ * whose ticket wears one of those now lands in `unrecognised`, which QUOTES
+ * the status — reported loudly by name instead of silently counted as done
+ * while pulse counted it in flight.
+ */
+const TERMINAL_STATUSES = loopStatuses.TERMINAL_STATUSES;
 
 /**
  * Where `id` appears in `haystack` as a WHOLE id rather than as part of a
