@@ -14,11 +14,15 @@
  * cannot see the message and neither can CI; the reply is the only place that
  * fact exists. Same reasoning as require_sql_handoff.cjs, and the same shape.
  *
- * INTERACTIVE SESSIONS ONLY
+ * `cli` SESSIONS ONLY -- WHICH IS NOT THE SAME AS "SOMEBODY IS READING"
  * A hand-off is only a hand-off if somebody is being handed something. The
  * loops run headless (`entrypoint: "sdk-cli"`) and report to a ticket, so
  * there is no operator at the other end and nothing to protect. Only `cli`
- * -- a terminal Dane is sitting in front of -- can trip this.
+ * can trip this. But `cli` means "started at a terminal", not "watched": the
+ * one `cli` session in this project's entire history (measured 2026-09-01 over
+ * 1,615 transcripts) is a `/loop 30m loop-build` that ran unattended for seven
+ * days. See isInteractive() in ../lib/operator_handoff.cjs. The brakes below
+ * are what make that survivable, so treat them as load-bearing.
  *
  * IT FAILS OPEN, ON PURPOSE
  * If the transcript cannot be read, or the entrypoint cannot be determined,
@@ -116,6 +120,15 @@ function main(input) {
   // continuing because a Stop hook already blocked it once. Honouring it is
   // what keeps the refusal counter from being the only brake in the system --
   // two independent limits, so neither one failing can wedge the session.
+  //
+  // KNOWN CONSEQUENCE, not a bug to fix here: require_sql_handoff.cjs is the
+  // other Stop hook in the same settings array and does NOT honour this flag.
+  // When it blocks first, the next Stop carries stop_hook_active and this hook
+  // exits right here -- so a reply with BOTH problems only ever gets the SQL
+  // complaint, and the hand-off is reported on a later turn or not at all.
+  // That is the price of the fail-open brake above, and it is the safe
+  // direction (a miss, not a wedge). The next reader should not have to
+  // rediscover it.
   if (payload && payload.stop_hook_active) process.exit(0);
 
   // Only the main agent's Stop event. A subagent's reply is read by this

@@ -56,6 +56,34 @@ three are closed, and the last one was checked against 11,803 real replies from
 this project's history first to make sure the wider net does not start crying
 wolf: it flagged the same 152 and not one more.
 
+A second review round found the escape hatch itself was too fussy, and this is
+the most interesting failure of the lot. To hand something over legitimately,
+the reply writes a line naming which of the four exceptions applies. The guard
+was only accepting that line when the exact phrase came first — `Exception:
+decision` passed, but `Exception: a decision that is genuinely his` did not.
+Look at that second one: it is the handbook's **own wording**, the exact
+sentence an agent would copy out of the very document this guard exists to
+enforce. Ten of sixteen normal, correct phrasings were being turned away,
+including "a real secret VALUE". The document and its own tripwire disagreed
+about what the four exceptions are called, and the cost of that is not a missed
+catch — it is an agent being refused while doing the right thing, which is the
+fastest possible route to somebody switching the guard off. It now looks for
+the keyword anywhere in the line, so ordinary English works, while a reason
+that is not one of the four ("Exception: I was busy") is still refused.
+
+Two claims in the write-up were also corrected, because they were reading
+better than the evidence supported. The check on 11,803 replies mentioned above
+did not say **which** replies it read: re-measured across all 1,615 transcripts,
+every single flagged reply came from the overnight loop sessions, which this
+guard deliberately ignores. In the sessions it can actually fire in, nothing
+flagged at all — so that reassuring number was taken almost entirely from
+somewhere the guard never looks, and now says so. And "sessions you are sitting
+in front of" turned out to be wishful: there is exactly one such session in this
+project's whole history, and it is a loop you started at your terminal on 23
+August that then ran by itself for seven days. The guard's own notes now say
+plainly that nobody may be reading, which is precisely why the two brakes that
+stop it jamming are not optional.
+
 ## 2026-08-31 — A branch that was fine no longer gets filed as broken work (#487)
 
 When Dane says "merge" on a finished ticket, the relay checks with GitHub first.

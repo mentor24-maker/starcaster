@@ -283,6 +283,69 @@ test('a bullet in front of the exception line does not invalidate it', () => {
   );
 });
 
+test('the four keywords are recognised in ordinary English, not only bare', () => {
+  // Round 2's blocker. `statedException` required the keyword to be the FIRST
+  // thing after the colon, so ten of these sixteen were refused -- including
+  // `a real secret VALUE` and `a decision that is genuinely his`, which are
+  // CLAUDE.md's OWN words for two of the four. The document and its tripwire
+  // disagreeing about what the exceptions are called is the harmful direction:
+  // it refuses a reply that named its exception correctly.
+  const accepted = [
+    ['Exception: decision', 'decision'],
+    ['Exception: a decision that is genuinely his', 'decision'],
+    ['Exception: a decision that is genuinely yours', 'decision'],
+    ['Exception: this is a decision', 'decision'],
+    ['Exception: billing', 'billing'],
+    ['Exception: a billing screen', 'billing'],
+    ['Exception: the secret value is yours to type', 'secret value'],
+    ['Exception: a real secret VALUE', 'secret value'],
+    ['Exception: browser login', 'browser login'],
+    ['Exception: a browser login', 'browser login'],
+    ['1. Exception: decision', 'decision'],
+    ['1) Exception: decision', 'decision'],
+    ['* Exception: decision', 'decision'],
+    ['- Exception: decision', 'decision'],
+    ['Exception - decision', 'decision'],
+    ['Exception: DECISION', 'decision'],
+  ];
+  for (const [line, want] of accepted) {
+    assert.equal(statedException(`${line}\n`), want, `must accept: ${line}`);
+  }
+});
+
+test('widening the match did not make it a rubber stamp', () => {
+  // The four keywords are still the whole list -- they just no longer have to
+  // lead the sentence. A reason that is not one of them is still refused, in
+  // every wrapper the peeling above tolerates.
+  for (const line of [
+    'Exception: I was busy',
+    'Exception: it seemed fine',
+    '1. Exception: I was busy',
+    'Exception - I was busy',
+    'Exceptional work today',
+    'no exception here',
+  ]) {
+    assert.equal(statedException(`${line}\n`), null, `must refuse: ${line}`);
+  }
+});
+
+test("CLAUDE.md's own wording gets through the real hook, not just the helper", () => {
+  // The end-to-end version of the blocker: a reply that hands over a command
+  // AND names its exception in the document's own words must end the turn.
+  const message = `That value is yours to type.\n\nException: a real secret VALUE\n\n${fenced('doppler run -- printenv SUPABASE_SERVICE_KEY')}`;
+  assert.equal(runHook(message).code, 0, 'a correctly-named exception must not be refused');
+  assert.equal(
+    runHook(`Here you go:\n\n${fenced('doppler run -- printenv SUPABASE_SERVICE_KEY')}`).code, 2,
+    'control: the same block with no exception line is still refused'
+  );
+});
+
+test('a numbered bullet does not invalidate the claim, through the real hook', () => {
+  assert.equal(
+    runHook(`1. Exception: a decision that is genuinely his\n\n${fenced('npm run db:refresh')}`).code, 0
+  );
+});
+
 test('an exception line inside a code fence does not count', () => {
   const message = fenced('Exception: decision') + '\n' + fenced('npm run db:refresh');
   assert.equal(statedException(message), null, 'an example is not a claim');

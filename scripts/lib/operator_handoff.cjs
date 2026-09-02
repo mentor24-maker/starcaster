@@ -157,11 +157,23 @@ function stripEnvPrefix(line) {
  * `npm run` under it was never looked at.
  *
  * The worry about widening it is false positives on pasted OUTPUT, so it was
- * measured rather than argued: across 11,803 real assistant messages in this
- * project's transcripts, every-line scanning flagged exactly the same 152
- * messages as first-line scanning -- zero newly refused. (Control: on the
- * three synthetic shapes above the two disagree, so the instrument can tell
- * them apart; the agreement on real messages is a reading, not a broken test.)
+ * measured rather than argued -- and the measurement has to say WHICH
+ * POPULATION it read, because the first one did not (DOCTRINE §3.11).
+ * Re-measured 2026-09-01 over all 1,615 transcripts in this project, 11,325
+ * assistant messages: every-line scanning flagged 151, first-line scanning
+ * flagged the same 151, zero newly refused. (Control first: on the three
+ * synthetic shapes above the two rules disagree 3/3, so the instrument can
+ * tell them apart; the agreement on real messages is a reading, not a dead
+ * test.)
+ *
+ * The reading's REACH is the caveat. All 151 are in `sdk-cli` sessions, which
+ * isInteractive() deliberately exempts -- so "zero newly refused" was measured
+ * almost entirely where this hook never looks. In `cli`, the only class it can
+ * fire in, zero of 884 messages flag under either rule. Both numbers are
+ * honest and neither is a licence: the every-line rule is barely exercised by
+ * the historical record, so it rests on the synthetic control above, not on a
+ * population reading.
+ *
  * The one output shape that did read as a hand-off was npm's `>` log prefix,
  * which is why stripPrompt no longer treats `>` as a shell prompt.
  */
@@ -180,29 +192,57 @@ function offendingCommands(message) {
 }
 
 /**
+ * Peel whatever list or quote markup leads a line, so the claim underneath is
+ * what gets read.
+ *
+ * `-`, `*`, `+` and `>` bullets were the first round of this; `1.` and `1)`
+ * are the second, because a numbered list is how an agent writes a reply with
+ * several points in it and `1. Exception: decision` was refused outright.
+ * Looped rather than done in one pass so nested forms (`- 1. ...`) come all
+ * the way down. Only the LEADING run is peeled -- a hyphen inside the text
+ * survives, which is what keeps `Exception - decision` readable below.
+ */
+function stripLeadingMarkers(line) {
+  let out = String(line == null ? '' : line);
+  for (;;) {
+    const next = out.replace(/^[\s>*_+-]+/, '').replace(/^\d+[.)]\s+/, '');
+    if (next === out) return out;
+    out = next;
+  }
+}
+
+/**
  * The stated exception, or null. Checked in the PROSE only: an `Exception:`
  * line inside a code fence is part of an example, not a claim the reply is
  * making. Markdown emphasis is tolerated (`**Exception:** decision`) because
  * that is how these actually get written.
+ *
+ * THE KEYWORD IS MATCHED ANYWHERE AFTER THE COLON, NOT ONLY AT ITS START.
+ * The first draft required the bare phrase to lead (`rest.startsWith(e)`), so
+ * `Exception: decision` passed and `Exception: a decision that is genuinely
+ * his` did not -- and that second one is CLAUDE.md's OWN wording, the exact
+ * words an agent copies out of the document this hook exists to enforce. Ten
+ * of sixteen plausible, correct phrasings were refused that way, including
+ * `Exception: a real secret VALUE`. Being refused while correctly naming an
+ * exception is the surest route to SKIP_OPERATOR_HANDOFF=1 for no reason,
+ * which costs more than the misses this widening allows. `Exception: I was
+ * busy` is still refused: the four keywords are still the whole list, they
+ * just no longer have to be the first thing on the line.
  */
 function statedException(message) {
   const { prose } = splitFences(message);
   for (const raw of prose) {
-    // Leading list/quote markers first, THEN emphasis. A hyphen bullet is a
-    // normal way to write this line, and being refused while correctly naming
-    // an exception is the surest way to send an agent to the escape hatch for
-    // no reason -- so `-`, `+`, `*` and `>` all have to lead a valid claim.
-    // Only the LEADING run is peeled: a hyphen inside the text survives.
-    const line = raw.replace(/^[\s>*_+-]+/, '').replace(/[*_>`]/g, '').trim();
-    const match = /^Exception:\s*(.+)$/i.exec(line);
+    const line = stripLeadingMarkers(raw).replace(/[*_>`]/g, '').trim();
+    // `Exception - decision` is written as often as `Exception: decision`, and
+    // the dash forms come out of prose keyboards (`--`, en and em dash).
+    const match = /^Exception\s*[:：\-–—]+\s*(.+)$/i.exec(line);
     if (!match) continue;
     const rest = match[1].trim().toLowerCase();
-    const hit = EXCEPTIONS.find((e) => rest.startsWith(e));
+    const hit = EXCEPTIONS.find((e) => rest.includes(e));
     if (hit) return hit;
   }
   return null;
 }
-
 /**
  * The last assistant message that actually said something, plus the session's
  * entrypoint, read from the transcript the harness points at.
@@ -248,17 +288,29 @@ function lastAssistantTurn(transcriptPath) {
 }
 
 /**
- * Is there an operator at the other end of this turn?
+ * Which sessions this hook fires in at all.
  *
- * `cli` is a terminal session Dane is sitting in front of. `sdk-cli` is a
- * headless run -- the build and review loops, whose reply goes to a ClickUp
- * ticket rather than to a person waiting on a prompt. Measured across 25
- * transcripts in this project on 2026-08-31: every loop-build and loop-review
- * session was `sdk-cli`, and the only `cli` one was a `/loop` Dane started at
- * his own terminal, where he IS reading.
+ * `cli` is a session started at a terminal; `sdk-cli` is a headless run, whose
+ * reply goes to a ClickUp ticket rather than to a prompt somebody is watching.
+ * Only `cli` fires the wire.
+ *
+ * `cli` DOES NOT MEAN A PERSON IS READING, and an earlier draft of this
+ * comment said it did. Measured across all 1,615 transcripts in this project
+ * on 2026-09-01: there is exactly ONE `cli` session in the whole history, and
+ * it is a `/loop 30m loop-build` Dane typed at his own terminal on 23 August
+ * that then ran unattended until 30 August -- seven days, 10,083 records. So
+ * the single session class this hook can fire in is, on the evidence, an
+ * unattended loop lane: precisely the case the fail-open design is written
+ * against.
+ *
+ * That is survivable rather than fine, and only because of two brakes: three
+ * refusals in a session and the wire stands down (see
+ * check_operator_handoff.cjs), and `stop_hook_active` exits 0 outright. Do not
+ * remove either one on the theory that somebody is there to notice.
  *
  * This is the constraint "must not fire where there is no operator reading",
- * answered from a real signal rather than by scoping it away.
+ * answered from a real signal rather than by scoping it away -- but the signal
+ * is coarser than its name suggests, which is why it is written down here.
  */
 function isInteractive(entrypoint) {
   return entrypoint === 'cli';
@@ -342,6 +394,7 @@ module.exports = {
   firstCommandLine,
   stripPrompt,
   stripEnvPrefix,
+  stripLeadingMarkers,
   offendingCommands,
   statedException,
   lastAssistantTurn,
