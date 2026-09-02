@@ -1,3 +1,26 @@
+## 2026-09-02 — Gradients can point any direction now, not just diagonally (#540)
+
+Every gradient background in the Builder ran at exactly one angle — diagonally,
+top-left corner down to bottom-right. That was never a choice anybody made in
+the design; the number was simply written into the code, on a single line that
+happens to draw the gradients for everything at once: row backgrounds, page
+backgrounds, buttons, module backgrounds and the overlay screen. There was no
+way to make one run left-to-right or top-to-bottom.
+
+There is now an **Angle** box sitting beside the two colour pickers, which shows
+up only when the background Type is set to Gradient. Type 90 and the gradient
+runs top to bottom; 0 runs it bottom to top.
+
+The care in this one went into making sure nothing that already exists moved.
+A gradient that was saved before today has no angle written on it, and every one
+of those still paints at exactly the old angle — that is what most of the new
+tests check, and each of them was deliberately broken first and watched failing,
+because a test that cannot fail proves nothing. One of those break tests found a
+real gap: the automated panel check could not see the new box at all, because
+the test page it measures had no gradient anywhere on it, so a clean result was
+not evidence of anything. That page now carries one. Six pages were also
+photographed before and after and came out pixel-for-pixel identical.
+
 ## 2026-09-02 — The pipeline's own health check finally runs on a timer (#524)
 
 We have a command, `npm run pulse`, that looks the whole build pipeline over and
