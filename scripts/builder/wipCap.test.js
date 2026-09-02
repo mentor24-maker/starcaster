@@ -715,6 +715,31 @@ test('a ticket resting in review keeps counting too', () => {
   assert.equal(STRANDABLE_STATUS, 'building', 'only Building may be discounted');
 });
 
+test('a review whose pass died still counts — only a BUILD may be discounted', () => {
+  // Found by break-testing: removing the status guard changed nothing in any
+  // test, because `classifyTicket` already returns null for the operator-held
+  // statuses. The one case it does NOT filter is an "In review" ticket
+  // carrying a stale review claim note — the sweep treats that as stranded and
+  // RELEASES it where it stands, without moving it. Its build is finished and
+  // its PR is open, so the work really is in flight and the cap must keep
+  // counting it. That is the whole reason the guard names one status instead
+  // of trusting the shared classifier's answer.
+  const { REVIEW_CLAIM_NOTE } = require('./loopNote.js');
+  const d = wipDecision({
+    prs: [prOf(1, 'a')], cap: 5, nowMs: NOW,
+    ticketStatusById: { a: { status: 'In review', dateUpdated: STALE, loopNote: `${REVIEW_CLAIM_NOTE} — a review pass started 2:00am` } },
+  });
+  assert.equal(d.stranded, 0, 'a dead review is not a dead build');
+  assert.equal(d.inFlight, 1, 'its PR is real and still needs catching up');
+  // And the shared classifier really would have called it stranded, so this
+  // test is proving the guard rather than restating the classifier.
+  const viaSweep = pipelinePause.classifyTicket(
+    { id: 'x', status: { status: 'In review' }, date_updated: STALE, loopNote: `${REVIEW_CLAIM_NOTE} — started` },
+    { nowMs: NOW },
+  );
+  assert.equal(viaSweep.stranded, true, 'the sweep does see it — the cap deliberately does not act on it');
+});
+
 test('a build in progress still counts — the discount is for DEAD work only', () => {
   const d = wipDecision({
     prs: [prOf(1, 'a')], cap: 5, nowMs: NOW,
