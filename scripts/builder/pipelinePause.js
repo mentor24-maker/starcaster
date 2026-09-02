@@ -351,6 +351,42 @@ function describeTickets(rows) {
 }
 
 /**
+ * WHY a stranded ticket is stuck — which is a DIFFERENT sentence for each kind,
+ * and used to be one sentence asserted over both (task 86bbqw49y).
+ *
+ * A stranded BUILD is stuck because of its status: it sits in "Building", which
+ * no loop claims from, so nothing will ever pick it up again.
+ *
+ * A stranded REVIEW is stuck for the opposite reason. Its status is already
+ * right — "In review" is exactly where a ticket waits for a reviewer — and the
+ * only thing wrong with it is the stale claim note saying a pass is running.
+ * Telling a reader "the loops only claim from Queued" about that ticket sends
+ * them looking for a status problem that does not exist.
+ *
+ * Returns one line per kind present, naming the ids, so a mixed sweep reports
+ * both rather than applying one kind's reason to all of them.
+ */
+function strandedExplanation(stranded = []) {
+  const rows = Array.isArray(stranded) ? stranded : [];
+  const reviews = rows.filter((r) => r && r.kind === 'a review');
+  const builds = rows.filter((r) => r && r.kind !== 'a review');
+  const lines = [];
+  if (builds.length) {
+    const ids = builds.map((r) => r.id).join(', ');
+    lines.push(builds.length === 1
+      ? `${ids}: a build with nothing working on it and nothing that ever will — it is in "Building", and the loops only claim from Rework and Queued.`
+      : `${ids}: builds with nothing working on them and nothing that ever will — they are in "Building", and the loops only claim from Rework and Queued.`);
+  }
+  if (reviews.length) {
+    const ids = reviews.map((r) => r.id).join(', ');
+    lines.push(reviews.length === 1
+      ? `${ids}: the build is finished and its pull request is open. Its STATUS is right — a stale claim note is all that makes it look like a review is already running, so no review pass will take it.`
+      : `${ids}: their builds are finished and their pull requests are open. Their STATUSES are right — stale claim notes are all that make them look like reviews are already running, so no review pass will take them.`);
+  }
+  return lines;
+}
+
+/**
  * What `pause` reports when it stops waiting, and whether that is a clean
  * stop. It must never return a promise it has not kept — "the decks are
  * clear" said over a running build is the one sentence this command cannot
@@ -449,15 +485,92 @@ function nagMessage({ by, why, sinceMs, nowMs } = {}) {
     '\nResume with: npm run pipeline -- resume --operator-asked';
 }
 
-/** What it says once, when the deck goes back. */
-function resumedMessage({ by, pausedForMs, swept = [] } = {}) {
+/**
+ * What actually happened to ONE swept ticket, in the words that match it.
+ *
+ * A released review and a returned build are two different outcomes, and the
+ * summary used to name only the build one — so a resume reported a ticket it
+ * had correctly left in "In review" as "returned to Queued", contradicting its
+ * own per-ticket line two lines earlier (seen 2026-08-31, task 86bbqw49y).
+ *
+ * A bare string is tolerated so that a caller which regresses to the old
+ * id-only array still prints an id rather than "[object Object]" — this is a
+ * safety tool's report, and a garbled one is worse than a terse one.
+ */
+function sweptTicketPhrase(entry) {
+  if (typeof entry === 'string') return entry;
+  const id = String(entry?.id ?? '');
+  const kind = String(entry?.kind ?? '');
+  const destination = String(entry?.destination ?? '');
+  if (kind === 'a review') return `${id} (released in "${destination || 'In review'}")`;
+  if (destination) return `${id} (returned to ${destination})`;
+  return id;
+}
+
+/**
+ * The one-sentence tally of the sweep — the SAME sentence for the terminal and
+ * for the party line, so the two reports of one event cannot disagree.
+ *
+ * Every ticket carries its own outcome: "unstuck" is the only verb true of
+ * both kinds, and where each one went is said per ticket rather than asserted
+ * over the group (that was this ticket's original defect).
+ *
+ * AN EMPTY `swept` LIST HAS THREE CAUSES AND THEY ARE NOT THE SAME NEWS
+ * (task 86bbqw49y, round 2). Answering all three with one all-clear is how a
+ * sweep comes to print, in two consecutive lines:
+ *
+ *     86bbzzzzz: the note landed but the move did NOT (403) — it is still stranded.
+ *   The pipeline is RUNNING again. No stranded tickets needed unsticking.
+ *
+ * which is the same contradicting-pair shape the ticket was opened about, with
+ * the summary again the false half. `if (!ok) continue` producing an all-clear
+ * is DOCTRINE 3.11 by name. So:
+ *
+ *   nothing was stranded   the all-clear is TRUE. Say it.
+ *   a sweep step FAILED    the ticket is still stuck. Say how many, and never
+ *                          say "no stranded tickets".
+ *   nothing was CHECKED    `--no-sweep`, or the queue could not be read.
+ *                          Nobody looked, so the honest answer is that it
+ *                          could not tell — never an all-clear.
+ *
+ * `left` (how many stranded tickets were examined and NOT unstuck) and
+ * `checked` (was the queue examined at all) have to come from the caller: what
+ * was LEFT BEHIND is structurally invisible to a function that is only ever
+ * shown what was taken. `why` names the reason nothing was checked.
+ */
+function sweptSummary(swept = [], { checked = true, left = 0, why = '' } = {}) {
+  const rows = Array.isArray(swept) ? swept : [];
+  const stuck = Number.isFinite(left) && left > 0 ? Math.trunc(left) : 0;
+
+  if (!checked) {
+    return `Whether anything is stranded was NOT checked${why ? ` — ${why}` : ''}.`
+      + ' Run `npm run pipeline -- status` to find out.';
+  }
+
+  const noun = rows.length === 1 ? '1 stranded ticket' : `${rows.length} stranded tickets`;
+  const unstuck = rows.length ? `${noun} unstuck: ${rows.map(sweptTicketPhrase).join(', ')}.` : '';
+  if (!stuck) return unstuck || 'No stranded tickets needed unsticking.';
+
+  const stillStranded = `${stuck} stranded ticket${stuck === 1 ? '' : 's'} could NOT be unstuck`
+    + ` and ${stuck === 1 ? 'is' : 'are'} STILL stranded.`
+    + ' Run `npm run pipeline -- status` to see which.';
+  return unstuck ? `${unstuck} ${stillStranded}` : stillStranded;
+}
+
+/**
+ * What it says once, when the deck goes back.
+ *
+ * It reports the sweep with `sweptSummary`'s own words rather than a second
+ * set of its own. It used to carry the sibling of the bug above — "Nothing was
+ * left stranded." on the same empty list — so the bus heard an all-clear the
+ * terminal had already contradicted. One sentence, one source.
+ */
+function resumedMessage({ by, pausedForMs, swept = [], checked = true, left = 0, why = '' } = {}) {
   const mins = Number.isFinite(pausedForMs) ? Math.round(pausedForMs / 60000) : null;
   return '[CC-starcaster] The build pipeline is RUNNING again' +
     (by ? `, resumed by ${by}` : '') +
     (mins != null ? ` after ${mins} min paused` : '') + '.' +
-    (swept.length
-      ? `\n${swept.length} ticket(s) whose pass had died were unstuck: ${swept.join(', ')}.`
-      : '\nNothing was left stranded.');
+    `\n${sweptSummary(swept, { checked, left, why })}`;
 }
 
 /**
@@ -606,10 +719,13 @@ module.exports = {
   classifyTicket,
   inFlight,
   describeTickets,
+  strandedExplanation,
   drainReport,
   nagDecision,
   nagMessage,
   resumedMessage,
+  sweptTicketPhrase,
+  sweptSummary,
   strandedBuildDestination,
   sweptTicketNote,
   resumeAuthorization,
