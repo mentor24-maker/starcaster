@@ -18,6 +18,34 @@ factory running on our bill.
 
 Not switched on anywhere yet, and it cannot be until you have chosen where it
 should live — there is a question waiting for you on the ticket. (#PR)
+## 2026-09-01 — A pull request is now named after its ticket, word for word (#514)
+
+Dane pairs up two lists to see what shipped and when: the Closed column in
+ClickUp, and the deploy list in GitHub and Vercel. He matches them by name. That
+only works while a piece of work is called the same thing in both places, and
+nothing in the system said it had to be — the ship command named the pull request
+after whatever the last commit message on the branch happened to say, and the
+build loop simply made a name up.
+
+Checked against the ten most recently merged pull requests on 31 August, two of
+them did not match their ticket. One was off by a single word ("drifts" where the
+ticket said "scrolls"), which is the worst kind, because it reads as a match
+until you look at it twice.
+
+Now the pull request takes the ClickUp task name exactly. The branch already
+knows which ticket it belongs to — that is stamped on when the thread is created
+— so nothing has to be remembered or typed. GitHub still adds its "(#514)" on the
+end, which is expected.
+
+Three things can go wrong, and each of them says so out loud rather than quietly
+doing something else: the branch has no ticket attached (perfectly normal, and it
+falls back to the commit message), ClickUp cannot be reached, or ClickUp answers
+with a blank. In every case it explains which happened and prints the one command
+that renames the pull request by hand. None of them stops the work shipping — a
+ClickUp outage is not a reason to strand a finished branch. The silence is the
+point: if a fallback said nothing, "the name came from the ticket" and "the lookup
+failed and nobody noticed" would look identical, which is exactly how this rule
+would get lost again.
 ## 2026-09-01 — Two changes that never touched each other still broke the build (#503)
 
 A piece of work was checked over, approved, and then sat for four days waiting
