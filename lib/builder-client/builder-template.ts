@@ -3748,8 +3748,10 @@ export function createEmptyModule(
                       : type === "media-manager"
                         ? {
                             kinds: "all",
+                            showFilters: "true",
                             showSize: "true",
                             showDate: "true",
+                            showTags: "true",
                             showDelete: "true",
                             accentColor: "#0f4f8f"
                           }

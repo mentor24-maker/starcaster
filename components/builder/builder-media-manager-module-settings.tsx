@@ -52,8 +52,10 @@ export function BuilderMediaManagerModuleSettings({
         title: "Structure",
         strips: [
           [
+            { key: "showFilters", label: "Filters", width: "check", control: "checkbox", rendersVia: "MediaManagerPreview" },
             { key: "showSize", label: "Size", width: "check", control: "checkbox", rendersVia: "MediaManagerPreview" },
             { key: "showDate", label: "Date", width: "check", control: "checkbox", rendersVia: "MediaManagerPreview" },
+            { key: "showTags", label: "Tags", width: "check", control: "checkbox", rendersVia: "MediaManagerPreview" },
             { key: "showDelete", label: "Delete", width: "check", control: "checkbox", rendersVia: "MediaManagerPreview" }
           ]
         ]

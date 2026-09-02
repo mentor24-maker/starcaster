@@ -2414,8 +2414,11 @@ if (cmd === 'whoami') {
 
   // gh, not the GitHub API directly: it is already the repo's authenticated
   // path everywhere else, and a second auth story is a second thing to break.
-  const lookupPr = (number) => {
-    const out = spawnSync('gh', ['pr', 'view', String(number), '--json', 'state,headRefName'], {
+  // --repo, ALWAYS (task 86bbqyyfn). Without it gh resolves the repo from the
+  // working directory, which is always starcaster — so a `repo:pulse` ticket
+  // was answered with starcaster's PR of the same number.
+  const lookupPr = (pr) => {
+    const out = spawnSync('gh', buildStart.prLookupArgs(pr), {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     });
     if (out.status !== 0) return null; // could not tell — NOT "no PR"
