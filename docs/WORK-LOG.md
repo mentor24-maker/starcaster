@@ -1,3 +1,46 @@
+## 2026-09-01 — The pipeline's cleanup told the truth, then described itself wrongly (#513)
+
+When Dane takes the deck to work on something urgent, the pipeline pauses, and
+handing it back runs a cleanup pass over any ticket whose helper died mid-job.
+That cleanup was already making the right call. A ticket whose *build* died goes
+back into the queue to be built again. A ticket whose *reviewer* died stays
+exactly where it is, because its work is finished and waiting to be checked —
+sending it back to the queue would throw away a completed job and have somebody
+build it a second time.
+
+What went wrong was the sentence printed underneath. It said "1 stranded ticket
+returned to the queue" about a ticket it had just correctly left alone, one line
+after saying so. Whoever read that would go looking for the ticket in a list it
+was never in. The cause was small: the cleanup kept only a list of ticket
+numbers, so by the time it wrote its summary it had forgotten which ones it had
+moved and which it had left, and it guessed the same answer for all of them.
+
+It now remembers what it did to each ticket and says so one by one. The status
+report had the same fault in its explanation of *why* a ticket is stuck — it
+gave the reason that fits a dead build to every ticket, including ones whose
+position is perfectly correct and whose only problem is a stale note saying
+somebody is already looking at them. Each now gets the reason that actually
+applies to it. Nothing about where a ticket ends up changed; only what the tool
+says about it.
+
+A review of that fix then caught the same fault standing right next to it. When
+the cleanup found nothing to unstick it announced "No stranded tickets needed
+unsticking" — an all-clear. But there are five ways to reach that sentence with
+nothing cleaned up and a ticket still stuck: the note it tries to leave on the
+ticket will not save, a stale marker will not clear, the status change comes
+back refused, the queue cannot be read at all, or the cleanup was deliberately
+skipped. In each of those the terminal read "it is still stranded" on one line
+and "no stranded tickets" on the next — the exact contradiction this job was
+opened to remove, moved one sentence over.
+
+The report now distinguishes three different pieces of news that used to share
+one sentence. Nothing was stuck, so the all-clear is true and it says it.
+Something was stuck and could not be freed, so it says how many are still
+stuck and where to look. Nothing was examined at all, so it says it could not
+tell — which is never an all-clear. The message posted to the team chat used to
+carry its own wording for the same event and could disagree with the terminal;
+both now print the same sentence from the same place, so they cannot drift
+apart.
 ## 2026-09-01 — Your words were being read as computer formatting (#515)
 
 There is a switch that lets the machines merge small, safe changes on their own
