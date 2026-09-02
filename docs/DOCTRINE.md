@@ -642,6 +642,36 @@ rendered at all.
 
 ---
 
+### 3.17 `check:panels` does not fail on a schema-generated module panel
+
+2026-09-01, found while building the Media Manager module (86bbrqnr0). Its
+settings panel was seeded into the fixture and the sweep rose from 630 panels
+to 639 — so the check is measuring *something* of that module. Then three
+deliberate W0 violations were introduced inside that panel, one at a time, and
+**every run reported OK**:
+
+| The break | Why it was not seen |
+|---|---|
+| A hand-rolled field carrying its own `width` | the check reads `.builder-module-field-strip` only as a **direct child** of `.builder-module-chrome`; this one was nested deeper |
+| A label long enough to blow the column budget | arguably not a violation at all — W0's column is *supposed* to grow to its longest label |
+| A `control: "custom"` field with a fixed 420px width, **inside a measured schema column** | still green |
+
+The panel count rising is not the same claim as the panel being checked, and
+the two were easy to conflate.
+
+This is `docs/UI_RULES.md` W0's own caveat made concrete — *a control the check
+cannot see is a control the rule does not cover* — and it matters more here
+than the caveat suggests, because a schema-generated panel holds W0 **by
+construction**. The generator owns the widths, so there is little for the check
+to catch and correspondingly little evidence in its green.
+
+**What to do with that.** Do not report `check:panels` as evidence for a
+schema-generated panel without having made it fail first. Say plainly that it
+passed and that the pass is not evidence, and then look at the panel. On the
+Media Manager nobody has yet — recorded in `docs/MEDIA_MANAGER.md` §7 rather
+than quietly left as a green tick.
+
+
 ## 4. Secrets
 
 ### 4.1 The rule is about EXPOSURE, not custody
@@ -1262,6 +1292,41 @@ each is "can this probe fail without telling me anything about the thing I am
 probing?", and if it can, "what does the cached wrong answer authorise?"
 
 ---
+
+### 5.20 A screen that paints is not a screen that works
+
+2026-09-01, PR #506 → fixed by #509. The Media Manager module shipped with
+rename sending `PUT` to `/api/assets/:id`. `routes/assets.js` handles **PATCH**
+and **DELETE** for that path and nothing else, so the request fell through
+unmatched. Renaming a file did nothing at all. Delete, on the same card, was
+fine.
+
+It shipped past every gate, because the closing check verified the grid
+**rendered**: the module drew its chrome, fetched real assets, and showed them
+with names, sizes and dates. Not one write action was exercised.
+
+The optimistic local state is what makes this class of defect so quiet. The
+break test reproduces it exactly:
+
+```
+PASS  the rename is reflected immediately
+FAIL  the rename SURVIVES A RELOAD
+```
+
+The name changes on screen the instant you press Enter, because the component
+set its own state. Everything looks correct until the page is reloaded, and
+nobody reloads while admiring their own feature.
+
+**So: a check on anything that writes must reload and read it back.** Not
+re-render from memory — reload, refetch, and assert the value came back from
+the database. The same duty applies to the closing "where I looked at it"
+sentence: naming the screen you opened is not enough if you only watched it
+paint.
+
+The sibling failure lives one section up (§3.10): a write that normalizes to
+nothing looks exactly like a success. This is its front end — a write that
+never happened looks exactly like one that did.
+
 
 ## 6. Working in this repo
 
