@@ -1072,11 +1072,27 @@ test('the SQL declares the cascade, and the fake says it does not cover it', asy
 
   // Declared and NOT exercised. The fake refuses out loud rather than letting a
   // later slice believe cascade behaviour is under test here.
+  //
+  // The refusal is on video_sessionS — the PARENT, the table whose deletion is
+  // what would cascade. This assertion used to name video_sources, which is the
+  // child and which nothing references, so deleting from it cascades nothing
+  // and there was never anything to refuse. It passed because the fake refused
+  // EVERY delete; once DELETE was implemented for tables nothing points at
+  // (2026-08-29, Connections 1/7), the assertion was left proving nothing about
+  // cascade. Same table, same promise, now aimed at the case it is about.
   const db = createFakeDb(schema);
   await assert.rejects(
-    () => db.sbQuery({ method: 'DELETE', table: 'video_sources', query: 'id=eq.x' }),
+    () => db.sbQuery({ method: 'DELETE', table: 'video_sessions', query: 'id=eq.x' }),
     /cascade/i
   );
+
+  // ...and the child, which nothing references, deletes ordinarily. A real
+  // uuid, because the fake type-checks filter values the way PostgREST does.
+  const child = await db.sbQuery({
+    method: 'DELETE', table: 'video_sources', query: `id=eq.${uuid(1)}`,
+  });
+  assert.equal(child.ok, true, child.error);
+  assert.equal(child.status, 204, 'no representation asked for, so PostgREST answers 204');
 });
 
 test('an inline unique is enforced, and nulls do not collide', async () => {

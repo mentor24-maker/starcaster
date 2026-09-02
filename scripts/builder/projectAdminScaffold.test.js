@@ -41,13 +41,14 @@ test('every module type the scaffold emits is known to the server template', () 
   }
 });
 
-test('the blueprint set is the Marinoff six, and only admin-login is public', () => {
+test('the blueprint set is the Marinoff six plus the event manager, and only admin-login is public', () => {
   assert.deepEqual(
     ADMIN_PAGE_BLUEPRINTS.map((b) => b.slug),
     [
       'admin-login',
       'admin-dashboard',
       'admin-blog-manager',
+      'admin-event-manager',
       'admin-contact-manager',
       'admin-settings',
       'admin-support',

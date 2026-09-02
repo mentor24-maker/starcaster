@@ -29,6 +29,1862 @@ Two panels named in the ticket, Image and Floating Image, turned out to need
 nothing — measuring them showed they already obeyed the rules — so they are
 unchanged to the pixel. The shared row also appears on the two Proximity
 Effect panels, which get the same improvement for free.
+## 2026-09-02 — The two stuck pull requests were never actually stuck (#513, #494)
+
+You asked to clear the conflicts on two pull requests. GitHub was flagging both
+of them red, with the word "conflicting" — which normally means two people
+changed the same lines and somebody has to decide which version wins.
+
+Neither one had a conflict. Not a small one, not a resolvable one: none. The
+check that settles it takes about a second and does not touch any files, and
+run every way it could be run — each branch against the version of the site it
+was started from, and against the version that existed by then — all four came
+back clean.
+
+Why that matters more than it sounds: the obvious thing to do when a tool says
+"conflict" is to open the files and start merging them by hand. If there was
+never a conflict, that hand-editing is pure risk. It looks like work
+afterwards, so nobody questions it, and it is one of the ways a branch quietly
+loses lines that were supposed to be in it — which has already happened here
+once, when a stale branch deleted 146 lines of the rules file on its way in.
+
+There was a second trap, and it is the one that would have caused real damage.
+After bringing both branches up to date and pushing, GitHub *still* said
+conflicting. That reads exactly like "your fix did not work" — and the natural
+response is to go back in and cut harder. It was not that at all: the site's
+main copy had moved underneath the work while it was happening. Another change
+had merged a few minutes earlier, so the branches were brought level with a
+version that was already out of date by the time they got there. Fetching again
+and checking a different way — not "did the merge command succeed" but "does
+this branch actually contain the current main" — gave a straight answer
+immediately.
+
+Both are now merged and live. The lasting change is a written rule: when a tool
+reports a conflict, confirm it locally before editing anything, and confirm a
+branch is current by what it contains rather than by a command reporting
+success. A green message from a command only tells you about the moment it ran.
+
+## 2026-09-01 — A ticket waiting on a red build no longer tells you it is waiting on you (#494)
+
+One of the weekly-report tickets sat in the "Ready to launch" column for six
+days with your merge approval already on it. It was never waiting on you. The
+merge step read your "merge", checked the build, found it red — one failing
+test out of 1,846 — declined for that reason, said so once, and then nothing
+in the system ever looked at that ticket again. From where you sit, you had
+already said yes, so it looked handled. The same thing had happened the day
+before on another one. Twice in a week is not bad luck, it is how that column
+fails.
+
+The column has nobody watching it, and that is on purpose: "Ready to launch"
+is yours, so the machines deliberately keep their hands off. The catch is that
+"keep your hands off" quietly became "nobody is looking".
+
+There was one report that would have raised a flag, and what it would have
+said was worse than saying nothing. It read: *"Bottleneck: OPERATOR — approved
+tickets have waited past 24h for a merge. The machine side is keeping up."*
+Both halves of that were false. The machine side was not keeping up, and it
+would have pointed at you as the hold-up when you had already done your part.
+That report only ever looked at ClickUp — it never once asked GitHub whether
+the build had passed — so it could not tell the difference between a ticket
+waiting on your word and a ticket waiting on a broken build. It just picked.
+
+This adds a check that asks the real question: whose hands does this actually
+need? It reads the ticket, finds its pull request the same way the merge step
+does, asks GitHub what state the build is in, and then answers one of three
+ways — yours, a machine's, or "cannot tell", which it says out loud with the
+reason rather than guessing. If the build is red it names the failing check and
+says, in as many words, *not waiting on you*. It runs every ten minutes off the
+existing relay job, stays quiet unless something is genuinely stuck, says the
+same thing at most once every six hours, and shuts up entirely while you have
+the pipeline paused.
+
+The old report's sentence is fixed too: with nothing to go on it now says whose
+hands this needs is not known, and points at the command that does know, rather
+than naming you by default.
+
+You can ask it yourself any time with `npm run stale-ready`.
+## 2026-09-01 — The pipeline's cleanup told the truth, then described itself wrongly (#513)
+
+When Dane takes the deck to work on something urgent, the pipeline pauses, and
+handing it back runs a cleanup pass over any ticket whose helper died mid-job.
+That cleanup was already making the right call. A ticket whose *build* died goes
+back into the queue to be built again. A ticket whose *reviewer* died stays
+exactly where it is, because its work is finished and waiting to be checked —
+sending it back to the queue would throw away a completed job and have somebody
+build it a second time.
+
+What went wrong was the sentence printed underneath. It said "1 stranded ticket
+returned to the queue" about a ticket it had just correctly left alone, one line
+after saying so. Whoever read that would go looking for the ticket in a list it
+was never in. The cause was small: the cleanup kept only a list of ticket
+numbers, so by the time it wrote its summary it had forgotten which ones it had
+moved and which it had left, and it guessed the same answer for all of them.
+
+It now remembers what it did to each ticket and says so one by one. The status
+report had the same fault in its explanation of *why* a ticket is stuck — it
+gave the reason that fits a dead build to every ticket, including ones whose
+position is perfectly correct and whose only problem is a stale note saying
+somebody is already looking at them. Each now gets the reason that actually
+applies to it. Nothing about where a ticket ends up changed; only what the tool
+says about it.
+
+A review of that fix then caught the same fault standing right next to it. When
+the cleanup found nothing to unstick it announced "No stranded tickets needed
+unsticking" — an all-clear. But there are five ways to reach that sentence with
+nothing cleaned up and a ticket still stuck: the note it tries to leave on the
+ticket will not save, a stale marker will not clear, the status change comes
+back refused, the queue cannot be read at all, or the cleanup was deliberately
+skipped. In each of those the terminal read "it is still stranded" on one line
+and "no stranded tickets" on the next — the exact contradiction this job was
+opened to remove, moved one sentence over.
+
+The report now distinguishes three different pieces of news that used to share
+one sentence. Nothing was stuck, so the all-clear is true and it says it.
+Something was stuck and could not be freed, so it says how many are still
+stuck and where to look. Nothing was examined at all, so it says it could not
+tell — which is never an all-clear. The message posted to the team chat used to
+carry its own wording for the same event and could disagree with the terminal;
+both now print the same sentence from the same place, so they cannot drift
+apart.
+## 2026-09-01 — Your words were being read as computer formatting (#515)
+
+There is a switch that lets the machines merge small, safe changes on their own
+— documentation and tests only, nothing that touches the site. It had turned
+itself off two days earlier, which was the right call at the time: a check had
+come back unreadable, and something that cannot verify its own footing should
+not be merging anything.
+
+The problem was everything after that. It wrote down only that "1 thing" could
+not be checked, not which thing, and then it never mentioned it again. So the
+lane sat switched off and looked exactly like a quiet couple of days. You found
+it by noticing that nothing was reaching you and asking whether something was
+stuck.
+
+Turning it back on is your word, on purpose — the machines are not allowed to
+un-brake themselves. You gave that word three times, and all three were
+ignored, because of something nobody had thought about: when you PASTE a phrase
+into ClickUp, ClickUp helpfully reformats it as a block of computer code. The
+switch was comparing your whole message against two exact words, and your
+message was no longer two exact words — it was two words wrapped in punctuation
+you never typed and could not see the significance of.
+
+So: your instruction is now read as what you typed, not as what ClickUp stored.
+That applies to the merge word too, which had the same flaw — your "merge"
+worked only because you happened to type it out by hand rather than paste it.
+
+Two other things were fixed on the way, both invisible from the outside. Every
+one of the machines posts to the party line using your account, so the switch
+had no way to tell your words from theirs; it does now. And the check that was
+supposed to tell them apart turned out to be matching nothing whatsoever —
+found only by running it over the real messages in the channel rather than over
+made-up examples, which is a habit worth keeping.
+
+Still to do, and filed: the brake should say what it could not check, and
+should keep saying it is on. Two days of silence is what made a five-minute
+problem into an evening.
+
+## 2026-08-24 — The machine that fetches YouTube video files (#419)
+
+Getting a video's title and captions is easy and happens on the website itself.
+Actually downloading the video and audio files is not: the service the website
+runs on cannot write files, gives up after a few seconds, and gets blocked by
+YouTube for being a data centre. So that job belongs on a small always-on
+machine of our own.
+
+This is that machine's program. You hand it a link, it answers straight away
+with a ticket number, and it goes off and does the work — because the website
+that asked is switched off within seconds of asking, so waiting for an answer
+would never work.
+
+It will not start at all without a password set, and it refuses any request
+that does not carry it. That matters more than usual here: this thing downloads
+whatever link it is given, so an unprotected one is a stranger's free video
+factory running on our bill.
+
+Not switched on anywhere yet, and it cannot be until you have chosen where it
+should live — there is a question waiting for you on the ticket. (#PR)
+
+## 2026-09-01 — A pull request is now named after its ticket, word for word (#514)
+
+Dane pairs up two lists to see what shipped and when: the Closed column in
+ClickUp, and the deploy list in GitHub and Vercel. He matches them by name. That
+only works while a piece of work is called the same thing in both places, and
+nothing in the system said it had to be — the ship command named the pull request
+after whatever the last commit message on the branch happened to say, and the
+build loop simply made a name up.
+
+Checked against the ten most recently merged pull requests on 31 August, two of
+them did not match their ticket. One was off by a single word ("drifts" where the
+ticket said "scrolls"), which is the worst kind, because it reads as a match
+until you look at it twice.
+
+Now the pull request takes the ClickUp task name exactly. The branch already
+knows which ticket it belongs to — that is stamped on when the thread is created
+— so nothing has to be remembered or typed. GitHub still adds its "(#514)" on the
+end, which is expected.
+
+Three things can go wrong, and each of them says so out loud rather than quietly
+doing something else: the branch has no ticket attached (perfectly normal, and it
+falls back to the commit message), ClickUp cannot be reached, or ClickUp answers
+with a blank. In every case it explains which happened and prints the one command
+that renames the pull request by hand. None of them stops the work shipping — a
+ClickUp outage is not a reason to strand a finished branch. The silence is the
+point: if a fallback said nothing, "the name came from the ticket" and "the lookup
+failed and nobody noticed" would look identical, which is exactly how this rule
+would get lost again.
+## 2026-09-01 — Two changes that never touched each other still broke the build (#503)
+
+A piece of work was checked over, approved, and then sat for four days waiting
+for Dane to say the word that puts it live. Nobody touched it in that time. When
+he said the word, the automatic safety checks refused it — the work had gone from
+fine to broken while sitting perfectly still.
+
+What happened is that another job finished and went live during those four days.
+The two pieces of work did not overlap: not one shared file, not one shared line.
+The usual warning a machine gives you — "these two edits collide, decide which
+one wins" — never fired, because there was nothing to collide about. What
+collided was the *rule*. The waiting work had tightened a rule about how a job
+ticket must be named; the other work had shipped a test that still expected the
+old, looser rule. Each was correct on its own. Put them in the same place and one
+of them has to be wrong.
+
+Nothing in the written rules of this project covered that. The two entries that
+come closest both start from "when the machine warns you about a clash, listen to
+it" — and here the machine had nothing to warn about. So this adds a new entry
+that starts from the opposite end: a quiet merge is not proof the two sides
+agree. It also writes down the thing that made the four days matter — being
+signed off is not a permanent condition. It says something was true about the
+work on the day it was read, and the ground can move underneath it afterwards.
+The practical habits that follow are: when you change a rule, go hunting for
+anywhere else that already relies on it; and when an old test argues with a new
+rule, don't just change the test's answer — make it say plainly which rule it is
+now guarding, so the next time the two drift apart somebody hears about it.
+
+## 2026-08-31 — A branch that was fine no longer gets filed as broken work (#487)
+
+When Dane says "merge" on a finished ticket, the relay checks with GitHub first.
+GitHub sometimes answers that the branch clashes with the live code when it does
+not — its answer can be minutes out of date — so the machine tries the merge
+itself before believing it. That second opinion comes back one of two ways: the
+two really do collide and somebody has to decide what the merged file says, or
+there was nothing to collide about.
+
+The note written on the ticket read that second opinion and said the right thing.
+The part that files a "somebody go fix this branch" job into the work queue never
+read it at all — it filed whenever GitHub used the word conflict. So on 30 August
+a branch that had merged perfectly, and only lost a race sending the result up to
+GitHub, got two notes on its ticket a fifth of a second apart. One said a job had
+been created and named it. The other said it would go through on the next attempt
+and nobody needed to do anything. Both were on the screen at once, and whichever
+one you read last is the one you believed. The job that got created told whoever
+picked it up to go and clean up a mess that was not there. The ticket sat for two
+hours next to it.
+
+Now both halves ask the same single question, so they cannot answer it
+differently — there is only one answer to read. And where the code used to ask
+"did we create a job for this?" it now asks "who is going to act next?" Those
+are not the same question: when there is nothing to fix, the next attempt IS the
+actor, and it is a real one. Treating that as "nobody" is why the system had
+been announcing a healthy branch as blocked every ten minutes and asking for
+hands it did not need. It still speaks up if a branch has not sorted itself out
+within a day, because at that point silence would be the wrong answer too.
+
+Review caught that "where" being written as "everywhere" the first time round.
+Four places had to change and only three did. The one that was missed is the
+message that goes to the group chat Dane actually reads, and it is the message
+sent when a branch has been stuck for a day — so once a day, about the branches
+that matter most, it would have posted a single sentence saying both "nothing is
+looking after this" and "every attempt has been retrying it on its own." The
+same two-answers-at-once problem this whole job was written to remove, one level
+down. It now says which of the two it is, the heading above it stops calling a
+branch with nothing wrong a clash, and the test that guards it feeds the two
+halves into each other the way the real code does — checking them one at a time
+was why a fully passing test run still had this in it.
+
+Review then caught something bigger, and it is the reason this went round a third
+time. "The machine looked and found nothing wrong" and "the machine never managed
+to look" had been filed as the same answer. They are not the same answer at all:
+the first is a finding, the second is the absence of one. So when the check
+failed to run — it could not reach the code, or the branch lives in a different
+project this machine does not have a copy of — the note on the ticket honestly
+said it could not check, while the message going to the group chat seconds later
+announced that no clash had been found and nobody needed to do anything. Standing
+the room down on a look nobody took. And a branch in one of the other projects
+hits that every single time, forever, so it had quietly stopped creating any job
+at all for work in those projects.
+
+There are three answers now instead of two, and each one is only allowed to say
+what it actually knows. A clean result still goes quiet and sorts itself out. A
+real clash still gets a job created and a name attached. A check that could not
+run says so plainly, in the same words everywhere it appears, and still gets a
+job created — because somebody has to find out why. The wrong-project case says
+out loud that it will never sort itself out from that machine, rather than
+promising a retry that cannot work. Every outcome the checker can produce now
+needs a decision written down beside it; a test fails if a new one is ever added
+without one, which is how four of these came to be sharing an answer nobody had
+chosen for them.
+
+And a fourth time, for the most embarrassing version of the same thing. Splitting
+those three answers apart fixed the note written on the ticket — and stopped
+there. The ticket that note LINKS TO, the one somebody actually opens and works
+from, still had a single set of words for all three. So the note would say
+"whether there is anything to resolve is still unknown", you would click through
+to find out, and land on a job titled "Resolve the merge conflict on PR #501"
+telling you to leave no conflict markers behind. Word for word the mistake this
+whole job was written to remove, one more level down — and for the branches that
+live in the other projects it happened on every single pass, not occasionally.
+Three more places had it too: the once-a-day chat message about a stuck branch,
+the end-of-run summary above it, and the "things I could not check" list at the
+bottom of every run.
+
+The fix is one change rather than four, and it is the only shape that stays fixed.
+Every one of those places used to hold its own words and pick between them by
+asking a question that only had two answers — so none of them could tell "we
+looked and found a clash" apart from "we never looked". The words now live in one
+table, one row per answer, and every surface reads its row. Nothing writes its own
+sentences any more, so nothing can describe a situation as something it is not.
+Adding a fourth answer without filling in its whole row fails the tests.
+
+One of the guard tests turned out to be holding the mistake in place: its written
+description said "only a branch with a real clash may be announced as a clash",
+which is right, while the check underneath it permitted exactly what the
+description forbade. It says what it always meant now — and reverting it to the
+old wording makes it fail, which is the proof it was load-bearing in the wrong
+direction.
+## 2026-08-31 — Work sent back for a fix stopped hiding in the queue (#489)
+
+When a review found a problem, the ticket went back to the "Queued" pile — the
+same pile as work nobody had started yet. Nothing on the board could tell the
+two apart, and that turned out to cost more than it looked like it would.
+
+Three things went wrong at once. The queue lied about its own size: fifty-two
+tickets sitting in "Queued" looked like fifty-two fresh jobs, when six of them
+were already half-built with the code sitting in a pull request waiting for one
+small fix. Worse, a returned ticket went to the back of the line — the machines
+pick by priority, and a returned ordinary job never beat a fresh urgent one. Four
+of them had been waiting weeks that way, one since 25 August. They did not get
+forgotten; the rule sent them to the back every single time. And the safety limit
+that stops the machines starting more than five things at once was reporting "one
+thing in progress" while five real branches sat open.
+
+So returned work now has a status of its own — **Rework** — and the build
+machines empty that pile first, oldest first, before touching anything new.
+Finishing something half-built is cheaper than starting something fresh: the
+branch is already there, the notes about what to fix are already there, and every
+day it waits it drifts further from the live site and needs re-syncing. Rework
+still does not count against the limit of five, because that limit is about how
+many *new* things to start — but the count is now printed in plain sight on every
+message rather than left out silently, which was the actual complaint.
+
+The rest is plumbing that had to follow: the sleep timer counts rework as work
+waiting (otherwise a queue full of returned tickets read as empty and the
+machines dozed for an hour), the pause-and-resume tool puts a half-built ticket
+back in the right pile, the daily health report measures rework on a shorter
+fuse, and the weekly report draws the new column.
+
+One step is left over on purpose. The tickets currently sitting in the wrong pile
+get moved by a command that has to run *after* this goes live — until the new
+rule is running, a ticket in "Rework" would be picked up by nothing at all, which
+is worse than where they are now.
+## 2026-08-31 — Posts now go out from the client's own account, not ours (#490)
+
+A client connects their Facebook Page to Starcaster. The screen says
+"connected". Their posts then go out from *our* account, and nobody finds out.
+
+That was the state of things until this change, and it is worth being precise
+about why. The last two pieces of work built the safe where a client's
+permission is kept, and the code that collects it. Neither one ever read it
+back. So the permission sat there, correctly stored, doing nothing, while every
+post carried on using the platform-wide keys — Dane's own accounts.
+
+This adds the missing piece: one function that every publisher now asks before
+it posts, which answers "this client's own connection, if they have a working
+one; ours otherwise". Facebook, Instagram, Threads, Bluesky, X and Buffer all
+go through it now.
+
+The thing that made this worth being careful about is that the failure is
+completely silent. Posting to the wrong account is not an error — the platform
+accepts it, the post appears, the job goes green. There is no log line, no
+alert, and no way to notice except a client eventually asking why their page
+has been quiet. So the new function is deliberately suspicious in three places.
+It refuses to post at all if it could not tell whether a client has a
+connection, rather than shrugging and using ours — "no connection" and "I could
+not check" are different answers, and only one of them is safe to guess at. It
+skips a token that has expired even when the record still claims it is fine,
+because nothing checks those records yet. And when it does refuse, it hands
+back an empty set of credentials rather than a flagged one, because an earlier
+draft handed back *our* working credentials with a flag on them, which reads
+perfectly and would have posted from the wrong account anyway.
+
+Two things were left deliberately alone. The older place a client's Facebook
+Page is stored is still consulted — it is live in production and holds real
+clients today, and quietly skipping it would have moved their pages back onto
+our account without a word. And the client's token replaces only the token: the
+application credentials underneath it stay ours, because permission to post to
+someone's page is not a new app, it is one key to one door.
+
+Every safeguard here was broken on purpose and watched to fail before being
+put back. One of those breaks earned its keep: taking the change out of a
+single channel left every test passing while that channel quietly went back to
+posting from our account. There is now a test watching for exactly that.
+
+Review sent this back once, and the thing it caught is worth writing down,
+because it is the same silent failure wearing a different coat. Some platforms
+do not hand out one key — they hand out two, and both have to match. X is like
+that, and so is Bluesky, where the password only works at the particular server
+that issued it. Our safe has room for exactly one. So the code was taking the
+client's key, noticing the second one was missing, and quietly filling that gap
+from our own — producing a pair made of one key from each of two different
+accounts, which unlocks nothing and reports an error naming neither. Worse, the
+comment above it claimed the case was handled.
+
+It now refuses instead, and says exactly which part it has nowhere to keep. That
+is the same instinct as the rest of this work, one step further in: falling back
+to our account is not the only way to end up posting as the wrong person — you
+can also get there by assembling something half-and-half that merely looks
+complete. Bluesky gets the matching fix, and it is the one that could have bitten
+a real client: rather than sending their password to whatever server *our*
+settings happen to name, it now uses the public one where such a password is
+actually valid. A client running their own Bluesky server cannot connect yet, and
+now gets an honest refusal instead of having their password handed somewhere it
+does not belong.
+
+Two smaller things review asked for are settled here too. A comment claiming an
+account could be filed in the safe exactly as it arrives said the opposite of
+what the safe actually does, so there is now a single small piece of code that
+does that filing properly and one place to change it. And a known rough edge in
+the Facebook code — asking for the list of a client's pages using the wrong one
+of their two keys — is written down where the next piece of work will meet it,
+along with why it is that piece of work's to fix rather than this one's.
+
+Review sent it back a second time, and this one was the opposite kind of
+failure — loud rather than silent, which is the lucky kind. Every post to X
+was refused with "credentials are missing" while the credentials were sitting
+right there, set and complete.
+
+The cause was a translation done twice. Credentials arrive from storage
+labelled one way and get relabelled into the form the posting code reads.
+Because looking them up is worth doing only once for a post — the check, the
+picture upload and the post itself all have to be the same account, or X
+answers with an error naming neither — the code looks them up once and passes
+the result along to all three. But the relabelling step was then handed
+something already relabelled, did not recognise a single field, and returned
+five blanks. Nothing errored; the post simply refused itself. And this was on
+the shared-keys path, which is Dane's own posting, so it was not some future
+client's problem — it was the only X path that runs today.
+
+The relabelling now understands both forms, so doing it twice changes nothing.
+That is the property the test asserts, rather than the one place that happened
+to trip over it, because the next person to translate twice will not know it
+was ever a hazard. The test that should have caught this listed four of the six
+channels; X was missing from it, and X is the one channel that hands its
+credentials along in an unusual shape — so the only unusual case in the file
+was the one nothing was watching. Both gaps are closed.
+
+One more thing review noticed while it was in there. There are two lists of
+the shared keys, and they disagreed about who wins when a value is set both in
+the settings screen and in the server's own configuration. One list preferred
+the settings screen, the other preferred the server. With both set and
+different, the same account posted under one name when a client project was
+named and a different name when it was not — a wrong-account post, arriving as
+success. There is one order now, and a test that fails if the two ever drift
+apart again.
+## 2026-08-31 — A saved section has one name, and renaming it now sticks (#454)
+
+You renamed the Delray site header three times and it snapped back three
+times. That was not stubbornness in the interface — the section genuinely had
+two names. One was the name in the Saved Sections list, which is what you were
+typing into; the other was stamped inside the section's own content, and that
+is the one every page card shows in bold. Renaming changed only the first, and
+then the thing that keeps every following page in sync pushed the section's
+content — old name and all — back over every page. So the rename was undone by
+the very machinery meant to spread it. The only way to move the other name was
+to unlock a section on a page, retitle it there, and save it back to the
+master, which is not something anybody would guess.
+
+There is one name now, and you can move it from either end. Renaming in the
+list changes the name everywhere it appears. Saving a section from a page
+carries that page's title with it, so the two never split apart again. And
+either way, the dialog that already tells you "this updates it on 35 pages"
+now also tells you "this also renames it on 35 pages" — that rename used to
+happen in silence, which is what hid the whole problem in the first place.
+
+Page cards are also titled by the master now rather than by whatever the last
+sync happened to stamp on them, so an old name cannot sit next to the new one
+arguing with it. Nothing was rewritten in the database to fix the sections
+that already disagree; they simply stop showing the wrong name, and they
+correct themselves the next time the section is saved.
+
+**A second round, after review.** The first version opened the same problem
+through a different door. Saving a section from a page takes that page's name
+with it — which is what makes the two names stay together — but on a section
+that still had the old mismatch, the page was carrying the *stale* name, so
+saving it put the old name back on the master and quietly undid a rename you
+had just made in the list. Worse, the warning that was supposed to announce a
+rename stayed silent, because it was comparing the wrong two strings: it
+checked the name stamped in the content instead of the name in the list, and
+on exactly those sections those two look identical. It now compares the name
+you can actually see in the list, so the dialog says what it is about to do.
+(That count went one step too far and is corrected in the third round
+below.)
+
+Second thing review caught: after saving a section from a page back to the
+master, that section on the page immediately showed up as *Changed* — as if
+you had edited it — even though you had just made it match. The relink was
+only flipping a couple of flags, while the server tidies a section as it saves
+it and fills in a few dozen settings the page never sent. So the two sides
+differed the instant they were joined, and every later sync then skipped that
+page on the grounds that somebody had edited it. The page now takes the
+section back exactly as the server stored it, which is what "this is the same
+section again" was always supposed to mean.
+
+Finally, the little "add this saved section under…" list was still labelling
+sections with the old stamped name, so it could offer you a section under a
+different name from the one its own card was showing, one click away.
+
+**A third round, after review.** Fixing the rename put a new wrong sentence
+into the very dialog this whole ticket is about. When you save a section from
+a page back over the master, that dialog lists every page it will change and
+exactly what changes on each — and it was working that list out from the
+section as it sits on your page, while the save itself now stamps the master's
+name on before writing. So it was describing a write that no longer happens.
+On a section with no title of its own it announced that the name was about to
+be wiped off every following page, and named those pages as changing, when in
+truth the name is kept and those pages are untouched. Telling somebody their
+section is about to be renamed to nothing, in the week whose complaint was a
+name behaving unpredictably, is worse than saying nothing. The preview and the
+save are now one and the same thing — worked out once, in one place, so the
+two cannot drift apart again.
+
+The second round had also made the rename warning count only the pages the
+save physically rewrites, skipping any page you had hand-edited. That is the
+right rule for *content* and the wrong one for a *name*: a hand-edited page
+still follows the section, so its card is titled by the master and it renames
+on screen the moment you rename, edits or no edits. Where every page had been
+hand-edited the warning therefore said nothing at all while every card
+changed — the original complaint, one more time. It now counts every page that
+will visibly rename, and says separately how many of them keep their own local
+edits, so the two sentences in that dialog stop disagreeing without either of
+them lying.
+
+Last, creating a saved section was still making one with two names. The name
+comes from a little prompt, and whatever you typed went onto the list entry
+while the section's own content kept whatever title it already had. Answer
+that prompt with anything but the default and the section was born with the
+exact mismatch this ticket exists to remove — invisible at first, because the
+cards now show the master's name either way, and back the moment somebody
+saved a page's copy over it. Both places that create a section now set both
+names together, and a test fails if a third one is ever added that does not.
+## 2026-09-01 — A merge can glue two statements together, and nothing was checking (#491)
+
+When two people change the same lines of a file, git stops and asks a human to
+sort it out. One of the usual answers is "keep both of these" — and that answer
+can quietly weld two separate instructions onto a single line. Git is happy,
+because git only ever asked whether the *text* overlapped. The computer that
+has to run the file is not happy at all, and it refuses to read the file at
+all — not just the broken line, the whole file, every function in it, gone.
+
+That happened on 30 August, in the one file every automated work-pass runs to
+talk to ClickUp. It was caught by luck: an agent happened to check the file by
+hand before committing. Nothing in the project would have caught it otherwise.
+The check we already had for this only looked at the browser code; the tests
+that mention that file only read it as text and never actually run it; and the
+commit checker deliberately looks the other way during a merge. So it could
+have gone live green, and the next work-pass would have died on its first line.
+No error, no alert, nothing to see — just a queue of tickets that had silently
+stopped moving, and no way to tell how long it had been like that.
+
+So the check now reads the tool scripts and the shared code as well as the
+browser code — about 600 files, in under half a second, every time anything is
+committed and again before anything merges. Generated files are left out on
+purpose, because they are rebuilt rather than written by hand, and they are not
+even present at the moment this check runs.
+
+The first time it ran, it found something nobody was looking for: a script for
+importing tweets from a spreadsheet has had a missing bracket since the day it
+was written. It has never once been able to run. One character, fixed. That is
+the same lesson arriving from the other direction — nothing had ever read that
+file either.
+
+Review caught one more thing, and it is the same lesson a third time. The test
+written to prove the check catches the 30 August problem did not actually
+contain that problem. The example it used had a semicolon between the two
+welded instructions — which makes it perfectly ordinary, valid code. The test
+was passing on the strength of a *different* broken line sitting underneath,
+and deleting the example entirely changed nothing. So the one test standing
+guard over the whole incident would not have noticed if the check stopped
+working. It now uses the real shape, on its own line, with a companion test
+using the correctly-separated version to prove the failure comes from the weld
+and nothing else — and both were broken on purpose to watch them fail.
+
+The other fix: the list of "files the computer generates, so leave them alone"
+is meant to be one list both checkers read, so they can never disagree about
+it. One of them was reading only half of it, and the gap was real — a bundling
+script writes six files into one folder and the list names three of them by
+name, relying on a folder rule to cover the rest. Both checkers now ask the
+same question, and a test fails if that ever comes apart again.
+
+## 2026-08-31 — The alarm for a loop that runs perfectly and gets nothing done (#488)
+
+We already had an alarm for a scheduled job that stops running. This adds the
+one for the sneakier failure: the job runs fine, finishes cleanly, and nothing
+comes out the other end.
+
+That is not hypothetical. On the morning of 31 August the build loop woke up
+every hour, did its work, exited cleanly every single time — and the queue did
+not get any shorter. Fifty-two tickets waiting, one in review, and the oldest
+sent-back pull request had been sitting untouched since the 25th. Nothing was
+broken, so nothing complained. That is what makes this failure worse than a
+crash: a crash writes an error, while a loop achieving nothing writes a long
+cheerful log, and a cheerful log is exactly what stops anyone looking. It took
+a morning of reading logs by hand to spot.
+
+The existing alarm could never have caught it, because it only asks "is this
+thing still alive?" — and it was, gloriously. So there is now a second question
+being asked alongside it: **is the queue actually getting shorter?**
+
+`npm run throughput` answers it. It shows how many tickets finished on each of
+the last seven days, how big the backlog was at the end of each day, and how
+long the oldest sent-back pull request has been waiting. Then it says one of
+four things, and the distinction between the middle two is the entire point:
+things are moving; nothing finished but there was nothing to finish (which is
+perfectly healthy, and it says so rather than showing a worrying zero); nothing
+finished while work sat waiting, which is the alarm; or it could not read
+something and refuses to guess. That last one never gets dressed up as good
+news.
+
+It runs quietly alongside the existing check every ten minutes and only ever
+speaks up when the queue has genuinely stopped moving — at most once every six
+hours, and it goes silent again the moment work starts shipping. No daily
+"everything is fine" messages that nobody reads.
+
+Two mistakes worth recording, because both were caught by pointing the new
+command at real data rather than by trusting the tests. The report printed the
+backlog as 57 on one line and 56 two lines further down — two numbers for the
+same thing, disagreeing, which is the precise sort of quiet wrongness this
+whole feature exists to catch. One real ticket had been marked finished without
+a completion date, and the two counts handled that differently. It now says out
+loud how many tickets it had to make an assumption about instead of silently
+papering over it. The other was smaller: ages were printing as "open 8d 0h ago"
+when they should have read "opened 8d 0h ago".
+
+And the detector itself was deliberately broken before being trusted — rigged
+so it could never report a stall — to confirm the tests actually fail when it
+stops working. Four of them did. A stall detector that cannot detect a stall
+would have been a perfect example of the problem it was built to solve.
+
+## 2026-08-31 — `npm run ship` now writes the note that lets a PR be merged (#484)
+
+There are two ways a finished change reaches the live site. The loops do it on
+their own, and Dane's own lane — `npm run ship` — does it by hand. A guard added
+last week checks, before letting anything merge, that the ticket has a note on
+it saying which pull request belongs to it. No note means the guard cannot tell,
+and it never lets something through it cannot tell about.
+
+The loops have been leaving that note for over a week. `ship` never has — it had
+no connection to ClickUp at all. Nothing was broken yet only because the guard is
+still advisory. The moment it is switched on for real, every change Dane ships by
+hand would have been stuck, waiting on a command nobody would have known to run.
+
+So `ship` writes the note itself now. It already knows which ticket the work is
+for, because starting a piece of work stamps the ticket onto it; it just never
+used that for this. It writes the note before it merges, so even a run that stops
+on a failed check leaves the ticket properly labelled. Running `ship` twice does
+not leave two notes — it asks the guard's own reader whether the note is already
+there, so one written by a loop or typed by hand counts the same. A branch with
+no ticket still ships perfectly well; it just says out loud that nothing was
+recorded, rather than staying quiet, because quiet looks exactly like success.
+And if ClickUp is down, the change still merges — the failure is reported
+loudly with the one command that repairs it, because a note going missing in
+silence is the entire thing being fixed here.
+
+The rules behind all of that were written as their own small piece of code so
+they could be tested, then broken on purpose one at a time — fourteen breaks,
+each of which made a named test fail. Two of those breaks found real bugs before
+the change ever left the branch: one test could not fail at all and was rewritten,
+and the code was reading a ClickUp command that had been killed mid-run as
+though it had succeeded, which is precisely the silent missing note the whole
+job exists to prevent.
+
+Review then found three more holes in that same work, all reproduced live rather
+than reasoned about, and this fixes them. The first is the plainest: when the
+note could not be written, the loud failure message handed over a command to
+repair it — and that command was rejected the moment you ran it, because it named
+the pull request by number where the tool wants the full web address. A repair
+step that does not run is not a repair step, and the tests had been written
+around the broken spelling, so fixing it would have looked like a regression.
+There is now one place that spells out both addresses, `ship` uses it for the
+command it prints and for the command it actually runs, and the two can no longer
+drift apart.
+
+The second was an ordering accident with real teeth. The guard works out which
+ticket a pull request belongs to by taking the FIRST ClickUp link in its
+description, and `ship` was adding its link at the bottom. So a change whose
+commit message happened to mention a related ticket — "follows on from ..." —
+would have sent the guard off to judge the work against the wrong ticket
+entirely. It would have refused rather than waved the wrong thing through, but
+the change it refused is the hand-shipped one, which is the exact thing this job
+exists to unblock. The link goes at the top now, so there is nothing left to get
+in the wrong order.
+
+The third was a cheerful all-clear standing in front of a refusal. Because `ship`
+is meant to be re-run, it asks first whether the note is already there and skips
+writing a second copy — but that skip was jumping over the other half of the
+check too, the one confirming the pull request points back at its ticket. So a
+ticket that already had its note would report success no matter what, and the
+guard would then reject the very same pull request for having no ticket link.
+Now the skip only skips the writing; both halves are checked every time.
+
+A second review pass found two more, and the first is the wrong-ticket problem
+above surviving in the one case the fix stepped over. `ship` puts its link at the
+top now, but it skips a description that already mentions this ticket — and
+"mentions it somewhere" is not the question the guard asks. The guard asks which
+link comes FIRST. So a description naming another ticket at the top and this one
+further down was left exactly as it was, and the guard went off to judge the work
+against somebody else's ticket, telling Dane about a ticket he had nothing to do
+with. The skip now asks the guard's own question, and the test no longer checks
+another example — it checks the rule itself, over five differently-shaped
+descriptions: whatever came in, what comes out points at this ticket.
+
+The second is a message that said more than it knew. When writing the note fails,
+`ship` announced "this ticket now has no note" and handed over a repair command.
+But one of the ways it fails is that the note WAS written and reading it back is
+what broke — so the sentence was false, and the repair command it gave would have
+added a second identical note, which is the duplicate the whole design goes out
+of its way to avoid. It now says what it can actually stand behind: the note may
+or may not be there, go and look. And both repair commands are the safe kind that
+write only if the note is genuinely missing. A repair is by definition run when
+nobody knows what landed, which is exactly when that matters.
+
+One more turned up while testing this on the live ticket, and it is the same
+mistake wearing different clothes. The whole point of the "only write if it is
+missing" option is that running `ship` twice does not leave two notes. To decide
+that, it reads the ticket's comments — and if that read came back without a list
+of comments at all, the code treated it as "there are no comments", which means
+"no note is there", which means write one. So the one check whose entire job is
+to prevent a duplicate would create a duplicate precisely when it could not see.
+It now tells the two apart: a ticket with genuinely no comments still gets its
+note, but a reply it could not read makes it stop and say run this again. One
+re-run costs nothing; a duplicate note sits on the ticket forever. The same
+confusion sat one step further down, where a reply it could not read was
+reported as "the note did not land" moments after the note had in fact been
+posted successfully — it now says what it actually knows, which is that it could
+not check.
+
+## 2026-08-31 — One shape for every social platform, proven on two of them (#471)
+
+Adding a new social network to Starcaster has always meant threading a new
+special case through the whole app. This changes that: every platform now
+answers the same six questions in the same way — where do I send the client to
+say yes, what do I do with their answer, which accounts does this cover, is it
+still working, make it work again, and give the permission back. Adding the
+next platform after this is one new file and one line on a list.
+
+A shape is only proven if something awkward fits it, so it was built against two
+platforms that work nothing alike. Facebook Pages is the flow that already runs
+in production, moved across rather than rewritten — if moving it had broken it,
+that would have meant the shape was wrong, and it is far cheaper to learn that
+with one platform on it than with five. Bluesky was written fresh, and second on
+purpose: it has no browser sign-in, no authorisation code, no expiring token to
+renew, and no way for us to hand the permission back on the client's behalf.
+Every one of those is something a design drawn only from Facebook would have
+assumed without noticing.
+
+One real fix rode along. The address Facebook sends a client back to after they
+agree used to be worked out from whichever web address the request happened to
+arrive on. On a test deployment that address is different every single time, and
+Facebook rejects any address it was not told about in advance — so the sign-in
+would have failed there with an error naming nothing useful. It is now a fixed,
+known address.
+
+Review caught a real hole on the third look, and it is the kind worth writing
+down. When a client connects an account, the code hands back a little record of
+it — which account, what it is called, the key that lets us post. That record is
+then what you pass back in later to ask "is this still working?" or "hand the
+permission back". Except the record came out labelled one way and every later
+question expected the other, so handing an account's own record straight back to
+the code that made it got the account refused. On Bluesky the refusal read
+"Bluesky needs a handle and an app password" — which is not a mismatch, it is a
+sentence that would have sent a client off to replace a password that was never
+wrong. Every test passed, because no test anywhere had ever fed a connection's
+own record back in.
+
+Both halves now use the one set of names — the same names the vault that stores
+these connections already used — and the check that would have caught it walks
+every platform on the list rather than the two that exist today. Platform seven
+either proves its own record can be handed back to itself or it fails the test.
+
+Nothing changes on any screen. The screen where a client actually clicks
+"Connect" is the next piece but one.
+## 2026-08-31 — Parallax was quietly removing a theme's photo tint (#481)
+
+Themes can lay a wash of colour over a photo — the "Photo overlay tint" — and
+it is not decoration. It is the thing that darkens a picture enough for white
+words to be readable on top of it. Review found that switching parallax on
+threw that wash away and left the white text sitting on the raw photo. On a
+dark picture you might not notice; on a light one the words disappear.
+
+The cause is the sort of thing only a browser tells you. The wash is painted
+on the row itself, and the drifting copy of the picture is a separate piece
+sitting inside the row — and a browser always paints the pieces inside a box
+on top of the box's own paint, never underneath it. So the drifting picture
+landed over the wash and hid it. The fix is that the drifting copy now carries
+the same wash, so it looks identical to the still one it covers. Measured with
+a red test tint before and after: the band read as raw photo before and as
+properly tinted after.
+
+Two checks came out of it. A new one photographs a themed row with parallax on
+and fails if the drifting picture is not wearing the row's tint — every
+existing parallax check used a plain untinted row, which is precisely why all
+27 of them were green over this. And an old check that was supposed to prove
+the video half of parallax still worked turned out to accept a video frozen to
+the screen, which is worse than no parallax at all; that hole is closed, and
+proved closed by freezing a video on purpose and watching it fail.
+
+## 2026-08-31 — Backgrounds can drift slower than the page now (#481)
+
+A section with a photo behind it used to look flat, and the reason was that the
+picture scrolled at exactly the same rate as the words on top of it. Everything
+moved as one sheet. Making the background drift a little slower than the text is
+the cheapest thing there is for making a page feel like it has depth, and Delray
+needs it.
+
+It is a checkbox and a number, in the Motion group of a row's Background panel.
+0 pins the picture to the screen, 1 is ordinary scrolling, and about 0.3 is the
+usual look. It works on video backgrounds as well as photos. Nothing that exists
+today changes: it is off unless you turn it on, and six pages were photographed
+before and after to prove it — every pixel identical.
+
+One thing to know before using it. The picture crops in tighter. That is not a
+bug and it cannot be avoided: the picture has to be taller than the row to have
+anywhere to drift to, so the stronger you set the effect the closer it is
+cropped. If the photo has a logo or a face near an edge, use a higher number,
+nearer 0.7. The panel says so in as many words.
+
+There is an obvious one-line way to build this that half the internet uses, and
+it was deliberately not used. It stops working the moment anything above it on
+the page has a blur or a shrink on it — the same six properties that caused the
+`blur(0px)` trouble a fortnight ago — and iPhones ignore it entirely. Both
+failures are silent. The version that shipped moves a real element instead, which
+nothing above it can switch off.
+
+The arithmetic was pulled out into its own file with no page-drawing in it at
+all, which is the house pattern for anything that moves, and for a plain reason:
+nothing in this codebase can test how something LOOKS, so the sums are the only
+part that can be pinned down and kept honest. Eleven checks were broken on
+purpose afterwards and watched to fail, because a check that has never failed has
+not been tested, only written. One of those breaks was worth the whole exercise:
+a check meant to prove the feature stays out of the way passed on the exact bug
+its own note described, and had to be replaced with one that actually looks at
+the right thing.
+
+Review then caught two things worth knowing about. The Speed box could not be
+typed into: clearing it put 0.3 straight back, so typing 0.7 left you looking at
+0.37. The cause was a small thing with a wide moral — the box was asking "what
+does this value mean?" using the rule meant for values coming back out of the
+database, where a blank means "never set, use the usual". Halfway through typing
+a number, a blank means "not finished yet", which is the opposite. Those are now
+two separate questions with two separate answers, and clearing the box leaves it
+empty like every other field on the screen.
+
+The other was the panel telling a small lie. It said parallax runs on phones,
+which is true of a photo and not of a video — a video background is not loaded on
+phones at all unless you switch that on, so there was nothing there to drift. The
+note now says which is which and names the switch. A control that quietly does
+nothing on half the devices people use is worse than one that says so.
+
+A third pass caught something duller and just as real. This work renamed the one
+file that draws a background — it was the "video background" file, and it is not
+video-only any more — but two of the written guides still sent the reader to the
+old name, which is now a file that does not exist. Both were corrected, and the
+video guide was brought up to date to say that one layer now carries photos and
+clips alike, and why that was the point rather than a side effect. A guide that
+points at a deleted file is worse than no guide: it costs somebody the time to
+find out it is wrong before they can start.
+## 2026-08-29 — The CRM Form settings panel was never being checked (#451)
+
+Back on 8/13 you pointed at a module's settings panel and said the column width
+"varies arbitrarily between the Settings fields and the Layout fields." That
+started a sweep to bring every panel onto one grid, so labels all start on the
+same line and fields all end on the same one. This is panel 9 of 15: the two CRM
+panels.
+
+The interesting part is what the check had been telling us. There is an
+automated check that opens the real app and measures every panel. It was passing.
+But before changing anything I asked a narrower question — not "does this pass?"
+but "is this panel actually being *looked at*?" — and the answer for the CRM Form
+panel was no. Zero of its eleven fields were being measured. The panel was built
+in a shape the checker does not recognise, so it was skipped, and a skipped panel
+looks exactly like a perfect one in the summary line.
+
+It was not perfect. With a picture taken of it, labels were sitting on top of
+their own boxes, and two of them — "H Margin" and "Field Width" — were being
+sliced off mid-word by the very control they were labelling. That has presumably
+been sitting there for months, inside green run after green run.
+
+The other panel in this ticket, the CRM contacts table, was genuinely fine: all
+ten of its fields were being measured and all ten obeyed the rule. I left it
+alone and said so, rather than touching it to look busy.
+
+The fix changed no styling at all — only the structure of the panel, so that it
+is built the same way the app builds the panels it generates automatically. That
+also means it is now *visible* to the checker, which matters more than this one
+fix: the next time someone breaks it, something will say so.
+
+One thing worth recording, because it nearly let a false pass through here too.
+The ticket asks that you break the check on purpose and watch it fail before you
+believe it. My first attempt to break it **didn't fail** — and that was correct
+behaviour, not a broken check. The grid makes every label box the same size
+automatically, so deliberately setting one to the wrong width just gets absorbed.
+A break that the check *can* see (shifting where the words start) failed
+immediately at all three screen widths. Had I skipped that step, I would have
+reported a green run as proof, exactly as has happened here before.
+## 2026-08-31 — The overlay controls a row always deserved (#482)
+
+Every row on a Builder page has been able to carry an overlay for months — a
+wash of colour, a gradient, or a second image laid over the row's own
+background, at whatever strength you pick. The setting was saved, and since
+yesterday the page actually paints it. What was missing was the knobs. The
+newer Builder had none at all, so the only overlay anyone could get was the
+dark tint a video row quietly gives itself, and there was no way to soften it,
+recolour it, or turn it off.
+
+Open a row's settings now and there is an **Overlay** group: choose a type —
+colour, gradient, a picture — and a strength control appears beside it. Put a
+dark blue over a photo at half strength and the words on top become readable
+while the photo still shows through. Pick a second image instead and the two
+blend. Set the type back to None and the row goes back to exactly how it looked.
+A video row opens with its tint already filled in, and that tint is finally
+yours to change.
+
+None of the machinery underneath moved — the saving, the loading and the
+painting were all already right, and only the controls were absent. The one
+thing worth recording is how nearly the layout check let this through. It
+measures a group of settings by asking whether they line up with each other,
+and while the overlay type sits at "None" the group holds exactly one setting.
+One thing always lines up with itself. So the check happily passed a layout
+that had been broken on purpose, until the test page was given a real overlay
+to show. That is the third time this year a green check has turned out to mean
+"nothing was looked at" rather than "nothing was wrong".
+
+## 2026-08-25 — The weekly report gathers itself now; the writing is still yours (#437)
+
+The first weekly report took most of an afternoon to put together. Almost none
+of that was writing — it was fetching. How many pull requests merged, how many
+lines changed, how long the tests took, where every ticket sat. Every one of
+those numbers already existed inside a command; somebody just had to go and ask
+for each one and copy it down.
+
+So a program does that part now. Every Monday at 7am the Mac Mini gathers all of
+it, builds the page, and opens a pull request with the figures already filled in
+and a chart of what shipped each day, grouped by which part of the system it
+touched. It stops there. It does not write a word of the actual report — the
+"here is what mattered this week and why" part is judgement, and a paragraph
+written by a machine would read like an opinion nobody actually holds. It leaves
+an obvious blank space where that goes, and files a ticket so writing it does not
+depend on anyone remembering. Ten minutes on top of finished numbers instead of
+an afternoon.
+
+The part worth insisting on is what happens when a number cannot be fetched. It
+prints "not available" and says why, in amber so you cannot skim past it. It
+never quietly leaves the row out, and it never estimates. A report missing a
+metric looks exactly like a report where that metric was fine, and there is no
+way to tell from the page which one you are reading. For the same reason, a
+pull request only counts as shipped if GitHub itself says it merged — the first
+edition credited one that was still open, because a commit message mentioning a
+PR is not proof that the PR landed.
+
+Two problems turned up while building it, both of the quiet kind. The first
+would have broken something else entirely: the straightforward way to commit
+the report would have left the Mac Mini's main folder sitting on the report's
+own branch permanently, and the little program that reads your ClickUp replies
+checks that folder's branch before updating itself. It would have stopped
+updating, kept running old code, and mentioned it only in a log file nobody
+opens. The second: the report was dating itself using Greenwich time, so a run
+late in the evening stamped tomorrow's date on it and pulled the wrong week's
+figures. Both are fixed, and there are tests that fail if either creeps back.
+
+A review pass then caught three more of the same kind, and they are worth
+knowing about because all three broke the one promise this thing makes — that a
+number it could not fully look up says so. Asking GitHub "which pull requests
+merged" only ever gets an answer about recent ones, so when the report was asked
+to rebuild an older week it found two merges in a week that actually had
+forty-three, and printed the two as though that were the whole story. It now
+asks about each pull request it found by name, and anything GitHub will not
+vouch for is said out loud on the page in amber — "this count is incomplete,
+treat it as a floor" — rather than silently dropped. The same older-week rebuild
+was also measuring how much code changed from that week all the way up to today
+instead of stopping at the end of the week, which made one week look about fifty
+times bigger than it was. And the Monday job had a quiet trap in it: it left its
+own finished report sitting in the folder, then next Monday saw a folder with
+loose files in it, decided somebody was working there, and skipped updating
+itself — forever, since the files were never going to move on their own. It
+tidies up after itself now, and there is a test that sets up that exact mess and
+fails if the job goes back to sleep on it.
+
+A second review pass found six more, and five of them were the same promise
+broken from five new directions — a number that was short, printed as though it
+were the whole story. The worst was the schedule itself. Running "the last seven
+days" every Monday at 7am means each edition stops at 7am and the next one picks
+up from Tuesday, so everything that happened on Monday during the day fell into
+no report at all. Nobody would ever have noticed, because from the report's point
+of view that time simply never existed — and it is not a rounding error: since
+the start of July that is 70 of the 107 things that shipped on a Monday. It also
+drew Monday's bar on the chart from seven hours of the day at the same width as
+the six full days beside it, so every single week would have looked like it ended
+on a slow note. The report now covers the week that has actually finished,
+Monday through Sunday.
+
+The second was the "how long does the build take" figure. It was asking GitHub
+for the 200 most recent runs and measuring whichever of those fell inside the
+week — but this repo now runs so much more than it used to that 200 runs only
+reaches back about five and a half days. For the week just gone it was measuring
+190 of the 282 runs that actually happened and printing the answer as if it
+covered all seven days. It now asks GitHub for the week by date instead of taking
+whatever is recent, and it can tell when it has been given everything — if it
+ever cannot see far enough, it says so on the tile rather than printing a
+confident number. The other four are smaller and the same shape: a count of
+finished tickets that had a start date but no end date, so it kept crediting a
+week with things closed days later; two scratch files written into the project
+folder that, if a run were ever killed halfway, would have left the folder
+looking "in use" and quietly stopped the Monday job updating itself again; the
+report reading the project history without refreshing it first, which made three
+separate figures silently short; and two settings that could be combined to write
+the report somewhere nobody intended. Each one now has a test that fails if it
+comes back, and each of those tests was deliberately broken first to check it was
+capable of failing at all.
+## 2026-08-30 — The review caught a way one client could have read another's permissions (#448)
+
+The safe box for client permissions went in last week (the entry below this
+one). Review then found four problems with it before it went anywhere near a
+client, and one of them was serious enough to be worth understanding, because
+the cause is not in that box at all — it is in a piece of plumbing that sits
+underneath nearly everything.
+
+Every time the app looks up stored records, it adds "…and only this client's"
+to the request. To know whether a particular filing cabinet is even organised
+by client, it asks the database once, early on, and then remembers the answer
+so it does not have to keep asking.
+
+The flaw was in what counted as an answer. If the database replied "no, that
+cabinet isn't organised by client," that is a real answer and remembering it is
+correct. But if the question simply failed to arrive — the database was briefly
+asleep, the connection dropped, the sort of hiccup this setup genuinely has and
+already warns us about — the app treated the silence as though it were the same
+"no." And it remembered that. From then on, until the app next restarted, it
+stopped adding "…and only this client's" to *anything*.
+
+Nothing would have looked wrong. No error, no blank screen, no slowdown — in
+fact the requests get faster and return more. It just quietly starts handing
+back everybody's records instead of one client's. In the box we had just built,
+those records are the permissions clients grant us to post on their own social
+accounts. Rich could have been handed another client's.
+
+It is fixed in two independent places, on purpose, because they fail
+differently. The plumbing now only remembers a real answer; a hiccup means "ask
+again next time," which costs nothing and lets it recover on its own. And
+separately, the permissions box now refuses to run a lookup that has not had
+"…and only this client's" attached to it — it stops and says so rather than
+returning anything. Either fix alone would have closed this hole. Both together
+mean the next piece of code built on that plumbing does not have to know this
+story to be safe, which is the part worth paying for.
+
+The other three problems were smaller and are also fixed: a way that recording
+"this permission stopped working" could have wiped the permission itself
+(unrecoverable — a client only hands it over once); a length limit measured
+against the wrong thing, so an unusually long permission would save and then be
+unreadable; and four fields that noticed a mistake and then stored a blank
+anyway instead of reporting it.
+
+Every fix was checked by deliberately breaking it again and confirming the
+relevant test failed — a test that cannot fail is worse than no test, because
+it tells you it is watching something when it is not.
+
+You applied the database change the same day, and I confirmed against the live
+database that both tables arrived correctly and are organised by client the way
+they must be. The box is real and empty, which is exactly where it should be.
+The next piece — the part that actually talks to Instagram and X — is unblocked.
+
+## 2026-08-30 — Why the review-gate work sat two hours after you approved it
+
+You said "merge" on the review-gate ticket and it stayed put. None of the reason
+was visible from the ticket, so here it is.
+
+Two things were genuinely wrong first, and both were handled correctly. The
+automatic checks were failing for a real reason, so the merge step refused to
+merge — the right call, and it said so quietly each time rather than nagging.
+Another session fixed the failing check and saved its work.
+
+The stall came after that. Before merging anything, the machinery brings the
+branch up to date with the live code. It did, and that update was clean — there
+was never anything to resolve. But in the moment it went to save the result, the
+other session had just saved to the same branch, so its save was rejected. That
+is two things arriving at once, not a disagreement in the work itself, and the
+correct response is simply to try again on the next pass.
+
+It half did that. One part of the machinery understood exactly what had happened
+and posted "it will be merged on the next run." A second part, which never asks
+whether a conflict is real, filed a whole new ticket titled "Resolve the merge
+conflict" — for a conflict that did not exist — and posted that too. So the
+ticket ended up carrying two notices, a fifth of a second apart, saying opposite
+things: one that it would sort itself out, one that a new ticket now owned it.
+Neither came true.
+
+Cleared by hand: bring the branch up to date with today's live code, save it,
+wait for the checks to go green, merge. The real repair — stop filing a conflict
+ticket when there is no conflict — is filed as its own task. The rule the
+incident produced is written down as DOCTRINE §2.6: work out who is waiting
+once, in one place, so two halves of the same pass can never name two different
+actors.
+
+## 2026-08-31 — The merge lock can now actually read the tickets
+
+The check that reads a ticket before letting anything merge has been running
+blind since it was built. It needed a password to look at ClickUp, that password
+was never added, and so on every single pull request it answered "I can't see" —
+which it correctly treats as a refusal rather than an all-clear. Harmless so far,
+because the check is still in warning mode and cannot block anything, but it
+meant nobody had ever watched it do its actual job.
+
+It has one now, and it works. On the first real run it named the ticket, read
+the newest review on it, and correctly said the work had been sent back rather
+than passed. I checked that ticket myself afterwards to be sure it was right and
+not just producing a sensible-looking sentence. It was right.
+
+**Getting it there took two wrong turns, and the second one is worth writing
+down.** You were sent to the GitHub settings page to paste the password in by
+hand. That page has a box for the *label* sitting directly above the box for the
+*password*, and the password went in the label box — twice, with two different
+passwords. GitHub scrambles a password so nobody can read it, but it does no such
+thing to a label, so both were sitting there in plain sight until they were
+deleted. Nobody but you can see that page, and there's no sign either was used,
+but they should not have been there at all.
+
+The cause was a rule of mine, applied backwards. It says an agent must never
+handle a real password — and it was written after a photo went round with a
+credentials file visible on a TV in the background. That rule is about a value
+being *seen*, not about who is holding it. Read the other way, it sent the
+password on a detour through the one screen in the whole process where it could
+be typed into the wrong field. There was a one-line command available the whole
+time that moves the password straight from one vault to the other without ever
+showing it, and it had no label box to get wrong. That command is now what the
+instructions say to use, and running it is my job.
+
+The rule has been rewritten to say what it always meant: **the question is
+whether the value ends up somewhere it could be read.** If no, the machine does
+it. If yes — writing one down, making a new one, typing it into a web page —
+that stays with you.
+
+The lock still cannot block anything. One prerequisite is left before it is
+switched on for real, and it has its own ticket.
+
+## 2026-08-26 — Saving a shared section no longer wipes your page templates (#428)
+
+The Builder lets you save a section — a footer, say — once and have every page
+that uses it follow along. This change was meant to make that push reach page
+templates too. It did, but it wrote them the wrong way: instead of updating
+just the sections, it overwrote the template's whole record with mostly blanks.
+A template called "Delray — Main Site Template" came back with no name at all,
+and its subject line, colours, logos, banner images and feature copy went with
+it. Templates keep no history, so there was nothing to undo it from.
+
+The write now hands over the full template with only the sections changed —
+the same way the page side has always done it. Two tests hold the line, and
+both were deliberately broken first to confirm they actually catch it: one
+runs a real push through the real storage code and checks the name and
+everything around it survives, and one fails if someone later adds a field to
+the saving half without adding it to the loading half, which is how this class
+of bug gets back in.
+## 2026-08-29 — A safe place to keep a client's own permissions (#448)
+
+Right now, posting to a client's Instagram or X means somebody pastes that
+client's password-equivalent into a settings screen by hand. The plan is to
+replace that with the client clicking "Connect" on their own screen and granting
+us the permission themselves. This is the safe box those permissions will go
+into — and nothing else. There is no screen to look at yet, and nothing reads or
+writes the box so far. Six more pieces follow.
+
+Two things got the care here, both of them mistakes this project has already
+paid for. The first is a record that forgets which client it belongs to. Two
+columns decide that, and if a table carries only one, the code that fills them
+in quietly gives up and fills in neither — nothing errors, the rows just land
+belonging to nobody. That happened to 550 records in August. A record belonging
+to nobody here would be a client's login permission with no name on it, so this
+one does not merely test for the problem: it refuses to write at all if it
+cannot put the client's name on the row.
+
+The second is answering a question with a blank instead of an error. The
+existing version of this code, when it cannot unscramble a stored permission,
+hands back an empty one and reports success — so the app then tries to post with
+no credential and Instagram's complaint reads as the client's fault. This one
+says it could not read the permission, which is the true answer.
+
+The permissions themselves are scrambled before they are stored, and that was
+checked the only way worth checking: by looking at what actually landed in a
+real database and searching every column of the table for the original text. It
+is not there.
+## 2026-08-26 — The new merge lock could have jammed itself shut (#443)
+
+Yesterday's change put a real lock on the merge button: before anything goes
+live, GitHub itself checks the work's ticket for a review pass. It works — but
+it had a flaw that would only have shown up on the day you switched it from a
+warning into a real block, and by then it would have stopped everything.
+
+The problem is that these checks run **once**, right after code is pushed, and
+they never think again. The review always lands *after* the last push — that is
+what a review is. So the check looked at the ticket, saw no review yet, wrote
+down "no", and then sat there forever with that answer. Nothing was ever going
+to change its mind. The only way to make a check run again is to push more code,
+and pushing more code cancels the review that just passed. Every properly
+reviewed piece of work would have been stuck in that loop.
+
+So the step that actually performs merges now asks one extra question first: is
+this check answering a question that has since changed? If the check ran before
+the review landed, it runs it again and waits for the real answer — about three
+minutes — instead of merging on the old one. If the fresh answer is a no, the
+merge is refused and you are told why. If the check cannot be run again at all,
+or its answer never arrives, the merge is refused too: not being able to see is
+never treated as an all-clear. And when the check is already up to date, nothing
+happens and nothing is spent, which is the ordinary case.
+
+Nothing about the lock itself was loosened to achieve this — "out of date" only
+ever means run it again, never let it through. With this in place the
+branch-protection setting is safe to turn on.
+
+The review pass caught something important before this shipped: the new
+question was being asked in the wrong place. Once the lock is switched on, an
+out-of-date check shows up as a *failed* check — and the merge step's very
+first rule is "never merge past a failed check", so it was giving up before it
+ever got to the new question. Everything looked fine in testing because the
+lock is still in warning mode, where the old answer stays green. The question
+now gets asked before that first rule instead of after it, a test pins the
+order so it cannot quietly drift back, and three smaller catches from the same
+review ride along: the step no longer pays for a re-run it has no time left to
+wait for, a branch that falls behind during the wait is told "catch up first"
+instead of being blamed for a failed check, and a moment where GitHub is
+swapping the old answer for the new one no longer looks like "no check here,
+go ahead".
+
+## 2026-08-26 — Checking the new merge lock before trusting it (#444)
+
+Yesterday's work put a lock on the door: an automatic check that refuses to
+merge a pull request unless its ticket carries a passing review of the code
+actually being merged. The lock is fitted but not yet switched on — that is a
+setting only you can tick — so right now it announces its answer and lets
+everything through regardless.
+
+Before flipping a switch like that, it is worth going over the lock itself, so
+this pass did. Four things were wrong with it. None of them can do any harm
+today, precisely because it is not switched on yet, but every one of them
+becomes real the moment it is.
+
+The serious one: the lock finds the ticket by taking the first ClickUp link in
+the pull request's description, and nothing checked that it was the right
+ticket. A description that mentioned some related ticket before its own would
+have been checked against **that** ticket's approval — and would have been let
+through if that other ticket happened to have a recent one. A lock that opens
+because it read somebody else's paperwork is worse than no lock. It never
+actually happened, but only because our automatic builder happens to always put
+its own link first. That is a habit, and habits are the exact thing this lock
+exists so we stop relying on. It now confirms the ticket it read really is
+about this pull request, and says "I cannot tell" rather than yes when it
+cannot.
+
+The other three were smaller and quieter. Two of our commands disagreed about
+what counts as naming a ticket, so a description one of them called perfectly
+fine would be rejected by the other with a message saying the opposite of what
+you could plainly see — they read the same piece of code now, so they cannot
+disagree again. The lock's own messages happened to be worded in a way our
+system reads as a **review rejection**, meaning that pasting one onto a ticket
+to explain it would have registered as a rejection nobody wrote and jammed
+three things at once. And a mismatch in how commit history is described could
+have silently switched off a protection that stops perfectly good reviews from
+being treated as out of date.
+
+Each of the four fixes was then deliberately un-done, one at a time, to watch
+the test that guards it actually fail — because a test that cannot fail proves
+nothing, and this is a lock we are about to start trusting.
+## 2026-08-30 — The rule about who runs the commands, put where it gets read (#453)
+
+Three times now you have had to say the same thing: when there is a command to
+run, I should run it, not hand it to you to paste. The most recent was the
+Delray header evening. Early on, one of my own safety gates refused a step —
+and instead of treating that as "this one call was blocked", I treated it as
+"I am not allowed to touch production tonight", and everything after that came
+back to you as something to copy. One of those was a script with two halves: a
+practice run that shows what it *would* change, and a second command that
+actually changes it. You ran the practice half. Nothing told you the real one
+was still sitting there waiting, so the fix was written but not applied, and
+most of an evening went on it.
+
+The reason it keeps coming back is dull and fixable: the rule was only written
+down in my memory and in the vault, and neither of those gets loaded when a
+session opens this repo. `CLAUDE.md` does — every session reads it. So the rule
+now lives there, in the "Coach the operator" section, with the full story and
+the incident behind it in `docs/DOCTRINE.md`.
+
+It says four things. I run the operational commands and tell you what happened
+in plain English. There are exactly four things I hand over instead — a real
+password or key, a billing screen, a login in your browser, and a decision
+that is genuinely yours — and when I hand something over I have to say which
+of the four it is, so "I need you" never arrives unexplained. A refusal applies
+to the one command it refused, not to the rest of the session. And a fix with
+a practice run and a real run is one job, not two: I run both and tell you what
+changed.
+
+Nothing about the app changed — this is a change to the instructions I read.
+## 2026-08-30 — Small, safe changes now merge themselves after an hour's notice (#438)
+
+Your ruling from the 24th is now running code: a pull request that touches
+nothing but tests and documentation, and has already passed review, announces
+itself on its ticket — "merging at 9:15pm unless you say otherwise" — waits
+one hour, and merges. Any comment from you during that hour stops it; not a
+keyword, anything at all. Everything riskier still waits for your word, and
+Lane C — anything visual, routes, data, sign-in — is never automated.
+
+It shipped the careful way: the first review pass sent it back because the
+branch had fallen behind the main line, and the second found six real holes
+before anyone was exposed to them. The two that mattered: the loop agents'
+own instruction files counted as "documentation", so a change rewriting the
+review rules could have merged itself — now anything that instructs an agent
+is on the never-auto-merge list; and a damaged memory file (the little ledger
+that records "Dane said stop") was being replaced with a blank one, which
+would have quietly lifted your stop order a pass later — now a ledger that
+cannot be read is never written over, it is left for a person to look at.
+
+Also from that review: an announcement that sat armed for more than a day
+goes stale and is cancelled instead of merged, the daily digest no longer
+lists the same merge twice, and a dry run truly writes nothing. Every one of
+those rules was broken on purpose to prove a named test catches it. The
+switch is `stop auto-merging` on the party line or any Loop Queue ticket,
+and `npm run clickup -- auto-merge-status` shows the lane's state any time.
+
+## 2026-08-30 — Tickets now end on what they need from you, in red (#457)
+
+You asked for three things while looking at a merge ticket: put the "NEEDED
+FROM DANE" block last, make it properly red and bold, and put the actual ask
+on the same line as the label instead of hiding below the banner. All three
+shipped the same day through the fast-track lane.
+
+Every card a machine puts in front of you now ends on the banner — your words
+first, then the explanation, then any proof, and the ask dead last, where your
+eye stops. The banner is bold and true red (#CC0000). The washed-out red you
+were seeing before was never a choice anybody made: it was ClickUp's standard
+colouring for "computer text", which the banner was wrapped in for safety.
+
+Getting the real red meant changing how cards are sent. ClickUp only allows
+coloured text through its structured format, and that format ignores the
+usual **bold** markup agents write — so the card builder now translates as it
+posts, and the tests prove the translation both ways: break the colour, a
+named test fails; move the banner up, another one fails.
+
+There is a living sample on the ticket itself (86bbq5ruz) — the newest card
+from Pulse ends exactly the way every future one will.
+
+## 2026-08-30 — When a merge gets stuck, somebody is now actually told to fix it (#452)
+
+You found PR #434 sitting untouched for three days and asked why nothing had
+happened. Here is what was going on, and it was not anybody forgetting.
+
+When two pieces of work change the same lines of the same file, the computer
+cannot safely guess which version wins — that is a "merge conflict", and it
+needs a pair of hands. The system knew that. On hitting one it did two things:
+it left a note on your ticket saying your approval still stood and you did not
+need to do anything, and it posted a message on the party line asking for a
+session to come and sort the branch out.
+
+The second half never worked. **Nothing reads the party line.** There is no
+watcher on that channel turning those requests into work, so the message went
+into an empty room — while the note on your ticket, sitting right next to it,
+described a process that was well underway. Both halves individually looked
+fine. Together they meant a job nobody had, under a message saying it was in
+hand. And it was quiet, so nothing looked wrong: every hourly check reported
+"handed off, nothing new to say" and "0 merged", which is exactly what a
+healthy system says when it has nothing to report.
+
+You picked the fix: instead of asking an empty room, **file it as an ordinary
+job in the queue**. The build loop already empties that queue every pass, on a
+timer, today — so the worker exists and is already running. Now a conflict
+creates a normal ticket ("Resolve the merge conflict on PR #N"), carrying the
+branch, what clashed, and a note telling whoever picks it up not to come back
+and ask you to approve a second time, because you already did.
+
+Two more things came with it. Every message the merge step writes now has to
+name **who** is going to act next, and if the answer is nobody it has to say so
+out loud — "Nothing is currently working on it" — rather than reaching for the
+comfortable phrasing that implies someone. And silence now expires: a conflict
+with no ticket behind it is flagged immediately, and one that has not been
+sorted within a day reports itself by name once a day until it is cleared —
+each report re-arms the clock, so a day of silence is the most it can buy
+(that cadence was the review's fix; as first built it nagged every pass).
+Three days of nothing cannot happen again without something saying so.
+## 2026-08-26 — You can now stage a fake outage to check the backup plan works (#445)
+
+Back on the 23rd, ClickUp's group chat broke for about sixteen hours. The
+machines use that chat to tell each other things, so when it went down, five of
+your answers sat in your queue doing nothing — the tickets you had replied to
+never moved on. A fix went in afterwards: if the chat is unavailable, the relay
+writes a short note on the ticket itself instead, and the ticket moves anyway.
+
+The trouble is that backup plan only runs during an outage, and you cannot order
+one. So it had never actually been watched working — only reasoned about. There
+was a command that sounded like a practice run, but it quit early and never
+touched the part it was supposedly practising, which is the worst kind of test:
+one that passes without checking anything.
+
+This adds a switch that pretends the chat is down. Nothing is sent and nothing
+is written, but the real backup code runs and prints what it decided — so you
+can see the ticket note being written and the ticket still moving, on demand, in
+about five seconds. The switch refuses to run in any mode that could write
+something, because faking an outage for real would leave a permanent note on a
+ticket claiming a breakdown that never happened.
+
+Worth recording: while proving this out, one of the new tests turned out to be
+unable to fail. Breaking the code on purpose is the only way that ever shows up,
+and it is why we do it before believing a passing run.
+
+## 2026-08-26 — Test and documentation changes can now merge themselves, after giving you an hour to object (#438)
+
+You are the last step on every merge, and lately that has meant saying "merge"
+ninety-odd times a week. A word you say that often without pausing is not really
+a decision any more — it is a rubber stamp, and a rubber stamp is worse than no
+check at all, because it looks like oversight while providing none.
+
+So this hands one narrow slice of that word to the machine, and only where your
+answer was never in doubt: a piece of work that has already passed an
+independent review and whose changes are **nothing but tests and documentation**
+— nothing that runs on the site, nothing anybody can see. On work like that, the
+pipeline now posts a comment on the ticket saying *"merging this at 9:15pm
+unless you say otherwise"*, lists exactly which files earned it that treatment,
+waits a full hour, and only then merges.
+
+**To stop it, just comment on the ticket.** Anything — a word, a question, "hold
+on". It is not looking for a keyword; if you are talking about it, it stops. And
+once stopped it stays stopped: it will not raise the same thing again until a
+fresh review has looked at it. That asymmetry is on purpose — stopping it by
+accident costs you one word, whereas missing your objection would merge
+something you did not want.
+
+Two words turn the whole thing off wherever you are: **"stop auto-merging"** on
+the party line or on any ticket. **"resume auto-merging"** puts it back. And if
+the system cannot read those instructions for any reason — the chat is down, a
+file will not open — it treats that as OFF rather than assuming everything is
+fine, because "you never said stop" and "I could not find out whether you said
+stop" look identical from the inside and only one of them is safe.
+
+Four more brakes sit behind that: it will not do more than three in an hour or
+twelve in a day; it posts one summary a day of everything it merged, and says
+"none" on a quiet day so a silent day and a broken job never look alike; it
+switches itself off if a run reports anything it could not fully check or if the
+live site's build goes red; and it is allowed to undo its own merges without
+asking.
+
+What it will never touch: anything visual, anything that runs, any database
+change — and, deliberately, none of the files that set the rules for the
+machines themselves. It cannot merge a change to its own instructions, which
+means this change could not have merged itself. There is a test that says so.
+
+This is the smallest, safest slice on purpose. It is about a tenth of the weekly
+volume and close to none of the risk, which makes it the right place to find out
+whether the safety machinery actually works before anything larger is
+considered.
+## 2026-08-26 — A check that asks "is anything moving?" rather than "is it switched on" (#439)
+
+Seven things went wrong in the pipeline last week, and here is the part worth
+sitting with: **not one of them was a crash.** Every single one was a piece of
+the system that started up, ran, reported success, and got nothing done. The
+build loop turned away thirteen jobs in a row because a counter had got stuck.
+Tickets sat three days in a stage that normally takes fifteen minutes. A pull
+request and its ticket each knew about the other in only one direction, which is
+exactly how two duplicate branches got opened a few days earlier.
+
+None of it was noticed, and the reason is uncomfortable: **everything looked
+healthy the whole time.** Every program was running. Every command reported
+success. Any "is it alive?" check you could have run would have come back green
+during all seven.
+
+So `npm run pulse` asks a different question. It looks at three things and
+prints a page you can read in about ten seconds. Has the build loop stopped
+picking up work, and if so, *why* did it decline each time? Has any ticket been
+sitting longer than that stage actually takes — with the time limit for each
+stage set from how long the work really takes, and the reasoning written down
+next to the number so nobody quietly retunes it on an irritating afternoon? And
+do the tickets and the pull requests still agree with each other, checked in
+*both* directions rather than one?
+
+That last one sounds like a technicality and is not. The loop decides "has this
+job been started already?" by reading the ticket. So a job whose link exists
+only on the pull-request side is invisible to it, and it cheerfully starts the
+same work a second time. That is not hypothetical — it happened, twice, on the
+23rd.
+
+Three deliberate choices are worth knowing about. **It never changes anything;
+it only reads** — and not as a promise but as a property, with a test that fails
+if anyone ever adds a way for it to write. When it finds a problem it tells you
+and stops, because one of the four problems it detects has two sensible fixes
+and only a person can pick the right one. **It always prints, even when
+everything is fine** — that is the entire point, because "all clear" and "the
+job died" looking identical is precisely what hid all seven incidents. And
+**"I couldn't check that" is never reported as "fine"**; it is kept separate all
+the way through to the end.
+
+The first time it ran against the real pipeline it found two things wrong with
+itself, both now fixed. It had been calling ordinary handed-back work "abandoned
+branches", and it had been matching any ticket number that appeared anywhere in
+a pull request's text — including, in one case, a made-up example number sitting
+in a paragraph that explained error messages. Both are worth mentioning because
+they are the failure this whole thing exists to prevent: a check that cries wolf
+gets skimmed past, and then the day it means something, it gets skimmed past
+then too.
+
+**The review caught a third one, and it was the same bug a third time.** The
+paragraph above says "I couldn't check that" is never reported as "fine" — and
+that was the intention, but in one line of the printout it was not what the code
+did. When the tool asked GitHub for the open pull requests and GitHub did not
+answer, that check compared nothing, found nothing wrong because it had looked
+at nothing, and printed **"all clear: every ticket and pull request names the
+other"** — sitting directly above its own line admitting it could not read
+GitHub at all. Read quickly, that is a green light on a check that never ran.
+
+The fix is one rule applied in one place: a check may only say "all clear" if it
+found nothing **and** managed to read everything, and that judgement now lives in
+a single shared function rather than being re-decided in each section, so the
+next check added to the tool inherits it instead of repeating the mistake. Two
+tests hold it down — each one run against the old code first and watched to
+fail, because a test that has never failed is not yet evidence of anything.
+
+Worth noting where this was caught: not by the tests, which were green, and not
+by the build, which passed. It was caught by the independent review step reading
+the output with the question "would this line be true if the check had not run?"
+That is the review lane earning its day.
+## 2026-08-26 — A ticket sent back now says which trip round it is (#442)
+
+You noticed this on the board on Monday: when a piece of work comes back from
+review with notes, it goes back into the "Queued" column — the same column as
+work nobody has started yet. From the outside those two look identical, so a
+ticket on its third trip round reads exactly like a fresh one.
+
+That is not just an eyesore. The same morning it jammed the build pipeline: the
+limit on how much work can be in flight counts open pull requests, and three of
+those belonged to tickets sitting in "Queued" *for rework* — so the limit was
+blocking the only thing that could clear them.
+
+Two changes, both the lighter option you chose rather than adding a new column
+to ClickUp. First, the Loop note on a sent-back ticket now says the round and
+the reason in one line — `↩ round 3 — three docs now contradict the change`
+instead of the old, identical-every-time "returned to the line with notes".
+The round is counted from the review comments already on the ticket, so nothing
+new is stored and nothing can drift out of step.
+
+Second, a fourth trip round no longer happens. Three rounds means the
+*instructions* were wrong, not the work, so on what would be the fourth the
+review pass stops and hands the ticket to you instead — with a card naming what
+each of the three previous rounds found, one line each, and asking you to pick:
+rewrite the spec, split it up, or drop it. Four and not three deliberately: two
+rounds is ordinary and healthy, and this week's send-backs caught two real bugs
+that would have been a waste of your attention to escalate.
+
+## 2026-08-26 — The loops now decide their own nap length from the queue (#441)
+
+The two background helpers that build and check work have always worked for
+about fourteen minutes and then slept for a fixed stretch. That stretch was an
+hour, chosen as a careful guess back when they first started running on their
+own overnight, and never looked at since. It meant they sat idle roughly three
+quarters of the time.
+
+The trouble is that no single number is right for very long. When there are
+thirty tickets waiting, a short nap costs almost nothing — starting up a
+session is a rounding error next to a fourteen-minute job, so you are only
+removing dead time from work you wanted done anyway. When the list is empty,
+the same short nap is pure waste: a whole session fired up every few minutes
+just to find out there is nothing to do. That is not a theory — one of the
+loops was left on a two-minute timer on the 24th and ran roughly three hundred
+and sixty passes, almost every one of them finding nothing.
+
+So they now ask, after every pass, how long to sleep. Nothing waiting: an hour.
+A few tickets: half an hour. Four or more: fifteen minutes, and never less than
+that. That fifteen-minute floor is written down together with the reason it
+exists, so nobody quietly lowers it on a day they are feeling impatient.
+
+Two things make it safe. It counts only tickets it could actually pick up —
+work belonging to a different codebase, or blocked waiting on something else,
+or work it is not allowed to start because too much is already in flight, does
+not count as a reason to wake up sooner. And every kind of confusion makes it
+sleep *longer*, never shorter: if it cannot reach the ticket list, if it cannot
+count what is already in progress, if the number comes back as nonsense, it
+falls back to the old hour and writes down why. Sleeping too long shows up as
+a slower response, which you would notice. Sleeping too little shows up only on
+the bill.
+
+One busy moment also cannot set the pace for the whole night: speeding up needs
+two readings in a row agreeing, while slowing down happens straight away.
+
+Every cycle now writes both the number and the reason into the log, so the
+pace is never a mystery. The change takes effect the next time the loops are
+restarted.
+
+Review found two holes before it shipped, both fixed in the same PR: a ticket
+waiting on work that had *already finished* would have looked blocked forever
+(finished tickets never appear in the list it reads, so it now looks those up
+separately), and a hand-edited settings file could have switched the
+two-readings rule off. Both would have failed quietly toward sleeping longer.
+
+## 2026-08-26 — The build loop stops jamming itself, and a dropped connection can no longer switch the brake off (#431)
+
+There is a rule that stops the robot builder taking on new work when too much
+is already half-finished. It was counting the wrong things. A job sent back for
+another go still had its pull request open, so the rule counted it as "busy" —
+even though the only way to finish that job was for the builder to pick it up
+again. The brake was jammed on by the very work it was blocking. One morning
+that left thirty-three jobs waiting and the builder doing nothing for four hours
+straight, while everything looked normal.
+
+It now counts jobs, not paperwork: only work somebody is genuinely moving
+counts, and it says the breakdown out loud — "one in flight, four not counted:
+two sent back, one already shipped" — instead of a bare number that told you
+nothing.
+
+The part that took three passes was the opposite failure. To count properly the
+rule now has to ask ClickUp what state each job is in, and something had to
+happen when ClickUp could not answer. If it cannot tell, it counts everything,
+which is the cautious answer. But a broken network connection did not reach that
+cautious answer at all — it crashed, and a crash was read further up as "carry
+on regardless", so a moment of bad wifi would have taken the brake off entirely.
+That is worse than the jam it was fixing. All three ways the answer can fail —
+ClickUp saying no, ClickUp saying nothing, and never reaching ClickUp at all —
+now land on the cautious answer, and there are tests that run the real command
+with each failure underneath it to prove it.
+
+Alongside it, the daily drift check learned to spot the matching mess: a job
+marked finished whose pull request is still sitting open. It reports those and
+leaves them for a person, because "close the leftover" and "that job was closed
+too early" both happen and only you can tell which.
+## 2026-08-26 — The settings fields and the Layout fields finally line up (#440)
+
+Back on the 13th you looked at a two-column module editor and said the left
+column's width "varies arbitrarily between the Settings fields and the Layout
+fields." Yesterday's work fixed the top half of that. This is the bottom half.
+
+Open Feature Cards and look down the left side. The rows at the top — Label,
+Background, Alignment, the margins — put their boxes at one distance from the
+left edge, and the rows right below them put theirs 33 pixels further over.
+Two ragged edges where you are reading one list.
+
+The reason it survived yesterday's fix is worth a sentence, because it is not
+carelessness. Those top rows and the rows below them are two separate boxes on
+the page, and in the language pages are laid out in, two separate boxes cannot
+share a column width — each one measures its own longest label and puts its
+fields wherever that happens to end. Written identically, they still land in
+different places. There is a newer feature, `subgrid`, that lets two boxes
+borrow their columns from a shared parent, and that is what they do now: the
+widest label is measured across every row at once, so every box starts and
+ends on one line. The two halves of the editor stay exactly the equal widths
+you asked for in August — the card list still begins at the halfway mark, to
+the pixel.
+
+Two of the editors this was expected to touch turned out not to need touching,
+and the only way to know that was to drive a real browser and measure. The
+Carousel's top rows have nothing underneath them to disagree with. Social had
+already solved it a different way months ago. Both were left alone.
+
+The Program List editor, which was not on the ticket, turned out to have its
+two columns backwards: the list of programs was stacked underneath the top
+rows on the left while the settings sat off on the right, with the heading
+"Settings" sitting over the list of programs. Nothing in the styling said so
+— the rule that places those two halves had simply never named this editor.
+It now matches Feature Cards, and the panel is about 850 pixels shorter.
+There are before-and-after pictures on the ticket; that one is worth a look.
+
+The last piece is the checker. `check:panels`, the tool that is supposed to
+catch exactly this kind of misalignment, had been reporting a clean pass over
+it for weeks — it compares each box against itself, so two boxes that are each
+perfectly tidy inside while disagreeing with each other were invisible to it.
+It now measures them together. Before believing the fix, the sharing was
+switched off on purpose to confirm the checker fails loudly: it does, twelve
+times over, at every screen width.
+
+## 2026-08-25 — A pause button for the whole pipeline, so going fast is allowed (#434)
+
+You said you needed an emergency shutdown that clears the decks so you can run
+a priority job through yourself. What was actually missing was a *lane*: there
+was the slow, careful one — spec, build, independent review, your merge, about
+a day — and there was nothing else. So whenever something was urgent, the only
+way to move was to step outside the whole system, into the one place where none
+of the safety rules apply.
+
+There is now a switch. `npm run pipeline -- pause` tells every machine to stop
+taking new work, and then **waits** for anything already half-built to finish
+before it tells you the decks are clear — it never just yanks the plug, because
+a job killed halfway through leaves its ticket stuck in a place nothing ever
+looks at again. That has already happened twice this month. If you do not want
+to wait, `--now` stops instantly and names exactly what it left running, and
+when you resume, anything that got stranded is put back in the line with a note
+for whoever picks it up.
+
+The important part is who listens. A pause the robots respected but people
+ignored would not have prevented the thing that caused this: that was an
+ordinary working session, not a robot, and it would never have thought to
+check. So the switch lives in ClickUp, where everything already looks, and the
+instruction to check it is written into the file every session reads when it
+starts. If the switch cannot be read at all — ClickUp down, network out — the
+answer is "paused", deliberately: working while you have the deck can wreck
+what you are doing, while stopping when you have not costs some idle time and a
+message on screen.
+
+Anyone can pause the line, because stopping is a safety move. Only you can
+start it again. And if a pause is still on after two hours it says so on the
+party line and keeps saying so every hour, because a pipeline that is paused
+and a pipeline that is broken look identical from the outside — which is
+exactly the confusion that cost most of today.
+
+The independent check on this work found two holes in it before it shipped, and
+both are worth knowing about because they are the same shape. The switch keeps
+its state as a note on a ClickUp ticket, and the hourly "still paused" reminder
+is *also* a note on that same ticket — and ClickUp only hands back the newest
+twenty-five. So after about a day of reminders, the reminders had pushed the
+original "PAUSED" note out of sight, the machines could no longer find it, and
+they would have quietly gone back to work while you still had the deck. The two
+best features cancelled each other out, overnight, in the one place that was
+supposed to be careful. It now reads the *whole* history, and separately, a
+reminder with no pause behind it is treated as "I could not read this properly"
+rather than "nothing to see" — because a reminder only ever gets written while
+the line is off, so seeing one alone proves something is missing.
+
+The second was smaller and would have hit you first: every command written down
+here was missing two characters. `npm run` quietly swallows anything starting
+with a dash unless you put `--` in front, so typing the resume command exactly
+as documented got you told off for leaving out the very word you had just
+typed. Every command in every document now has it, and there is a check that
+fails if one ever loses it again.
+## 2026-08-25 — An agent that asks you to spend money now has to show its work (#436)
+
+A few days ago one of the agents came to you with a confident recommendation:
+put the ClickUp workspace back on a paid plan. It had good-looking reasons. The
+chat channel had been refusing to accept messages for sixteen hours, a separate
+write had failed with an error mentioning plan limits, and the account did read
+back as being on the free tier. Three facts, one tidy story.
+
+The story was wrong. Checked again a few hours later — same account, same free
+plan, nothing changed — every one of those things worked fine. The outage had
+been temporary and had already cleared on its own. Paying would have fixed
+nothing.
+
+The bad guess is not really the problem; a guess like that is reasonable on a
+day when two things break at once. The problem is that it got all the way to
+your wallet without anybody re-running the thing that had been failing. That
+would have taken one command and about ten seconds, and the moment of coming to
+you is exactly when it is still cheap to check and already expensive to be
+wrong.
+
+So the request itself now demands the proof. When an agent writes you a card
+that asks you to spend, buy, subscribe, upgrade, change a plan, rotate a
+password or delete something, it simply will not post unless the card also
+carries the command it ran, what that command actually printed, and the time it
+ran it. Not a summary of the output — the output. And the time shows up in the
+heading you read, so evidence gathered before an outage cannot quietly pass
+itself off as evidence about right now.
+
+Ordinary questions are untouched. "Should this sort by name or by date?" posts
+exactly as it always did, and there is a test making sure it keeps doing so —
+because a rule that nags about everything is a rule people learn to go around,
+and then it protects nothing at all.
+
+Review caught two holes in the first version, both now closed. The time shown in
+the heading was taken from the first clock anywhere in the proof — including
+inside the pasted output — so an agent who wrote "measured at 9:40pm" under a log
+line from last Thursday got a card telling you the check was six days old. The
+heading now reads only what the agent wrote in its own words, and a proof whose
+only time is buried in the printout is refused with an explanation. Second, the
+list of words that trip the rule knew "delete" and "deleting" but not "deletes",
+so "this deletes all 550 rows" — the most natural way to describe what your yes
+would do — sailed straight through with no proof at all. Every verb now carries
+all three forms, and a test fails if a future one arrives missing any of them.
+
+A second review round found three more, all of the same kind — the rule quietly
+doing the wrong thing rather than complaining. The heading still took the first
+time it found, and proof usually tells the story before it shows the receipt
+("the outage started at 3:12pm; I re-ran it at 8:04pm"), so the card announced
+the outage time as the measurement. It now reads the time the agent says it ran
+the check at, and if there are two times and nothing says which is which, it
+refuses and asks rather than guessing. A hyphen also switched the whole rule
+off: "approve the hard-delete of those rows" was never checked at all, because
+of a bad assumption about how word matching works. And "this will cost about
+thirty dollars a month" slipped through while "it costs about thirty dollars a
+month" was caught, because the list had one spelling of the word and not the
+other.
+
+The last fix went the other way. Words like "billing", "invoice" and "deletion"
+were tripping the rule on cards that asked for nothing — "nothing needed, the
+deletion already happened last week" was being refused, which is exactly how a
+rule teaches people to route around it. Those words now only count when
+something in the same sentence actually proposes the act: "approve the
+deletion" still asks for proof, "the deletion already happened" does not.
+
+A third review round found the heading getting the time wrong for the third
+time, and it is worth saying why that one mattered more than the others.
+Everywhere else this rule REFUSES something, and being wrong costs a reword.
+The heading is the one place it TELLS you something — "measured at 8:04pm" —
+so being wrong there means the card states, in the machine's own voice, that a
+check was run at a time it was not. That is the same shape as the mistake the
+whole thing exists to prevent.
+
+Each of the three attempts had picked the time by where it sat in the sentence:
+the first one, then the first one outside the printout, then the last one. Each
+worked until somebody wrote the sentence a slightly different way. "I re-ran
+the chat call at 9:40pm, well after the outage that began at 3:12pm" got read
+as 3:12pm, because the words "re-ran" were allowed to claim every time later in
+the sentence. The rule now says something different in kind: the phrase that
+means "I ran this" belongs to the ONE time it introduces and no further. And if
+an agent genuinely marks two different times as the run, the card no longer
+picks a winner — it stops and asks which one to print.
+
+Three smaller holes went with it. A time written on its own next to a printout
+that carries its own timestamp is no longer trusted, because a bare time next
+to a log is usually the thing that broke rather than the check that was run. A
+command typed across two lines with a backslash was counting as "a command plus
+its output" when there was no output at all. And the short list of harmless
+phrases was being cut out of the text letter by letter rather than word by
+word, so "pays offshore contractors" lost the phrase "pays off" out of the
+middle of a word and stopped counting as money. Related: the words that turn a
+noun into a request only knew their plainest spelling, so "proceeding with the
+deletion", "performing the key rotation", "kicking off the migration" and
+"signing off on the invoice" all posted with no proof required — all of them
+ordinary English for exactly the things this rule is meant to catch.
+
+One thing was deliberately left alone, and it is yours to call rather than
+mine. Any dollar figure in a request trips the rule, even when the card is not
+asking for anything — so "nothing needed, the Vercel bill came to $30 last
+month" gets refused and has to be reworded. Requiring a request-word alongside
+the figure would fix that, but it would also let "$29/month for Business or $49
+for the tier above?" through silently, and that one is a real question about
+your money. Which way that should go is a judgment about how much plain English
+a word-matching rule ought to chase, and it seemed better to say so than to
+quietly pick.
+
+Then a fourth review round found the heading wrong a fourth time, and a fifth
+found it a fifth. The sentence that broke it this time put the run time first
+and the explanation after — "at 8:04pm I re-ran the failing call, well after
+the outage began at 3:12pm" — and the card came out headed 3:12pm, the moment
+things broke, presented as the moment they were checked. Five attempts, each
+one a different rule for working out which time in a sentence is the
+measurement, and each one correct until somebody wrote the next sentence.
+
+So it went to you instead of round the loop again, and you picked option A:
+stop guessing. The agent now writes the time on a line of its own —
+`@@MEASURED 8:04pm` — and every other time anywhere in the proof is ignored,
+narrated or printed. It costs an agent one extra line. What it buys is that
+this particular bug cannot come back, because there is no longer a sentence to
+misread: the five previous fixes were all answers to a question this version
+does not ask. If the line is missing, written twice, buried inside the printout
+or carrying something that is not a time, the card is refused and told exactly
+which of those it is.
+
+The same round fixed a smaller thing that needed no decision from you. Every
+one of these words worked in the singular and went silent in the plural, so
+"approve the deletion" demanded proof and "approve the deletions" did not —
+the rule declining on the more expensive version of the same request. Six words
+gained their plurals, with a test that now checks both spellings of each one
+and fails if a future word arrives with only half of itself.
 
 ## 2026-08-26 — Somewhere to write down what footage exists (#422)
 

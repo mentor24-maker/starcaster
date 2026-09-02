@@ -17,7 +17,12 @@ export type AdminMediaItem = {
   imageWidth?: number;
   imageHeight?: number;
   createdAt?: string;
+  /** Which surface this file was uploaded through. See lib/assetSource.js. */
+  source?: string;
 };
+
+/** The one source the gallery can filter on today. */
+export const ADMIN_MEDIA_MANAGER_SOURCE = "admin-media-manager";
 
 export const GALLERY_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"] as const;
 export const GALLERY_VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v", ".webm", ".ogg"] as const;

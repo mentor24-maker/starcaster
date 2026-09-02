@@ -20,7 +20,7 @@ import { BUILDER_CAPABILITIES } from "@/lib/capabilities";
 export const PLAIN_TEXT_PLACEHOLDER =
   "Plain text. Line breaks are kept, and inline tags like <em> or <a href=\"…\"> work.";
 
-export type ModulePaletteGroup = BuilderTemplateModuleType | "special-effects" | "blog" | "admin";
+export type ModulePaletteGroup = BuilderTemplateModuleType | "special-effects" | "blog" | "events" | "admin";
 
 export type GalleryTarget =
   | { kind: "module"; sectionId: string; moduleId: string }
@@ -167,6 +167,7 @@ export const modulePaletteGroups: Array<{
     description: "Search the whole site — a search box, and the results list it feeds."
   },
   { value: "blog", label: "Blog", icon: "✍", description: "Blog content modules — post feeds, filters, author bios, and more." },
+  { value: "events", label: "Events", icon: "📅", description: "Event calendar modules — the admin manager, and the calendars visitors see." },
   {
     value: "special-effects",
     label: "Special Effects",
@@ -783,6 +784,54 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     label: "Post Manager (Admin)",
     icon: "⊞",
     description: "Admin CRUD table listing all blog posts with edit and delete actions. Place on a back-end admin page.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "event-detail-standard",
+    type: "event-detail",
+    group: "events",
+    label: "Event Page",
+    icon: "🎟",
+    description: "One event in full — when, where, the details and a link to book. Reads the event from the page address, so one page serves them all.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "event-calendar-standard",
+    type: "event-calendar",
+    group: "events",
+    label: "Event Calendar",
+    icon: "📅",
+    description: "The events visitors see — a month grid, an upcoming list, or a row of cards.",
+    name: "",
+    text: "",
+    settings: { layout: "month" }
+  },
+  {
+    id: "media-manager-standard",
+    type: "media-manager",
+    // "admin", not a media-specific group. The operator went looking for the
+    // Event Manager under Admin and it was filed under Events (open question,
+    // 2026-09-01) — so a management panel goes where he actually looks, beside
+    // Team Users and Site Settings, rather than beside the Image module.
+    group: "admin",
+    label: "Media Manager (Admin)",
+    icon: "\ud83d\uddbc\ufe0f",
+    description: "Upload images and video, and browse the project's gallery. Place on a back-end admin page.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "event-manager-standard",
+    type: "event-manager",
+    group: "events",
+    label: "Event Manager (Admin)",
+    icon: "📅",
+    description: "Admin table of every event, with an inline form to add and edit them. Place on a back-end admin page.",
     name: "",
     text: "",
     settings: {}

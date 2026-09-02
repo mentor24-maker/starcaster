@@ -143,7 +143,7 @@ export type SiteSearchResult = {
  *
  * Two reasons, kept apart on purpose:
  * - **Admin surfaces** must not be searchable by the public. These mirror
- *   PRIVATE_ONLY_MODULE_TYPES in components/BuilderPublicSitePage.tsx plus
+ *   PRIVATE_ONLY_MODULE_TYPES in lib/builder-client/public-site-sections.ts plus
  *   every `admin-*` type, which is enforced by prefix below.
  * - **Site chrome** (nav, breadcrumb, table of contents, social bars) is on
  *   every page by design. The boilerplate detector would catch most of it,
@@ -156,6 +156,7 @@ const NEVER_INDEXED_MODULE_TYPES = new Set([
   "blog-post-manager",
   "blog-category-manager",
   "blog-card-manager",
+  "event-manager",
   "navigation",
   "tractor-nav",
   "breadcrumb",

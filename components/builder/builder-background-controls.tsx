@@ -5,12 +5,29 @@ import {
   createDefaultBackgroundSettings,
   normalizeBuilderAssetUrl
 } from "@/lib/builder-template";
+import {
+  BACKGROUND_PARALLAX_SPEED_MAX,
+  BACKGROUND_PARALLAX_SPEED_MIN,
+  backgroundParallaxSpeedFromInput,
+  DEFAULT_BACKGROUND_PARALLAX_SPEED
+} from "@/lib/background-parallax";
 import { BuilderGalleryModal } from "./builder-gallery-modal";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
+import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderThemeColorField } from "./builder-theme-color-field";
 
 type BuilderBackgroundControlsProps = {
   label: string;
+  /**
+   * What the MODE picker is called, when that differs from the group's own
+   * `label`. The overlay group is one control set worn twice — the same
+   * picker choosing a background on one row and a screen painted over it on
+   * the next — and "Background Type" sitting inside a group headed Overlay
+   * reads as the row's own background. The frozen vanilla builder solved it
+   * with `sectionLabel`; this is the same idea with a name that says which
+   * label it is. Defaults to `label`, so every existing caller is unchanged.
+   */
+  modeLabel?: string;
   background: BackgroundSettings;
   onChange: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
   onChooseImage?: () => void;
@@ -25,10 +42,33 @@ type BuilderBackgroundControlsProps = {
   themeBackgroundColor?: string;
   themePrimaryColor?: string;
   themeColors?: Array<{ label: string; hex: string }>;
+  /**
+   * Whether Video is offered here. OFF by default, and that default is the
+   * whole point: this component is the chrome worn by button backgrounds,
+   * module backgrounds, poll pods and the email path, none of which can render
+   * a <video>. Opting IN per surface means adding video could not silently put
+   * an option in front of an operator that does nothing where he clicked it.
+   */
+  allowVideo?: boolean;
+  /**
+   * Whether Parallax is offered here. OFF by default, on the same reasoning as
+   * `allowVideo` and NOT folded into it: `BackgroundSettings` is one shared
+   * object worn by six surfaces — the page background, a section, a column, a
+   * module, a BUTTON and the overlay-screen dimmer — and parallax on a button
+   * is nonsense. The field lives on the type; the control is surfaced only
+   * where it means something, which in this slice is section backgrounds.
+   *
+   * A separate flag rather than a reuse of `allowVideo` because the two
+   * questions genuinely differ: a surface can be able to play a video and have
+   * nothing to parallax against, and the page background will be the reverse
+   * the moment 86bbqa7a5 lands.
+   */
+  allowParallax?: boolean;
 };
 
 export function BuilderBackgroundControls({
   label,
+  modeLabel,
   background,
   onChange,
   onChooseImage,
@@ -40,9 +80,23 @@ export function BuilderBackgroundControls({
   showColorFieldLabel = true,
   themeBackgroundColor,
   themePrimaryColor,
-  themeColors = []
+  themeColors = [],
+  allowVideo = false,
+  allowParallax = false
 }: BuilderBackgroundControlsProps) {
   const [isFallbackGalleryOpen, setIsFallbackGalleryOpen] = useState(false);
+  /*
+   * What is in the Parallax Speed box WHILE it is being typed in, which is not
+   * the same thing as the stored setting and cannot be derived from it.
+   * `<input type="number">` reports an empty string for every value it cannot
+   * yet parse, so a cleared box and the "0." on the way to "0.7" arrive
+   * identically — and normalising either one back to a number is what made
+   * backspace snap the field to 0.3 and turn the next keystrokes into 0.37.
+   * `null` means "not being typed in": the box shows the stored value, which
+   * is what it goes back to on blur.
+   */
+  const [parallaxSpeedDraft, setParallaxSpeedDraft] = useState<string | null>(null);
+  const [openVideoPicker, setOpenVideoPicker] = useState<"clip" | "poster" | null>(null);
 
   function handleModeChange(newMode: BackgroundSettings["mode"]) {
     onChange((current) => {
@@ -58,6 +112,330 @@ export function BuilderBackgroundControls({
       }
       return next;
     });
+  }
+
+  const videoUrl = background.videoUrl ?? "";
+  const posterUrl = background.posterUrl ?? "";
+  const needsPoster = background.mode === "video" && !posterUrl;
+
+  const videoGallery = openVideoPicker ? (
+    <BuilderGalleryModal
+      isUploading={false}
+      /*
+       * FILE KIND, not media category. This was `initialMediaCategory` with
+       * "Video"/"Image" until 2026-08-31, and `mediaCategory` is the topical
+       * category ("Article Banner", "X Post") — nothing in the library carries
+       * "Video" as one. The picker painted the whole gallery and then emptied
+       * itself the moment the filter landed: a flash, then a blank shell.
+       *
+       * Still a starting point, not a lock — the filter bar shows it and
+       * Clear brings the whole library back.
+       */
+      initialKind={openVideoPicker === "clip" ? "video" : "image"}
+      onSelectImage={(path) => {
+        const url = normalizeBuilderAssetUrl(path);
+        onChange((current) =>
+          openVideoPicker === "clip"
+            ? { ...current, videoUrl: url }
+            : { ...current, posterUrl: url }
+        );
+        setOpenVideoPicker(null);
+      }}
+      onClose={() => setOpenVideoPicker(null)}
+    />
+  ) : null;
+
+  /**
+   * The Video panel. One definition, rendered by both layouts below, so the
+   * horizontal and stacked forms of this component cannot drift into offering
+   * different controls — which is exactly what happened to the mode dropdown
+   * itself, where a third hand-written copy in builder-section-controls.tsx
+   * had to be found and updated separately.
+   */
+  function renderVideoControls() {
+    if (background.mode !== "video") return null;
+
+    return (
+      <div className="builder-schema-panel-column builder-video-background-controls">
+        <div className="builder-schema-group-title">Video</div>
+
+        <BuilderSettingRow label="Video URL" fullWidth>
+          <input
+            type="text"
+            value={videoUrl}
+            onChange={(event) =>
+              onChange((current) => ({
+                ...current,
+                videoUrl: normalizeBuilderAssetUrl(event.target.value)
+              }))
+            }
+            placeholder="/api/admin/media-file/..."
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Video File" fullWidth>
+          <div className="builder-media-actions">
+            <button
+              className="secondary-button builder-gallery-button"
+              onClick={() => setOpenVideoPicker("clip")}
+              type="button"
+            >
+              Choose Video
+            </button>
+            {onUploadImage ? (
+              <label className="secondary-button builder-gallery-button builder-upload-button">
+                <span>Upload Video</span>
+                <input
+                  className="builder-upload-input"
+                  type="file"
+                  accept="video/*"
+                  onChange={(event) => {
+                    onUploadImage(event.target.files?.[0] ?? null);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+            ) : null}
+          </div>
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Poster Image" fullWidth>
+          <input
+            type="text"
+            value={posterUrl}
+            onChange={(event) =>
+              onChange((current) => ({
+                ...current,
+                posterUrl: normalizeBuilderAssetUrl(event.target.value)
+              }))
+            }
+            placeholder="/api/admin/media-file/..."
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Poster File" fullWidth>
+          <button
+            className="secondary-button builder-gallery-button"
+            onClick={() => setOpenVideoPicker("poster")}
+            type="button"
+          >
+            Choose Poster
+          </button>
+        </BuilderSettingRow>
+
+        {needsPoster ? (
+          <BuilderSettingRow label="" fullWidth>
+            <p className="builder-video-background-warning">
+              Without a poster image this section will be blank until the video loads — and it is
+              what phones and visitors who have asked for reduced motion see instead of the video.
+            </p>
+          </BuilderSettingRow>
+        ) : null}
+
+        <BuilderSettingRow label="Speed">
+          <select
+            value={String(background.videoSpeed ?? 1)}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, videoSpeed: Number(event.target.value) }))
+            }
+          >
+            <option value="0.25">0.25x</option>
+            <option value="0.5">0.5x</option>
+            <option value="0.75">0.75x</option>
+            <option value="1">Normal</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2x</option>
+          </select>
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Loop">
+          <input
+            type="checkbox"
+            checked={background.videoLoop !== false}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, videoLoop: event.target.checked }))
+            }
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Loop Fade">
+          <input
+            type="number"
+            min={0}
+            max={5}
+            step={0.1}
+            value={String(background.videoLoopFade ?? 0.6)}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, videoLoopFade: Number(event.target.value) }))
+            }
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Start At">
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={String(background.videoTrimStart ?? 0)}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, videoTrimStart: Number(event.target.value) }))
+            }
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="End At">
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={String(background.videoTrimEnd ?? 0)}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, videoTrimEnd: Number(event.target.value) }))
+            }
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Blur">
+          <input
+            type="number"
+            min={0}
+            max={20}
+            value={String(background.videoBlur ?? 0)}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, videoBlur: Number(event.target.value) }))
+            }
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Focus X">
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={String(background.videoFocalX ?? 50)}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, videoFocalX: Number(event.target.value) }))
+            }
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Focus Y">
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={String(background.videoFocalY ?? 50)}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, videoFocalY: Number(event.target.value) }))
+            }
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Play On Phones">
+          <input
+            type="checkbox"
+            checked={background.videoPlayOnMobile === true}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, videoPlayOnMobile: event.target.checked }))
+            }
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="" fullWidth>
+          <p className="builder-video-background-note">
+            Loop Fade dissolves the clip back into itself instead of cutting; 0 is a hard cut.
+            Phones show the poster instead unless Play On Phones is on — a background video is
+            megabytes of someone&rsquo;s cell data. Leave both trim boxes at 0 to play the whole clip.
+          </p>
+        </BuilderSettingRow>
+
+        {videoGallery}
+      </div>
+    );
+  }
+
+  /**
+   * The Motion panel — parallax, and nothing else so far.
+   *
+   * One definition rendered by both layouts below, for the reason the Video
+   * panel's own header gives: a second hand-written copy is how the horizontal
+   * and stacked forms of this component drift into offering different
+   * controls, which has already happened once here with the mode dropdown.
+   *
+   * Shown only for modes `image` and `video`, because those are the only two
+   * backgrounds that are a picture. A gradient has nothing to drift.
+   */
+  function renderParallaxControls() {
+    if (!allowParallax) return null;
+    if (background.mode !== "image" && background.mode !== "video") return null;
+
+    const parallaxOn = background.parallax === true;
+
+    return (
+      <div className="builder-schema-panel-column builder-parallax-background-controls">
+        <div className="builder-schema-group-title">Motion</div>
+
+        <BuilderSettingRow label="Parallax">
+          <input
+            type="checkbox"
+            checked={parallaxOn}
+            onChange={(event) =>
+              onChange((current) => ({ ...current, parallax: event.target.checked }))
+            }
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="Parallax Speed">
+          <input
+            type="number"
+            min={BACKGROUND_PARALLAX_SPEED_MIN}
+            max={BACKGROUND_PARALLAX_SPEED_MAX}
+            step={0.05}
+            disabled={!parallaxOn}
+            value={
+              parallaxSpeedDraft ??
+              String(background.parallaxSpeed ?? DEFAULT_BACKGROUND_PARALLAX_SPEED)
+            }
+            onChange={(event) => {
+              // The box holds the keystroke either way; only a readable number
+              // is written to the setting. A half-typed one leaves the stored
+              // value exactly as it was rather than resetting it to the
+              // default, which is what used to eat the backspace.
+              const typed = event.target.value;
+              setParallaxSpeedDraft(typed);
+              const parsed = backgroundParallaxSpeedFromInput(typed);
+              if (parsed === null) return;
+              onChange((current) => ({ ...current, parallaxSpeed: parsed }));
+            }}
+            onBlur={() => setParallaxSpeedDraft(null)}
+          />
+        </BuilderSettingRow>
+
+        <BuilderSettingRow label="" fullWidth>
+          <p className="builder-parallax-background-note">
+            Parallax makes the background drift slower than the words over it, which is what
+            gives a page depth. 0 pins the picture to the screen; 1 is ordinary scrolling.
+            Around 0.3 is the usual look. Expect the picture to CROP IN: it has to be taller
+            than the row to have somewhere to drift to, so the stronger the effect the more
+            closely it is cropped — a photo with a logo or a face near the edge wants a
+            higher number, nearer 0.7. Turning it on also trims anything that overhangs the
+            row&rsquo;s edges.{" "}
+            {background.mode === "video" ? (
+              <>
+                On phones this drift only happens if <strong>Play On Phones</strong> is on:
+                with it off the clip is never loaded there, so the still picture is what
+                visitors see and nothing moves. An image background drifts on phones either
+                way.
+              </>
+            ) : (
+              <>It runs on phones as well as desktops.</>
+            )}{" "}
+            It switches itself off completely for visitors who have asked their device for
+            reduced motion, so nothing here can make somebody ill.
+          </p>
+        </BuilderSettingRow>
+      </div>
+    );
   }
 
   // When no external gallery callback is wired (e.g. cell/page/poll
@@ -105,7 +483,7 @@ export function BuilderBackgroundControls({
       <div className="builder-background-controls builder-background-controls-horizontal">
         <BuilderModuleFieldStrip>
           {!hideModeRow ? (
-            <BuilderModuleField label={label} width="select-md">
+            <BuilderModuleField label={modeLabel ?? label} width="select-md">
               <select
                 value={background.mode}
                 onChange={(event) => handleModeChange(event.target.value as BackgroundSettings["mode"])}
@@ -114,6 +492,7 @@ export function BuilderBackgroundControls({
                 <option value="color">Color</option>
                 <option value="gradient">Gradient</option>
                 <option value="image">Image</option>
+                {allowVideo ? <option value="video">Video</option> : null}
                 <option value="style">Style</option>
               </select>
             </BuilderModuleField>
@@ -232,6 +611,9 @@ export function BuilderBackgroundControls({
             {fallbackGallery}
           </>
         ) : null}
+
+        {renderVideoControls()}
+        {renderParallaxControls()}
       </div>
     );
   }
@@ -240,25 +622,22 @@ export function BuilderBackgroundControls({
     <div className="builder-background-controls">
       <div className={compact ? "builder-background-inline-row" : undefined}>
         <label className="field">
-          <span>{label}</span>
+          <span>{modeLabel ?? label}</span>
           <select
             value={background.mode}
-            onChange={(event) => {
-              const mode = event.target.value as BackgroundSettings["mode"];
-              if (mode === "none") {
-                onChange(() => createDefaultBackgroundSettings());
-                return;
-              }
-              onChange((current) => ({
-                ...current,
-                mode
-              }));
-            }}
+            /*
+             * Routed through the shared handler rather than repeating its
+             * logic, which is what this branch used to do — the two layouts
+             * had already drifted, with only the horizontal one seeding theme
+             * colours on a mode change.
+             */
+            onChange={(event) => handleModeChange(event.target.value as BackgroundSettings["mode"])}
           >
             <option value="none">None</option>
             <option value="color">Color</option>
             <option value="gradient">Gradient</option>
             <option value="image">Image</option>
+            {allowVideo ? <option value="video">Video</option> : null}
             <option value="style">Style</option>
           </select>
         </label>
@@ -371,6 +750,9 @@ export function BuilderBackgroundControls({
           {fallbackGallery}
         </div>
       ) : null}
+
+      {renderVideoControls()}
+      {renderParallaxControls()}
     </div>
   );
 }

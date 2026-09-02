@@ -236,6 +236,102 @@ And when you find one of these, look for the destructive twin: the same dialog
 that stops a duplicate is what stops an accidental overwrite of a section 40
 pages depend on.
 
+### 2.5 A person is a human being — an agent is not, and a hand-off must say which
+
+`person` and `human` mean a human being. In practice, Dane. An agent session is
+an **agent session** — never a person, a human, somebody, or anyone. Ratified in
+vault `doctrine/TERMINOLOGY.md` (2026-08-29), under the same rule that retired
+"banner" and "harness": doctrine states rules in words with exactly one referent.
+
+This is not house style. It is the answer to the only question that matters at a
+hand-off — *whose hands does this need, and are they Dane's?*
+
+Ticket 86bbmfc15 (PR #434) sat blocked for four days. The merge step hit a real
+conflict and behaved correctly, but its messages did not. It told Dane *"your
+approval is still standing — you do not have to say merge again"* and *"it will
+merge on a later run, once the branch is caught up."* Its log and help text
+called the actor it needed **a human**. An agent read that log and told Dane the
+system had "stopped and asked for a person," so he concluded he was the blocker
+and had missed a prompt. He was not the blocker, no prompt existed, and the
+actor actually requested — an agent session, asked for on the bus — was not
+listening, because nothing consumes those messages. The wrong word hid a missing
+actor for four days, and the conflict itself was three lines.
+
+**Do this:** at any hand-off, name which of the two it needs. A hand-off that
+cannot name a specific waiting actor does not get to imply one. Passive voice is
+the tell — *"once the branch is caught up"* reads as a process underway until you
+ask who is doing the catching up. If nothing is going to pick the work up, the
+message says so plainly.
+
+**And do not over-correct.** Most existing uses are right and must stay: *"a
+human eye is the only gate that exists"*, *"only a HUMAN exports a token by
+hand"*, *"an Urgent flag is a human override"*. The test is not the word, it is
+the referent — replace it only where the actor is genuinely an agent session.
+
+### 2.6 The actor has one source, or two code paths will name two
+
+§2.5 made every hand-off name the actor it waits on. That is necessary and it is
+not sufficient. On 2026-08-30 the merge step named its actor correctly, and a
+second code path in the same pass named a different one.
+
+PR #444 was approved and its branch needed catching up with `main`. The catch-up
+merged cleanly and the **push** lost a race — another session had pushed to the
+same branch seconds earlier, so git rejected it with `fetch first`.
+`branchCatchUp` reported `PUSH_FAILED`; `clickup_direct.mjs` mapped it to
+`kind: 'unknown'`; `mergeOnComment.conflictHandOffNotice` read that, chose the
+actor `later-pass`, and wrote the true sentence — *"It will be merged on the next
+run."* Nothing needed to act.
+
+Then the filing path ran. It files on `gate.action === 'conflict'` alone and
+never reads the local verdict, so it opened a ticket titled *"Resolve the merge
+conflict on PR #444"* — for conflict markers that did not exist; `git merge-tree
+--write-tree` on the two branches exits 0 with a clean tree — and posted a second
+comment naming the build loop as the actor. The two comments landed 200
+milliseconds apart saying different things. The ticket then sat two hours in
+Ready to launch, because a reader believes whichever one they read last, and
+neither named actor was going to move it.
+
+**Do this:** derive the actor once and let every consumer read that one value —
+the notice, the filing decision, the log line. Where two readers exist, a test
+asserts they cannot disagree on the same fixtures, the way the verdict parser
+already guards its own pair. An actor computed twice is two actors.
+
+The tell is a condition that stops short of the value it is deciding about:
+`if (!filed && !dryRun)` asks whether a ticket already exists and whether this is
+a real run, and never asks the one question it is answering — *is there anything
+to resolve?* Closing it is task 86bbq80j5.
+
+### 2.7 Every time quoted to the operator is Mountain time — never UTC
+
+Dane works in **Mountain time (`America/Denver` — MDT in summer, MST in
+winter)**. So does everything he reads: the Mac Mini's clock, the loop logs
+under `~/loop-logs/`, the launchd logs, and every ClickUp Loop note. GitHub and
+the ClickUp API do not — they hand back UTC, with a trailing `Z`.
+
+On 2026-09-01 a report to him quoted `mergedAt=2026-09-01T17:21:59Z` in the
+same breath as a Mini-log line reading `10:37`, and he had to ask which clock
+was which. He had asked before. His words that morning: *"You are back to
+using UTC as a basis. It is now 11:12 AM my time. Please make note of this in
+doctrine so we don't have to keep discussing time zones."* A standing
+instruction given verbatim is a keeper.
+
+**Do this:** convert every API timestamp to Mountain time before it reaches a
+reply, a ticket note, a bus post or an operator card — `mergedAt`, `date`,
+`createdAt`, `date_updated`, all of them. Mini-log and Loop-note times are
+already local; leave them alone. If a raw value must be quoted (a log excerpt,
+a `gh` line pasted as evidence), label it once with the zone so the reader is
+never left converting. The `@@MEASURED 8:04pm` line on an operator card is the
+same rule from the other side: it is the clock that dates the card, and it is
+his clock.
+
+```
+TZ=America/Denver date -r 1756747319                       # shell, from an epoch
+new Date(x).toLocaleString('en-US', { timeZone: 'America/Denver' })   # node
+```
+
+Two clocks in one report is one question he has to ask every time, and this
+section exists so that he never has to ask it again.
+
 ---
 
 ## 3. Designing checks
@@ -385,15 +481,222 @@ it against what you sent — count and identity, not just "no error". Stop on
 the first mismatch, before the next record is touched, and print the
 restore command. A tool's own log is not evidence about the database.
 
+### 3.12 A guard placed after the refusal it exists to pre-empt is unreachable
+
+The merge step was taught to notice a `review-gate` check that had answered an
+older question and **re-run** it rather than merge on it (task 86bbmk7pv, PR
+#443). The decision logic was pure, tested from nine angles, and correct. It was
+also, in the one mode it was written for, dead code.
+
+The step's first rule is *never merge past a red check*. In enforcing mode a
+stale gate **exits 1** — so it IS a red check, `githubGate` answered `refuse`,
+and the function returned three lines above the staleness question. Ticking the
+branch-protection box would have produced exactly the deadlock the ticket was
+written to prevent.
+
+Two things hid it. The feature ships **advisory first** (exit 0), and in advisory
+mode the stale check reads green, the refusal never fires, and the block is
+reached — so every trial and every test exercised the reachable half. And the
+wiring test asserted only that the staleness call appeared *before the merge
+command*, which stayed true with the code unreachable: it pinned a boundary that
+could not move, so it could not fail.
+
+**Do this:** when a check exists to handle a specific failure state, prove it is
+**reached while the system is in that state** — not merely that it is called
+somewhere before the action. Two questions catch it:
+
+- *What else answers first?* List the branches that return before yours. A guard
+  that interprets a red signal must sit above the rule that refuses on red
+  signals; a stale red means "run it again", and only the re-run's answer is a
+  real refusal.
+- *Which mode did I test?* A feature with an advisory phase and an enforcing
+  phase is two programs. Green in the harmless one is not evidence about the
+  other, and the enforcing path is the one with the consequences.
+
+An ordering test must pin the boundary that can actually move — here,
+*staleness before the red-check refusal*, not *staleness before the merge*.
+Break it on purpose and watch it fail; an assertion that survives the bug it
+names is decoration.
+
+### 3.13 A watchdog that runs only where its subject runs cannot see the case it exists for
+
+Slice E of the NODES plan (task 86bbhbadj, PR #469) had to make *silence*
+detectable: a job that fails writes a log line, but a job that never fires
+writes nothing anywhere, and nothing is indistinguishable from a quiet week.
+
+The obvious build is a check on the machine that owns the job — it has the
+data, it is already awake when the job runs, and it needs no coordination. It is
+also useless, and useless in the exact scenario the feature was written for.
+**The machine being switched off takes the watchdog out with the job.** A
+schedule evicted by an OS update, a Mini unplugged, a launchd job that never
+reloaded after a restart: in every one of those the watcher and the watched die
+together, and the silence goes unreported by the one thing built to report it.
+
+So the beats go on a surface **both** machines read (a ClickUp ticket), and the
+check runs from whichever machine is awake — including, and especially, the one
+that does **not** own the job. `scripts/run_bus_relay.sh` performs it *before*
+the ownership test, which reads oddly until you see why: the non-owning machine
+was already waking every ten minutes to say "not my job" and exit, and that idle
+wake is the only vantage point in the system that survives the owning machine
+being dead.
+
+**Do this:** for any check whose subject is a machine, a process or a schedule,
+ask *what takes both of us out at once?* If the answer is "the thing I am
+watching for", the check is in the wrong place. Put the evidence somewhere
+neither party owns, and read it from somewhere the failure cannot reach.
+
+The corollary is a resolution question, and it is the cheap half: the shared
+record only needs to be as fine-grained as the absence you must notice. Slice E
+pushes one row per machine per day, because the requirement is "a day-long
+absence is visible", not "a ten-minute one is". A finer clock would have been
+more writes, more noise and no more detection.
+
+### 3.14 An unpopulated field is not an empty answer
+
+The same slice reads its roll call out of a ClickUp task description. Driven
+against the live API, ClickUp answered a `GET` with `markdown_description: ""`
+for a task whose description it was holding **perfectly well** — the text
+arriving under `description` instead. The reader preferred the markdown field,
+so it handed the parser an empty string for a record that was entirely intact.
+
+The parser then did the reasonable thing and read an empty string as *an empty
+roll call*: no beats recorded yet. Which would have announced **every scheduled
+job in the system as having gone quiet, all at once**, off a field that was
+simply not filled in. For a monitoring feature that is the worst available
+failure: an alarm that cries wolf is an alarm nobody reads, so a false-alarm
+storm does not merely add noise, it disables the real alerts behind it.
+
+It was caught only because the thing was run against the live service instead of
+reasoned about — the code is correct against the API as documented.
+
+**Do this:** when a provider can return a field empty, decide explicitly which
+of two things "empty" means — *a confirmed absence* or *nothing was read* — and
+make the two render differently (§3.2, §3.11). Where the record you write always
+carries something (a preamble, a header, a marker), a wholly empty read is
+**unreadable**, never zero results. And consult every field that could carry the
+value rather than one by preference; a provider populating a different field
+than the one you wrote is a real behaviour, not a corruption.
+
+### 3.15 A declared behaviour is not a running one — watch it, do not read one frame
+
+Three render contracts were written for the video-background crossfade
+(2026-08-31, #478). Two of them assert the pair of `<video>` elements exists
+and that the trailing copy carries an `opacity` transition. Both are true
+statements about the DOM and both are worthless.
+
+The handoff was then disabled on purpose — the opaque copy never swaps, the
+loop hard-cuts, the feature is completely dead — and `check:render` reported
+**19/19 green**. Nothing had to go wrong for that; the elements were still
+there, and a `transition` property is a declaration about what *would* happen
+if something changed, not evidence that anything does.
+
+This is the same species as the two already recorded in §5.14: an
+`animation-name` naming keyframes that do not exist, and a `--sc-effect-*`
+variable compared against itself. A property that describes motion is not
+motion. Here the tell is sharper, because the property was correct and the
+thing that never ran was ours.
+
+What proves a dissolve is **two copies both partly visible at the same
+instant**, which does not exist in any single frame. So `sample()` in
+`scripts/ui/check_render.mjs` grew a `series` option — named selectors, a list
+of properties, a count and an interval — and hands the whole run to `expect`.
+The contract now fails with the opacity pairs it actually saw:
+
+```
+✗ video-background-crossfade-actually-dissolves: the two copies were never
+  both partly visible across 45 frames — the loop is still a hard cut with a
+  transition property on it. Opacity pairs seen: 1/0.
+```
+
+**Do this:** if the behaviour is a CHANGE — a fade, a hand-off, a debounce, a
+retry, a thing that settles — the check has to watch it happen. Reading one
+frame can only ever confirm the setup. And before believing any new contract,
+break the behaviour it guards and watch it fail; every check in this repo that
+skipped that step went on to report clean over something broken.
+
+### 3.16 An absence has to be a stated expectation, never a silent not-found
+
+The same feature needed the opposite assertion: under reduced motion, and at
+phone width, the layer must render **no `<video>` element at all** — the poster
+underneath is the answer (`docs/VIDEO_BACKGROUNDS.md`).
+
+`check:render` could not express that. Its first rule is that nothing measured
+is a failure, never a pass — which is right, and which made "this must not be
+here" unwritable. Left as-is, the fallbacks would have had no coverage at all,
+and their failure mode is invisible to whoever is not affected: the page looks
+perfectly fine to anyone who has not asked for reduced motion and is not on a
+phone.
+
+So `absent: true` inverts that one rule explicitly, and says so in the failure
+message. Explicit is the whole point — a check that treats "I found nothing" as
+a pass by default is how §3.11 and §3.2 keep being relearned. Paired with it,
+`emulate` (reduced motion, viewport) puts the browser into the condition the
+behaviour exists for, because the only prior evidence those paths worked was
+somebody remembering to toggle a system setting by hand.
+
+**Do this:** when correct behaviour is that something does not appear, assert
+the absence deliberately, and make the assertion distinguishable from the check
+having failed to look. Then verify the pair from both sides — the presence
+contract is what stops the absence contract passing because the feature never
+rendered at all.
+
 ---
 
 ## 4. Secrets
 
-### 4.1 Agents never handle live secret values
+### 4.1 The rule is about EXPOSURE, not custody
 
-Standing rule. Agents write rotation and diagnostic tooling; the operator runs
-the command that touches the real value. `scripts/diagnose_x_auth.js` follows
-this: it prints lengths and first/last four characters, never a value.
+Standing rule, and the test is one question: **would this render the value
+somewhere a person or a log could read it?**
+
+- **No — the agent runs it.** A command that moves a secret between two stores
+  without displaying it: `doppler secrets get X --plain | gh secret set X`.
+  Nothing reaches the screen, the clipboard, the transcript, or a field where it
+  could be mislabelled.
+- **Yes — the operator runs it.** Anything that makes a value *visible* or
+  *new*: reading one out, generating one (`openssl rand`), pasting into a
+  browser form, a billing screen, a login. `scripts/diagnose_x_auth.js` is the
+  model for tooling that must not cross the line — it prints lengths and
+  first/last four characters, never a value.
+
+**The pipe has a direction, and only one end is safe** (2026-09-01). The example
+above works because `doppler secrets get --plain` writes to stdout, where a pipe
+swallows it, and `gh secret set` echoes nothing. Reverse it and the rule inverts:
+**`doppler secrets set` prints the value it just wrote**, and `doppler secrets
+delete` prints the remaining secrets table — full values, all of them. `--silent`
+suppresses info messages, not those tables. An agent moving a credential INTO
+Doppler that way exposed a live ClickUp token and a Google API key in one
+session, while believing it was following this section.
+
+So: Doppler belongs on the `get` side of a pipe, never the `set` side. A value
+that has to be *entered* into Doppler goes in through the dashboard, by Dane —
+that is the "makes a value new" case, and it always was. And before piping a
+secret anywhere, check what the receiving command prints on success; "it moves
+between two stores" is not the test, "does anything render it" is.
+
+Deleting a GitHub secret is refused outright by the session's safety classifier
+(three attempts, 2026-08-31). That is correct behaviour, not a bug to route
+around: hand the click over and say in one line why.
+
+**Why it is stated this way** (2026-08-31). The rule used to read "the operator
+runs the command that touches the real value", and it was applied as though it
+were about **custody** — who holds the secret. It was written after the
+2026-07-13 incident where `.env.local` was visible on a TV in a photo, so it was
+always about **visibility**.
+
+Read as custody, it did the opposite of its job. Setting up the review gate's
+CI token, the operator was handed the GitHub secrets browser form — and pasted
+a ClickUp token into the **Name** box twice, with two different tokens. GitHub
+encrypts and masks secret *values*; it does not protect *names*. Both tokens sat
+in the settings UI as plain labels and are in the repository's audit history
+permanently, which no deletion reaches. The agent had a pipe available that
+would have shown nothing and had no Name box to get wrong, and declined to run
+it on the strength of this rule.
+
+**Do this:** prefer the pipe over the form precisely *because* the form has a
+field the value can land in wrongly. A rule written to prevent exposure must
+never be applied in a way that creates it — when the two readings disagree, the
+one that keeps the value off every screen is the correct one.
 
 ### 4.2 Reveal one field, on demand, and log it
 
@@ -686,7 +989,23 @@ So it was built (#315, #318, #320, #322):
 - Horizontal-overflow on a rendered page is **not** asserted anywhere: the
   Builder preview shell clips it, so the assertion was written, tried, and
   deleted when it could not be made to fail.
-- Only the `image` module family has real contracts today.
+- Only the `image` module family has real contracts today. *(2026-08-31: the
+  video background has six as well — `docs/VIDEO_BACKGROUNDS.md`.)*
+
+#### What `check:render` grew on 2026-08-31, and what each was built against
+
+Three capabilities, each added because a contract could not otherwise be
+written — or worse, could be written and could not fail:
+
+| Capability | Lets a contract say | Built against |
+|---|---|---|
+| `emulate` | put the browser in a condition first — `reducedMotion`, `viewport` | the reduced-motion and phone fallbacks, whose only prior evidence was somebody remembering to toggle a system setting by hand |
+| `absent: true` | **this must NOT be here** — inverts "nothing measured is a failure", explicitly (§3.16) | the same two fallbacks, whose correct behaviour is rendering no element at all |
+| `series` | watch named selectors over N frames and judge the run (§3.15) | a crossfade that reported 19/19 green with its handoff disabled and the loop hard-cutting |
+
+They are general. Any contract can use them, and `series` is the answer for
+anything whose truth is a change rather than a state — a fade, a hand-off, a
+debounce, something that settles.
 
 So the first paragraph stands: **the verification for a visual change is
 still a browser measurement or the operator's eye.** These checks widen what
@@ -754,7 +1073,7 @@ live on Publish", which is a decision, not a cleanup), or select one row in SQL
 and accept that the publish/private filters and the frame resolution then exist
 twice.
 
-### 5.17 A zero-value filter is not "no filter" — it captures `position: fixed`
+### 5.17 A zero-value filter is not "no filter" — it captures `position: fixed` and disables `background-attachment: fixed`
 
 `position: fixed` means "fixed to the browser window" only while **no ancestor
 has a `transform`, `filter`, `perspective`, `backdrop-filter`, `will-change`
@@ -793,6 +1112,23 @@ declarations the browser KEPT — and it kept this one; the declaration is
 valid, applied, and doing exactly what it says. The fault is a side effect of
 a valid value, which is a different question from the one that harness asks.
 
+**The same capture has a second symptom, and it looks nothing like the
+first.** Those six properties also turn `background-attachment: fixed` into
+plain `scroll`. Nothing is mispositioned and there is no offset to measure —
+the background simply stops being fixed and scrolls with the page. So the
+"walk the ancestors" advice below is right, but the tell that leads you to it
+is absent: you are not looking at something in the wrong place, you are
+looking at an effect that is not happening.
+
+Worse, it is conditional. Whether a themed column carries a filter decides
+whether a fixed background works, so the same page can be correct under one
+theme and dead under another, with no diff between them.
+
+This is why parallax is a scroll-driven layer here and not the one-line CSS
+version (2026-08-31, 86bbqazxv / PR #481). `docs/VIDEO_BACKGROUNDS.md`,
+under "`background-attachment: fixed` was considered and rejected", carries
+the worked example — and the iOS Safari half of the reason.
+
 **Do this:**
 
 - Never emit a filter, transform or backdrop-filter for a zero setting. Emit
@@ -802,6 +1138,10 @@ a valid value, which is a different question from the one that harness asks.
 - When a fixed element lands somewhere unexplainable, walk its ancestors for
   those six properties before doubting your own arithmetic. If the offset
   equals some ancestor's origin, that ancestor is the containing block.
+- When a fixed BACKGROUND is not fixed — it scrolls like an ordinary one —
+  walk the same six properties. There is no offset to compare here, so check
+  the ancestors first rather than last; it is the likeliest cause and the
+  cheapest to rule out.
 - Positioning bugs are measured, not eyeballed: read
   `getBoundingClientRect()` against the window centre and compare numbers.
   Both halves of this one were found that way and neither was obvious on
@@ -847,6 +1187,82 @@ see the indirect case. To prove the guard bites: add a vitest test that requires
 
 ---
 
+### 5.19 A cache must not remember a failed question as an answer
+
+2026-08-30, found in review of PR #448 (Connections 1/7). `lib/projectScope.js`
+asks each table once whether it has both tenant columns, and remembers the
+answer for the life of the process:
+
+```js
+const probe = await sbQuery({ table, query: 'select=project_id,owner_user_id&limit=1' });
+const supported = probe.ok;          // ← the bug, in one line
+SUPPORT_CACHE.set(tableName, supported);
+```
+
+`probe.ok` is false for two situations that are **not the same fact**:
+
+| What happened | What it means | Cacheable? |
+|---|---|---|
+| 400 naming the column, 404 on the relation | Postgres answered: the columns are not there | Yes — it is a property of the table |
+| 502, cold start, dropped connection | The question never arrived | **No** — it is a property of the moment |
+
+Both were stored as "this table has no tenant columns", permanently. And
+`scopedListQuery`/`scopedIdQuery` respond to that by returning the caller's
+query **with no project filter appended at all** — which is a reasonable
+behaviour for a table that genuinely is not tenant-scoped, and a catastrophic
+one for a table that is. Every scoped read in that process then returned every
+project's rows. On `project_connections` that is one client reading another
+client's decrypted OAuth tokens; review reproduced it with a single simulated
+502.
+
+Note what makes this invisible. There is no error, no empty result, no slow
+query — the unscoped read is *faster* and returns *more* data, and every store
+above it reports `ok: true`. It also cannot be reproduced by running the
+software normally, because the cache is only wrong after a failure that is by
+definition rare and transient. It is a bug that exists exclusively in
+production, exclusively after a hiccup, and exclusively in the direction of
+handing out too much.
+
+**The rule.** A negative cache entry must be justified by an answer, never by
+the absence of one. If a probe can fail for reasons unrelated to the thing
+being probed — and any probe crossing a network can — then a failure must be
+classified before it is stored, and an unclassifiable failure is not stored at
+all. Answering "unknown, ask again next time" costs one extra round trip on the
+next call; answering "no" costs the whole process.
+
+**Fixed at both ends, deliberately** (PR #448), because they fail differently:
+
+1. `supportsProjectColumns` caches only a definitive answer. A transient
+   failure returns false for that one call and re-probes on the next, so the
+   process heals itself.
+2. `lib/projectConnectionsStore.js` refuses to *execute* a query that did not
+   come back scoped — `requireScopedQuery` checks for `project_id.eq.` and
+   returns a 503 rather than run it. The insert path already did this;
+   the read, list and delete paths did not.
+
+The second is the one that matters, and it generalises: **the guard belongs
+where the damage happens, not only where the mistake originates.** Fixing only
+the cache leaves every future caller of `scopedIdQuery` trusting that a
+returned query is a scoped query, which is exactly the assumption that failed
+here. A store handling secrets should verify the filter is present rather than
+assume the helper added it — cheap, local, and it does not depend on anyone
+remembering this incident.
+
+**Prove a fix.** Simulate the transient failure specifically; a missing column
+does not exercise this path, because that failure is correctly cached.
+`scripts/builder/projectConnectionsStore.test.js` does it with a fault switch
+that fails the NEXT probe with a 502 and nothing else — then asserts three
+things: the read is refused, the token appears nowhere in the refusal, and the
+very next call recovers to a correctly scoped 404. Break either end and that
+test fails; both were reverted and watched to fail before the fix was believed.
+
+**Where else this shape lives.** Anything that probes once and remembers.
+`git grep -n "CACHE.set" lib/` is the starting point — the question to ask of
+each is "can this probe fail without telling me anything about the thing I am
+probing?", and if it can, "what does the cached wrong answer authorise?"
+
+---
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
@@ -865,6 +1281,14 @@ chain that a branch was editing, the right resolution was not to re-home the
 branch's addition but to **delete it** — the newer phases covered the same ground
 better, and its warning could not even fire in production. Resolving a conflict
 mechanically would have preserved dead weight.
+
+The converse costs more, because nothing announces it: a merge with **no**
+conflict is not evidence the two sides agree. §6.11 is that case — two branches
+contradicting each other's rules without sharing a line.
+
+And before any of that: **confirm the conflict is real.** A forge can report
+one that git cannot reproduce, and the word alone is enough to start somebody
+editing files that never conflicted — §6.13.
 
 ### 6.3 State results, not intentions
 
@@ -1071,7 +1495,450 @@ old. That is not the point. An unattended agent crossed a line the operator drew
 and the crossing was invisible; on a machine nobody is watching, "the guard has
 a hole" is the whole finding.*
 
+### 6.7 On a send-back, merge `main` in before you rework — the fix may already be there
+
+**The incident (2026-08-30, ticket 86bbmg2fb, PR #441).** Review sent the
+branch back asking, among other things, for `next-interval` to survive an
+unreadable list without exiting non-zero. `fetchAllTasks` ended in `die()`, so
+the rework added a `soft` option that throws instead. Meanwhile — while the
+branch sat in review — a different ticket (86bbm4zwd) had added the same escape
+hatch to the same function on `main`, named `fatal: false`, returning
+`{ tasks: null, failed }`. `ship` stopped on the conflict. The resolution was
+to delete the rework and call `main`'s version: the correct code had existed
+before the rework started, and the only work the rework produced was the
+conflict.
+
+**Do this:** the first command on a sent-back branch is `git merge
+origin/main`, before reading the review notes against the code. A branch that
+has been in review for days is editing a file `main` has since changed; §6.2
+says the conflict is information, and this is the cheap time to receive it.
+Then look for the asked-for fix on `main` by *behaviour* — search for the
+function, not for the name you were about to give it.
+
+**Addendum (same day, same merge): after resolving a conflict by keeping both
+sides, PARSE the file before you commit it.** The same `git merge origin/main`
+on ticket 86bbmg2tq hit a content conflict in `scripts/clickup_direct.mjs`
+where both branches had added lines in the same place. "Keep both sides" fused
+two separate `const { ... } = X;` statements onto one line — a resolution git
+considers complete and node considers a SyntaxError. It was caught only
+because an agent happened to run `node --check` by hand.
+
+Nothing in the toolchain would have caught it. `check:syntax` parsed only
+`public/js/`. `test:builder` reads `clickup_direct.mjs` as *text* — two
+source-level assertions — and never executes it. `check_conventions` skips its
+added-line checks during a merge, precisely because a merge adds lines it did
+not write. So a file every loop pass runs could have reached `main` green, and
+the next loop pass would have died on line 1: every ticket stuck in whatever
+status it was in, with no verdict written anywhere, and no error anyone would
+see until somebody wondered why the queue had stopped moving.
+
+That gap is now closed — `npm run check:syntax` parses every hand-written
+`.js`/`.mjs`/`.cjs` under `scripts/` and `lib/` as well as `public/js/`, in
+pre-commit and in CI (ticket 86bbq5hwg). Two things follow. First, the fused
+statement is caught for you; you no longer have to remember `node --check`.
+Second, and more general: **a clean merge is a claim about text, not about
+meaning.** Git's job ends at "no overlapping edits"; whether the result is
+still a program is a separate question, and every file class needs something
+that asks it. The first sweep under the new gate found an unrelated file that
+had been unparseable on `main` since it was committed
+(`scripts/import_messaging_tweets_csv.js`, a missing closing paren) — which is
+the same lesson from the other end: nothing had ever parsed it either.
+
+The same claim fails one level higher too, where the merged result parses
+perfectly and two files simply assert opposite rules: §6.11. And one level
+lower, where the conflict being reworked around was never there at all: §6.13.
+
+### 6.8 A fixture must be a shape the real source can produce, and the assertion must name the value
+
+**The incident (same ticket).** The test that pinned "a ticket waiting on a
+FINISHED blocker is claimable" put the finished blocker *in* the task list
+beside its dependant. ClickUp's list endpoint never returns closed tasks
+(`include_closed` defaults to false), so the fixture was a shape production
+cannot produce; the code path it exercised was real, and the path production
+took — blocker absent, treated as still open, ticket excluded forever — had no
+test and no failure, because it fails toward sleeping longer. Review found it
+only by probing the live endpoint (49 tasks without `include_closed`, 104
+with).
+
+Same ticket, second shape: `clampToFloor` was "deliberately total" and had a
+break-test — `assert.ok(result >= FLOOR)`. `Number(null)`, `Number('')`,
+`Number([])` and `Number(false)` are all `0`, finite, and raised to the floor:
+the SHORT end, which switched hysteresis off for a hand-edited state file. The
+assertion was true of the wrong answer.
+
+**Do this:** before writing a fixture for an external source, read one real
+response and build from *its* shape — what it omits matters as much as what it
+carries. And a break-test asserts the **value** the rule requires, not a bound
+the wrong answer also satisfies: `assert.equal(clampToFloor(null), 3600)`, not
+`>= 900`. A guard that only checks `isFinite` has not checked "is this a
+number" — `Number()` manufactures finite zeros from garbage.
+
+### 6.9 CC runs the operational commands — handing one over is a claim it cannot
+
+**Standing instruction from the operator, 2026-08-07, verbatim:**
+
+> *"when you say 'you' can veto etc., you mean you, cc-starcaster, right? I
+> won't remember all those commands."*
+
+He raised it again on 2026-08-23 and 2026-08-30. It kept recurring because the
+rule lived only in agent memory and in the vault, and neither of those is
+loaded into a repo session the way `CLAUDE.md` is. Neither is a guard, either —
+so nothing ever caught an agent doing it.
+
+**The incident.** 2026-08-30, the Delray header. One safety-gate refusal early
+in the session was treated as a verdict on the whole session rather than a
+refusal of that one call, and every production step after it came back to him
+as a command to paste. One of them was a script with a dry run and an
+`--apply`. He ran the dry run; it printed what it *would* change; nothing in
+the output or the hand-off said the change had not happened yet, so he had no
+way to know a second command was still waiting on him. Most of an evening went
+on a fix that had already been written.
+
+**The rule.**
+
+- CC runs the operational commands — scripts, `doppler run`, SSH to the Mini,
+  publishing. He says what he wants in plain language; CC picks the script and
+  the flags, runs it, and reports the outcome rather than the log.
+- **Four exceptions, and only four:** a real secret VALUE (§4.1), a billing
+  screen, a browser login, and a decision that is genuinely his — money,
+  clients, what ships. A hand-off **names which one applies**. An unnamed
+  hand-off is itself the defect, the same shape as §2.5's unnamed actor.
+- **A refusal is scoped to the call it refused.** Retry when the step actually
+  comes; if it is refused again, say so in one line and carry on. An early
+  "no" is not a session-wide policy, and converting it into one silently
+  widens a single gate into a work stoppage.
+- **Never leave a production fix as a two-step.** A dry run and its `--apply`
+  are one job. Run both, then say what changed. A dry run reported as though
+  it were the fix is a §3.10 failure wearing an operator's clothes: it looks
+  exactly like success and changed nothing.
+
+*Why this is doctrine and not a courtesy:* flags exist so the agent has a
+precise instrument, not so the operator has a syntax to memorize — §6.4 already
+establishes that his bottleneck is attention. But the sharper cost is that a
+hand-off **misreports the state of the work**. He reads a pasted command as
+"this needs your hands", so a job that was finished reads as blocked on him,
+and one that is genuinely blocked is indistinguishable from it. That is §2.5
+arriving from the other direction: there, an automation said it had asked a
+human when it had not; here, an agent implies a human is needed when none is.
+
+Canon home for this rule is the vault `doctrine/OPERATIONS.md`; this section is
+the repo-side copy, which is the one actually loaded into every session.
+
+### 6.10 A behaviour proven in an uncommitted file does not move when its job moves
+
+On 2026-08-20 the `bus-relay` failure alert was built, break-tested and watched
+to work: a forced failure posted to the bus, a second one was suppressed, a
+success cleared the stamp. It was written into
+`~/Library/Application Support/starcaster/bus-relay-cron.sh` — a hand-installed
+file on the MacBook Pro, correct at the time, in git nowhere.
+
+Then two ordinary, well-run changes landed. Slice B brought the schedule into
+the repo (`scripts/run_bus_relay.sh` + `scripts/install_bus_relay.sh`), and
+`lib/nodeRoles.js` moved `bus-relay` to the Mac Mini. Both were reviewed. Both
+were right. **Neither carried the alert**, because the alert was not in the
+thing being moved — so from that cutover until 2026-08-30, a relay failure on
+the machine that actually ran it reached nobody at all.
+
+Nothing could have caught it. No test covered the file, no review saw it, no
+check compared old behaviour against new, and the regression's only symptom is
+the absence of a message nobody was expecting on a particular day. It was found
+only because the *next* ticket in the same plan went looking at the runner.
+
+**Do this:** when a slice says a thing "now lives in the repo", diff what the
+old artifact did against what the new one does before believing the migration
+is complete — the committed version is a rewrite, not a move, and rewrites drop
+things. Treat "we proved this works" as scoped to the file it was proved in.
+And when a hand-installed file is superseded, say explicitly what happened to
+every behaviour it carried; "it is replaced" is a claim about the file, not
+about the behaviour.
+
+The general shape, which is why this sits next to §6.6: work that lives outside
+version control has no changelog, no review, no test and no blast radius anyone
+can compute. That is acceptable for a one-off, and it is a debt that comes due
+the first time anything around it moves.
+
+### 6.11 A clean merge is not agreement — and a review verdict has a shelf life
+
+**The incident (2026-08-30, ticket 86bbmmv7t, PR #444, fixed in commit
+`80b5502b`).** The PR was reviewed green on 08-26 and sat in `Ready to launch`
+for four days waiting on Dane's merge word. When he gave it, the merge step
+refused: CI was red. Nothing on the branch had changed since the review.
+
+The branch had tightened what counts as a PR naming its ticket — a bare id
+(`ClickUp: 86bbm4zwd`) stopped counting, only a full `app.clickup.com/t/<id>`
+URL does (`scripts/builder/clickupTicketLink.js`). Meanwhile the WIP-cap work
+landed on `main` carrying `scripts/builder/wipCap.test.js`, whose drift test
+asserted the **old** rule: it fed a bare id to `prBodyCarriesTicket` and
+expected `true`.
+
+The two changes share no line and no file. `git merge` reported no conflict and
+`git merge-tree --write-tree` exited 0 with a clean tree. Both branches were
+green on their own. The contradiction was in the **rule**, not in the text, and
+it surfaced only when the catch-up merge put both in one tree: one failure out
+of 1,665, four days after a review had approved the branch.
+
+**This is the case with no conflict, which is why §6.2 and §6.7 do not reach
+it.** §6.2 says a conflict is information; §6.7 says merge `main` in before you
+rework so you receive that information early. Both assume git has something to
+report. Here it had nothing, so nothing prompted anyone to look. §6.7's closing
+line — *a clean merge is a claim about text, not about meaning* — was about
+whether the result still parses; this is the same claim failing one level up,
+where the result parses fine and two files now assert opposite rules.
+
+**Do this:**
+
+- **Treat a review verdict as certifying the code at that commit, not the
+  branch.** "Verified" has a shelf life. A branch approved days ago is
+  re-tested by its catch-up merge, not by the review that already happened —
+  and a branch waiting on a merge word is exactly the branch most likely to
+  have had the ground move under it.
+- **When a change tightens or loosens a rule other code asserts, go looking
+  for the tests of that behaviour before shipping.** `git grep` the function
+  name and a fixture string — not only the file you are editing. The test that
+  broke here was in a file the branch never touched, in a subsystem it had
+  nothing to do with.
+- **When a test disagrees with a new rule, do not simply flip the
+  expectation.** Assert the property the test was written to guard, then pin
+  the rule's current answer explicitly beside it, so the next drift fails
+  loudly instead of leaving the test vacuously passing. That is what
+  `80b5502b` did: the one-directional property (the cap may count more than
+  the gate lets through, never less) plus three pinned assertions naming the
+  ticket that set the rule.
+
+### 6.12 Match what he typed, not what the tool stored — and prove a filter against real input
+
+**The incident (2026-09-01, ticket 86bbt038u, PR #515, merged as `3d821bd7`).**
+Dane came back from a break and asked whether the loops were stuck. They were
+not: both lanes were building and reviewing normally. What was stuck was the
+auto-merge lane, which had latched itself off on 08-30 at 8:31pm and stayed off
+for two days without telling anybody.
+
+He tried to release it the sanctioned way — posting `resume auto-merging` on
+the party line — three times. All three were ignored. `switchCommand` matches
+`resume` as the WHOLE message, deliberately, because a resume that fires when
+he was only *talking* about resuming costs an unwanted merge. But ClickUp's
+message box turns a **pasted** phrase into a fenced code block and guesses a
+language, so what the switch actually received was:
+
+````
+```cpp
+resume auto-merging
+```
+````
+
+Three defects, and only the first was visible from the code:
+
+1. `normalizeCommand` never stripped the editor's formatting, so the backticks
+   were being read as part of what he said. The same hole sat on the merge
+   path — his `merge` worked only because he happened to type it by hand.
+2. `readBusSwitchSignals` carried the comment *"Only HIS words. An agent post
+   quoting the phrase is a machine talking to itself"* and did not enforce it:
+   it accepted any message whose `user_id` was Dane's, which every agent's
+   posts are, because they all post under his token. The ticket path next door
+   had been enforcing exactly that rule with the machine marker all along.
+3. **The filter added for (2) matched nothing at all.** ClickUp's chat api
+   escapes the brackets — `\[CC-starcaster bus-relay\] ...` — and every entry
+   in `LEGACY_MACHINE_PREFIXES` begins with `[`. Run over the live channel
+   before the fix, six of six recent messages classified as Dane's own words,
+   three of them posted by the relay itself.
+
+The third is the one that nearly shipped. Every unit test passed, because every
+fixture had been hand-written in the shape its author expected rather than
+captured from the surface the code actually reads.
+
+**Do this:**
+
+- **An input box you do not control is part of the wire format.** When a
+  command must match exactly, normalise away what the *editor* added before
+  comparing — fences, language tags, smart quotes, escaping. Strictness is
+  only honest when it is strict about things the operator can control;
+  otherwise "whole message" quietly means "whole message plus whatever the
+  client decided to wrap it in". Note the fix here did **not** loosen the
+  matcher: the deliberate `stop`/`resume` asymmetry survived untouched, because
+  the bug was never the strictness.
+- **Prove a filter against real captured input before believing it.** A filter
+  that matches nothing is silent in precisely the same way as a filter with
+  nothing to catch — this is §3.11's failure wearing a different hat. Fixtures
+  written by the same author as the filter share its blind spot by
+  construction. Fetch a page of the real messages, run the predicate over them,
+  and look at the classifications one by one.
+- **A stated intent is not a guard.** If a comment says what must not happen,
+  either the code enforces it or the comment is a false statement with a shelf
+  life — and the next reader will trust it, because it is written in the
+  imperative and sits directly above the code. When you find one, the fix is
+  the enforcement, not a better comment.
+- **Two doors into the same decision must be guarded the same way.** The ticket
+  path and the bus path both answered "is this Dane's word?", and only one of
+  them checked. The weaker door was the one nobody watched. Where a rule has
+  more than one entrance, read them together, or derive them from one shared
+  predicate so they cannot drift apart (§6.2's ancestor, and the same argument
+  as the single-reading rule for shared questions).
+- **A latch must keep saying it is latched.** The self-disable recorded
+  `"1 thing(s)"` — the count, not the sentences it was holding — and announced
+  nothing on the passes that followed. That is why two days passed. A brake
+  that cannot say why it engaged is one nobody can safely release; a brake that
+  says so once and then goes quiet is indistinguishable from a quiet week.
+
+### 6.13 A reported conflict is a claim to verify, not an instruction to start editing
+
+**The incident (2026-09-02, ticket 86bbt4dkr).** Dane asked for the conflicts
+on PRs #513 and #494 to be cleared. Both read `CONFLICTING / DIRTY` on GitHub.
+**Neither had a conflict.** Checked afterwards with `git merge-tree` in every
+combination that mattered — each branch tip against the `main` it was opened
+on, and against the `main` that existed by then — all four merge clean, zero
+conflict markers. `git merge origin/main` in each worktree confirmed it live:
+"Merge made by the 'ort' strategy", nothing to resolve.
+
+The cost this time was one wasted round trip. The failure mode it exposes is
+larger, because the natural response to the word "conflict" is to open the
+files and start reconciling them by hand — and here there was nothing to
+reconcile. Hand-editing files that never conflicted is one of the quieter ways
+a branch loses lines (§6.10 and the #467 doc revert are the same wound from a
+different angle), and it is unreviewable afterwards: the diff looks like work.
+
+There was a second half, and it is the part that actually misleads. After
+merging `main` in and pushing, GitHub **still** said `CONFLICTING` — because
+`main` had moved underneath the session (#516 merged at 05:26Z, mid-task). A
+second `CONFLICTING` after you have just resolved reads exactly like *your
+resolution failed*, which invites a second, more aggressive round of hand-
+editing. It was not a resolution failure at all. The question that answered it
+was ancestry:
+
+```
+git fetch origin
+git merge-base --is-ancestor origin/main <branch> && echo contains || echo behind
+```
+
+`behind`. The local merge had succeeded against a `main` that was already
+stale by the time it finished.
+
+**Do this:**
+
+- **Verify the conflict before resolving it.** `git merge-tree <base> <head>`
+  answers it in a second, writes nothing, and touches no working tree:
+
+  ```
+  git merge-tree origin/main <branch> | grep -c '^CONFLICT'
+  ```
+
+  Zero means the host is wrong, or stale, or answering about a base that has
+  since moved — and the fix is to merge and push, never to edit a file. A
+  forge's mergeability flag is a cached derived value about two moving
+  targets; git's own three-way merge is the authority, and it is local and
+  free. This is §1's rule about instruments: when the reading and the
+  mechanism disagree, doubt the reading first.
+
+- **Re-fetch immediately before you merge, and confirm by ancestry.** `main`
+  moves during long tasks — five PRs landed on it during this one. A merge
+  that succeeded is evidence about the base you had, not about the base that
+  exists now, so `git merge origin/main` printing success proves nothing
+  about whether the branch is current. `--is-ancestor` is the check that
+  cannot be fooled by a clean merge of the wrong thing. Same shape as
+  verifying a pull by comparing HEAD ids rather than reading git's chatter.
+
+- **A second identical failure after a fix is a prompt to re-diagnose, not to
+  push harder on the first theory.** The strongest signal available was that
+  the symptom did not move at all. An unchanged symptom usually means the
+  thing you changed was not the cause — and escalating the same remedy is how
+  a wrong theory gets expensive.
+
+- **"Clear the conflicts" does not authorise merging.** Clearing a conflict
+  and merging a pull request are two decisions, and only the first was asked
+  for; the merge came as a separate word from Dane afterwards. §6.6 says not
+  to spend an operator decision twice — the converse holds too: do not spend
+  one he has not made yet.
+
 ---
+
+### 6.14 A pull request opened without a claim is invisible to every other session
+
+On 2026-09-01 a hand-driven session was asked to finish ticket 86bbjve6q. It did
+what the rules say: read the ticket, found it **`Queued`, unassigned, with no loop
+note** — every signal a session can check said the work was free — and claimed it.
+One command later, while checking whether the Vercel variables still needed
+setting, it found them already there, **created eight minutes earlier**, a
+production deployment `Ready` seven minutes earlier, and **PR #517** open ten
+minutes earlier. Another session had been building the ticket the whole time and
+had never claimed it.
+
+This is the 2026-08-20 two-sessions-one-epic collision, reproduced exactly, five
+weeks after the rule written to prevent it. Note which guards did and did not
+fire. **Worktree separation did not help, and could not**: both threads were
+scrupulous about it, each in its own folder on its own branch. Separate folders
+stop two threads corrupting each other's *files*; they say nothing about two
+threads building the same *thing*.
+
+What surfaced it was the claim — made by the session that was **not** doing the
+work. That is the whole lesson, and it inverts the way the rule is usually read:
+
+- **The claim is not a lock you take for your own benefit. It is a signal you
+  emit for everyone else.** A session that skips it loses nothing itself and
+  removes the only evidence anyone else could have used.
+- **So the session that opens the pull request must be the session that claimed
+  the ticket.** Not "a claim happened at some point" — the actor that builds is
+  the actor that claims, because the claim is what makes that actor visible.
+- **Every signal reading "free" is not evidence of free.** Status, assignee and
+  loop note all agreed and all three were wrong together, because they are one
+  source: whatever last wrote to the ticket. Three consistent readings from one
+  unwritten source is one silence, not three confirmations.
+
+What actually caught it was an unrelated read of *external* state — Vercel — one
+step before a duplicate deploy. That is luck, not a control, and it should not be
+relied on again. Until something enforces this, the cheap habits are
+`npm run map` and the queue before starting an epic (THREAD-DISCIPLINE rule 4), and
+treating **any** ticket whose work you can see evidence of as claimed by somebody,
+whatever its status says.
+
+Related: the same night produced two more tickets whose status disagreed with
+reality — one `Queued` with an open PR, one `Queued` with a **merged** PR and its
+closing note already posted. `npm run reconcile` could report none of them, because
+`Queued` and `Rework` satisfy neither `isInFlight` nor `isTerminal` and so fall out
+of both of its scans (task 86bbt3wzk). Three instances in one evening of *the
+ticket does not know what happened to it* is a systems answer waiting to be built,
+not three slips.
+
+### 6.15 An abandoned branch's unique file is evidence of a rejected plan until proven otherwise
+
+Clearing out stale branches on 2026-09-01, one of eight held a file that existed
+nowhere else in the repository: `workers/youtube-media/fly.toml`, deploy
+configuration for the YouTube media worker, with a comment explaining that it
+existed so nobody would have to answer the `fly launch` wizard. The reasoning
+wrote itself — unique, unrecoverable if deleted, and the very next ticket in that
+epic was *deploy the worker*. The recommendation was nearly to ship it.
+
+It was configuration for **Fly.io, a rented datacenter host**, and `main`'s README
+for that same worker — rewritten fifty minutes earlier — opens like this:
+
+> **It runs on the Mac Mini.** Dane chose that over a rented server on 2026-08-24
+> (ticket `86bbjve6b`), and the reason is the address: YouTube blocks datacenter
+> IPs, which is the whole reason this work cannot live on Vercel in the first
+> place.
+
+The file was not orphaned treasure. It was a five-week-old artifact of **the plan
+that was rejected**, and shipping it would have put two contradictory deploy
+stories in one folder with the wrong one looking freshly committed — plus a second
+cost the README names, since a rented host needs a logged-in YouTube session stored
+on it.
+
+- **Uniqueness is not value.** "This exists nowhere else" and "this is wanted" are
+  different questions, and only the second one matters. A branch is usually
+  abandoned *because* its idea was dropped, so the unique files on it are the most
+  likely to encode the rejected approach, not the least.
+- **Find the decision before you value the artifact.** The answer took one look at
+  the README that the artifact's own subject already had in `main`. Check what the
+  current code says about the same subject before deciding an old file is a
+  survivor.
+- **Verify a branch by content, never by `git cherry`.** Squash-merging rewrites
+  commits, so patch-equivalence calls shipped work unshipped — six of the eight
+  branches looked like they held unshipped commits and every one was superseded.
+  Compare the files against `main` and count what is actually there: two of them
+  held test files with 8 and 6 cases where `main` had 16 and 19.
+
+The reason this is worth a rule rather than a shrug: the failure is asymmetric and
+silent in one direction. Deleting a wanted file announces itself the moment someone
+needs it, and the restore line is one command away. **Shipping an unwanted one
+announces nothing at all** — it lands looking current, and the next session reads
+it as the plan.
 
 ## 7. Operator-facing gotchas
 

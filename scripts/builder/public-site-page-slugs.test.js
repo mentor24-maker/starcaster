@@ -21,6 +21,7 @@ describe('public-site-page-slugs', () => {
     assert.equal(isPrivateSiteSlug('blog-create-post'), true);
     assert.equal(isPrivateSiteSlug('blog-post-edit'), true);
     assert.equal(isPrivateSiteSlug('blog-post-manager'), true);
+    assert.equal(isPrivateSiteSlug('event-manager'), true);
     assert.equal(isPrivateSiteSlug('blog-category-manager'), true);
     assert.equal(isPrivateSiteSlug('crm'), true);
   });

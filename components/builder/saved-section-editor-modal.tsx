@@ -13,6 +13,7 @@ import { appendRichTextImageToHtml } from "@/lib/rich-text-image";
 import { appApi } from "@/lib/adapters/starcaster-app";
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
 import { loadSavedSectionUsage, type BlockUsage } from "@/lib/shared-block-usage";
+import { applySavedSectionName } from "@/lib/saved-section-name";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import type { GalleryTarget, ModulePaletteGroup, ModulePaletteItem } from "./builder-types";
 import { buildBuilderThemePaletteColors } from "./builder-utils";
@@ -385,10 +386,15 @@ export function SavedSectionEditorModal({
     setIsSaving(true);
     setError(null);
     try {
+      // ONE name: stamp the row's name onto the content before the write, or
+      // the fan-out this triggers pushes the old title straight back over
+      // every following page and undoes the rename it just made. See
+      // @/lib/saved-section-name.
+      const name = localName || savedSectionName;
       const result = await appApi(`/api/builder/saved-sections/${savedSectionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: localName || savedSectionName, section: draft }),
+        body: JSON.stringify({ name, section: applySavedSectionName(draft, name) }),
       });
       // Saving a master rewrites this section on every page that follows it.
       // A fan-out that only half landed used to close the dialog looking clean;

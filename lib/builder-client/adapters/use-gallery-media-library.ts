@@ -9,7 +9,7 @@ import {
   type GalleryMediaFilters
 } from '../gallery-media-filters';
 import type { AdminMediaItem, AdminMediaKind } from '../admin-media-shared';
-import { getMediaKind } from '../admin-media-shared';
+import { ADMIN_MEDIA_MANAGER_SOURCE, getMediaKind } from '../admin-media-shared';
 import { sortGalleryMediaList, type GalleryMediaListSort } from '../gallery-media-list-sort';
 import { normalizeGalleryMediaAspect } from '../gallery-media-aspect';
 import { starcasterApi, unwrapEnvelope } from './starcaster-app';
@@ -33,6 +33,7 @@ type StarcasterAsset = {
   imageHeight?: number;
   renditions?: ImageRendition[];
   createdAt?: string;
+  source?: string;
 };
 
 function extensionFromLocation(location: string): string {
@@ -70,11 +71,12 @@ export function assetToAdminMediaItem(asset: StarcasterAsset): AdminMediaItem | 
     aspect: asset.aspect ? normalizeGalleryMediaAspect(asset.aspect) : undefined,
     imageWidth: Number(asset.imageWidth || 0) || undefined,
     imageHeight: Number(asset.imageHeight || 0) || undefined,
-    createdAt: asset.createdAt || undefined
+    createdAt: asset.createdAt || undefined,
+    source: String(asset.source ?? '').trim() || undefined
   };
 }
 
-function matchesFilters(item: AdminMediaItem, filters: GalleryMediaFilters, filename: string): boolean {
+export function matchesFilters(item: AdminMediaItem, filters: GalleryMediaFilters, filename: string): boolean {
   const checks: Array<{ negated: boolean; active: boolean; matches: boolean }> = [
     {
       negated: filters.not.filename,
@@ -110,6 +112,11 @@ function matchesFilters(item: AdminMediaItem, filters: GalleryMediaFilters, file
       negated: filters.not.aspect,
       active: filters.aspect.length > 0,
       matches: (item.aspect ?? '') === filters.aspect
+    },
+    {
+      negated: false,
+      active: filters.mediaManagerOnly,
+      matches: item.source === ADMIN_MEDIA_MANAGER_SOURCE
     }
   ];
 

@@ -25,25 +25,128 @@ cd "$REPO" || exit 1
 
 echo "=== bus-relay $(date '+%Y-%m-%d %H:%M:%S') — $REPO"
 
-branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
-if [ "$branch" != "main" ]; then
-  echo "update: skipped — checkout is on '$branch', not main. Running the code that is here."
-elif [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-  echo "update: skipped — uncommitted changes present; a background job does not touch them."
-elif ! git fetch --quiet origin main 2>/dev/null; then
-  echo "update: skipped — could not reach origin. Running the code that is here."
-elif ! git merge --ff-only origin/main 2>&1; then
-  echo "update: skipped — main has diverged from origin and only a person should sort that out."
-else
-  echo "update: checkout is at $(git rev-parse --short HEAD)"
-fi
+# THE UPDATE, AND THE ALARM WHEN IT CANNOT HAPPEN (task 86bbrf2vf).
+#
+# The five conditions above are unchanged and live in scripts/checkout_currency.mjs
+# now: only main, only clean, only fast-forward. That timidity was never the
+# bug. What was wrong is what happened AFTER a refusal — an `echo` into a log
+# nobody reads, carrying a reason that was sometimes flatly wrong.
+#
+# On 2026-09-01 this machine could not fast-forward for hours because three
+# untracked weekly-report files had become tracked paths in a later commit.
+# The branch it fell through to printed "main has diverged from origin", which
+# was false: main had not diverged. It was found by hand, and only because
+# somebody happened to watch a pull.
+#
+# So a blocked update now posts to the bus (once per 6h, cleared by the next
+# success) and NAMES the blocking files. `--fix` is deliberately NOT passed
+# here: displacing a file is reversible, but it is still a decision, and the
+# rule that a background job may not rewrite someone's work is the reason this
+# step is trusted at all. It reports; a person or an agent session repairs.
+#
+# Never allowed to fail the relay, like its neighbours below.
+npm run --silent checkout:current -- --check || true
 
 # Does the machine still agree with the repo about how often to wake?
 # Three answers, never two — and "could not tell" is one of them, said out
 # loud. The reasoning and the exit codes live in the script itself.
 REPO="$REPO" "$REPO/scripts/bus_relay_interval.sh" "interval: " || true
 
+# THE WATCHDOG, BEFORE THE OWNERSHIP CHECK — deliberately (NODES Slice E).
+#
+# A watchdog that runs on the same machine as the job it watches cannot notice
+# that machine being switched off, which is the case it exists for. This wake-up
+# happens on every machine that has the schedule installed, and on a machine
+# that does NOT own the relay it has until now done nothing at all: it wakes,
+# reads lib/nodeRoles.js, says whose job it is and exits. That idle wake is the
+# one vantage point in the system that survives the owning machine being dead,
+# so it is where the check belongs.
+#
+# Reads the shared roll call and posts to the bus only when a job has gone
+# quiet; it is silent otherwise. Never allowed to fail the relay.
+npm run --silent heartbeat -- --check || true
+
+# THE OTHER WATCHDOG, IN THE SAME PLACE AND FOR THE SAME REASON (task 86bbqrw3p).
+#
+# The heartbeat above asks "did a job stop firing?". This asks the question a
+# heartbeat structurally cannot: the job fired, and did anything come out?
+#
+# On 2026-08-31 the build loop fired every hour, exited 0 every time, and the
+# queue did not move — 52 queued, 1 in review, the oldest rework PR sitting
+# since Aug 25. Every gate was green and every green was honest. A loop that
+# runs and achieves nothing writes a full, cheerful log, which reads as health
+# and so stops anybody looking; finding it took a morning of reading logs.
+#
+# Before the ownership check for the same reason the heartbeat is: the machine
+# that does NOT own the relay is already awake here doing nothing, and that
+# idle wake is the vantage point that survives the owning machine being dead.
+#
+# Posts to the bus only on a STALLED verdict, once per 6h, cleared by the next
+# run that is not stalled. Silent otherwise, and never allowed to fail the
+# relay — it exits 1 on a stall, which is a finding, not this script's failure.
+npm run --silent throughput -- --check || true
+
+# THE THIRD WATCHDOG — the one stage that has no owner at all (task 86bbqp68c).
+#
+# The heartbeat asks "did a job stop firing?". The throughput check asks "the
+# job fired, and did anything come out?". Both are about the MACHINES. This one
+# is about `Ready to launch`: operator-held, so the loops never touch it, and
+# the merge step re-declines a red PR forever without ever escalating.
+#
+# 86bbkw1mn sat there for six days with Dane's merge approval already given,
+# blocked on one failing test out of 1,846. Nothing in the system was watching,
+# and the one line that would have fired said "Bottleneck: OPERATOR ... the
+# machine side is keeping up" — false in both halves, and it would have told
+# him he was the blocker when he was not.
+#
+# BEFORE THE OWNERSHIP CHECK, but NOT by inheriting its neighbours' reasoning.
+# Theirs is "a watchdog that runs only where its job runs cannot notice that
+# machine being switched off", and this check watches ClickUp and GitHub rather
+# than a machine, so that argument is not available to it. The reason it
+# belongs here anyway is row 2 of its own table: *approved, green, and still
+# not merged* is exactly what a dead merge step looks like, so a check that ran
+# only where the loops run could not see the case where the loops are not
+# running at all.
+#
+# Posts to the bus only when something is stuck, once per ticket per REASON per
+# 6h, cleared when the ticket stops being stuck — and it asks the pipeline
+# switch first, so it stays quiet while Dane has the deck. Never allowed to
+# fail the relay: it exits 1 on a finding and 2 on a cannot-tell, both of which
+# are readings, not this script's failure.
+npm run --silent stale-ready -- --check || true
+
 npm run --silent clickup -- bus-relay
 status=$?
 echo "=== exit $status"
+
+if [ "$status" -eq 0 ]; then
+  # A beat, and only on a real success. Recorded locally every time (free,
+  # offline); pushed to the shared roll call at most once a day, which is what
+  # keeps this from being channel noise x365 and is the resolution the
+  # requirement actually asks for — a day-long absence, not a ten-minute one.
+  #
+  # A pass on a machine that does not own the relay also exits 0, and that is
+  # correct: `--role bus-relay` records THIS machine as the beater, and the
+  # report only ever counts the OWNER's row, so a non-owner's beat can never
+  # make a dead relay look alive.
+  # It also clears this job's failure and silence alarms, so a fault that is
+  # fixed and returns is announced again straight away rather than being
+  # swallowed by the earlier one's six-hour suppression window. That clearing
+  # lives in the beat rather than here so only one file knows where the stamps
+  # are kept (NODES P1 — a path written twice is a path that drifts).
+  npm run --silent heartbeat -- --beat --role bus-relay || true
+else
+  # The failure alert, in the repo at last. It was built by hand on 2026-08-20
+  # inside an uncommitted wrapper on the MacBook Pro; when Slice B brought the
+  # schedule into git and ownership moved to the Mini, the alert did not come
+  # with it, and a failure on the machine that actually runs the relay reached
+  # nobody. Nothing announced that — which is what an uncommitted file does.
+  # Through npm, not node, so Doppler supplies the ClickUp token the same way
+  # every other write in this file gets it — and NOT redirected to /dev/null:
+  # this script's stdout IS the launchd log, so an alert that could not be sent
+  # has to leave its reason where the next reader will find it.
+  npm run --silent report:failure -- --job bus-relay --status "$status" \
+    --log "$HOME/Library/Logs/bus-relay-launchd.log" || true
+fi
+
 exit $status

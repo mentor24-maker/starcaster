@@ -55,6 +55,10 @@ const PROTECTED = new Set(['main', 'master']);
 const CI_TIMEOUT_MIN = 20;
 const { pickPullRequestCommit, REPIN_SUBJECT, NUDGE_SUBJECT } = require('./builder/pullRequestCommit');
 const { waitForChecks } = require('./builder/waitForChecks');
+const {
+  decideTrailWrite, bodyWithTicketLink, describeTrailResult, prUrl: prUrlFor,
+} = require('./builder/shipPrTrail');
+const { decidePullRequestTitle } = require('./builder/pullRequestTitle');
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -85,7 +89,39 @@ function run(cmd, argv, { cwd = root, allowFail = false } = {}) {
 
 function quiet(cmd, argv, { cwd = root } = {}) {
   const result = spawnSync(cmd, argv, { cwd, encoding: 'utf8' });
-  return { ok: result.status === 0, out: `${result.stdout || ''}${result.stderr || ''}`.trim() };
+  // `code` matters for the ClickUp trail step below, which treats exit 4 (the
+  // PR body carries no ticket link) differently from every other failure —
+  // they need opposite advice, and "not zero" cannot tell them apart.
+  return { ok: result.status === 0, code: result.status, out: `${result.stdout || ''}${result.stderr || ''}`.trim() };
+}
+
+/**
+ * Ask ClickUp for a ticket's name, for the pull-request title.
+ *
+ * NOT `quiet()`, and the difference is the whole point. `quiet` concatenates
+ * stdout and stderr, which is right for the trail step — it wants everything
+ * the command said, to print back. Here the stdout IS the title, and
+ * `clickup_direct.mjs` writes its rate-limit line to stderr, so `quiet` would
+ * glue "ClickUp's own limit: 91 of 100 left this minute" onto the end of every
+ * PR name.
+ *
+ * `--silent` because npm writes its run banner (`> starcaster@1.0.0 clickup`)
+ * to stdout, not stderr. `parseTaskName` strips that shape as well, so the
+ * title survives an npm that stops honouring the flag.
+ *
+ * Never throws and never calls fail(): a ClickUp outage falls back to the
+ * commit subject and says so, rather than stopping a green branch from
+ * shipping.
+ */
+function fetchTaskNameFromClickUp(id) {
+  const result = spawnSync('npm', ['run', '--silent', 'clickup', '--', 'task-name', '--task', String(id)], {
+    cwd: root, encoding: 'utf8',
+  });
+  return {
+    ok: result.status === 0,
+    stdout: result.stdout || '',
+    output: `${result.stderr || ''}`.trim(),
+  };
 }
 
 /** Block for ms without a busy loop — the CI poll is the only place this runs. */
@@ -126,6 +162,11 @@ function queryPullRequestChecks(prNumber) {
   return []; // unreachable; fail() exits.
 }
 
+// The PR URL spelling moved into `shipPrTrail` (task 86bbq7z1k, round 2). It
+// had a second caller there — the repair command a failed trail write prints —
+// which printed a bare `--pr 484` that `pr-opened` rejects. One spelling, one
+// place, so the command ship is told to run is the command ship itself runs.
+
 let step = 0;
 const say = (message) => console.log(message);
 const heading = (message) => console.log(`\n[${++step}] ${message}`);
@@ -138,6 +179,11 @@ function fail(message) {
 /* ------------------------------------------------------------- the checks */
 
 const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
+
+// The ticket this thread is FOR, stamped onto the branch by `npm run thread`
+// and read back by `npm run tidy`. `ship` uses it for the PR trail (step 5b);
+// a branch without one still ships, it just says so out loud.
+const taskId = git(['config', '--get', `branch.${branch}.clickup-task`], { allowFail: true }) || '';
 
 if (PROTECTED.has(branch)) {
   fail(
@@ -267,14 +313,77 @@ if (existing.ok && existing.out) prNumber = existing.out.trim();
 
 if (prNumber) {
   say(`    Using the open one: #${prNumber}`);
-} else if (DRY) {
-  say('    Would open a pull request from the commit message.');
 } else {
   const { subject, body } = pickPullRequestCommit(git);
-  const created = quiet('gh', ['pr', 'create', '--title', subject, '--body', body || subject]);
-  if (!created.ok) fail(`Could not open a pull request:\n\n${created.out}`);
-  prNumber = (created.out.match(/\/pull\/(\d+)/) || [])[1];
-  say(`    Opened #${prNumber || '?'} — ${created.out.split('\n').pop()}`);
+  // THE TITLE COMES FROM THE TICKET (task 86bbqwupk). `subject` is the newest
+  // hand-authored commit — still the right answer for an unstamped branch, and
+  // still the fallback when ClickUp cannot be reached, but it is a freehand
+  // sentence and the operator pairs the Closed list with the deploy list by
+  // name. The decision, and every reason it might not use the ticket, live in
+  // `builder/pullRequestTitle` where they can be tested without a token.
+  const titled = decidePullRequestTitle({
+    taskId,
+    fallbackSubject: subject,
+    fetchTaskName: fetchTaskNameFromClickUp,
+  });
+  say(titled.message.split('\n').map((line) => `    ${line}`).join('\n'));
+
+  // Both halves of the trail, written at the one moment ship owns the body.
+  // `pr-opened` refuses its half until the PR names the ticket, so without this
+  // line every ship on a stamped branch would ask for the trail and be told no.
+  const prBody = bodyWithTicketLink(body || subject, taskId);
+  if (DRY) {
+    say(`    Would open a pull request titled: "${titled.title}"`);
+  } else {
+    const created = quiet('gh', ['pr', 'create', '--title', titled.title, '--body', prBody]);
+    if (!created.ok) fail(`Could not open a pull request:\n\n${created.out}`);
+    prNumber = (created.out.match(/\/pull\/(\d+)/) || [])[1];
+    say(`    Opened #${prNumber || '?'} — ${created.out.split('\n').pop()}`);
+  }
+}
+
+/* -------------------------------------------- 5b. record the PR on the ticket */
+
+// WHY SHIP DOES THIS (task 86bbq7z1k). The review gate confirms that a ticket
+// RECORDS its PR, by reading the newest `PR opened:` line off it
+// (`loopTrail.prTrailLanded`). No line means CANNOT TELL, which is never a
+// pass. The loops have written that line since task 86bbjt18r; ship never did,
+// and ship is the hand lane and the fast-track lane's step 7 — so once branch
+// protection is ticked, every hand-shipped PR would be blocked on a comment
+// nobody remembered to post.
+//
+// It is a command rather than a line in the lane docs for the same reason the
+// loop traces became commands: a written step is followed most of the time, and
+// nothing notices the times it is not.
+//
+// This runs BEFORE the CI wait and the merge, so the trail exists even on a run
+// that later stops on a red check — and it never stops the ship itself. A
+// ClickUp outage is not a reason to abandon a green, mergeable PR; but it is
+// said LOUDLY, because a silently missing trail is the entire defect here.
+heading('Recording the pull request on its ClickUp ticket');
+const trail = decideTrailWrite({ taskId, prNumber });
+if (DRY && taskId && !prNumber) {
+  // A dry run has not opened the PR, so there is no number to decide about yet.
+  // Saying "no pull-request number could be read" here would report a problem
+  // that only exists because nothing was done.
+  say(`    Would open the pull request, then record it on ticket ${taskId}.`);
+} else if (!trail.write) {
+  say(trail.message.split('\n').map((line) => `    ${line}`).join('\n'));
+} else if (DRY) {
+  say(`    Would record PR #${trail.prNumber} on ticket ${trail.taskId}.`);
+} else {
+  // --if-missing because ship is meant to be re-run whenever main moves under
+  // it, and a plain pr-opened would leave one identical line per catch-up
+  // round. It asks the merge step's own reader whether this PR is already
+  // findable here — a line written by a loop, or by hand, counts the same.
+  const recorded = quiet('npm', [
+    'run', 'clickup', '--', 'pr-opened',
+    '--task', trail.taskId, '--pr', prUrlFor(trail.prNumber), '--if-missing',
+  ]);
+  const told = describeTrailResult({
+    taskId: trail.taskId, prNumber: trail.prNumber, code: recorded.code, output: recorded.out,
+  });
+  say(told.message.split('\n').map((line) => `    ${line}`).join('\n'));
 }
 
 if (DRY) {
@@ -294,7 +403,7 @@ if (DRY) {
 // call absence a failure. Decision logic lives in scripts/builder/waitForChecks.
 heading(`Waiting for the checks (up to ${CI_TIMEOUT_MIN} minutes)`);
 
-const prUrl = `https://github.com/mentor24-maker/starcaster/pull/${prNumber}`;
+const prUrl = prUrlFor(prNumber);
 let lastReport = '';
 
 /**
