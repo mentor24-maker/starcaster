@@ -1,6 +1,12 @@
 'use strict';
 
 const loopStatuses = require('./loopStatuses.js');
+// The staleness rule is IMPORTED, never re-derived. `pipelinePause` already
+// owns "is this ticket in flight or stranded" for the pause drain and the
+// sweep, and two definitions of how old is too old would drift the first time
+// one was tuned — which is the failure this file already carries two comments
+// about (`ticketIdFromPrBody`, and the 2026-08-31 two-call-sites incident).
+const pipelinePause = require('./pipelinePause.js');
 
 /**
  * Should loop-build claim another ticket, or is the merge side already full?
@@ -38,6 +44,29 @@ const loopStatuses = require('./loopStatuses.js');
 const DEFAULT_WIP_CAP = 5;
 
 const CAP_ENV = 'CLAUDE_LOOP_WIP_CAP';
+
+/**
+ * How old a "Building" ticket must be before the cap stops counting it,
+ * overridable for experiments and — the reason it exists — so the discount can
+ * be WATCHED WORKING on real data. Without it the only way to see this fire is
+ * to wait 90 minutes for a pass to die, which is how a rule ships having never
+ * been observed. The sibling flag on `pipeline -- sweep` caught two real bugs
+ * that way on the day this was written.
+ *
+ * Unset means the shared 90 minutes from `pipelinePause`, which stays the ONE
+ * definition; this only moves the number for a run.
+ */
+const STRANDED_ENV = 'CLAUDE_LOOP_STRANDED_MINUTES';
+
+function resolveStrandedAfterMs(env = process.env) {
+  const raw = String(env?.[STRANDED_ENV] ?? '').trim();
+  if (!raw) return pipelinePause.STRANDED_AFTER_MS;
+  const n = Number(raw);
+  // A negative or non-numeric override is IGNORED, never obeyed: a typo here
+  // would discount every in-flight build at once and uncap the loop.
+  if (!Number.isFinite(n) || n < 0) return pipelinePause.STRANDED_AFTER_MS;
+  return n * 60000;
+}
 
 /**
  * The cap in force. A malformed or negative override is ignored rather than
@@ -91,6 +120,35 @@ function resolveCap(env = process.env) {
 const IN_FLIGHT_STATUSES = Object.freeze([
   'building', 'in review', 'ready to launch', 'needs your input',
 ]);
+
+/**
+ * The one status a STRANDED ticket may be discounted from — and why it is only
+ * this one (2026-09-02, task 86bbtmbum).
+ *
+ * On the night of 2026-09-01 the cap sat full for five consecutive passes with
+ * 48 tickets queued. Two of its five slots were builds whose pass had died:
+ * `86bbjt1b0` (#447) and `86bbjt1b4` (#449), both with finished, green pull
+ * requests, both sitting in "Building" with nothing working on them. The loops
+ * claim only from `Rework` and `Queued`, so nothing could ever pick them up
+ * again — they were not a queue, they were a deadlock, and they consumed 40%
+ * of the pipeline's capacity until a person moved them by hand.
+ *
+ * THE OTHER THREE IN-FLIGHT STATUSES KEEP COUNTING HOWEVER OLD THEY GET, and
+ * that is deliberate rather than an omission:
+ *
+ *   ready to launch   operator-held, and MOVING — Dane or Lane A will merge
+ *   needs your input  it. The file's existing reasoning stands: if his inbox
+ *                     is full the pipeline genuinely is full, and a cap that
+ *                     hid that would lie in the more dangerous direction.
+ *   in review         a resting status as well as a working one. A ticket
+ *                     waits there for a reviewer; its PR is real and still
+ *                     needs catching up every time something lands.
+ *
+ * Only a stranded `building` is going nowhere BY CONSTRUCTION. That is the
+ * difference between work that is slow and work that is dead, and it is the
+ * whole of what this discount is allowed to act on.
+ */
+const STRANDABLE_STATUS = 'building';
 
 /** Statuses that mean the work is finished and the PR is a leftover. */
 const TERMINAL_STATUSES = Object.freeze(['live', 'complete', 'closed', 'done']);
@@ -186,21 +244,80 @@ function ticketIdFromPrBody(body, knownIds) {
  * round 1 rejected for `live`, so it gets the same treatment — say the thing
  * you actually know, including the status you did not recognise.
  */
-function classifyPrs({ prs, ticketStatusById } = {}) {
+/**
+ * What a caller told us about one ticket, in a single shape.
+ *
+ * The map may carry either a plain status string — which is what every caller
+ * passed before 2026-09-02, and what `loop_throughput.mjs` still passes — or a
+ * record `{ status, dateUpdated, loopNote }`. ONE map either way, deliberately:
+ * a parallel "and here is the freshness" map would be a second thing to build
+ * at each call site, and this file already carries the scar of two call sites
+ * building slightly different inputs and reaching opposite answers
+ * (2026-08-31, `probeCap`).
+ *
+ * `dateUpdated` absent means freshness is UNKNOWN, not fresh and not stale.
+ * The caller then gets no discount at all, which keeps the cap where it has
+ * always been — counting it. Failing toward the cap costs idle time; failing
+ * away from it costs the churn the cap exists to prevent, and this file is
+ * explicit that open is the dangerous direction.
+ */
+function normalizeTicketInfo(value) {
+  if (value && typeof value === 'object') {
+    return {
+      status: String(value.status ?? '').trim(),
+      dateUpdated: Number(value.dateUpdated),
+      loopNote: value.loopNote == null ? '' : String(value.loopNote),
+    };
+  }
+  return { status: String(value ?? '').trim(), dateUpdated: NaN, loopNote: '' };
+}
+
+/**
+ * Is this ticket a build whose pass died?
+ *
+ * Answered by `pipelinePause.classifyTicket`, not by a rule written here — the
+ * sweep that MOVES stranded tickets and the cap that DISCOUNTS them have to
+ * agree about which ones they are, or the cap forgives a ticket the sweep will
+ * not rescue and the deadlock simply moves.
+ *
+ * Returns false whenever freshness is unknown, so "we could not tell" never
+ * reads as "not in flight".
+ */
+function isStrandedBuild(info, nowMs, strandedAfterMs) {
+  if (String(info.status || '').toLowerCase() !== STRANDABLE_STATUS) return false;
+  if (!Number.isFinite(info.dateUpdated)) return false;
+  const row = pipelinePause.classifyTicket(
+    { id: 'x', status: { status: info.status }, date_updated: info.dateUpdated, loopNote: info.loopNote },
+    { nowMs, strandedAfterMs },
+  );
+  return Boolean(row && row.stranded);
+}
+
+function classifyPrs({ prs, ticketStatusById, nowMs = Date.now(), strandedAfterMs = resolveStrandedAfterMs() } = {}) {
   const source = ticketStatusById && typeof ticketStatusById === 'object' ? ticketStatusById : {};
   const byId = Object.create(null);
   for (const [k, v] of Object.entries(source)) byId[String(k).trim().toLowerCase()] = v;
   const knownIds = Object.keys(byId);
 
-  const groups = { inFlight: [], rework: [], queued: [], live: [], unknown: [], unrecognised: [] };
+  const groups = { inFlight: [], strandedBuilds: [], rework: [], queued: [], live: [], unknown: [], unrecognised: [] };
+  // Whether the discount could be assessed AT ALL. Told apart from "assessed,
+  // found none" everywhere below: a clause that vanishes when nobody looked is
+  // how "could not tell" comes to read as an all-clear (DOCTRINE 3.11).
+  let freshnessKnown = false;
   for (const pr of Array.isArray(prs) ? prs : []) {
     if (!pr || typeof pr !== 'object') continue;
     if (String(pr.state || 'OPEN').toUpperCase() !== 'OPEN') continue;
     const id = ticketIdFromPrBody(pr.body, knownIds);
+    const info = normalizeTicketInfo(id ? byId[id] : '');
+    if (Number.isFinite(info.dateUpdated)) freshnessKnown = true;
     // Kept in the casing ClickUp gave it, so the message can quote it back.
-    const raw = id ? String(byId[id] ?? '').trim() : '';
+    const raw = info.status;
     const status = raw.toLowerCase();
     if (!id || !status) groups.unknown.push(pr.number);
+    // A build whose pass died is not work in progress. It is the only
+    // in-flight status that can be going nowhere by construction, and two of
+    // them held 40% of the cap for a whole night (2026-09-02).
+    else if (isStrandedBuild(info, nowMs, strandedAfterMs)) groups.strandedBuilds.push(pr.number);
     else if (IN_FLIGHT_STATUSES.includes(status)) groups.inFlight.push(pr.number);
     // The REAL status, not "queued means rework". Until task 86bbr1u9v there
     // was no other way to tell, and that guess is the bug this ticket closes.
@@ -212,6 +329,7 @@ function classifyPrs({ prs, ticketStatusById } = {}) {
     // is what this ticket exists to stop.
     else groups.unrecognised.push({ number: pr.number, status: raw });
   }
+  groups.freshnessKnown = freshnessKnown;
   return groups;
 }
 
@@ -237,7 +355,7 @@ function countOpenPrs(prs) {
  * @returns {{ claim: boolean, code: 0|3, openCount: number, cap: number, message: string }}
  *   `code` mirrors the node-role guard: 0 = go ahead, 3 = a normal decline.
  */
-function wipDecision({ prs, cap, ticketStatusById } = {}) {
+function wipDecision({ prs, cap, ticketStatusById, nowMs = Date.now(), strandedAfterMs = resolveStrandedAfterMs() } = {}) {
   const limit = Number.isInteger(cap) ? cap : DEFAULT_WIP_CAP;
 
   // No ticket statuses supplied — ClickUp could not be read, or an older
@@ -258,16 +376,23 @@ function wipDecision({ prs, cap, ticketStatusById } = {}) {
     };
   }
 
-  const groups = classifyPrs({ prs, ticketStatusById });
+  const groups = classifyPrs({ prs, ticketStatusById, nowMs, strandedAfterMs });
   const inFlight = groups.inFlight.length;
   const notCounted = groups.rework.length + groups.queued.length + groups.live.length
-    + groups.unknown.length + groups.unrecognised.length;
+    + groups.unknown.length + groups.unrecognised.length + groups.strandedBuilds.length;
 
   // The split, always — a bare total is what hid the 2026-08-25 deadlock.
   const parts = [];
   // Rework leads the list, and is named as rework rather than as "queued",
   // because it is the number this ticket exists to stop hiding: half-finished
   // branches with review notes already on them.
+  // Stranded builds lead the list because they are the only bucket that names
+  // a FAULT rather than a state: every other line here is work waiting its
+  // turn, while this one is work nothing will ever pick up.
+  if (groups.strandedBuilds.length) {
+    parts.push(`${groups.strandedBuilds.length} whose build pass died and left the ticket in "Building" (#`
+      + groups.strandedBuilds.join(', #') + ') — `npm run pipeline -- sweep` puts them back in the line');
+  }
   if (groups.rework.length) parts.push(`${groups.rework.length} in rework, waiting to be re-claimed (#${groups.rework.join(', #')})`);
   if (groups.queued.length) parts.push(`${groups.queued.length} queued with a PR already open (#${groups.queued.join(', #')})`);
   if (groups.live.length) parts.push(`${groups.live.length} whose ticket is already live (#${groups.live.join(', #')})`);
@@ -290,12 +415,19 @@ function wipDecision({ prs, cap, ticketStatusById } = {}) {
   // gets skimmed. Zero is stated too: a clause that vanishes when it is zero
   // tells the reader nothing about whether it was checked at all.
   const reworkPhrase = `${groups.rework.length} in rework`;
+  // THE HEADLINE SAYS WHAT WAS DISCOUNTED, and says separately when it could
+  // not tell. A cap that quietly forgives two PRs reads exactly like a cap
+  // that was never full — and "0 stranded" and "stranded not checked" are
+  // different news, only one of which is an all-clear.
+  const strandedPhrase = groups.freshnessKnown
+    ? `${groups.strandedBuilds.length} stranded`
+    : 'stranded builds NOT checked';
 
   if (inFlight >= limit) {
     return {
-      claim: false, code: 3, openCount: countOpenPrs(prs), inFlight, rework: groups.rework.length, cap: limit, groups,
+      claim: false, code: 3, openCount: countOpenPrs(prs), inFlight, rework: groups.rework.length, stranded: groups.strandedBuilds.length, cap: limit, groups,
       message:
-        `WIP cap reached — ${inFlight} in flight, cap ${limit} (${reworkPhrase}, which never counts). ` +
+        `WIP cap reached — ${inFlight} in flight, cap ${limit} (${strandedPhrase}, ${reworkPhrase}, which never count). ` +
         `Not claiming; the merge side is the bottleneck.${tail}\n` +
         'This is a normal outcome, not a failure. Work queued beyond the merge rate does not ship sooner —\n' +
         `it goes stale, and every merge re-dates every open branch. Raise it with ${CAP_ENV} for an experiment.`,
@@ -303,8 +435,8 @@ function wipDecision({ prs, cap, ticketStatusById } = {}) {
   }
 
   return {
-    claim: true, code: 0, openCount: countOpenPrs(prs), inFlight, rework: groups.rework.length, cap: limit, groups,
-    message: `${inFlight} in flight, cap ${limit} (${reworkPhrase}, which never counts) — room to claim another.${tail}`,
+    claim: true, code: 0, openCount: countOpenPrs(prs), inFlight, rework: groups.rework.length, stranded: groups.strandedBuilds.length, cap: limit, groups,
+    message: `${inFlight} in flight, cap ${limit} (${strandedPhrase}, ${reworkPhrase}, which never count) — room to claim another.${tail}`,
   };
 }
 
@@ -422,6 +554,11 @@ function undeterminedDecision(why) {
 }
 
 module.exports = {
+  STRANDABLE_STATUS,
+  STRANDED_ENV,
+  resolveStrandedAfterMs,
+  normalizeTicketInfo,
+  isStrandedBuild,
   DEFAULT_WIP_CAP,
   CAP_ENV,
   IN_FLIGHT_STATUSES,

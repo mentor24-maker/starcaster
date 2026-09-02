@@ -642,6 +642,36 @@ rendered at all.
 
 ---
 
+### 3.17 `check:panels` does not fail on a schema-generated module panel
+
+2026-09-01, found while building the Media Manager module (86bbrqnr0). Its
+settings panel was seeded into the fixture and the sweep rose from 630 panels
+to 639 — so the check is measuring *something* of that module. Then three
+deliberate W0 violations were introduced inside that panel, one at a time, and
+**every run reported OK**:
+
+| The break | Why it was not seen |
+|---|---|
+| A hand-rolled field carrying its own `width` | the check reads `.builder-module-field-strip` only as a **direct child** of `.builder-module-chrome`; this one was nested deeper |
+| A label long enough to blow the column budget | arguably not a violation at all — W0's column is *supposed* to grow to its longest label |
+| A `control: "custom"` field with a fixed 420px width, **inside a measured schema column** | still green |
+
+The panel count rising is not the same claim as the panel being checked, and
+the two were easy to conflate.
+
+This is `docs/UI_RULES.md` W0's own caveat made concrete — *a control the check
+cannot see is a control the rule does not cover* — and it matters more here
+than the caveat suggests, because a schema-generated panel holds W0 **by
+construction**. The generator owns the widths, so there is little for the check
+to catch and correspondingly little evidence in its green.
+
+**What to do with that.** Do not report `check:panels` as evidence for a
+schema-generated panel without having made it fail first. Say plainly that it
+passed and that the pass is not evidence, and then look at the panel. On the
+Media Manager nobody has yet — recorded in `docs/MEDIA_MANAGER.md` §7 rather
+than quietly left as a green tick.
+
+
 ## 4. Secrets
 
 ### 4.1 The rule is about EXPOSURE, not custody
@@ -1263,6 +1293,41 @@ probing?", and if it can, "what does the cached wrong answer authorise?"
 
 ---
 
+### 5.20 A screen that paints is not a screen that works
+
+2026-09-01, PR #506 → fixed by #509. The Media Manager module shipped with
+rename sending `PUT` to `/api/assets/:id`. `routes/assets.js` handles **PATCH**
+and **DELETE** for that path and nothing else, so the request fell through
+unmatched. Renaming a file did nothing at all. Delete, on the same card, was
+fine.
+
+It shipped past every gate, because the closing check verified the grid
+**rendered**: the module drew its chrome, fetched real assets, and showed them
+with names, sizes and dates. Not one write action was exercised.
+
+The optimistic local state is what makes this class of defect so quiet. The
+break test reproduces it exactly:
+
+```
+PASS  the rename is reflected immediately
+FAIL  the rename SURVIVES A RELOAD
+```
+
+The name changes on screen the instant you press Enter, because the component
+set its own state. Everything looks correct until the page is reloaded, and
+nobody reloads while admiring their own feature.
+
+**So: a check on anything that writes must reload and read it back.** Not
+re-render from memory — reload, refetch, and assert the value came back from
+the database. The same duty applies to the closing "where I looked at it"
+sentence: naming the screen you opened is not enough if you only watched it
+paint.
+
+The sibling failure lives one section up (§3.10): a write that normalizes to
+nothing looks exactly like a success. This is its front end — a write that
+never happened looks exactly like one that did.
+
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
@@ -1623,6 +1688,135 @@ human when it had not; here, an agent implies a human is needed when none is.
 
 Canon home for this rule is the vault `doctrine/OPERATIONS.md`; this section is
 the repo-side copy, which is the one actually loaded into every session.
+
+**The tripwire.** Written down three times, broken three times — twice by
+sessions that had read it that day. So it is no longer only written down:
+`scripts/hooks/check_operator_handoff.cjs` is a **Stop hook** that reads the
+reply about to be delivered and refuses to end the turn when it hands over a
+fenced `doppler run`, `ssh`, `npm run`, `node scripts/`, or the
+`cd ~/WebApps/starcaster && …` copy-paste preamble. Same family as
+`check_conventions`, `check:syntax` and the terminology guard: a rule that
+depends on being remembered is not a control, it is a hope.
+
+Four things it deliberately does **not** do, each for a reason:
+
+- **An inline mention is not a hand-off.** `` `npm run doctor` `` in backticks
+  is a reference — naming a command while explaining something. The rule was
+  never against mentioning one. Only a fenced block, ready to paste, counts.
+  Inside a fence, though, **every line is judged, not just the first**. The
+  first draft read only the first non-blank line, which let the exact shape
+  `CLAUDE.md` itself prints walk straight through — `PORT=3058 node server.js`
+  on line one (not a hand-off), the real `npm run check:render` on line two,
+  never looked at. Widening it risks false positives on pasted *output*, so it
+  was measured rather than argued — and **the measurement has to name the
+  population it read**, which the first version of this paragraph did not
+  (§3.11). Re-measured 2026-09-01 over all 1,615 transcripts in this project,
+  11,325 assistant messages: every-line scanning flagged 151, first-line
+  scanning flagged the same 151, zero newly refused, while a control on three
+  synthetic two-line blocks disagreed 3/3, so the two rules can still tell each
+  other apart.
+  **The reach of that reading is the caveat.** All 151 flagged messages are in
+  `sdk-cli` sessions — which this hook deliberately exempts. In `cli`, the only
+  class it can fire in, **zero of 884** messages flag under either rule. So
+  "zero newly refused" was measured almost entirely where the hook never looks.
+  Both numbers are honest; neither is a licence. The every-line rule is barely
+  exercised by the historical record, so it rests on the synthetic control, not
+  on a population reading, and the next reader should know that before treating
+  it as calibrated.
+  The one output shape that did read as a hand-off was npm's own `>` log
+  prefix, so `>` is no longer stripped as a shell prompt (`$` and `%` are).
+- **`npm run pipeline -- resume` is exempt.** An agent may pause the line;
+  only Dane hands the deck back (§6.9's "a decision that is genuinely his",
+  and the pipeline switch's own rule). Handing him that one command is right.
+- **Headless runs are exempt — but `cli` does not mean anybody is reading.**
+  A hand-off is only a hand-off if somebody is being handed something. The
+  loops run with `entrypoint: "sdk-cli"` and report to a ticket; only `cli`
+  can trip the wire, and the two are genuinely distinguishable rather than
+  scoped away by assumption.
+  What `cli` actually means is narrower than its name. Measured across all
+  1,615 transcripts in this project on 2026-09-01: there is exactly **one**
+  `cli` session in the entire history, and it is a `/loop 30m loop-build` Dane
+  typed at his own terminal on 23 August that then ran **unattended until 30
+  August** — seven days, 10,083 records. So the single session class this hook
+  can fire in is, on the evidence, an unattended loop lane: precisely the case
+  the fail-open design below is written against. That is survivable rather than
+  fine, and it is survivable only because of the two brakes. Do not remove
+  either one on the theory that a human is there to notice.
+- **It fails OPEN, and it has two independent brakes.** This is the opposite
+  of the pipeline switch's fail-safe (§6.8) and the asymmetry really is
+  reversed: a wrong refusal wedges a turn and can strand an unattended pass in
+  `Building`, while a miss just leaves the written rule doing the work it was
+  already doing. If the transcript cannot be read or the entrypoint cannot be
+  determined, it steps aside.
+
+  The brakes are `stop_hook_active` — the harness's own infinite-loop flag,
+  honoured by exiting 0 the moment it is set — and a per-session counter that
+  stands the hook down after three refusals. **Two, on purpose, because each
+  one alone has already failed.** The counter is the older of the pair and it
+  has now been inoperative twice, both times silently:
+
+  1. It wrote to `<toplevel>/.git/`, which is a *directory* only in the main
+     checkout. In a worktree `.git` is a one-line file, so the write failed
+     with `ENOTDIR` inside a `try/catch` and the counter never advanced. Every
+     thread here runs in a worktree. Fixed with
+     `git rev-parse --absolute-git-dir`.
+  2. The counter then sat inside `if (dir)`, so when `git rev-parse` could not
+     run at all — cwd outside any repo, or `git` simply not on PATH, which is
+     the normal starting state of an agent shell on the Mac Mini — the whole
+     block was skipped and the hook refused **every** turn with no limit.
+     Measured over five turns before the fix: `2,2,2,2,2` in both conditions,
+     against `2,2,2,0,0` inside a repo. The state now falls back to the temp
+     directory: a worse place to keep it, and infinitely better than nowhere.
+
+  Both are §3.11's shape — a safety valve that silently does not run — and
+  both were found by asking what happens when the *measurement* fails, not the
+  feature. `require_sql_handoff.cjs` still writes to the old path and has
+  gap (1).
+
+  **The two Stop hooks interact, and the interaction costs a report.**
+  `require_sql_handoff.cjs` is the other Stop hook in the same settings array
+  and does **not** honour `stop_hook_active`. When it blocks first, the next
+  Stop carries the flag, this hook exits 0, and a reply with *both* problems
+  only ever gets the SQL complaint. That is a direct consequence of the brake
+  above rather than a regression, and it is the safe direction — a miss, not a
+  wedge — so it is written down here rather than fixed. It is recorded in
+  `check_operator_handoff.cjs` at the exit itself, so the next reader does not
+  have to rediscover it from behaviour.
+
+**The sanctioned way through is to name the exception**, on its own line,
+outside any code fence — `Exception: secret value | billing | browser login |
+decision`. That is the whole contract, and it is the same one §6.9 states in
+prose: not *may I hand this over*, but *say out loud which of the four this
+is*. An `Exception:` line inside a fence does not count, because an example is
+not a claim. Markdown around it is tolerated — emphasis, a leading `-`,
+`*`, `+` or `>` bullet, and a numbered one (`1.`, `1)`) — because being refused
+while correctly naming an exception is the surest way to send an agent to the
+escape hatch for no reason. `SKIP_OPERATOR_HANDOFF=1` is that deliberate
+one-off override, and per `CLAUDE.md` using it means saying so and why.
+
+**And the keyword is matched anywhere after the colon, not only at its start.**
+The first version required the bare phrase to lead, so `Exception: decision`
+passed and `Exception: a decision that is genuinely his` did not — and that
+second one is `CLAUDE.md`'s **own wording**, the exact words an agent copies
+out of the document the hook exists to enforce. Ten of sixteen plausible,
+correct phrasings were refused that way, `Exception: a real secret VALUE`
+among them. *The document and its tripwire disagreed about what the four
+exceptions are called.*
+
+That is the harmful direction, not a miss, and it is a general lesson about
+guards that accept a written claim: **the wording a guard accepts has to be
+the wording the rule itself is written in.** A guard calibrated against a
+tidy canonical form rejects the people following the rule most literally, and
+every wrongful refusal is an argument for the escape hatch. `Exception: I was
+busy` is still refused — the four keywords are still the whole list; they just
+no longer have to be the first thing on the line.
+
+Tests are `scripts/hooks/check_operator_handoff.test.js`, run by
+`npm run test:hooks` in CI alongside the other three hook suites. They drive
+the real hook process with real JSON and assert the actual exit code, and the
+one that matters most removes the `Exception:` line from an otherwise
+identical reply and watches the same message flip from pass to refusal — a
+guard that only proves it stays quiet has proved nothing.
 
 ### 6.10 A behaviour proven in an uncommitted file does not move when its job moves
 

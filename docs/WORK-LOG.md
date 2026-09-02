@@ -31,6 +31,170 @@ nothing — measuring them showed they already obeyed the rules — so they are
 unchanged to the pixel. The shared row also appears on the two Proximity
 Effect panels, which get the same improvement for free.
 
+## 2026-09-01 — Handing you a command to paste is now something the machine refuses to do (#499)
+
+There is a rule here that CC runs the operational commands itself and tells you
+what happened, rather than handing you something to copy and paste. Pasting a
+command at you is really a claim that CC could not run it, so a job that is
+actually finished ends up looking like it is waiting on you. You have raised
+this three times — 7 August, 23 August and 30 August — and it was broken all
+three times, twice by sessions that had read the rule that same day.
+
+So it is no longer only written down. There is now a small program that runs at
+the moment a reply is about to reach you, reads it, and refuses to let the turn
+end if the reply hands over a ready-to-paste command. The agent then has two
+choices: run the thing and report what it said, or write one line naming which
+of the four exceptions applies — a real secret value, a billing screen, a
+browser login, or a decision that is genuinely yours.
+
+It is deliberately narrow. Mentioning a command mid-sentence is fine; that is
+explaining, not handing over. The one command that IS yours to run —
+`pipeline resume`, the switch that hands the deck back after a pause — is
+exempt. And it only watches sessions you are actually sitting in front of, not
+the loops that run overnight and report to a ticket, because there is nobody
+there to hand anything to. It also steps aside after three refusals in a
+session: a guard that can jam a conversation shut is worse than the thing it
+prevents.
+
+Building it turned up a second bug worth mentioning. That "step aside after
+three" counter was going to be stored in a place that only exists in the main
+copy of the code — in a worktree, which is where essentially all work here
+happens, the write would have failed silently and the counter would never have
+counted. The safety valve would have been dead in every folder that uses it.
+Fixed, with a test that builds a real worktree and fails if it stops working.
+The older SQL hand-off hook has the same gap and still needs its own fix.
+
+Review then caught the same counter failing a second way, and this one was
+worse: the "step aside after three" limit only existed when the guard could
+work out which folder it was in. If it could not — because the session was
+started outside the code folder, or because the `git` command simply was not
+available, which is the normal starting state for an agent on the Mac Mini —
+the limit was skipped entirely and the guard would have refused **every** turn,
+forever, with no way out. A safety brake that disappears in the one situation
+it exists for. It now keeps its count in a scratch folder when it cannot find a
+better place, and it also listens to the signal Claude Code itself sends after
+a guard has already blocked once, so there are two independent brakes rather
+than one. Both were measured over five turns in a row before and after, because
+"it stops after three" and "it never stops" look identical if you only try it
+twice.
+
+Three smaller things came out of the same review. Naming an exception on a line
+that started with a dash — an ordinary way to write a bullet point — was being
+rejected, which would have pushed agents toward the override switch for no
+reason. A command hidden behind a setting, like `PORT=3058 npm run something`,
+was sailing through because the guard only looked at the very start of the
+line. And it only ever read the first line of a pasted block, so the exact
+two-line shape the project's own handbook prints slipped past untouched. All
+three are closed, and the last one was checked against 11,803 real replies from
+this project's history first to make sure the wider net does not start crying
+wolf: it flagged the same 152 and not one more.
+
+A second review round found the escape hatch itself was too fussy, and this is
+the most interesting failure of the lot. To hand something over legitimately,
+the reply writes a line naming which of the four exceptions applies. The guard
+was only accepting that line when the exact phrase came first — `Exception:
+decision` passed, but `Exception: a decision that is genuinely his` did not.
+Look at that second one: it is the handbook's **own wording**, the exact
+sentence an agent would copy out of the very document this guard exists to
+enforce. Ten of sixteen normal, correct phrasings were being turned away,
+including "a real secret VALUE". The document and its own tripwire disagreed
+about what the four exceptions are called, and the cost of that is not a missed
+catch — it is an agent being refused while doing the right thing, which is the
+fastest possible route to somebody switching the guard off. It now looks for
+the keyword anywhere in the line, so ordinary English works, while a reason
+that is not one of the four ("Exception: I was busy") is still refused.
+
+Two claims in the write-up were also corrected, because they were reading
+better than the evidence supported. The check on 11,803 replies mentioned above
+did not say **which** replies it read: re-measured across all 1,615 transcripts,
+every single flagged reply came from the overnight loop sessions, which this
+guard deliberately ignores. In the sessions it can actually fire in, nothing
+flagged at all — so that reassuring number was taken almost entirely from
+somewhere the guard never looks, and now says so. And "sessions you are sitting
+in front of" turned out to be wishful: there is exactly one such session in this
+project's whole history, and it is a loop you started at your terminal on 23
+August that then ran by itself for seven days. The guard's own notes now say
+plainly that nobody may be reading, which is precisely why the two brakes that
+stop it jamming are not optional.
+## 2026-09-02 — A refusal that named the wrong reason, on a pull request whose real problem was a conflict (#525)
+
+On 1 September Dane told the system to merge a piece of finished work, and it
+came back and said no. The reason it gave was that "a required review or check
+is missing". That was not true, and it was not true in two separate ways: every
+check on that work was green, and the actual problem was a **merge conflict** —
+the branch and the live site's code had both changed the same lines, which is a
+thing only a person can untangle.
+
+A wrong reason is worse than no reason at all, because it looks like an answer.
+Told a review was missing, the natural next move is to go looking for the review
+— and there was never a review to find. The half-hour that costs is the whole
+point of this fix; it is the third time in a week the same shape has bitten
+(a gate reading its own note as the verdict, a blocked pull being called
+"uncommitted changes"), and each time the machine sounded certain about
+something it had not actually checked.
+
+The cause was small and ordinary. GitHub reports the state of a pull request in
+one word, and it has eight of them — behind, blocked, conflicted, clean, still
+computing, and so on. The code was treating five of those as if they were one
+thing and printing a single sentence for all of them. So now each word gets its
+own sentence, saying what is actually true and whose hands it needs: *the branch
+is behind, this machine will catch it up*; *this check failed, here is its name*;
+*the branch conflicts, here are the files*. And where GitHub does not say enough
+to know — it will happily report "blocked" without saying which rule — the
+answer is now the honest one, **CANNOT TELL**, along with a note that a conflict
+it has not finished working out looks exactly like this. It also stops guessing
+in one more place: a state the code has never seen before used to quietly count
+as "fine, merge it", and now it says so and stops.
+
+The proof came from the real thing rather than a rehearsal. Two pull requests
+sitting open right now were read twice a few seconds apart: the first read said
+"still computing", the second said "conflicted". That is the exact sequence that
+produced the wrong message in the first place — and this time it produced "I
+cannot tell yet, I'll ask again" followed by "this is a conflict". Each fix was
+also deliberately broken again afterwards to watch the tests that guard it fail,
+so a future change cannot quietly put the old sentence back.
+
+## 2026-09-02 — The Carousel settings panel, and a green check that could not say what it had looked at (#446)
+
+The Carousel editor — the panel you open to edit a slideshow's slides — had been
+built up over time rather than laid out. Its list of slides was a grid of titled
+columns with a second, unrelated row of boxes hanging underneath each one, and
+those two halves were sized independently, so nothing below a slide's first row
+lined up with anything above it. This rebuilds the slide list the same way the
+Feature Cards panel was already rebuilt: one labelled block per slide, every
+label starting on one line and every box ending on one line, reusing that
+panel's layout rather than inventing a second one.
+
+The interesting part is why this took a second pass. There is an automatic
+checker that opens every settings panel in a browser and measures whether the
+labels and boxes line up. It went green. But a green result is only worth
+something if you have watched the same check go red — so someone tried to break
+the Carousel panel on purpose, four different ways, and the check stayed green
+through all four. The obvious conclusion was that the checker never opens this
+panel at all, and the work was sent back.
+
+That conclusion was wrong, and finding out why is the rest of this entry. The
+checker does open the panel and does measure it. What failed was the attempts to
+break it: each one tried to make a box far too wide, and the page quietly refused
+in two different ways — one rule capped the box's maximum size, and the boxes sit
+in a row that shrinks its contents to fit. So nothing over-wide was ever drawn on
+screen, and the checker honestly reported that nothing was over-wide. The check
+was telling the truth; the experiment had failed without saying so.
+
+The only reason those two possibilities could not be told apart is that the
+checker's failure messages did not name what they were looking at. A problem was
+reported as "panel #18" — an ordinal in a sweep of 594 panels — and the slide
+list was labelled "chrome strip 3", which reads like anonymous page furniture
+rather than the thing it is. Search that output for the word "carousel" and you
+find nothing, whether or not the panel was ever opened.
+
+So the messages now name the panel and the group: "panel #18 (carousel) /
+Slides". With that in place the panel was broken on purpose twice more — once by
+knocking a single box out of line, once by forcing a box past its size ceiling —
+and both times the check failed, at all three screen widths, naming the carousel
+in every line. Then the breaks were taken back out and it went green again. That
+is the evidence the first pass was missing, and it is now cheap for the next
+person to repeat on any panel.
 ## 2026-09-02 — The two stuck pull requests were never actually stuck (#513, #494)
 
 You asked to clear the conflicts on two pull requests. GitHub was flagging both

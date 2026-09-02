@@ -396,3 +396,98 @@ test('wantedStatuses still accepts a bare string, so one status never means none
   assert.deepEqual(li.wantedStatuses(['Rework', ' QUEUED ']), ['rework', 'queued']);
   assert.deepEqual(li.wantedStatuses([null, '', 'x']), ['x']);
 });
+
+// ---------------------------------------------------------------------------
+// A blocked queue is not an idle queue (2026-09-02, task 86bbtmbvn).
+//
+// The NUMBER is deliberately unchanged — backing off on a blocked queue is
+// correct, and the module header says why. What was wrong is the SENTENCE:
+// at depth 0 the curve's reason is "nothing to do", which is false whenever
+// the zero came from a blockage rather than an empty queue. On the morning of
+// 2026-09-02 it printed under 48 queued tickets, two lines below
+// `claimableDepth`'s own accurate note, and it is the line that got read —
+// it is last, and it is the one prefixed `interval:`.
+// ---------------------------------------------------------------------------
+
+test('a capped queue does not report "nothing to do"', () => {
+  const r = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, capReached: true, resolveRepo: fakeRepo });
+  const d = li.intervalForDepth(r.depth, { blockedNote: r.note });
+  assert.equal(d.seconds, 3600, 'the number is unchanged — this ticket does not touch the curve');
+  assert.match(d.reason, /work-in-progress cap is full/);
+  assert.ok(!/nothing to do/.test(d.reason), 'it must not claim the queue is empty while tickets wait');
+});
+
+test('a queue that is entirely blocked says what blocked it', () => {
+  // Every ticket the right status, none claimable — a foreign repo here.
+  const foreign = [
+    { id: 'n1', status: { status: 'Queued' }, tags: [{ name: 'repo:normie' }] },
+    { id: 'n2', status: { status: 'Queued' }, tags: [{ name: 'repo:pulse' }] },
+    { id: 'n3', status: { status: 'Queued' }, tags: [{ name: 'repo:normie' }] },
+  ];
+  const r = li.claimableDepth({ loop: 'loop-build', tasks: foreign, capReached: false, resolveRepo: fakeRepo });
+  assert.equal(r.depth, 0);
+  assert.ok(r.note, 'a zero with tickets behind it must explain itself');
+  assert.match(r.note, /3 ticket\(s\) are the right status but none can be claimed/);
+  const d = li.intervalForDepth(r.depth, { blockedNote: r.note });
+  assert.equal(d.seconds, 3600, 'still backs off — only the sentence changes');
+  assert.ok(!/nothing to do/.test(d.reason));
+});
+
+test('a genuinely empty queue still says "nothing to do"', () => {
+  // The one case where the old sentence was true. It must survive intact, or
+  // this change has traded one false statement for another.
+  const r = li.claimableDepth({ loop: 'loop-build', tasks: [], capReached: false, resolveRepo: fakeRepo });
+  assert.equal(r.depth, 0);
+  assert.equal(r.note, null, 'nothing was blocked, so there is nothing to explain');
+  const d = li.intervalForDepth(r.depth, { blockedNote: r.note });
+  assert.match(d.reason, /nothing to do; do not pay to find that out often/);
+});
+
+test('a queue with claimable work never carries a blocked note', () => {
+  // The excluded tickets are ordinary background when work IS available, and
+  // the caller already prints them one per line.
+  const r = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, capReached: false, resolveRepo: fakeRepo });
+  assert.ok(r.depth > 0);
+  assert.equal(r.note, null);
+});
+
+test('the blocked reasons are grouped and counted, dominant cause first', () => {
+  const note = li.blockedSummary([
+    { id: '1', why: 'blocked on a dependency' },
+    { id: '2', why: 'for another repo' },
+    { id: '3', why: 'for another repo' },
+    { id: '4', why: 'for another repo' },
+  ]);
+  assert.match(note, /^4 ticket\(s\)/);
+  assert.match(note, /3 for another repo; 1 blocked on a dependency/,
+    'the dominant cause leads, so a reader sees the shape of the blockage first');
+  assert.equal(li.blockedSummary([]), null);
+  assert.equal(li.blockedSummary(null), null);
+});
+
+test('the honest reason survives hysteresis, in both of its sentences', () => {
+  // decideInterval wraps the proposal's reason into two other strings. If the
+  // note only reached the bare proposal, the line the log actually prints on a
+  // held or shortening cycle would still say "nothing to do".
+  const note = 'the work-in-progress cap is full, so nothing is claimable this pass however deep the queue is';
+  const held = li.decideInterval({ depth: 0, state: { interval: 900, lastProposed: 900 }, fallbackSeconds: 3600, blockedNote: note });
+  assert.match(held.reason, /work-in-progress cap is full/);
+  assert.ok(!/nothing to do/.test(held.reason));
+});
+
+test('a blocked note is ignored when there IS claimable work', () => {
+  // Defensive: the note only ever applies at depth 0. A caller that passed a
+  // stale note must not be able to mislabel a healthy reading.
+  const d = li.intervalForDepth(7, { blockedNote: 'the cap is full' });
+  assert.match(d.reason, /7 claimable — deep enough/);
+  assert.ok(!/cap is full/.test(d.reason));
+});
+
+test('the caller feeds the note INTO the decision, not merely alongside it', () => {
+  // The whole defect was a true line printed two lines above a false summary.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const code = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+  assert.match(code, /decideInterval\(\{ depth, state, fallbackSeconds, blockedNote: note \}\)/,
+    'the note must reach the interval reason, or the fix is inert in the thing that runs');
+});
