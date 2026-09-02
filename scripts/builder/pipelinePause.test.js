@@ -525,11 +525,19 @@ test('bus-relay is the announcer for a pause that has outlived two hours', () =>
 });
 
 test('both loop skills check the pause before claiming, and neither may resume', () => {
+  // Through the preflight TABLE since task 86bbtujen — the sequence lives in
+  // code, and the skill's job is to run the one command and obey it. The
+  // guard's intent is unchanged: every loop consults the pause, and no pass
+  // may resume.
+  const preflight = require('./preflight.js');
   for (const skill of ['loop-build', 'loop-review']) {
     const text = read(`.claude/skills/${skill}/SKILL.md`);
-    assert.match(text, /npm run pipeline -- check/, `${skill} must run the check`);
-    assert.match(text, /exit 3/, `${skill} must say what a paused pipeline means`);
-    assert.match(text, /Never resume it/, `${skill} must say the resume is the operator's`);
+    assert.match(text, new RegExp(`npm run preflight -- ${skill}`), `${skill} must run the preflight`);
+    assert.match(text, /exit 3/, `${skill} must say what a decline means`);
+    assert.match(text, /never resume it from a pass/, `${skill} must say the resume is the operator's`);
+    const pause = preflight.GATES[skill].find((g) => g.id === 'pause');
+    assert.ok(pause, `${skill}'s gate table must include the pause`);
+    assert.equal(preflight.interpretGate(pause, 3).stop, true, 'and a paused deck must stop the pass');
   }
 });
 

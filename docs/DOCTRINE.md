@@ -1427,6 +1427,104 @@ The sibling failure lives one section up (§3.10): a write that normalizes to
 nothing looks exactly like a success. This is its front end — a write that
 never happened looks exactly like one that did.
 
+**This rule was broken the day after it was written.** 2026-09-02, task
+86bbt72jw: the Card Manager's settings were verified in its Live Preview, which
+renders from component state. Every control worked on screen and not one value
+reached the database. See §5.22 — knowing to reload is not enough if you reload
+the surface that cannot see the write.
+
+
+### 5.21 An upsert without `merge-duplicates` is not an upsert — and a store that falls back on failure reports a save that did not happen
+
+2026-09-02, task 86bbt72jw, fixed in PR #533. `lib/blogCardTemplateStore.js`
+saved the blog card template with:
+
+```js
+sbQuery({ method: 'POST', table: t(), query: 'on_conflict=project_id', body: row })
+```
+
+`on_conflict=` only NAMES the column. PostgREST merges a conflicting row solely
+when it is asked to, with `Prefer: resolution=merge-duplicates`. So the first
+save for a project inserted, and every save after it came back **409 duplicate
+key value violates unique constraint**. Eleven other stores in this repo
+(`builderPublishStore`, `trainingStore`, `promoLeads`, `credentialIdentityStore`,
+…) already sent that header. This one never had.
+
+On its own that would have been loud. **The second bug is why it lasted two
+months.** On failure the function fell through to the local-JSON path, wrote the
+file, and returned the merged template:
+
+```js
+if (result.ok || result.status === 200 || result.status === 201) return safe;
+// ↓ reached on 409, and it "succeeds"
+const store = readStore();
+store.templates[projectId || '_default'] = safe;
+writeStore(store);
+return safe;
+```
+
+The route answered **200 carrying the operator's new values while the database
+still held the old ones**. On Vercel the file write vanishes outright (landmine
+6), so production had no record at all. Save, reload, everything reverted, no
+error logged anywhere.
+
+Production cost, read straight from the table after the fix:
+
+```
+proj_1780601274760_97i84r  |  last written 2026-06-30
+```
+
+Frozen for over two months. Every change made to that card template in that
+window was silently discarded.
+
+**Two rules, and the second is the load-bearing one:**
+
+1. An upsert sends `Prefer: resolution=merge-duplicates`. `on_conflict=` alone
+   is not an upsert, and it fails only once a row exists — so it passes every
+   first-run test and every fresh fixture.
+2. **A fallback path is for the case the primary store is ABSENT, never for the
+   case it REFUSED.** When Supabase is configured it IS the store; a write it
+   rejected must raise, not divert to a file and return the value the caller
+   hoped for. A store that answers with its input rather than with what landed
+   is not a store, it is an echo.
+
+### 5.22 The surface you verify on decides what you are able to see
+
+2026-09-02, tasks 86bbt62dy and 86bbt72jw — twice in two days, on one feature,
+in two different ways. Both times the work was verified, both times the
+verification was real, and both times it was performed somewhere that
+structurally could not show the defect.
+
+**Once by rendering a different code path.** 86bbt52fa added fifteen Card
+Manager controls, checked on `builder-preview.html` — the harness page, which
+renders the module's PUBLIC component. The controls were there. In the Builder,
+where the operator actually opens the module, `renderModulePreview` had no
+branch for that type and drew nothing at all. He refreshed repeatedly and saw
+an empty panel. The check was honest and answered a question nobody had asked.
+
+**Once by reading back component state.** 86bbt72jw's settings were exercised in
+the Card Manager's Live Preview, which re-renders from React state. Every
+control moved the sample card. None of the values reached the database (§5.21).
+A surface that shows you what you just typed cannot tell you the write failed —
+it will agree with you forever.
+
+The shared shape is not "we tested the wrong thing". It is that **a convenient
+surface and the operator's surface are different programs**, and only one of
+them is the deliverable. `builder-preview.html` exists precisely because it
+needs no database, no login and no fixture — which is the same sentence as *it
+does not exercise the database, the session or the real page*.
+
+**So: the closing check runs on the surface the operator uses, reached the way
+he reaches it.** For this repo that usually means signing in and driving the
+real Builder, not the harness; and for anything that writes, reading the value
+back out of the DATABASE or the published page, not out of the editor that just
+sent it. §5.20 says reload and read it back. This says: and make sure the thing
+you reload is the thing he opens.
+
+The harness pages keep their job — they are how `check:render` and
+`check:panels` stay cheap enough to run every time. They are instruments for
+regression, not evidence that a feature works where it ships.
+
 
 ## 6. Working in this repo
 
