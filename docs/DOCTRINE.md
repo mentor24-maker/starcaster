@@ -332,6 +332,57 @@ new Date(x).toLocaleString('en-US', { timeZone: 'America/Denver' })   # node
 Two clocks in one report is one question he has to ask every time, and this
 section exists so that he never has to ask it again.
 
+### 2.8 A refusal that cannot clear must not promise that it will
+
+§2.1 is about a message whose **diagnosis** is wrong. This is the opposite and
+costs more: a message whose diagnosis is right every single time, and whose
+**prognosis** is invented.
+
+On 2026-09-02, task 86bbqw49y sat in "Ready to launch" for twelve hours with its
+pull request already merged and its work live in production. The merge-on-comment
+step read Dane's `merge`, went to GitHub, found PR #513 already merged, and
+declined. That was correct — there was nothing left to merge. It then said this,
+every ten minutes from 06:26 to 10:40 UTC:
+
+```
+Merge not performed. PR #513 is not in a state that can be merged safely.
+Why: the PR is already merged.
+
+Your approval is still standing — you do not have to say "merge" again. Every
+later pass re-checks this ticket, so the moment the reason above is dealt with
+it goes through on its own. You will only hear from this step again if the
+answer changes.
+```
+
+Nothing will deal with it. No later pass can. "Already merged" is terminal, and
+the sentence promising otherwise is exactly what stopped anyone looking. Three
+reasons appeared on that one ticket, all carrying the same reassurance, and only
+one of them was transient:
+
+| Count | Reason | Can a later pass clear it? |
+|---|---|---|
+| 16 | the PR is already merged | **No — terminal** |
+| 3 | no "PR opened:" comment on this ticket | **No — terminal** |
+| 6 | no review verdict on this ticket | Yes |
+
+Two thirds of the refusals told the reader to wait for something that was never
+coming. Then the repeat-suppressor noticed the reason had not changed and
+silenced them, so the ticket went from reassuring-and-wrong to saying nothing at
+all. **Dedup without escalation converts a loud wrong answer into a quiet one**,
+which is not an improvement — it is the same defect with the evidence removed.
+
+**Do this:** classify every refusal reason as `terminal` or `transient` **at the
+point it is raised**, never by inferring from its wording later. A reason with no
+classification is a build error, not a default. Only a transient reason may say
+the approval stands and the pass will retry. A terminal one drops that sentence
+entirely, says plainly what it needs instead, posts **once**, and then escalates
+rather than repeating — and it names who must act, an agent session or Dane, in
+the active voice (§2.5).
+
+The general form is worth carrying past merges: **a message can be completely
+accurate about the present and still lie about the future, and the lie is the
+expensive half, because it is the part that tells the reader to stop looking.**
+
 ---
 
 ## 3. Designing checks
@@ -670,6 +721,55 @@ schema-generated panel without having made it fail first. Say plainly that it
 passed and that the pass is not evidence, and then look at the panel. On the
 Media Manager nobody has yet — recorded in `docs/MEDIA_MANAGER.md` §7 rather
 than quietly left as a green tick.
+
+
+### 3.18 A watchdog that is awake, correct and unread is indistinguishable from coverage
+
+§3.13 asks *where* a watchdog runs. This asks the two questions that remain once
+it is running in the right place, and a check can pass both of §3.13's tests and
+still miss everything.
+
+The twelve hours in §2.8 were not unwatched. **Three watchdogs were awake and
+pointed straight at that ticket, and none of them reached Dane.**
+
+| Watchdog | Cadence | What it saw | Why it did not land |
+|---|---|---|---|
+| `stale-ready` | every 10 min, on the Mini, inside `run_bus_relay.sh` | `READY TO LAUNCH — 1 ticket in the stage, 0 past 24h / Nothing is stuck.` | Its threshold is **24 hours**. The ticket was stuck twelve. It reported all-clear, honestly. |
+| `reconcile` | by hand only | Named the ticket exactly: *"sits in ready to launch but PR #513 is already MERGED"* | Nothing schedules it, and its finding goes to the bus. |
+| merge-on-comment | every 10 min | Refused 25 times, correctly | Reassured while refusing (§2.8). |
+
+Note what is *not* wrong here. Every one of them was correctly placed by §3.13's
+rule, running on the right machine, reading live state, and telling the truth.
+The instinct on discovering this was to schedule `reconcile` — and that would
+have found the same thing sooner and filed it into the same unread channel.
+**The cadence was never the problem.** The two failures were:
+
+- **Threshold.** Twenty-four hours is a reasonable grace period for a ticket
+  nobody has looked at. It is far too patient for one the operator has
+  personally approved: he stated an expectation the moment he typed `merge`, and
+  he noticed inside a day, so the machine must notice sooner than he does. Dane
+  ruled on this the same day, verbatim: *"Yes → tickets carrying your merge
+  comment get a short fuse (1–2h)"*.
+- **Destination.** All three write to the bus. The bus was not read. A finding
+  in an unread channel is not a quieter alert — **it is silence wearing an
+  alert's clothes**, and it is worse than having no watchdog at all, because it
+  reads as coverage on the board and nobody builds the thing that would have
+  worked.
+
+**Do this:** for every check, answer two questions in writing before believing
+it works. *What is the longest this can be wrong before somebody who cares finds
+out by other means?* — if that number is smaller than the threshold, the
+threshold is wrong. And *who reads where this lands, and how would I know if
+they stopped?* — if there is no answer, the check is not finished, however
+correct its logic.
+
+A threshold is a claim about who is allowed to notice first. Whenever the
+operator has stated an expectation — an approval, a `merge`, a deadline — the
+clock starts there and runs faster than his patience, not slower.
+
+Measure that clock from the event itself, never from a record's `date_updated`:
+any edit resets it, so on 86bbqw49y the twenty-five automated refusal comments
+would each have reset the very clock built to catch them.
 
 
 ## 4. Secrets
@@ -2133,6 +2233,47 @@ silent in one direction. Deleting a wanted file announces itself the moment some
 needs it, and the restore line is one command away. **Shipping an unwanted one
 announces nothing at all** — it lands looking current, and the next session reads
 it as the plan.
+
+### 6.16 A claim only counts with the receipt — and a session cannot promise to come back
+
+§6.3 covers gates: run them, report what they printed. It does not cover the
+other half, which failed twice in one morning on 2026-09-02.
+
+**a. The reported action that never happened.** This session told Dane it had
+filed ticket `86bbtw2k4` for follow-up work. That ticket does not exist and never
+did — the body was written and sound, the ClickUp call was simply never made, and
+the summary had no way to tell the difference between a task drafted and a task
+created. In the same reply it quoted `86bbtvbhk` for a ticket that *did* exist
+under a different id. Both were caught only by reading the queue back afterwards.
+
+The irony is the lesson: this is §2.8 committed by the agent instead of the
+merge step. A confident report that something is handled, when it is not, and no
+way for the reader to tell.
+
+**Do this:** for any call with a side effect whose identifier is its receipt —
+a ticket created, a comment posted, a status moved, a PR opened, a file written,
+a row inserted — report the id you **read back**, never the one you intended to
+create. If a summary names an id, that id was observed in a response or a
+follow-up query, or it does not go in the summary. §5.20 is the same rule for
+screens; this is the rule for records.
+
+**b. The promise to return.** Dane asked, reasonably, to be reminded
+periodically to run `npm run reconcile`. **An agent session cannot do that.**
+The window closes and the promise dies with it, silently, leaving him unable to
+distinguish *"CC is watching this for me"* from *"nothing is watching this"* —
+which is §2.8 again, relocated to the human layer, and it is the more dangerous
+location because there is no log to check.
+
+**Do this:** when asked to remember or to recur, say plainly in one sentence
+that a session cannot, and offer the durable form instead — a schedule, a
+watchdog, a ClickUp ticket, a memory file, a line in this document. Never accept
+the reminder. "An agent will remind you" names an actor that does not persist,
+which is the §2.5 defect with a future tense.
+
+Both halves reduce to one habit: **before reporting that something is true, ask
+what you would have to have observed for it to be true, and check that you
+observed it.**
+
 
 ## 7. Operator-facing gotchas
 
