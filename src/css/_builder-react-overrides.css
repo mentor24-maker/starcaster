@@ -8024,3 +8024,61 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   border-color: var(--danger, #a03c28);
   color: var(--btn-text);
 }
+
+/* ── Media Manager filters ──────────────────────────────────────────────── */
+
+.builder-react-root .builder-media-manager-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+.builder-react-root .builder-media-manager-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.builder-react-root .builder-media-manager-filter-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-media-manager-filter-input,
+.builder-react-root .builder-media-manager-filter-select {
+  font-size: var(--text-sm);
+  padding: 0.28rem 0.4rem;
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  max-width: 100%;
+}
+
+.builder-react-root .builder-media-manager-filter-input {
+  min-width: 12rem;
+}
+
+.builder-react-root .builder-media-manager-clear {
+  align-self: flex-end;
+}
+
+/* The clear inside the "no matches" message — a link, not a second button
+   competing with the one in the bar. */
+.builder-react-root .builder-media-manager-clear-inline {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--builder-media-accent, #0f4f8f);
+  text-decoration: underline;
+  cursor: pointer;
+}
