@@ -96,6 +96,28 @@ as a rule first, then gets a checker where one is possible.
   with fields that cannot (pickers, long text, more than about four
   columns) takes the labelled block, because that is the one where the
   spanning secondary row was already breaking the column alignment.
+
+  **Carousel is the second adopter, converted in the panel sweep
+  (2026-08-26, task 86bbjt1az).** It is the test case for the sentence
+  above rather than a new decision: an image picker, a description
+  textarea, and four fields riding a `.builder-item-grid-sub` row whose
+  auto-fit tracks were computed independently of the three columns over
+  them, so nothing below an item's first row lined up with anything above
+  it. It reuses `.builder-cards-panel-fields` — the same grid, the same
+  CSS, `data-lattice-pairs="2"` — rather than a second pattern.
+
+  Its sub-row was also built from `label.field`, the shape W0 says to
+  **retire rather than style**, so the manager carried two label geometries
+  at once: one label beside its field in the columns, another stacked above
+  a full-width box underneath. Converting the shape retired both problems
+  in one move, which is the usual sign the shape was the bug.
+
+  **And it had never been measured.** `check_panels` selects item managers
+  on `[data-lattice-pairs]` and `[data-lattice-columns]`; this one declared
+  neither, so every sweep since the check was written found nothing to look
+  at here and reported OK. Declaring it took the run from 558 measured panel
+  groups to 564. A manager that opts into neither attribute is not passing —
+  it is absent, and the two are indistinguishable from the summary line.
   **How it is built, and how it is checked (rewritten 8/13).** The first
   cut got the shape right and the mechanism wrong — a fixed `11ch` label
   track, `1fr` fields, an `11rem` button — which is the per-field width W0
