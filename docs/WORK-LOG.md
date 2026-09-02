@@ -1,3 +1,30 @@
+## 2026-09-02 — The pipeline's own health check finally runs on a timer (#524)
+
+We have a command, `npm run pulse`, that looks the whole build pipeline over and
+says whether anything is stuck: is the build loop still picking up work, has any
+ticket been sitting in one stage too long, does every ticket and its pull
+request point at each other. It was built, checked, and marked finished back in
+July — and it had never once run on its own, because nobody ever set up the
+timer. It even ends with a line saying "if a scheduled run does not print this,
+that absence IS the alert." There were no scheduled runs, so the absence was
+permanent and told nobody anything. Run by hand on 31 August it turned up two
+real problems and a third worth knowing about, none of which anyone had seen.
+
+It now runs every hour on the Mac Mini. Every hour it writes its full report to
+a single ClickUp ticket called "Pipeline pulse", replacing what was there before
+— so there is exactly one of it and it is always today's. Only the things that
+actually need somebody get announced on the party line, once each per six hours,
+and they stop being announced when they clear. A clean report posted daily would
+be 365 messages a year, which is how a channel stops getting read.
+
+Two smaller things came with it. The job now records a heartbeat every time it
+finishes, so if the Mini is ever switched off the missing heartbeat is noticed
+by whichever machine is awake — a watchdog sitting on the machine it watches
+cannot spot that machine going dark, and this closes that. And the whole
+schedule is a committed script rather than something typed into one Mac by
+hand, which is the mistake that lost the failure alert the last time a job moved
+machines.
+
 ## 2026-09-02 — The Carousel settings panel, and a green check that could not say what it had looked at (#446)
 
 The Carousel editor — the panel you open to edit a slideshow's slides — had been
