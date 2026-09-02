@@ -113,3 +113,40 @@ test('the checkbox turns it on, however it was stored', () => {
 test('a value that means nothing falls back rather than guessing', () => {
   assert.equal(mergeTemplate({ imageLinkToPost: 'yes please' }).imageLinkToPost, false);
 });
+
+/**
+ * THE CARD'S OWN BORDER (2026-09-02, task 86bbtvnr5).
+ *
+ * It used to come only from the `cardStyle` preset, whose "default" branch
+ * hard-coded `1px solid #e2e8f0`. Both production templates are `default`, so
+ * every tenant card carried that grey and no control could change it.
+ *
+ * Splitting the border out of the preset is only safe if a template saved
+ * BEFORE the split renders identically, for all three preset values — not just
+ * the one the operator happened to be on.
+ */
+test('a pre-split template keeps the exact border its preset drew', () => {
+  const accent = '#0f4f8f';
+  const cases = [
+    ['default',  1, '#e2e8f0'],
+    ['bordered', 1, '#0f4f8f40'],  // the accent at 25%, as an 8-digit hex
+    ['shadow',   0, '#e2e8f0'],    // shadow drew no border at all
+  ];
+  for (const [cardStyle, width, color] of cases) {
+    const m = mergeTemplate({ cardStyle, accentColor: accent });
+    assert.equal(m.cardBorderWidth, width, `${cardStyle} border width`);
+    assert.equal(m.cardBorderColor, color, `${cardStyle} border colour`);
+  }
+});
+
+test('an explicitly saved border of 0 is not mistaken for an absent one', () => {
+  // The trap: `saved.cardBorderWidth || preset()` puts the preset's border back
+  // on every read, so "no border" could never be saved. The test is `undefined`.
+  assert.equal(mergeTemplate({ cardStyle: 'default', cardBorderWidth: 0 }).cardBorderWidth, 0);
+  assert.equal(mergeTemplate({ cardStyle: 'bordered', cardBorderWidth: 0 }).cardBorderWidth, 0);
+});
+
+test('an explicit border colour wins over the preset', () => {
+  const m = mergeTemplate({ cardStyle: 'bordered', accentColor: '#0f4f8f', cardBorderColor: '#ff0000' });
+  assert.equal(m.cardBorderColor, '#ff0000');
+});
