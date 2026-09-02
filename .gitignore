@@ -12,6 +12,8 @@ npm-debug.log*
 data/api_settings.json
 data/auth_users.json
 data/auth_sessions.json
+# Local fallback store for the Event Calendar (Supabase is the real home).
+data/events.json
 
 # Local-only files
 docs/archives/

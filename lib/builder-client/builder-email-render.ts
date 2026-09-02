@@ -99,7 +99,31 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     // a sensible static form — a snapshot of "results" would be results for
     // a search nobody performed.
     module.type === "site-search" ||
-    module.type === "site-search-results"
+    module.type === "site-search-results" ||
+    // Standard 11, decided 2026-09-01: skipped, and not for a layout reason.
+    // The Event Manager is an ADMIN surface — a table of every event with
+    // edit and delete buttons, behind a project-admin login. Rendering it in
+    // an email would put a tenant's whole unpublished calendar into a message
+    // and offer controls that cannot work. It is the same call every other
+    // manager module gets; it is written down here because a module that
+    // merely falls off the end of this function is indistinguishable from one
+    // nobody thought about.
+    module.type === "event-manager" ||
+    // Standard 11, decided 2026-09-01: skipped, for the reason the two Site
+    // Search modules are. The calendar is a live query run in the browser
+    // after the page loads, and its month grid is a CSS grid that Outlook's
+    // Word engine cannot lay out. In an email it would render as an empty
+    // frame with paging buttons nobody can press. A calendar in an email is
+    // a real want — it needs a nested-table renderer written against a
+    // snapshot of the events, which is its own task, not a footnote here.
+    module.type === "event-calendar" ||
+    // Standard 11, decided 2026-09-01: skipped. The event page renders
+    // whichever event the ADDRESS names (`?event=<slug>`), fetched after the
+    // page loads. An email has no address bar and no browser to run the
+    // query, so it would render its own "we could not find that event"
+    // message to every reader. An event in an email wants the event's details
+    // baked in at send time, which is a different renderer, not this one.
+    module.type === "event-detail"
   ) {
     return "";
   }

@@ -14,6 +14,7 @@ import {
   resolveCarouselFormat
 } from "./builder-carousel-module-settings";
 import { getCarouselImageFrameStyle } from "@/lib/builder-carousel-image-frame";
+import { moduleFollowsMaster, setFollowsMaster } from "@/lib/canonical-follow";
 import {
   createBuilderCardItem,
   parseBuilderCardItems,
@@ -90,6 +91,10 @@ import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blo
 import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-module-settings";
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
+import { BuilderEventManagerModuleSettings } from "./builder-event-manager-module-settings";
+import { BuilderMediaManagerModuleSettings } from "./builder-media-manager-module-settings";
+import { BuilderEventCalendarModuleSettings } from "./builder-event-calendar-module-settings";
+import { BuilderEventDetailModuleSettings } from "./builder-event-detail-module-settings";
 import { BuilderBlogCategoryManagerModuleSettings } from "./builder-blog-category-manager-module-settings";
 import { BuilderBlogCardManagerModuleSettings } from "./builder-blog-card-manager-module-settings";
 import { BuilderBlogSearchModuleSettings } from "./builder-blog-search-module-settings";
@@ -189,8 +194,15 @@ const TWO_COLUMN_EDITOR_TYPES = new Set(["feature-cards", "carousel", "program-l
  * track for every row above it.
  */
 const MODULE_NUDGE_SIDES = [
-  { key: "horizontalOffset", label: "Horizontal Offset", hint: "Positive moves right; negative moves left." },
-  { key: "verticalOffset", label: "Vertical Offset", hint: "Positive moves up; negative moves down." }
+  // "H Offset" / "V Offset" rather than the words spelled out (2026-08-25).
+  // They sit directly under `V Margin` and `H Margin`, which have taught that
+  // convention since 8/15, and a label never wraps — it is shortened instead
+  // (components/CLAUDE.md). Spelled out, "Horizontal Offset" was the longest
+  // label in the chrome by 60px, so it alone set the label track for the
+  // whole column and pushed every chrome control 60px right of the settings
+  // column below it. The hint keeps the direction unambiguous on hover.
+  { key: "horizontalOffset", label: "H Offset", hint: "Positive moves right; negative moves left." },
+  { key: "verticalOffset", label: "V Offset", hint: "Positive moves up; negative moves down." }
 ] as const;
 
 type BuilderModuleCardProps = {
@@ -1979,6 +1991,132 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "event-detail") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden", padding: 12 }}>
+        <div style={{ fontSize: 9, color: "#8ba9be", marginBottom: 6 }}>← Back to all events</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#18324a" }}>Spring Member Mixer</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: accent, marginTop: 2 }}>Apr 12, 2026, 6:00 PM – 9:00 PM</div>
+        <div style={{ fontSize: 10, color: "#8ba9be", marginTop: 1 }}>Center Court</div>
+        <div style={{ height: 34, background: "#f4f8fb", borderRadius: 4, margin: "8px 0" }} />
+        <div style={{ height: 5, background: "#eef3f7", borderRadius: 3, marginBottom: 4 }} />
+        <div style={{ height: 5, background: "#eef3f7", borderRadius: 3, width: "72%", marginBottom: 8 }} />
+        <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#fff", background: accent, borderRadius: 4, padding: "4px 10px" }}>Get Tickets</span>
+      </div>
+    );
+  }
+
+  if (module.type === "event-calendar") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    const layout = module.settings.layout || "month";
+    if (layout === "month") {
+      // A miniature April: the 1st on a Wednesday, so the leading blanks are
+      // visible and the shape reads as a real month rather than a plain grid.
+      const lead = 3;
+      const cells = Array.from({ length: 35 }, (_, i) => i - lead + 1).map((d) => (d >= 1 && d <= 30 ? d : null));
+      const marked = new Set([12, 19, 27]);
+      return (
+        <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden", padding: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, fontSize: 8, fontWeight: 700, color: "#587592", textAlign: "center", marginBottom: 3 }}>
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <span key={i}>{d}</span>)}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+            {cells.map((d, i) => (
+              <span
+                key={i}
+                style={{
+                  fontSize: 8, textAlign: "center", padding: "3px 0", borderRadius: 2,
+                  color: d === null ? "transparent" : marked.has(d) ? "#fff" : "#18324a",
+                  background: d === null ? "transparent" : marked.has(d) ? accent : "#f4f8fb",
+                  fontWeight: d !== null && marked.has(d) ? 700 : 400,
+                }}
+              >
+                {d ?? "·"}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    const rows = [
+      { date: "APR 12", title: "Spring Member Mixer", place: "Center Court" },
+      { date: "APR 19", title: "Junior Clinic Open House", place: "Courts 1–4" },
+      { date: "MAY 03", title: "Summer Kickoff Social", place: "Clubhouse" },
+    ];
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden" }}>
+        {rows.map((row, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 12px", borderBottom: i < rows.length - 1 ? "1px solid #f0f4f8" : undefined }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: "#fff", background: accent, borderRadius: 4, padding: "4px 6px", whiteSpace: "nowrap" }}>{row.date}</span>
+            <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+              <span style={{ fontSize: 12, color: "#18324a", fontWeight: 600 }}>{row.title}</span>
+              <span style={{ fontSize: 10, color: "#8ba9be" }}>{row.place}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (module.type === "media-manager") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    const tiles = [
+      { label: "court-1.jpg", kind: "image" },
+      { label: "clinic.mp4", kind: "video" },
+      { label: "clubhouse.jpg", kind: "image" },
+      { label: "team-2026.jpg", kind: "image" },
+    ];
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#f8fafc", borderBottom: "1px solid #e4ecf2" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: accent, borderRadius: 4, padding: "3px 8px" }}>Upload Files</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "#587592", textTransform: "uppercase" }}>4 files</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, padding: 12 }}>
+          {tiles.map((tile, i) => (
+            <div key={i} style={{ border: "1px solid #e4ecf2", borderRadius: 6, overflow: "hidden" }}>
+              <div style={{ height: 34, background: tile.kind === "video" ? "#18324a" : "#dbe9f5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: tile.kind === "video" ? "#dbe9f5" : "#587592" }}>
+                {tile.kind === "video" ? "▶" : "🖼"}
+              </div>
+              <div style={{ fontSize: 9, color: "#8ba9be", padding: "4px 5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tile.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (module.type === "event-manager") {
+    const accent = module.settings.accentColor || "#0f4f8f";
+    const rows = [
+      { title: "Spring Member Mixer", status: "published", date: "Apr 12", place: "Center Court" },
+      { title: "Junior Clinic Open House", status: "draft", date: "Apr 19", place: "Courts 1–4" },
+      { title: "Summer Kickoff Social", status: "cancelled", date: "May 03", place: "Clubhouse" },
+    ];
+    const statusColor = (s: string) => s === "published" ? "#16a34a" : s === "cancelled" ? "#c0392b" : "#6b7280";
+    const statusBg   = (s: string) => s === "published" ? "#f0fdf4" : s === "cancelled" ? "#fef2f2" : "#f3f4f6";
+    return (
+      <div className="builder-module-preview-copy" style={{ background: "#fff", border: "1px solid #dde8f0", borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto auto", gap: "0 12px", padding: "8px 12px", background: "#f8fafc", borderBottom: "1px solid #e4ecf2", fontSize: 10, fontWeight: 700, color: "#587592", textTransform: "uppercase" }}>
+          <span>Event</span><span>Status</span><span>Starts</span><span>Where</span><span>Actions</span>
+        </div>
+        {rows.map((row, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto auto", gap: "0 12px", padding: "8px 12px", borderBottom: i < rows.length - 1 ? "1px solid #f0f4f8" : undefined, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "#18324a", fontWeight: 500 }}>{row.title}</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: statusColor(row.status), background: statusBg(row.status), borderRadius: 4, padding: "2px 6px" }}>{row.status}</span>
+            <span style={{ fontSize: 11, color: "#8ba9be" }}>{row.date}</span>
+            <span style={{ fontSize: 11, color: "#8ba9be" }}>{row.place}</span>
+            <span style={{ display: "flex", gap: 6 }}>
+              <span style={{ fontSize: 13, color: accent, cursor: "default" }}>✎</span>
+              <span style={{ fontSize: 13, color: "#c0392b", cursor: "default" }}>✕</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (module.type === "blog-category-manager") {
     const accent = module.settings.accentColor || "#0f4f8f";
     const rows = [
@@ -3019,6 +3157,10 @@ export function BuilderModuleCard({
     const isBlogPostTagsModule = module.type === "blog-post-tags";
     const isBlogPostCreateModule = module.type === "blog-post-create";
     const isBlogPostManagerModule = module.type === "blog-post-manager";
+    const isEventDetailModule = module.type === "event-detail";
+    const isEventCalendarModule = module.type === "event-calendar";
+    const isEventManagerModule = module.type === "event-manager";
+    const isMediaManagerModule = module.type === "media-manager";
     const isBlogCategoryManagerModule = module.type === "blog-category-manager";
     const isBlogCardManagerModule = module.type === "blog-card-manager";
     const isBlogSearchModule = module.type === "blog-search";
@@ -3084,6 +3226,9 @@ export function BuilderModuleCard({
       isBlogPostTagsModule ||
       isBlogPostCreateModule ||
       isBlogPostManagerModule ||
+      isEventDetailModule ||
+      isEventCalendarModule ||
+      isEventManagerModule ||
       isBlogCategoryManagerModule ||
       isBlogCardManagerModule ||
       isBlogSearchModule ||
@@ -3098,22 +3243,65 @@ export function BuilderModuleCard({
       isAdminSiteSettingsModule ||
       isAdminSupportFormModule;
 
+    /**
+     * The module's internal name. Rendered in ONE of two places and never
+     * both: inside the chrome strip when this module has chrome, and on its
+     * own strip above the panel when it does not — see `showsSharedChrome`.
+     *
+     * Hoisted out of the JSX on 2026-08-25 (ticket 86bbjt1aq). It used to be
+     * a strip of its own ABOVE the chrome, which made it a second grid with
+     * its own label track: the operator's screenshot of the image panel that
+     * day showed three label tracks stacked above the axes — Label's at one
+     * x, Background's at another, and the Alignment/margin strip's at a
+     * third. Two of the three were `display: contents` members of grids that
+     * simply were not the same grid (W0).
+     */
+    const moduleLabelField = (
+      <BuilderModuleField label="Label" width="text-md">
+        <input
+          type="text"
+          value={module.name}
+          onChange={(event) => onUpdateModule((current) => ({ ...current, name: event.target.value }))}
+          // W0: the field is the standard width, so the placeholder is
+          // written to fit it. This used to run the other way round —
+          // the copy set the width and the row went its own length.
+          placeholder="Internal label"
+        />
+      </BuilderModuleField>
+    );
+
+    /**
+     * Social and Blog Post List name the module inside their own editors, so
+     * a second box here would be two controls for one setting (E6).
+     */
+    const showsLabelField = module.type !== "social" && module.type !== "blog-post-list";
+
     const sharedModuleChrome = (
       <div className="builder-module-chrome">
-        {/* Speech bubble uses its own flat fill color (BuilderSpeechBubbleModuleSettings);
-            the standard modal's gradient/image/style modes are no-ops on a bubble. */}
-        {module.type !== "speech-bubble" ? (
-          <BuilderBackgroundControls
-            label="Background"
-            background={getModuleBackgroundSettings(module.settings)}
-            horizontal
-            onChange={onUpdateModuleBackground}
-            themeBackgroundColor={themeBackgroundColor}
-            themeColors={themeColors}
-            themePrimaryColor={themePrimaryColor}
-          />
-        ) : null}
+        {/* ONE strip, and therefore one grid: every chrome row — the label,
+            the background, the alignment, the margins, the nudge — measures
+            against the same two tracks. Background used to sit outside this
+            strip as a sibling of it, so the chrome laid itself out as two
+            ragged sub-columns: the background block at the panel's left edge
+            and the whole margin stack floating to its right. That is what
+            `.builder-module-editor--feature-cards .builder-module-chrome`
+            was already stacking around for its own two-column editor; this
+            fixes the cause rather than the two panels that noticed. */}
         <BuilderModuleFieldStrip>
+          {showsLabelField ? moduleLabelField : null}
+          {/* Speech bubble uses its own flat fill color (BuilderSpeechBubbleModuleSettings);
+              the standard modal's gradient/image/style modes are no-ops on a bubble. */}
+          {module.type !== "speech-bubble" ? (
+            <BuilderBackgroundControls
+              label="Background"
+              background={getModuleBackgroundSettings(module.settings)}
+              horizontal
+              onChange={onUpdateModuleBackground}
+              themeBackgroundColor={themeBackgroundColor}
+              themeColors={themeColors}
+              themePrimaryColor={themePrimaryColor}
+            />
+          ) : null}
           <BuilderModuleField label="Alignment" width="align">
             <BuilderAlignmentIconGroup
               value={moduleAlignment}
@@ -3210,230 +3398,20 @@ export function BuilderModuleCard({
         </BuilderModuleFieldStrip>
       </div>
     );
-  return (
-    <div
-      className={`builder-module-card ${getAlignmentClass(moduleAlignment)}`}
-      style={{
-        /*
-         * Text is excluded with Button because its fill now belongs to the
-         * frame INSIDE the card (getTextModuleFrameStyle, 2026-08-15).
-         * Tinting the card as well would paint the same colour twice at two
-         * different sizes and tell the operator the fill spans the card when
-         * on the page it stops at the border. The card keeps the neutral
-         * surface; the preview inside shows what the page will show.
-         */
-        ...(module.type !== "button" && module.type !== "text" && !isPollCategoryListModule
-          ? resolveBuilderDrillDownSurfaceBackground(getModuleBackgroundSettings(module.settings), "module")
-          : {}),
-        // One reader for every type (W7). A floating image and a reminder are
-        // positioned overlays, so a wrapper margin has nothing to push.
-        ...(isFloatingImage || isReminderModule ? {} : getModuleOuterSpacingStyle(module.settings))
-      }}
-    >
-      {onModuleDragStart ? (
-        <div
-          aria-label="Drag module"
-          className="builder-module-drag-handle"
-          draggable
-          onDragStart={onModuleDragStart}
-          title="Drag Module"
-        >
-          ⋮⋮
-        </div>
-      ) : null}
-      <div aria-expanded={isExpanded} className="builder-module-header" ref={moduleHeaderRef}>
-        <div className="builder-module-title">
-          {/*
-            The pop-out sits on the LEFT, with the drag handle and the name,
-            rather than at the end of the action cluster (operator,
-            2026-08-15, with a screenshot of six side-by-side cells to show
-            why). A module in a narrow cell is clipped at its right edge, and
-            the action cluster goes with it — so the one control that ESCAPES
-            the narrow cell was the one the narrow cell hid. The left edge is
-            the only part of a module card that is always on screen.
-          */}
-          {hideHeaderActions ? null : (
-            <button
-              aria-label="Open editor in popup"
-              className={`builder-icon-button builder-module-popout${isPopped ? " builder-icon-button-active" : ""}`}
-              onClick={() => setIsPopped((p) => !p)}
-              title="Open editor in popup"
-              type="button"
-            >
-              ⤢
-            </button>
-          )}
-          <div className="builder-module-title-text">
-            <strong>{module.name || module.type}</strong>
-            <span>{module.type}</span>
-          </div>
-          {module.savedModuleId ? (
-            <button
-              aria-label={module.canonicalLocked ? "Unlock: allow push updates from canonical" : "Lock: block push updates from canonical"}
-              className={`builder-canonical-badge${module.canonicalLocked ? " builder-canonical-badge-locked" : ""}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onUpdateModule((m) => ({ ...m, canonicalLocked: !m.canonicalLocked }));
-              }}
-              title={module.canonicalLocked ? "Custom (push updates blocked) — click to re-link" : "Linked to canonical — click to lock"}
-              type="button"
-            >
-              {module.canonicalLocked ? "Custom" : "Linked"}
-            </button>
-          ) : null}
-        </div>
-        {hideHeaderActions ? (
-          <div className="builder-section-actions">
-            <button aria-label={isExpanded ? "Collapse module" : "Expand module"} className="builder-icon-button" onClick={onToggleExpanded} title={isExpanded ? "Collapse module" : "Expand module"} type="button"><BuilderCollapseIcon expanded={isExpanded} /></button>
-          </div>
-        ) : (
-          <div className="builder-section-actions">
-            <button aria-label={isExpanded ? "Collapse module" : "Expand module"} className="builder-icon-button" onClick={onToggleExpanded} title={isExpanded ? "Collapse module" : "Expand module"} type="button"><BuilderCollapseIcon expanded={isExpanded} /></button>
-            <button aria-label="Move module up" className="builder-icon-button" onClick={onMoveUp} title="Move module up" type="button">↑</button>
-            <button aria-label="Move module down" className="builder-icon-button" onClick={onMoveDown} title="Move module down" type="button">↓</button>
-            <button
-              aria-label="Clone module"
-              className="builder-icon-button"
-              onClick={onClone}
-              title="Clone module"
-              type="button"
-            >
-              ⧉
-            </button>
-            {onSaveModule ? (
-              <button
-                aria-label="Save module"
-                className="builder-icon-button"
-                onClick={onSaveModule}
-                title="Save Module"
-                type="button"
-              >
-                💾
-              </button>
-            ) : null}
-            <button aria-label="Delete module" className="builder-icon-button builder-icon-button-danger" onClick={onRemove} title="Delete module" type="button">✕</button>
-          </div>
-        )}
-      </div>
-
-      {!isExpanded ? (
-        <div
-          className="builder-module-preview-button"
-          role="button"
-          tabIndex={0}
-          onClick={onToggleExpanded}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              onToggleExpanded();
-            }
-          }}
-        >
-          {renderModulePreview(module)}
-        </div>
-      ) : null}
-
-      {(isExpanded || isPopped) ? (
-        <ModuleEditorWrapper
-          isPopped={isPopped}
-          moduleType={module.type}
-          title={module.name || module.type}
-          onClose={() => setIsPopped(false)}
-        >
-          {/* A two-column editor runs its chrome down the left column beside
-              the item list, so that column needs a name at the top of it.
-              Every other module keeps the chrome full-width and has no
-              columns to label. Slideshow joined 2026-08-12, which is why this
-              is a set rather than the `=== "feature-cards"` it started as —
-              the second module to want it should not have to find this line
-              by reading the whole file. */}
-          {TWO_COLUMN_EDITOR_TYPES.has(module.type) ? (
-            <div className="builder-cards-panel-heading">Settings</div>
-          ) : null}
-          {module.type !== "social" && module.type !== "blog-post-list" ? (
-            // Content-sized, not full-panel — this row tops every module,
-            // so master rule W1 applies here with maximum leverage.
-            <BuilderModuleFieldStrip>
-              <BuilderModuleField label="Label" width="text-md">
-                <input
-                  type="text"
-                  value={module.name}
-                  onChange={(event) => onUpdateModule((current) => ({ ...current, name: event.target.value }))}
-                  // W0: the field is the standard width, so the placeholder is
-                  // written to fit it. This used to run the other way round —
-                  // the copy set the width and the row went its own length.
-                  placeholder="Internal label"
-                />
-              </BuilderModuleField>
-            </BuilderModuleFieldStrip>
-          ) : null}
-
-          {editorDevice === "mobile" ? (
-            <div
-              className={
-                module.type === "heading"
-                  ? "builder-heading-module-settings"
-                  : "builder-module-settings-row builder-module-settings-row-mobile"
-              }
-            >
-              <BuilderSettingRow label="Hide Module on Mobile">
-                <input
-                  type="checkbox"
-                  checked={module.settings.mobileHidden === "true"}
-                  onChange={(event) =>
-                    onUpdateModule((current) => ({
-                      ...current,
-                      settings: { ...current.settings, mobileHidden: event.target.checked ? "true" : "false" }
-                    }))
-                  }
-                />
-              </BuilderSettingRow>
-              <BuilderSettingRow label="Mobile Alignment">
-                <select
-                  value={mobileAlignment}
-                  onChange={(event) =>
-                    onUpdateModule((current) => ({
-                      ...current,
-                      settings: { ...current.settings, mobileAlignment: event.target.value }
-                    }))
-                  }
-                >
-                  <option value="">Use browser setting</option>
-                  <option value="left">Left</option>
-                  <option value="center">Center</option>
-                  <option value="right">Right</option>
-                </select>
-              </BuilderSettingRow>
-              {(module.type === "heading" ||
-                module.type === "headline-rotator" ||
-                module.type === "poll-category-list") ? (
-                <BuilderSettingRow label="Mobile Font Size">
-                  <input
-                    type="number"
-                    min="10"
-                    max="120"
-                    step="1"
-                    value={module.settings.mobileFontSize ?? ""}
-                    onChange={(event) =>
-                      onUpdateModule((current) => ({
-                        ...current,
-                        settings: { ...current.settings, mobileFontSize: event.target.value }
-                      }))
-                    }
-                    placeholder="Auto"
-                  />
-                </BuilderSettingRow>
-              ) : null}
-              <div className="builder-mobile-context-note">
-                Mobile overrides are kept separate from browser settings.
-              </div>
-            </div>
-          ) : (
-          <>
-          {showModuleTriggerSettings ? (
-            <BuilderModuleTriggerSettings module={module} onUpdateModule={onUpdateModule} />
-          ) : null}
-          {module.type !== "button" ? (
+    /**
+     * The module's own settings editor, chosen once. It is the shared
+     * chrome for every module that never grew an editor of its own — and
+     * naming it here is what lets the Label row above know whether that
+     * chrome is going to render, so the two can never both put a Label on
+     * the panel (E6) and the chrome-less modules never lose theirs.
+     *
+     * Hoisted out of the JSX 2026-08-25 (ticket 86bbjt1aq). The identity
+     * test below is the point of the hoist: the alternative was restating
+     * the forty conditions of the ternary as a boolean, which is a second
+     * copy of a list that grows every time a module gets an editor.
+     */
+    const moduleSettingsEditor =
+      module.type !== "button" ? (
             isCurrentPollModule ? (
               <BuilderCurrentPollModuleSettings
                 module={module}
@@ -3473,6 +3451,14 @@ export function BuilderModuleCard({
               <BuilderBlogPostCreateModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostManagerModule ? (
               <BuilderBlogPostManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isEventDetailModule ? (
+              <BuilderEventDetailModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isEventCalendarModule ? (
+              <BuilderEventCalendarModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isEventManagerModule ? (
+              <BuilderEventManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isMediaManagerModule ? (
+              <BuilderMediaManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryManagerModule ? (
               <BuilderBlogCategoryManagerModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCardManagerModule ? (
@@ -3571,7 +3557,239 @@ export function BuilderModuleCard({
             ) : (
               sharedModuleChrome
             )
+      ) : null;
+
+    /**
+     * Whether the shared chrome is on the panel — inline as this module's
+     * whole editor, or restored underneath one that swallowed it (F13).
+     * Never in the mobile pane, which renders its own overrides instead.
+     */
+    const showsSharedChrome =
+      editorDevice !== "mobile" &&
+      (moduleSettingsEditor === sharedModuleChrome || needsRestoredChrome);
+
+  return (
+    <div
+      className={`builder-module-card ${getAlignmentClass(moduleAlignment)}`}
+      style={{
+        /*
+         * Text is excluded with Button because its fill now belongs to the
+         * frame INSIDE the card (getTextModuleFrameStyle, 2026-08-15).
+         * Tinting the card as well would paint the same colour twice at two
+         * different sizes and tell the operator the fill spans the card when
+         * on the page it stops at the border. The card keeps the neutral
+         * surface; the preview inside shows what the page will show.
+         */
+        ...(module.type !== "button" && module.type !== "text" && !isPollCategoryListModule
+          ? resolveBuilderDrillDownSurfaceBackground(getModuleBackgroundSettings(module.settings), "module")
+          : {}),
+        // One reader for every type (W7). A floating image and a reminder are
+        // positioned overlays, so a wrapper margin has nothing to push.
+        ...(isFloatingImage || isReminderModule ? {} : getModuleOuterSpacingStyle(module.settings))
+      }}
+    >
+      {onModuleDragStart ? (
+        <div
+          aria-label="Drag module"
+          className="builder-module-drag-handle"
+          draggable
+          onDragStart={onModuleDragStart}
+          title="Drag Module"
+        >
+          ⋮⋮
+        </div>
+      ) : null}
+      <div aria-expanded={isExpanded} className="builder-module-header" ref={moduleHeaderRef}>
+        <div className="builder-module-title">
+          {/*
+            The pop-out sits on the LEFT, with the drag handle and the name,
+            rather than at the end of the action cluster (operator,
+            2026-08-15, with a screenshot of six side-by-side cells to show
+            why). A module in a narrow cell is clipped at its right edge, and
+            the action cluster goes with it — so the one control that ESCAPES
+            the narrow cell was the one the narrow cell hid. The left edge is
+            the only part of a module card that is always on screen.
+          */}
+          {hideHeaderActions ? null : (
+            <button
+              aria-label="Open editor in popup"
+              className={`builder-icon-button builder-module-popout${isPopped ? " builder-icon-button-active" : ""}`}
+              onClick={() => setIsPopped((p) => !p)}
+              title="Open editor in popup"
+              type="button"
+            >
+              ⤢
+            </button>
+          )}
+          <div className="builder-module-title-text">
+            <strong>{module.name || module.type}</strong>
+            <span>{module.type}</span>
+          </div>
+          {module.savedModuleId ? (
+            // Reads every spelling, writes only `canonical` — see
+            // lib/builder-client/canonical-follow.ts and its server twin.
+            (() => {
+              const following = moduleFollowsMaster(module);
+              return (
+                <button
+                  aria-label={following ? "Lock: block push updates from canonical" : "Unlock: allow push updates from canonical"}
+                  className={`builder-canonical-badge${following ? "" : " builder-canonical-badge-locked"}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUpdateModule((m) => setFollowsMaster(m, !moduleFollowsMaster(m)));
+                  }}
+                  title={following ? "Linked to canonical — click to lock" : "Custom (push updates blocked) — click to re-link"}
+                  type="button"
+                >
+                  {following ? "Linked" : "Custom"}
+                </button>
+              );
+            })()
           ) : null}
+        </div>
+        {hideHeaderActions ? (
+          <div className="builder-section-actions">
+            <button aria-label={isExpanded ? "Collapse module" : "Expand module"} className="builder-icon-button" onClick={onToggleExpanded} title={isExpanded ? "Collapse module" : "Expand module"} type="button"><BuilderCollapseIcon expanded={isExpanded} /></button>
+          </div>
+        ) : (
+          <div className="builder-section-actions">
+            <button aria-label={isExpanded ? "Collapse module" : "Expand module"} className="builder-icon-button" onClick={onToggleExpanded} title={isExpanded ? "Collapse module" : "Expand module"} type="button"><BuilderCollapseIcon expanded={isExpanded} /></button>
+            <button aria-label="Move module up" className="builder-icon-button" onClick={onMoveUp} title="Move module up" type="button">↑</button>
+            <button aria-label="Move module down" className="builder-icon-button" onClick={onMoveDown} title="Move module down" type="button">↓</button>
+            <button
+              aria-label="Clone module"
+              className="builder-icon-button"
+              onClick={onClone}
+              title="Clone module"
+              type="button"
+            >
+              ⧉
+            </button>
+            {onSaveModule ? (
+              <button
+                aria-label="Save module"
+                className="builder-icon-button"
+                onClick={onSaveModule}
+                title="Save Module"
+                type="button"
+              >
+                💾
+              </button>
+            ) : null}
+            <button aria-label="Delete module" className="builder-icon-button builder-icon-button-danger" onClick={onRemove} title="Delete module" type="button">✕</button>
+          </div>
+        )}
+      </div>
+
+      {!isExpanded ? (
+        <div
+          className="builder-module-preview-button"
+          role="button"
+          tabIndex={0}
+          onClick={onToggleExpanded}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onToggleExpanded();
+            }
+          }}
+        >
+          {renderModulePreview(module)}
+        </div>
+      ) : null}
+
+      {(isExpanded || isPopped) ? (
+        <ModuleEditorWrapper
+          isPopped={isPopped}
+          moduleType={module.type}
+          title={module.name || module.type}
+          onClose={() => setIsPopped(false)}
+        >
+          {/* A two-column editor runs its chrome down the left column beside
+              the item list, so that column needs a name at the top of it.
+              Every other module keeps the chrome full-width and has no
+              columns to label. Slideshow joined 2026-08-12, which is why this
+              is a set rather than the `=== "feature-cards"` it started as —
+              the second module to want it should not have to find this line
+              by reading the whole file. */}
+          {TWO_COLUMN_EDITOR_TYPES.has(module.type) ? (
+            <div className="builder-cards-panel-heading">Settings</div>
+          ) : null}
+          {/* Only when this module has no chrome to put it in. A module WITH
+              chrome renders the same field as the chrome strip's first row,
+              so it shares that grid's tracks instead of measuring its own.
+              Content-sized, not full-panel — this row tops every module, so
+              master rule W1 applies here with maximum leverage. */}
+          {showsLabelField && !showsSharedChrome ? (
+            <BuilderModuleFieldStrip>{moduleLabelField}</BuilderModuleFieldStrip>
+          ) : null}
+
+          {editorDevice === "mobile" ? (
+            <div
+              className={
+                module.type === "heading"
+                  ? "builder-heading-module-settings"
+                  : "builder-module-settings-row builder-module-settings-row-mobile"
+              }
+            >
+              <BuilderSettingRow label="Hide Module on Mobile">
+                <input
+                  type="checkbox"
+                  checked={module.settings.mobileHidden === "true"}
+                  onChange={(event) =>
+                    onUpdateModule((current) => ({
+                      ...current,
+                      settings: { ...current.settings, mobileHidden: event.target.checked ? "true" : "false" }
+                    }))
+                  }
+                />
+              </BuilderSettingRow>
+              <BuilderSettingRow label="Mobile Alignment">
+                <select
+                  value={mobileAlignment}
+                  onChange={(event) =>
+                    onUpdateModule((current) => ({
+                      ...current,
+                      settings: { ...current.settings, mobileAlignment: event.target.value }
+                    }))
+                  }
+                >
+                  <option value="">Use browser setting</option>
+                  <option value="left">Left</option>
+                  <option value="center">Center</option>
+                  <option value="right">Right</option>
+                </select>
+              </BuilderSettingRow>
+              {(module.type === "heading" ||
+                module.type === "headline-rotator" ||
+                module.type === "poll-category-list") ? (
+                <BuilderSettingRow label="Mobile Font Size">
+                  <input
+                    type="number"
+                    min="10"
+                    max="120"
+                    step="1"
+                    value={module.settings.mobileFontSize ?? ""}
+                    onChange={(event) =>
+                      onUpdateModule((current) => ({
+                        ...current,
+                        settings: { ...current.settings, mobileFontSize: event.target.value }
+                      }))
+                    }
+                    placeholder="Auto"
+                  />
+                </BuilderSettingRow>
+              ) : null}
+              <div className="builder-mobile-context-note">
+                Mobile overrides are kept separate from browser settings.
+              </div>
+            </div>
+          ) : (
+          <>
+          {showModuleTriggerSettings ? (
+            <BuilderModuleTriggerSettings module={module} onUpdateModule={onUpdateModule} />
+          ) : null}
+          {moduleSettingsEditor}
 
           {/* F13: the chrome the settings-editor ternary above swallowed —
               rendered here for modules whose renderer honours background and

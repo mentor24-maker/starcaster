@@ -21,8 +21,14 @@ import {
   imageEffectTravels
 } from "./builder-image-effects";
 import {
+  CAROUSEL_IMAGE_FRAME_DEFAULTS,
+  CAROUSEL_IMAGE_FRAME_LIMITS,
+  carouselImageShadowIsOn
+} from "@/lib/builder-carousel-image-frame";
+import {
   BuilderSchemaModuleSettings,
   paddingFields,
+  type BuilderSchemaField,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
 import { type BuilderThemePalette } from "./builder-theme-color-field";
@@ -48,6 +54,87 @@ type BuilderImageModuleSettingsProps = {
 // to be small. `getModuleWidthPercent` clamped anything under 10 back up to
 // it, so the floor moved there in the same change.
 const SIZE_OPTIONS = ["5", "10", "15", "25", "33", "50", "66", "75", "90", "100"];
+
+/**
+ * The five controls behind the Drop Shadow checkbox, each hidden until the
+ * box is ticked — a greyed-out row per setting is five rows of noise on a
+ * feature most pictures never use (D9: a gated field sits beside what gates
+ * it, and does not sit there when it is off).
+ *
+ * Every number here reads from the Carousel's frame constants so the two
+ * panels cannot drift into two different ideas of the same shadow.
+ */
+const IMAGE_SHADOW_DETAIL_FIELDS: BuilderSchemaField[] = [
+  {
+    key: "imageShadowColor",
+    label: "Shadow Color",
+    width: "color",
+    control: "theme-color",
+    dialogLabel: "Image drop shadow color",
+    themeDefault: CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowColor,
+    visibleWhen: carouselImageShadowIsOn,
+    rendersVia: "getImageModuleStyle"
+  },
+  {
+    key: "imageShadowX",
+    label: "Shadow X",
+    width: "num",
+    control: "number",
+    min: CAROUSEL_IMAGE_FRAME_LIMITS.shadowOffset.min,
+    max: CAROUSEL_IMAGE_FRAME_LIMITS.shadowOffset.max,
+    fallback: String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowX),
+    visibleWhen: carouselImageShadowIsOn,
+    rendersVia: "getImageModuleStyle"
+  },
+  {
+    key: "imageShadowY",
+    label: "Shadow Y",
+    width: "num",
+    control: "number",
+    min: CAROUSEL_IMAGE_FRAME_LIMITS.shadowOffset.min,
+    max: CAROUSEL_IMAGE_FRAME_LIMITS.shadowOffset.max,
+    fallback: String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowY),
+    visibleWhen: carouselImageShadowIsOn,
+    rendersVia: "getImageModuleStyle"
+  },
+  {
+    key: "imageShadowBlur",
+    label: "Shadow Blur",
+    width: "num",
+    control: "number",
+    min: CAROUSEL_IMAGE_FRAME_LIMITS.shadowBlur.min,
+    max: CAROUSEL_IMAGE_FRAME_LIMITS.shadowBlur.max,
+    step: 2,
+    fallback: String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowBlur),
+    visibleWhen: carouselImageShadowIsOn,
+    rendersVia: "getImageModuleStyle"
+  },
+  {
+    key: "imageShadowSpread",
+    label: "Shadow Spread",
+    width: "num",
+    control: "number",
+    min: CAROUSEL_IMAGE_FRAME_LIMITS.shadowSpread.min,
+    max: CAROUSEL_IMAGE_FRAME_LIMITS.shadowSpread.max,
+    fallback: String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowSpread),
+    visibleWhen: carouselImageShadowIsOn,
+    rendersVia: "getImageModuleStyle"
+  },
+  {
+    // Without this a shadow is flat black, which no photograph wants. 30% is
+    // the softness the default X/Y/Blur assume.
+    key: "imageShadowOpacity",
+    label: "Shadow Opacity",
+    width: "num",
+    control: "number",
+    min: CAROUSEL_IMAGE_FRAME_LIMITS.shadowOpacity.min,
+    max: CAROUSEL_IMAGE_FRAME_LIMITS.shadowOpacity.max,
+    step: 5,
+    fallback: String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowOpacity),
+    visibleWhen: carouselImageShadowIsOn,
+    rendersVia: "getImageModuleStyle"
+  }
+];
 
 /**
  * Shared "prime" image controls, used by the image module and by nested
@@ -252,9 +339,43 @@ export function BuilderImageModuleSettings({
               fallback: "18",
               rendersVia: "getImageModuleStyle"
             }
-          ]
+          ],
+          /*
+           * DROP SHADOW (operator, 2026-08-25: "add dropshadow settings for
+           * images").
+           *
+           * On Frame, not Effects, and that is a rule rather than a
+           * preference: a shadow is filed by what it shadows (A7). This one
+           * is a `box-shadow` on the picture's frame, so it belongs beside
+           * the border and radius that draw the rest of that frame.
+           * `text-shadow` is the one that lives on a Text axis.
+           *
+           * Last on the axis by D9 — border thickness restyles the picture,
+           * a shadow finishes it.
+           *
+           * The SAME six controls, keys, defaults and limits the Carousel's
+           * pictures have carried since 2026-08-16, from
+           * `builder-carousel-image-frame.ts`. Deliberately not the shared
+           * `dropShadowFields()`: that one is built for text and defaults to
+           * a hard 3/3/2 black, with no spread and no opacity. A photograph
+           * wants the soft one — and a Carousel of pictures and a lone
+           * picture disagreeing about what "Drop Shadow" means would be two
+           * things to learn for one idea.
+           */
+          [
+            {
+              key: "imageShadow",
+              label: "Drop Shadow",
+              width: "check",
+              control: "checkbox",
+              fallback: String(CAROUSEL_IMAGE_FRAME_DEFAULTS.shadow),
+              rendersVia: "getImageModuleStyle"
+            }
+          ],
+          ...IMAGE_SHADOW_DETAIL_FIELDS.map((field) => [field])
         ],
-        // A2 theme overrides. Frame's order is width, colour, then radius (D9).
+        // A2 theme overrides. Frame's order is width, colour, then radius,
+        // then the shadow (D9).
       },
       {
         // Its own axis as of 2026-08-16, and empty-ish on purpose: the

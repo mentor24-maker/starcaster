@@ -184,7 +184,16 @@ function measure(page, nonStretch) {
       // that Structure and Placement match, which the rule deliberately does
       // not ask for. Chrome outside any axis column is its own group.
       const groups = [...panel.querySelectorAll('.builder-schema-panel-column')];
-      const loose = [...panel.querySelectorAll('.builder-module-chrome .builder-module-field-strip')];
+      // The chrome's OWN strip, by direct child (2026-08-25, ticket
+      // 86bbjt1aq). It used to be any descendant strip, which read as the
+      // safer selector and was the looser one in the way that matters: the
+      // background picker brings a strip of its own, so `Background` was
+      // measured as a group of one — a group of one always agrees with
+      // itself — instead of as a row of the chrome. Its label sat 55px left
+      // of every other chrome control for weeks and this reported a clean
+      // pass the whole time. As a direct child the group is the whole chrome
+      // and the background's rows are inside it, where they can disagree.
+      const loose = [...panel.querySelectorAll('.builder-module-chrome > .builder-module-field-strip')];
       // An item manager running its own lattice (L6a) opts in by declaring
       // how many label/field pairs it puts on a row. It is measured like any
       // other group — this check reported a clean pass on the Feature Cards
@@ -192,8 +201,48 @@ function measure(page, nonStretch) {
       // above, and the pass was read as verification. A surface the check
       // cannot see is a surface the rule does not cover.
       const managers = [...panel.querySelectorAll('[data-lattice-pairs]')];
-      return [...groups, ...loose, ...managers].map((group, gi) => {
-      const groupName = ((group.querySelector('.builder-schema-group-title') || {}).textContent || '').trim()
+
+      /*
+       * A GROUP CAN BE MORE THAN ONE BOX (ticket 86bbmafd6, 2026-08-26).
+       *
+       * Everything above measures each box against ITSELF, which is why this
+       * check passed for weeks over the bug the operator was looking at: in a
+       * stacked two-column editor the chrome and the settings column below it
+       * were two grids, each perfectly aligned internally, disagreeing with
+       * each other by 33px. Two groups that each agree with themselves is the
+       * same blind spot as a group of one, one level up.
+       *
+       * The boxes that claim to share the editor's lattice say so in the
+       * cascade — they are the ones placed on the `lattice-start` line — so
+       * that is what identifies them, and they are measured together against
+       * the PANEL, not each against its own rect. Now their offsets are in
+       * one coordinate system and every assertion below applies across the
+       * seam.
+       *
+       * Two or more, never one: a lone sharer agrees with itself, and this
+       * check has already been fooled by that exact shape once (#432).
+       */
+      const shared = [...panel.querySelectorAll('.builder-module-field-strip, .builder-schema-panel-column')]
+        .filter((el) => getComputedStyle(el).gridColumnStart === 'lattice-start');
+
+      /*
+       * A unit is the boxes to read pairs from plus the origin to measure
+       * them against. For every group above those are the same element; for a
+       * shared lattice they are not, which is the only reason this is a pair
+       * of fields rather than one.
+       */
+      const units = [
+        ...groups.map((el) => ({ els: [el], origin: el })),
+        ...loose.map((el) => ({ els: [el], origin: el })),
+        ...managers.map((el) => ({ els: [el], origin: el })),
+        ...(shared.length > 1 ? [{ els: shared, origin: panel, shared: true }] : []),
+      ];
+
+      return units.map((unit, gi) => {
+      const group = unit.els[0];
+      const groupName = unit.shared
+        ? `shared lattice — chrome + settings, ${unit.els.length} boxes`
+        : ((group.querySelector('.builder-schema-group-title') || {}).textContent || '').trim()
         || `chrome strip ${gi}`;
       // Legacy BuilderSettingRow pairs are measured too. They were not,
       // and on 2026-08-11 the heading panel's offsets sat 12px right of
@@ -207,11 +256,11 @@ function measure(page, nonStretch) {
       // whole modal of stacked full-width boxes while this reported a clean
       // pass (operator 8/12). A control the check cannot see is a control the
       // rule does not cover — the same lesson as the heading offsets.
-      const pairs = [
-        ...group.querySelectorAll('.builder-module-field'),
-        ...group.querySelectorAll('.builder-setting-row, .builder-setting-row-full'),
-        ...group.querySelectorAll('label.field'),
-      ].filter((el) => !el.closest('.builder-slider-item-grid, .builder-item-grid'));
+      const pairs = unit.els.flatMap((el) => [
+        ...el.querySelectorAll('.builder-module-field'),
+        ...el.querySelectorAll('.builder-setting-row, .builder-setting-row-full'),
+        ...el.querySelectorAll('label.field'),
+      ]).filter((el) => !el.closest('.builder-slider-item-grid, .builder-item-grid'));
       // ITEM MANAGERS ARE OUT OF SCOPE, deliberately and not by accident.
       // A repeating card editor (social links, TOC entries, tag rows) is a
       // titled-column grid governed by L6, not a column of the panel
@@ -253,7 +302,7 @@ function measure(page, nonStretch) {
           .map((c) => c.replace('builder-module-field--', ''))
           .find((c) => c !== 'builder-module-field') || '';
 
-        const or = group.getBoundingClientRect();
+        const or = unit.origin.getBoundingClientRect();
         const lr = label.getBoundingClientRect();
         const cr = control.getBoundingClientRect();
 

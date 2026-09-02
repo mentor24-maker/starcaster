@@ -62,10 +62,12 @@ earns ClickUp's misleading "Team not authorized" 401. When in doubt,
 The everyday commands (run `npm run clickup` bare for the full list):
 
 ```bash
-npm run clickup -- queue --list 901418546619 --status Queued   # first line = the task to claim
+npm run clickup -- queue --list 901418546619 --claimable       # first line = the task to claim (all Rework, then Queued)
 npm run clickup -- get --task <id>                             # header + body
 npm run clickup -- comments --task <id>                        # where the PR URL lives
-npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim
+npm run clickup -- waiting [--task <id>]                        # is this ACTUALLY waiting on Dane? read-only; run it BEFORE saying so
+npm run clickup -- claim --task <id>                           # safe claim: reads the ticket's own status and guards on it
+npm run clickup -- status --task <id> --status Building --if-status Queued   # the long form, when you know the status
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # hand it to Dane: card + status
 npm run clickup -- pr-opened --task <id> --pr <pr-url>          # record the PR (loop-build step 7 — required)
 npm run clickup -- verdict --task <id> --pass|--fail --if-status "In review" --body-file -  # the review verdict (loop-review step 4)
@@ -74,6 +76,7 @@ npm run clickup -- comment --task <id> --body-file -           # a plain note (p
 npm run clickup -- describe --task <id> --body-file -          # REPLACE the description (the left column)
 npm run clickup -- chat --channel 2kydhxeu-474 --body-file -   # post to the bus
 npm run clickup -- attach --task <id> --file a.png --file b.png             # before/after pictures
+npm run --silent clickup -- next-interval --for loop-build --fallback 3600  # how long to sleep next (one integer)
 ```
 
 `status` enforces the handoff rule by itself: moving into any machine status
@@ -98,7 +101,9 @@ found what the other times cost:
   correctly refused to guess which PR they meant — and two of those PRs also
   shipped with no ClickUp link in the body, so ticket and PR could only be
   paired by reading titles. `pr-opened` now checks the PR body FIRST (exit 4
-  if the link is missing) and only then writes the ticket side.
+  if the link is missing) and only then writes the ticket side. That check
+  wants the **full URL** — a bare task id is not enough (see "One matcher for
+  'the PR names its ticket'" below for why the two readers had to agree).
 - **Two tickets reached `Ready to launch` with no passing review on them.**
   That status is the operator's "safe to merge" signal; he approved both in
   good faith. `ask` and `status` now both refuse to set it unless the newest
@@ -154,7 +159,7 @@ The two rules that came out of it, and where each one lives:
    then stand down — no verdict, no status move, take the next task.
    `--no-guard` opts out and says so in the transcript.
 
-   The send-back path carries the same guard (`status --status Queued
+   The send-back path carries the same guard (`status --status Rework
    --if-status "In review"`). The pass path needs no second guard, because
    `ask --status "Ready to launch"` already refuses unless the newest verdict
    is a PASS — so a verdict the guard refused blocks the status move behind it.
@@ -220,6 +225,76 @@ PR regardless, so the migration cannot reach anything irreversible. A ticket
 whose PR was merged by hand during the stall gets one truthful comment saying
 so instead.
 
+### ...and a hand-off now names who is going to act (2026-08-30, task 86bbq0fh8)
+
+The section above made the hand-off honest about the *approval*. It stayed
+dishonest about the *actor*. The comment said the merge would go through "once
+the branch is caught up", and the pass posted `MERGE BLOCKED` to the bus asking
+for an agent session to resolve it.
+
+**Nothing reads the bus.** No session polls that channel and turns a request
+into claimed work, so it went into an empty room while the ticket comment
+described a process already underway. PR #434 sat that way from 2026-08-26 to
+2026-08-29; every pass logged `MERGE HANDED OFF (unchanged, nothing posted)`
+and `0 merged`, which is the correct quiet behaviour once a hand-off exists.
+Dane found it himself and asked why nothing had happened. The system worked as
+designed and the design had no actor in it.
+
+Dane picked **option C** on 2026-08-30: file it into the queue that already has
+a consumer.
+
+- **A conflict files a Loop Queue ticket — and calls the work what it is.**
+  GitHub saying `CONFLICTING` is not a finding; what the relay machine found
+  when it tried the merge itself is. There are **three** answers it can give,
+  and each gets its own ticket, comment and bus wording, all from one table in
+  `scripts/builder/conflictWork.js`:
+  - **a real overlap** — *"Resolve the merge conflict on PR #N (branch)"*,
+    carrying the branch, why it conflicts, and an explicit instruction not to
+    ask Dane to approve again.
+  - **no overlap** — nothing is filed at all. The local merge came back clean
+    (a lost push race, or GitHub answering about a state it has not caught up
+    with), so the next relay pass retries and it clears itself.
+  - **the check could not run** — wrong repo, failed fetch, no scratch
+    worktree — *"Find out why PR #N (branch) will not merge"*, whose first
+    acceptance criterion is to answer that question out loud before touching
+    anything. It must NOT say "resolve the conflict": nobody has established
+    there is one. `WRONG_REPO` also says the answer is permanent from the
+    relay machine and names what would settle it.
+
+  The build loop drains that list on a timer today, so the actor already
+  exists and is already running. No new consumer, and no second queue beside
+  the one that works.
+- **The comment names that ticket, or says nobody is on it.** Every notice now
+  declares an `actor` beside its marker, and the two together decide whether
+  the body may promise the approval carries over. `actor: 'nobody'` — filing
+  failed — prints *"Nothing is currently working on it"* and makes no promise
+  at all. Passive voice implying an unnamed actor is itself the defect
+  (vault `doctrine/TERMINOLOGY.md`, 2026-08-29; `docs/DOCTRINE.md` §2.5).
+- **Filing is idempotent, and a failure to file is loud.** The trail comment
+  (`CONFLICT TICKET FILED: PR #N — <url>`) is written by and read back through
+  `scripts/builder/conflictWork.js`, so a conflict that persists for a day
+  does not file twenty-four tickets. If the ticket cannot be filed, that goes
+  in the pass's `could not be checked` list and the bus post says
+  `MERGE BLOCKED AND UNFILED`.
+- **Silence has a shelf life, and the banner says which kind of silence.** A
+  hand-off with no ticket behind it is stalled immediately — *unless* the
+  verdict was a proven no-overlap, where the next relay pass IS the actor and
+  is real, so nagging about it would be a false alarm. Anything that has not
+  moved in 24 hours stops being quiet and reports every pass, by name, under
+  the banner its own verdict earns: `CONFLICTS STILL UNRESOLVED` for a real
+  overlap, `MERGE STILL NOT CLEARED` for one that was supposed to heal itself,
+  and `MERGE STILL BLOCKED — THE CHECK NEVER RAN` when nothing was ever
+  established. A mixed pass says so rather than rounding to either. That
+  bucket is deliberately separate from `could not be checked` — the latter
+  exits 1 because it describes an unhealthy *pass*, while a stalled hand-off
+  is a healthy pass reporting an unhealthy *ticket*.
+
+**These heal themselves too.** A hand-off already sitting in the record with no
+ticket behind it gets one filed on the next pass, and that counts as news even
+though the reason has not changed — so the comment naming the new actor is
+posted rather than suppressed by the quieting rule. Same shape as the marker
+migration above: nothing to remember to run by hand.
+
 ## The two columns, and the operator card (ratified 2026-08-22)
 
 ClickUp puts the task description on the **left**, wide, and the comment stream
@@ -255,8 +330,9 @@ npm run clickup -- ask --task <id> --status "Needs your input" --body-file -
 npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -
 ```
 
-The body is four sections. The check runs **before** the first network call, so
-a card that fails the shape leaves the ticket exactly where it was:
+The body is four sections, plus a fifth that some asks are required to carry.
+The check runs **before** the first network call, so a card that fails the
+shape leaves the ticket exactly where it was:
 
 ```
 @@ASKED
@@ -270,21 +346,184 @@ anything else; over 100 it becomes the wall of text this replaces.
 @@NEEDED
 The specific ask. "Nothing right now" is a good answer and a useful one, but it
 has to be written down rather than left blank.
+@@EVIDENCE
+Optional in general; REQUIRED when the ask costs money or cannot be undone.
+The command in runnable form, its actual output pasted in a ``` fence, and one
+line saying when you ran it:
+
+    @@MEASURED 8:04pm
+
+That line is the ONLY thing that dates the card. Every other clock in the
+section — narrated or inside the paste — is ignored. It goes in the prose,
+outside the fence, and carries the clock and nothing else (date it too if it
+was not today: `@@MEASURED 2026-08-23 8:04pm`).
 ```
 
-`@@NEEDED` renders under a banner he can find without reading:
+`@@NEEDED` renders as the LAST thing on the card, inside a banner he can find
+without reading — bold, `#CC0000`, with the ask on the label's own line
+(Dane, 2026-08-30, task 86bbq5ruz):
 
 ```
 #############################
-NEEDED FROM DANE: 
+NEEDED FROM DANE: Your word to merge PR #444.
 #############################
 ```
+
+Nothing renders after it: his words, what is going on, the evidence if any,
+then the banner. Anything a later edit adds that needs a new action from him
+goes at the bottom. The card is posted in ClickUp's structured comment shape
+(`comment: [{ text, attributes }]`), because colour exists only there and that
+shape does not parse markdown — `renderCardComment` converts the small subset
+agents write (`**bold**`, fences, `` `code` ``) into attributes.
 
 The shape is a real module (`scripts/builder/operatorCard.js`) with real tests
 (`scripts/builder/operatorCard.test.js`), not a convention an agent has to
 remember. `status --status "Needs your input"` refuses on its own and prints
 the `ask` form; `--no-card` is the escape hatch, and like `--operator-asked`
 above it is a written claim in the transcript, not a permission check.
+
+### An ask that costs money must carry the command that proves it
+
+On 2026-08-23 an agent escalated to Dane and asked him to spend money on a
+diagnosis that was wrong: the bus chat had refused every write for sixteen
+hours, a custom-field write failed with "Custom field usages exceeded for your
+plan", and `GET /team/{id}/plan` read back `Free Forever`, so it recommended
+putting the workspace on a paid plan. Re-measured hours later on the same token
+and the same unchanged Free plan, every one of those calls succeeded — the
+outage was transient and cleared itself, and paying would have fixed nothing.
+
+The mistake was not the hypothesis; it was that the hypothesis reached his
+wallet without anyone re-running the failing call. So `ask` now refuses a card
+whose `@@NEEDED` proposes spending, buying, subscribing, a plan change, a
+credential rotation or a deletion unless `@@EVIDENCE` carries the command, its
+real output in a fence, and the time it was run. The trigger words and the
+reason for each live in `scripts/builder/costlyAsk.js`; adding one is a
+one-line change with a test beside it.
+
+The gate is deliberately narrow rather than a general assumption-checker: a
+checking agent would add a round trip, make assertions of its own, and cost
+tokens continuously to catch a class a free rule catches — and the evidence for
+"assertions of its own" is this incident, where the agent that produced the
+wrong diagnosis was already the careful one. An ordinary escalation — a design
+question, a scope choice, an A-or-B with no cost — is untouched, and a test
+pins that, because a gate that fires on everything gets routed around and then
+protects nothing.
+
+The card also shows the measurement time in the heading it renders
+(**THE CHECK BEHIND THIS ASK — measured at 8:04pm**). Evidence gathered before
+a sixteen-hour outage is not evidence about now, so the freshness is stated
+rather than implied.
+
+**That time is DECLARED on its own line, not read out of your sentences.**
+Four versions of this gate each inferred it, and each inferred it differently —
+the first clock anywhere in the section (which is how a `2026-08-20 3:12pm` log
+line dated a card six days stale), then the first clock in the prose, then the
+last clock a measurement cue governed, then the clock a cue introduces. Every
+one was right on the sentences it was tested against and wrong on the next one
+somebody wrote. The last of them headed a card *measured at 3:12pm* — the
+moment the outage STARTED — off the sentence "At 8:04pm I re-ran the failing
+call, well after the outage began at 3:12pm". That is the exact half of the
+2026-08-23 incident the timestamp exists to close, arriving through the
+machinery meant to close it, and it did not refuse: it asserted it.
+
+Dane settled it on 2026-08-29 (option A on task 86bbk34ym): stop guessing, make
+the writer say so. `@@MEASURED 8:04pm` on its own line, everything else
+ignored. It costs an agent one line per costly ask, and it ends the class —
+there is no sentence shape left to get wrong. The reasoning is on the rule
+itself (`MEASURED_LINE` in `scripts/builder/operatorCard.js`), because the
+ticket's own Non-goals say this gate stays cheap, narrow and mechanical, and
+reading which clock an English sentence means is none of those.
+
+A card with no `@@MEASURED` line is refused; so are two of them, a line with
+something other than a clock on it, and one written inside the fence (where it
+reads as part of what the machine printed) or under the wrong section. Each of
+those gets its own sentence, because "add a time" is unhelpful to an author who
+wrote one in the wrong place.
+
+The same review found the trigger list carried base and gerund forms but no
+third-person ones, so "this deletes all 550 rows", "it rotates the key" and
+"approving this upgrades the workspace" all posted with no evidence at all —
+and third person is the most natural way to describe what the operator's yes
+will do. Every verb in the list now carries all three forms, with a test that
+fails if a future verb arrives with a form missing.
+
+**A second review round, the same day, found three more of the same shape** —
+the gate doing the wrong thing silently rather than refusing. (1) Reading the
+prose fixed the fence but kept *first clock wins*, and evidence narrates before
+it proves: "the outage began at 3:12pm. I re-ran the failing call at 8:04pm"
+rendered as *measured at 3:12pm*. Only a clock a measurement cue governs
+(`measured|ran|re-ran|checked at`…) counts as the run; two clocks with no cue
+are refused rather than guessed at, because the heading is load-bearing and a
+wrong time is worse than none. (2) Each trigger was bounded by "not a word character
+**or hyphen**", on the belief that `\b` would not fire beside a hyphen — it does,
+so the custom boundary only ever removed matches, and `hard-delete`,
+`force-delete`, `auto-purge` and `key re-rotation` were never checked at all.
+Plain `\b` now. (3) `costs` was listed and the base form `cost` was not, so "this
+will cost thirty dollars a month" was silent; the completeness test now names
+`cost` and twelve other verbs, so the rule it describes is actually held up.
+
+**And one correction in the other direction.** The bare nouns — `billing`,
+`invoice`, `deletion`, `rotation`, `migration`, `payment`, `subscription` —
+fired on any sentence that merely mentioned them, so "nothing needed, the
+deletion already happened last week" and "just confirm you saw the invoice
+screenshot" were both REFUSED and the agent could not hand the ticket off until
+it reworded a card that was already right. A noun now fires only where a
+proposal cue governs it in the same sentence (`approve the deletion`, `run the
+migration`, `go ahead with the rotation`); a verb needs no cue, because
+proposing is what a verb does here — which is also why past tense is
+deliberately absent from the list. The known limit, stated rather than hidden:
+a bare noun phrase with no verb at all ("the key rotation — yes or no?") does
+not fire, and the verb forms are the primary net.
+
+**A third round found the same mis-dating for the third time, and what
+actually fixed it.** Rounds 1, 2 and 3 each picked the run time by where it sat
+in the text — first clock, first clock in the prose, last clock a cue governs —
+and each was wrong on the next sentence shape somebody wrote. A cue was allowed
+to govern every clock later in its sentence, and authors narrate *after* the
+run time as readily as before it, so "I re-ran the chat POST at 9:40pm, well
+after the outage that began at 3:12pm" rendered as *measured at 3:12pm*. There
+is no position that means "this is the measurement": the cue does, and it is
+spent on the clock it introduces. A cue now reaches only from the previous
+clock to the next one, and **two times both marked as the run are refused
+rather than ranked** — this heading is the single place the gate asserts
+something to Dane instead of refusing something, so a wrong "measured at" is a
+false statement about a live system, which is the shape of the original
+incident. A wrong refusal costs a reword.
+
+**A fourth and fifth round found the same mis-dating again, and it went to
+Dane.** Round 4 scoped a cue to the clock it introduces; round 5 wrote the run
+time FIRST and the narration after it — "At 8:04pm I re-ran the failing call,
+well after the outage began at 3:12pm" — and the cue, sitting between the two
+clocks, reached forward to the wrong one. Five rounds, five positional rules,
+five sentence shapes. It was escalated as a product decision rather than sent
+back a fifth time, and Dane chose to stop inferring altogether: the run time is
+now the declared `@@MEASURED` line described above. The same round also found
+that every bare noun fired in the singular and was silent in the plural —
+"Approve the deletions" demanded no evidence while "Approve the deletion" did,
+which is the gate declining on the more costly spelling of the same ask. Each
+noun now carries its plural, with a completeness test that names the pairs in
+both directions.
+
+The same round closed three narrower holes: a lone bare clock in the prose is
+no longer taken at its word when the pasted output carries a clock too (a bare
+time beside a log is usually the thing that *broke*, not the check); a
+backslash-continued command counted as two pasted lines and so satisfied the
+"show me the output" rule with no output at all; and the innocent phrases were
+lifted out as raw characters rather than as whole words, so "pays offshore
+contractors" lost "pays off" out of the middle of a word. The cue list also got
+the all-forms rule the trigger list had already been given twice — "proceeding
+with the deletion", "performing the key rotation", "this executes the
+migration", "kicking off the migration", "signing off on the invoice" were all
+silent — with a completeness test that names the cue families in both
+directions, so a lone form cannot be added without its siblings.
+
+One item is left deliberately unchanged and is the operator's to settle: a bare
+dollar figure fires with no proposal cue, so a card that asks for nothing while
+mentioning a cost ("nothing right now, the Vercel bill came to $30 last month")
+is refused. A cue rule would fix that and would also silence "$29/month for
+Business or $49 for the tier above?", which is a real ask with no verb in it.
+That is a product question about how much natural language a keyword gate
+should chase, not a correctness one.
 
 ### ClickUp deletes `> ` blockquotes — from comments AND descriptions
 
@@ -343,13 +582,14 @@ this list's id is hard-coded in 18 places across 11 files, so moving approvals
 off it is its own epic, and it buys a tab. A saved view does the same job with
 nothing moved.
 
-## The six statuses — and the two that are yours
+## The seven statuses — and the two that are yours
 
 The task list lives in a ClickUp list called **"Loop Queue"** in the
-**Starcaster** space. Every ticket sits in exactly one of six statuses:
+**Starcaster** space. Every ticket sits in exactly one of seven statuses:
 
 | Status | What it means | Whose move |
 |---|---|---|
+| `Rework` | review sent it back — a branch and a PR already exist | machine |
 | `Queued` | waiting for a build loop to pick it up | machine |
 | `Building` | a loop is writing the code | machine |
 | `In review` | a loop is checking that code against the task | machine |
@@ -364,7 +604,27 @@ plain-language question in the ticket comments. `Ready to launch` wants a
 authorize.
 
 Everything else is the machine talking to itself. On a normal day you can
-ignore four of these six.
+ignore five of these seven.
+
+**`Rework` is new (2026-08-31, task 86bbr1u9v), and it exists because a
+send-back used to go back to `Queued`, where it was indistinguishable from work
+nobody had started.** Three things followed. It was invisible — "52 queued, 1 in
+review" read as 52 fresh tickets when six of them were half-built with open
+PRs. It lost its place in line, because a sent-back ticket re-entered the
+priority contest from scratch, so normal-priority rework never won against
+fresh high-priority work: #419 (25 August), #446, #447 and #449 did not go stale
+by accident, *the claim rule did it to them*. And the work-in-progress cap could
+not report honestly, saying "1 in flight" while five real branches sat open.
+
+**loop-build drains every `Rework` ticket before any `Queued` one, oldest
+first, priority ignored inside the rework tier.** Priority says what to
+*start*; rework is not started, it is finished — and ordering rework by
+priority would recreate the same starvation one tier down. A ticket in `Rework`
+does **not** count against the work-in-progress cap (Dane's call, 2026-08-31):
+the cap answers "how many NEW things may I start", and counting rework is
+exactly what deadlocked the build loop for four hourly passes on 2026-08-25.
+It is named separately in every message that counts anything, which is the
+whole point — the omission has to be visible.
 
 Two rules keep it honest:
 
@@ -467,24 +727,28 @@ applies to **building**: every piece of work gets its own folder and branch.
 That is what the loops do for each task. It was never about where a loop
 session is launched from.
 
+The unattended runner on the Mac Mini does not use a fixed number any more —
+it asks the queue how long to sleep after each pass. See **"How often the
+LOOPS wake"** below for the curve, the 900 s floor and why that floor exists.
+
 `/loop 30m X` means "run X, then run it again every 30 minutes." Build drains
-the `Queued` pile into PRs; review drains the `In review` pile into
-`Ready to launch` PRs that ping you.
+the `Rework` pile and then the `Queued` pile into PRs; review drains the
+`In review` pile into `Ready to launch` PRs that ping you.
 
 Your day:
 1. **Morning:** run `loop-spec`, answer its questions, approve the task list.
 2. **During the day:** the loops build and review. You get a message per
    `Ready to launch` PR with a preview link and test steps.
 3. **When you're ready:** reply **`merge`** on the ticket — just that word.
-   Within one bus-relay cycle (hourly) it is merged and the ticket closes as
-   `Live`, provided the PR is still open, green and conflict-free. Telling a
+   Within one bus-relay cycle (every 10 minutes) it is merged and the ticket
+   closes as `Live`, provided the PR is still open, green and conflict-free. Telling a
    CC session "merge PR #NN" still works and is faster if one is open; the
    comment is the version that works when nobody is watching. Either way the
    decision is yours — see Safety.
 4. **When a ticket asks you a question** (`Needs your input`): answer it as a
-   comment on the ticket. Within one bus-relay cycle (hourly) your answer is
-   posted to the bus and the ticket goes back to `Queued` for a build loop to
-   pick up — the comment alone is enough, no status clicking.
+   comment on the ticket. Within one bus-relay cycle (every 10 minutes) your
+   answer is posted to the bus and the ticket goes back to `Queued` for a build
+   loop to pick up — the comment alone is enough, no status clicking.
 
 ### The one place to check: Assigned to me
 
@@ -503,8 +767,79 @@ scoped to one space, so it could see Loop Queue or Agent Response but never
 both — and the workspace-wide level made a status filter unwieldy, since it
 offers every status in the workspace at once. Assignment sidesteps all of it.
 
-If you ever see a ticket assigned to you sitting in `Queued`, `Building`, or
+If you ever see a ticket assigned to you sitting in `Rework`, `Queued`, `Building`, or
 `In review`, that is a bug in a loop, not a job for you — tell CC.
+
+### No agent says something is waiting on you without running `waiting` first
+
+**The rule, in one line: an agent may not state that anything is waiting on
+Dane until `npm run clickup -- waiting` has said so.** It is one command, it
+takes a couple of seconds, and it is the only thing in the room that has
+actually read the ticket.
+
+Twice on the evening of 2026-08-23 an agent told him something needed him when
+it did not, and he acted on it both times:
+
+- *"Seventeen Ready-to-launch tickets are waiting on your merge word."* Eleven
+  already carried his approval and were stuck on a machine that could not push
+  to GitHub. He went looking for work that was not his.
+- *"The YouTube worker decision is the one thing waiting on you."* He had
+  answered `A` an hour earlier, and the relay had already cleared his name and
+  moved the ticket to `Queued`. He asked, reasonably, whether he had to answer
+  a third time.
+
+Neither was a lie and neither was a reasoning failure. Both were **a claim
+about current state, stated flatly, by an agent reading something other than
+the state** — a terminal buffer in one case, a stale impression of a list in
+the other. Him, that night: *"The issue is making assumptions and stating them
+with confidence. It has come up many times."*
+
+A rule alone would not have held. Every claim that was RIGHT that evening
+carried its evidence welded on ("854/854, verified by read-back"; "exit 0,
+here is the output"). Every claim that was WRONG was a confident sentence with
+nothing attached. So the command exists to make the cheapest path the correct
+one:
+
+```bash
+npm run clickup -- waiting                    # what actually needs him, both lists
+npm run clickup -- waiting --task 86bbjve6b   # one ticket, the whole picture
+```
+
+```
+86bbjve6b  Acquire YouTube slice 3/4
+  status:     queued
+  assignee:   (not Dane)
+  last word:  Dane, "A", 2026-08-23 8:11pm
+  VERDICT:    NOT waiting on Dane — his own comment is the newest word on it — a machine owes the next move, whatever the status says
+```
+
+The verdict is **derived, never guessed**, from three live facts and nothing
+else: the status (`needs your input` / `ready to launch` are his lane), whether
+he is assigned (assignment IS the handoff signal, above), and whether the
+newest comment is his. A ticket in his lane, assigned to him, whose newest
+comment is not his → **waiting on him**. A ticket whose newest comment IS his →
+waiting on a machine, whatever the status says. Anything the read cannot
+establish prints `CANNOT TELL` with the reason and exits non-zero — never a
+confident verdict either way, because a wrong "not waiting" is how an answered
+ticket sits for nine hours.
+
+Exit codes match the rest of the loop tooling: **0** nothing of his, **3**
+something IS his, **1** could not tell. It is read-only — it never moves a
+status, assigns anyone or comments anywhere.
+
+`ask` enforces the same rule at the other end: it **refuses** to hand a ticket
+back to him when his own comment is already the newest one on it, because that
+is the "answer this a third time" failure arriving through the mechanism built
+to prevent it. `--after-his-answer` overrides it, on the record, for a
+genuinely new question.
+
+**The refusal stands on both doors into his lane.** `ask` is one way in;
+`status --status "Needs your input" --no-card` is the other, and it assigns him
+just the same — so both go through one shared check rather than a copy that can
+drift. This is the same lesson the Ready-to-launch gate learned (task
+86bbjt18r): a guard covering one of two routes is worse than no guard, because
+it earns the belief that the failure has become impossible.
+
 
 ## Visual changes come to you as pictures
 
@@ -527,16 +862,157 @@ Because the entry rides inside the task's own PR, the log updates on `main` at
 the exact moment the work merges; nothing edits `WORK-LOG.md` directly. Scroll
 that one file any day to read, in English, everything the loops have shipped.
 
+## The weekly report — figures generated, narrative written (2026-08-25, task 86bbkw1mn)
+
+The first weekly report, on 2026-08-24, was assembled by hand and took most of
+an afternoon. Almost all of that was **gathering**: every figure in it came out
+of a command. The writing did not — the ranked five, the plain-language
+summaries and the incident write-ups are judgement.
+
+So the job is split exactly along that line, and the split is the point:
+
+| | Who does it | How long |
+| ---| ---| --- |
+| The figures | `scripts/weekly_report.mjs`, on a schedule | seconds |
+| The narrative | a person, or an agent in a short pass | about ten minutes |
+
+**The script does not write prose.** A generated paragraph would be worse than
+no paragraph, because it reads like a judgement nobody actually made. It leaves
+a visible empty slot on the page instead, and files a ClickUp ticket so the
+narrative pass is queued work rather than something someone has to remember.
+
+### What it writes, and where
+
+`docs/reports/YYYY-MM-DD.html` plus `docs/reports/YYYY-MM-DD.data.json`, both
+**committed**, with `docs/reports/index.html` listing editions newest-first.
+
+These are records, the same category as `docs/WORK-LOG.md` — **not** build
+artifacts. They are deliberately absent from `.gitignore` and from
+`check_conventions`' generated list. A report that vanishes on the next build is
+not a record, and a test pins that so a future tidy-up cannot quietly reclassify
+them.
+
+The JSON exists so the narrative pass re-gathers nothing: every number on the
+page is in it.
+
+### The honesty rule
+
+**A figure the script could not read prints as `not available` with its reason.
+It is never omitted and never estimated, and the run still exits 0.**
+
+A report that silently drops a metric reads as though the metric was fine — the
+reader cannot tell "zero" from "we didn't look". Unreadable figures are also
+marked visually, not only worded, so a skimmed page cannot mislead either.
+
+Two figures are honest in a particular way worth knowing about:
+
+*   **Unattended loop passes** is a labelled *proxy* for machine time. What a
+    reader actually wants is Anthropic quota spent, and that is not readable
+    from this repo at all. The page says so rather than leaving the row out.
+*   **Only merged work counts.** A `(#373)` in a commit subject is not evidence
+    that #373 merged — the first edition credited exactly that PR while it was
+    still open. The check is GitHub's own state, and a test pins it with a
+    fixture containing an open PR.
+
+### Two ways a figure can be short, and what the page does about it
+
+The honesty rule is easy to state and easy to break from a new direction. Every
+one of these was a number that *was* read, was incomplete, and printed as though
+it were whole — which is worse than a gap, because a gap is visible.
+
+*   **The window must be a week that has finished.** `--window 7` alone means
+    "the 7 days ending *today*". Fired Monday 07:00 that covers up to 07:00, and
+    the next edition starts Tuesday — so Monday daytime lands in **no edition at
+    all**, and nothing says so. On real history since 1 July that is 70 of 107
+    Monday merges. It also drew the last chart bar from 7 hours of Monday at the
+    same width as the six whole days beside it, which read as a slow Monday every
+    week. The wrapper therefore runs `--as-of yesterday`.
+*   **A slice must reach the whole window, or say that it did not.** The CI
+    median used to take the 200 most recent runs and median whatever fell inside
+    the window. On this repo 200 runs reaches back under six days: for the week
+    ending 2026-08-30 that was **190 of the 282** successful runs in the window,
+    printed as a bare `1m27s`. It now asks GitHub for the range itself
+    (`gh run list --created <from>..<to>`) and proves its own completeness —
+    fewer rows back than the limit means GitHub had no more to give. Hitting the
+    limit tints the tile and says so on it.
+*   **A count needs a ceiling as well as a floor.** `stage-counts --since` alone
+    counted tickets closed from the window start *until now*, so a report on an
+    older week credited itself with closures that happened days after it ended.
+    It takes `--until` now, and refuses a ceiling with no floor.
+*   **`origin/main` is fetched before anything is read out of it.** The merge
+    count, both lines-changed figures and the chart all come from it, and the
+    wrapper's self-update skips on four separate conditions — on every one of
+    those paths the local `origin/main` is however stale it happened to be. A
+    failed fetch is now an amber box on the page, not silence.
+
+### Running it
+
+```bash
+node scripts/weekly_report.mjs                 # 7 days ending today
+node scripts/weekly_report.mjs --window 14
+node scripts/weekly_report.mjs --as-of 2026-08-24   # reproduce an old edition
+node scripts/weekly_report.mjs --out /tmp/x.html    # just look at one
+node scripts/weekly_report.mjs --publish       # + branch, commit, PR, ticket
+```
+
+**`--out` and `--publish` do not combine, and the script refuses the pair.**
+Publishing copies the report into a throwaway worktree by its path *relative to
+the repo*: an `--out` inside `docs/reports/` makes that a copy of the file onto
+itself, and an `--out` anywhere else makes it a relative path that climbs out of
+the worktree altogether. Use one or the other.
+
+Running it twice for the same window produces a byte-identical file — nothing
+on the page comes from a clock except the window it was asked for, which is an
+input. That is a property of the renderer, pinned by a test, not luck.
+
+### The schedule, and why one machine
+
+| | |
+| ---| --- |
+| Job | `weekly-report` in `lib/nodeRoles.js` |
+| Owner | **mac-mini** |
+| When | Mondays 07:00 local |
+| Window | the **finished** week — `--as-of yesterday --window 7`, i.e. Monday to Sunday |
+| Wrapper | `scripts/run_weekly_report.sh` |
+| Install | `./scripts/install_weekly_report.sh` (`--status`, `--uninstall`) |
+| Log | `~/Library/Logs/weekly-report.log` |
+
+It writes into the repo and opens a pull request, so two machines holding the
+schedule would file two branches and two PRs for the same week — and the
+duplicate is only visible after both already exist. That is the same class of
+hazard `bus-relay` and `db:refresh` are in the table for.
+
+The Mini owns it for the relay's reason: a Monday-morning job on a laptop that
+spent the weekend closed does not run at all, and a report nobody notices is
+missing is worse than no report.
+
+```bash
+npm run node:owns -- weekly-report   # 0 on the Mini, 3 on the laptop
+```
+
+The role is checked at **run** time, and only gates *publishing*. On a machine
+that does not own the job the script still writes the figures locally and then
+declines to publish — so the schedule is harmless if it is ever installed in two
+places, and it can be installed on a new machine *before* ownership moves, with
+no week where neither machine reports.
+
+It never commits to `main`: `main` auto-deploys to production, and a scheduled
+job with a commit bit on `main` is a scheduled deploy at 07:00 on a Monday with
+nobody awake. A failure posts to the bus, like every other unattended job.
+
 ## Safety — why this is wired tighter than the YouTube version
 
 The popular "just wake up and hit merge" demos run on throwaway apps. Starcaster
 is different, so the loops have guardrails baked in:
 
-- **`main` auto-deploys to production.** So no loop ever merges on its own. The
+- **`main` auto-deploys to production.** So no loop merges on its own, with one
+  named exception you ratified on 2026-08-24: **Lane A**, where the change is
+  nothing but tests and documentation, and the machine announces itself and
+  gives you an hour to stop it (see "Lane A" below). Everywhere else the
   review loop can only mark a PR `Ready to launch`; **you** authorize the merge.
   Since 2026-08-21 that authorization can be a one-word comment on the ticket
-  and the hourly relay carries it out (task 86bbjd5nn) — which moves the
-  *hands*, not the *decision*. The relay merges nothing you did not name, on a
+  and the relay carries it out within 10 minutes (task 86bbjd5nn) — which
+  moves the *hands*, not the *decision*. The relay merges nothing you did not name, on a
   ticket no independent review passed, or on a branch that is red or in
   conflict. It exists because on 2026-08-20 three tickets you had already
   approved sat unmerged for hours waiting for a human to notice: the
@@ -554,6 +1030,1130 @@ is different, so the loops have guardrails baked in:
   `Needs your input` for a human instead of shipping broken.
 - **Review is independent.** It re-runs everything and actually opens the page
   in a browser; it never rubber-stamps the build loop.
+- **And since 2026-08-25 one of these is a check, not a convention.** Every
+  bullet above binds only an actor that has read this file; PR #432 was merged
+  unreviewed by a session that had not. The `review-gate` status check refuses a
+  merge whose ticket carries no review PASS newer than the code — see "The
+  review gate" below, including the two settings that switch it from a warning
+  into a block.
+
+## The review gate — the rule the repository enforces (2026-08-25, task 86bbmfbkv)
+
+Everything in "Safety" above is a **convention**, and a convention only reaches
+the actors that know they are bound by it.
+
+On 2026-08-25 at 12:38 PR #432 was merged to production with no review verdict
+on its ticket and no merge word from Dane. Ticket 86bbjt1aq went `Live` without
+ever reaching `Ready to launch`. None of the unattended machinery did it: it was
+**a second Claude Code session on the MacBook** running `gh pr merge 432
+--squash` — an ordinary session, with ordinary `gh` access, that had no way to
+know a review lane was waiting for that PR.
+
+A fresh session, a forgotten terminal window, an operator in a hurry: none of
+them have read this file. So the rule stops being something every actor must
+remember and becomes a **status check**.
+
+### What it checks
+
+`.github/workflows/review-gate.yml` runs `scripts/review_gate.mjs` on every
+pull request. It reads the ticket id out of the PR body, reads that ticket's
+comments, and finds the newest `REVIEW:` verdict. It **passes only if that
+verdict is a PASS and it is newer than the PR's newest commit** — a PASS on
+older code is not a review of what is about to merge.
+
+The verdict parser is **imported** from `scripts/builder/mergeOnComment.js`,
+never re-implemented, and a test asserts the gate, the merge step and
+`loopTrail.readyToLaunchGate` all agree across a fixture set. A gate that
+disagreed with the merge step about what a PASS is would be worse than no gate.
+
+| Situation | Verdict |
+|---|---|
+| Newest verdict is a PASS, newer than the newest commit | **pass** |
+| No `REVIEW:` verdict on the ticket at all | **fail**, naming the ticket |
+| Newest verdict is a send-back | **fail** |
+| PASS older than the newest commit (sent back, fixed, pushed) | **fail** |
+| No ClickUp link in the PR body | **fail** |
+| The ticket does not record THIS PR (see below) | **CANNOT TELL** — never a pass |
+| `[gate-waived: <reason>]` in the PR body | **pass**, and announced on the bus |
+| ClickUp unreachable, or the CI token missing | **CANNOT TELL** — never a pass |
+
+Every failure names the ticket, says what the newest verdict actually is, and
+states the one thing that has to happen next. A red X that teaches nothing
+teaches people to route around it.
+
+A check is computed once per commit, so a verdict posted *after* the last push
+does not reach the run that already happened. The merge step re-runs a gate in
+that state rather than merging on it — "A stale gate is re-run, never merged
+on", below.
+
+**Lane A is not exempt.** Auto-merging a docs- or test-only change removes the
+*operator's word*, never the review (vault `doctrine/AUTO-MERGE-LANES.md`).
+
+### The ticket has to be THIS PR's (added 2026-08-26, task 86bbmmv7t)
+
+The gate reads the **first** ClickUp link in the PR body. That is a convention,
+not a fact, and until 2026-08-26 nothing checked it: a body that cited a related
+ticket *before* its own was judged against **that** ticket's verdict, and
+**passed** whenever that verdict happened to be newer than this PR's newest
+commit. The gate opening on a review of different work is the one failure it
+exists to prevent, and it was the only one of the four holes found in review
+that failed **open**.
+
+It never bit, purely because loop-built bodies put their own ticket on line 1 —
+which is the kind of luck this whole check exists to stop depending on. PR #433
+proves the shape is live: its body carries `86bbmfbkv` on line 1 and
+`86bbmk7pv` on line 156, and the other order would have judged it against a
+ticket it does not belong to.
+
+So before granting a PASS the gate confirms the ticket **records this PR**: the
+ticket's newest `PR opened:` line must name this PR's number. That reader is
+`loopTrail.prTrailLanded` — the same one `pr-opened` verifies its own write
+with, imported rather than re-implemented. When it cannot confirm, the answer is
+**CANNOT TELL**, never a pass, and the message names the fix.
+
+Practical effect: **`pr-opened` is no longer only bookkeeping.** A ticket
+without that line cannot pass the gate, which is the point — it is the only
+trace that pairs a ticket with a PR.
+
+### One matcher for "the PR names its ticket"
+
+`pr-opened` used to accept a **bare task id** (`ClickUp: 86bbjt18r`) while the
+gate required a full `app.clickup.com/t/<id>` URL. The direction was safe — the
+gate refused rather than passed — but once it is required, that combination
+strands a PR the very command that checked it called traceable, with a message
+saying the opposite of what the reader can see in the body.
+
+Settled on the **full URL**, and both sides now import one matcher
+(`scripts/builder/clickupTicketLink.js`) so they cannot drift again. A bare id
+cannot be recognised safely — it has the same shape as an abbreviated commit
+sha or a build hash, so matching one in prose fails *open* on a coincidence —
+and the URL is what a reader wants anyway. `loop-build` step 7 has always asked
+for the URL on a line of its own; this makes the shipped rule match the written
+one rather than the other way round.
+
+### The gate does not say "REVIEW"
+
+Its messages begin `MERGE GATE`, and that is load-bearing rather than a
+naming preference. `mergeOnComment.isReviewVerdict` reads any line starting with
+the word REVIEW as a ticket verdict. The gate's own output used to begin
+"REVIEW GATE ...", so **every message it printed** — pass, fail and CANNOT TELL
+alike — parsed as a verdict, and as a **send-back**, since none of them match
+the PASSED spelling.
+
+Nothing automated pastes those onto a ticket, so it never bit. But a refusal
+here is written to tell the reader what to do next, which makes copying it onto
+the ticket the natural next move for a person or an agent — and that one paste
+would have become the ticket's newest verdict, freezing `readyToLaunchGate`,
+`mergeDecision` and the gate itself at once, showing a send-back nobody wrote.
+The label is exported from one place so the runner cannot drift back into that
+namespace, and a test feeds every real output string through the verdict parser
+to prove none of them registers.
+
+**Freshness measures the branch's own commits, not its catch-up merges.**
+Branch protection is `strict: true` and this repo catches up by merging
+`origin/main` in rather than rebasing (DOCTRINE §6.6), so every catch-up adds a
+commit newer than any review. Counting those would deadlock the pipeline —
+catch up, go stale, re-review, catch up again. Merge commits are excluded by
+**parent count**, which is what a merge *is*, rather than by matching a merge
+message, which is only what a script currently writes. Checked against the live
+record before shipping: PRs #400 and #406 both failed the naive rule and pass
+the real one, while #432 (the incident) and #419 still fail correctly.
+
+### The waiver
+
+A waiver line passes the gate, including past the no-ticket rule — a hotfix
+opened by hand at 2am is what it is for. A reason is **required**; an empty one
+is not a waiver, and neither is a placeholder pasted out of this document.
+
+**It must sit ALONE on its own line**, and that anchor is load-bearing. The
+first version matched anywhere in the body, and the first CI run caught it on
+the gate's own pull request: that PR necessarily *documents* the syntax, so the
+gate read its own documentation as a live waiver and let itself through. Any PR
+quoting the syntax — a doc change, a rules table, a discussion — would have
+bypassed the gate while looking entirely ordinary. Mentioning a waiver inside a
+sentence or a table cell is now only mentioning it, exactly as `mergeOnComment`
+anchors its verdict regexes so that prose about a rule is not the rule.
+
+**And a waiver shown as CODE is an example, not an instruction.** The anchor
+alone still let a realistic waiver through if it sat on its own line inside a
+code fence — which is exactly how this repo writes down its own rules, so the
+next docs page with a plausible reason in it would have reopened the same hole
+one step out (found in review, 2026-08-25). Both ways Markdown says "this is
+an example" are skipped: a fenced block (triple backtick or triple tilde) and a
+four-space-indented block. Both skips fail **closed**: an unclosed
+fence hides the rest of the body, so a real waiver after it is ignored and the
+gate goes on to check the ticket. Losing a waiver costs one edit; granting one
+costs a merge. That is why the table above and every example in this document
+can quote the syntax safely.
+
+Using one **posts to the party line** with the reason, the PR and who did it.
+An override nobody can see is not an override, it is a hole, so the price of
+reaching for it is visibility. If the bus post fails the gate still passes but
+says so loudly — tell the party line by hand.
+
+### It is ADVISORY until Dane ticks the box
+
+Making a check *required* is a branch-protection change in GitHub's settings, a
+browser action on his account that an agent may not perform. Until then the job
+annotates loudly, writes its verdict to the run summary, and **exits 0**.
+
+Exiting 0 rather than going red is deliberate and load-bearing:
+`mergeOnComment.githubGate` refuses to merge **any** PR carrying a red check. An
+"advisory" gate that went red would therefore not be advisory at all — it would
+silently block every merge the relay makes, through a rule nobody had agreed to
+enforce yet.
+
+**To switch it on, both halves, in one visit:**
+
+1. **Settings → Branches → `main` → Require status checks to pass → add
+   `review-gate`.**
+2. **Settings → Secrets and variables → Actions → Variables → New variable:
+   `REVIEW_GATE_ENFORCING` = `true`.**
+
+The variable exists so the two halves cannot drift. With the box ticked but the
+token missing or revoked, the gate answers CANNOT TELL and stays shut, instead
+of quietly reverting to advisory and waving everything through. Inferring the
+mode from "is the token present?" would have exactly that hole.
+
+### Before ticking the box: three things must be true
+
+**Read this list before the tick, not after.** Each item is a way for the gate
+to be *correct* and still stop every merge in the pipeline. Two are done; one is
+open.
+
+1. **The CI ClickUp token must exist.** ☑ DONE — `CLICKUP_API_TOKEN` was set as
+   a repository Actions secret on 2026-08-31 at 00:57Z, and the gate now returns
+   real verdicts instead of CANNOT TELL. Confirmed on PR #437: the run named the
+   ticket and read its newest verdict correctly ("a send-back, not a PASS"), and
+   the ticket was checked independently to be sure the gate was right and not
+   merely plausible. The workflow reads `secrets.CLICKUP_API_TOKEN` — the same
+   name the rest of the repo uses (`scripts/clickup_direct.mjs`), not one
+   invented for CI.
+
+   **Set it with the pipe, never the browser form:**
+
+   ```
+   doppler secrets get CLICKUP_API_TOKEN --project starcaster --config dev --plain \
+     | gh secret set CLICKUP_API_TOKEN --repo mentor24-maker/starcaster
+   ```
+
+   That is an agent's command to run, not a hand-off. The form has a **Name**
+   box above the **Secret** box, and doing this by hand put the token in the
+   Name box twice, with two different tokens — where GitHub does not protect it.
+   `docs/DOCTRINE.md` §4.1 carries the incident and the rule.
+2. **Something must re-run the gate after a review lands.** ☑ DONE — task
+   86bbmk7pv, PR #443, 2026-08-31. See "A stale gate is re-run, never merged
+   on" below. Note the second round: the re-run was written, tested and
+   *unreachable in enforcing mode* because it sat below the red-check refusal
+   (`docs/DOCTRINE.md` §3.12). Green tests in advisory mode said nothing about
+   the mode that matters.
+3. **`npm run ship` must record the PR on its ticket.** ☑ DONE — task
+   **86bbq7z1k**, 2026-08-31. Since task 86bbmmv7t the gate confirms the ticket
+   records *this* PR by reading its newest `PR opened:` line
+   (`loopTrail.prTrailLanded`); a ticket without one answers CANNOT TELL, which
+   is never a pass. That is deliberate and it fails closed — but
+   `scripts/ship_thread.cjs` contained no ClickUp interaction at all, so **every
+   hand-shipped and fast-tracked PR** would have been blocked until somebody ran
+   `npm run clickup -- pr-opened --task <id> --pr <url>` by hand. The loops were
+   never affected; they write the trail already. See "Who writes the PR trail"
+   below.
+
+Ticking the box with 3 still open would not have produced a gate that is too
+strict — it would have produced a pipeline that cannot merge anything at all,
+which is the same deadlock item 2 was written to prevent, arriving through a
+different door.
+
+### Who writes the PR trail (2026-08-31, task 86bbq7z1k)
+
+**One answer, and it is never a written step: whoever opens the PR writes the
+trail, using the same command.**
+
+| Lane | Who opens the PR | Who writes `PR opened:` |
+|---|---|---|
+| `loop-build` | the build pass | the build pass, step 8 — `clickup pr-opened` |
+| the hand lane / fast-track | `npm run ship` | **`ship` itself**, step 5b |
+
+Two ways to close the gap were on the table: teach `ship` to write the trail,
+or add an explicit `pr-opened` step to the fast-track lane's step 7 and to the
+hand-ship instructions. `ship` won for the reason that turned both loop traces
+into commands in the first place (task 86bbjt18r) — **a written step is
+followed most of the time, and nothing notices the times it is not.** The two
+lanes cannot drift apart now, because neither of them is prose.
+
+`ship` already knew the ticket: `npm run thread` stamps it onto the branch
+(`branch.<name>.clickup-task`), the same stamp `npm run tidy` reads back. Four
+properties, all in `scripts/builder/shipPrTrail.js` so they can be tested
+without a remote, a PR and a live CI run:
+
+- **Both halves, one moment.** `pr-opened` refuses to write its half until the
+  PR body links back to the ticket, so `ship` adds `ClickUp: <url>` to the body
+  it authors. Without that, every ship on a stamped branch would ask for the
+  trail and be told no.
+- **The ticket link goes FIRST in the body, and that is load-bearing.** The
+  gate resolves which ticket a PR belongs to with `findTicketId`, which returns
+  the **first** ClickUp link it finds — a convention `reviewGate` flags as a
+  hazard in its own docstring, because "loop-built bodies put their own ticket
+  on line 1" is a habit rather than a rule. `ship` originally *appended* the
+  line, which made it depend on that convention while writing the one body
+  shape that breaks it: a commit message citing a related ticket ("Follows
+  .../86bbjt18r") left the other ticket first and the gate judged the PR
+  against it. It failed closed rather than open, but the PR it blocked was the
+  hand-shipped one — the exact thing this work exists to unblock. Prepending
+  removes the dependency instead of restating the convention.
+
+  **And the skip-if-already-linked guard has to ask the gate's question, not a
+  weaker one.** Round 2 prepended correctly but guarded with "is this ticket
+  linked ANYWHERE", so a body naming another ticket first and this one further
+  down was still returned untouched — the same wrong-ticket defect, needing only
+  one extra line in the body to reach. The guard now compares `findTicketId`,
+  which is literally the gate's own reader. The invariant the tests assert,
+  rather than another example: for every input,
+  `findTicketId(bodyWithTicketLink(body, id)) === id`. A second copy of the link
+  further down is harmless; a body that resolves to the wrong ticket is not.
+- **`--if-missing` skips the comment, never the verification.** The PR-body
+  check runs on every invocation, before the idempotence preflight can
+  short-circuit. When it sat inside the skip, a ticket that already carried a
+  trail exited 0 — "already recorded" — whatever its body said, and the gate
+  then failed the same PR for carrying no ClickUp link. A cheerful all-clear in
+  front of a refusal is the failure mode this whole ticket exists to remove.
+- **One spelling of each URL.** The repair command a failed write prints has to
+  RUN when it is pasted: `pr-opened` rejects a bare `--pr 484` outright, so
+  `shipPrTrail` owns both the ticket-URL and PR-URL spellings and `ship`
+  imports them rather than keeping its own copy.
+- **Idempotent.** `ship` is *designed* to be re-run whenever main moves under
+  it, so the same PR reaches the command repeatedly. `pr-opened --if-missing`
+  writes nothing when the merge step's own reader (`prTrailLanded`) can already
+  find this PR on the ticket — whoever put it there, a loop or a hand.
+- **The idempotence guard fails CLOSED, because a duplicate is permanent.** The
+  `--if-missing` preflight read `json.comments || []`, so a 200 carrying no
+  comment list collapsed to an empty array — indistinguishable from a ticket
+  that genuinely has no trail — and it wrote, which is the second `PR opened:`
+  line the flag exists to prevent. An empty ARRAY is a real answer and still
+  writes; a missing one is CANNOT TELL, and the command now refuses and says to
+  run it again. One re-run is cheap; a duplicate is not. (Found on 2026-08-31
+  when two identical `pr-opened --if-missing` calls eleven minutes apart went
+  opposite ways on the same ticket. The one-off would not reproduce — polling and
+  a post-then-read probe both came back consistent — but this is the only path in
+  the command that produces that symptom from a healthy-looking response, and
+  DOCTRINE 3.11 says a check that could not run never reports an answer.) The
+  read-back one branch below had the same coercion: it called an unreadable body
+  "the trail did NOT land" when the write had just succeeded, so it now joins the
+  other UNVERIFIED case.
+- **No stamp is not a failure.** Plenty of branches legitimately have no
+  ticket. `ship` says so out loud and names the consequence, because a silent
+  skip is indistinguishable from a success.
+- **A ClickUp failure never stops the ship.** An outage is not a reason to
+  abandon a green, mergeable PR. But it is LOUD and names the repair — a
+  silently missing trail is the entire defect. Exit 4 (the PR body carries no
+  ticket link) gets its own message, because its fix is to edit the body, not
+  to run the command again.
+- **The failure message claims only what the exit code proves, and every repair
+  it prints carries `--if-missing`.** A non-4 failure is *not* proof the trail
+  is absent: `pr-opened` also exits 1 when the comment POSTED and reading it
+  back failed. Saying "this ticket now has no readable PR trail" was false on
+  that path, and the bare `pr-opened` it handed over would post a second
+  identical line — the duplication `--if-missing` exists to prevent. So the
+  message says the trail may or may not be there and to check by eye, and both
+  repair commands are safe to run twice. A repair is by definition run when
+  nobody knows what landed; that is exactly when idempotence matters.
+
+### A stale gate is re-run, never merged on (2026-08-26, task 86bbmk7pv)
+
+A GitHub status check is computed **once per commit**. This gate reads the
+ticket for a review PASS — and loop-review posts that PASS *after* the last
+push, by definition. So the run that already happened saw no verdict, recorded
+a fail, and **will not re-run on its own**. Nothing later changes its mind.
+
+While the gate is advisory that is harmless: it exits 0 either way. The moment
+the branch-protection box is ticked it is a **deadlock** — every correctly
+reviewed PR carries a stale red check that only a new commit can clear, and
+pushing a commit to clear it invalidates the review that just passed.
+
+So the merge step (`bus-relay`'s merge path) asks one more question before it
+merges: **is this check answering a question that has since changed?**
+
+| What it finds | What it does |
+|---|---|
+| The gate run started **after** the newest verdict | nothing — merges as before, no CI spent |
+| The gate run started **before** the newest verdict | **re-runs it** (`gh run rerun`) and waits for the result |
+| The re-run comes back red | **refuses** the merge, naming GitHub's own reason |
+| The re-run cannot be started, or its result is never seen | **refuses** the merge — cannot-see is not a pass |
+| The PR carries **no** gate run at all | nothing to be out of date; see below |
+| A timestamp on either side is unreadable | treated as **stale**, so it re-runs |
+| The pass has no wait budget left | waits quietly for the next pass — **before** spending a CI run, not after |
+| Main moves while it waits on the re-run | ends the wait; the next pass's catch-up handles it (the push re-runs the gate itself) |
+
+**The question is asked BEFORE the red-check refusal, and the order is the
+whole fix** (found in review, 2026-08-30). In enforcing mode a stale gate
+exits 1 — a red check — and the merge step's first rule is to refuse any PR
+with a red check. Asked after that refusal, the staleness question was
+unreachable in the one mode it was written for: every test stayed green
+because advisory mode (exit 0) still reached it. A stale RED gate means
+*re-run it*; only a re-run that comes back red is a real refusal. A wiring
+test pins the ordering (staleness before the refusal branch, before the merge
+command, and the budget ask before the re-run fires), so it cannot drift
+back. The conflict hand-off and the catch-up keep precedence above it on
+purpose: a conflict needs an agent session no matter what the gate says, and
+a catch-up push re-runs the gate on its own. A PR that is closed, merged or a
+draft skips the question entirely — its refusal reason is the honest one, and
+a re-run on it would spend a CI run to change nothing.
+
+**It compares START times, not completion times.** A verdict posted before the
+run started was certainly visible to it; one posted after the start may or may
+not have been read before the job fetched the ticket. That ambiguity resolves
+toward "stale", because being wrong costs one CI minute in this direction and a
+merge on an unreviewed verdict in the other.
+
+**A catch-up does not need any of this.** `gh pr update-branch` pushes a commit,
+which fires `synchronize` and re-runs the gate on its own. The staleness path is
+for the case where nothing was pushed, so nothing re-ran.
+
+**No gate run at all is deliberately not a refusal.** There is no answer to be
+out of date, and refusing would strand every PR opened before the workflow
+existed — a deadlock introduced by the fix for a deadlock. Both actors that
+could merge such a PR are already covered: GitHub refuses one itself once the
+check is required, and the relay has independently checked the ticket's verdict
+in ClickUp before it ever reaches this step.
+
+**The gate is never weakened to work around its own staleness.** "Stale" only
+ever means *run it again*; it never means *pass*.
+
+The decision is pure and lives beside the gate
+(`scripts/builder/reviewGate.js` — `reviewGateStaleness`, `afterRerunDecision`),
+so every path is tested without touching GitHub, including the ones that are
+awkward to reproduce live. The plumbing that carries it out is in
+`scripts/clickup_direct.mjs`, and a test asserts it is still wired in — the
+first version of that assertion could not fail, because deleting the real check
+left an identical call in the wait loop behind it.
+
+While it waits for the re-run it keeps waiting on **the re-run**, not merely on
+"the checks look settled": a re-run takes a few seconds to appear, and until it
+does GitHub still reports the old, settled, stale answer. Polling on the
+ordinary check gate alone would act on it in the first poll — the same bug
+wearing a fresh coat. And inside that wait, only a **fresh** answer falls
+through to the ordinary gate (`duringRerunWait`, pure and tested): for a few
+seconds GitHub's rollup may carry no review-gate entry at all while the old
+attempt is swapped for the new one, and before this was one function the hook
+fell through on that moment — other checks green, the PR merged, the re-run's
+answer never observed. "No gate on this PR" is benign before a re-run exists;
+during the wait it means *cannot see*, and cannot-see is not a pass.
+
+## Lane A — when the machine supplies the word (2026-08-25, task 86bbkw2au)
+
+**Canon: vault `doctrine/AUTO-MERGE-LANES.md`, ratified 2026-08-24.** That
+document is binding; this section is how it is wired up here. If the two ever
+disagree, the vault is right and this file is the thing to fix.
+
+### What it is, in one paragraph
+
+Merge-on-comment already removed the *hands* from merging: you say "merge" and
+the relay does it. What was left was the *word* — and at ninety-odd merges a
+week that word is the ceiling. A rubber stamp is worse than a policy, because it
+looks like oversight while providing none. So the machine now supplies the word
+in exactly one place: a ticket that **passed review** and whose pull request
+touches **nothing but tests and documentation**. It announces itself on the
+ticket, waits **one hour**, and merges unless you say anything at all.
+
+Your ruling, 2026-08-24: *"Ship Lane A now. Give it a 1-hour window to start.
+Never for C."* Lane B was not ruled on and is not built. Lane C — anything
+visual, routes, migrations, auth, CI — is never automated.
+
+### What qualifies
+
+Every changed file must match one of:
+
+```
+*.test.js   *.test.ts   *.test.tsx   *.test.mjs
+docs/**     *.md
+```
+
+**One file outside that set disqualifies the whole pull request.** There is no
+partial credit and no "mostly tests": a mixed PR carries the risk of its
+riskiest file, not the average of them.
+
+Disqualified even though they match, because a machine never auto-merges the
+machinery that governs machines: any `CLAUDE.md`, `docs/DOCTRINE.md`, this file,
+anything under `.github/`, `.claude/` or `skills/` (the loop skills are the
+review gate's own instructions, and they are `.md` — review round 2 found them
+eligible), and the tests covering the merge step itself (`mergeOnComment`,
+`branchCatchUp`, `wipCap`, `busRelayPlan`, `autoMergeLane`, `reviewGate`). A
+test that governs merging is governance.
+
+Nothing else is loosened. A review PASS, an open PR, green checks and a clean
+merge are all still required, and are checked by the same gate your own
+authorizations go through.
+
+### How it looks on the ticket
+
+1. The relay posts one comment: **"Merging PR #123 at 9:15pm EDT unless you say
+   otherwise"**, listing the files that qualified it. The Loop note changes to
+   `🤖 auto-merge at 9:15pm unless you say stop`, so the queue tells the two
+   states apart at a glance. The ticket **stays in `Ready to launch`** — no new
+   status.
+2. **The hour runs from when that comment is confirmed posted**, read back from
+   ClickUp. An announcement that failed to post is not a window, and no clock
+   starts.
+3. **To stop it, comment on the ticket. Anything at all** — a word, a question,
+   "hold on". Not a keyword: if you are talking about it, the machine stops.
+   Stopping is final for that announcement; it will not announce itself again
+   until a fresh review pass has looked at it. A false stop costs you one word;
+   a missed stop costs an unwanted merge, so it is built to lean that way.
+4. If the hour passes in silence, it merges exactly as your own "merge" does —
+   same gate, same squash, same move to `Live` — and the record says it was
+   Lane A and which files qualified it.
+
+If the pull request gains a runtime file *during* the window, it does not merge:
+eligibility is re-checked against a fresh read at merge time, not trusted from
+the announcement.
+
+**An announcement goes stale after a day.** An armed ticket the relay finds
+more than 24 hours after its announcement is cancelled, not merged — the hour it
+promised you ended long ago. Without this, three PRs armed before a `stop
+auto-merging`, then a `resume` a fortnight later, would all merge on the next
+pass on windows that closed two weeks ago. Like any cancel, it takes a fresh
+review PASS to announce again.
+
+### Turning it off
+
+```
+stop auto-merging          # on the party line or any Loop Queue ticket
+resume auto-merging        # only from you, and it must be the whole message
+```
+
+`stop auto-merging` halts **every** lane immediately. It is matched loosely — it
+will fire if the phrase appears anywhere in your message. `resume auto-merging`
+is matched strictly, as the entire message, for the same asymmetry as above.
+
+**If the switch cannot be read for any reason, auto-merge is off.** Not "assume
+fine": "you never said stop" and "I could not find out whether you said stop"
+look identical from inside a pass, and only one of them is safe to act on. That
+means a party-line outage turns the lane off until the bus is back.
+
+`--no-merge` on the relay turns Lane A off along with merge-on-comment, and so
+does a paused pipeline (`npm run pipeline -- pause`). So does a stop recorded on
+an earlier pass: a stop is written down in the ledger (`.git/auto-merge-ledger.json`),
+so it cannot quietly expire when the ticket it was said on closes. **A ledger
+that cannot be read is never written over** — the pass halts, says so, and
+leaves the file for a hand to look at. Writing an empty ledger over a corrupt
+one would erase the stop and switch the lane back on a pass later, which is
+the direction a fail-safe must never fail in (review round 2, 2026-08-30).
+
+### The four things that keep it honest
+
+1. **Rate cap** — 3 an hour, 12 a rolling day. A burst is what a misbehaving
+   loop looks like, so the cap turns a runaway into a pause.
+2. **A daily digest** on the party line, listing every auto-merge with its lane,
+   its PR and the files that qualified it — **and saying "none" on a quiet day**,
+   because a silent day and a broken job must not look alike. Each digest
+   covers everything since the previous one, so nothing is listed twice.
+3. **It disables itself on trouble.** If a pass reports anything under "could
+   not fully verify", or `main`'s build is red after the last auto-merge, the
+   lane switches off and says why on the bus. `resume auto-merging` puts it back.
+4. **Reverting is pre-authorised.** An agent may revert its own auto-merge
+   without asking, and should say that it did.
+
+### Checking on it
+
+```bash
+npm run clickup -- auto-merge-status
+```
+
+Read-only. Prints whether the lane is running and, if not, exactly which of the
+four gates is holding it — the switch, the self-disable flag, the rate cap or an
+unreadable source — plus the auto-merges of the last day. Exit 0 means running,
+3 means held.
+
+To watch a real pass decide without it acting:
+
+```bash
+npm run clickup -- bus-relay --only-task <id> --dry-run
+```
+
+### Where the rules live
+
+Every decision — path eligibility, the window arithmetic, the cap, the switch,
+the self-disable — is a pure function in `scripts/builder/autoMergeLane.js`,
+break-tested in `scripts/builder/autoMergeLane.test.js` with no clock, no
+ClickUp and no GitHub. `scripts/clickup_direct.mjs` holds only the network and
+the ledger file. That split is deliberate: a rule that can only be exercised
+against live services is a rule nobody will break-test, and this is the one
+feature in the repo where an untested branch merges code by itself.
+
+The small amount of state that cannot live on a ticket — recent auto-merges for
+the cap, the self-disable flag, the last digest — is a JSON file in `.git/`
+(`auto-merge-ledger.json`). `.git/` because it is the one place in the repo that
+cannot be committed by accident. If that file cannot be read, the lane is off,
+for the same reason an unreadable switch is off.
+
+## Pausing the pipeline — the sanctioned way to go fast (2026-08-25, task 86bbmfc15)
+
+The loop lane is deliberately slow: spec, build, independent review, your
+merge — about a day end to end. That is right for ordinary work and wrong for
+the day something is urgent. Until now the only way to go faster was to step
+outside the system entirely, into the one place where none of the guards apply,
+and that is a **missing lane** rather than anyone being careless.
+
+```bash
+npm run pipeline -- status                    is it running? if not, since when, who, and why
+npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
+npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
+npm run pipeline -- pause --now               ... or don't wait, and name exactly what was left running
+npm run pipeline -- resume --operator-asked   hand the deck back — yours, never an agent's
+```
+
+The `--` is required in every one of those. npm eats any `--flag` typed without
+it, which is silent and confusing: `resume --operator-asked` gets refused for
+missing the flag you just typed, and `pause --now` waits the full half hour.
+`pipelinePause.test.js` fails if a documented form ever loses it again.
+
+**It drains, it does not kill.** A pass killed mid-build leaves its ticket in
+`Building` forever, because the loops only claim from `Rework` and `Queued` — that
+happened twice in the week this was built. So `pause` writes the flag (which
+stops every new claim that instant) and then waits for whatever was already
+running. `resume` sweeps any ticket that was stranded back into the claim line —
+`Rework` if a pull request is already open for it, `Queued` if nothing was ever
+built — with a
+note telling the next builder to look for an existing branch first.
+
+**Every actor asks, not just the loops.** The flag is a comment trail on one
+ClickUp ticket — the *Pipeline pause switch*, created the first time `pause`
+runs — because ClickUp is the one place every actor already looks. `loop-build`
+and `loop-review` check it before claiming, `bus-relay` checks it before
+merging, and `CLAUDE.md` carries it so a hand-driven session reads it on
+arrival. That last one is the point: the collision this was written for came
+from a session that was not a loop and would never have looked anywhere else.
+
+**It fails safe.** A switch that cannot be read counts as paused. Running while
+you have the deck collides with what you are doing on it; pausing when you do
+not costs idle machines and one loud message. Those are not symmetric.
+
+**Only you resume.** An agent may pause the line — stopping is a safety move
+anyone should be able to make — but handing the deck back is yours, because
+only the person standing on it knows whether he is finished. A pause that
+outlives two hours announces itself on the party line and keeps saying so
+hourly, because a pause nobody remembers looks exactly like a pipeline that has
+broken.
+
+## The fast-track lane — the loop's job, done by hand (2026-08-30, task 86bbq5523)
+
+**Ruled by Dane on 2026-08-30:** *"Let's fast track \<ticket-id\>"*, said at
+the start of a new session, is a complete instruction. The agent runs the
+human lane end to end and the session ends with a clean merge. Until this
+section existed the procedure lived only in one machine's agent memory; it
+belongs here so every machine and every session runs the same lane.
+
+The lane is not an exemption. It exists because the loop lane — spec, build,
+review, merge — is about a day end to end, and sometimes a ticket cannot wait
+a day. Everything the loops check, the hand session checks too; the only thing
+it skips is the queue position.
+
+### The steps
+
+1. **`npm run pipeline -- check`.** Exit 3 = the deck is Dane's; claim
+   nothing, merge nothing, say so once. Exit 1 = could not tell; re-run it
+   before treating that as paused (one transient 1 was observed on
+   2026-08-30 from a background shell, and the re-run said running).
+2. **Read the ticket and every comment.** On a send-back, the review comment
+   is the specification — it names the defects, how they were proved, and
+   what it already verified so you do not redo it. The description is context.
+3. **Claim it, atomically.** `npm run clickup -- status --task <id> --status
+   Building --if-status <the status it is in>` (or just `npm run clickup --
+   claim --task <id>`, which reads that status for you). **Priority is not a
+   guard** — an Urgent
+   ticket is still claimable by a loop pass; only the status is, and only
+   `--if-status` makes the write refuse if a pass got there first (the same
+   check-then-act guard the loops use). Leave the priority where it is.
+4. **Find the branch.** `npm run clickup -- build-start --task <id>`: exit 3
+   means a PR is already open, so the work continues on THAT branch, not a
+   fresh one. `npm run thread` only creates new branches, so for an existing
+   one it is by hand:
+
+   ```
+   git worktree add .claude/worktrees/<topic> -b <branch> origin/<branch>
+   cd .claude/worktrees/<topic> && npm ci && npm run build && npm run env:local
+   git config branch.<branch>.clickup-task <id>     # what tidy reads back
+   ```
+
+   Then build in that folder, by absolute path (CLAUDE.md, "One topic, one
+   worktree — a session may hold more than one", rule 2). The hand-off to a
+   fresh window is no longer required: since 2026-09-01 a session may carry
+   more than one topic, provided each topic has its own worktree and its own
+   claimed ticket. What has not changed is that the folder and the topic stay
+   one thing.
+5. **On a send-back, merge `origin/main` in FIRST.** Before touching a line.
+   The branch has been sitting in review while `main` moved; the fix review
+   asked for may already be there under another name. On 2026-08-30, ticket
+   86bbmg2fb's rework added a `soft` option to `fetchAllTasks` for exactly
+   what `main` had meanwhile added as `fatal: false` — a conflict `ship` had
+   to stop for, resolved by throwing the rework away and calling `main`'s
+   version. Merging first would have shown that before any code was written.
+   (`docs/DOCTRINE.md` §6.7.)
+6. **Build to the Definition of done**, and **break every fix on purpose**:
+   revert it, run the suite, name the test that failed, restore it. Say the
+   numbers ("reverted the clamp: tests 3 and 15 failed; restored: 0"). A fix
+   whose test passes both ways is not tested (§6.8).
+7. **`npm run ship`.** It catches up, rebuilds, runs the checks, pushes,
+   reuses the open PR, **records the PR on its ticket**, waits for CI, merges,
+   and tidies. You do not run `clickup pr-opened` by hand in this lane — `ship`
+   does it from the branch's `clickup-task` stamp, which is why step 4 insists
+   on that stamp even when you build on an existing branch ("Who writes the PR
+   trail", above). A branch with no stamp still ships; it says so. **No pause
+   to merge.**
+   Dane's first instinct was to pause the pipeline so the merge would not
+   collide with a loop pass; it cannot — the loops never merge, and a merge
+   only re-dates their open branches, which `ship` handles by catching up.
+   `pause` costs up to a thirty-minute drain and, past two hours, an hourly
+   nag on the bus. If `ship` stops on a conflict, resolve it by hand, commit,
+   and run `ship` again — it picks up where it got to.
+   *Gotcha:* run from inside the worktree, and expect the shell to lose its
+   working directory afterwards — `ship`'s tidy removes the folder you ran it
+   from, so a trailing command in the same shell can report exit 1 for
+   `getcwd` after a successful merge. Read `ship`'s own last line.
+8. **Close it out.** Ticket to Live with a note that states the gates and
+   their numbers, what was probed live, and what was break-tested;
+   `npm run tidy` (ship already did); one line on the bus.
+
+### When the ticket is already In review
+
+"Fast track" on a ticket whose PR is already open and green is the **review
+half** of the lane, not the build half (2026-08-30, ticket 86bbjzg83, PR #445).
+Step 3's claim does not apply — there is no `Queued` to claim from and the
+ticket must not be dragged back to `Building`; the one status write is the
+closing move to Live, guarded with `--if-status "in review"` so a loop-review
+verdict that landed meanwhile is not overwritten. Everything else stands:
+step 4 (the branch exists, so it is the by-hand worktree), step 5 (merge
+`main` in first — #445 was 13 commits behind and conflicted on a line Lane A
+had since rewritten), step 6 (re-run every gate on the *merged* code and break
+one fix on purpose yourself rather than trusting the PR's table), step 7 and
+step 8. The PR body's evidence is the builder's; the reviewer's job is to
+produce its own, and to say what it could not reproduce — here, the
+per-comment verdict lines, which need a fresh operator comment that no ticket
+had at the time.
+
+**A review pass in flight keeps its claim** (2026-08-30, task 86bbq0fh8).
+"Fast track" can arrive while a loop-review pass is actively on the ticket —
+there the loop note read "being checked" for a pass that had started two
+minutes earlier. First confirm the claim is live, on the machine that owns
+the review: the Mini's `~/loop-logs/loop-review.log` says whether a pass is
+actually running, and a "review pass started" note with nothing running is a
+stranded claim for `pipeline -- resume` to unstick, not a reason to wait.
+While a live pass reads the branch, do not push to it, write a status, or
+post anything to the ticket — a push hands the reviewer a moving target.
+Everything local is fair game in the meantime: set up the worktree, merge
+`origin/main` in, resolve the conflict, run the gates, break-test. Then act
+on the verdict. A send-back drops the ticket to `Rework`, which is a clean
+step-3 claim and turns the review notes into the specification; a pass
+leaves the green-PR case above. On 86bbq0fh8 the verdict landed nine minutes
+in, the send-back's two findings were fixed on top of the already-resolved
+merge, and the whole round — verdict to Live — cost under an hour.
+
+### What the first run of this lane found (2026-08-30, ticket 86bbmg2fb, PR #441)
+
+* **The Mini's runners took the change before the command existed.** The
+  one-line change to `~/bin/loop-runner.sh` was on the Mini before
+  `next-interval` was on `main`, so both loops logged
+  `next-interval gave no usable answer ('') -- falling back to 900s` for a
+  day. That is the fallback working, not a fault: each loop pass
+  fast-forwards the Mini's `main` checkout (its reflog shows one merge per
+  pass), so the runners pick up a new CLI command on the pass after it
+  merges. If that line persists after a merge, the Mini's `main` is behind —
+  `git pull` there. No restart is needed while the runner already calls the
+  command; a runner that does NOT yet call it holds the old script's inode
+  and needs its screen restarted.
+* **A pipeline-side rework needs the Mini checked, not assumed.** The review
+  note said the runners held the old inode; the logs said they had already
+  been restarted and were calling the command. Thirty seconds over SSH
+  (`zsh -lc`, not a bare `ssh host cmd` — the login shell is what finds
+  Homebrew) settled it, and it changed what the closing step was.
+
+## How often the relay wakes, and why that number (2026-08-23, task 86bbk2fuh)
+
+The relay runs **every 10 minutes** (`StartInterval` 600). It was hourly until
+2026-08-23. The interval lives in `scripts/install_bus_relay.sh`
+(`INTERVAL_SECONDS`), which generates the launchd plist — so it is changed by
+editing the repo and re-running the installer, never by hand-editing the plist
+on the machine.
+
+**Why it moved.** Hourly was a fair default while the relay only *notified*.
+On 2026-08-21 it started **merging** (task 86bbjd5nn), which made it the
+consumer for the whole pipeline, and the default was never revisited. Nothing
+about the work justified an hour: a pass costs **no tokens at all** — it is a
+plain Node script, not a Claude session — and finishes the entire job in about
+**14 seconds**. So an approved PR could sit up to an hour waiting on the
+*interval*, not on any work. That was the ceiling, and it is the one thing this
+change removed.
+
+**What it costs, measured.** ClickUp allows roughly **100 requests per minute**.
+A steady pass, measured on 2026-08-23 against a queue of 15 open tickets
+carrying 22 already-relayed operator comments, used **39 requests** — leaving
+**61 requests of headroom**, about 61%. The relay prints this itself now, on
+every pass:
+
+```
+requests this pass: 39 (ClickUp allows ~100/minute)
+```
+
+Two things about that number are worth keeping straight:
+
+- **The interval does not multiply it.** ClickUp's budget resets every minute,
+  and a 14-second pass every 10 minutes never shares a minute with the next
+  one. Peak usage is one pass, whatever the interval. Going 3600 → 600 raised
+  requests *per hour* from 39 to 234, and ClickUp does not meter per hour.
+- **Queue size does multiply it.** The count is roughly `2 list reads + 1 per
+  open ticket + 1 per operator comment on those tickets`, so it grows with how
+  much work is open, not with how often the relay runs. Reaching 100 would take
+  roughly 2.5× the current open queue. This is also the real shape of the 429
+  on 2026-08-23 that reported six tasks as "could not read comments": that was
+  a 24-comment backlog drain, a *volume* problem wearing a rate-limit hat, and
+  shortening the interval does not make it likelier. **If "requests this pass"
+  starts creeping toward 100, the fix is a cheaper pass — not a longer
+  interval.**
+
+**Overlap: what actually prevents a double-post.** At 10 minutes a slow pass
+overlapping the next is far likelier than at 60, so this was verified rather
+than assumed. It matters because the relay's own dedup guard would *not*
+survive an overlap: "has this comment been relayed?" is a read, a comparison,
+then a write against a remote API, and two passes can both read "no" before
+either writes its marker. The code says so itself, about two machines.
+
+**launchd is the guard, and it holds.** A launchd job is one instance per
+`Label`: it will not start a second copy while the first is still running.
+Probed directly on the Mini — a scratch job with `StartInterval` 10 running a
+25-second script, which would overlap 2–3 deep if overlap were possible:
+
+```
+START pid=2550 23:32:15    END pid=2550 23:32:41
+START pid=3013 23:32:51    END pid=3013 23:33:16
+START pid=3165 23:33:26    END pid=3165 23:33:51
+START pid=3832 23:34:01
+```
+
+Never two STARTs before an END — which is the load-bearing finding, and it was
+confirmed a second time by an independent 16-run probe in review.
+
+Note what the timings do *not* prove. Each run begins 10 seconds after the
+previous one **ended**, and it is tempting to read that as launchd restarting
+the countdown from exit. Apple documents `StartInterval` as a plain periodic
+timer whose firings are **coalesced** when the job is still running — several
+missed firings collapse into a single start. With a 25-second job on a
+10-second interval those two mechanisms produce identical logs, so this data
+cannot tell them apart, and coalescing is the documented one. The practical
+consequence is the same either way and is what actually matters: **a pass
+that runs long never stacks — it swallows the firings it overran.** The cost
+of a long pass is therefore a delay, not a double-post: approvals arriving
+while it runs wait on work already in flight. That is why the merge pass's
+worst case is pinned below one interval in
+`scripts/builder/mergeOnComment.test.js`.
+
+The consequence worth remembering: **overlap safety comes entirely from
+launchd, not from the relay's code.** Anything that runs the relay outside that
+schedule — a second machine, a hand-run pass alongside the timer, a future
+wrapper that backgrounds it — loses the guarantee. `lib/nodeRoles.js` covers
+the second-machine case; the others are on whoever types the command.
+
+**The interval is still only on one machine.** The generated plist lives at
+`~/Library/LaunchAgents/com.starcaster.bus-relay.plist` on the Mini and is not
+in the repo, so it is invisible to everyone and lost if the machine is rebuilt.
+That belongs to the **NODES** slices, not to this ticket — recording the number
+here is the stopgap. The closest live one is **Slice D, "provision a node by
+script, not by document"** (`86bbhbaay`); treat this relay interval as a worked
+example of why a machine-only config is a config nobody can review. (Task
+86bbk2fuh cited "NODES Slice B (86bbh9kh2)" for this, but that id is
+"Make Pulse path-portable" and no Slice B ticket could be found — A, C, D and E
+exist. Verify before citing it again.)
+
+**The drift check, and why it has three answers.** Changing
+`INTERVAL_SECONDS` in the repo does not change the machine — that needs the
+installer re-run, by hand, by a person. So `scripts/bus_relay_interval.sh`
+compares the two on every relay pass and in `install_bus_relay.sh --status`,
+and it answers one of **three** ways, never two:
+
+| | |
+|---|---|
+| `interval: every 600s, matching the repo` | both values read, and equal |
+| `interval: MISMATCH — this machine wakes every 3600s, the repo says 600s.` | both read, different — prints the installer command, pointed at the **main** checkout (the installer refuses to run from a worktree) |
+| `interval: CANNOT TELL — …` | no plist, no readable `StartInterval`, or no readable `INTERVAL_SECONDS` — it names which |
+
+The third one is the point. This check is the compensating control for the one
+thing the change could not do for itself: the installer re-run is a human step,
+and this is what keeps it from being forgotten silently forever. Its first
+version had only two answers, so an unparseable `StartInterval` printed
+`every ?s, matching the repo` — claiming a match while the `?` admitted it had
+no value — and a missing plist printed nothing at all, which reads as no news.
+Both were false all-clears in the one check whose whole job is to make silent
+drift loud (`docs/DOCTRINE.md` 3.11: *checked*, *empty* and *could not check*
+are three outcomes, and the third is never folded into the second). Caught in
+review, 2026-08-24. `scripts/builder/busRelayInterval.test.js` pins all three,
+and each was verified by reintroducing the defect and watching the test fail.
+
+Review round 2 then found a **fourth** answer hiding in the same check, and the
+worst kind: confidently wrong. A plist is XML, not a line-oriented file, so
+launchd is content with the whole `<dict>` on one line — and the value was read
+with `grep -A1` plus a greedy `sed`, which takes the **last** `<integer>` on the
+line rather than the one belonging to `StartInterval`. A single-line plist
+saying 600, with any later integer-valued key (`Nice`, `ThrottleInterval`),
+reported that other key's number as the schedule. The match is now anchored to
+the value that follows `<key>StartInterval</key>`, and the test file pins it.
+
+**The interval is written down in more places than the two that run it.**
+Round 1 of review fixed the check; round 2 caught what the check cannot see.
+`INTERVAL_SECONDS` and the plist are the two copies that *take effect*, and the
+drift check compares those. But the number is also stated in prose, and prose
+that says "hourly" after the machine stopped being hourly is wrong in exactly
+the way nobody notices — it never fails, it just misinforms.
+
+**Do not trust a list here to be complete — run the search.** The list below
+was published in review round 2 under the heading "every place that had to
+change", and round 3 found it short by eight: the same stale word sitting in
+code comments and in one line of operator-visible stderr. A hand-maintained
+inventory of a scattered fact is itself a scattered fact. The check is one
+command and it is the only thing that actually answers the question:
+
+```
+git grep -niE "hourly|every hour"
+```
+
+Search for the **outgoing** wording, not the incoming one — the stale copies are
+the ones still saying the old thing. And search for the number spelled out as
+well as in digits: two of the six records above say "every **ten** minutes", so
+a future change away from 10 minutes wants
+`git grep -niE "ten minutes|10 minutes"` and would miss half the list without
+the words.
+
+Three families come back, and only the first needs touching:
+
+1. **States the current cadence** — the rows below. These go stale on a change.
+2. **Describes the past on purpose** — `scripts/bus_relay_interval.sh`,
+   `scripts/install_bus_relay.sh` (the `INTERVAL_SECONDS` history note), the
+   "it was hourly until 2026-08-23" sentences in this file, and every dated
+   entry in `docs/WORK-LOG.md`. Correct as they stand; changing them would
+   falsify the record. The work log in particular is a record of what was true
+   on a date and must never be back-edited to match today.
+3. **A different feature entirely** — `lib/builderPageRevisionsStore.js` and
+   its tests use "hourly" about page-revision bucketing. Unrelated; never touch.
+
+The places that state the cadence, and why each one matters:
+
+| Where | Why it matters |
+|---|---|
+| `scripts/install_bus_relay.sh` → `INTERVAL_SECONDS` | the source of truth; generates the plist |
+| `~/Library/LaunchAgents/com.starcaster.bus-relay.plist` | what actually runs; only changes when the installer is re-run |
+| `docs/ecosystem/inventory.yaml` → `job-bus-relay` | **published** — `build_ecosystem_html.mjs` and `ecosystemNotes.js` render it, so a stale value ships to the page people read |
+| `docs/APPROVALS.md` | the operator-facing description of the one-word merge flow; a faster merge is the whole visible point of the change |
+| `.claude/skills/loop-review/SKILL.md` | tells the review loop what happens after `Ready to launch` |
+| `scripts/install_bus_relay.sh` install-time stderr | a person reads this one, on the machine, when doppler is missing |
+| code comments in `scripts/clickup_direct.mjs` and `scripts/builder/mergeOnComment.js` (+ its test) | they explain *why* a guard exists; a wrong cadence there misleads the next person to change the guard |
+| this file | the reasoning, the measurement, and the table you are reading |
+
+**Most of those comments no longer name a cadence at all.** Where the sentence
+only meant "on every pass" — dedup markers, quieted repeat comments, "ask again
+next time" — it now says exactly that, and is immune to the next change. Only
+the places where the *number itself* is load-bearing still carry one, and the
+one that matters most (the merge pass's worst-case bound) no longer states it
+in prose either: `scripts/builder/mergeOnComment.test.js` reads
+`INTERVAL_SECONDS` and asserts a pass cannot outlast one interval, so shortening
+the cadence again fails a test instead of quietly permitting an overrun.
+
+**Nothing checks the prose, and one thing nearly could.**
+`scripts/check_ecosystem_drift.cjs` probes the bus-relay job with its
+`launchctl` probe, which asks only whether `detail.label` is loaded on the host
+machine — it never reads `StartInterval`, so `schedule:` in the inventory can be
+wrong forever without a single check complaining. That checker is the one place
+positioned to catch this class, since it already talks to the real machine and
+already holds the inventory's claim beside it. Teaching it to compare
+`detail.schedule` against the live plist is a **follow-up, deliberately not done
+here** — it needs a schedule vocabulary (`hourly`, `every 10 minutes`, a cron
+expression) before it can compare anything, which is a design question and not a
+one-line fix. Until then, the table above is the manual answer: this number
+changes in six places or it is wrong in some of them.
+
+**Known and not fixed here:** the launchd log now grows 6× faster with no
+rotation. It is small (a few KB per pass) but unbounded, and belongs to a
+housekeeping ticket rather than this one.
+
+## How often the LOOPS wake — the queue decides, not a number (2026-08-25, task 86bbmg2fb)
+
+The relay's schedule above is fixed on purpose: it polls for something that
+either happened or didn't. The two build/review loops are different — how often
+they *should* wake depends entirely on how much work is waiting — so since
+2026-08-25 they **ask, each cycle, instead of being told once at startup**.
+
+```
+npm run --silent clickup -- next-interval --for loop-build --fallback 3600
+```
+
+It prints **one integer, seconds, on stdout** and the reason on stderr, and
+**always exits 0**. The decision itself is a pure, tested module —
+`scripts/builder/loopInterval.js`, `scripts/builder/loopInterval.test.js` —
+so the numbers below are testable claims, not lore.
+
+### The curve
+
+| Claimable queue | Interval | Why |
+|---|---|---|
+| 0 | 3600 s | Nothing to do; do not pay to find that out often. |
+| 1–3 | 1800 s | Shallow — the work will be gone soon anyway. |
+| 4+ | 900 s | Deep enough that idling is the dominant cost. |
+
+This is a **starting** curve, to be tuned against real data rather than
+defended as correct. The trade it encodes inverts on one thing: with a deep
+queue a short interval is nearly free *per unit of work* (a session's overhead
+is noise against a 14-minute build), and with an empty one it is pure waste —
+a whole Claude session every few minutes to learn there is nothing to do.
+
+The problem it replaces: the build loop worked ~14 minutes and then slept a
+flat 60, a **23% duty cycle**. Nothing was recovering or waiting in that gap.
+The hour was a quota throttle, picked as a safe default when the loops first
+ran unattended, and never revisited. On 2026-08-25 it was hand-retimed to 900 s
+(`~/loop-logs/retime.log`) — which is the same failure one rung up: right at
+the moment it was typed, wrong by the next morning.
+
+### The floor is 900 s, and here is why
+
+**Do not lower it without recording the decision here and on task 86bbmg2fb.**
+
+`loop-review` was left on a **2-minute** interval on 2026-08-24 and ran roughly
+**360 passes**, almost every one of them finding nothing. 900 s is the shortest
+cadence at which session overhead is still small against the ~14 minutes of
+real work a pass does; below it, the loop spends more on starting than on
+building. A number with no derivation gets tuned by whoever is annoyed that
+day — so the derivation lives beside the number, in the module and here.
+
+The floor is applied to *everything*: the curve's own rungs, the runner's
+argument, and the on-disk state file. A hand-edited `120` cannot get through.
+Nor can a hand-edited `null` get *under* the hysteresis: `Number(null)` is 0,
+which a floor-only clamp would raise to 900 and treat as the cadence already
+in force, so one deep reading would shorten it at once. Anything that is not
+actually a number resolves to the long fallback instead, and the test asserts
+that value rather than merely `>= floor`.
+
+### "Claimable", not "queued"
+
+A queue full of tickets the loop **cannot take** is not a reason to wake more
+often. The count excludes:
+
+* tickets whose `repo:` tag makes the loop escalate rather than build — wrong
+  repo, unknown repo, two repo tags, or a repo not checked out on this machine;
+* tickets blocked by a dependency that is not finished. **A finished blocker
+  is never in the list** — the list read returns open tasks only — so the
+  command reads each blocker the list cannot show back separately, once per
+  cycle, and only those. One that cannot be read stays unseen and counts as
+  still blocking, the safe direction. (Review round 1, 2026-08-29: without
+  that read, a ticket waiting on work that had already shipped read as
+  blocked on every cycle, forever — and the fixture that "covered" it put the
+  closed blocker in the list, a shape the endpoint cannot return. The fixture
+  now keeps it out.)
+* The list is read in full, every page — never page 0 alone. ClickUp pages
+  newest-first and the loops claim oldest-first, so a one-page read drops
+  exactly the oldest backlog (DOCTRINE 5.12).
+* **for `loop-build` only**, everything, when the work-in-progress cap is
+  already full: a capped pass claims nothing however deep the queue is.
+
+The cap deliberately does **not** throttle `loop-review`. Review drains the
+very PRs the cap is waiting on; pausing it because the cap is full would make
+the cap permanent.
+
+### Both commands take ONE reading of the cap
+
+`wip-check` and `next-interval` ask the same question, and on 2026-08-31 they
+answered it differently for a whole morning (task 86bbq8br2):
+
+```
+wip-check      → 4 in flight, cap 5 — room to claim another.
+                 4 open PR(s) not counted: 4 queued for rework (#454, #449, #446, #419).
+next-interval  → interval: 3600s (0 claimable — the work-in-progress cap is full)
+```
+
+So `loop-build` slept the maximum hour after every *productive* pass, telling
+its own log the merge side was full, while 38 tickets were claimable. Every
+gate was green and every green was honest.
+
+Neither function was wrong. There were two **call sites**: `next-interval`
+asked GitHub for `number,state` and passed no ticket statuses, so it took the
+documented conservative fallback of counting every open PR — including the
+ones sent back to `Queued` for rework, which is the exact deadlock task
+86bbm4zwd had already fixed for the claim gate. `wip-check` asked for `body`
+too, read the queue, and excluded them correctly.
+
+The reading now happens once, in `wipCap.probeCap`, wired to `gh` and
+`fetchAllTasks` by a single `capProbe` helper. The two things that had to
+match and did not — the `--json` field list (it **must** include `body`, which
+is how a PR is matched to its ticket) and `include_closed` on the queue read —
+now have one place to be wrong instead of two.
+
+What is deliberately *not* shared is the direction each caller fails in, which
+is a real difference rather than duplication: `probeCap` returns
+`determined:false` and says why, and `wip-check` fails open while
+`next-interval` fails toward capped (the table below). `next-interval` also
+logs the cap sentence itself now, not just its effect — a disagreement should
+be visible in the log, not inferred from an interval an hour later.
+
+### Hysteresis, and which direction it protects
+
+**Shortening needs two consecutive readings. Lengthening is immediate.**
+
+One burst of tickets must not set a fast cadence for the rest of the night —
+the queue may be drained again before the loop next wakes. Going *slower*
+never waits, because that is the cheap mistake.
+
+With no state on disk at all, the cadence in force is taken to be the runner's
+configured argument, so a first pass against a deep queue holds one cycle and
+shortens on the next. That is the same rule every later pass follows, rather
+than a special case that skips the guard exactly when nothing is known.
+
+State is one small file per loop, beside the log the runner already writes:
+`~/loop-logs/<loop>.interval-state.json`. Deleting it is harmless — it costs
+one cycle of hysteresis, in the safe direction.
+
+### Every failure lengthens the sleep, and says so
+
+| What went wrong | Answer | Why not the floor |
+|---|---|---|
+| ClickUp unreadable | the runner's configured fallback (3600 s) | A short interval on unknown state is how quota gets burned invisibly. |
+| Open-PR count unreadable | assume the cap is full → 3600 s | Unlike `wip-check` (which fails *open*, because refusing there would stop all work), the pass has already run; the only question left is how long to sleep. |
+| Depth is absurd — `NaN`, `Infinity`, negative | read as 0 → 3600 s | `Infinity` reads like "wake often" and is in fact garbage. Garbage takes the cheap direction. |
+| The command itself fails | the runner's `$INTERVAL` argument | The runner never sleeps on a guess. |
+
+A failed read is **not a reading**: it leaves the hysteresis state untouched,
+so two outages in a row cannot masquerade as two consecutive short readings.
+
+And nothing is silent. Every cycle logs the number *and* its reason —
+
+```
+interval: 900s (12 claimable — deep enough that idling is the dominant cost)
+[loop-runner] 04:38:10 sleeping 900s before the next /loop-build
+```
+
+— because the WIP cap shipped with a bare total and nobody could tell why it
+had declined.
+
+### The runner side (unversioned — keep this copy)
+
+`~/bin/loop-runner.sh` lives on the Mac Mini only and is **in no repository**,
+so this is the recoverable copy of the change. It replaced the single line
+`sleep "$INTERVAL"` at the bottom of the `while` loop with:
+
+```bash
+  NEXT=$(PATH="/opt/homebrew/bin:/usr/local/bin:$PATH" npm run --silent clickup -- \
+           next-interval --for "$SKILL" --fallback "$INTERVAL" 2>>"$LOG" | tail -1)
+  if ! [[ "$NEXT" =~ ^[0-9]+$ ]]; then
+    echo "[loop-runner] next-interval gave no usable answer ('$NEXT') -- falling back to ${INTERVAL}s" >> "$LOG"
+    NEXT=$INTERVAL
+  fi
+  echo "[loop-runner] $(date "+%H:%M:%S") sleeping ${NEXT}s before the next /$SKILL" >> "$LOG"
+  sleep "$NEXT"
+```
+
+`PATH` is set inline because a detached `screen` session does not inherit
+Homebrew's. The `^[0-9]+$` test is the whole fallback: anything that is not a
+plain integer — no `npm`, no Doppler, a usage error, a checkout that predates
+the command — means the runner keeps using its configured argument.
+
+**A running runner keeps its old behaviour.** Bash reads a script as it goes,
+so the file was replaced with `mv` rather than edited in place; the live
+`screen` sessions hold the old inode. The new cadence starts when a runner is
+next restarted. Bringing that wrapper under version control is **NODES Slice B
+(86bbh9kh2)**, not this ticket.
 
 ## A build node must be able to make GitHub run its checks
 
@@ -715,8 +2315,43 @@ npm run clickup -- bus-relay --dry-run              # says what it would do, wri
 npm run clickup -- bus-relay --only-task <task-id>  # one ticket, real writes
 ```
 
-To exercise the fallback deliberately rather than waiting for the next outage,
-point the pass at a channel id that does not exist:
+**A run on any other machine exits 0 and tests nothing.** The role guard in
+`lib/nodeRoles.js` prints "not this machine's job" and returns success — it is
+built for launchd, where a refusal must not read as a crash. So the three
+How-to-test commands in a bus-relay ticket, run on the MacBook, all "pass" while
+exercising none of the code (2026-08-30, task 86bbjzg83: the reviewer ran them,
+got three exit 0s, and only the words *did nothing* in the output gave it
+away). Read the output, not the exit code, and rehearse on the Mini. A branch
+that is not on `main` yet can be rehearsed there without touching the Mini's
+own checkout: `git worktree add /tmp/<x> origin/<branch>`, symlink
+`node_modules` from the main checkout (a script run, not a build — landmine 8
+is about build outputs), run, then `git worktree remove --force /tmp/<x>`.
+
+**To rehearse the outage fallback without writing anything** (2026-08-30,
+task 86bbjzg83, PR #445):
+
+```bash
+npm run clickup -- bus-relay --dry-run --simulate-bus-failure
+```
+
+Every party-line write reports failure without a request being sent, and
+dry-run stops short-circuiting so the real `deliverToBus()` decision runs: per
+relayed comment it prints whether the ticket receipt would carry the message
+and whether the hand-back would fire (a "needs your input" watch) or that it is
+NOT delivered with no hand-back (a notify-only watch — the deliberate asymmetry
+in `deliveryVerdict`). The receipt and its read-back are rehearsed, not sent;
+no dedup marker, no status move. The `why` says `SIMULATED` in the text so a
+log reader can never mistake it for an outage. **Without `--dry-run` it is
+refused, exit 2, before the first read** — outside dry-run it would post a real
+receipt claiming an outage that is not happening and write the permanent
+"already relayed" marker against it, dropping the real message for good. That
+guard is `simulationGuard` in `scripts/builder/busRelayPlan.js`, and test 42
+of `busRelayPlan.test.js` fails if it is loosened. The pass only shows verdict
+lines when a watched ticket actually has a fresh operator comment; on an empty
+queue it proves the banner, the path and the summary line, nothing more.
+
+To exercise the fallback **for real** — receipts written, ticket moved — rather
+than rehearsed, point the pass at a channel id that does not exist:
 
 ```bash
 npm run clickup -- bus-relay --only-task <task-id> --channel 0000-nonexistent
@@ -734,14 +2369,266 @@ a scratch ticket plus a comment of your own works too. Do **not** delete an
 existing `[bus-relay]` marker to manufacture one — that is destructive, and the
 run will then send his real answer to a dead channel.
 
+## The pulse — is anything actually moving? (2026-08-25, task 86bbm9h60)
+
+```
+npm run pulse                 # human-readable, exit 0 whatever it finds
+npm run pulse -- --json       # machine-readable
+npm run pulse -- --exit-code  # 0 clean / 1 findings / 2 could not look
+npm run pulse -- --job loop-review   # read a different loop's log
+```
+
+**Seven incidents in the week to 2026-08-25. Not one of them was a crash.**
+Every single one was a component that ran, exited 0, and accomplished nothing:
+a build loop that declined thirteen passes in a row on a deadlocked cap,
+tickets sitting seventy hours in `Building`, a pull request and its ticket
+linked in only one direction. A health check would have passed during all of
+them, because every process was alive and every exit code was 0.
+
+That is why the pulse measures **flow, never status**. "Is it running" is the
+question that failed; "is anything moving" is the question that works.
+
+It is **read-only** — three GET-only sources, no write path in the file at all,
+and a test that fails if one is ever added. The ClickUp read sends
+`include_closed=true`, and a test asserts the literal string: without it the
+list endpoint hides every closed-type status (47 tickets came back where 163
+existed, all 116 `Live` ones missing — measured 2026-08-30), which made the
+zombie shape below impossible to fire. Fourth reader in this repo to hit that
+trap; each one carries the same regression test. It reports and stops. Repairs live
+in `npm run reconcile`, deliberately: the fourth drift shape below has two
+valid fixes and only a person knows which one is right.
+
+### A1 — the no-op streak
+
+Consecutive loop passes that claimed nothing. A declining pass and a healthy
+quiet pass are byte-identical from outside, which is how fourteen hours of a
+dead build loop read as a quiet morning.
+
+| Number | Value | Where it came from |
+|---|---|---|
+| Streak threshold | **3 passes** | One claimless pass is normal, two is plausible. Eight happened; thirteen happened on 2026-08-25. Three is the first count that cannot be explained away. |
+| Gate | **only while `Queued > 0`** | A loop declining an empty queue is working perfectly. Alarming on that teaches the reader to ignore the alarm. |
+| Hung pass | **4 hours** | A pass is 10–15 minutes of work; the longest in a 580-pass sample was 38 minutes. |
+| Loop gone silent | **3 hours** since the loop was last seen alive | `loopInterval.js` sleeps at most 3600s between passes (the empty-queue cadence; 900–1800s with work queued). Three missed intervals at the *longest* cadence is 3h — past that no queue depth explains the silence. Measured from the newest END banner, or the START of a pass still running, so the pulse's own in-flight pass counts as a sign of life. |
+
+**Two shapes of a dead loop, and the streak only sees one.** A loop that runs
+and declines shows up as a streak. A loop that *stops emitting passes* does not:
+the streak walk stops at the newest claim, so a launchd job that died right
+after a claim read as `clear` with 36 tickets queued and the loop last seen
+five days earlier (caught in review, 2026-08-30). The silence check above is
+judged *before* the streak, and every A1 result carries `lastPassAt` whatever
+its verdict, so the JSON always answers "when did this last run".
+
+**An orphan `START` the loop has since recovered from is history, not news.**
+The log is append-only, so a pass that never printed its END banner stays in
+it forever; the 2026-08-23 orphan alarmed on every production run and pinned
+`--exit-code` at 1 permanently — the "same false note on every run" the 4h
+threshold guards against, at the other end. If any pass has *completed* since
+the orphan started, it is reported as `superseded` and counts as nothing.
+
+The source is `~/loop-logs/loop-build.log`, whose body is **the agent's own
+prose report, not tool output** — there is no structured claim record to read.
+So a pass is classified off the *deterministic strings the loop's own commands
+print* and a declining pass quotes verbatim: `wipCap.js`'s "WIP cap reached —
+N PR(s) open, cap M", `nodeRoles.js`'s "so it did nothing.", and the harness's
+own quota notice. Measured against 580 real passes, **90% classify; the other
+10% are reported as CANNOT TELL, never as a decline.** That asymmetry is the
+point — guessing "declined" invents an outage, guessing "claimed" hides one.
+
+An early draft matched `wip-check` and `exit 3` *anywhere* in the body and
+mislabelled a genuine claim, because `build-start` — a different command — had
+exited 3 for an unrelated reason. Requiring the quoted message is the fix.
+
+### A2 — stage residency
+
+How long each ticket has sat where it is.
+
+| Stage | Threshold | Where the number came from |
+|---|---|---|
+| Building | **2 h** | A build takes 10–15 minutes. Three tickets measured 65–72 hours on 2026-08-25. |
+| In review | **4 h** | A review takes about 10 minutes on an hourly poll, so 4 hours is already several missed polls. |
+| Ready to launch | **24 h** (notice, not alarm) | Operator-held. Surface it; do not alarm — only Dane moves a ticket out of it. |
+| Queued | **7 days** (notice) | Long is fine. Forgotten is not. |
+| Rework | **3 days** (alarm) | Half the queued allowance: a send-back has an open branch going stale against a moving `main`, so waiting costs real work here in a way it does not for fresh tickets. |
+
+**`date_updated` is a proxy for stage entry, not a measurement of it.** ClickUp
+bumps it on any edit, so a comment or a Loop-note stamp resets the clock. The
+error runs one way — it makes a stuck ticket look *fresher* than it is — so the
+check under-reports, and every run says so rather than implying a precision the
+data does not have. A stage with no threshold (`Needs your input`, `Live`) is
+listed as **not measured**, never silently skipped.
+
+### B1 — ticket ↔ PR drift, in both directions
+
+| Shape | Meaning | Severity |
+|---|---|---|
+| 1 | Non-terminal ticket, PR **merged** — the work is live and the ticket did not follow | notice (`reconcile` repairs it) |
+| 2 | Terminal ticket, PR still **open** — a zombie branch | alarm |
+| 3 | In-flight ticket, **no PR on either side** — stranded | alarm |
+| 4 | A PR names a ticket, **the ticket has no record of that PR** | alarm |
+
+**Shape 4 is the dangerous one, and the reason this check reads both
+directions.** `build-start` decides whether a branch already exists by reading
+*the ticket*. A link that exists only on the PR side is invisible to it, so the
+next pass opens a second branch for work that already has one — exactly how
+duplicate PRs #407 and #408 were born. Real case: PR #373 ↔ 86bbjj6qb, found
+while writing the design and since repaired by hand.
+
+Two distinctions cost false positives on the first production run, and both are
+now guarded by tests:
+
+- **Neither `Rework` nor `Queued` is in-flight or terminal.** A ticket in either with an open
+  PR is a **send-back** — the ordinary state of work a review handed back, and
+  the exact state `build-start` exists to recognise. Reading "not in flight" as
+  "finished" called two of them zombies.
+- **A PR *mentioning* a ticket is not a PR *claiming* one.** The link is the
+  ClickUp URL line the PR body is required to carry, not any id appearing in
+  prose. PR #435 discusses four other tickets — one of them the literal example
+  `86bbnonexistent` — while declaring exactly one.
+
+### The five rules, which matter more than the checks
+
+1. **Silence is never all-clear.** Every check prints a section whether or not
+   it found anything, so "all clear" and "the job died" can never look alike.
+2. **"Cannot tell" is its own state**, never folded into "fine" (DOCTRINE
+   3.11) — and it has its own exit code (2) so a caller can treat "I could not
+   look" differently from "I looked and it was fine".
+   In the report that means a **`CLEAR` line may only print when the check
+   both found nothing AND could read everything** — `whollyMeasured()` in
+   `pulse.js`, one predicate shared by every section. Guarding on findings
+   alone is how the two collapse: with `gh` unavailable, B1 compared 0 tickets
+   against 0 PRs, found nothing because it had seen nothing, and printed
+   "CLEAR every ticket and PR names the other" directly above its own CANNOT
+   line (caught in review, 2026-08-30). A CLEAR asserts something about
+   everything the check looked at, so a check that looked at nothing has
+   nothing to assert.
+   **The headline is bound by the same rule, and it is the line that
+   matters most.** A failed log read returns `verdict: 'cannot-tell'`
+   *alongside* its `sourceError`, and the sentence tests that state before
+   the REVIEW and OPERATOR branches — otherwise an unread log plus two stale
+   reviews read "Not the builder … the loop is claiming", steering the reader
+   away from the one stage nobody had looked at (the round-2 send-back,
+   2026-08-30). And when GitHub cannot be read, the CANNOT line carries `gh`'s
+   own first line of stderr, so auth, rate limit and wrong folder are told
+   apart instead of all reading as "failed".
+3. **Every count carries its breakdown.** `7 open, cap 5` was true and hid a
+   deadlock for four passes.
+4. **The bottleneck is named in a sentence** — "Bottleneck: BUILD (4
+   consecutive claimless passes, 26 queued). Ready to launch holds 1." A table
+   of rates makes the reader do arithmetic they will skip.
+5. **The pulse cannot fail silently either.** Every completed run ends with
+   `PULSE COMPLETE <timestamp>`, so a scheduled run that does not print that
+   line is itself the alert. It writes no heartbeat file, because the ticket's
+   non-goals forbid the pulse writing anything; a persisted heartbeat belongs
+   to phase 2 alongside the daily digest.
+
+### Where the code lives
+
+`scripts/builder/pulse.js` is **pure** — every threshold, every classification
+and every sentence, with no clock, no network and no disk (a test enforces
+that). `scripts/pulse.cjs` holds only the reads. That split is what makes a
+threshold break-testable, and a threshold nobody can break-test is one that
+gets tuned by whoever is annoyed that day.
+
+Phase 1 is deliberately only these three checks — the ones that would have
+caught real incidents — so the value is provable before the other nine in the
+design are written. **There is no dashboard, on purpose:** a screen nobody
+opens manufactures the feeling of oversight, which is the failure being
+designed against.
+## The work-in-progress cap — and what it counts
+
+`loop-build` asks `npm run clickup -- wip-check` before claiming, and declines
+when too much is already in flight. Branch protection is `strict: true`, so
+every merge invalidates every other open branch: the catch-up cost is quadratic
+in open PRs, and building an eighth branch while seven rot ships nothing sooner.
+Exit 0 = room to claim, 3 = a normal decline, 1 = could not tell.
+
+**It counts work in flight, not open pull requests** (2026-08-25, task
+86bbm4zwd). A PR counts only when its ticket is `Building`, `In review`,
+`Ready to launch` or `Needs your input`. That last one is there deliberately:
+it is operator-held, exactly like `Ready to launch`. A ticket parked on Dane
+with an open PR is real work occupying the merge pipeline, its branch still
+needs catching up on every merge, and if his inbox is full then the pipeline
+genuinely is full — a cap that hid that would be lying in the more dangerous
+direction. The list lives in `IN_FLIGHT_STATUSES` (`scripts/builder/wipCap.js`).
+
+A PR counts **zero** when:
+
+* the ticket is **`Rework`** — a send-back the loop must be free to claim first,
+  and named as rework rather than counted (since 2026-08-31 it is a real status
+  rather than a guess from the ticket being queued);
+* the ticket is **`Queued`** with a stray PR against it — still work the loop
+  must be free to claim;
+* the ticket is **`Live`** — the work shipped by another route and the PR is a
+  leftover;
+* **no ticket can be found** for it — reported by number, never counted;
+* the ticket is in a status this list does not recognise — also reported, and
+  reported *as that*, quoting the status. It is deliberately NOT lumped in with
+  "no ticket found", which would send you hunting for a missing ClickUp link
+  that is not missing.
+
+The first version counted every open PR, and on the morning of 2026-08-25 that
+**deadlocked the build loop for four consecutive hourly passes**: seven PRs open
+against a cap of five, of which five should never have counted — three sent back
+to `Queued` for rework (so the cap blocked the only thing that could close them)
+and two zombies whose tickets were already `Live`. The queue sat at 33 while
+every pass exited 0 and did nothing.
+
+The message always names the split, never a bare total:
+
+```
+1 in flight, cap 5 — room to claim another.
+4 open PR(s) not counted: 4 queued for rework (#428, #426, #422, #419).
+```
+
+A bare "7 open, cap 5" is true and useless — it is what hid the deadlock for
+four passes.
+
+**If the queue cannot be read, it falls back to counting every open PR** — the
+older, *more* restrictive reading, and it says out loud which reading it used
+and why. Failing toward the cap costs idle time; failing away from it reinstates
+the churn the cap exists to prevent.
+
+"Cannot be read" covers every way that can happen, and getting there took two
+review rounds because each way arrived through a different door. ClickUp
+answering with an error (a routine 429 — the loops share a budget of about 100
+requests a minute) is one. The request never arriving at all — DNS, TLS, this
+machine offline, a connection timeout — is another, and it is the one that
+nearly shipped: `fetch` *rejects* rather than returning a response, so it was an
+unhandled crash and **exit 1**, which this skill reads as *"could not tell,
+proceed unbounded by the cap"*. A network blip would have uncapped the loop
+rather than capping it. A 200 carrying a junk body (a proxy's error page) was a
+third. All three now land in the same conservative fallback, and
+`scripts/builder/wipCapOutage.test.js` runs the real command with each failure
+underneath it — asserting the exit code is 0 or 3 and never 1, and asserting
+*which* guard produced the answer, because an outer catch swallowing an inner
+guard's bug is how one of those tests first passed when it should not have.
+
+The cap itself is 5, override `CLAUDE_LOOP_WIP_CAP` for an experiment. Five is a
+starting point, not a measurement.
+
+**The matching drift check.** `npm run reconcile` now also flags the reverse
+pair — a **terminal task with any linked PR still open**, which is how those two
+zombies survived. Every distinct PR the ticket links, not just the newest: the
+real 2026-08-25 shape is a `Live` ticket linking an open leftover *and* a later
+merged PR that actually shipped it, so a newest-only check would return silently
+on the exact case it was written for. The scan is bounded to the 25 most
+recently updated terminal tasks and says how many it skipped — there are already
+66 `Live` tickets and the set only grows, and an unbounded scan is a job that
+quietly gets slower until someone notices it timing out.
+
+It is never repaired automatically: "close the PR" and "the task was closed too
+early" are both plausible, and only a person can tell which.
+
 ## Reading the queue at a glance — the Loop note
 
 The Status column says which STAGE a ticket is in; the **Loop note** column
 says what is actually happening and what happens next, in plain language:
 `🔨 building — claimed 10:12am`, `🔀 PR #351 open — waiting for a review pass`,
 `🔍 being checked — a review pass started 8/23 3:41am`,
-`👀 verified — waiting on Dane to say "merge"`, `↩ returned to the line…`,
-`✅ live 8/20`. An empty note means "waiting in line" — correct, not a gap.
+`👀 verified — waiting on Dane to say "merge"`,
+`↩ round 3 — three docs now contradict the change`, `✅ live 8/20`. An empty
+note means "waiting in line" — correct, not a gap.
 The note is not decoration in one case: `🔍 being checked` is loop-review's
 **claim** on a ticket, and the next review pass reads it to decide whether to
 leave that ticket alone (see "Two passes, one ticket" above). `queue` and `get`
@@ -754,6 +2641,63 @@ The loops stamp these themselves (`loop-note` / `loop-heartbeat` in
 `scripts/clickup_direct.mjs`, wording in `scripts/builder/loopNote.js`) — one
 write per real transition, never per queued ticket (that would be ~33 writes a
 pass against a rate-limited API for what the sort order already shows).
+
+### A send-back says which round it is, and the fourth asks Dane
+
+`Queued` holds two different things — work nobody has started, and work that
+was built, reviewed and handed back with notes — and from the board they are
+identical. Dane spotted it from the UI on 2026-08-25, watching a ticket bounce
+for the third time: *"I would think tasks would never go back to queue except
+for situations involving dependencies or time delays."* The build loop had
+spotted the same conflation by jamming on it earlier that day (86bbm4zwd): the
+WIP cap counts open PRs, three of those PRs belonged to tickets sitting in
+`Queued` **for rework**, so the cap was blocking the only thing that could
+close them.
+
+He chose the lighter of the two fixes — carry the distinction in the Loop note,
+**not** in a new ClickUp status. (Statuses live on the list, and that dialog has
+burned this project before.) So a send-back now reads
+`↩ round 3 — three docs now contradict the change (12:28pm)`:
+
+- **The round** is prior send-backs + 1, counted from the ticket's own
+  `REVIEW: sent back` verdict comments. Derived, never stored — no new state
+  means no new state to fall out of sync.
+- **The reason** is the first line of the note the review pass gave
+  `verdict --fail`, so the board line and the audit trail cannot disagree.
+  It is truncated to fit ClickUp's 255-character field; **the round is never
+  what gets cut**, because "this is the third time" is the part that carries
+  the meaning and the reason can be read in full on the ticket.
+
+**On what would be round 4, `verdict --fail` refuses** (exit 3, nothing
+written) and prints what every previous round found plus the `ask` command to
+use instead. Three rounds means the **spec** was wrong, not the builder, and a
+fourth pass at the same ticket is the system failing to notice it is stuck.
+Ticket 86bbk2fuh proved it on 2026-08-25: it asked to change one number, turned
+out to touch four other records, and each round found something genuinely new.
+The escalation card must name each round's finding on its own line — a card
+saying "this has failed three times" without saying what they were is not
+actionable — and `@@NEEDED` should offer him named options (respec, split,
+drop) rather than an open question.
+
+Four, not three: two rounds is ordinary and healthy. The week this shipped,
+send-backs caught a tenancy hole and an inverted safety property, and
+escalating either would have spent his attention on work the loop was handling
+correctly.
+
+```
+npm run clickup -- send-back-rounds --task <id>   # rounds so far, what each found; exit 3 = escalate
+```
+
+**The counter is the ticket's whole history, and it does not reset** — including
+after Dane answers an escalation. That is deliberate: the count is a fact about
+the ticket, and resetting it on any operator comment would let a ticket loop
+indefinitely as long as somebody kept talking on it. If he settles a ticket and
+a further round genuinely is the right move, `verdict --fail
+--fourth-round-anyway` is the written claim that you meant it, visible in the
+transcript — the same idiom as `--no-guard`.
+
+Code: `scripts/builder/sendBackRounds.js` (pure, `sendBackRounds.test.js` pins
+the round counting and both sides of the round-3/round-4 boundary).
 
 **One-time setup (ClickUp UI — the API cannot create either):**
 1. On the Loop Queue list: Columns → + → Create field → **Text**, named

@@ -65,6 +65,17 @@ export type BlockLineageInput = {
   masterName?: string;
   /** Usage for the master, straight out of `buildSavedSectionUsageIndex`. */
   usage?: BlockUsage | null;
+  /**
+   * True when the card's HEADING already shows the master's name, so this
+   * line must not repeat it.
+   *
+   * Since a following copy is titled by its master (`resolveSharedSectionTitle`,
+   * ./saved-section-name), `Copy of "2a - Header"` sat directly under a
+   * heading reading `2a - Header`. Naming it twice is the noise the two-names
+   * bug left behind once the contradiction itself was gone; the reach — how
+   * many pages a save touches — is the part the line is actually for.
+   */
+  namedInTitle?: boolean;
 };
 
 /** " · used on 35 pages", or "" when nothing follows the master yet. */
@@ -79,6 +90,7 @@ export function describeBlockLineage({
   hasMasterSource = false,
   masterName,
   usage,
+  namedInTitle = false,
 }: BlockLineageInput): BlockLineage {
   const name = String(masterName ?? "").trim();
 
@@ -127,8 +139,15 @@ export function describeBlockLineage({
   }
 
   // A following copy whose master could not be resolved still has a state
-  // worth showing; it just has nothing to name.
-  const line = name ? `Copy of "${name}"${usedClause(usage)}` : null;
+  // worth showing; it just has nothing to name. When the heading is already
+  // the master's name, the line keeps the reach and drops the repeat — and
+  // says nothing at all when there is no reach to report either.
+  const used = usedClause(usage);
+  const line = namedInTitle
+    ? (used ? `Used on ${describeUsage(usage)}` : null)
+    : name
+      ? `Copy of "${name}"${used}`
+      : null;
 
   if (hasDrifted) {
     return {

@@ -367,3 +367,170 @@ test('the receipt is deduped per ticket, and remembers whether it verified', () 
   assert.match(RELAY_SRC, /if \(posted && receipted\) receipted\.set\(String\(taskId\), stuck\)/,
     'the ticket is recorded once the POST lands; verification travels in the value');
 });
+
+/* -------------------------------------------------------------------------
+ * Breaking the party line on purpose (task 86bbjzg83).
+ *
+ * The fallback above only runs during a vendor outage. Until this switch there
+ * was no way to make one happen, so the whole path could be reasoned about and
+ * never watched — and `--dry-run`, the one command that sounds like a
+ * rehearsal, returned before deliverToBus() was ever reached.
+ * ---------------------------------------------------------------------- */
+
+const {
+  SIMULATED_BUS_WHY,
+  simulationGuard,
+  simulationLine,
+} = require('./busRelayPlan.js');
+
+test('the simulation refuses to run outside --dry-run', () => {
+  const g = simulationGuard({ simulate: true, dryRun: false });
+  assert.equal(g.ok, false, 'a live pass must never simulate an outage');
+  assert.match(g.why, /requires --dry-run/);
+  // The refusal has to explain the damage, not just decline: outside dry-run
+  // the forced failure writes a real receipt and a real permanent dedup
+  // marker, which drops the genuine bus message for good.
+  assert.match(g.why, /marker/i, 'the refusal must name the permanent consequence');
+  assert.match(g.why, /Nothing was run/);
+});
+
+test('the simulation runs inside --dry-run, and is inert when not asked for', () => {
+  assert.equal(simulationGuard({ simulate: true, dryRun: true }).ok, true);
+  assert.equal(simulationGuard({ simulate: false, dryRun: false }).ok, true);
+  assert.equal(simulationGuard({}).ok, true);
+});
+
+test('a simulated failure says "simulated" in the text a human will read', () => {
+  // This string reaches the run report AND the body of the rehearsed receipt.
+  // A reader finding it in a log later must not mistake it for a real outage.
+  assert.match(SIMULATED_BUS_WHY, /SIMULATED/);
+  assert.match(SIMULATED_BUS_WHY, /no request was sent/);
+});
+
+test('the rehearsal reports delivery by receipt, and that the hand-back fires', () => {
+  const verdict = deliveryVerdict({
+    chatOk: false, handsBack: true, receiptAttempted: true,
+    receiptPosted: true, receiptOk: true,
+  });
+  const line = simulationLine({ verdict, target: 'Queued' });
+  assert.match(line, /receipt on the ticket/);
+  assert.match(line, /hand-back to "Queued" WOULD fire/);
+});
+
+test('on a notify-only watch the rehearsal reports NOT delivered and no hand-back', () => {
+  // The deliberate asymmetry: Agent Response and "ready to launch" hand nothing
+  // back, so a receipt there delivers nothing. This is the case a rehearsal
+  // most needs to show, because it is the one that looks like a bug.
+  const verdict = deliveryVerdict({ chatOk: false, handsBack: false, receiptAttempted: false });
+  // Shaped as deliverToBus hands it over: `why` is the chat failure, `reason`
+  // is the verdict's account. The line must quote the SECOND one — the first
+  // says "HTTP 000" and explains nothing about why this watch is different.
+  const line = simulationLine({
+    verdict: { ...verdict, why: SIMULATED_BUS_WHY, reason: verdict.why },
+    target: null,
+  });
+  assert.match(line, /NOT delivered/);
+  assert.match(line, /no hand-back/);
+  assert.match(line, /only the party line delivers here/);
+  assert.ok(!line.includes('HTTP 000'),
+    'the chat error must not crowd out the reason nothing was delivered');
+});
+
+test('a rehearsal that reports delivery via chat is called INVALID, not a pass', () => {
+  // If the simulation did not take effect, the run must not read as a green
+  // rehearsal — that would be a check that cannot fail.
+  const line = simulationLine({ verdict: { ok: true, via: 'chat' }, target: 'Queued' });
+  assert.match(line, /INVALID/);
+});
+
+test('the switch is wired into the relay, and dry-run stops short-circuiting for it', () => {
+  assert.match(RELAY_SRC, /flag\('simulate-bus-failure'\)/,
+    'the flag must be parsed');
+  assert.match(RELAY_SRC, /if \(!simGuard\.ok\)/,
+    'the guard must be enforced, not merely computed');
+  // The whole point: plain dry-run still returns early, a simulated one does not.
+  assert.match(RELAY_SRC, /if \(dryRun && !simulateBusFailure\) \{/,
+    'a simulated dry-run must reach deliverToBus, or it rehearses nothing');
+  assert.match(RELAY_SRC, /simulate: simulateBusFailure/,
+    'the simulation must be threaded into the delivery call');
+});
+
+test('a simulated pass sends no write of any kind', () => {
+  // postToBus returns before its request...
+  assert.match(RELAY_SRC, /if \(simulate\) return \{ ok: false, why: SIMULATED_BUS_WHY \}/,
+    'the chat write must be skipped, not merely failed after sending');
+
+  // ...the receipt is rehearsed rather than posted. Checking only that the
+  // simulation branch appears BEFORE the POST is a check that cannot fail:
+  // source order survives `if (false && simulate)`, which is exactly how this
+  // assertion was first written and exactly what it failed to catch when the
+  // branch was disabled on purpose. So: the guard must be reachable, and the
+  // slice between it and the POST must actually return.
+  const receiptSim = RELAY_SRC.indexOf('  if (simulate) {\n    console.error(`  SIMULATION — would post the fallback receipt');
+  assert.ok(receiptSim > -1,
+    'the receipt simulation branch is missing or no longer plainly `if (simulate)` — a disabled or narrowed condition posts a real comment during a rehearsal');
+  const receiptPost = RELAY_SRC.indexOf("call('POST', `/api/v2/task/${taskId}/comment`");
+  assert.ok(receiptPost > receiptSim, 'the receipt POST moved — re-point this test');
+  const between = RELAY_SRC.slice(receiptSim, receiptPost);
+  assert.match(between, /return answer\(deliveryVerdict\(/,
+    'the simulation branch must RETURN before the receipt POST, not fall through to it');
+
+  // ...and the dedup marker, which is permanent, is never written.
+  assert.match(RELAY_SRC, /if \(delivery\.ok\) \{ relayed\+\+; fresh\+\+; \}/,
+    'a simulated pass must continue before the marker write');
+});
+
+test('the guard is checked before the relay reads anything', () => {
+  const guardAt = RELAY_SRC.indexOf('const simGuard = simulationGuard(');
+  const firstWatchRead = RELAY_SRC.indexOf('const watches = (arg(');
+  assert.ok(guardAt > -1 && firstWatchRead > -1, 'the guard or the watch setup moved — re-point this test');
+  assert.ok(guardAt < firstWatchRead,
+    'a refused run must do nothing at all, not even look');
+});
+
+/* ------------------------------------------------------------------ *
+ * Whose word is it? (task 86bbqx2xe)
+ *
+ * The loops post under Dane's own API token, so his user id is on comments he
+ * never wrote. These pin the filter the relay actually uses.
+ * ------------------------------------------------------------------ */
+
+const { operatorComments } = require('./busRelayPlan.js');
+const { isMachineComment, stampMachineComment } = require('./machineComment.js');
+
+const DANE = 48012725;
+const opts = { operatorId: DANE, isMachine: isMachineComment };
+
+const hisWord = { id: 'h', user: { id: DANE }, comment_text: 'B, go with the marker' };
+const itsOwnCard = { id: 'm', user: { id: DANE }, comment_text: stampMachineComment('@@ASKED Which option?') };
+const someoneElse = { id: 'x', user: { id: 999 }, comment_text: 'drive-by' };
+
+test('a machine-authored comment is not a fresh operator answer', () => {
+  assert.deepEqual(operatorComments([itsOwnCard], opts), []);
+});
+
+test("the relay still hears Dane when he actually answers", () => {
+  assert.deepEqual(operatorComments([itsOwnCard, hisWord, someoneElse], opts).map((c) => c.id), ['h']);
+});
+
+test('an escalated ticket with only its own ask card has nothing fresh, so it is never handed back', () => {
+  const fresh = operatorComments([itsOwnCard], opts).length;
+  assert.equal(handbackTarget(loopQueue, 'needs your input', fresh), null);
+});
+
+test('...and the same ticket IS handed back once he answers for real', () => {
+  const fresh = operatorComments([itsOwnCard, hisWord], opts).length;
+  assert.equal(handbackTarget(loopQueue, 'needs your input', fresh), 'Queued');
+});
+
+test('an unreadable comment list is not somebody\'s word', () => {
+  assert.deepEqual(operatorComments(null, opts), []);
+  assert.deepEqual(operatorComments(undefined, opts), []);
+});
+
+test('without an isMachine predicate the filter is id-only — the caller must pass the guard', () => {
+  // Pinned deliberately: this is the OLD behaviour, and it is what the relay
+  // would fall back to if a future edit dropped the predicate. If this ever
+  // needs changing, the relay's call site is what to look at first.
+  assert.equal(operatorComments([itsOwnCard], { operatorId: DANE }).length, 1);
+});

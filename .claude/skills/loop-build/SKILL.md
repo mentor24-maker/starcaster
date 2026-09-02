@@ -1,6 +1,6 @@
 ---
 name: loop-build
-description: Pick the next "Queued" task from the Starcaster "Loop Queue" ClickUp list and build it end-to-end into a pull request — in its own git worktree, passing every build gate — then move the task to "In review". Designed to be run on a timer with `/loop 30m loop-build`. Never edits main, never merges.
+description: Pick the next claimable task (all "Rework" first, then "Queued") from the Starcaster "Loop Queue" ClickUp list and build it end-to-end into a pull request — in its own git worktree, passing every build gate — then move the task to "In review". Designed to be run on a timer with `/loop 30m loop-build`. Never edits main, never merges.
 ---
 
 # Loop: Build
@@ -34,6 +34,33 @@ npm run node:owns -- loop-build
     "nobody is doing it" look identical from here, and only one of them is
     safe. The message says exactly what to type to fix it (one line, once per
     machine). `npm run node:whoami` shows the whole picture.
+
+## Then: has the operator taken the deck?
+
+There is a sanctioned way for Dane to clear the decks and run something
+through fast, and it is a switch rather than an improvisation. While it is on,
+the machines stop taking new work so nothing lands under him while he is
+working.
+
+```bash
+npm run pipeline -- check
+```
+
+*   **exit 0** — the pipeline is running. Carry on.
+*   **exit 3** — **paused.** Claim nothing, review nothing, merge nothing,
+    and write NOTHING to ClickUp — no status, no comment, no Loop note. Report
+    the line it printed and finish the pass **successfully**. This is a normal
+    outcome, the same shape as another machine owning the job.
+
+It **fails safe**: if the switch cannot be read at all, it says so and still
+exits 3. That is deliberate. Running while the operator has the deck collides
+with whatever he is doing there; pausing when he does not costs idle machines
+and one loud message. Those are not symmetric, so the tie goes to stopping.
+
+**Never resume it.** An agent may pause the line — that is a safety move
+anyone should be able to make — but only Dane hands the deck back
+(`npm run pipeline -- resume --operator-asked`). `npm run pipeline -- status` says
+whether it is on, since when, who put it there and why.
 
 ## Then: is the merge side already full?
 
@@ -73,12 +100,13 @@ list, the ids, and the reasoning live in ONE place: `docs/LOOP_ENGINEERING.md`
 §"ClickUp access". The moves this loop makes:
 
 ```bash
-npm run clickup -- queue --list 901418546619 --status Queued   # FIRST LINE is the task to claim
-npm run clickup -- status --task <id> --status Building --if-status Queued   # safe claim; exit 3 = someone beat you, take the next
+npm run clickup -- queue --list 901418546619 --claimable       # FIRST LINE is the task to claim (all Rework, then Queued)
+npm run clickup -- claim --task <id>                           # safe claim; exit 3 = someone beat you (or it moved), take the next
 npm run clickup -- status --task <id> --status "In review"                   # hand off (assignees auto-cleared)
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # escalate: card + status together
 npm run clickup -- pr-opened --task <id> --pr <pr-url>                        # record the PR — REQUIRED, and it verifies itself
 npm run clickup -- comment --task <id> --body-file -                         # a plain note (progress, notes)
+npm run clickup -- waiting [--task <id>]                                      # read-only: is this ACTUALLY waiting on Dane? run it before saying so
 npm run clickup -- describe --task <id> --body-file -                        # REPLACE the description (left column)
 ```
 
@@ -105,21 +133,72 @@ spec. Dane could not tell what was being asked of him on either ticket.
 **Escalating is one command, not two.** `status --status "Needs your input"`
 refuses on its own now — a status move with no stated ask is a red badge in his
 inbox with no answerable question on it, which is exactly how 7/7 sat there for
-a day. Use `ask`, whose body is four sections, checked before anything is sent:
+a day. Use `ask`, whose body is four sections plus a fifth that costly asks must
+carry, all checked before anything is sent:
 
 ```
 @@ASKED     his own words that caused this ticket, verbatim — never invented
 @@WHEN      optional — when and where he said it
 @@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
 @@NEEDED    the specific ask; "Nothing right now" is fine, but say it out loud
+@@EVIDENCE  required ONLY when the ask costs money or cannot be undone
 ```
 
-`@@NEEDED` renders under a banner he can spot without reading. If the ticket
+`@@NEEDED` renders under a banner he can spot without reading.
+
+**An ask that spends money or cannot be undone is refused without
+`@@EVIDENCE`** — spend, buy, subscribe, upgrade, a plan change, a credential
+rotation, a deletion — and it reads third-person phrasings too ("this deletes
+all 550 rows"). That section carries the command in runnable form, its ACTUAL
+output pasted in a fence, and one line saying when you ran it:
+
+```
+@@MEASURED 8:04pm
+```
+
+That line is the only thing that dates the card — every other clock in the
+section, narrated or inside the paste, is ignored. Put it in the prose outside
+the fence, with the clock and nothing else on it (date it too if it was not
+today). It is declared rather than read out of your sentences because four
+earlier versions guessed which clock you meant and the last one dated a card by
+the outage it was reporting (Dane's call, 2026-08-29, task 86bbk34ym).
+
+On 2026-08-23 an agent asked Dane to pay for a plan upgrade on a
+diagnosis that was wrong, and re-running the one failing call would have
+settled it in seconds. Re-run it, paste what it says — do not summarise it.
+Ordinary escalations are untouched. If the ticket
 genuinely has no instruction behind it, say that in `@@ASKED` and name the
 standing decision it descends from.
 
 Use the connector only if the direct script itself is broken, and say so in
 the run report.
+
+## Never say something is waiting on Dane without checking
+
+**One command, run BEFORE the sentence leaves your mouth:**
+
+```bash
+npm run clickup -- waiting                    # what actually needs him, both lists
+npm run clickup -- waiting --task <id>        # one ticket: status, assignee, last word, verdict
+```
+
+Read-only, a couple of seconds, exit **0** nothing of his / **3** something IS
+his / **1** could not tell. It reports the verdict from three live facts — the
+status, whether he is assigned, and whether the newest comment is his — so a
+ticket he has already answered can never be handed back to him a second time.
+
+Twice on 2026-08-23 an agent told him something was waiting on him when it was
+not, and he acted on it both times: eleven of "seventeen tickets waiting on
+your merge word" already carried his approval, and the YouTube worker question
+he was asked again had been answered `A` an hour earlier. Him, that night:
+*"The issue is making assumptions and stating them with confidence. It has come
+up many times."* Every wrong claim that evening was a confident sentence with
+nothing attached; every right one carried its evidence. This is the evidence,
+and it is cheaper to run than the claim is to reason about.
+
+Applies to the run report as much as to a comment. `ask` enforces the same rule
+at its own end — it refuses to hand a ticket back when his comment is already
+the newest one on it (`--after-his-answer` overrides, on the record).
 
 ## Loop note — stamp the queue as you go (queue visibility)
 
@@ -145,12 +224,33 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
 
 ## Workflow
 
-1. **Claim the next task.** Find the oldest `Queued` task (highest priority
-   first) in the **Loop Queue** list (id `901418546619`). If
-   none, report "queue empty" and stop — do not invent work. Claim it with
-   `--status Building --if-status Queued`: the guard makes the claim atomic,
-   so a parallel build loop that got there first shows up as exit code 3 —
-   take the next task instead of proceeding.
+1. **Claim the next task.** Ask the **Loop Queue** list (id `901418546619`)
+   for its claimable work and take the first line:
+
+   ```bash
+   npm run clickup -- queue --list 901418546619 --claimable
+   npm run clickup -- claim --task <id>
+   ```
+
+   **`--claimable` spans TWO statuses, and the order is the point.** It returns
+   every `Rework` ticket before any `Queued` one — rework oldest-first with
+   priority ignored, then queued by priority-then-oldest exactly as before.
+   Rework is a send-back: a ticket that already has a branch, an open PR and
+   review notes on it. Finishing one is cheaper than starting something new,
+   and every day it waits costs another catch-up merge against a moving `main`.
+
+   Asking with `--status Queued` instead is the mistake this change exists to
+   prevent: it hides every send-back, which is how #419 (25 August), #446, #447
+   and #449 went stale — *the claim rule did it to them.*
+
+   If the list comes back empty, report "queue empty" and stop — do not invent
+   work.
+
+   `claim` reads the ticket's own status and guards the write on that exact
+   status, so the claim stays atomic without your having to remember which of
+   the two it was in. Exit 3 means it moved underneath you — a parallel build
+   loop got there first, or it is not a status loop-build may take. Take the
+   next task instead of proceeding.
 
    **Then, BEFORE creating a branch, ask whether one already exists:**
 
@@ -162,22 +262,32 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
        carry on to step 2.
    *   **exit 3** — a PR for this ticket is **still open**. Do NOT start a
        second branch. Check that one out, read the send-back that returned the
-       ticket to `Queued`, fix what it named, and push to the SAME PR. The
-       command prints the branch.
+       ticket to `Rework`, fix what it named, and push to the SAME PR. The
+       command prints the branch. The ticket's Loop note says which round
+       this is (`↩ round 3 — <why>`); at round 3, read all of the earlier
+       send-backs before you touch anything — `npm run clickup --
+       send-back-rounds --task <id>` lists what each one found — because a
+       fourth would stop the loop and go to Dane instead.
    *   **exit 1** — it could not tell. **Stop and say so.** Do not start a
        branch on a guess; that is the failure this step exists to prevent,
        arriving through the check meant to catch it.
 
    The claim in the line above and this check answer DIFFERENT questions, and
    conflating them cost two duplicate PRs on 2026-08-23 (#407 beside the still
-   open #349, #408 beside #350). `--if-status Queued` asks *"is anyone else
+   open #349, #408 beside #350). The atomic claim asks *"is anyone else
    starting this right now"* — it was working perfectly. Nothing asked *"was
-   this already started and handed back"*, and a sent-back ticket is genuinely
-   `Queued` with its PR genuinely still open. Reading the comments would have
-   shown it; a pass that must remember to read is a pass that will forget.
+   this already started and handed back"*, and at the time a sent-back ticket
+   was genuinely `Queued` with its PR genuinely still open. Reading the comments
+   would have shown it; a pass that must remember to read is a pass that will
+   forget. A send-back lands in `Rework` now, so the second question is visible
+   on the board — but visible is not answered, and this check still runs on
+   every ticket.
 
-   The list's six statuses, in order, are `Queued → Building → In review →
-   Needs your input / Ready to launch → Live`. Match them case-insensitively.
+   The list's seven statuses, in order, are `Rework → Queued → Building →
+   In review → Needs your input / Ready to launch → Live`. Match them
+   case-insensitively. **`Rework` is where review sends work back** (since
+   2026-08-31, task 86bbr1u9v); it exists so a half-finished ticket stops being
+   indistinguishable from one nobody has started.
    Two of them belong to the operator and no loop may set or clear them except
    as described below: **Needs your input** (a human must answer something) and
    **Ready to launch** (a human must authorize the merge).
@@ -188,7 +298,7 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    So the rule is mechanical:
 
    - Moving a ticket **into** `Needs your input` → Dane must be assigned.
-   - Moving a ticket into any machine status (`Queued`, `Building`,
+   - Moving a ticket into any machine status (`Rework`, `Queued`, `Building`,
      `In review`) → assignees must be cleared, so it leaves his list the
      moment it stops being his.
 
@@ -393,8 +503,11 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
 - **The PR and the ticket must name each other.** `pr-opened` enforces both
   directions and verifies its own write; if it exits non-zero the run has
   failed, whatever else went right.
-- **Never touch a task that isn't `Queued`.** Every other status is owned by
-  another step or by the operator.
+- **Never touch a task that is not `Rework` or `Queued`.** Every other status
+  is owned by another step or by the operator, and `claim` refuses them.
+- **A `Rework` ticket keeps its branch.** `build-start` will exit 3 and name
+  it; fix what the send-back asked for and push to the SAME PR. Never open a
+  second one.
 - **Never set `Ready to launch` and never clear `Needs your input`.** Those two
   are the operator's; only he moves a task out of them — in person, or through
   the bus-relay pass acting on a comment he wrote (an answer releases
@@ -406,6 +519,6 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
   so with `ask` *before* building, and offer him named slices to pick from,
   smallest-and-safest first. Then **build only the slice he names** — narrow the
   description with `describe` to match his answer before you start. A ticket
-  handed back to `Queued` still carrying its original wide scope is how the
+  handed back to the claim line still carrying its original wide scope is how the
   risky half gets built by accident (Sync 6/7, 2026-08-22).
 - Leave the worktree in place until the PR merges; `loop-review` may reuse it.

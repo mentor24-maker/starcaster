@@ -60,8 +60,25 @@ test('the newest line wins, so a rebuild verifies against its own PR', () => {
 
 test('the link runs the other way too: the PR body must name its ticket', () => {
   assert.equal(prBodyCarriesTicket(`Closes ${TASK_URL}\n\nSummary.`, TASK, TASK_URL), true);
-  assert.equal(prBodyCarriesTicket(`ClickUp: ${TASK}`, TASK, TASK_URL), true);
-  assert.equal(prBodyCarriesTicket(`ClickUp: ${TASK.toUpperCase()}`, TASK, TASK_URL), true);
+  // ClickUp's own "copy link" button includes the workspace id.
+  assert.equal(
+    prBodyCarriesTicket(`Closes https://app.clickup.com/t/90141423066/${TASK}`, TASK, TASK_URL),
+    true,
+  );
+  // Ids are quoted in mixed case in the wild.
+  assert.equal(prBodyCarriesTicket(`Closes ${TASK_URL.toUpperCase()}`, TASK, TASK_URL), true);
+});
+
+test('a bare task id is NOT a link — this command and the review gate agree now', () => {
+  // Until 2026-08-26 (task 86bbmmv7t, finding 2) a bare id passed here and was
+  // then refused by the review gate, which has always wanted the URL — so
+  // `pr-opened` called a PR traceable and the gate told the same reader, of the
+  // same body, that it carried no ticket link. The two read one matcher now.
+  //
+  // BREAK-TEST: point prBodyCarriesTicket back at a substring search for the
+  // id and this fails, along with the agreement test in reviewGate.test.js.
+  assert.equal(prBodyCarriesTicket(`ClickUp: ${TASK}`, TASK, TASK_URL), false);
+  assert.equal(prBodyCarriesTicket(`ClickUp: ${TASK.toUpperCase()}`, TASK, TASK_URL), false);
 });
 
 test('BREAK IT: a PR body with a plain summary and no ticket is refused', () => {
@@ -123,6 +140,26 @@ test('a send-back verdict does not accidentally read as a pass', () => {
   assert.equal(isReviewPassed(verdictComment(false, 'CI is red')), false);
 });
 
+test('a send-back verdict names Rework, and the OLD wording still counts as one', () => {
+  // Task 86bbr1u9v. Two halves, and the second matters more than the first:
+  // `sendBackRounds` counts these comments to decide when a fourth round goes
+  // to Dane instead of round-tripping again. If renaming the status had
+  // orphaned the history, every ticket sent back before 2026-08-31 would have
+  // silently reset to round 1 — the escalation quietly switched off.
+  const fresh = verdictComment(false, 'the panel is staggered');
+  assert.match(fresh, /sent back to Rework/);
+  assert.doesNotMatch(fresh, /sent back to Queued/);
+
+  const { isReviewVerdict } = require('./mergeOnComment.js');
+  const legacy = 'REVIEW: sent back to Queued — one surviving mutant proves a coverage hole.';
+  for (const text of [fresh, legacy]) {
+    assert.equal(isReviewVerdict(text), true, `must read as a verdict: ${text}`);
+    assert.equal(isReviewPassed(text), false, `must not read as a pass: ${text}`);
+  }
+  // And a PASS is untouched by any of it.
+  assert.equal(isReviewPassed(verdictComment(true, 'gates green')), true);
+});
+
 test('only "Ready to launch" is gated — no other status is touched', () => {
   assert.equal(isReadyToLaunch('Ready to launch'), true);
   assert.equal(isReadyToLaunch('  ready TO launch '), true);
@@ -152,7 +189,9 @@ test('the gate runs BEFORE anything is written, on both doors', () => {
   // task read that leads to the write. A refusal has to leave the ticket
   // exactly where it was.
   const askAt = SCRIPT.indexOf('if (!noMove && await readyToLaunchRefused');
-  const cardAt = SCRIPT.indexOf("call('POST', `/api/v2/task/${task}/comment`, { comment_text: rendered })");
+  // The card posts in ClickUp's structured shape since task 86bbq5ruz (the
+  // banner is bold and red, and colour only exists there).
+  const cardAt = SCRIPT.indexOf("call('POST', `/api/v2/task/${task}/comment`, { comment: commentBody })");
   assert.ok(askAt > 0 && cardAt > askAt, 'the ask gate must run before the card is posted');
 
   const statusAt = SCRIPT.indexOf('if (await readyToLaunchRefused(task, status)) process.exit(2)');
