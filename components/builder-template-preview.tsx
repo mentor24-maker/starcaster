@@ -3080,6 +3080,277 @@ function blogManagerViewBaseUrl(settings: Record<string, string>): string {
   return defaultBlogPostViewPath();
 }
 
+type BlogImportCandidate = {
+  pageId: string;
+  slug: string;
+  pageName: string;
+  title: string;
+  titleFound: boolean;
+  publishedAt: string | null;
+  dateFound: boolean;
+  author: string;
+  authorFound: boolean;
+  excerpt: string;
+  featuredImageUrl: string;
+  wordCount: number;
+  looksLikePost: boolean;
+  alreadyImported: boolean;
+  maybeDuplicateOf: string;
+};
+
+type BlogImportResult = {
+  pageId: string;
+  ok: boolean;
+  skipped?: boolean;
+  reason?: string;
+  title?: string;
+  slug?: string;
+};
+
+function blogImportDateLabel(candidate: BlogImportCandidate): string {
+  if (!candidate.dateFound || !candidate.publishedAt) return "no date in source";
+  return new Date(candidate.publishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+/**
+ * Recover discarded Builder pages as draft blog posts. A picker, not a
+ * button: every candidate is shown with what would be created, nothing is
+ * written until the operator has seen the preview and confirmed, and
+ * everything lands as a draft (docs/BLOG_BULK_IMPORT_HANDOFF.md).
+ */
+function BlogImportPanel({ onImported, onClose }: { onImported: () => void; onClose: () => void }) {
+  const [candidates, setCandidates] = useState<BlogImportCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [defaultAuthor, setDefaultAuthor] = useState("");
+  const [batchSize, setBatchSize] = useState(10);
+  const [step, setStep] = useState<"pick" | "preview" | "running" | "done">("pick");
+  const [progress, setProgress] = useState(0);
+  const [results, setResults] = useState<BlogImportResult[]>([]);
+
+  useEffect(() => {
+    fetch("/api/blog/import/candidates", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`The server answered ${r.status}`))))
+      .then((d) => {
+        setCandidates(Array.isArray(d?.data?.candidates) ? d.data.candidates : []);
+        setDefaultAuthor(String(d?.data?.defaultAuthorSuggestion || ""));
+        setBatchSize(Number(d?.data?.batchSize) || 10);
+      })
+      .catch((err: Error) => setLoadError(err.message || "Could not load the candidate list"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const probable = candidates.filter((c) => c.looksLikePost);
+  const improbable = candidates.filter((c) => !c.looksLikePost);
+  const chosen = candidates.filter((c) => selected.has(c.pageId));
+
+  function toggle(pageId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageId)) next.delete(pageId); else next.add(pageId);
+      return next;
+    });
+  }
+
+  function selectAllProbable() {
+    setSelected(new Set(probable.filter((c) => !c.alreadyImported).map((c) => c.pageId)));
+  }
+
+  async function runImport() {
+    setStep("running");
+    setProgress(0);
+    const all: BlogImportResult[] = [];
+    const ids = chosen.map((c) => c.pageId);
+    // One small batch per request; a single long request gets cut off
+    // server-side, so the client is the loop.
+    for (let i = 0; i < ids.length; i += batchSize) {
+      try {
+        const res = await fetch("/api/blog/import", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+          body: JSON.stringify({ pageIds: ids.slice(i, i + batchSize), defaultAuthor }),
+        });
+        const data = res.ok ? await res.json() : null;
+        const batch: BlogImportResult[] = Array.isArray(data?.data?.results) ? data.data.results : [];
+        if (!res.ok || !batch.length) {
+          for (const pageId of ids.slice(i, i + batchSize)) {
+            all.push({ pageId, ok: false, reason: `The server answered ${res.status}` });
+          }
+        } else {
+          all.push(...batch);
+        }
+      } catch {
+        for (const pageId of ids.slice(i, i + batchSize)) {
+          all.push({ pageId, ok: false, reason: "The request failed" });
+        }
+      }
+      setProgress(Math.min(ids.length, i + batchSize));
+      setResults([...all]);
+    }
+    setResults(all);
+    setStep("done");
+    onImported();
+  }
+
+  const titleFor = new Map(candidates.map((c) => [c.pageId, c.title || c.pageName || c.slug]));
+
+  function renderCandidateRow(candidate: BlogImportCandidate) {
+    const flags: string[] = [];
+    if (candidate.alreadyImported) flags.push("already imported");
+    if (candidate.maybeDuplicateOf) flags.push(`may duplicate the existing post “${candidate.maybeDuplicateOf}”`);
+    if (!candidate.titleFound) flags.push("no headline in source — using the page name");
+    if (!candidate.dateFound) flags.push("no date in source");
+    if (!candidate.authorFound) flags.push("no author in source");
+    return (
+      <label key={candidate.pageId} className={`builder-blog-import-row${candidate.alreadyImported ? " builder-blog-import-row--disabled" : ""}`}>
+        <input
+          type="checkbox"
+          checked={selected.has(candidate.pageId)}
+          disabled={candidate.alreadyImported}
+          onChange={() => toggle(candidate.pageId)}
+        />
+        <span className="builder-blog-import-row-body">
+          <span className="builder-blog-import-row-title">{candidate.title || candidate.pageName || candidate.slug}</span>
+          <span className="builder-blog-import-row-meta">
+            {blogImportDateLabel(candidate)}
+            {" · "}{candidate.authorFound ? candidate.author : "no author in source"}
+            {" · "}{candidate.wordCount} words
+          </span>
+          {candidate.excerpt ? <span className="builder-blog-import-row-excerpt">{candidate.excerpt}</span> : null}
+          {flags.length ? <span className="builder-blog-import-row-flags">{flags.join(" · ")}</span> : null}
+        </span>
+      </label>
+    );
+  }
+
+  if (loading) {
+    return <div className="builder-blog-import-panel"><div className="builder-blog-post-manager-stub">Looking for discarded pages…</div></div>;
+  }
+  if (loadError) {
+    return (
+      <div className="builder-blog-import-panel">
+        <div className="builder-blog-post-manager-stub">Could not load the candidate list: {loadError}</div>
+        <div className="builder-blog-import-actions">
+          <button type="button" className="builder-blog-import-btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    );
+  }
+  if (!candidates.length) {
+    return (
+      <div className="builder-blog-import-panel">
+        <div className="builder-blog-post-manager-stub">No discarded pages were found for this site.</div>
+        <div className="builder-blog-import-actions">
+          <button type="button" className="builder-blog-import-btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "preview" || step === "running" || step === "done") {
+    return (
+      <div className="builder-blog-import-panel">
+        {step === "preview" ? (
+          <>
+            <div className="builder-blog-import-note">
+              Nothing has been written yet. These {chosen.length} posts would be created, each as a <strong>draft</strong>:
+            </div>
+            <div className="builder-blog-import-preview-list">
+              {chosen.map((candidate) => (
+                <div key={candidate.pageId} className="builder-blog-import-preview-item">
+                  <div className="builder-blog-import-row-title">{candidate.title || candidate.pageName || candidate.slug}</div>
+                  <div className="builder-blog-import-row-meta">
+                    Address: {candidate.slug || "(blank)"}
+                    {" · "}Author: {candidate.authorFound ? candidate.author : (defaultAuthor || "(blank)")}
+                    {" · "}Date: {candidate.dateFound && candidate.publishedAt ? blogImportDateLabel(candidate) : "(blank — no date in source)"}
+                    {" · "}{candidate.wordCount} words
+                    {" · "}Featured image: {candidate.featuredImageUrl ? "yes" : "none found"}
+                  </div>
+                  {candidate.excerpt ? <div className="builder-blog-import-row-excerpt">{candidate.excerpt}</div> : null}
+                </div>
+              ))}
+            </div>
+            <div className="builder-blog-import-actions">
+              <button type="button" className="builder-blog-import-btn" onClick={() => setStep("pick")}>Back</button>
+              <button type="button" className="builder-blog-import-btn builder-blog-import-btn--primary" onClick={runImport}>
+                Import {chosen.length} {chosen.length === 1 ? "post" : "posts"} as drafts
+              </button>
+            </div>
+          </>
+        ) : null}
+        {step === "running" ? (
+          <div className="builder-blog-import-note">Importing… {progress} of {chosen.length} processed.</div>
+        ) : null}
+        {step === "done" ? (
+          <>
+            <div className="builder-blog-import-note">
+              Done: {results.filter((r) => r.ok).length} created as drafts,{" "}
+              {results.filter((r) => r.skipped).length} skipped,{" "}
+              {results.filter((r) => !r.ok && !r.skipped).length} failed.
+            </div>
+            <div className="builder-blog-import-preview-list">
+              {results.map((r) => (
+                <div key={r.pageId} className="builder-blog-import-preview-item">
+                  <div className="builder-blog-import-row-meta">
+                    {r.ok ? "✓ " : "✗ "}
+                    {r.title || titleFor.get(r.pageId) || r.pageId}
+                    {r.reason ? ` — ${r.reason}` : ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="builder-blog-import-actions">
+              <button type="button" className="builder-blog-import-btn" onClick={onClose}>Close</button>
+            </div>
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="builder-blog-import-panel">
+      <div className="builder-blog-import-note">
+        These are discarded pages recovered from this site’s history. Tick the ones to bring back as blog posts —
+        nothing is written until you confirm on the next screen.
+      </div>
+      <div className="builder-blog-import-controls">
+        <button type="button" className="builder-blog-import-btn" onClick={selectAllProbable}>Select all probable posts</button>
+        <button type="button" className="builder-blog-import-btn" onClick={() => setSelected(new Set())}>Select none</button>
+        <label className="builder-blog-import-author">
+          Author when the source has none:{" "}
+          <input
+            type="text"
+            value={defaultAuthor}
+            onChange={(e) => setDefaultAuthor(e.target.value)}
+            placeholder="e.g. the site’s name"
+          />
+        </label>
+      </div>
+      <div className="builder-blog-import-list">
+        {probable.map(renderCandidateRow)}
+        {improbable.length ? (
+          <div className="builder-blog-import-group-label">Probably not posts — tick one only if you recognise it</div>
+        ) : null}
+        {improbable.map(renderCandidateRow)}
+      </div>
+      <div className="builder-blog-import-actions">
+        <button type="button" className="builder-blog-import-btn" onClick={onClose}>Cancel</button>
+        <button
+          type="button"
+          className="builder-blog-import-btn builder-blog-import-btn--primary"
+          disabled={!chosen.length}
+          onClick={() => setStep("preview")}
+        >
+          Preview import ({chosen.length})
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BlogPostManagerPreview({ settings }: { settings: Record<string, string> }) {
   const editBaseUrl = useMemo(() => blogManagerEditBaseUrl(settings), [settings.editPageUrl]);
   const viewBaseUrl = useMemo(() => blogManagerViewBaseUrl(settings), [settings.viewPageUrl, settings.postPageUrl]);
@@ -3097,6 +3368,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cloningId, setCloningId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   function loadPosts() {
     setLoading(true);
@@ -3166,8 +3438,21 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   const statusBg   = (s?: string) => s === "published" ? "#f0fdf4" : s === "archived" ? "#f9fafb" : "#fffbeb";
 
   const listHeading = (
-    <h3 className="builder-admin-data-table-title">Published Blog Posts</h3>
+    <div className="builder-blog-post-manager-heading">
+      <h3 className="builder-admin-data-table-title">Published Blog Posts</h3>
+      <button
+        type="button"
+        className="builder-blog-import-btn builder-blog-import-open"
+        onClick={() => setImportOpen((v) => !v)}
+      >
+        {importOpen ? "Hide import" : "Import from discarded pages"}
+      </button>
+    </div>
   );
+
+  const importPanel = importOpen ? (
+    <BlogImportPanel onImported={loadPosts} onClose={() => setImportOpen(false)} />
+  ) : null;
 
   if (loading) {
     return (
@@ -3182,6 +3467,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
     return (
       <div className="builder-blog-post-manager-module builder-admin-data-table-module">
         {listHeading}
+        {importPanel}
         <div className="builder-blog-post-manager-stub">
           No posts yet. Use the Create Post module to add your first post.
         </div>
@@ -3192,6 +3478,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   return (
     <div className="builder-blog-post-manager-module builder-admin-data-table-module">
       {listHeading}
+      {importPanel}
       <div className="builder-blog-post-manager-list">
         {posts.map((post) => {
           const editHref = buildBlogPostEditHref(editBaseUrl, post.id);
