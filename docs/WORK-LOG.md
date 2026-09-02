@@ -1,3 +1,56 @@
+## 2026-09-02 — The screen a client uses to connect their own accounts (#526)
+
+Until now, putting a client's social account onto Starcaster meant you pasting
+their tokens into Vercel by hand. This is the screen that replaces that: the
+client opens Settings › Connections and sees one card per platform — Facebook
+Page, Bluesky, and Instagram and X greyed as "coming soon" — and connects the
+ones they want themselves. Four states, and each card is in exactly one of
+them: not connected, connected (with the account name on it), needs attention
+(with a plain sentence saying what broke), or coming soon with no button at all.
+
+The cards are not written into the screen. They are generated from the list of
+platforms the earlier slices built, so when Instagram is finished next, its card
+turns from grey to a working Connect button with nothing in this screen edited.
+There is a test that proves it by inventing a platform the code has never heard
+of and checking a card appears for it.
+
+Two things turned up while building it that were worth stopping for. The first:
+one Facebook sign-in can cover several Pages, and they all get saved in the same
+instant — so the screen could tell a client "posting to your main Page" while
+the thing that actually posts had picked a different one. Nothing would have
+looked wrong. The screen now reads back which one will really be used instead of
+assuming. The second: none of the buttons on this screen showed anything when
+you tabbed to them with the keyboard, because the admin app has never had a rule
+for that. Measured both ways in a real browser — six controls with no ring
+before, six with one after.
+
+Disconnecting is deliberately honest about its limits: it forgets the account
+here, and says out loud that it has not withdrawn the permission at Facebook or
+Bluesky itself. That comes in a later slice, and until it does, "disconnected"
+must not be read as "revoked".
+
+One thing to confirm before this goes live: storing a connection needs an
+encryption key that has been missing since a rotation was left unfinished in
+July. This session could not read the production settings to check whether it is
+there. If it is not, the Connect button will fail — for the earlier slices as
+much as this one.
+
+Review sent this back once, over the Disconnect button, and it was the right
+catch. A client with three Facebook Pages under one sign-in was asked
+"Disconnect Delray Tennis Center?" — one Page, by name — and pressing yes
+removed all three. Both halves were reasonable on their own: the message
+described the Page currently in use, and the delete cleared the platform. Put
+together they promised one thing and did another, on the one kind of action you
+cannot undo. The dialog now says what it means — "This removes all 3 connected
+accounts", and names them — because that sentence IS the client's consent, and
+consent to something that does not happen is not consent at all. Removing only
+the one named Page was the other option and was rejected for a concrete reason:
+a Page connected the old way is not stored the same way, so a narrower delete
+would have quietly removed nothing and left the card connected. Both old tests
+had seeded a single account, where the two behaviours look identical — the case
+that could tell them apart now has a test in each suite, and both were watched
+failing before the fix went back in.
+
 ## 2026-09-02 — The pipeline's own health check finally runs on a timer (#524)
 
 We have a command, `npm run pulse`, that looks the whole build pipeline over and
