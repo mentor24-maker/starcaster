@@ -11,6 +11,8 @@ const {
   mergeDecision,
   checkState,
   githubGate,
+  MERGE_STATE_STATUSES,
+  unmetProtectionRule,
 } = require('./mergeOnComment.js');
 
 const OPERATOR = 48012725;
@@ -272,6 +274,160 @@ test('closed, merged and draft PRs are all refused', () => {
 test('UNKNOWN mergeability waits — GitHub has not finished computing it', () => {
   const g = githubGate({ state: 'OPEN', mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN', statusCheckRollup: green });
   assert.equal(g.action, 'wait');
+});
+
+// ------------------------------ one sentence per merge state (86bbrg9v0)
+//
+// PR #487, 2026-09-01: Dane's "merge" was refused with "GitHub reports the
+// merge is blocked (a required review or check is missing)" while every check
+// was green and the branch actually had a merge conflict. Both halves of that
+// "why" were false, and it read as answered. These fixtures hold one row per
+// mergeStateStatus so no value can collapse into another's sentence again.
+
+/** The wrong sentence, in the form no fixture below may ever produce. */
+const REVIEW_MISSING = /required review or check is missing/i;
+
+/** A phrase that claims a review is the problem, however it is worded. */
+const CLAIMS_A_REVIEW = /review/i;
+
+const gateOn = (over) => githubGate({
+  state: 'OPEN', mergeable: 'MERGEABLE', statusCheckRollup: green, ...over,
+});
+
+test('every mergeStateStatus GitHub can return has a sentence of its own', () => {
+  const seen = new Map();
+  for (const status of MERGE_STATE_STATUSES) {
+    const g = gateOn({ mergeStateStatus: status });
+    assert.ok(g && g.action, `${status} produced no verdict at all`);
+    assert.ok(g.reason && g.reason.length > 10, `${status} produced no reason worth reading`);
+    // The two that MAY merge share one sentence on purpose — "go" is the
+    // same answer either way. Every value that holds the work up has to say
+    // something of its own, because that is the sentence Dane reads.
+    if (g.action === 'merge') continue;
+    const clash = seen.get(g.reason);
+    assert.equal(clash, undefined,
+      `${status} and ${clash} share one sentence — that is the collapse this test exists to stop`);
+    seen.set(g.reason, status);
+  }
+  // Only CLEAN and HAS_HOOKS may merge; every other value has an owner.
+  const merges = MERGE_STATE_STATUSES.filter((s) => gateOn({ mergeStateStatus: s }).action === 'merge');
+  assert.deepEqual(merges, ['CLEAN', 'HAS_HOOKS']);
+});
+
+test('DELIBERATE: no merge state invents a missing review', () => {
+  for (const status of MERGE_STATE_STATUSES) {
+    const g = gateOn({ mergeStateStatus: status });
+    assert.doesNotMatch(g.reason, REVIEW_MISSING, `${status} named a missing review it never read`);
+  }
+});
+
+test('BEHIND says whose job it is — the machine catches it up', () => {
+  const g = gateOn({ mergeStateStatus: 'BEHIND' });
+  assert.equal(g.action, 'update-branch');
+  assert.match(g.reason, /behind main/);
+});
+
+test('UNSTABLE with a green rollup is a disagreement, not a merge', () => {
+  const g = gateOn({ mergeStateStatus: 'UNSTABLE' });
+  assert.equal(g.action, 'refuse');
+  assert.match(g.reason, /CANNOT TELL/);
+  assert.doesNotMatch(g.reason, CLAIMS_A_REVIEW);
+});
+
+test('UNSTABLE names the failing check whenever the rollup can see it', () => {
+  const rollup = [
+    { __typename: 'CheckRun', name: 'verify', status: 'COMPLETED', conclusion: 'SUCCESS' },
+    { __typename: 'CheckRun', name: 'Vercel', status: 'COMPLETED', conclusion: 'FAILURE' },
+  ];
+  const g = gateOn({ mergeStateStatus: 'UNSTABLE', statusCheckRollup: rollup });
+  assert.equal(g.action, 'refuse');
+  assert.match(g.reason, /Vercel/);
+});
+
+test('BLOCKED names the branch-protection rule when GitHub named it', () => {
+  const needsReview = gateOn({ mergeStateStatus: 'BLOCKED', reviewDecision: 'REVIEW_REQUIRED' });
+  assert.equal(needsReview.action, 'refuse');
+  assert.match(needsReview.reason, /required review has not been given/);
+
+  const changes = gateOn({ mergeStateStatus: 'BLOCKED', reviewDecision: 'CHANGES_REQUESTED' });
+  assert.equal(changes.action, 'refuse');
+  assert.match(changes.reason, /requested changes/);
+});
+
+test('THE BUG: BLOCKED with green checks and no named rule says CANNOT TELL', () => {
+  const g = gateOn({ mergeStateStatus: 'BLOCKED' });
+  assert.equal(g.action, 'refuse');
+  assert.match(g.reason, /CANNOT TELL/);
+  assert.doesNotMatch(g.reason, REVIEW_MISSING);
+  // And it must say the thing that would have saved the hour: a conflict
+  // GitHub has not recomputed looks exactly like this.
+  assert.match(g.reason, /conflict/i);
+});
+
+test('an APPROVED PR that is still BLOCKED does not blame the review', () => {
+  const g = gateOn({ mergeStateStatus: 'BLOCKED', reviewDecision: 'APPROVED' });
+  assert.equal(g.action, 'refuse');
+  assert.match(g.reason, /CANNOT TELL/);
+});
+
+test('a merge state this gate does not know is refused, never merged', () => {
+  const g = gateOn({ mergeStateStatus: 'SOMETHING_NEW' });
+  assert.equal(g.action, 'refuse');
+  assert.match(g.reason, /CANNOT TELL/);
+  assert.match(g.reason, /SOMETHING_NEW/);
+});
+
+test('UNKNOWN says CANNOT TELL out loud and waits — it is never resolved by guessing', () => {
+  const g = gateOn({ mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN' });
+  assert.equal(g.action, 'wait');
+  assert.match(g.reason, /CANNOT TELL/);
+  assert.doesNotMatch(g.reason, REVIEW_MISSING);
+});
+
+test('THE #487 SHAPE: UNKNOWN on the first read, DIRTY on the next', () => {
+  // What GitHub was reporting when the gate looked: still computing.
+  const first = githubGate({
+    state: 'OPEN', mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN',
+    statusCheckRollup: green,
+  });
+  assert.equal(first.action, 'wait', 'a PR GitHub has not finished computing is asked again, not refused');
+  assert.doesNotMatch(first.reason, REVIEW_MISSING);
+
+  // What `gh pr view` showed a moment later, and what was actually true.
+  const second = githubGate({
+    state: 'OPEN', mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY',
+    statusCheckRollup: green,
+  });
+  assert.equal(second.action, 'conflict');
+  assert.match(second.reason, /conflict/i);
+  assert.doesNotMatch(second.reason, REVIEW_MISSING);
+
+  // And the shape in between — GitHub having settled on BLOCKED before it
+  // recomputed the conflict, which is how #487 reached the wrong sentence.
+  const between = githubGate({
+    state: 'OPEN', mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED',
+    statusCheckRollup: green,
+  });
+  assert.doesNotMatch(between.reason, REVIEW_MISSING,
+    'every check was green — this is the sentence that sent Dane looking for a review that was never missing');
+});
+
+test('unmetProtectionRule names only what GitHub named', () => {
+  assert.equal(unmetProtectionRule({ reviewDecision: 'REVIEW_REQUIRED' }), 'a required review has not been given');
+  assert.equal(unmetProtectionRule({ reviewDecision: 'CHANGES_REQUESTED' }), 'a reviewer requested changes');
+  assert.equal(unmetProtectionRule({ reviewDecision: 'APPROVED' }), null);
+  assert.equal(unmetProtectionRule({}), null, 'an absent field is "could not tell", not "no rule"');
+  assert.equal(unmetProtectionRule(null), null);
+});
+
+test('the merge read asks GitHub for reviewDecision, or the rule can never be named', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+  const m = src.match(/const fields = '([^']*mergeStateStatus[^']*)'/);
+  assert.ok(m, 'clickup_direct.mjs must build the PR field list in one place');
+  assert.ok(m[1].split(',').includes('reviewDecision'),
+    'reviewDecision is what lets a BLOCKED merge name its rule instead of guessing');
 });
 
 test('checkState reads both rollup shapes and both failure spellings', () => {

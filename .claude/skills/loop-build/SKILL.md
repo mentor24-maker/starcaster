@@ -35,6 +35,33 @@ npm run node:owns -- loop-build
     safe. The message says exactly what to type to fix it (one line, once per
     machine). `npm run node:whoami` shows the whole picture.
 
+## Then: did the last pass finish what it started?
+
+```bash
+npm run clickup -- pass-reconcile
+```
+
+A pass claims a ticket by moving it to `Building`, and **the loops claim only
+from `Rework` and `Queued`**. So a pass that ends without handing its ticket on
+does not leave it slow — it leaves it *invisible*, forever, until a person
+moves it by hand. Two went that way on the night of 2026-09-01 and sat there
+until 9:30 the next morning.
+
+This command reads the marker the previous pass's claim left behind. Four
+outcomes, and you report whichever you get:
+
+*   **exit 0** — nothing to do, or a stale marker cleared. The normal case.
+*   **exit 3** — **the previous pass dropped its ticket** and this one handed it
+    back. Not your fault and not a failure, but **say so in your report**: that
+    line is the only evidence in the log that it happened, and a defect nobody
+    can see is a defect nobody fixes.
+*   **exit 2** — it could not tell (an unreadable marker, or the ticket's status
+    would not read). Nothing was moved. Say so; do not assume the deck is clear.
+*   **exit 1** — a hand-back was needed and failed. The ticket is still stranded.
+    Say so loudly. It will be retried next pass.
+
+Then carry on with your own pass either way.
+
 ## Then: has the operator taken the deck?
 
 There is a sanctioned way for Dane to clear the decks and run something
@@ -101,7 +128,8 @@ list, the ids, and the reasoning live in ONE place: `docs/LOOP_ENGINEERING.md`
 
 ```bash
 npm run clickup -- queue --list 901418546619 --claimable       # FIRST LINE is the task to claim (all Rework, then Queued)
-npm run clickup -- claim --task <id>                           # safe claim; exit 3 = someone beat you (or it moved), take the next
+npm run clickup -- pass-reconcile                               # FIRST: hand back whatever the last pass dropped
+npm run clickup -- claim --task <id> --pass loop-build          # safe claim; exit 3 = someone beat you (or it moved), take the next
 npm run clickup -- status --task <id> --status "In review"                   # hand off (assignees auto-cleared)
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # escalate: card + status together
 npm run clickup -- pr-opened --task <id> --pr <pr-url>                        # record the PR — REQUIRED, and it verifies itself
@@ -503,7 +531,8 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    titles. The step had been written down the whole time.
 
 9. **Hand off to review.** Set the task status to `In review` and leave it
-   unassigned (it is the machine's turn, not Dane's). **Do NOT merge** —
+   unassigned (it is the machine's turn, not Dane's). **This step is not
+   optional and it is not deferrable** — see the invariant in Guardrails. **Do NOT merge** —
    `main` is PR-protected (the "verify" check must go green) and merges happen
    only on the operator's explicit say-so. The `loop-review` skill takes it
    from here.
@@ -512,6 +541,30 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    wrapper will re-invoke you for the next task).
 
 ## Guardrails
+
+- **A PASS MAY NOT END WITH ITS TICKET STILL IN `Building`.** This is the one
+  invariant of the whole skill, because breaking it is the only way to make
+  work *unreachable* rather than merely late — `Building` is a status no loop
+  claims from. Before you write your report, the ticket you claimed is either
+  in `In review` (you finished), in `Rework` or `Queued` (you gave it back on
+  purpose, with a note saying why), or `Needs your input` (you escalated with
+  `ask`). If it is still `Building`, you are not done.
+
+- **YOU CANNOT PROMISE TO COME BACK.** A pass is a one-shot session: it ends
+  the moment it stops producing output. There is no later, no callback, no
+  waiter, no "when CI goes green I will…". On 2026-09-01 a pass finished PR
+  #449 and wrote, in its own report:
+
+  > *"`verify` and the Vercel deploy are still running; I have a waiter armed
+  > that will bring me back the moment all four checks settle... Once CI is
+  > green I'll set the ticket to `In review`."*
+
+  It exited **0** nineteen minutes later and the ticket sat in `Building` for
+  nine hours with a finished, green pull request nobody could see. If you are
+  waiting on checks, **wait inside the pass** and then move the ticket. If you
+  cannot wait, hand the ticket back to `Rework` with a note naming what is
+  outstanding — a ticket in a claimable status with an honest note is a
+  perfectly good outcome. An unfinished promise is not.
 
 - **One task, one worktree, one PR.** Never build two tasks in one branch.
 - **The PR and the ticket must name each other.** `pr-opened` enforces both
