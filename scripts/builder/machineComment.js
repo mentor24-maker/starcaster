@@ -71,9 +71,28 @@ const MACHINE_MARKER_LINE = `${MACHINE_MARKER} posted by a loop under Dane's tok
  */
 const LEGACY_MACHINE_PREFIXES = [
   '[CC-starcaster bus-relay]',
+  '[CC-starcaster]',
+  '[CC-pulse]',
   '[auto-merge]',
   '[bus-relay]',
 ];
+
+/**
+ * Undo the editor's markdown escaping before matching a prefix.
+ *
+ * ClickUp's CHAT api hands back "\\[CC-starcaster bus-relay\\] ..." — it escapes
+ * the brackets it would otherwise read as markdown. Every prefix below starts
+ * with "[", so without this every agent post on the party line read as Dane's
+ * own words. Verified against live channel content, not assumed: before this,
+ * all six most recent bus messages classified as "his word", including three
+ * the relay had posted itself (task 86bbt038u).
+ *
+ * Only the BACKSLASH is dropped, and only where it escapes markdown
+ * punctuation, so nothing Dane actually typed changes meaning.
+ */
+function unescapeMarkdown(text) {
+  return String(text == null ? '' : text).replace(/\\([[\]()*_`~#!>+\-.])/g, '$1');
+}
 
 /** The last line with anything on it, or '' for an empty comment. */
 function lastNonEmptyLine(text) {
@@ -95,7 +114,7 @@ function lastNonEmptyLine(text) {
  */
 function isMachineComment(text) {
   if (text == null) return false;
-  const s = String(text);
+  const s = unescapeMarkdown(text);
   if (!s.trim()) return false;
   if (lastNonEmptyLine(s).startsWith(MACHINE_MARKER)) return true;
   const head = s.trimStart();
