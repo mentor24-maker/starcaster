@@ -508,27 +508,69 @@ function sweptTicketPhrase(entry) {
 }
 
 /**
- * The one-sentence tally the resume prints, with every ticket carrying its own
- * outcome. "unstuck" is the only verb true of both kinds; where each one went
- * is said per ticket rather than asserted over the group.
+ * The one-sentence tally of the sweep — the SAME sentence for the terminal and
+ * for the party line, so the two reports of one event cannot disagree.
+ *
+ * Every ticket carries its own outcome: "unstuck" is the only verb true of
+ * both kinds, and where each one went is said per ticket rather than asserted
+ * over the group (that was this ticket's original defect).
+ *
+ * AN EMPTY `swept` LIST HAS THREE CAUSES AND THEY ARE NOT THE SAME NEWS
+ * (task 86bbqw49y, round 2). Answering all three with one all-clear is how a
+ * sweep comes to print, in two consecutive lines:
+ *
+ *     86bbzzzzz: the note landed but the move did NOT (403) — it is still stranded.
+ *   The pipeline is RUNNING again. No stranded tickets needed unsticking.
+ *
+ * which is the same contradicting-pair shape the ticket was opened about, with
+ * the summary again the false half. `if (!ok) continue` producing an all-clear
+ * is DOCTRINE 3.11 by name. So:
+ *
+ *   nothing was stranded   the all-clear is TRUE. Say it.
+ *   a sweep step FAILED    the ticket is still stuck. Say how many, and never
+ *                          say "no stranded tickets".
+ *   nothing was CHECKED    `--no-sweep`, or the queue could not be read.
+ *                          Nobody looked, so the honest answer is that it
+ *                          could not tell — never an all-clear.
+ *
+ * `left` (how many stranded tickets were examined and NOT unstuck) and
+ * `checked` (was the queue examined at all) have to come from the caller: what
+ * was LEFT BEHIND is structurally invisible to a function that is only ever
+ * shown what was taken. `why` names the reason nothing was checked.
  */
-function sweptSummary(swept = []) {
+function sweptSummary(swept = [], { checked = true, left = 0, why = '' } = {}) {
   const rows = Array.isArray(swept) ? swept : [];
-  if (!rows.length) return 'No stranded tickets needed unsticking.';
+  const stuck = Number.isFinite(left) && left > 0 ? Math.trunc(left) : 0;
+
+  if (!checked) {
+    return `Whether anything is stranded was NOT checked${why ? ` — ${why}` : ''}.`
+      + ' Run `npm run pipeline -- status` to find out.';
+  }
+
   const noun = rows.length === 1 ? '1 stranded ticket' : `${rows.length} stranded tickets`;
-  return `${noun} unstuck: ${rows.map(sweptTicketPhrase).join(', ')}.`;
+  const unstuck = rows.length ? `${noun} unstuck: ${rows.map(sweptTicketPhrase).join(', ')}.` : '';
+  if (!stuck) return unstuck || 'No stranded tickets needed unsticking.';
+
+  const stillStranded = `${stuck} stranded ticket${stuck === 1 ? '' : 's'} could NOT be unstuck`
+    + ` and ${stuck === 1 ? 'is' : 'are'} STILL stranded.`
+    + ' Run `npm run pipeline -- status` to see which.';
+  return unstuck ? `${unstuck} ${stillStranded}` : stillStranded;
 }
 
-/** What it says once, when the deck goes back. */
-function resumedMessage({ by, pausedForMs, swept = [] } = {}) {
+/**
+ * What it says once, when the deck goes back.
+ *
+ * It reports the sweep with `sweptSummary`'s own words rather than a second
+ * set of its own. It used to carry the sibling of the bug above — "Nothing was
+ * left stranded." on the same empty list — so the bus heard an all-clear the
+ * terminal had already contradicted. One sentence, one source.
+ */
+function resumedMessage({ by, pausedForMs, swept = [], checked = true, left = 0, why = '' } = {}) {
   const mins = Number.isFinite(pausedForMs) ? Math.round(pausedForMs / 60000) : null;
-  const rows = Array.isArray(swept) ? swept : [];
   return '[CC-starcaster] The build pipeline is RUNNING again' +
     (by ? `, resumed by ${by}` : '') +
     (mins != null ? ` after ${mins} min paused` : '') + '.' +
-    (rows.length
-      ? `\n${rows.length} ticket(s) whose pass had died were unstuck: ${rows.map(sweptTicketPhrase).join(', ')}.`
-      : '\nNothing was left stranded.');
+    `\n${sweptSummary(swept, { checked, left, why })}`;
 }
 
 /**

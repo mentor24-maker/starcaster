@@ -300,7 +300,45 @@ test('the resumed message is said once and reports what was swept', () => {
   ];
   assert.match(pause.resumedMessage({ by: 'Dane', pausedForMs: 30 * MIN, swept }), /a1/);
   assert.match(pause.resumedMessage({ by: 'Dane', pausedForMs: 30 * MIN, swept }), /b2/);
-  assert.match(pause.resumedMessage({ by: 'Dane', pausedForMs: 30 * MIN, swept: [] }), /Nothing was left stranded/);
+  assert.match(
+    pause.resumedMessage({ by: 'Dane', pausedForMs: 30 * MIN, swept: [] }),
+    /No stranded tickets needed unsticking/,
+  );
+});
+
+// The bus heard the same false all-clear the terminal did — "Nothing was left
+// stranded." on an empty list that was empty because a step FAILED. It says
+// what the summary says now, from the summary's own function, so fixing one
+// cannot leave the other lying (task 86bbqw49y, round 2).
+test('the resumed message reports the sweep in the summary\'s own words', () => {
+  const failed = pause.resumedMessage({ by: 'Dane', swept: [], checked: true, left: 2 });
+  assert.match(failed, /STILL stranded/);
+  assert.doesNotMatch(failed, /No stranded tickets/);
+  assert.doesNotMatch(failed, /Nothing was left stranded/);
+
+  const unchecked = pause.resumedMessage({ by: 'Dane', swept: [], checked: false, why: 'the --no-sweep flag was used' });
+  assert.match(unchecked, /NOT checked/);
+  assert.doesNotMatch(unchecked, /No stranded tickets/);
+
+  // The one case where an all-clear is true.
+  assert.match(
+    pause.resumedMessage({ by: 'Dane', swept: [], checked: true, left: 0 }),
+    /No stranded tickets needed unsticking/,
+  );
+
+  // Whatever it says about the sweep, it is the summary's sentence verbatim —
+  // the two reports of one event cannot drift apart.
+  for (const state of [
+    { checked: true, left: 0 },
+    { checked: true, left: 3 },
+    { checked: false, why: 'the queue could not be read' },
+  ]) {
+    assert.ok(
+      pause.resumedMessage({ by: 'Dane', swept: [], ...state })
+        .includes(pause.sweptSummary([], state)),
+      `the bus message must carry sweptSummary's sentence for ${JSON.stringify(state)}`,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -764,6 +802,34 @@ test('the resume sweep sends a stranded build back but leaves a stranded review'
     'the sweep must ask where a stranded build belongs');
 });
 
+test('the resume sweep hands its report what it left behind, and whether it looked', () => {
+  // Source-level for the same reason as the test above — the sweep needs a live
+  // token — but this is the wiring the round-2 send-back was about. The report
+  // functions are honest now; they can only be honest about what they are TOLD,
+  // and what was LEFT BEHIND is invisible to a function shown only what was
+  // taken. Every `continue` in the sweep loop is a ticket that is still
+  // stranded, so every one of them has to record itself.
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+
+  const failureContinues = code.match(/left\.push\(s\.id\);\s*continue;/g) || [];
+  assert.equal(failureContinues.length, 3,
+    'all three bail-outs (note write, claim clear, status move) must record the ticket they left');
+
+  // Not looking and finding nothing are different answers. `checked` may only
+  // be asserted inside the arm that actually read the queue.
+  assert.match(code, /} else if \(sw\.queue\?\.readable\) {\s*sweepChecked = true;/,
+    'checked may only be set where the queue was actually examined');
+  assert.equal((code.match(/sweepChecked = true/g) || []).length, 1,
+    'one place may claim the sweep ran');
+
+  // And BOTH reports carry it, so neither can print an all-clear the other
+  // contradicts.
+  assert.match(code, /sweptSummary\(swept, sweepState\)/,
+    'the terminal summary must be told what was left and whether it looked');
+  assert.match(code, /resumedMessage\(\{ by, pausedForMs, swept, \.\.\.sweepState \}\)/,
+    'the party-line message must be told the same thing, or the two disagree');
+});
+
 test('a stranded build goes to Rework only when something was actually built', () => {
   // The rule itself, not its wiring. Both destinations are claimable, so this
   // is about ORDER and about telling the truth — a half-built ticket dropped
@@ -837,6 +903,64 @@ test('a MIXED sweep reports each kind accurately in one summary', () => {
 test('an empty sweep says so rather than counting to zero', () => {
   assert.match(pause.sweptSummary([]), /No stranded tickets/);
   assert.doesNotMatch(pause.sweptSummary([]), /Queued/);
+});
+
+// ---------------------------------------------------------------------------
+// An empty `swept` list is THREE different pieces of news and only one of them
+// is an all-clear (task 86bbqw49y, round 2). Five paths in `resume` reach the
+// summary with nothing swept while a ticket IS still stranded — a hand-back
+// note that would not write, a stale review claim that would not clear, a
+// status move that returned 403, an unreadable queue, and --no-sweep. Each
+// prints its own stderr line saying so, and the summary underneath used to
+// answer "No stranded tickets needed unsticking." — the same
+// two-contradicting-lines shape this ticket was opened about, with the summary
+// again the false half. `if (!ok) continue` producing an all-clear is
+// DOCTRINE 3.11 by name.
+// ---------------------------------------------------------------------------
+
+test('an empty sweep that is empty because a step FAILED never reads as an all-clear', () => {
+  const one = pause.sweptSummary([], { checked: true, left: 1 });
+  assert.match(one, /1 stranded ticket could NOT be unstuck/);
+  assert.match(one, /is STILL stranded/);
+  assert.doesNotMatch(one, /No stranded tickets/, 'a ticket is still stuck — an all-clear here is the bug');
+
+  const many = pause.sweptSummary([], { checked: true, left: 3 });
+  assert.match(many, /3 stranded tickets could NOT be unstuck/);
+  assert.match(many, /are STILL stranded/);
+  assert.doesNotMatch(many, /No stranded tickets/);
+});
+
+test('a PARTLY failed sweep reports what it unstuck AND what it left', () => {
+  const line = pause.sweptSummary(
+    [{ id: 'ok1', kind: 'a build', destination: 'Queued' }],
+    { checked: true, left: 2 },
+  );
+  assert.match(line, /ok1 \(returned to Queued\)/);
+  assert.match(line, /2 stranded tickets could NOT be unstuck/);
+});
+
+test('a sweep that never ran says it could not tell, never an all-clear', () => {
+  const noSweep = pause.sweptSummary([], { checked: false, why: 'the --no-sweep flag was used' });
+  assert.match(noSweep, /NOT checked/);
+  assert.match(noSweep, /--no-sweep/);
+  assert.match(noSweep, /pipeline -- status/, 'it has to say how to find out');
+  assert.doesNotMatch(noSweep, /No stranded tickets/);
+
+  const unreadable = pause.sweptSummary([], { checked: false, why: 'the queue could not be read' });
+  assert.match(unreadable, /NOT checked/);
+  assert.match(unreadable, /the queue could not be read/);
+  assert.doesNotMatch(unreadable, /No stranded tickets/);
+});
+
+test('the all-clear survives for the one case that earns it', () => {
+  assert.match(pause.sweptSummary([], { checked: true, left: 0 }), /No stranded tickets needed unsticking/);
+  // A successful sweep with nothing left behind still reads as before.
+  const swept = pause.sweptSummary(
+    [{ id: 'a1', kind: 'a review', destination: 'In review' }],
+    { checked: true, left: 0 },
+  );
+  assert.match(swept, /1 stranded ticket unstuck/);
+  assert.doesNotMatch(swept, /STILL stranded/);
 });
 
 test('a bare id still prints as an id, not as [object Object]', () => {

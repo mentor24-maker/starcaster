@@ -22,6 +22,26 @@ position is perfectly correct and whose only problem is a stale note saying
 somebody is already looking at them. Each now gets the reason that actually
 applies to it. Nothing about where a ticket ends up changed; only what the tool
 says about it.
+
+A review of that fix then caught the same fault standing right next to it. When
+the cleanup found nothing to unstick it announced "No stranded tickets needed
+unsticking" — an all-clear. But there are five ways to reach that sentence with
+nothing cleaned up and a ticket still stuck: the note it tries to leave on the
+ticket will not save, a stale marker will not clear, the status change comes
+back refused, the queue cannot be read at all, or the cleanup was deliberately
+skipped. In each of those the terminal read "it is still stranded" on one line
+and "no stranded tickets" on the next — the exact contradiction this job was
+opened to remove, moved one sentence over.
+
+The report now distinguishes three different pieces of news that used to share
+one sentence. Nothing was stuck, so the all-clear is true and it says it.
+Something was stuck and could not be freed, so it says how many are still
+stuck and where to look. Nothing was examined at all, so it says it could not
+tell — which is never an all-clear. The message posted to the team chat used to
+carry its own wording for the same event and could disagree with the terminal;
+both now print the same sentence from the same place, so they cannot drift
+apart.
+
 ## 2026-09-01 — Two changes that never touched each other still broke the build (#503)
 
 A piece of work was checked over, approved, and then sat for four days waiting

@@ -428,8 +428,21 @@ if (cmd === 'check') {
   // Sweep first, then lift the flag. In this order a ticket that was stranded
   // is back in the line BEFORE the loops start claiming again, so the very
   // next pass can pick it up rather than finding it a minute later.
+  // Three things the report needs, and only this loop can know two of them.
+  // `swept` is what was unstuck. `left` is what was EXAMINED and could not be —
+  // invisible to a summary that is only shown what was taken, which is how an
+  // all-clear came to print one line under "it is still stranded" (86bbqw49y).
+  // `checked` is whether the queue was looked at at all: not looking and
+  // finding nothing are different answers, and only one of them is an
+  // all-clear.
   const swept = [];
-  if (!flag('no-sweep') && sw.queue?.readable) {
+  const left = [];
+  let sweepChecked = false;
+  let sweepWhy = '';
+  if (flag('no-sweep')) {
+    sweepWhy = 'the --no-sweep flag was used';
+  } else if (sw.queue?.readable) {
+    sweepChecked = true;
     const rows = (sw.queue.tasks || []).map((t) => ({ ...t, loopNote: loopNoteOf(t) }));
     const { stranded } = inFlight(rows, { nowMs: Date.now(), strandedAfterMs: STRANDED_AFTER_MS });
     for (const s of stranded) {
@@ -460,7 +473,11 @@ if (cmd === 'check') {
         }),
         notify_all: false,
       });
-      if (!note.ok) { console.error(`  ${s.id}: could not write the hand-back note (${whyOf(note)}) — LEAVING it where it is rather than moving it silently.`); continue; }
+      if (!note.ok) {
+        console.error(`  ${s.id}: could not write the hand-back note (${whyOf(note)}) — LEAVING it where it is rather than moving it silently.`);
+        left.push(s.id);
+        continue;
+      }
 
       const task = (sw.queue.tasks || []).find((t) => String(t.id) === s.id);
 
@@ -468,6 +485,7 @@ if (cmd === 'check') {
         const cleared = await clearLoopNote(task);
         if (!cleared) {
           console.error(`  ${s.id}: the note landed but the stale review claim could NOT be cleared — the next review pass will still see it as taken.`);
+          left.push(s.id);
           continue;
         }
         console.error(`  ${s.id} ("${s.name}") released in "In review" — its review pass died, but its build is finished and its PR is open.`);
@@ -480,28 +498,36 @@ if (cmd === 'check') {
       const move = await tryCall('PUT', `/api/v2/task/${s.id}`, { status: where.status, assignees: { add: [], rem } });
       if (!move.ok || String(move.json?.status?.status || '').toLowerCase() !== where.status.toLowerCase()) {
         console.error(`  ${s.id}: the note landed but the move to ${where.status} did NOT (${whyOf(move)}) — it is still stranded.`);
+        left.push(s.id);
         continue;
       }
       console.error(`  ${s.id} ("${s.name}") returned to ${where.status} — it was ${s.kind} with nothing working on it; ${where.why}.`);
       swept.push({ id: s.id, kind: s.kind, destination: where.status });
     }
-  } else if (!flag('no-sweep')) {
+  } else {
+    sweepWhy = 'the queue could not be read';
     console.error('  the queue could not be read, so nothing was swept — run `npm run pipeline -- status` after this.');
   }
+  const sweepState = { checked: sweepChecked, left: left.length, why: sweepWhy };
 
   const at = new Date().toISOString();
   await writeRecord(sw.task.id, resumeRecord({ by, node: thisNodeName(), at }), 'Resume', at);
   await stampSwitchNote(sw.task, `▶ running — resumed ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase().replace(/\s/g, '')}`);
 
   const pausedForMs = Number.isFinite(before.atMs) ? Date.now() - before.atMs : null;
-  await announce(resumedMessage({ by, pausedForMs, swept }));
+  await announce(resumedMessage({ by, pausedForMs, swept, ...sweepState }));
 
   // No destination is true of every swept ticket — a half-built one goes to
   // Rework, a fresh one to Queued, and a stranded REVIEW does not move at all.
   // So the summary carries each ticket's own outcome rather than naming one
   // for the group, which is how a released review came to be announced as
   // "returned to Queued" one line under the truth (86bbqw49y).
-  console.log(`The pipeline is RUNNING again. ${sweptSummary(swept)}`);
+  //
+  // And it is handed `sweepState` because an empty `swept` is three different
+  // pieces of news — nothing stranded, a step that failed, or nothing checked —
+  // and only the first is an all-clear. The other two used to print one anyway,
+  // directly under the stderr line saying the ticket was still stranded.
+  console.log(`The pipeline is RUNNING again. ${sweptSummary(swept, sweepState)}`);
   console.error(`  requests this pass: ${requestCount}`);
 
 } else {
