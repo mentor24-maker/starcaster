@@ -1,3 +1,40 @@
+## 2026-09-02 — The screen a client uses to connect their own accounts (#526)
+
+Until now, putting a client's social account onto Starcaster meant you pasting
+their tokens into Vercel by hand. This is the screen that replaces that: the
+client opens Settings › Connections and sees one card per platform — Facebook
+Page, Bluesky, and Instagram and X greyed as "coming soon" — and connects the
+ones they want themselves. Four states, and each card is in exactly one of
+them: not connected, connected (with the account name on it), needs attention
+(with a plain sentence saying what broke), or coming soon with no button at all.
+
+The cards are not written into the screen. They are generated from the list of
+platforms the earlier slices built, so when Instagram is finished next, its card
+turns from grey to a working Connect button with nothing in this screen edited.
+There is a test that proves it by inventing a platform the code has never heard
+of and checking a card appears for it.
+
+Two things turned up while building it that were worth stopping for. The first:
+one Facebook sign-in can cover several Pages, and they all get saved in the same
+instant — so the screen could tell a client "posting to your main Page" while
+the thing that actually posts had picked a different one. Nothing would have
+looked wrong. The screen now reads back which one will really be used instead of
+assuming. The second: none of the buttons on this screen showed anything when
+you tabbed to them with the keyboard, because the admin app has never had a rule
+for that. Measured both ways in a real browser — six controls with no ring
+before, six with one after.
+
+Disconnecting is deliberately honest about its limits: it forgets the account
+here, and says out loud that it has not withdrawn the permission at Facebook or
+Bluesky itself. That comes in a later slice, and until it does, "disconnected"
+must not be read as "revoked".
+
+One thing to confirm before this goes live: storing a connection needs an
+encryption key that has been missing since a rotation was left unfinished in
+July. This session could not read the production settings to check whether it is
+there. If it is not, the Connect button will fail — for the earlier slices as
+much as this one.
+
 ## 2026-09-01 — Handing you a command to paste is now something the machine refuses to do (#499)
 
 There is a rule here that CC runs the operational commands itself and tells you
