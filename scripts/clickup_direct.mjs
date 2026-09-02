@@ -612,8 +612,20 @@ function capProbe({ repo } = {}) {
       if (!Array.isArray(listed.tasks) || !listed.tasks.length) {
         throw new Error(listed.failed || 'no tasks came back');
       }
+      // The RECORD, not just the status — `date_updated` and the loop note are
+      // what let the cap tell a build in progress from a build whose pass
+      // died. They come off the tasks already fetched here, so this costs no
+      // extra call, and it is the SAME map rather than a parallel one: two
+      // inputs built at one call site is how the 2026-08-31 disagreement
+      // happened (see probeCap).
       const byId = Object.create(null);
-      for (const t of listed.tasks) byId[String(t.id)] = t.status?.status ?? '';
+      for (const t of listed.tasks) {
+        byId[String(t.id)] = {
+          status: t.status?.status ?? '',
+          dateUpdated: Number(t.date_updated),
+          loopNote: loopNoteOf(t),
+        };
+      }
       return byId;
     },
   });
