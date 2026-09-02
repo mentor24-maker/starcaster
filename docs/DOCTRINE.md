@@ -642,6 +642,36 @@ rendered at all.
 
 ---
 
+### 3.17 `check:panels` does not fail on a schema-generated module panel
+
+2026-09-01, found while building the Media Manager module (86bbrqnr0). Its
+settings panel was seeded into the fixture and the sweep rose from 630 panels
+to 639 — so the check is measuring *something* of that module. Then three
+deliberate W0 violations were introduced inside that panel, one at a time, and
+**every run reported OK**:
+
+| The break | Why it was not seen |
+|---|---|
+| A hand-rolled field carrying its own `width` | the check reads `.builder-module-field-strip` only as a **direct child** of `.builder-module-chrome`; this one was nested deeper |
+| A label long enough to blow the column budget | arguably not a violation at all — W0's column is *supposed* to grow to its longest label |
+| A `control: "custom"` field with a fixed 420px width, **inside a measured schema column** | still green |
+
+The panel count rising is not the same claim as the panel being checked, and
+the two were easy to conflate.
+
+This is `docs/UI_RULES.md` W0's own caveat made concrete — *a control the check
+cannot see is a control the rule does not cover* — and it matters more here
+than the caveat suggests, because a schema-generated panel holds W0 **by
+construction**. The generator owns the widths, so there is little for the check
+to catch and correspondingly little evidence in its green.
+
+**What to do with that.** Do not report `check:panels` as evidence for a
+schema-generated panel without having made it fail first. Say plainly that it
+passed and that the pass is not evidence, and then look at the panel. On the
+Media Manager nobody has yet — recorded in `docs/MEDIA_MANAGER.md` §7 rather
+than quietly left as a green tick.
+
+
 ## 4. Secrets
 
 ### 4.1 The rule is about EXPOSURE, not custody
@@ -1263,6 +1293,41 @@ probing?", and if it can, "what does the cached wrong answer authorise?"
 
 ---
 
+### 5.20 A screen that paints is not a screen that works
+
+2026-09-01, PR #506 → fixed by #509. The Media Manager module shipped with
+rename sending `PUT` to `/api/assets/:id`. `routes/assets.js` handles **PATCH**
+and **DELETE** for that path and nothing else, so the request fell through
+unmatched. Renaming a file did nothing at all. Delete, on the same card, was
+fine.
+
+It shipped past every gate, because the closing check verified the grid
+**rendered**: the module drew its chrome, fetched real assets, and showed them
+with names, sizes and dates. Not one write action was exercised.
+
+The optimistic local state is what makes this class of defect so quiet. The
+break test reproduces it exactly:
+
+```
+PASS  the rename is reflected immediately
+FAIL  the rename SURVIVES A RELOAD
+```
+
+The name changes on screen the instant you press Enter, because the component
+set its own state. Everything looks correct until the page is reloaded, and
+nobody reloads while admiring their own feature.
+
+**So: a check on anything that writes must reload and read it back.** Not
+re-render from memory — reload, refetch, and assert the value came back from
+the database. The same duty applies to the closing "where I looked at it"
+sentence: naming the screen you opened is not enough if you only watched it
+paint.
+
+The sibling failure lives one section up (§3.10): a write that normalizes to
+nothing looks exactly like a success. This is its front end — a write that
+never happened looks exactly like one that did.
+
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
@@ -1281,6 +1346,14 @@ chain that a branch was editing, the right resolution was not to re-home the
 branch's addition but to **delete it** — the newer phases covered the same ground
 better, and its warning could not even fire in production. Resolving a conflict
 mechanically would have preserved dead weight.
+
+The converse costs more, because nothing announces it: a merge with **no**
+conflict is not evidence the two sides agree. §6.11 is that case — two branches
+contradicting each other's rules without sharing a line.
+
+And before any of that: **confirm the conflict is real.** A forge can report
+one that git cannot reproduce, and the word alone is enough to start somebody
+editing files that never conflicted — §6.13.
 
 ### 6.3 State results, not intentions
 
@@ -1536,6 +1609,10 @@ had been unparseable on `main` since it was committed
 (`scripts/import_messaging_tweets_csv.js`, a missing closing paren) — which is
 the same lesson from the other end: nothing had ever parsed it either.
 
+The same claim fails one level higher too, where the merged result parses
+perfectly and two files simply assert opposite rules: §6.11. And one level
+lower, where the conflict being reworked around was never there at all: §6.13.
+
 ### 6.8 A fixture must be a shape the real source can produce, and the assertion must name the value
 
 **The incident (same ticket).** The test that pinned "a ticket waiting on a
@@ -1774,7 +1851,288 @@ version control has no changelog, no review, no test and no blast radius anyone
 can compute. That is acceptable for a one-off, and it is a debt that comes due
 the first time anything around it moves.
 
+### 6.11 A clean merge is not agreement — and a review verdict has a shelf life
+
+**The incident (2026-08-30, ticket 86bbmmv7t, PR #444, fixed in commit
+`80b5502b`).** The PR was reviewed green on 08-26 and sat in `Ready to launch`
+for four days waiting on Dane's merge word. When he gave it, the merge step
+refused: CI was red. Nothing on the branch had changed since the review.
+
+The branch had tightened what counts as a PR naming its ticket — a bare id
+(`ClickUp: 86bbm4zwd`) stopped counting, only a full `app.clickup.com/t/<id>`
+URL does (`scripts/builder/clickupTicketLink.js`). Meanwhile the WIP-cap work
+landed on `main` carrying `scripts/builder/wipCap.test.js`, whose drift test
+asserted the **old** rule: it fed a bare id to `prBodyCarriesTicket` and
+expected `true`.
+
+The two changes share no line and no file. `git merge` reported no conflict and
+`git merge-tree --write-tree` exited 0 with a clean tree. Both branches were
+green on their own. The contradiction was in the **rule**, not in the text, and
+it surfaced only when the catch-up merge put both in one tree: one failure out
+of 1,665, four days after a review had approved the branch.
+
+**This is the case with no conflict, which is why §6.2 and §6.7 do not reach
+it.** §6.2 says a conflict is information; §6.7 says merge `main` in before you
+rework so you receive that information early. Both assume git has something to
+report. Here it had nothing, so nothing prompted anyone to look. §6.7's closing
+line — *a clean merge is a claim about text, not about meaning* — was about
+whether the result still parses; this is the same claim failing one level up,
+where the result parses fine and two files now assert opposite rules.
+
+**Do this:**
+
+- **Treat a review verdict as certifying the code at that commit, not the
+  branch.** "Verified" has a shelf life. A branch approved days ago is
+  re-tested by its catch-up merge, not by the review that already happened —
+  and a branch waiting on a merge word is exactly the branch most likely to
+  have had the ground move under it.
+- **When a change tightens or loosens a rule other code asserts, go looking
+  for the tests of that behaviour before shipping.** `git grep` the function
+  name and a fixture string — not only the file you are editing. The test that
+  broke here was in a file the branch never touched, in a subsystem it had
+  nothing to do with.
+- **When a test disagrees with a new rule, do not simply flip the
+  expectation.** Assert the property the test was written to guard, then pin
+  the rule's current answer explicitly beside it, so the next drift fails
+  loudly instead of leaving the test vacuously passing. That is what
+  `80b5502b` did: the one-directional property (the cap may count more than
+  the gate lets through, never less) plus three pinned assertions naming the
+  ticket that set the rule.
+
+### 6.12 Match what he typed, not what the tool stored — and prove a filter against real input
+
+**The incident (2026-09-01, ticket 86bbt038u, PR #515, merged as `3d821bd7`).**
+Dane came back from a break and asked whether the loops were stuck. They were
+not: both lanes were building and reviewing normally. What was stuck was the
+auto-merge lane, which had latched itself off on 08-30 at 8:31pm and stayed off
+for two days without telling anybody.
+
+He tried to release it the sanctioned way — posting `resume auto-merging` on
+the party line — three times. All three were ignored. `switchCommand` matches
+`resume` as the WHOLE message, deliberately, because a resume that fires when
+he was only *talking* about resuming costs an unwanted merge. But ClickUp's
+message box turns a **pasted** phrase into a fenced code block and guesses a
+language, so what the switch actually received was:
+
+````
+```cpp
+resume auto-merging
+```
+````
+
+Three defects, and only the first was visible from the code:
+
+1. `normalizeCommand` never stripped the editor's formatting, so the backticks
+   were being read as part of what he said. The same hole sat on the merge
+   path — his `merge` worked only because he happened to type it by hand.
+2. `readBusSwitchSignals` carried the comment *"Only HIS words. An agent post
+   quoting the phrase is a machine talking to itself"* and did not enforce it:
+   it accepted any message whose `user_id` was Dane's, which every agent's
+   posts are, because they all post under his token. The ticket path next door
+   had been enforcing exactly that rule with the machine marker all along.
+3. **The filter added for (2) matched nothing at all.** ClickUp's chat api
+   escapes the brackets — `\[CC-starcaster bus-relay\] ...` — and every entry
+   in `LEGACY_MACHINE_PREFIXES` begins with `[`. Run over the live channel
+   before the fix, six of six recent messages classified as Dane's own words,
+   three of them posted by the relay itself.
+
+The third is the one that nearly shipped. Every unit test passed, because every
+fixture had been hand-written in the shape its author expected rather than
+captured from the surface the code actually reads.
+
+**Do this:**
+
+- **An input box you do not control is part of the wire format.** When a
+  command must match exactly, normalise away what the *editor* added before
+  comparing — fences, language tags, smart quotes, escaping. Strictness is
+  only honest when it is strict about things the operator can control;
+  otherwise "whole message" quietly means "whole message plus whatever the
+  client decided to wrap it in". Note the fix here did **not** loosen the
+  matcher: the deliberate `stop`/`resume` asymmetry survived untouched, because
+  the bug was never the strictness.
+- **Prove a filter against real captured input before believing it.** A filter
+  that matches nothing is silent in precisely the same way as a filter with
+  nothing to catch — this is §3.11's failure wearing a different hat. Fixtures
+  written by the same author as the filter share its blind spot by
+  construction. Fetch a page of the real messages, run the predicate over them,
+  and look at the classifications one by one.
+- **A stated intent is not a guard.** If a comment says what must not happen,
+  either the code enforces it or the comment is a false statement with a shelf
+  life — and the next reader will trust it, because it is written in the
+  imperative and sits directly above the code. When you find one, the fix is
+  the enforcement, not a better comment.
+- **Two doors into the same decision must be guarded the same way.** The ticket
+  path and the bus path both answered "is this Dane's word?", and only one of
+  them checked. The weaker door was the one nobody watched. Where a rule has
+  more than one entrance, read them together, or derive them from one shared
+  predicate so they cannot drift apart (§6.2's ancestor, and the same argument
+  as the single-reading rule for shared questions).
+- **A latch must keep saying it is latched.** The self-disable recorded
+  `"1 thing(s)"` — the count, not the sentences it was holding — and announced
+  nothing on the passes that followed. That is why two days passed. A brake
+  that cannot say why it engaged is one nobody can safely release; a brake that
+  says so once and then goes quiet is indistinguishable from a quiet week.
+
+### 6.13 A reported conflict is a claim to verify, not an instruction to start editing
+
+**The incident (2026-09-02, ticket 86bbt4dkr).** Dane asked for the conflicts
+on PRs #513 and #494 to be cleared. Both read `CONFLICTING / DIRTY` on GitHub.
+**Neither had a conflict.** Checked afterwards with `git merge-tree` in every
+combination that mattered — each branch tip against the `main` it was opened
+on, and against the `main` that existed by then — all four merge clean, zero
+conflict markers. `git merge origin/main` in each worktree confirmed it live:
+"Merge made by the 'ort' strategy", nothing to resolve.
+
+The cost this time was one wasted round trip. The failure mode it exposes is
+larger, because the natural response to the word "conflict" is to open the
+files and start reconciling them by hand — and here there was nothing to
+reconcile. Hand-editing files that never conflicted is one of the quieter ways
+a branch loses lines (§6.10 and the #467 doc revert are the same wound from a
+different angle), and it is unreviewable afterwards: the diff looks like work.
+
+There was a second half, and it is the part that actually misleads. After
+merging `main` in and pushing, GitHub **still** said `CONFLICTING` — because
+`main` had moved underneath the session (#516 merged at 05:26Z, mid-task). A
+second `CONFLICTING` after you have just resolved reads exactly like *your
+resolution failed*, which invites a second, more aggressive round of hand-
+editing. It was not a resolution failure at all. The question that answered it
+was ancestry:
+
+```
+git fetch origin
+git merge-base --is-ancestor origin/main <branch> && echo contains || echo behind
+```
+
+`behind`. The local merge had succeeded against a `main` that was already
+stale by the time it finished.
+
+**Do this:**
+
+- **Verify the conflict before resolving it.** `git merge-tree <base> <head>`
+  answers it in a second, writes nothing, and touches no working tree:
+
+  ```
+  git merge-tree origin/main <branch> | grep -c '^CONFLICT'
+  ```
+
+  Zero means the host is wrong, or stale, or answering about a base that has
+  since moved — and the fix is to merge and push, never to edit a file. A
+  forge's mergeability flag is a cached derived value about two moving
+  targets; git's own three-way merge is the authority, and it is local and
+  free. This is §1's rule about instruments: when the reading and the
+  mechanism disagree, doubt the reading first.
+
+- **Re-fetch immediately before you merge, and confirm by ancestry.** `main`
+  moves during long tasks — five PRs landed on it during this one. A merge
+  that succeeded is evidence about the base you had, not about the base that
+  exists now, so `git merge origin/main` printing success proves nothing
+  about whether the branch is current. `--is-ancestor` is the check that
+  cannot be fooled by a clean merge of the wrong thing. Same shape as
+  verifying a pull by comparing HEAD ids rather than reading git's chatter.
+
+- **A second identical failure after a fix is a prompt to re-diagnose, not to
+  push harder on the first theory.** The strongest signal available was that
+  the symptom did not move at all. An unchanged symptom usually means the
+  thing you changed was not the cause — and escalating the same remedy is how
+  a wrong theory gets expensive.
+
+- **"Clear the conflicts" does not authorise merging.** Clearing a conflict
+  and merging a pull request are two decisions, and only the first was asked
+  for; the merge came as a separate word from Dane afterwards. §6.6 says not
+  to spend an operator decision twice — the converse holds too: do not spend
+  one he has not made yet.
+
 ---
+
+### 6.14 A pull request opened without a claim is invisible to every other session
+
+On 2026-09-01 a hand-driven session was asked to finish ticket 86bbjve6q. It did
+what the rules say: read the ticket, found it **`Queued`, unassigned, with no loop
+note** — every signal a session can check said the work was free — and claimed it.
+One command later, while checking whether the Vercel variables still needed
+setting, it found them already there, **created eight minutes earlier**, a
+production deployment `Ready` seven minutes earlier, and **PR #517** open ten
+minutes earlier. Another session had been building the ticket the whole time and
+had never claimed it.
+
+This is the 2026-08-20 two-sessions-one-epic collision, reproduced exactly, five
+weeks after the rule written to prevent it. Note which guards did and did not
+fire. **Worktree separation did not help, and could not**: both threads were
+scrupulous about it, each in its own folder on its own branch. Separate folders
+stop two threads corrupting each other's *files*; they say nothing about two
+threads building the same *thing*.
+
+What surfaced it was the claim — made by the session that was **not** doing the
+work. That is the whole lesson, and it inverts the way the rule is usually read:
+
+- **The claim is not a lock you take for your own benefit. It is a signal you
+  emit for everyone else.** A session that skips it loses nothing itself and
+  removes the only evidence anyone else could have used.
+- **So the session that opens the pull request must be the session that claimed
+  the ticket.** Not "a claim happened at some point" — the actor that builds is
+  the actor that claims, because the claim is what makes that actor visible.
+- **Every signal reading "free" is not evidence of free.** Status, assignee and
+  loop note all agreed and all three were wrong together, because they are one
+  source: whatever last wrote to the ticket. Three consistent readings from one
+  unwritten source is one silence, not three confirmations.
+
+What actually caught it was an unrelated read of *external* state — Vercel — one
+step before a duplicate deploy. That is luck, not a control, and it should not be
+relied on again. Until something enforces this, the cheap habits are
+`npm run map` and the queue before starting an epic (THREAD-DISCIPLINE rule 4), and
+treating **any** ticket whose work you can see evidence of as claimed by somebody,
+whatever its status says.
+
+Related: the same night produced two more tickets whose status disagreed with
+reality — one `Queued` with an open PR, one `Queued` with a **merged** PR and its
+closing note already posted. `npm run reconcile` could report none of them, because
+`Queued` and `Rework` satisfy neither `isInFlight` nor `isTerminal` and so fall out
+of both of its scans (task 86bbt3wzk). Three instances in one evening of *the
+ticket does not know what happened to it* is a systems answer waiting to be built,
+not three slips.
+
+### 6.15 An abandoned branch's unique file is evidence of a rejected plan until proven otherwise
+
+Clearing out stale branches on 2026-09-01, one of eight held a file that existed
+nowhere else in the repository: `workers/youtube-media/fly.toml`, deploy
+configuration for the YouTube media worker, with a comment explaining that it
+existed so nobody would have to answer the `fly launch` wizard. The reasoning
+wrote itself — unique, unrecoverable if deleted, and the very next ticket in that
+epic was *deploy the worker*. The recommendation was nearly to ship it.
+
+It was configuration for **Fly.io, a rented datacenter host**, and `main`'s README
+for that same worker — rewritten fifty minutes earlier — opens like this:
+
+> **It runs on the Mac Mini.** Dane chose that over a rented server on 2026-08-24
+> (ticket `86bbjve6b`), and the reason is the address: YouTube blocks datacenter
+> IPs, which is the whole reason this work cannot live on Vercel in the first
+> place.
+
+The file was not orphaned treasure. It was a five-week-old artifact of **the plan
+that was rejected**, and shipping it would have put two contradictory deploy
+stories in one folder with the wrong one looking freshly committed — plus a second
+cost the README names, since a rented host needs a logged-in YouTube session stored
+on it.
+
+- **Uniqueness is not value.** "This exists nowhere else" and "this is wanted" are
+  different questions, and only the second one matters. A branch is usually
+  abandoned *because* its idea was dropped, so the unique files on it are the most
+  likely to encode the rejected approach, not the least.
+- **Find the decision before you value the artifact.** The answer took one look at
+  the README that the artifact's own subject already had in `main`. Check what the
+  current code says about the same subject before deciding an old file is a
+  survivor.
+- **Verify a branch by content, never by `git cherry`.** Squash-merging rewrites
+  commits, so patch-equivalence calls shipped work unshipped — six of the eight
+  branches looked like they held unshipped commits and every one was superseded.
+  Compare the files against `main` and count what is actually there: two of them
+  held test files with 8 and 6 cases where `main` had 16 and 19.
+
+The reason this is worth a rule rather than a shrug: the failure is asymmetric and
+silent in one direction. Deleting a wanted file announces itself the moment someone
+needs it, and the restore line is one command away. **Shipping an unwanted one
+announces nothing at all** — it lands looking current, and the next session reads
+it as the plan.
 
 ## 7. Operator-facing gotchas
 

@@ -8082,3 +8082,58 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ── Card Manager: the controls bar, grouped ──────────────────────────────
+   Task 86bbt52fa (2026-09-02). The bar was one flat row of six controls;
+   fifteen of them needed the Content / Structure / Frame grouping the rest of
+   the builder uses. These rules are HAND-WRITTEN and live here on purpose:
+   _builder-react.css is rewritten whole by `npm run extract:builder-css`
+   (CLAUDE.md, "committed but regenerated wholesale"). */
+
+.builder-react-root .bcm-controls-bar {
+  align-items: stretch;
+  gap: 12px;
+}
+
+.builder-react-root .bcm-group {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--bg-surface);
+}
+
+.builder-react-root .bcm-group-title {
+  padding: 0 4px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .bcm-group-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: flex-end;
+}
+
+/* A number and its unit read as one control, so they stay on one line. */
+.builder-react-root .bcm-num-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* A control that does nothing in the current layout is dimmed rather than
+   removed — a control that vanishes reads as a bug, and its title says which
+   layout brings it back. */
+.builder-react-root .bcm-control input:disabled,
+.builder-react-root .bcm-control select:disabled {
+  background: var(--bg-hover);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
