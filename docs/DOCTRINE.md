@@ -1282,6 +1282,10 @@ branch's addition but to **delete it** — the newer phases covered the same gro
 better, and its warning could not even fire in production. Resolving a conflict
 mechanically would have preserved dead weight.
 
+The converse costs more, because nothing announces it: a merge with **no**
+conflict is not evidence the two sides agree. §6.11 is that case — two branches
+contradicting each other's rules without sharing a line.
+
 ### 6.3 State results, not intentions
 
 `CLAUDE.md`'s definition of done is the standard: run the gates and report what
@@ -1536,6 +1540,9 @@ had been unparseable on `main` since it was committed
 (`scripts/import_messaging_tweets_csv.js`, a missing closing paren) — which is
 the same lesson from the other end: nothing had ever parsed it either.
 
+The same claim fails one level higher too, where the merged result parses
+perfectly and two files simply assert opposite rules: §6.11.
+
 ### 6.8 A fixture must be a shape the real source can produce, and the assertion must name the value
 
 **The incident (same ticket).** The test that pinned "a ticket waiting on a
@@ -1644,6 +1651,54 @@ The general shape, which is why this sits next to §6.6: work that lives outside
 version control has no changelog, no review, no test and no blast radius anyone
 can compute. That is acceptable for a one-off, and it is a debt that comes due
 the first time anything around it moves.
+
+### 6.11 A clean merge is not agreement — and a review verdict has a shelf life
+
+**The incident (2026-08-30, ticket 86bbmmv7t, PR #444, fixed in commit
+`80b5502b`).** The PR was reviewed green on 08-26 and sat in `Ready to launch`
+for four days waiting on Dane's merge word. When he gave it, the merge step
+refused: CI was red. Nothing on the branch had changed since the review.
+
+The branch had tightened what counts as a PR naming its ticket — a bare id
+(`ClickUp: 86bbm4zwd`) stopped counting, only a full `app.clickup.com/t/<id>`
+URL does (`scripts/builder/clickupTicketLink.js`). Meanwhile the WIP-cap work
+landed on `main` carrying `scripts/builder/wipCap.test.js`, whose drift test
+asserted the **old** rule: it fed a bare id to `prBodyCarriesTicket` and
+expected `true`.
+
+The two changes share no line and no file. `git merge` reported no conflict and
+`git merge-tree --write-tree` exited 0 with a clean tree. Both branches were
+green on their own. The contradiction was in the **rule**, not in the text, and
+it surfaced only when the catch-up merge put both in one tree: one failure out
+of 1,665, four days after a review had approved the branch.
+
+**This is the case with no conflict, which is why §6.2 and §6.7 do not reach
+it.** §6.2 says a conflict is information; §6.7 says merge `main` in before you
+rework so you receive that information early. Both assume git has something to
+report. Here it had nothing, so nothing prompted anyone to look. §6.7's closing
+line — *a clean merge is a claim about text, not about meaning* — was about
+whether the result still parses; this is the same claim failing one level up,
+where the result parses fine and two files now assert opposite rules.
+
+**Do this:**
+
+- **Treat a review verdict as certifying the code at that commit, not the
+  branch.** "Verified" has a shelf life. A branch approved days ago is
+  re-tested by its catch-up merge, not by the review that already happened —
+  and a branch waiting on a merge word is exactly the branch most likely to
+  have had the ground move under it.
+- **When a change tightens or loosens a rule other code asserts, go looking
+  for the tests of that behaviour before shipping.** `git grep` the function
+  name and a fixture string — not only the file you are editing. The test that
+  broke here was in a file the branch never touched, in a subsystem it had
+  nothing to do with.
+- **When a test disagrees with a new rule, do not simply flip the
+  expectation.** Assert the property the test was written to guard, then pin
+  the rule's current answer explicitly beside it, so the next drift fails
+  loudly instead of leaving the test vacuously passing. That is what
+  `80b5502b` did: the one-directional property (the cap may count more than
+  the gate lets through, never less) plus three pinned assertions naming the
+  ticket that set the rule.
 
 ---
 

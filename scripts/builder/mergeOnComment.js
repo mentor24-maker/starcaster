@@ -33,14 +33,43 @@ const { isRealOverlap, isSelfHealing, isPermanent, conflictActor, verdictCopy, c
 const MERGE_PHRASES = ['merge', 'merge it', 'ship it', 'approve'];
 
 /**
- * Normalize a comment for phrase matching: trim, lowercase, collapse runs of
- * whitespace (ClickUp turns a Reply box into "merge\n"), and drop trailing
- * sentence punctuation so "Merge!" is the same instruction as "merge".
+ * Strip the editor's own formatting off a command.
+ *
+ * ClickUp's message box turns a PASTED phrase into a fenced code block, and it
+ * guesses a language while it is at it — Dane's `resume auto-merging` was
+ * stored as "```cpp\nresume auto-merging\n```". Every command here is matched
+ * as a WHOLE message, so those backticks made his words unreadable and the
+ * auto-merge lane stayed latched off for two days while he typed the right
+ * thing three times (2026-09-01, task 86bbt038u).
+ *
+ * The wrapper is the editor talking, not him. Removing it before matching is
+ * what keeps whole-message strictness honest: without this, "strict" quietly
+ * means "strict about things the operator cannot control".
+ *
+ * Only the code-block SYNTAX goes. Nothing inside is touched, so prose that
+ * merely mentions a command is still prose, and the caller still requires the
+ * whole remaining string to equal a phrase.
+ */
+function stripCodeFormatting(text) {
+  return String(text || '')
+    // A fenced block: ```lang\n ... \n``` — the opening fence may carry a
+    // language tag ClickUp inferred, which is never part of the instruction.
+    .replace(/^[ \t]*```[^\n`]*\n?/gm, '')
+    .replace(/^[ \t]*```[ \t]*$/gm, '')
+    // Inline backticks: `merge` is the same instruction as merge.
+    .replace(/`/g, '');
+}
+
+/**
+ * Normalize a comment for phrase matching: strip code formatting the editor
+ * added (see above), trim, lowercase, collapse runs of whitespace (ClickUp
+ * turns a Reply box into "merge\n"), and drop trailing sentence punctuation so
+ * "Merge!" is the same instruction as "merge".
  * Nothing here makes the match a substring match — the whole remaining
  * string must equal a phrase.
  */
 function normalizeCommand(text) {
-  return String(text || '')
+  return stripCodeFormatting(text)
     .trim()
     .toLowerCase()
     .replace(/\s+/g, ' ')
