@@ -1,3 +1,23 @@
+## 2026-08-24 — The machine that fetches YouTube video files (#419)
+
+Getting a video's title and captions is easy and happens on the website itself.
+Actually downloading the video and audio files is not: the service the website
+runs on cannot write files, gives up after a few seconds, and gets blocked by
+YouTube for being a data centre. So that job belongs on a small always-on
+machine of our own.
+
+This is that machine's program. You hand it a link, it answers straight away
+with a ticket number, and it goes off and does the work — because the website
+that asked is switched off within seconds of asking, so waiting for an answer
+would never work.
+
+It will not start at all without a password set, and it refuses any request
+that does not carry it. That matters more than usual here: this thing downloads
+whatever link it is given, so an unprotected one is a stranger's free video
+factory running on our bill.
+
+Not switched on anywhere yet, and it cannot be until you have chosen where it
+should live — there is a question waiting for you on the ticket. (#PR)
 ## 2026-09-01 — A pull request is now named after its ticket, word for word (#514)
 
 Dane pairs up two lists to see what shipped and when: the Closed column in
