@@ -1,3 +1,28 @@
+## 2026-09-01 — The pipeline's cleanup told the truth, then described itself wrongly (#513)
+
+When Dane takes the deck to work on something urgent, the pipeline pauses, and
+handing it back runs a cleanup pass over any ticket whose helper died mid-job.
+That cleanup was already making the right call. A ticket whose *build* died goes
+back into the queue to be built again. A ticket whose *reviewer* died stays
+exactly where it is, because its work is finished and waiting to be checked —
+sending it back to the queue would throw away a completed job and have somebody
+build it a second time.
+
+What went wrong was the sentence printed underneath. It said "1 stranded ticket
+returned to the queue" about a ticket it had just correctly left alone, one line
+after saying so. Whoever read that would go looking for the ticket in a list it
+was never in. The cause was small: the cleanup kept only a list of ticket
+numbers, so by the time it wrote its summary it had forgotten which ones it had
+moved and which it had left, and it guessed the same answer for all of them.
+
+It now remembers what it did to each ticket and says so one by one. The status
+report had the same fault in its explanation of *why* a ticket is stuck — it
+gave the reason that fits a dead build to every ticket, including ones whose
+position is perfectly correct and whose only problem is a stale note saying
+somebody is already looking at them. Each now gets the reason that actually
+applies to it. Nothing about where a ticket ends up changed; only what the tool
+says about it.
+
 ## 2026-08-31 — A branch that was fine no longer gets filed as broken work (#487)
 
 When Dane says "merge" on a finished ticket, the relay checks with GitHub first.
