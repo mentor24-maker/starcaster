@@ -1286,6 +1286,10 @@ The converse costs more, because nothing announces it: a merge with **no**
 conflict is not evidence the two sides agree. §6.11 is that case — two branches
 contradicting each other's rules without sharing a line.
 
+And before any of that: **confirm the conflict is real.** A forge can report
+one that git cannot reproduce, and the word alone is enough to start somebody
+editing files that never conflicted — §6.13.
+
 ### 6.3 State results, not intentions
 
 `CLAUDE.md`'s definition of done is the standard: run the gates and report what
@@ -1541,7 +1545,8 @@ had been unparseable on `main` since it was committed
 the same lesson from the other end: nothing had ever parsed it either.
 
 The same claim fails one level higher too, where the merged result parses
-perfectly and two files simply assert opposite rules: §6.11.
+perfectly and two files simply assert opposite rules: §6.11. And one level
+lower, where the conflict being reworked around was never there at all: §6.13.
 
 ### 6.8 A fixture must be a shape the real source can produce, and the assertion must name the value
 
@@ -1773,6 +1778,75 @@ captured from the surface the code actually reads.
   nothing on the passes that followed. That is why two days passed. A brake
   that cannot say why it engaged is one nobody can safely release; a brake that
   says so once and then goes quiet is indistinguishable from a quiet week.
+
+### 6.13 A reported conflict is a claim to verify, not an instruction to start editing
+
+**The incident (2026-09-02, ticket 86bbt4dkr).** Dane asked for the conflicts
+on PRs #513 and #494 to be cleared. Both read `CONFLICTING / DIRTY` on GitHub.
+**Neither had a conflict.** Checked afterwards with `git merge-tree` in every
+combination that mattered — each branch tip against the `main` it was opened
+on, and against the `main` that existed by then — all four merge clean, zero
+conflict markers. `git merge origin/main` in each worktree confirmed it live:
+"Merge made by the 'ort' strategy", nothing to resolve.
+
+The cost this time was one wasted round trip. The failure mode it exposes is
+larger, because the natural response to the word "conflict" is to open the
+files and start reconciling them by hand — and here there was nothing to
+reconcile. Hand-editing files that never conflicted is one of the quieter ways
+a branch loses lines (§6.10 and the #467 doc revert are the same wound from a
+different angle), and it is unreviewable afterwards: the diff looks like work.
+
+There was a second half, and it is the part that actually misleads. After
+merging `main` in and pushing, GitHub **still** said `CONFLICTING` — because
+`main` had moved underneath the session (#516 merged at 05:26Z, mid-task). A
+second `CONFLICTING` after you have just resolved reads exactly like *your
+resolution failed*, which invites a second, more aggressive round of hand-
+editing. It was not a resolution failure at all. The question that answered it
+was ancestry:
+
+```
+git fetch origin
+git merge-base --is-ancestor origin/main <branch> && echo contains || echo behind
+```
+
+`behind`. The local merge had succeeded against a `main` that was already
+stale by the time it finished.
+
+**Do this:**
+
+- **Verify the conflict before resolving it.** `git merge-tree <base> <head>`
+  answers it in a second, writes nothing, and touches no working tree:
+
+  ```
+  git merge-tree origin/main <branch> | grep -c '^CONFLICT'
+  ```
+
+  Zero means the host is wrong, or stale, or answering about a base that has
+  since moved — and the fix is to merge and push, never to edit a file. A
+  forge's mergeability flag is a cached derived value about two moving
+  targets; git's own three-way merge is the authority, and it is local and
+  free. This is §1's rule about instruments: when the reading and the
+  mechanism disagree, doubt the reading first.
+
+- **Re-fetch immediately before you merge, and confirm by ancestry.** `main`
+  moves during long tasks — five PRs landed on it during this one. A merge
+  that succeeded is evidence about the base you had, not about the base that
+  exists now, so `git merge origin/main` printing success proves nothing
+  about whether the branch is current. `--is-ancestor` is the check that
+  cannot be fooled by a clean merge of the wrong thing. Same shape as
+  verifying a pull by comparing HEAD ids rather than reading git's chatter.
+
+- **A second identical failure after a fix is a prompt to re-diagnose, not to
+  push harder on the first theory.** The strongest signal available was that
+  the symptom did not move at all. An unchanged symptom usually means the
+  thing you changed was not the cause — and escalating the same remedy is how
+  a wrong theory gets expensive.
+
+- **"Clear the conflicts" does not authorise merging.** Clearing a conflict
+  and merging a pull request are two decisions, and only the first was asked
+  for; the merge came as a separate word from Dane afterwards. §6.6 says not
+  to spend an operator decision twice — the converse holds too: do not spend
+  one he has not made yet.
 
 ---
 
