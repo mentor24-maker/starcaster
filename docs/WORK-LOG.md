@@ -37,6 +37,81 @@ hands this needs is not known, and points at the command that does know, rather
 than naming you by default.
 
 You can ask it yourself any time with `npm run stale-ready`.
+## 2026-08-24 — The machine that fetches YouTube video files (#419)
+
+Getting a video's title and captions is easy and happens on the website itself.
+Actually downloading the video and audio files is not: the service the website
+runs on cannot write files, gives up after a few seconds, and gets blocked by
+YouTube for being a data centre. So that job belongs on a small always-on
+machine of our own.
+
+This is that machine's program. You hand it a link, it answers straight away
+with a ticket number, and it goes off and does the work — because the website
+that asked is switched off within seconds of asking, so waiting for an answer
+would never work.
+
+It will not start at all without a password set, and it refuses any request
+that does not carry it. That matters more than usual here: this thing downloads
+whatever link it is given, so an unprotected one is a stranger's free video
+factory running on our bill.
+
+Not switched on anywhere yet, and it cannot be until you have chosen where it
+should live — there is a question waiting for you on the ticket. (#PR)
+## 2026-09-01 — A pull request is now named after its ticket, word for word (#514)
+
+Dane pairs up two lists to see what shipped and when: the Closed column in
+ClickUp, and the deploy list in GitHub and Vercel. He matches them by name. That
+only works while a piece of work is called the same thing in both places, and
+nothing in the system said it had to be — the ship command named the pull request
+after whatever the last commit message on the branch happened to say, and the
+build loop simply made a name up.
+
+Checked against the ten most recently merged pull requests on 31 August, two of
+them did not match their ticket. One was off by a single word ("drifts" where the
+ticket said "scrolls"), which is the worst kind, because it reads as a match
+until you look at it twice.
+
+Now the pull request takes the ClickUp task name exactly. The branch already
+knows which ticket it belongs to — that is stamped on when the thread is created
+— so nothing has to be remembered or typed. GitHub still adds its "(#514)" on the
+end, which is expected.
+
+Three things can go wrong, and each of them says so out loud rather than quietly
+doing something else: the branch has no ticket attached (perfectly normal, and it
+falls back to the commit message), ClickUp cannot be reached, or ClickUp answers
+with a blank. In every case it explains which happened and prints the one command
+that renames the pull request by hand. None of them stops the work shipping — a
+ClickUp outage is not a reason to strand a finished branch. The silence is the
+point: if a fallback said nothing, "the name came from the ticket" and "the lookup
+failed and nobody noticed" would look identical, which is exactly how this rule
+would get lost again.
+## 2026-09-01 — Two changes that never touched each other still broke the build (#503)
+
+A piece of work was checked over, approved, and then sat for four days waiting
+for Dane to say the word that puts it live. Nobody touched it in that time. When
+he said the word, the automatic safety checks refused it — the work had gone from
+fine to broken while sitting perfectly still.
+
+What happened is that another job finished and went live during those four days.
+The two pieces of work did not overlap: not one shared file, not one shared line.
+The usual warning a machine gives you — "these two edits collide, decide which
+one wins" — never fired, because there was nothing to collide about. What
+collided was the *rule*. The waiting work had tightened a rule about how a job
+ticket must be named; the other work had shipped a test that still expected the
+old, looser rule. Each was correct on its own. Put them in the same place and one
+of them has to be wrong.
+
+Nothing in the written rules of this project covered that. The two entries that
+come closest both start from "when the machine warns you about a clash, listen to
+it" — and here the machine had nothing to warn about. So this adds a new entry
+that starts from the opposite end: a quiet merge is not proof the two sides
+agree. It also writes down the thing that made the four days matter — being
+signed off is not a permanent condition. It says something was true about the
+work on the day it was read, and the ground can move underneath it afterwards.
+The practical habits that follow are: when you change a rule, go hunting for
+anywhere else that already relies on it; and when an old test argues with a new
+rule, don't just change the test's answer — make it say plainly which rule it is
+now guarding, so the next time the two drift apart somebody hears about it.
 
 ## 2026-08-31 — A branch that was fine no longer gets filed as broken work (#487)
 
