@@ -1,3 +1,38 @@
+## 2026-09-02 — The two stuck pull requests were never actually stuck (#513, #494)
+
+You asked to clear the conflicts on two pull requests. GitHub was flagging both
+of them red, with the word "conflicting" — which normally means two people
+changed the same lines and somebody has to decide which version wins.
+
+Neither one had a conflict. Not a small one, not a resolvable one: none. The
+check that settles it takes about a second and does not touch any files, and
+run every way it could be run — each branch against the version of the site it
+was started from, and against the version that existed by then — all four came
+back clean.
+
+Why that matters more than it sounds: the obvious thing to do when a tool says
+"conflict" is to open the files and start merging them by hand. If there was
+never a conflict, that hand-editing is pure risk. It looks like work
+afterwards, so nobody questions it, and it is one of the ways a branch quietly
+loses lines that were supposed to be in it — which has already happened here
+once, when a stale branch deleted 146 lines of the rules file on its way in.
+
+There was a second trap, and it is the one that would have caused real damage.
+After bringing both branches up to date and pushing, GitHub *still* said
+conflicting. That reads exactly like "your fix did not work" — and the natural
+response is to go back in and cut harder. It was not that at all: the site's
+main copy had moved underneath the work while it was happening. Another change
+had merged a few minutes earlier, so the branches were brought level with a
+version that was already out of date by the time they got there. Fetching again
+and checking a different way — not "did the merge command succeed" but "does
+this branch actually contain the current main" — gave a straight answer
+immediately.
+
+Both are now merged and live. The lasting change is a written rule: when a tool
+reports a conflict, confirm it locally before editing anything, and confirm a
+branch is current by what it contains rather than by a command reporting
+success. A green message from a command only tells you about the moment it ran.
+
 ## 2026-09-01 — A ticket waiting on a red build no longer tells you it is waiting on you (#494)
 
 One of the weekly-report tickets sat in the "Ready to launch" column for six
