@@ -451,3 +451,144 @@ test('an age reads as an age, not as "open ... ago"', () => {
   assert.match(out, /opened 8d 0h ago/);
   assert.doesNotMatch(out, /open 8d 0h ago/);
 });
+
+// ---------------------------------------------------------------------------
+// The 24-hour blind spot, and why it is NOT closed with a recency alarm
+// (2026-09-02, task 86bbtmbwe).
+//
+// The premise held: `verdict` returns MOVING on `closedLast24h > 0`, so a
+// stall shorter than the window is invisible. The proposed fix — call it a
+// stall when nothing has closed for N hours — did not survive measurement.
+// 189 closures over the fortnight to 2026-09-02 gave a p90 gap of 3.4h and a
+// p95 of 10.2h, and the overnight gap this ticket was opened about was 7.2h:
+// shorter than eleven other gaps in the same fortnight. A threshold low enough
+// to catch it fires on most nights.
+// ---------------------------------------------------------------------------
+
+test('MOVING answers the question the tool actually asks', () => {
+  // "35 tickets reached Live" is true and is not an answer to "is the queue
+  // getting shorter?". On 2026-09-02 it read as an all-clear while open work
+  // had gone 40 -> 56 in a week.
+  const v = lt.verdict({
+    closedLast24h: 33,
+    queue: { openWork: 56, queued: 52, inFlight: 4 },
+    trend: { first: 40, last: 56, delta: 16, days: 7 },
+  });
+  assert.strictEqual(v.state, 'MOVING', 'a growing backlog is not a fault — the verdict does not change');
+  assert.match(v.why, /33 ticket\(s\) reached Live/);
+  assert.match(v.why, /40 → 56 over 7 days \(up 16\)/);
+});
+
+test('MOVING says so when the backlog fell, too', () => {
+  const v = lt.verdict({
+    closedLast24h: 12, queue: { openWork: 20, queued: 18, inFlight: 2 },
+    trend: { first: 34, last: 20, delta: -14, days: 7 },
+  });
+  assert.match(v.why, /34 → 20 over 7 days \(down 14\)/);
+});
+
+test('a long quiet spell is MENTIONED and never becomes a verdict', () => {
+  // The night of 2026-09-01, replayed: 35 closed in the window, last one 7.2
+  // hours ago, 48 queued. A recency alarm would call this STALLED. It must not
+  // — by the measured distribution that night was around the 93rd percentile
+  // and unremarkable.
+  const v = lt.verdict({
+    closedLast24h: 35,
+    queue: { openWork: 55, queued: 48, inFlight: 7 },
+    lastClose: { at: 0, ms: 7.2 * HOUR },
+    trend: { first: 40, last: 55, delta: 15, days: 7 },
+  });
+  assert.strictEqual(v.state, 'MOVING', 'a 7.2h gap is an ordinary night here, not a stall');
+  assert.strictEqual(v.exitCode, 0, 'and it must not post to the bus');
+  assert.match(v.why, /Nothing has closed for 7\.2 hours/, 'but the reader is told');
+});
+
+test('a short quiet spell is not worth mentioning', () => {
+  const v = lt.verdict({
+    closedLast24h: 5, queue: { openWork: 10, queued: 8, inFlight: 2 },
+    lastClose: { at: 0, ms: 20 * 60 * 1000 },
+  });
+  assert.ok(!/Nothing has closed/.test(v.why),
+    'three quarters of real gaps are under an hour; saying so every run is noise');
+});
+
+test('the 24h window is still what decides MOVING — the blind spot is documented, not papered over', () => {
+  // Deliberate. Nothing here turns a quiet spell into a stall, and a future
+  // reader who wants to must read the measurement first.
+  const v = lt.verdict({
+    closedLast24h: 1,
+    queue: { openWork: 55, queued: 48, inFlight: 7 },
+    lastClose: { at: 0, ms: 23 * HOUR },
+  });
+  assert.strictEqual(v.state, 'MOVING');
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', '..', 'lib', 'loopThroughput.js'), 'utf8');
+  assert.match(src, /p90\s+3\.38h/, 'the measured distribution is recorded next to the decision');
+  assert.match(src, /would have fired on roughly eleven of the last fourteen nights/,
+    'and the reason a recency threshold was rejected');
+});
+
+test('"nothing has ever closed" is not "closed a very long time ago"', () => {
+  const NOW = Date.parse('2026-09-02T15:00:00.000Z');
+  assert.strictEqual(lt.sinceLastClose({ tasks: [], now: NOW }), null);
+  assert.strictEqual(lt.sinceLastClose({ tasks: [{ id: 'a' }], now: NOW }), null);
+  const r = lt.sinceLastClose({ tasks: [
+    { id: 'a', date_closed: String(NOW - 3 * HOUR) },
+    { id: 'b', date_closed: String(NOW - 1 * HOUR) },
+    { id: 'c', date_closed: '' },
+  ], now: NOW });
+  assert.strictEqual(r.ms, 1 * HOUR, 'the most recent closure wins');
+});
+
+test('a closure dated in the future is ignored rather than producing a negative age', () => {
+  const NOW = Date.parse('2026-09-02T15:00:00.000Z');
+  const r = lt.sinceLastClose({ tasks: [
+    { id: 'a', date_closed: String(NOW + DAY) },
+    { id: 'b', date_closed: String(NOW - 2 * HOUR) },
+  ], now: NOW });
+  assert.strictEqual(r.ms, 2 * HOUR);
+});
+
+test('the trend cannot go quiet on a rising backlog, which is what plateau does', () => {
+  // The bug that prompted it: depthPlateau anchors on TODAY, so 55 -> 55 -> 56
+  // reports a run of one day and the caller prints nothing — silence on the
+  // worse of the two cases.
+  const rising = [{ date: 'd1', open: 55 }, { date: 'd2', open: 55 }, { date: 'd3', open: 56 }];
+  assert.strictEqual(lt.depthPlateau(rising).days, 1, 'plateau still says almost nothing here');
+  const t = lt.depthTrend(rising);
+  assert.deepStrictEqual([t.first, t.last, t.delta, t.days], [55, 56, 1, 3]);
+});
+
+test('the trend needs two points to mean anything', () => {
+  assert.strictEqual(lt.depthTrend([]), null);
+  assert.strictEqual(lt.depthTrend([{ date: 'd1', open: 5 }]), null);
+  assert.strictEqual(lt.depthTrend(null), null);
+});
+
+test('a duration is said in the unit the reader thinks in', () => {
+  assert.strictEqual(lt.hoursText(7.2 * HOUR), '7.2 hours');
+  assert.strictEqual(lt.hoursText(20 * 60 * 1000), '20 minutes');
+  assert.strictEqual(lt.hoursText(-1), 'an unknown time');
+  assert.strictEqual(lt.hoursText('x'), 'an unknown time');
+});
+
+test('IDLE and STALLED are untouched by any of this', () => {
+  const idle = lt.verdict({ closedLast24h: 0, queue: { openWork: 0, queued: 0, inFlight: 0 }, lastClose: { at: 0, ms: 40 * HOUR } });
+  assert.strictEqual(idle.state, 'IDLE');
+  assert.strictEqual(idle.exitCode, 0);
+  const stalled = lt.verdict({ closedLast24h: 0, queue: { openWork: 12, queued: 10, inFlight: 2 }, loopsFiring: true });
+  assert.strictEqual(stalled.state, 'STALLED');
+  assert.strictEqual(stalled.exitCode, 1);
+  const unknown = lt.verdict({ unreadable: 'ClickUp said 429' });
+  assert.strictEqual(unknown.state, 'UNKNOWN');
+  assert.strictEqual(unknown.exitCode, 2);
+});
+
+test('the caller reports the last closure and the trend, or none of this is visible', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const code = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8');
+  assert.match(code, /throughput\.sinceLastClose\(\{ tasks, now: NOW \}\)/);
+  assert.match(code, /throughput\.depthTrend\(curve\)/);
+  assert.match(code, /verdict\(\{ closedLast24h, queue, loopsFiring, trend, lastClose \}\)/,
+    'both must reach the verdict, or the fix is inert in the thing that runs');
+});

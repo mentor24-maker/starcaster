@@ -50,7 +50,7 @@
 
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { writeFileSync, existsSync } from 'node:fs';
+import { writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -70,6 +70,7 @@ import branchCatchUp from './builder/branchCatchUp.js';
 import reviewGate from './builder/reviewGate.js';
 import conflictWork from './builder/conflictWork.js';
 import wipCap from './builder/wipCap.js';
+import passClaim from './builder/passClaim.js';
 import loopStatuses from './builder/loopStatuses.js';
 import autoMergeLane from './builder/autoMergeLane.js';
 import autoMergeLedgerFile from './builder/autoMergeLedgerFile.js';
@@ -354,10 +355,19 @@ function usage(code = 2) {
   console.error('  task-name --task <id>                      JUST the task name, on stdout, nothing else — for scripts that title');
   console.error('                                             a pull request from it (`npm run ship`). Everything else goes to stderr.');
   console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
-  console.error('  claim --task <id>                          THE build claim: reads the ticket\'s own status, refuses (exit 3) if it is');
+  console.error('  claim --task <id> [--pass <skill>]         THE build claim: reads the ticket\'s own status, refuses (exit 3) if it is');
   console.error('                                             not one loop-build may take, else moves it to Building guarded on that');
   console.error('                                             exact status. Removes the step of remembering which of Rework/Queued it');
   console.error('                                             was in — guarding on the wrong one refuses every send-back.');
+  console.error('                                             --pass <skill> also drops a claim marker beside .git, so the NEXT pass');
+  console.error('                                             of that skill hands the ticket back if this one dies. Opt-in on purpose:');
+  console.error('                                             a hand-driven session claims with this same command, and a marker from');
+  console.error('                                             one would let a loop reclaim a ticket a person is building.');
+  console.error('  pass-reconcile                             the FIRST thing a loop-build pass runs: if the previous pass left a');
+  console.error('                                             claim marker and its ticket is still "Building", hand it back (Rework');
+  console.error('                                             if a PR is open, else Queued) and clear the marker.');
+  console.error('                                             exit 0 = nothing to do, 1 = a hand-back failed, 2 = could not tell');
+  console.error('                                             (never 0), 3 = a hand-back was performed.');
   console.error('  migrate-rework [--apply] [--list <id>]     one-off: move tickets that are Queued WITH AN OPEN PR into Rework.');
   console.error('                                             Dry run unless --apply. Run it AFTER the claim rule is live on main —');
   console.error('                                             a Rework ticket is claimed by nothing until then.');
@@ -612,8 +622,20 @@ function capProbe({ repo } = {}) {
       if (!Array.isArray(listed.tasks) || !listed.tasks.length) {
         throw new Error(listed.failed || 'no tasks came back');
       }
+      // The RECORD, not just the status — `date_updated` and the loop note are
+      // what let the cap tell a build in progress from a build whose pass
+      // died. They come off the tasks already fetched here, so this costs no
+      // extra call, and it is the SAME map rather than a parallel one: two
+      // inputs built at one call site is how the 2026-08-31 disagreement
+      // happened (see probeCap).
       const byId = Object.create(null);
-      for (const t of listed.tasks) byId[String(t.id)] = t.status?.status ?? '';
+      for (const t of listed.tasks) {
+        byId[String(t.id)] = {
+          status: t.status?.status ?? '',
+          dateUpdated: Number(t.date_updated),
+          loopNote: loopNoteOf(t),
+        };
+      }
       return byId;
     },
   });
@@ -951,7 +973,10 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
 
   const pr = decision.pr;
   const repo = `${pr.owner}/${pr.repo}`;
-  const fields = 'number,state,isDraft,mergeable,mergeStateStatus,headRefName,title,url,statusCheckRollup';
+  // `reviewDecision` is here so a BLOCKED merge can name the rule that is
+  // unmet instead of guessing at one (task 86bbrg9v0). Without it the gate
+  // still answers, but it answers CANNOT TELL.
+  const fields = 'number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,title,url,statusCheckRollup';
   const view = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
   if (!view.ok) {
     // A read that failed is not a red PR — it is a PR nobody checked. Say so
@@ -1629,6 +1654,55 @@ let cmd = process.argv[2];
 // It refuses (exit 3) on any status loop-build may not claim, which is the
 // normal "someone got there first" code, and it deliberately does NOT reach
 // into `Building` or `In review` to "help".
+/**
+ * Where this checkout's claim marker lives. Asked of git rather than assumed,
+ * because the claim happens in the main checkout and the hand-off happens
+ * inside the pass's worktree, where plain `.git` is a FILE pointing elsewhere.
+ * A path that resolved differently in those two places would write one marker
+ * and clear another.
+ */
+function passMarkerPath() {
+  try {
+    const r = spawnSync('git', ['rev-parse', '--git-common-dir'], { encoding: 'utf8' });
+    const out = r.status === 0 ? String(r.stdout || '').trim() : '';
+    return passClaim.markerPath(out || '.git');
+  } catch {
+    return passClaim.markerPath('.git');
+  }
+}
+
+/** Written BEFORE the status write, never after: a session that dies in
+ *  between must leave a marker naming the ticket it was about to take, which
+ *  is exactly the 2:06am case (86bbr2jpq). A marker for a claim that then
+ *  failed is harmless — the reconcile sees a ticket that is not "Building"
+ *  and clears it. */
+function writePassMarker(task, skill) {
+  const file = passMarkerPath();
+  try {
+    writeFileSync(file, `${JSON.stringify(passClaim.claimRecord({ task, skill, pid: process.pid }), null, 2)}\n`);
+    console.error(`  (pass marker written for ${task} — the next ${skill} pass will hand it back if this one does not finish)`);
+  } catch (err) {
+    // NOT fatal, and said out loud. The claim itself is what matters; losing
+    // the safety net is worth a line, not a refusal to work.
+    console.error(`  (WARNING: the pass marker could not be written — ${err?.message || err}. If this pass dies, its ticket will strand.)`);
+  }
+}
+
+/** Cleared whenever the marked ticket leaves "Building" by a verified write —
+ *  the hand-off to review, a `ship`, or an abandon. A completed pass leaves
+ *  nothing behind. */
+function clearPassMarkerFor(task, newStatus) {
+  if (String(newStatus || '').trim().toLowerCase() === 'building') return;
+  const file = passMarkerPath();
+  const m = passClaim.readMarker(file);
+  if (!m.found || !m.record) return;
+  if (String(m.record.task) !== String(task)) return;
+  try {
+    unlinkSync(file);
+    console.error(`  (pass marker cleared — ${task} was handed on)`);
+  } catch { /* the next reconcile sees the ticket has moved and clears it */ }
+}
+
 if (cmd === 'claim') {
   const task = arg('task');
   if (!task) {
@@ -1658,6 +1732,13 @@ if (cmd === 'claim') {
     '--status', loopStatuses.DISPLAY[loopStatuses.BUILDING],
     '--if-status', now,
   ];
+  // OPT-IN, and that is the safety argument. A hand-driven fast-track session
+  // claims with this same command; if every claim wrote a marker, a later loop
+  // pass would hand a ticket back out from under a person who is building it.
+  // Only the loop skill passes --pass.
+  const passSkill = arg('pass');
+  if (passSkill) writePassMarker(task, passSkill);
+
   console.error(`claiming ${task} out of "${now}" (guarded on that exact status)`);
   cmd = 'status';
 }
@@ -1748,6 +1829,89 @@ if (cmd === 'whoami') {
   if (!out.res.ok) die('send chat message', out);
   console.log(`\nPosted to channel ${channel}. Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
   reportLimits(out.res);
+
+} else if (cmd === 'pass-reconcile') {
+  // THE FIRST THING A LOOP-BUILD PASS DOES (2026-09-02, task 86bbtmbpc).
+  //
+  // A pass that claims a ticket and then ends without handing it on leaves it
+  // in "Building", which no loop claims from — so it is not slow, it is
+  // invisible, forever. Two happened on the night of 2026-09-01: one pass ran
+  // to completion promising to "come back" when CI settled (a one-shot session
+  // cannot), and one was killed by a usage limit two minutes after claiming.
+  //
+  // The second is why this runs HERE rather than at the end of a pass.
+  // Nothing in a killed session runs again. The next pass is the cheapest
+  // thing guaranteed to run afterwards, and a fresh session is exactly what
+  // survives the previous one being killed.
+  const file = passMarkerPath();
+  const marker = passClaim.readMarker(file);
+
+  let status = '';
+  if (marker.found && marker.record) {
+    const seen = await call('GET', `/api/v2/task/${marker.record.task}`);
+    // An unreadable status is NOT a hand-back. Moving a ticket on a reading we
+    // did not take is how a live build gets yanked out from under a pass that
+    // is genuinely running.
+    if (seen.res.ok) status = seen.json.status?.status ?? '';
+  }
+
+  const decision = passClaim.reconcileDecision({ marker, status });
+  let ok = true;
+  let destination = '';
+
+  if (decision.action === 'handback') {
+    // WHERE it goes is `strandedBuildDestination`'s call, and the note is
+    // `sweptTicketNote`'s — the same two the pause sweep uses. Three places now
+    // hand a dead build back (the sweep, the cap's advice, and this); a third
+    // definition of where one belongs would drift from the other two.
+    // Asked the SAME way `build-start` asks it, through the same module: the
+    // reconcile and the next build pass must not disagree about whether work
+    // already exists, or one hands the ticket to Queued while the other finds
+    // an open PR on it.
+    const lookupPr = (pr) => {
+      const out = spawnSync('gh', buildStart.prLookupArgs(pr), { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      if (out.status !== 0) return null; // could not tell — NOT "no PR"
+      try { return JSON.parse(out.stdout); } catch { return null; }
+    };
+    const cmts = await call('GET', `/api/v2/task/${decision.task}/comment`);
+    const dest = cmts.res.ok
+      ? buildStart.resolveBuildStart(cmts.json.comments || [], { lookupPr })
+      : { action: 'unknown' };
+    const plan = pipelinePause.strandedBuildDestination(dest.action);
+    destination = plan.status;
+    const note = await call('POST', `/api/v2/task/${decision.task}/comment`, {
+      comment_text: pipelinePause.sweptTicketNote({
+        at: new Date().toISOString(),
+        by: `the next ${marker.record.skill || 'loop'} pass`,
+        kind: 'a build',
+        destination: plan.status,
+        why: plan.why,
+        command: 'npm run clickup -- pass-reconcile',
+      }),
+      notify_all: false,
+    });
+    if (!note.res.ok) {
+      console.error(`  ${decision.task}: could not write the hand-back note — LEAVING it where it is rather than moving it silently.`);
+      ok = false;
+    } else {
+      const move = await call('PUT', `/api/v2/task/${decision.task}`, { status: plan.status, assignees: { add: [], rem: [] } });
+      const landed = String(move.json?.status?.status || '').toLowerCase() === plan.status.toLowerCase();
+      if (!move.res.ok || !landed) {
+        console.error(`  ${decision.task}: the note landed but the move to ${plan.status} did NOT — it is still stranded.`);
+        ok = false;
+      }
+    }
+  }
+
+  // The marker is removed for every outcome that RESOLVED it, and kept for
+  // every outcome that did not — so a failure is retried next pass instead of
+  // being forgotten, and an unreadable marker stays for a person to look at.
+  if (decision.action === 'resolved' || (decision.action === 'handback' && ok)) {
+    try { unlinkSync(file); } catch { /* it will read as resolved next pass */ }
+  }
+
+  console.log(passClaim.reconcileMessage(decision, { destination }));
+  process.exit(passClaim.reconcileExitCode({ action: decision.action, ok }));
 
 } else if (cmd === 'wip-check') {
   // Is the merge side already full? Exit codes mirror `node:owns`:
@@ -1895,7 +2059,12 @@ if (cmd === 'whoami') {
   if (note) console.error(`  (${note})`);
   for (const x of excluded) console.error(`  (not claimable: ${x.id} — ${x.why})`);
 
-  const decision = loopInterval.decideInterval({ depth, state, fallbackSeconds });
+  // The note goes INTO the decision, not merely alongside it. Printing the
+  // truth two lines above a summary that contradicts it is what happened on
+  // 2026-09-02: three accurate lines said the cap was full, and the last line
+  // — the one prefixed `interval:` — said "nothing to do" under 48 queued
+  // tickets. The last line is the one that gets read.
+  const decision = loopInterval.decideInterval({ depth, state, fallbackSeconds, blockedNote: note });
   if (res) reportLimits(res);
   answer(decision);
 
@@ -2315,6 +2484,10 @@ if (cmd === 'whoami') {
     }
   }
   console.log(`Task ${task}: "${was}" -> "${now}", assigned: ${assigneeNames(t)} (verified from the write response).`);
+  // AFTER the read-back, never before: the marker is the record that this
+  // ticket still needs handing on, and clearing it on a write that did not
+  // stick would throw away the safety net and the ticket together.
+  clearPassMarkerFor(task, now);
   reportLimits(out.res);
 
 } else if (cmd === 'priority') {
