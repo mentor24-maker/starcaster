@@ -301,6 +301,37 @@ The tell is a condition that stops short of the value it is deciding about:
 a real run, and never asks the one question it is answering — *is there anything
 to resolve?* Closing it is task 86bbq80j5.
 
+### 2.7 Every time quoted to the operator is Mountain time — never UTC
+
+Dane works in **Mountain time (`America/Denver` — MDT in summer, MST in
+winter)**. So does everything he reads: the Mac Mini's clock, the loop logs
+under `~/loop-logs/`, the launchd logs, and every ClickUp Loop note. GitHub and
+the ClickUp API do not — they hand back UTC, with a trailing `Z`.
+
+On 2026-09-01 a report to him quoted `mergedAt=2026-09-01T17:21:59Z` in the
+same breath as a Mini-log line reading `10:37`, and he had to ask which clock
+was which. He had asked before. His words that morning: *"You are back to
+using UTC as a basis. It is now 11:12 AM my time. Please make note of this in
+doctrine so we don't have to keep discussing time zones."* A standing
+instruction given verbatim is a keeper.
+
+**Do this:** convert every API timestamp to Mountain time before it reaches a
+reply, a ticket note, a bus post or an operator card — `mergedAt`, `date`,
+`createdAt`, `date_updated`, all of them. Mini-log and Loop-note times are
+already local; leave them alone. If a raw value must be quoted (a log excerpt,
+a `gh` line pasted as evidence), label it once with the zone so the reader is
+never left converting. The `@@MEASURED 8:04pm` line on an operator card is the
+same rule from the other side: it is the clock that dates the card, and it is
+his clock.
+
+```
+TZ=America/Denver date -r 1756747319                       # shell, from an epoch
+new Date(x).toLocaleString('en-US', { timeZone: 'America/Denver' })   # node
+```
+
+Two clocks in one report is one question he has to ask every time, and this
+section exists so that he never has to ask it again.
+
 ---
 
 ## 3. Designing checks
@@ -627,6 +658,21 @@ somewhere a person or a log could read it?**
   browser form, a billing screen, a login. `scripts/diagnose_x_auth.js` is the
   model for tooling that must not cross the line — it prints lengths and
   first/last four characters, never a value.
+
+**The pipe has a direction, and only one end is safe** (2026-09-01). The example
+above works because `doppler secrets get --plain` writes to stdout, where a pipe
+swallows it, and `gh secret set` echoes nothing. Reverse it and the rule inverts:
+**`doppler secrets set` prints the value it just wrote**, and `doppler secrets
+delete` prints the remaining secrets table — full values, all of them. `--silent`
+suppresses info messages, not those tables. An agent moving a credential INTO
+Doppler that way exposed a live ClickUp token and a Google API key in one
+session, while believing it was following this section.
+
+So: Doppler belongs on the `get` side of a pipe, never the `set` side. A value
+that has to be *entered* into Doppler goes in through the dashboard, by Dane —
+that is the "makes a value new" case, and it always was. And before piping a
+secret anywhere, check what the receiving command prints on success; "it moves
+between two stores" is not the test, "does anything render it" is.
 
 Deleting a GitHub secret is refused outright by the session's safety classifier
 (three attempts, 2026-08-31). That is correct behaviour, not a bug to route

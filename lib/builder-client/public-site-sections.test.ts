@@ -34,11 +34,12 @@ describe("filterPublicSections — one filter for the preview and the live site"
     expect(out[0].modules).toEqual([]);
   });
 
-  it("names exactly the three blog admin surfaces", () => {
+  it("names exactly the admin-only surfaces", () => {
     expect([...PRIVATE_ONLY_MODULE_TYPES].sort()).toEqual([
       "blog-category-manager",
       "blog-post-create",
       "blog-post-manager",
+      "event-manager",
     ]);
     expect(isPrivateOnlyModuleType("blog-post-create")).toBe(true);
     expect(isPrivateOnlyModuleType("text")).toBe(false);

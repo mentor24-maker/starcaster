@@ -457,6 +457,16 @@ const STAGE_THRESHOLDS = {
     severity: 'notice',
     why: 'long is fine, forgotten is not — a week is the point where nobody remembers filing it',
   },
+  // Rework is HALF the queued allowance, and the shorter number is the point
+  // (task 86bbr1u9v). A ticket here has a branch, an open PR and review notes;
+  // every day it waits costs another catch-up merge against a moving `main`,
+  // and it is the stage where four tickets rotted for weeks while looking like
+  // ordinary queued work. Waiting is cheap for fresh work and expensive here.
+  rework: {
+    hours: 24 * 3,
+    severity: 'alarm',
+    why: 'a send-back has an open branch going stale against main; three days is already several catch-up merges',
+  },
 };
 
 /**
@@ -770,8 +780,16 @@ function driftFindings(records) {
  * `readyActors` is `lib/staleReady.js`'s tally when the caller has taken the
  * reading (`scripts/pulse.cjs` does). Without it the honest answer is that the
  * stage is backed up and this check cannot say whose fault that is.
+ *
+ * `reworkClause` is threaded in from `bottleneckSentence` and appended to ALL
+ * FOUR return paths. It comes from #489, which landed on this same sentence
+ * while this function was being written, and dropping it is the whole hazard
+ * of that merge: git resolves either side cleanly, and taking this one
+ * wholesale silently stops the pulse's headline from ever naming rework.
+ * Appending it to three of the four paths is the same bug, smaller — so the
+ * break-test in pulse.test.js walks all four.
  */
-function readyBottleneck({ over, ready, readyActors }) {
+function readyBottleneck({ over, ready, readyActors, reworkClause = '' }) {
   const hours = STAGE_THRESHOLDS['ready to launch'].hours;
   const head = `${over} of ${ready} approved tickets have waited past ${hours}h for a merge`;
 
@@ -780,7 +798,8 @@ function readyBottleneck({ over, ready, readyActors }) {
     return (
       `Bottleneck: READY TO LAUNCH — ${head}. Whose hands that needs is NOT known here: this check ` +
       'never reads PR state, so it cannot tell a missing merge word from a red build. ' +
-      '`npm run stale-ready` answers it.'
+      '`npm run stale-ready` answers it.' +
+      reworkClause
     );
   }
 
@@ -796,18 +815,18 @@ function readyBottleneck({ over, ready, readyActors }) {
     const yours = operator ? `${operator} genuinely waiting on Dane` : 'none of them waiting on Dane';
     return (
       `Bottleneck: MERGE — ${head}, and ${machine} of those are blocked on the MACHINE side ` +
-      `(red or unfinished checks, or a PR the merge step cannot find)${tail} — ${yours}.`
+      `(red or unfinished checks, or a PR the merge step cannot find)${tail} — ${yours}.${reworkClause}`
     );
   }
   if (cannotTell >= 1) {
     return (
       `Bottleneck: CANNOT TELL — ${head}, and ${cannotTell} of those could not be resolved to an actor ` +
-      'at all. Not reported as waiting on Dane, because that is not known.'
+      `at all. Not reported as waiting on Dane, because that is not known.${reworkClause}`
     );
   }
   return (
     `Bottleneck: OPERATOR — ${head}, and every one of them is green, reviewed and waiting only on the ` +
-    'merge word. The machine side is keeping up — checked against GitHub, not assumed.'
+    `merge word. The machine side is keeping up — checked against GitHub, not assumed.${reworkClause}`
   );
 }
 
@@ -825,14 +844,20 @@ function bottleneckSentence({ noOp, residency, readyActors } = {}) {
   const queued = Number.isFinite(noOp?.queuedCount) ? noOp.queuedCount : count('queued');
   const ready = count('ready to launch');
   const review = count('in review');
+  // Rework is named separately everywhere it is counted (task 86bbr1u9v).
+  // Folding it into "queued" is what let six half-built tickets read as fresh
+  // work for a morning, and this sentence is the one line of the report most
+  // likely to be the only line read.
+  const rework = count('rework');
+  const reworkClause = rework ? ` ${rework} in rework.` : '';
 
   if (noOp?.verdict === 'finding' && noOp.stale) {
-    return `Bottleneck: BUILD — ${noOp.message}. Ready to launch holds ${ready}.`;
+    return `Bottleneck: BUILD — ${noOp.message}. Ready to launch holds ${ready}.${reworkClause}`;
   }
   if (noOp?.verdict === 'finding') {
     return (
       `Bottleneck: BUILD — ${noOp.streak} consecutive claimless passes with ${queued} queued ` +
-      `(${describeBreakdown(noOp.breakdown)}). Ready to launch holds ${ready}.`
+      `(${describeBreakdown(noOp.breakdown)}). Ready to launch holds ${ready}.${reworkClause}`
     );
   }
   // A cannot-tell on the loop log OUTRANKS the review and operator branches.
@@ -847,13 +872,18 @@ function bottleneckSentence({ noOp, residency, readyActors } = {}) {
   if (overIn('in review') >= 2) {
     return (
       `Bottleneck: REVIEW — ${overIn('in review')} of ${review} tickets in review are past ` +
-      `${STAGE_THRESHOLDS['in review'].hours}h. Not the builder; ${queued} still queued and the loop is claiming.`
+      `${STAGE_THRESHOLDS['in review'].hours}h. Not the builder; ${queued} still queued and the loop is claiming.${reworkClause}`
     );
   }
   if (overIn('ready to launch') >= 1) {
-    return readyBottleneck({ over: overIn('ready to launch'), ready, readyActors });
+    return readyBottleneck({
+      over: overIn('ready to launch'),
+      ready,
+      readyActors,
+      reworkClause,
+    });
   }
-  return `No bottleneck: the loop is claiming, ${review} in review, ${ready} awaiting merge, ${queued} queued.`;
+  return `No bottleneck: the loop is claiming, ${review} in review, ${ready} awaiting merge, ${queued} queued, ${rework} in rework.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

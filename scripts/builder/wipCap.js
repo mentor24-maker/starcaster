@@ -1,5 +1,7 @@
 'use strict';
 
+const loopStatuses = require('./loopStatuses.js');
+
 /**
  * Should loop-build claim another ticket, or is the merge side already full?
  *
@@ -65,9 +67,19 @@ function resolveCap(env = process.env) {
  * somebody is moving, and they diverge in two entirely ordinary situations —
  * a send-back and an abandoned duplicate. Both were present.
  *
- * `Queued` is deliberately NOT here: a queued ticket with an open PR is rework
- * waiting to be claimed, and counting it is what caused the deadlock. `Live`
- * is not here either — the work shipped; the PR is a leftover.
+ * `Rework` and `Queued` are deliberately NOT here: a ticket in either with an
+ * open PR is work waiting to be CLAIMED, and counting it is what caused the
+ * deadlock. `Live` is not here either — the work shipped; the PR is a
+ * leftover.
+ *
+ * `Rework` did not exist until 2026-08-31 (task 86bbr1u9v). Before it a
+ * sent-back ticket sat in `Queued`, so this file had to INFER "that one is
+ * rework" from the ticket being queued — which is precisely why it could not
+ * tell a send-back from work nobody had started. It reads the real status now.
+ * Dane took the recommendation that rework stays uncounted, for the reason
+ * above: the cap answers "how many NEW things may I start", and rework is not
+ * new. That is not a licence to omit it silently, which is the whole point of
+ * the new status — `wipDecision` names the rework count in BOTH its messages.
  *
  * `Needs your input` IS here (review round 1). It is operator-held, exactly
  * like `Ready to launch` which was never in doubt: a ticket parked on Dane
@@ -154,12 +166,19 @@ function ticketIdFromPrBody(body, knownIds) {
  * lowercased here, because `ticketIdFromPrBody` lowercases what it reads and a
  * mixed-case key would then miss (review round 2).
  *
- * FOUR buckets do not count, and they are kept APART on purpose:
+ * FIVE buckets do not count, and they are kept APART on purpose:
  *
- *   queued        rework the loop must be free to claim
+ *   rework        a send-back the loop must be free to claim FIRST
+ *   queued        fresh work the loop must be free to claim
  *   live          the work shipped elsewhere; the PR is a leftover
  *   unknown       no ticket could be found for the PR at all
  *   unrecognised  a ticket WAS found, in a status this file does not know
+ *
+ * `rework` and `queued` are two buckets and not one because they are two
+ * different statements — "five branches are half-built and waiting to be
+ * finished" and "five tickets have a stray PR against work nobody started"
+ * call for opposite responses. Collapsing them is the reading that made
+ * "1 in flight" true and useless while five branches sat open.
  *
  * The last two used to share one bucket reported as "no ticket found", which
  * is a false statement about the second: it sends the reader hunting for a
@@ -173,7 +192,7 @@ function classifyPrs({ prs, ticketStatusById } = {}) {
   for (const [k, v] of Object.entries(source)) byId[String(k).trim().toLowerCase()] = v;
   const knownIds = Object.keys(byId);
 
-  const groups = { inFlight: [], queued: [], live: [], unknown: [], unrecognised: [] };
+  const groups = { inFlight: [], rework: [], queued: [], live: [], unknown: [], unrecognised: [] };
   for (const pr of Array.isArray(prs) ? prs : []) {
     if (!pr || typeof pr !== 'object') continue;
     if (String(pr.state || 'OPEN').toUpperCase() !== 'OPEN') continue;
@@ -183,7 +202,10 @@ function classifyPrs({ prs, ticketStatusById } = {}) {
     const status = raw.toLowerCase();
     if (!id || !status) groups.unknown.push(pr.number);
     else if (IN_FLIGHT_STATUSES.includes(status)) groups.inFlight.push(pr.number);
-    else if (status === 'queued') groups.queued.push(pr.number);
+    // The REAL status, not "queued means rework". Until task 86bbr1u9v there
+    // was no other way to tell, and that guess is the bug this ticket closes.
+    else if (status === loopStatuses.REWORK) groups.rework.push(pr.number);
+    else if (status === loopStatuses.QUEUED) groups.queued.push(pr.number);
     else if (TERMINAL_STATUSES.includes(status)) groups.live.push(pr.number);
     // A status nobody anticipated: not counted, and NOT called "live" — that
     // label is a claim about the work having shipped, and a wrong claim here
@@ -238,12 +260,16 @@ function wipDecision({ prs, cap, ticketStatusById } = {}) {
 
   const groups = classifyPrs({ prs, ticketStatusById });
   const inFlight = groups.inFlight.length;
-  const notCounted = groups.queued.length + groups.live.length
+  const notCounted = groups.rework.length + groups.queued.length + groups.live.length
     + groups.unknown.length + groups.unrecognised.length;
 
   // The split, always — a bare total is what hid the 2026-08-25 deadlock.
   const parts = [];
-  if (groups.queued.length) parts.push(`${groups.queued.length} queued for rework (#${groups.queued.join(', #')})`);
+  // Rework leads the list, and is named as rework rather than as "queued",
+  // because it is the number this ticket exists to stop hiding: half-finished
+  // branches with review notes already on them.
+  if (groups.rework.length) parts.push(`${groups.rework.length} in rework, waiting to be re-claimed (#${groups.rework.join(', #')})`);
+  if (groups.queued.length) parts.push(`${groups.queued.length} queued with a PR already open (#${groups.queued.join(', #')})`);
   if (groups.live.length) parts.push(`${groups.live.length} whose ticket is already live (#${groups.live.join(', #')})`);
   if (groups.unknown.length) parts.push(`${groups.unknown.length} with no ticket found (#${groups.unknown.join(', #')})`);
   // Said separately from "no ticket found", because a ticket WAS found here
@@ -257,19 +283,28 @@ function wipDecision({ prs, cap, ticketStatusById } = {}) {
   }
   const tail = notCounted ? `\n${notCounted} open PR(s) not counted: ${parts.join('; ')}.` : '';
 
+  // The rework count goes in the HEADLINE of both messages, not only in the
+  // tail (task 86bbr1u9v, acceptance criterion 3). "1 in flight, cap 5" while
+  // five real branches sat open is the statement the Rework status exists to
+  // end, and a number that appears only in a trailing clause is a number that
+  // gets skimmed. Zero is stated too: a clause that vanishes when it is zero
+  // tells the reader nothing about whether it was checked at all.
+  const reworkPhrase = `${groups.rework.length} in rework`;
+
   if (inFlight >= limit) {
     return {
-      claim: false, code: 3, openCount: countOpenPrs(prs), inFlight, cap: limit, groups,
+      claim: false, code: 3, openCount: countOpenPrs(prs), inFlight, rework: groups.rework.length, cap: limit, groups,
       message:
-        `WIP cap reached — ${inFlight} in flight, cap ${limit}. Not claiming; the merge side is the bottleneck.${tail}\n` +
+        `WIP cap reached — ${inFlight} in flight, cap ${limit} (${reworkPhrase}, which never counts). ` +
+        `Not claiming; the merge side is the bottleneck.${tail}\n` +
         'This is a normal outcome, not a failure. Work queued beyond the merge rate does not ship sooner —\n' +
         `it goes stale, and every merge re-dates every open branch. Raise it with ${CAP_ENV} for an experiment.`,
     };
   }
 
   return {
-    claim: true, code: 0, openCount: countOpenPrs(prs), inFlight, cap: limit, groups,
-    message: `${inFlight} in flight, cap ${limit} — room to claim another.${tail}`,
+    claim: true, code: 0, openCount: countOpenPrs(prs), inFlight, rework: groups.rework.length, cap: limit, groups,
+    message: `${inFlight} in flight, cap ${limit} (${reworkPhrase}, which never counts) — room to claim another.${tail}`,
   };
 }
 

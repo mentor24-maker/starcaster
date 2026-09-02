@@ -62,6 +62,7 @@ import mergeOnComment from './builder/mergeOnComment.js';
 import loopTrail from './builder/loopTrail.js';
 import buildStart from './builder/buildStart.js';
 import operatorCard from './builder/operatorCard.js';
+import machineComment from './builder/machineComment.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import taskRepo from './builder/taskRepo.js';
 import loopInterval from './builder/loopInterval.js';
@@ -69,6 +70,7 @@ import branchCatchUp from './builder/branchCatchUp.js';
 import reviewGate from './builder/reviewGate.js';
 import conflictWork from './builder/conflictWork.js';
 import wipCap from './builder/wipCap.js';
+import loopStatuses from './builder/loopStatuses.js';
 import autoMergeLane from './builder/autoMergeLane.js';
 import autoMergeLedgerFile from './builder/autoMergeLedgerFile.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
@@ -77,7 +79,7 @@ import pipelinePause from './builder/pipelinePause.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
-  defaultWatches, handbackTarget, mergeEnabled,
+  defaultWatches, handbackTarget, mergeEnabled, operatorComments,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
   SIMULATED_BUS_WHY, simulationGuard, simulationLine,
 } = busRelayPlan;
@@ -87,7 +89,9 @@ const {
 } = mergeOnComment;
 const {
   conflictTicketFiledComment, findConflictTicket, conflictTicketName,
-  conflictTicketBody, handOffStalled, stalledHandOffLine,
+  conflictTicketBody, handOffStalled, stalledHandOffLine, stalledHandOffHeadline,
+  stalledSummaryHeadline, stalledSummaryClause,
+  shouldFileConflictTicket, verdictFromCatchUp, isRealOverlap, isPermanent,
 } = conflictWork;
 const {
   prOpenedComment, verdictComment, prTrailLanded, prBodyCarriesTicket,
@@ -104,6 +108,9 @@ const {
 } = autoMergeLane;
 const { readLedgerFile, saveLedgerIfReadable } = autoMergeLedgerFile;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
+const {
+  isMachineComment, stampCommentBody, isCommentPostPath,
+} = machineComment;
 const { resolveTaskRepo } = taskRepo;
 const {
   ESCALATE_AT_ROUND, currentRound, nextRound, wouldEscalate,
@@ -122,7 +129,10 @@ const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
 const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
 const OPERATOR_STATUSES = ['needs your input', 'ready to launch'];
 const PRIORITY = { urgent: 1, high: 2, normal: 3, low: 4 };
-const PRIORITY_RANK = { urgent: 1, high: 2, normal: 3, low: 4 };
+// Claim ordering lives in loopStatuses.js — one table, so the queue this
+// prints and the depth the pacing curve counts can never disagree about which
+// ticket is next (task 86bbr1u9v).
+const PRIORITY_RANK = loopStatuses.PRIORITY_RANK;
 
 // bus-relay defaults: the "Agent Response" list in the Dane of Earth space,
 // and the party-line bus channel, so the common case needs no flags at all
@@ -247,12 +257,22 @@ function unreachable(err) {
 
 async function call(method, path, body) {
   requestCount += 1;
+  // THE ONE PLACE A MACHINE COMMENT IS MARKED (task 86bbqx2xe). The loops post
+  // under Dane's own token, so nothing downstream can tell their writing from
+  // his; the relay read an `ask` card as his answer and released the
+  // escalation within ten minutes. There are fourteen comment-posting sites in
+  // this file and a fifteenth would fail silently in the dangerous direction,
+  // so the stamp goes on at the door rather than at each of them. See
+  // scripts/builder/machineComment.js.
+  const sendBody = (method === 'POST' && isCommentPostPath(path))
+    ? stampCommentBody(body)
+    : body;
   let res;
   try {
     res = await fetch(`https://api.clickup.com${path}`, {
       method,
       headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
+      body: sendBody ? JSON.stringify(sendBody) : undefined,
     });
   } catch (err) {
     return unreachable(err);
@@ -318,8 +338,10 @@ function usage(code = 2) {
   console.error('                                             stand down if `queue`/`get` already shows one that is not stale');
   console.error('  loop-heartbeat --task <id> --in-line N --next "<name>"   one per pass onto the pinned heartbeat ticket');
   console.error('  chat --channel <id> --body-file <file|->');
-  console.error('  queue --list <id> [--status "Queued"]     open tasks, sorted priority-then-oldest, ALL pages:');
+  console.error('  queue --list <id> [--status "Queued" | --claimable]   open tasks, sorted priority-then-oldest, ALL pages:');
   console.error('                                             id <TAB> status <TAB> priority <TAB> repo <TAB> created <TAB> name <TAB> loop note');
+  console.error('                                             --claimable is what a BUILD pass asks for: every status loop-build may take,');
+  console.error('                                             in drain order — all Rework first (oldest first, priority ignored), then Queued');
   console.error('                                             the loop note is what a pass in flight looks like (e.g. a review already running)');
   console.error('                                             repo is the declared repo (repo:<name> tag); ?<name> = escalate, do not build');
   console.error('  stage-counts [--list <id>] [--since YYYY-MM-DD] [--until YYYY-MM-DD]');
@@ -330,6 +352,13 @@ function usage(code = 2) {
   console.error('                                             so a report on an older week credits later closures to it');
   console.error('  get --task <id>                            one task: header lines, then "---", then the body markdown');
   console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
+  console.error('  claim --task <id>                          THE build claim: reads the ticket\'s own status, refuses (exit 3) if it is');
+  console.error('                                             not one loop-build may take, else moves it to Building guarded on that');
+  console.error('                                             exact status. Removes the step of remembering which of Rework/Queued it');
+  console.error('                                             was in — guarding on the wrong one refuses every send-back.');
+  console.error('  migrate-rework [--apply] [--list <id>]     one-off: move tickets that are Queued WITH AN OPEN PR into Rework.');
+  console.error('                                             Dry run unless --apply. Run it AFTER the claim rule is live on main —');
+  console.error('                                             a Rework ticket is claimed by nothing until then.');
   console.error('  status --task <id> --status "In review" [--if-status "Queued"] [--assign <userId>] [--clear-assignees] [--no-auto-assign]');
   console.error('                                             move a task; operator statuses auto-assign the operator,');
   console.error('                                             machine statuses auto-clear; --if-status makes it a safe claim;');
@@ -542,20 +571,38 @@ function gh(args) {
  * also what keeps the old last-resort guard here: an unhandled rejection is
  * exit 1, and loop-build reads exit 1 as "proceed, unbounded by the cap".
  */
+/**
+ * Every open pull request, with the fields `classifyPrs` needs.
+ *
+ * ONE PLACE BUILDS THIS LIST, and `wipCap.test.js` fails if a second one
+ * appears. The reason is the 2026-08-31 incident this whole probe was written
+ * for: `next-interval` asked for `number,state` while `wip-check` asked for
+ * `number,state,body`, and because a PR is matched to its ticket THROUGH its
+ * body, the shorter field list silently made every PR look untick-eted and
+ * reported the cap as full while the claim gate reported room. A second copy
+ * of these arguments is not duplication to tidy up later; it is that bug,
+ * pre-built.
+ *
+ * THROWS rather than returning `[]`. An empty list and a failed call look
+ * identical to a caller, and they mean opposite things — "no open PRs" versus
+ * "we have no idea" (DOCTRINE 3.11).
+ */
+function listOpenPullRequests(repo) {
+  const args = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state,body'];
+  if (repo) args.push('--repo', repo);
+  const out = gh(args);
+  if (!out.ok) throw new Error(out.stderr.slice(0, 200) || 'gh failed');
+  try {
+    return JSON.parse(out.stdout);
+  } catch {
+    throw new Error('gh returned output that is not JSON');
+  }
+}
+
 function capProbe({ repo } = {}) {
   return wipCap.probeCap({
     cap: wipCap.resolveCap(process.env),
-    listOpenPrs: async () => {
-      const args = ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,state,body'];
-      if (repo) args.push('--repo', repo);
-      const out = gh(args);
-      if (!out.ok) throw new Error(out.stderr.slice(0, 200) || 'gh failed');
-      try {
-        return JSON.parse(out.stdout);
-      } catch {
-        throw new Error('gh returned output that is not JSON');
-      }
-    },
+    listOpenPrs: async () => listOpenPullRequests(repo),
     readTicketStatuses: async () => {
       // fatal:false is REQUIRED — see fetchAllTasks. With the default, a
       // routine ClickUp 429 exits 1 before this function can report anything.
@@ -736,7 +783,7 @@ async function fileConflictTicket({ task, pr, branch, localVerdict, commentId, u
       : []);
 
   const out = await call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
-    name: conflictTicketName({ pr, branch }),
+    name: conflictTicketName({ pr, branch, localVerdict }),
     markdown_description: conflictTicketBody({ task, pr, branch, localVerdict, commentId }),
     status: 'Queued',
     // High, not Urgent: Urgent is the operator's lane (ratified 2026-08-18)
@@ -765,7 +812,7 @@ async function fileConflictTicket({ task, pr, branch, localVerdict, commentId, u
   // The trail on the WAITING ticket. Without it the next pass cannot tell that
   // this conflict is already filed and would file another one every hour.
   const trail = await call('POST', `/api/v2/task/${task.id}/comment`, {
-    comment_text: conflictTicketFiledComment({ id, url, prNumber: pr.number }),
+    comment_text: conflictTicketFiledComment({ id, url, prNumber: pr.number, localVerdict }),
   });
   if (!trail.res.ok) {
     unchecked.push(`${task.id}: filed conflict ticket ${id} but could NOT record it on this ticket — the next pass will file a duplicate. Add the line by hand: "CONFLICT TICKET FILED: PR #${pr.number} — ${url}"`);
@@ -968,7 +1015,13 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
         return { outcome: 'waiting', reason: after.reason };
       }
-      gate = { action: after.action, reason: after.reason };
+      // CARRY THE CLEAN VERDICT (review round 2). If GitHub STILL says
+      // conflict after a catch-up that merged and pushed, that is the textbook
+      // stale answer — and this machine has the strongest possible evidence
+      // there is no overlap, because it just did the merge. Dropping the
+      // verdict here left `localVerdict` null, which the hand-off then had to
+      // guess about. It is a finding; it travels.
+      gate = { action: after.action, reason: after.reason, localVerdict: local };
       if (after.prJson) prJson = after.prJson;
     } else {
       // Carry WHY into the hand-off, so the reader learns whether it was a
@@ -988,13 +1041,13 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // overlap" and "I could not check" are different problems with different
     // fixes, and reading one as the other is how a machine problem gets
     // diagnosed as a code problem.
-    const verdict = gate.localVerdict;
-    const localVerdict = verdict
-      ? {
-          kind: verdict.code === branchCatchUp.CODES.REAL_CONFLICT ? 'real-conflict' : 'unknown',
-          reason: verdict.reason,
-        }
-      : null;
+    // The code-to-answer table lives in conflictWork beside the predicate that
+    // reads it (review round 2). It used to be inline here and had only two
+    // buckets, so `WRONG_REPO`, `FETCH_FAILED`, `WORKTREE_FAILED` and
+    // `NOT_ANCESTOR` — four ways of never looking — came out wearing the same
+    // answer as a lost push race, which is a finding. The bus post then
+    // asserted that finding.
+    const localVerdict = verdictFromCatchUp(gate.localVerdict);
     const branch = prJson.headRefName;
 
     // OPTION C (Dane's answer on task 86bbq0fh8, 2026-08-30): the resolution
@@ -1003,9 +1056,20 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // room — nothing reads the bus — and PR #434 sat three days as a result.
     // Filing FIRST matters: the hand-off comment's promise is decided by
     // whether a ticket exists, so it must be settled before the body is built.
+    //
+    // ...but ONLY for a conflict that is real (2026-08-31, task 86bbq80j5).
+    // This used to file on `gate.action === 'conflict'` alone, never reading
+    // the verdict the block above had just computed. On 2026-08-30 a lost push
+    // race — the merge was clean, the push lost a race, `PUSH_FAILED` — was
+    // filed as "Resolve the merge conflict on PR #444", 200ms before the
+    // hand-off comment beside it correctly said the next pass would merge it.
+    // The acceptance criteria on that filed ticket described clearing conflict
+    // markers that did not exist. `shouldFileConflictTicket` is the same
+    // function `conflictHandOffNotice` reads to pick its actor, so the ticket
+    // and the promise cannot name two different people again.
     let filed = findConflictTicket(comments, pr.number);
     const alreadyFiled = Boolean(filed);
-    if (!filed && !dryRun) {
+    if (shouldFileConflictTicket(localVerdict) && !filed && !dryRun) {
       filed = await fileConflictTicket({
         task, pr, branch, localVerdict, commentId: decision.commentId, unchecked,
       });
@@ -1018,7 +1082,19 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       filed,
     });
     const handOffReason = notice.marker.replace(/^refused:\s*/, '');
+    // WHO ACTS NEXT, asked once. Every branch below used to key off `filed`,
+    // which conflates "no ticket" with "no actor" — wrong for a verdict that
+    // found no overlap, where the actor is the next pass and is real. The
+    // notice already decided this from the shared predicate; read its answer
+    // rather than re-deriving one (task 86bbq80j5).
+    const selfHealing = notice.actor === 'later-pass';
+    // "It found no overlap" and "it never looked" are different facts and only
+    // one of them is a finding — the distinction review round 2 sent this back
+    // for. Both are non-self-healing, so `selfHealing` alone cannot tell the
+    // copy below which sentence it is entitled to write.
+    const isRealOverlapVerdict = isRealOverlap(localVerdict);
     if (lane) return { outcome: 'lane-cancel', reason: gate.reason };
+
 
     // The quiet path — right on the merits, and exactly where three days of
     // silence lived. It stays quiet only while a NAMED actor is plausibly
@@ -1034,17 +1110,23 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     const freshlyFiled = Boolean(filed) && !alreadyFiled;
     if (alreadySaid(handOffReason) && !freshlyFiled) {
       const stalled = handOffStalled({
-        at: decision.priorRefusalAt, now: Date.now(), filed,
+        at: decision.priorRefusalAt, now: Date.now(), filed, localVerdict,
       });
       if (!stalled.stalled) {
         console.error(`  MERGE HANDED OFF (unchanged, nothing posted) on ${label}: ${gate.reason}`);
         return { outcome: 'handed-off-quiet', reason: gate.reason };
       }
-      const line = stalledHandOffLine({ task, pr, filed, stalled });
+      // THE VERDICT, not `filed` and not the actor. These three surfaces reach
+      // the BUS, and each of them used to ask a two-way question of a
+      // three-way answer: round 1 caught them reading `filed`, round 3 caught
+      // them reading a two-valued `actor`, which cannot tell a found overlap
+      // apart from a check that never ran. They take `localVerdict` now and
+      // derive what they need from the one table in conflictWork.js.
+      const line = stalledHandOffLine({ task, pr, filed, stalled, localVerdict });
       console.error(`  MERGE HAND-OFF STALLED on ${label}: ${stalled.why}`);
-      stalledHandOffs.push(line);
+      stalledHandOffs.push({ line, kind: notice.kind });
       if (dryRun) return { outcome: 'would-report-stalled', reason: stalled.why };
-      const busStall = await postToBus(channel, `[CC-starcaster bus-relay] CONFLICT STILL UNRESOLVED — ${line}\n\n${pr.url}`);
+      const busStall = await postToBus(channel, `[CC-starcaster bus-relay] ${stalledHandOffHeadline({ localVerdict })} — ${line}\n\n${pr.url}`);
       // "One pass of noise per day is the price" (conflictWork.js) — and the
       // clock that meters it is the marker's timestamp, so a stall that has
       // been ANNOUNCED re-stamps the marker and the next nag is a day away.
@@ -1056,23 +1138,57 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       return { outcome: 'handed-off-stalled', reason: stalled.why };
     }
 
-    console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}${filed ? ` — filed as ${filed.id}` : ' — NOT FILED, nothing will pick this up'}`);
+    const handOffActorLine = filed
+      ? ` — filed as ${filed.id}`
+      : selfHealing
+        ? ' — no overlap found; the next pass retries the catch-up'
+        : ' — NOT FILED, nothing will pick this up';
+    console.error(`  MERGE HANDED OFF on ${label}: ${gate.reason}${handOffActorLine}`);
     if (dryRun) {
-      console.error(`  DRY RUN — would file a Loop Queue ticket to resolve the conflict on ${branch}, then post a hand-off naming it`);
+      // A dry run never attempts the local catch-up, so it has NO verdict, and
+      // no verdict now reads as could-not-check — the honest answer to "what
+      // did you find?" when nothing was looked at (review round 2). That is
+      // also what makes the dry run report a stalled, unfiled hand-off instead
+      // of quietly calling it self-healing.
+      //
+      // It cannot know which of the three the real pass would land on, so it
+      // names all three rather than trading one confident guess for another.
+      console.error(`  DRY RUN — would attempt the catch-up on ${branch} and then hand off. A dry run computes no local verdict, so which hand-off it would be is unknown: no overlap means the next pass retries and nothing is filed; a real overlap, or a check that could not run at all, means a Loop Queue ticket is filed and named.`);
       return { outcome: 'would-hand-off', reason: gate.reason };
     }
     const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
     if (!cOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} conflicts, but the hand-off comment FAILED to post`);
     // The bus post names the actor now instead of asking the room for one.
     // It is a notification, not a request — the work is already filed.
-    const busBody = filed
-      ? `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): PR #${pr.number} conflicts with main. Resolving it is filed as ${filed.url} in the Loop Queue, which the build loop drains — no session needs to claim this from here. Dane's approval still stands: once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`
-      : `[CC-starcaster bus-relay] MERGE BLOCKED AND UNFILED — ${label} (${task.url}): PR #${pr.number} conflicts with main and the Loop Queue ticket could NOT be filed. Nothing is going to pick this up on its own. An agent session must be pointed at branch ${branch}. Ticket left in Ready to launch.\n\n${pr.url}`;
+    // Three actors, three sentences. The self-healing one is new: it used to
+    // get the UNFILED body, which tells the room to point an agent session at
+    // a branch that has nothing wrong with it (task 86bbq80j5).
+    // WHAT THE BUS IS TOLD, and it may only assert what the pass actually
+    // found (review round 2). The self-healing sentence — "this machine found
+    // no overlap ... nobody needs to claim it" — is TRUE only for a proven
+    // no-overlap. It used to be printed for a failed fetch and for a repo this
+    // machine has no checkout of, standing the room down on a look nobody took.
+    // So the middle case is now its own sentence, and it says which it is.
+    const couldNotLook = !selfHealing && !isRealOverlapVerdict;
+    const blockedWhy = couldNotLook
+      ? `GitHub called PR #${pr.number} a conflict and this machine could not check whether that is true — ${localVerdict ? localVerdict.reason : 'no local check was attempted'}${isPermanent(localVerdict) ? '. That answer is permanent from here: the branch is in a repo this machine has no checkout of, so no future pass can settle it either' : ''}`
+      : `PR #${pr.number} conflicts with main`;
+    const busBody = selfHealing
+      ? `[CC-starcaster bus-relay] MERGE DEFERRED — ${label} (${task.url}): GitHub called PR #${pr.number} a conflict, but this machine merged it here with no overlap at all. Nothing needs resolving and nobody needs to claim it; the next relay pass retries the catch-up. Ticket left in Ready to launch.\n\n${pr.url}`
+      : filed
+        ? `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): ${blockedWhy}. Picking it up is filed as ${filed.url} in the Loop Queue, which the build loop drains — no session needs to claim this from here. Dane's approval still stands: once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`
+        : `[CC-starcaster bus-relay] MERGE BLOCKED AND UNFILED — ${label} (${task.url}): ${blockedWhy}, and the Loop Queue ticket could NOT be filed. Nothing is going to pick this up on its own. An agent session must be pointed at branch ${branch}. Ticket left in Ready to launch.\n\n${pr.url}`;
     const bus = await postToBus(channel, busBody);
     // An unfiled hand-off is NOT cosmetic: the ticket comment says nothing is
     // working on it, and if the bus post fails too, nobody has been told.
-    if (!bus.ok) reportBusFailure({ cosmetic: Boolean(filed), unchecked, busSkipped, line: `${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})` });
-    if (!filed) unchecked.push(`${task.id}: PR #${pr.number} conflicts and NO Loop Queue ticket could be filed for it — no actor exists for this conflict, and it will not merge on its own`);
+    if (!bus.ok) reportBusFailure({ cosmetic: Boolean(filed) || selfHealing, unchecked, busSkipped, line: `${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})` });
+    // IT MAY NOT ASSERT THE FINDING EITHER (review round 3, item 3). This line
+    // said "conflicts" and "this conflict" for every non-healing verdict,
+    // including the ones where nothing was looked at — the same sentence the
+    // bus post beside it had already been fixed not to write.
+    if (!filed && !selfHealing) unchecked.push(isRealOverlapVerdict
+      ? `${task.id}: PR #${pr.number} conflicts and NO Loop Queue ticket could be filed for it — no actor exists for this conflict, and it will not merge on its own`
+      : `${task.id}: GitHub called PR #${pr.number} a conflict, this machine could not check whether that is true, and NO Loop Queue ticket could be filed to find out — no actor exists for it, and it will not merge on its own`);
     if (alreadyFiled) console.error(`  (conflict ticket ${filed.id} was already on file — not filed twice)`);
     await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'handed-off', reason: gate.reason, filed: filed ? filed.id : null };
@@ -1477,7 +1593,62 @@ async function alreadyAnsweredRefused(task, status) {
   return null;
 }
 
-const cmd = process.argv[2];
+let cmd = process.argv[2];
+
+// ---------------------------------------------------------------------------
+// `claim` — the build loop's claim, with the status guard filled in for it.
+//
+// WHY IT EXISTS (2026-08-31, task 86bbr1u9v). loop-build now drains TWO
+// statuses, `Rework` before `Queued`, and the atomic claim needs `--if-status`
+// to name the one the caller actually read. That leaves a step that must be
+// REMEMBERED — look at column two of the queue, then type it — and this repo
+// has a standing answer to that shape: a pass that must remember is a pass that
+// will forget (buildStart.js, loopTrail.js). Getting it wrong is not cosmetic.
+// Guarding on `Queued` when the ticket is in `Rework` refuses every send-back,
+// which silently reproduces the starvation the status was created to end;
+// loosening the guard to accept either would break the one thing keeping two
+// build sessions off the same ticket (acceptance criterion 5).
+//
+// So it is one read: the status is taken from the ticket itself and handed
+// straight to the SAME `--if-status` guard, which then re-reads and compares
+// before writing. That is exactly the window `status --if-status` has always
+// had — this adds no race, it only removes the typing.
+//
+// It refuses (exit 3) on any status loop-build may not claim, which is the
+// normal "someone got there first" code, and it deliberately does NOT reach
+// into `Building` or `In review` to "help".
+if (cmd === 'claim') {
+  const task = arg('task');
+  if (!task) {
+    console.error('claim needs --task <id>.');
+    process.exit(2);
+  }
+  const seen = await call('GET', `/api/v2/task/${task}`);
+  if (!seen.res.ok) die('read the task before claiming it', seen);
+  const now = seen.json.status?.status ?? '';
+  if (!loopStatuses.isClaimableByBuild(now)) {
+    console.error(`NOT claimed: "${task}" is "${now || '?'}", which loop-build may not claim.`);
+    console.error(`Claimable statuses, in drain order: ${loopStatuses.CLAIMABLE_BY_BUILD.map((x) => loopStatuses.DISPLAY[x]).join(', ')}.`);
+    console.error('Take the next task in the queue.');
+    process.exit(3);
+  }
+  // Hand the exact status it is in to the ordinary guarded write, so there is
+  // one writer, one verifier and one place that clears assignees.
+  if (arg('status') || arg('if-status')) {
+    console.error('claim sets --status and --if-status itself; pass neither.');
+    console.error('If you need to name them by hand, use `status` directly — that is the honest form.');
+    process.exit(2);
+  }
+  process.argv = [
+    ...process.argv.slice(0, 2),
+    'status',
+    ...process.argv.slice(3),
+    '--status', loopStatuses.DISPLAY[loopStatuses.BUILDING],
+    '--if-status', now,
+  ];
+  console.error(`claiming ${task} out of "${now}" (guarded on that exact status)`);
+  cmd = 'status';
+}
 
 if (cmd === 'whoami') {
   const out = await call('GET', '/api/v2/user');
@@ -1720,18 +1891,43 @@ if (cmd === 'whoami') {
   const list = arg('list');
   if (!list) usage();
   const status = arg('status');
+  // `--claimable` is what a build pass asks for (task 86bbr1u9v): every status
+  // loop-build may take, in the order it must take them — all of `Rework`
+  // first, oldest first, then `Queued` by priority-then-oldest.
+  //
+  // IT IS A SEPARATE FLAG AND NOT A CHANGE TO `--status Queued`, because those
+  // are different questions and the old one still has honest answers ("show me
+  // the fresh work"). What is NOT honest any more is using `--status Queued`
+  // as the claim list: it silently hides every sent-back ticket, which is the
+  // bug this whole ticket is about, arriving through the command meant to fix
+  // it. So asking for both at once is refused rather than quietly resolved.
+  const claimable = flag('claimable');
+  if (claimable && status) {
+    console.error('--claimable and --status are two different questions; pass one.');
+    console.error('  --claimable    every status loop-build may take, in claim order (Rework, then Queued)');
+    console.error(`  --status <s>   one status exactly as spelled: ${loopStatuses.STAGE_ORDER.join(' / ')}`);
+    process.exit(2);
+  }
   const { tasks, res } = await fetchAllTasks(list);
   // Filter locally, case-insensitively — the same matching the `status`
   // command's verify uses — so a casing mismatch cannot masquerade as an
   // empty queue the way a server-side filter miss would.
-  const wanted = status
-    ? tasks.filter((t) => (t.status?.status ?? '').toLowerCase() === status.toLowerCase())
-    : tasks;
-  // The loops claim "the oldest Queued task, highest priority first": encode
-  // that rule here, so the first output line IS the task to claim.
-  wanted.sort((a, b) =>
-    (PRIORITY_RANK[a.priority?.priority] ?? 9) - (PRIORITY_RANK[b.priority?.priority] ?? 9)
-    || Number(a.date_created) - Number(b.date_created));
+  let wanted;
+  if (claimable) {
+    // Filtering AND ordering in one call, from the module the pacing curve
+    // reads, so the first line is the ticket the claim rule actually names.
+    wanted = loopStatuses.claimOrder(tasks);
+  } else {
+    wanted = status
+      ? tasks.filter((t) => (t.status?.status ?? '').toLowerCase() === status.toLowerCase())
+      : tasks;
+    // Within one status the rule is unchanged: highest priority first, then
+    // oldest.
+    wanted.sort((a, b) =>
+      (PRIORITY_RANK[a.priority?.priority] ?? loopStatuses.PRIORITY_UNKNOWN)
+        - (PRIORITY_RANK[b.priority?.priority] ?? loopStatuses.PRIORITY_UNKNOWN)
+      || Number(a.date_created) - Number(b.date_created));
+  }
   for (const t of wanted) {
     const created = new Date(Number(t.date_created)).toISOString().slice(0, 10);
     // The repo a task declares (Charter: a task declares its repo). A loop
@@ -1744,8 +1940,142 @@ if (cmd === 'whoami') {
     // keeps working. It is what says "a pass is already running on this one".
     console.log([t.id, t.status?.status ?? '?', t.priority?.priority ?? 'none', repoCol, created, t.name, loopNoteOf(t)].join('\t'));
   }
-  console.error(`${wanted.length} task(s)${status ? ` with status "${status}"` : ''} in list ${list} (all pages; first line is the one to claim)`);
+  const scope = claimable
+    ? ` claimable by loop-build (${loopStatuses.CLAIMABLE_BY_BUILD.join(' then ')})`
+    : (status ? ` with status "${status}"` : '');
+  console.error(`${wanted.length} task(s)${scope} in list ${list} (all pages; first line is the one to claim)`);
+  if (claimable && wanted.length) {
+    const first = wanted[0];
+    // The claim command, spelled out with THIS ticket's status already in it.
+    // `--if-status` must name the status the caller actually read, and a
+    // build pass that has to remember which of two statuses it just saw is a
+    // pass that will guard on the wrong one — see `claim`, which removes the
+    // step entirely.
+    console.error(`  claim it: npm run clickup -- claim --task ${first.id}`);
+  }
   if (res) reportLimits(res);
+
+} else if (cmd === 'migrate-rework') {
+  // The one-off that puts the existing send-backs where they belong
+  // (task 86bbr1u9v, acceptance criterion 6). Leaving them behind in `Queued`
+  // reproduces this ticket's own bug on day one.
+  //
+  // THE ORDER MATTERS AND IT IS THE TRAP ON THIS TICKET. Until the claim rule
+  // above is live on `main`, a ticket in `Rework` is claimed by NOTHING — it
+  // drops out of `claimableDepth`, out of the pacing curve, and out of the
+  // build loop's reach entirely, which is strictly worse than sitting visible
+  // in `Queued`. So this runs after the merge, never before. It is idempotent
+  // and dry by default, so running it twice is free and running it early is
+  // at worst a listing.
+  //
+  // WHICH TICKETS: `Queued` with an OPEN pull request naming them. That is the
+  // definition of a send-back that nothing else can express — it is exactly
+  // what `wipCap.classifyPrs` already computes for the cap, so it is read from
+  // there rather than re-derived, and the migration cannot disagree with the
+  // number the cap reports.
+  const list = arg('list') || LOOP_QUEUE_LIST;
+  const apply = flag('apply');
+
+  const probe = await capProbe({ repo: arg('repo') || '' });
+  if (!probe.determined) {
+    console.error(`Could not list the open pull requests (${probe.why}), so there is no way to tell which`);
+    console.error('queued tickets are half-built. NOTHING was changed — this refuses rather than guessing,');
+    console.error('because moving a ticket that has no PR into Rework is a lie the next reader acts on.');
+    process.exit(1);
+  }
+  if (!probe.statusesAvailable) {
+    console.error(`The Loop Queue could not be read (${probe.queueFailure}). NOTHING was changed.`);
+    process.exit(1);
+  }
+
+  const { tasks } = await fetchAllTasks(list, { includeClosed: true });
+  const byId = new Map(tasks.map((t) => [String(t.id), t]));
+  const knownIds = tasks.map((t) => String(t.id));
+  const openPrs = probe.decision.groups?.queued || [];
+
+  // Back from PR number to ticket, through the SAME reader the cap uses.
+  const targets = [];
+  const prsByTicket = new Map();
+  let openPrList;
+  try {
+    openPrList = listOpenPullRequests(arg('repo') || '');
+  } catch (err) {
+    console.error(`Could not re-read the open pull requests (${err.message}). NOTHING was changed.`);
+    process.exit(1);
+  }
+  for (const pr of openPrList) {
+    if (!openPrs.includes(pr.number)) continue;
+    const id = wipCap.ticketIdFromPrBody(pr.body, knownIds);
+    if (!id) continue;
+    const task = byId.get(id) || [...byId.values()].find((t) => String(t.id).toLowerCase() === id);
+    if (!task) continue;
+    if (!prsByTicket.has(String(task.id))) {
+      prsByTicket.set(String(task.id), pr.number);
+      targets.push(task);
+    }
+  }
+
+  if (!targets.length) {
+    console.log('Nothing to migrate: no ticket is Queued with an open pull request against it.');
+    process.exit(0);
+  }
+
+  console.log(`${targets.length} ticket(s) are Queued with an open PR — they are send-backs, not fresh work:`);
+  for (const t of targets) console.log(`  ${t.id}  #${prsByTicket.get(String(t.id))}  ${t.name}`);
+  if (!apply) {
+    console.log('\nDRY RUN — nothing was changed. Re-run with --apply once the claim rule is live on main.');
+    process.exit(0);
+  }
+
+  let moved = 0;
+  for (const t of targets) {
+    const rem = (t.assignees || []).map((a) => a.id);
+    const out = await call('PUT', `/api/v2/task/${t.id}`, {
+      status: loopStatuses.DISPLAY[loopStatuses.REWORK],
+      assignees: { add: [], rem },
+    });
+    // Verified from the write response, the same rule `status` follows: a 200
+    // is not evidence the status changed.
+    const now = String(out.json?.status?.status || '').toLowerCase();
+    if (!out.res.ok || now !== loopStatuses.REWORK) {
+      console.error(`  ${t.id}: NOT moved (HTTP ${out.res.status}, status now "${now || '?'}")`);
+      continue;
+    }
+    console.log(`  ${t.id} -> Rework (verified)`);
+    moved += 1;
+  }
+  console.log(`${moved} of ${targets.length} moved.`);
+
+  // The list's own DESCRIPTION documents the flow, and it still describes the
+  // six-status one. A list description that documents the WRONG flow is worse
+  // than none, because a reader has no way to tell — so it moves with the
+  // tickets, in the same post-merge step, rather than being a chore somebody
+  // remembers. Only the flow sentence is rewritten; anything else Dane has
+  // written there is left exactly as it is.
+  const listRead = await call('GET', `/api/v2/list/${list}`);
+  if (!listRead.res.ok) {
+    console.error(`The tickets moved, but the list description could NOT be read (HTTP ${listRead.res.status}) — it still documents the old flow.`);
+    process.exit(1);
+  }
+  const oldFlow = /Statuses:[^\n]*/;
+  const newFlow = 'Statuses: Rework -> Queued -> Building -> In review -> '
+    + 'Needs your input / Ready to launch -> Live (closed). '
+    + 'A build loop drains every Rework ticket (a send-back, with a branch and an open PR already) '
+    + 'before any Queued one, oldest first.';
+  const content = String(listRead.json?.content || '');
+  const nextContent = oldFlow.test(content) ? content.replace(oldFlow, newFlow) : `${content}\n\n${newFlow}`.trim();
+  if (nextContent === content) {
+    console.log('The list description already describes the Rework flow.');
+  } else {
+    const wrote = await call('PUT', `/api/v2/list/${list}`, { content: nextContent });
+    if (!wrote.res.ok || !String(wrote.json?.content || '').includes('Rework ->')) {
+      console.error(`The tickets moved, but the list description did NOT update (HTTP ${wrote.res.status}).`);
+      process.exit(1);
+    }
+    console.log('The list description now documents the Rework flow (verified from the write response).');
+  }
+
+  if (moved !== targets.length) process.exit(1);
 
 } else if (cmd === 'stage-counts') {
   // Every stage of the pipeline, counted, as JSON — for the weekly report
@@ -2084,8 +2414,11 @@ if (cmd === 'whoami') {
 
   // gh, not the GitHub API directly: it is already the repo's authenticated
   // path everywhere else, and a second auth story is a second thing to break.
-  const lookupPr = (number) => {
-    const out = spawnSync('gh', ['pr', 'view', String(number), '--json', 'state,headRefName'], {
+  // --repo, ALWAYS (task 86bbqyyfn). Without it gh resolves the repo from the
+  // working directory, which is always starcaster — so a `repo:pulse` ticket
+  // was answered with starcaster's PR of the same number.
+  const lookupPr = (pr) => {
+    const out = spawnSync('gh', buildStart.prLookupArgs(pr), {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     });
     if (out.status !== 0) return null; // could not tell — NOT "no PR"
@@ -2849,8 +3182,12 @@ if (cmd === 'whoami') {
     for (const t of open) {
       const commentsOut = await call('GET', `/api/v2/task/${t.id}/comment`);
       if (!commentsOut.res.ok) { unchecked.push(`${t.id} (${t.name}): could not read comments`); continue; }
-      const fromOperator = (commentsOut.json.comments || [])
-        .filter((c) => Number(c.user?.id) === OPERATOR_ID);
+      // Authorship is id AND marker (task 86bbqx2xe) — the rule lives in
+      // busRelayPlan.operatorComments so a test can reach it without a network.
+      const fromOperator = operatorComments(commentsOut.json.comments, {
+        operatorId: OPERATOR_ID,
+        isMachine: isMachineComment,
+      });
 
       // The kill switch, as he may have set it on a ticket rather than on the
       // party line (standing condition 1: "on the bus or any Loop Queue
@@ -3305,7 +3642,11 @@ if (cmd === 'whoami') {
     : pauseState.paused
       ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
       : ', merging disabled (--no-merge)';
-  const stalledLine = stalledHandOffs.length ? `, ${stalledHandOffs.length} conflict(s) STILL UNRESOLVED` : '';
+  // Counted APART, because calling a self-healing deferral a conflict is the
+  // same overstatement the per-line banner was fixed for, one surface across
+  // (review round 2, item 4).
+  const stalledKinds = stalledHandOffs.map((h) => h.kind);
+  const stalledLine = stalledSummaryClause(stalledKinds);
   console.log(`bus-relay: ${relayed} relayed, ${skipped} already relayed, ${handedBack} handed back${mergeLine}${laneLine}${stalledLine}, ${busSkipped.length} bus post(s) skipped, ${unchecked.length} could not be checked.${dryRun ? (simulateBusFailure ? ' (DRY RUN + SIMULATED PARTY-LINE OUTAGE — nothing was merged, posted or moved)' : ' (DRY RUN — nothing was merged, posted or moved)') : ''}`);
 
   // Its own heading, and unmissable. The whole point of task 86bbq0fh8 is
@@ -3313,8 +3654,8 @@ if (cmd === 'whoami') {
   // days. A conflict that has been handed off and is still sitting there now
   // says so on every pass, by name, until it clears.
   if (stalledHandOffs.length) {
-    console.error(`\nCONFLICTS STILL UNRESOLVED — ${stalledHandOffs.length} approved merge(s) are blocked and not moving:`);
-    for (const line of stalledHandOffs) console.error(`  - ${line}`);
+    console.error(`\n${stalledSummaryHeadline(stalledKinds)} — ${stalledHandOffs.length} approved merge(s) are not moving:`);
+    for (const h of stalledHandOffs) console.error(`  - ${h.line}`);
   }
   // Its own heading, above the failures and visibly not one of them. A chat
   // outage is worth seeing; it is not worth stopping the pipeline for.

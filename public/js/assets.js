@@ -905,6 +905,8 @@ App.assets = (function () {
       els.assetMultiUploadType.value = defaults.assetType || '';
     }
     renderMultiUploadCategoryOptionsByType(defaults.assetType, defaults.category);
+    applyUploadAccept(els.assetUploadType, els.assetUploadFile);
+    applyUploadAccept(els.assetMultiUploadType, els.assetMultiUploadFiles);
     if (els.assetMultiUploadAspect) {
       els.assetMultiUploadAspect.value = defaults.aspect || '';
     }
@@ -1334,6 +1336,17 @@ App.assets = (function () {
         nameTd.textContent = nameText;
       }
       if (canPreviewImage && nameEl) bindAssetImageHover(nameEl, asset);
+      // Files uploaded through this screen carry a mark, so an operator can see
+      // at a glance which of a mixed gallery came from the Media Manager and
+      // which arrived from Drive, the Builder, AI generation or Site Import.
+      if (asset.source === MEDIA_MANAGER_SOURCE) {
+        const badge = document.createElement('span');
+        badge.className = 'asset-source-badge';
+        badge.textContent = 'Media Mgr';
+        badge.title = 'Uploaded through the Admin Media Manager';
+        nameTd.appendChild(document.createTextNode(' '));
+        nameTd.appendChild(badge);
+      }
       tr.appendChild(nameTd);
 
       appendCell(tr, asset.imageWidth > 0 ? String(asset.imageWidth) : '-');
@@ -1397,6 +1410,37 @@ App.assets = (function () {
     return String(mimeType || '').toLowerCase().startsWith('image/');
   }
 
+  // This screen IS the Admin Media Manager, so everything uploaded through it
+  // declares that origin. The server validates the value against the allowlist
+  // in lib/assetSource.js; the two endpoints below are shared with the Builder
+  // and the asset picker, which send nothing and stay unmarked.
+  const MEDIA_MANAGER_SOURCE = 'admin-media-manager';
+
+  // What the file picker should offer for each Asset Type. The image and video
+  // lists mirror GALLERY_IMAGE_EXTENSIONS / GALLERY_VIDEO_EXTENSIONS in
+  // lib/builder-client/admin-media-shared.ts, which is what the gallery uses to
+  // decide whether a stored file is an image or a video. Keep them in step.
+  const UPLOAD_ACCEPT_BY_TYPE = {
+    Image: '.png,.jpg,.jpeg,.webp,.gif,.svg',
+    Video: '.mp4,.mov,.m4v,.webm,.ogg',
+    Audio: '.mp3,.m4a,.wav,.aac,.ogg',
+    'Lead Magnet': '.pdf',
+    File: '',
+  };
+
+  // An Asset Type the picker cannot open a file for is a dead option. Setting
+  // `accept` from the chosen type is what makes Video, PDF and File reachable —
+  // the markup used to hardcode image/* and silently greyed the rest out.
+  function applyUploadAccept(typeEl, fileEl) {
+    if (!typeEl || !fileEl) return;
+    const selected = String(typeEl.value || '').trim();
+    const accept = Object.prototype.hasOwnProperty.call(UPLOAD_ACCEPT_BY_TYPE, selected)
+      ? UPLOAD_ACCEPT_BY_TYPE[selected]
+      : '';
+    if (accept) fileEl.setAttribute('accept', accept);
+    else fileEl.removeAttribute('accept');
+  }
+
   function isImageUploadFile(file) {
     if (!file) return false;
     const mime = String(file.type || '').toLowerCase();
@@ -1453,6 +1497,7 @@ App.assets = (function () {
       tags: Array.isArray(options?.tags) ? options.tags : [],
     };
     if (aspect) payload.aspect = aspect;
+    payload.source = MEDIA_MANAGER_SOURCE;
 
     const result = await api('/api/assets/import-image', {
       method: 'POST',
@@ -1484,6 +1529,7 @@ App.assets = (function () {
       assetName: String(options?.assetName || '').trim() || file.name,
       category: String(options?.category || '').trim(),
       tags: Array.isArray(options?.tags) ? options.tags : [],
+      source: MEDIA_MANAGER_SOURCE,
     };
 
     await api('/api/assets/upload-google-drive', {
@@ -1521,6 +1567,7 @@ App.assets = (function () {
         location: String(blob?.url || '').trim(),
         tags,
         size: Number(file.size || 0) || 0,
+        source: MEDIA_MANAGER_SOURCE,
       }),
     });
     return created?.asset || created?.data || null;
@@ -1987,7 +2034,18 @@ App.assets = (function () {
               notify(summary);
             }
           } else {
-            for (const file of files) {
+            // Videos go up through Blob multipart and can take minutes each, so
+            // this branch reports progress the same way the image branch does —
+            // without it a bulk video upload is indistinguishable from a hang.
+            setBulkImportProgress(true, `Uploading 0 of ${files.length}...`, 0, files.length);
+            for (let index = 0; index < files.length; index += 1) {
+              const file = files[index];
+              setBulkImportProgress(
+                true,
+                `Uploading ${index + 1} of ${files.length}: ${file.name}`,
+                index,
+                files.length
+              );
               if (assetType === 'Video') {
                 await uploadFileToBlobClient(file, {
                   assetType,
@@ -2004,6 +2062,7 @@ App.assets = (function () {
                 });
               }
             }
+            setBulkImportProgress(true, 'Upload complete', files.length, files.length);
             notify(`${files.length} ${assetType === 'Video' ? 'video' : 'asset'}${files.length === 1 ? '' : 's'} uploaded`);
           }
 
@@ -2085,6 +2144,7 @@ App.assets = (function () {
         const assetType = String(els.assetUploadType.value || '').trim();
         const existingCategory = String(els.assetUploadCategory?.value || '').trim();
         renderUploadCategoryOptionsByType(assetType, existingCategory);
+        applyUploadAccept(els.assetUploadType, els.assetUploadFile);
       });
     }
 
@@ -2093,6 +2153,7 @@ App.assets = (function () {
         const assetType = String(els.assetMultiUploadType.value || '').trim();
         const existingCategory = String(els.assetMultiUploadCategory?.value || '').trim();
         renderMultiUploadCategoryOptionsByType(assetType, existingCategory);
+        applyUploadAccept(els.assetMultiUploadType, els.assetMultiUploadFiles);
       });
     }
 

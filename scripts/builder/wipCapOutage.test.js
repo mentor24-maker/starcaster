@@ -162,5 +162,5 @@ test('the queue read succeeding still governs the answer', () => {
   assert.equal(out.status, 0,
     `6 open PRs whose tickets are all Queued rework must NOT cap the loop — that is the deadlock.\n${out.stderr}`);
   assert.match(out.stdout, /0 in flight, cap 5/);
-  assert.match(out.stdout, /6 queued for rework/);
+  assert.match(out.stdout, /6 queued with a PR already open/);
 });

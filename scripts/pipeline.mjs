@@ -21,7 +21,7 @@
  * than only the loops, fails safe, and refuses to be forgotten.
  *
  * It DRAINS, it does not kill. Killing a pass mid-build strands its ticket in
- * "Building" forever, because the loops only ever claim from "Queued" — that
+ * "Building" forever, because the loops only claim from "Rework" and "Queued" — that
  * happened twice in the week this was written. So `pause` stops new claims the
  * instant it writes the flag, then waits for what is already running.
  *
@@ -33,7 +33,9 @@
  */
 
 import { setTimeout as sleep } from 'node:timers/promises';
+import { execFileSync } from 'node:child_process';
 import pipelinePause from './builder/pipelinePause.js';
+import buildStart from './builder/buildStart.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import nodeRoles from '../lib/nodeRoles.js';
 
@@ -42,7 +44,9 @@ const {
   pauseRecord, resumeRecord, readTrail, pauseVerdict,
   inFlight, describeTickets, drainReport,
   resumedMessage, sweptTicketNote, resumeAuthorization, numericOption,
+  strandedBuildDestination,
 } = pipelinePause;
+const { resolveBuildStart, prLookupArgs } = buildStart;
 // The switch is READ in exactly one place, shared with bus-relay, so the two
 // can never hold different ideas of where the flag is or what counts as
 // unreadable (pipelinePauseStore.js says why that matters).
@@ -84,8 +88,9 @@ function usage(code = 2) {
   console.error('  resume --operator-asked [--by NAME] [--no-sweep]');
   console.error('                                  hand the deck back. Refused without --operator-asked: an agent may pause');
   console.error('                                  the line but may not un-pause the operator\'s deck. Sweeps tickets that');
-  console.error('                                  were stranded mid-pass, with a note: a build goes back to Queued, a');
-  console.error('                                  review is released where it stands so its finished build is not lost.');
+  console.error('                                  were stranded mid-pass, with a note: a half-built build goes to Rework, an');
+  console.error('                                  unstarted one to Queued, and a review is released where it stands so its');
+  console.error('                                  finished build is not lost.');
   process.exit(code);
 }
 
@@ -123,6 +128,48 @@ async function tryCall(method, path, body) {
   } catch (err) {
     return { res: { status: 0, ok: false }, json: null, text: '', ok: false, threw: String(err && err.message) };
   }
+}
+
+/**
+ * Has anything already been BUILT for this stranded ticket?
+ *
+ * The same question `npm run clickup -- build-start` answers, through the same
+ * module, so the sweep and the next build pass cannot reach different
+ * conclusions about the same ticket. Two readings: the ticket's comments (for
+ * the `PR opened:` trail loop-build writes) and `gh` (for that PR's state).
+ *
+ * Everything that can fail here resolves to an ANSWER rather than an exception
+ * — a resume must never die half-swept — and `resolveBuildStart` already has a
+ * name for "a PR is named but its state is unreadable": `unknown`. Where that
+ * answer sends the ticket, and why, is `pipelinePause.strandedBuildDestination`.
+ */
+async function buildStartFor(taskId) {
+  const seen = await tryCall('GET', `/api/v2/task/${taskId}/comment`);
+  // A comment list we could not read is NOT "no comments" — that would report
+  // a half-built ticket as fresh, which is the direction that loses work
+  // (DOCTRINE 3.11). No readable trail at all means no PR is named, so
+  // resolveBuildStart's own `fresh` is not reachable from a failed read: say
+  // unknown instead.
+  if (!seen.ok || !Array.isArray(seen.json?.comments)) {
+    return { action: 'unknown', why: `this ticket's comments could not be read (${whyOf(seen)})` };
+  }
+  return resolveBuildStart(seen.json.comments, {
+    // --repo, ALWAYS (task 86bbqyyfn). This is the second copy of the bug the
+    // ticket was filed for: `resume` unsticks stranded builds by asking the
+    // same question, and it was asking it of whichever repo the process
+    // happened to be running in.
+    lookupPr: (pr) => {
+      try {
+        const out = execFileSync('gh', prLookupArgs(pr), {
+          encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+        });
+        return JSON.parse(out);
+      } catch {
+        // null, not a guess — resolveBuildStart turns it into `unknown`.
+        return null;
+      }
+    },
+  });
 }
 
 function thisNodeName() {
@@ -395,8 +442,19 @@ if (cmd === 'check') {
       // job to a second builder. So it is released where it stands — note
       // cleared, status untouched — and the next review pass claims it.
       const reviewing = s.kind === 'a review';
+      // WHERE a stranded build goes depends on whether anything was built for
+      // it (task 86bbr1u9v). Asked BEFORE the note is written, because the note
+      // names the destination — a note saying "Queued" above a move to "Rework"
+      // is a trail that contradicts the board, and the trail is the only thing
+      // the next pass reads. Reviews skip it: they never move.
+      const dest = reviewing ? { action: 'n/a' } : await buildStartFor(s.id);
+      const plan = reviewing ? null : strandedBuildDestination(dest.action);
       const note = await tryCall('POST', `/api/v2/task/${s.id}/comment`, {
-        comment_text: sweptTicketNote({ at: new Date().toISOString(), by, kind: s.kind }), notify_all: false,
+        comment_text: sweptTicketNote({
+          at: new Date().toISOString(), by, kind: s.kind,
+          destination: plan?.status, why: plan?.why,
+        }),
+        notify_all: false,
       });
       if (!note.ok) { console.error(`  ${s.id}: could not write the hand-back note (${whyOf(note)}) — LEAVING it where it is rather than moving it silently.`); continue; }
 
@@ -414,12 +472,13 @@ if (cmd === 'check') {
       }
 
       const rem = (task?.assignees || []).map((a) => a.id);
-      const move = await tryCall('PUT', `/api/v2/task/${s.id}`, { status: 'Queued', assignees: { add: [], rem } });
-      if (!move.ok || String(move.json?.status?.status || '').toLowerCase() !== 'queued') {
-        console.error(`  ${s.id}: the note landed but the move to Queued did NOT (${whyOf(move)}) — it is still stranded.`);
+      const where = plan;
+      const move = await tryCall('PUT', `/api/v2/task/${s.id}`, { status: where.status, assignees: { add: [], rem } });
+      if (!move.ok || String(move.json?.status?.status || '').toLowerCase() !== where.status.toLowerCase()) {
+        console.error(`  ${s.id}: the note landed but the move to ${where.status} did NOT (${whyOf(move)}) — it is still stranded.`);
         continue;
       }
-      console.error(`  ${s.id} ("${s.name}") returned to Queued — it was ${s.kind} with nothing working on it.`);
+      console.error(`  ${s.id} ("${s.name}") returned to ${where.status} — it was ${s.kind} with nothing working on it; ${where.why}.`);
       swept.push(s.id);
     }
   } else if (!flag('no-sweep')) {
@@ -433,7 +492,11 @@ if (cmd === 'check') {
   const pausedForMs = Number.isFinite(before.atMs) ? Date.now() - before.atMs : null;
   await announce(resumedMessage({ by, pausedForMs, swept }));
 
-  console.log(`The pipeline is RUNNING again. ${swept.length} stranded ticket(s) returned to Queued${swept.length ? `: ${swept.join(', ')}` : ''}.`);
+  // "returned to Queued" is no longer true of every swept ticket — a
+  // half-built one goes to Rework — and a summary that names one destination
+  // for both is the kind of confident wrong sentence the per-ticket lines
+  // above exist to avoid. Those lines say where each one actually went.
+  console.log(`The pipeline is RUNNING again. ${swept.length} stranded ticket(s) unstuck${swept.length ? `: ${swept.join(', ')}` : ''}.`);
   console.error(`  requests this pass: ${requestCount}`);
 
 } else {

@@ -318,6 +318,76 @@ export const RENDER_DIFFERENTIALS = [
 
 export const RENDER_CONTRACTS = [
   {
+    id: 'event-detail-without-a-slug-explains-itself',
+    why:
+      'The event page renders whichever event the ADDRESS names. On this page there is no ?event= ' +
+      'in the URL and no database, which is exactly the state an operator meets the moment they drop ' +
+      'the module on a page — and the state a visitor meets if a link is built wrong. A blank panel ' +
+      'here reads as a broken module; R4 says that state is designed. It is also the only one of this ' +
+      "module's states a fixture-free check can reach, the other two needing a real event.",
+    module: { type: 'event-detail', settings: { backLinkUrl: '/whats-on', backLinkLabel: 'All events' } },
+    selector: '.builder-event-detail-note',
+    read: ['height'],
+    expect(sample) {
+      if (sample.box.height < 20) {
+        return `the no-slug state is ${sample.box.height}px tall — the event page is rendering as a blank box.`;
+      }
+      if (!/single event/.test(sample.text)) {
+        return `the no-slug state reads "${sample.text.slice(0, 70)}" — it no longer explains what the page is for.`;
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'event-calendar-month-grid-is-a-month',
+    why:
+      'The month grid is arithmetic wearing a layout: seven columns of whole weeks, with the ' +
+      'neighbouring months drawn but muted. An off-by-one in the lead makes every date sit under the ' +
+      'wrong weekday — a calendar that is confidently, silently wrong, which is worse than one that ' +
+      'fails to draw. The geometry is unit-tested in lib/builder-client/event-format.ts; this is the ' +
+      'half a test cannot see, that the numbers reach the page in seven columns.',
+    module: { type: 'event-calendar', settings: { layout: 'month', calendarTitle: 'What is on' } },
+    selector: '.builder-event-calendar-grid',
+    read: ['gridTemplateColumns', 'display'],
+    expect(sample) {
+      if (sample.styles.display !== 'grid') {
+        return `the month grid renders as ${sample.styles.display}, not a grid — its layout CSS is not reaching the page.`;
+      }
+      const columns = String(sample.styles.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
+      if (columns.length !== 7) {
+        return `the month grid has ${columns.length} columns, not 7 — a week is seven days and the dates will sit under the wrong weekdays.`;
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'event-calendar-empty-state-is-designed',
+    why:
+      'On this page there is no session and no database, so the calendar renders the state a tenant ' +
+      'meets before they have added anything. R4: that is a designed state. Every failure mode of a ' +
+      'fetch-backed module lands here as a zero-height box indistinguishable from a module that is ' +
+      'switched off — and the operator-written empty message is the one piece of copy proving the ' +
+      'setting reaches the renderer at all.',
+    module: {
+      type: 'event-calendar',
+      settings: { layout: 'list', emptyMessage: 'Nothing on the calendar yet — do come back.' },
+    },
+    selector: '.builder-event-calendar-empty',
+    read: ['height'],
+    expect(sample) {
+      if (sample.box.height < 20) {
+        return `the empty state is ${sample.box.height}px tall — an empty calendar is rendering as a blank box.`;
+      }
+      if (!/Nothing on the calendar yet/.test(sample.text)) {
+        return `the empty state reads "${sample.text.slice(0, 60)}" — the Empty Message setting is not reaching the renderer.`;
+      }
+      return null;
+    },
+  },
+
+  {
     id: 'bug-report-trigger-renders-to-its-settings',
     why:
       'The Bug Report module is a floating button on tenant pages (task 4/5). It is the first module ' +

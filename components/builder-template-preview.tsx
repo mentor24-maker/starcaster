@@ -4,6 +4,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  EMPTY_MEDIA_FILTERS,
+  MEDIA_ASPECTS,
+  mediaAssetMatchesFilters,
+  mediaFiltersActive,
+  mediaTagKey,
+  mediaTagOptions,
+  normalizeMediaTag,
+  type MediaFilters
+} from "@/lib/media-manager-filters";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import {
   builderBackgroundParallaxActive,
@@ -130,6 +140,16 @@ import { BuilderCodeEmbed } from "@/components/builder/builder-code-embed";
 import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import { BuilderImagePickerField } from "@/components/builder/builder-image-picker-field";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
+import {
+  eventOccursOn,
+  formatEventWhen,
+  isSameDay,
+  isoToLocalInput,
+  isUpcomingEvent,
+  localInputToIso,
+  monthGrid,
+  normalizeEventStatus,
+} from "@/lib/event-format";
 import { BuilderImagePreview } from "@/components/builder/builder-image-preview";
 import {
   BuilderFloatingImageRuntime,
@@ -2194,6 +2214,19 @@ function BuilderModulePreview({
   if (module.type === "blog-post-manager") {
     return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
   }
+  if (module.type === "event-detail") {
+    return <EventDetailPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
+  }
+  if (module.type === "event-calendar") {
+    return <EventCalendarPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
+  }
+  if (module.type === "media-manager") {
+    return <MediaManagerPreview settings={module.settings} text={module.text} />;
+  }
+
+  if (module.type === "event-manager") {
+    return <EventManagerPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
+  }
   if (module.type === "blog-category-manager") {
     return <BlogCategoryManagerPreview settings={module.settings} />;
   }
@@ -3805,6 +3838,1935 @@ function BlogCardManagerPreview() {
         ) : null}
         <span className="bcm-save-note">Applies to all Post Feed modules on your site</span>
       </div>
+    </div>
+  );
+}
+
+/* ── Event Detail (public) ─────────────────────────────────────────────────
+ *
+ * One event's own page. It reads `?event=<slug>` from the URL — the same link
+ * the calendar and the manager build — and asks
+ * `/api/events/<slug>?by=slug`, which is public for a PUBLISHED event only:
+ * routes/events.js 404s a draft to a visitor with no session.
+ */
+
+type DetailEvent = {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  description: string;
+  excerpt: string;
+  imageUrl: string;
+  imageAlt: string;
+  url: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  allDay: boolean;
+  timezone: string;
+  locationName: string;
+  locationAddress: string;
+  locationUrl: string;
+  organizerName: string;
+  organizerContact: string;
+  seoTitle: string;
+  seoDescription: string;
+};
+
+/**
+ * A contact as something to act on: an email becomes mailto:, a phone number
+ * tel:, anything else stays plain text. Guessing wrong is worse than not
+ * linking — a dead mailto: on a phone number is a link that goes nowhere.
+ */
+function organizerContactHref(contact: string): string | undefined {
+  const text = contact.trim();
+  if (!text) return undefined;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)) return `mailto:${text}`;
+  const digits = text.replace(/[\s().-]/g, "");
+  if (/^\+?\d{7,15}$/.test(digits)) return `tel:${digits}`;
+  return undefined;
+}
+
+function EventDetailPreview({
+  settings,
+  theme,
+  themePalette,
+}: {
+  settings: Record<string, string>;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+}) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const backLinkUrl = (settings.backLinkUrl || "").trim();
+  const backLinkLabel = (settings.backLinkLabel || "").trim() || "Back to all events";
+  const ctaLabel = (settings.ctaLabel || "").trim() || "Get Tickets";
+  const showImage = (settings.showImage ?? "true") !== "false";
+  const showLocation = (settings.showLocation ?? "true") !== "false";
+  const showDescription = (settings.showDescription ?? "true") !== "false";
+  const showOrganizer = (settings.showOrganizer ?? "true") !== "false";
+  const notFoundMessage = (settings.notFoundMessage || "").trim()
+    || "We could not find that event. It may have been removed.";
+
+  const [slug, setSlug] = useState("");
+  const [event, setEvent] = useState<DetailEvent | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+
+  // The slug comes from the URL and can change under a single-page navigation,
+  // so popstate is listened for rather than read once at mount.
+  useEffect(() => {
+    function syncSlugFromUrl() {
+      setSlug(new URLSearchParams(window.location.search).get("event") ?? "");
+    }
+    syncSlugFromUrl();
+    window.addEventListener("popstate", syncSlugFromUrl);
+    return () => window.removeEventListener("popstate", syncSlugFromUrl);
+  }, []);
+
+  useEffect(() => {
+    if (!slug) {
+      setEvent(null);
+      setNotFound(false);
+      setLoading(false);
+      return;
+    }
+    let live = true;
+    setLoading(true);
+    setNotFound(false);
+    fetch(`/api/events/${encodeURIComponent(slug)}?by=slug`, {
+      credentials: "include",
+      headers: getCrmProjectHeaders(),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!live) return;
+        const raw = d?.event ?? d?.data ?? null;
+        if (!raw || typeof raw !== "object") { setEvent(null); setNotFound(true); return; }
+        setEvent(raw as DetailEvent);
+      })
+      .catch(() => { if (live) { setEvent(null); setNotFound(true); } })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
+  }, [slug]);
+
+  /*
+   * The event's own SEO fields, applied to the page that is showing it.
+   *
+   * Without this the SEO Title and SEO Description an operator fills in on
+   * every event render nowhere at all — fields that look like they work and
+   * do nothing (Standard 13). The previous title is restored on the way out,
+   * so browsing away from an event does not leave its name in the tab.
+   */
+  useEffect(() => {
+    if (!event) return;
+    const previousTitle = document.title;
+    const heading = event.seoTitle?.trim() || event.title?.trim();
+    if (heading) document.title = heading;
+
+    const description = event.seoDescription?.trim() || event.excerpt?.trim();
+    let meta = document.querySelector('meta[name="description"]');
+    const ownsMeta = !meta && Boolean(description);
+    let previousDescription: string | null = null;
+    if (description) {
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.setAttribute("name", "description");
+        document.head.appendChild(meta);
+      } else {
+        previousDescription = meta.getAttribute("content");
+      }
+      meta.setAttribute("content", description);
+    }
+
+    return () => {
+      document.title = previousTitle;
+      if (ownsMeta && meta?.parentNode) meta.parentNode.removeChild(meta);
+      else if (meta && previousDescription !== null) meta.setAttribute("content", previousDescription);
+    };
+  }, [event]);
+
+  const frameStyle = {
+    ["--evt-accent" as string]: accent,
+    ...getAdminDataTableThemeStyle(themePalette, theme),
+  };
+
+  const backLink = backLinkUrl ? (
+    <a className="builder-event-detail-back" href={backLinkUrl}>← {backLinkLabel}</a>
+  ) : null;
+
+  // No slug at all: the page has been opened directly rather than through a
+  // calendar link. Said plainly, because a blank panel here reads as broken.
+  if (!slug) {
+    return (
+      <div className="builder-event-detail" style={frameStyle}>
+        <p className="builder-event-detail-note">
+          This page shows a single event. Open it from the calendar, or add
+          <code> ?event=your-event-slug </code> to the address.
+        </p>
+        {backLink}
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="builder-event-detail" style={frameStyle}>
+        <p className="builder-event-detail-note">Loading event…</p>
+      </div>
+    );
+  }
+
+  if (notFound || !event) {
+    return (
+      <div className="builder-event-detail" style={frameStyle}>
+        <p className="builder-event-detail-note">{notFoundMessage}</p>
+        {backLink}
+      </div>
+    );
+  }
+
+  const cancelled = normalizeEventStatus(event.status) === "cancelled";
+  const imageUrl = showImage ? resolvePublicBuilderAssetUrl(event.imageUrl) : "";
+  const contactHref = organizerContactHref(event.organizerContact || "");
+  const hasLocation = showLocation && Boolean(event.locationName || event.locationAddress);
+  const descriptionHtml = showDescription ? formatRichTextContent(event.description) : "";
+
+  return (
+    <article className="builder-event-detail" style={frameStyle}>
+      {backLink}
+
+      {/*
+        * The whole reason `cancelled` exists as a status rather than a delete:
+        * an event people have already put in their diary keeps its page and
+        * says, at the top, that it is off. Deleting it makes them turn up.
+        */}
+      {cancelled ? (
+        <p className="builder-event-detail-cancelled" role="status">
+          <strong>This event has been cancelled.</strong>
+        </p>
+      ) : null}
+
+      <h1 className="builder-event-detail-title">{event.title || "Untitled event"}</h1>
+
+      <p className="builder-event-detail-when">
+        {formatEventWhen(event)}
+        {event.timezone ? (
+          <span className="builder-event-detail-timezone"> ({event.timezone.replace(/_/g, " ")})</span>
+        ) : null}
+      </p>
+
+      {hasLocation ? (
+        <p className="builder-event-detail-where">
+          {event.locationUrl ? (
+            <a href={event.locationUrl} target="_blank" rel="noopener noreferrer">
+              {event.locationName || event.locationAddress}
+            </a>
+          ) : (
+            <span>{event.locationName}</span>
+          )}
+          {event.locationName && event.locationAddress ? (
+            <span className="builder-event-detail-address">{event.locationAddress}</span>
+          ) : null}
+        </p>
+      ) : null}
+
+      {imageUrl ? (
+        <img
+          className="builder-event-detail-image"
+          src={imageUrl}
+          alt={event.imageAlt || ""}
+        />
+      ) : null}
+
+      {/* Sanitized by formatRichTextContent (Standard 9) — never raw. */}
+      {descriptionHtml ? (
+        <div
+          className="builder-event-detail-body"
+          dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+        />
+      ) : event.excerpt ? (
+        <p className="builder-event-detail-body">{event.excerpt}</p>
+      ) : null}
+
+      {/* A cancelled event keeps its page, but never its "buy a ticket" button. */}
+      {event.url && !cancelled ? (
+        <p className="builder-event-detail-cta-row">
+          <a
+            className="builder-event-detail-cta"
+            href={event.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {ctaLabel}
+          </a>
+        </p>
+      ) : null}
+
+      {showOrganizer && (event.organizerName || event.organizerContact) ? (
+        <p className="builder-event-detail-organizer">
+          {event.organizerName ? <span>Organised by {event.organizerName}</span> : null}
+          {event.organizerContact ? (
+            contactHref
+              ? <a href={contactHref}>{event.organizerContact}</a>
+              : <span>{event.organizerContact}</span>
+          ) : null}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+/* ── Event Calendar (public) ───────────────────────────────────────────────
+ *
+ * What a visitor sees. Three layouts over one fetch: a month grid, an
+ * upcoming list, and a row of cards.
+ *
+ * It reads `/api/events?status=published`, which is public on a tenant site
+ * (lib/projectAdminApiAuth.js) — deliberately the published-only opening,
+ * so a draft is unreachable here even by asking for it.
+ */
+
+type CalendarEvent = {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  excerpt: string;
+  imageUrl: string;
+  imageAlt: string;
+  url: string;
+  featured: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  allDay: boolean;
+  locationName: string;
+};
+
+const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+function EventCalendarPreview({
+  settings,
+  theme,
+  themePalette,
+}: {
+  settings: Record<string, string>;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+}) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const layout = settings.layout || "month";
+  const heading = (settings.calendarTitle || "").trim();
+  const eventPageUrl = (settings.eventPageUrl || "").trim();
+  const columns = Math.min(4, Math.max(1, parseInt(settings.columns || "3", 10) || 3));
+  const limit = Math.min(50, Math.max(1, parseInt(settings.limit || "12", 10) || 12));
+  const weekStartsOn: 0 | 1 = settings.weekStartsOn === "1" ? 1 : 0;
+  const showPast = settings.showPast === "true";
+  const showImages = (settings.showImages ?? "true") !== "false";
+  const showLocation = (settings.showLocation ?? "true") !== "false";
+  const showExcerpt = (settings.showExcerpt ?? "true") !== "false";
+  const emptyMessage = (settings.emptyMessage || "").trim()
+    || "No events scheduled just yet — check back soon.";
+
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  // The month on view. Held in state so Prev/Next can move it; seeded to the
+  // month we are actually in.
+  const [cursor, setCursor] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+
+  useEffect(() => {
+    let live = true;
+    fetch("/api/events?status=published&limit=200", {
+      credentials: "include",
+      headers: getCrmProjectHeaders(),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!live) return;
+        const list = (d?.events ?? d?.data ?? []) as CalendarEvent[];
+        if (!Array.isArray(list)) { setFailed(true); return; }
+        setEvents(list);
+      })
+      .catch(() => { if (live) setFailed(true); })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
+  }, []);
+
+  /** A published event only. The API filters too; this is the belt to its braces. */
+  const published = useMemo(
+    () => events.filter((e) => normalizeEventStatus(e.status) === "published"),
+    [events]
+  );
+
+  const listed = useMemo(() => {
+    const now = new Date();
+    const chosen = showPast ? published : published.filter((e) => isUpcomingEvent(e, now));
+    return [...chosen]
+      .sort((a, b) => {
+        // Unscheduled events have nowhere to sit on a timeline, so they go
+        // last rather than to 1970 — which is where a plain Date.parse of an
+        // empty string would put them.
+        if (!a.startsAt && !b.startsAt) return a.title.localeCompare(b.title);
+        if (!a.startsAt) return 1;
+        if (!b.startsAt) return -1;
+        return Date.parse(a.startsAt) - Date.parse(b.startsAt);
+      })
+      .slice(0, limit);
+  }, [published, showPast, limit]);
+
+  function hrefFor(event: CalendarEvent): string | undefined {
+    /*
+     * The site's own event page wins, and the event's external link is the
+     * FALLBACK — not the other way round.
+     *
+     * This was backwards when the calendar shipped (2/3) and only became
+     * visible once the event page existed (3/3): nearly every real event has
+     * a ticketing link, so preferring it sent every visitor straight off-site
+     * and the event page — with the description, the location, the organiser
+     * and its own Get Tickets button — was unreachable from the calendar it
+     * belongs to.
+     *
+     * With no event page configured the external link is still better than a
+     * dead title, so it stays as the fallback.
+     */
+    if (eventPageUrl && event.slug) {
+      const sep = eventPageUrl.includes("?") ? "&" : "?";
+      return `${eventPageUrl}${sep}event=${encodeURIComponent(event.slug)}`;
+    }
+    return event.url || undefined;
+  }
+
+  const Title = heading
+    ? <h2 className="builder-event-calendar-heading">{heading}</h2>
+    : null;
+
+  if (loading) {
+    return (
+      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+        {Title}
+        <p className="builder-event-calendar-empty">Loading events…</p>
+      </div>
+    );
+  }
+
+  // A failed fetch is NOT the same as an empty calendar and must not wear its
+  // words: "no events scheduled" over a broken request tells a visitor
+  // something false about the club.
+  if (failed) {
+    return (
+      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+        {Title}
+        <p className="builder-event-calendar-empty">Events are unavailable just now. Please try again shortly.</p>
+      </div>
+    );
+  }
+
+  /* ── Month grid ─────────────────────────────────────────────────────── */
+  if (layout === "month") {
+    const weeks = monthGrid(cursor.year, cursor.month, weekStartsOn);
+    const monthName = new Date(cursor.year, cursor.month, 1)
+      .toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    const today = new Date();
+    const dayNames = Array.from({ length: 7 }, (_, i) => WEEKDAY_LABELS[(i + weekStartsOn) % 7]);
+    const step = (by: number) => setCursor((c) => {
+      const d = new Date(c.year, c.month + by, 1);
+      return { year: d.getFullYear(), month: d.getMonth() };
+    });
+
+    return (
+      <div className="builder-event-calendar builder-event-calendar--month" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+        {Title}
+        <div className="builder-event-calendar-nav">
+          <button type="button" className="builder-event-calendar-nav-btn" aria-label="Previous month" onClick={() => step(-1)}>‹</button>
+          <span className="builder-event-calendar-month" aria-live="polite">{monthName}</span>
+          <button type="button" className="builder-event-calendar-nav-btn" aria-label="Next month" onClick={() => step(1)}>›</button>
+        </div>
+        <div className="builder-event-calendar-grid" role="grid" aria-label={monthName}>
+          {dayNames.map((name) => (
+            // The short form is decoration; the full name is what a screen
+            // reader should say, so the letter is hidden from it.
+            <div key={name} className="builder-event-calendar-weekday" role="columnheader">
+              <abbr title={name} aria-label={name}>
+                <span aria-hidden="true">{name.slice(0, 3)}</span>
+              </abbr>
+            </div>
+          ))}
+          {weeks.flat().map((cell) => {
+            const onThisDay = published.filter((e) => eventOccursOn(e, cell.date));
+            const isToday = isSameDay(cell.date, today);
+            return (
+              <div
+                key={cell.date.toISOString()}
+                role="gridcell"
+                className={[
+                  "builder-event-calendar-day",
+                  cell.inMonth ? "" : "builder-event-calendar-day--outside",
+                  isToday ? "builder-event-calendar-day--today" : "",
+                  onThisDay.length ? "builder-event-calendar-day--has-events" : "",
+                ].filter(Boolean).join(" ")}
+              >
+                <span className="builder-event-calendar-daynum">{cell.date.getDate()}</span>
+                {onThisDay.map((event) => {
+                  const href = hrefFor(event);
+                  const label = event.title || "Untitled event";
+                  const body = (
+                    <>
+                      <span className="builder-event-calendar-chip-title">{label}</span>
+                      {!event.allDay && event.startsAt ? (
+                        <span className="builder-event-calendar-chip-time">
+                          {new Date(event.startsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                        </span>
+                      ) : null}
+                    </>
+                  );
+                  return href ? (
+                    <a key={event.id} className="builder-event-calendar-chip" href={href} title={label}>{body}</a>
+                  ) : (
+                    <span key={event.id} className="builder-event-calendar-chip" title={label}>{body}</span>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+        {published.length === 0 ? <p className="builder-event-calendar-empty">{emptyMessage}</p> : null}
+      </div>
+    );
+  }
+
+  /* ── List and cards ─────────────────────────────────────────────────── */
+  if (!listed.length) {
+    return (
+      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+        {Title}
+        <p className="builder-event-calendar-empty">{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  const isCards = layout === "cards";
+
+  return (
+    <div
+      className={`builder-event-calendar builder-event-calendar--${isCards ? "cards" : "list"}`}
+      style={{
+        ["--evt-accent" as string]: accent,
+        ["--evt-columns" as string]: String(columns),
+        ...getAdminDataTableThemeStyle(themePalette, theme),
+      }}
+    >
+      {Title}
+      <ul className="builder-event-calendar-items">
+        {listed.map((event) => {
+          const href = hrefFor(event);
+          const label = event.title || "Untitled event";
+          const start = event.startsAt ? new Date(event.startsAt) : null;
+          const image = showImages && isCards ? resolvePublicBuilderAssetUrl(event.imageUrl) : "";
+          const titleNode = href
+            ? <a className="builder-event-calendar-item-title" href={href}>{label}</a>
+            : <span className="builder-event-calendar-item-title">{label}</span>;
+          return (
+            <li key={event.id} className="builder-event-calendar-item">
+              {image ? (
+                <img
+                  className="builder-event-calendar-item-image"
+                  src={image}
+                  alt={event.imageAlt || ""}
+                  loading="lazy"
+                />
+              ) : null}
+              <div className="builder-event-calendar-item-body">
+                {start && !isCards ? (
+                  <span className="builder-event-calendar-datechip" aria-hidden="true">
+                    <span className="builder-event-calendar-datechip-month">
+                      {start.toLocaleDateString(undefined, { month: "short" }).toUpperCase()}
+                    </span>
+                    <span className="builder-event-calendar-datechip-day">{start.getDate()}</span>
+                  </span>
+                ) : null}
+                <div className="builder-event-calendar-item-text">
+                  {titleNode}
+                  <p className="builder-event-calendar-item-when">{formatEventWhen(event)}</p>
+                  {showLocation && event.locationName ? (
+                    <p className="builder-event-calendar-item-where">{event.locationName}</p>
+                  ) : null}
+                  {showExcerpt && event.excerpt ? (
+                    <p className="builder-event-calendar-item-excerpt">{event.excerpt}</p>
+                  ) : null}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/* ── Media Manager (admin) ─────────────────────────────────────────────────── */
+
+/**
+ * The Media Manager a TENANT admin uses, on their own site — e.g.
+ * delraytennis.starcaster.pro/admin-media-manager. Not to be confused with the
+ * Assets screen in the platform admin app, which is Dane's and never loads
+ * here (that confusion is what tickets 1-3 of this series were built against).
+ *
+ * Runs on /api/assets with a project-admin session. Ticket 86bbrqnqu pinned
+ * which asset endpoints a tenant admin may reach and which are refused — the
+ * refused ones spend Alphire's money, quota or compute, and none of them are
+ * used below.
+ *
+ * Every upload declares `source: "admin-media-manager"`, the column added in
+ * 86bbrnz2v. That is what makes these files findable as Media Manager uploads
+ * in the Builder's own gallery picker.
+ */
+
+const MEDIA_MANAGER_SOURCE = "admin-media-manager";
+
+/** Mirrors GALLERY_IMAGE_EXTENSIONS / GALLERY_VIDEO_EXTENSIONS. */
+const MEDIA_IMAGE_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,.svg";
+const MEDIA_VIDEO_ACCEPT = ".mp4,.mov,.m4v,.webm,.ogg";
+
+/**
+ * The base64 upload path tops out around 7MB. Anything larger goes through
+ * Vercel Blob, which is also the only path for video.
+ */
+const MEDIA_DIRECT_UPLOAD_MAX_BYTES = 6 * 1024 * 1024;
+
+type MediaAsset = {
+  id: number;
+  assetName: string;
+  assetType: string;
+  category?: string;
+  aspect?: string;
+  location: string;
+  thumbnailUrl?: string;
+  tags?: string[];
+  size?: number;
+  imageWidth?: number;
+  imageHeight?: number;
+  source?: string;
+  createdAt?: string;
+};
+
+type MediaUploadProgress = { name: string; index: number; total: number };
+
+type MediaTag = { id: number; tag: string };
+
+type MediaCategory = { id: number; assetType: string; category: string };
+
+function mediaIsVideo(asset: MediaAsset): boolean {
+  if (String(asset.assetType || "").toLowerCase() === "video") return true;
+  return /\.(mp4|mov|m4v|webm|ogg)(\?|#|$)/i.test(String(asset.location || ""));
+}
+
+function formatMediaSize(bytes?: number): string {
+  const n = Number(bytes || 0);
+  if (!n) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+let mediaBlobClientPromise: Promise<{ upload: (...args: unknown[]) => Promise<{ url: string }> }> | null = null;
+function getMediaBlobClient() {
+  // Loaded from a CDN at runtime rather than bundled — the same technique
+  // public/js/assets.js uses, and what lets a tenant page upload video without
+  // the builder bundle carrying the SDK.
+  if (!mediaBlobClientPromise) {
+    // The specifier is built at runtime so TypeScript does not try to resolve
+    // a URL import at compile time, and esbuild leaves it as a dynamic import
+    // for the browser to fetch.
+    const cdn = "https://esm.sh/@vercel/blob/client?bundle";
+    mediaBlobClientPromise = (new Function("u", "return import(u)")(cdn)) as Promise<{
+      upload: (...args: unknown[]) => Promise<{ url: string }>;
+    }>;
+  }
+  return mediaBlobClientPromise;
+}
+
+function MediaManagerPreview({
+  settings,
+  text
+}: {
+  settings: Record<string, string>;
+  text?: string;
+}) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const kinds = String(settings.kinds || "all").toLowerCase();
+  const showSize = (settings.showSize ?? "true") !== "false";
+  const showDate = (settings.showDate ?? "true") !== "false";
+  const showDelete = (settings.showDelete ?? "true") !== "false";
+  const showTags = (settings.showTags ?? "true") !== "false";
+  const showFilters = (settings.showFilters ?? "true") !== "false";
+
+  const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [statusMsg, setStatusMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [uploading, setUploading] = useState<MediaUploadProgress | null>(null);
+  const [renameId, setRenameId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<MediaAsset | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [projectTags, setProjectTags] = useState<MediaTag[]>([]);
+  const [projectCategories, setProjectCategories] = useState<string[]>([]);
+  const [filters, setFilters] = useState<MediaFilters>(EMPTY_MEDIA_FILTERS);
+  const [tagTarget, setTagTarget] = useState<MediaAsset | null>(null);
+  const [tagDraft, setTagDraft] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // The module card offers a generic Content box bound to module.text, and it
+  // is a plain <textarea> for every type but "text" — so this is TEXT, never
+  // HTML. Rendered through React's own escaping, with line breaks preserved by
+  // CSS rather than by building markup out of the value.
+  const description = String(text || "").trim();
+
+  const acceptAttr =
+    kinds === "images" ? MEDIA_IMAGE_ACCEPT
+      : kinds === "videos" ? MEDIA_VIDEO_ACCEPT
+        : `${MEDIA_IMAGE_ACCEPT},${MEDIA_VIDEO_ACCEPT}`;
+
+  function loadAssets() {
+    setLoading(true);
+    setLoadError("");
+    fetch("/api/assets", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, `Failed to load media (${r.status})`));
+        const list = (d?.assets ?? d?.data ?? []) as MediaAsset[];
+        setAssets(Array.isArray(list) ? list : []);
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Failed to load media."))
+      .finally(() => setLoading(false));
+  }
+
+  function loadProjectTags() {
+    fetch("/api/asset-tags", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, "Failed to load tags"));
+        const list = (d?.tags ?? d?.data ?? []) as MediaTag[];
+        setProjectTags(Array.isArray(list) ? list : []);
+      })
+      // A tag list that will not load must not stop the grid rendering: the
+      // media is the point, tagging is an extra. The modal reports it instead.
+      .catch(() => setProjectTags([]));
+  }
+
+  function loadProjectCategories() {
+    fetch("/api/asset-categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, "Failed to load categories"));
+        const list = (d?.categories ?? d?.data ?? []) as MediaCategory[];
+        // The endpoint returns one entry per (assetType, category) pair, so the
+        // same category arrives once per type it is used on. De-duplicated by
+        // name here or the select lists "Logos" three times.
+        const seen = new Map<string, string>();
+        (Array.isArray(list) ? list : []).forEach((c) => {
+          const name = String(c?.category || "").trim();
+          if (name && !seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+        });
+        setProjectCategories([...seen.values()].sort((a, b) => a.localeCompare(b)));
+      })
+      // A category list that will not load must not stop the grid rendering.
+      .catch(() => setProjectCategories([]));
+  }
+
+  useEffect(() => { loadAssets(); loadProjectTags(); loadProjectCategories(); }, []);
+
+  function setFilter(key: keyof MediaFilters, value: string) {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function openTagEditor(asset: MediaAsset) {
+    setTagTarget(asset);
+    setTagDraft(Array.isArray(asset.tags) ? [...asset.tags] : []);
+    setNewTag("");
+    setErrorMsg("");
+    loadProjectTags();
+  }
+
+  function toggleDraftTag(tag: string) {
+    const key = mediaTagKey(tag);
+    setTagDraft((prev) => (
+      prev.some((t) => mediaTagKey(t) === key)
+        ? prev.filter((t) => mediaTagKey(t) !== key)
+        : [...prev, normalizeMediaTag(tag)]
+    ));
+  }
+
+  /** Adds to the project registry AND applies to this file, in one action. */
+  async function addNewTag() {
+    const tag = normalizeMediaTag(newTag);
+    if (!tag) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/asset-tags", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({ tag })
+      });
+      const d = await res.json().catch(() => null);
+      // 200 means it already existed, 201 means it is new. Both are success —
+      // two admins typing "Courts" is normal use, not a conflict.
+      if (!res.ok) throw new Error(readApiErrorMessage(d, "Failed to add tag."));
+      const saved = (d?.tag ?? d?.data) as MediaTag | undefined;
+      const name = normalizeMediaTag(saved?.tag || tag);
+      setNewTag("");
+      loadProjectTags();
+      setTagDraft((prev) => (
+        prev.some((t) => mediaTagKey(t) === mediaTagKey(name)) ? prev : [...prev, name]
+      ));
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to add tag.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveTags() {
+    if (!tagTarget) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/assets/${encodeURIComponent(String(tagTarget.id))}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({ tags: tagDraft })
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, "Failed to save tags."));
+      }
+      setTagTarget(null);
+      setStatusMsg("Tags saved.");
+      loadAssets();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to save tags.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // What the module is configured to hold at all. Separate from the operator's
+  // filters below, so an empty grid can say WHICH of the two emptied it.
+  const inScope = assets.filter((asset) => {
+    if (kinds === "images") return !mediaIsVideo(asset);
+    if (kinds === "videos") return mediaIsVideo(asset);
+    return true;
+  });
+
+  const filtersOn = showFilters && mediaFiltersActive(filters);
+
+  const visible = !filtersOn
+    ? inScope
+    : inScope.filter((asset) => mediaAssetMatchesFilters(asset, filters));
+
+  async function uploadOne(file: File) {
+    const isVideo = /^video\//i.test(file.type) || /\.(mp4|mov|m4v|webm|ogg)$/i.test(file.name);
+    const assetType = isVideo ? "Video" : "Image";
+
+    // Video, and anything past the base64 ceiling, goes through Blob. An
+    // image small enough takes the direct path because it also generates a
+    // thumbnail on the way in.
+    if (isVideo || file.size > MEDIA_DIRECT_UPLOAD_MAX_BYTES) {
+      const { upload } = await getMediaBlobClient();
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/assets/blob-upload",
+        multipart: true,
+        clientPayload: JSON.stringify({ fileName: file.name, assetType, assetName: file.name })
+      });
+      const res = await fetch("/api/assets", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({
+          assetName: file.name,
+          assetType,
+          location: String(blob?.url || ""),
+          size: Number(file.size || 0),
+          source: MEDIA_MANAGER_SOURCE
+        })
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, `Failed to record ${file.name}.`));
+      }
+      return;
+    }
+
+    const res = await fetch("/api/assets/import-image", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType: file.type || "image/jpeg",
+        fileBase64: await fileToBase64(file),
+        assetName: file.name,
+        source: MEDIA_MANAGER_SOURCE
+      })
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      throw new Error(readApiErrorMessage(d, `Failed to upload ${file.name}.`));
+    }
+  }
+
+  async function handleFiles(fileList: FileList | null) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setErrorMsg("");
+    setStatusMsg("");
+    const failures: string[] = [];
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index];
+      // A video upload runs for minutes. Silence here is indistinguishable
+      // from a hang, so every file announces itself before it starts.
+      setUploading({ name: file.name, index, total: files.length });
+      try {
+        await uploadOne(file);
+      } catch (err) {
+        failures.push(`${file.name}: ${err instanceof Error ? err.message : "upload failed"}`);
+      }
+    }
+    setUploading(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    const ok = files.length - failures.length;
+    if (failures.length) {
+      setErrorMsg(`${failures.length} of ${files.length} failed — ${failures[0]}`);
+    }
+    if (ok > 0) setStatusMsg(`${ok} file${ok === 1 ? "" : "s"} uploaded.`);
+    loadAssets();
+  }
+
+  async function saveRename(asset: MediaAsset) {
+    const next = renameValue.trim();
+    if (!next || next === asset.assetName) { setRenameId(null); return; }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/assets/${encodeURIComponent(String(asset.id))}`, {
+        // PATCH, not PUT. routes/assets.js handles PATCH and DELETE for this
+        // path and nothing else, so a PUT falls through unmatched and the
+        // rename silently does not happen.
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: JSON.stringify({ assetName: next })
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, "Failed to rename."));
+      }
+      setStatusMsg("Renamed.");
+      setRenameId(null);
+      loadAssets();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to rename.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/assets/${encodeURIComponent(String(deleteTarget.id))}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: getCrmProjectHeaders()
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(d, "Failed to delete."));
+      }
+      setDeleteTarget(null);
+      setStatusMsg("Deleted.");
+      loadAssets();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to delete.");
+      setDeleteTarget(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="builder-media-manager" style={{ ["--builder-media-accent" as string]: accent }}>
+      {description ? (
+        <p className="builder-media-manager-description">{description}</p>
+      ) : null}
+      <div className="builder-media-manager-toolbar">
+        <label className="builder-media-manager-upload">
+          <input
+            ref={fileInputRef}
+            accept={acceptAttr}
+            className="builder-media-manager-file-input"
+            disabled={Boolean(uploading)}
+            multiple
+            onChange={(e) => { handleFiles(e.target.files); }}
+            type="file"
+          />
+          <span className="builder-media-manager-upload-label">
+            {uploading ? "Uploading…" : "Upload Files"}
+          </span>
+        </label>
+        <span className="builder-media-manager-count">
+          {loading
+            ? "Loading…"
+            : filtersOn
+              // "0 files" while 40 sit behind a filter is the same lie as the
+              // wrong empty state, in a smaller space.
+              ? `${visible.length} of ${inScope.length} file${inScope.length === 1 ? "" : "s"}`
+              : `${visible.length} file${visible.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
+
+      {uploading ? (
+        <div aria-live="polite" className="builder-media-manager-progress">
+          Uploading {uploading.index + 1} of {uploading.total}: {uploading.name}
+        </div>
+      ) : null}
+
+      {showFilters ? (
+        <div className="builder-media-manager-filters">
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Name</span>
+            <input
+              className="builder-media-manager-filter-input"
+              onChange={(e) => setFilter("name", e.target.value)}
+              placeholder="Search filenames"
+              type="search"
+              value={filters.name}
+            />
+          </label>
+
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Aspect</span>
+            <select
+              className="builder-media-manager-filter-select"
+              onChange={(e) => setFilter("aspect", e.target.value)}
+              value={filters.aspect}
+            >
+              <option value="">All</option>
+              {MEDIA_ASPECTS.map((a) => (
+                <option key={a.value} value={a.value}>{a.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Tag</span>
+            <select
+              className="builder-media-manager-filter-select"
+              onChange={(e) => setFilter("tag", e.target.value)}
+              value={filters.tag}
+            >
+              <option value="">All</option>
+              {mediaTagOptions(projectTags, assets).map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Category</span>
+            <select
+              className="builder-media-manager-filter-select"
+              onChange={(e) => setFilter("category", e.target.value)}
+              value={filters.category}
+            >
+              <option value="">All</option>
+              {projectCategories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+
+          {/* Only when there is something to clear — a permanently visible
+              Clear reads as an action with no effect. */}
+          {mediaFiltersActive(filters) ? (
+            <button
+              className="builder-media-manager-btn builder-media-manager-clear"
+              onClick={() => setFilters(EMPTY_MEDIA_FILTERS)}
+              type="button"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {statusMsg ? <div className="builder-media-manager-status">{statusMsg}</div> : null}
+      {errorMsg ? <div className="builder-media-manager-error">{errorMsg}</div> : null}
+      {loadError ? <div className="builder-media-manager-error">{loadError}</div> : null}
+
+      {/* Two different emptinesses, and they must never be confused: nothing
+          uploaded, versus everything hidden by a filter. */}
+      {!loading && !visible.length && !loadError && !filtersOn ? (
+        <p className="builder-media-manager-empty">
+          No media yet. Use Upload Files to add images or video.
+        </p>
+      ) : null}
+
+      {!loading && !visible.length && !loadError && filtersOn ? (
+        <p className="builder-media-manager-empty">
+          No files match these filters.{" "}
+          <button
+            className="builder-media-manager-clear-inline"
+            onClick={() => setFilters(EMPTY_MEDIA_FILTERS)}
+            type="button"
+          >
+            Clear filters
+          </button>
+        </p>
+      ) : null}
+
+      <div className="builder-media-manager-grid">
+        {visible.map((asset) => (
+          <figure className="builder-media-manager-card" key={asset.id}>
+            <div className="builder-media-manager-thumb">
+              {mediaIsVideo(asset) ? (
+                <video className="builder-media-manager-media" preload="metadata" src={asset.location} />
+              ) : (
+                <img
+                  alt={asset.assetName}
+                  className="builder-media-manager-media"
+                  loading="lazy"
+                  src={asset.thumbnailUrl || asset.location}
+                />
+              )}
+              {asset.source === MEDIA_MANAGER_SOURCE ? (
+                <span className="builder-media-manager-badge" title="Uploaded here">Media Mgr</span>
+              ) : null}
+            </div>
+            <figcaption className="builder-media-manager-caption">
+              {renameId === asset.id ? (
+                <input
+                  autoFocus
+                  className="builder-media-manager-rename"
+                  disabled={busy}
+                  onBlur={() => saveRename(asset)}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveRename(asset);
+                    if (e.key === "Escape") setRenameId(null);
+                  }}
+                  value={renameValue}
+                />
+              ) : (
+                <button
+                  className="builder-media-manager-name"
+                  onClick={() => { setRenameId(asset.id); setRenameValue(asset.assetName); }}
+                  title="Click to rename"
+                  type="button"
+                >
+                  {asset.assetName}
+                </button>
+              )}
+              <span className="builder-media-manager-meta">
+                {showSize ? formatMediaSize(asset.size) : null}
+                {showSize && showDate && asset.createdAt ? " · " : null}
+                {showDate && asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : null}
+                {showTags ? (
+                  <button
+                    aria-label={`Tag ${asset.assetName}`}
+                    className="builder-media-manager-tag-btn"
+                    onClick={() => openTagEditor(asset)}
+                    title="Tags"
+                    type="button"
+                  >
+                    {/* An outline tag glyph. Inline SVG rather than an emoji so
+                        it inherits the accent colour and renders identically
+                        on every platform. */}
+                    <svg aria-hidden="true" fill="none" height="14" viewBox="0 0 16 16" width="14">
+                      <path
+                        d="M1.5 7.1V2.4a.9.9 0 0 1 .9-.9h4.7c.24 0 .47.1.64.26l6.1 6.1a.9.9 0 0 1 0 1.28l-4.7 4.7a.9.9 0 0 1-1.28 0l-6.1-6.1a.9.9 0 0 1-.26-.64Z"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                      />
+                      <circle cx="4.6" cy="4.6" fill="currentColor" r="1" />
+                    </svg>
+                  </button>
+                ) : null}
+              </span>
+              {showTags && Array.isArray(asset.tags) && asset.tags.length ? (
+                <span className="builder-media-manager-tags">
+                  {asset.tags.map((tag) => (
+                    <span className="builder-media-manager-tag" key={tag}>{tag}</span>
+                  ))}
+                </span>
+              ) : null}
+              {showDelete ? (
+                <button
+                  className="builder-media-manager-delete"
+                  disabled={busy}
+                  onClick={() => setDeleteTarget(asset)}
+                  type="button"
+                >
+                  Delete
+                </button>
+              ) : null}
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+
+      {tagTarget ? (
+        <div
+          aria-label={`Tags for ${tagTarget.assetName}`}
+          aria-modal="true"
+          className="builder-media-manager-tag-modal"
+          onKeyDown={(e) => { if (e.key === "Escape") setTagTarget(null); }}
+          role="dialog"
+        >
+          <div className="builder-media-manager-tag-modal-inner">
+            <h3 className="builder-media-manager-tag-modal-title">
+              Tags — {tagTarget.assetName}
+            </h3>
+
+            {projectTags.length ? (
+              <div className="builder-media-manager-tag-choices">
+                {projectTags.map((tag) => {
+                  const on = tagDraft.some((t) => mediaTagKey(t) === mediaTagKey(tag.tag));
+                  return (
+                    <button
+                      aria-pressed={on}
+                      className="builder-media-manager-tag-choice"
+                      disabled={busy}
+                      key={tag.id}
+                      onClick={() => toggleDraftTag(tag.tag)}
+                      type="button"
+                    >
+                      {tag.tag}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="builder-media-manager-tag-empty">
+                No tags yet. Add the first one below.
+              </p>
+            )}
+
+            <div className="builder-media-manager-tag-add">
+              <input
+                aria-label="New tag"
+                className="builder-media-manager-tag-input"
+                disabled={busy}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter adds the tag rather than submitting anything — this
+                  // modal is not inside a form on the public site.
+                  if (e.key === "Enter") { e.preventDefault(); addNewTag(); }
+                }}
+                placeholder="Add a new tag"
+                value={newTag}
+              />
+              <button
+                className="builder-media-manager-tag-add-btn"
+                disabled={busy || !normalizeMediaTag(newTag)}
+                onClick={addNewTag}
+                type="button"
+              >
+                Add
+              </button>
+            </div>
+
+            {errorMsg ? <div className="builder-media-manager-error">{errorMsg}</div> : null}
+
+            <div className="builder-media-manager-confirm-actions">
+              <button
+                className="builder-media-manager-btn builder-media-manager-btn-primary"
+                disabled={busy}
+                onClick={saveTags}
+                type="button"
+              >
+                {busy ? "Saving…" : "Save Tags"}
+              </button>
+              <button
+                className="builder-media-manager-btn"
+                disabled={busy}
+                onClick={() => setTagTarget(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteTarget ? (
+        <div className="builder-media-manager-confirm">
+          <p>Delete “{deleteTarget.assetName}”? This cannot be undone.</p>
+          <div className="builder-media-manager-confirm-actions">
+            <button
+              className="builder-media-manager-btn builder-media-manager-btn-danger"
+              disabled={busy}
+              onClick={confirmDelete}
+              type="button"
+            >
+              {busy ? "Deleting…" : "Delete"}
+            </button>
+            <button
+              className="builder-media-manager-btn"
+              disabled={busy}
+              onClick={() => setDeleteTarget(null)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ── Event Manager (admin) ─────────────────────────────────────────────────── */
+
+type EventRecord = {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  description: string;
+  excerpt: string;
+  imageUrl: string;
+  imageAlt: string;
+  url: string;
+  featured: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  allDay: boolean;
+  timezone: string;
+  locationName: string;
+  locationAddress: string;
+  locationUrl: string;
+  organizerName: string;
+  organizerContact: string;
+  seoTitle: string;
+  seoDescription: string;
+};
+
+type EventFormValues = Record<string, string>;
+
+const EVENT_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "draft", label: "Draft" },
+  { value: "published", label: "Published" },
+  // Cancelled rather than deleted, on purpose: an event people already put in
+  // their diary must keep its page and say it is off, not vanish and leave
+  // them turning up.
+  { value: "cancelled", label: "Cancelled" },
+];
+
+const EMPTY_EVENT_FORM: EventFormValues = {
+  title: "", slug: "", status: "draft",
+  startsAt: "", endsAt: "", allDay: "false", timezone: "",
+  locationName: "", locationAddress: "", locationUrl: "",
+  imageUrl: "", imageAlt: "", url: "",
+  excerpt: "", description: "",
+  organizerName: "", organizerContact: "",
+  seoTitle: "", seoDescription: "",
+  featured: "false",
+};
+
+/** The viewer's own zone, offered as the default for a new event. */
+function localTimeZoneName(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
+}
+
+function eventStatusClass(status: string): string {
+  return `builder-event-manager-status builder-event-manager-status-${normalizeEventStatus(status)}`;
+}
+
+function EventManagerPreview({
+  settings,
+  theme,
+  themePalette,
+}: {
+  settings: Record<string, string>;
+  theme?: import("@/lib/builder-template").BuilderTheme;
+  themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+}) {
+  const accent = settings.accentColor || "#0f4f8f";
+  const viewBaseUrl = String(settings.viewPageUrl || "").trim();
+  const showStatus = (settings.showStatus ?? "true") !== "false";
+  const showDate = (settings.showDate ?? "true") !== "false";
+  const showLocation = (settings.showLocation ?? "true") !== "false";
+  const showDelete = (settings.showDelete ?? "true") !== "false";
+
+  const [events, setEvents] = useState<EventRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<EventFormValues>(EMPTY_EVENT_FORM);
+  const [saving, setSaving] = useState(false);
+  const [statusMsg, setStatusMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<EventRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  function loadEvents() {
+    setLoading(true);
+    setLoadError("");
+    fetch("/api/events?limit=200", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, `Failed to load events (${r.status})`));
+        const list = (d?.events ?? d?.data ?? []) as EventRecord[];
+        setEvents(Array.isArray(list) ? list : []);
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Failed to load events."))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { loadEvents(); }, []);
+
+  function setField(key: string, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditId(null);
+    setForm(EMPTY_EVENT_FORM);
+    setErrorMsg("");
+  }
+
+  function startCreate() {
+    setEditId(null);
+    setForm({ ...EMPTY_EVENT_FORM, timezone: localTimeZoneName() });
+    setErrorMsg("");
+    setStatusMsg("");
+    setFormOpen(true);
+  }
+
+  function startEdit(event: EventRecord) {
+    const allDay = Boolean(event.allDay);
+    setEditId(event.id);
+    setForm({
+      title: event.title ?? "",
+      slug: event.slug ?? "",
+      status: event.status || "draft",
+      startsAt: isoToLocalInput(event.startsAt, allDay),
+      endsAt: isoToLocalInput(event.endsAt, allDay),
+      allDay: allDay ? "true" : "false",
+      timezone: event.timezone ?? "",
+      locationName: event.locationName ?? "",
+      locationAddress: event.locationAddress ?? "",
+      locationUrl: event.locationUrl ?? "",
+      imageUrl: event.imageUrl ?? "",
+      imageAlt: event.imageAlt ?? "",
+      url: event.url ?? "",
+      excerpt: event.excerpt ?? "",
+      description: event.description ?? "",
+      organizerName: event.organizerName ?? "",
+      organizerContact: event.organizerContact ?? "",
+      seoTitle: event.seoTitle ?? "",
+      seoDescription: event.seoDescription ?? "",
+      featured: event.featured ? "true" : "false",
+    });
+    setErrorMsg("");
+    setStatusMsg("");
+    setFormOpen(true);
+  }
+
+  /**
+   * Switching All Day converts what is already typed rather than discarding
+   * it: a date survives losing its clock, and gains midnight coming back.
+   */
+  function toggleAllDay(next: boolean) {
+    setForm((prev) => ({
+      ...prev,
+      allDay: next ? "true" : "false",
+      startsAt: prev.startsAt ? isoToLocalInput(localInputToIso(prev.startsAt), next) : "",
+      endsAt: prev.endsAt ? isoToLocalInput(localInputToIso(prev.endsAt), next) : "",
+    }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.title.trim()) { setErrorMsg("Event name is required."); return; }
+    const startsAt = localInputToIso(form.startsAt);
+    const endsAt = localInputToIso(form.endsAt);
+    // An end before its start is the one date mistake worth refusing: it makes
+    // every calendar view render the event backwards or not at all.
+    if (startsAt && endsAt && Date.parse(endsAt) < Date.parse(startsAt)) {
+      setErrorMsg("The end of an event cannot come before its start.");
+      return;
+    }
+    setSaving(true);
+    setErrorMsg("");
+    setStatusMsg("");
+    const payload = {
+      title: form.title.trim(),
+      slug: form.slug.trim() || textToSlug(form.title.trim()),
+      status: form.status || "draft",
+      startsAt,
+      endsAt,
+      allDay: form.allDay === "true",
+      timezone: form.timezone.trim(),
+      locationName: form.locationName.trim(),
+      locationAddress: form.locationAddress.trim(),
+      locationUrl: form.locationUrl.trim(),
+      imageUrl: form.imageUrl.trim(),
+      imageAlt: form.imageAlt.trim(),
+      url: form.url.trim(),
+      excerpt: form.excerpt.trim(),
+      description: form.description || "",
+      organizerName: form.organizerName.trim(),
+      organizerContact: form.organizerContact.trim(),
+      seoTitle: form.seoTitle.trim(),
+      seoDescription: form.seoDescription.trim(),
+      featured: form.featured === "true",
+    };
+    try {
+      const res = await fetch(
+        editId ? `/api/events/${encodeURIComponent(editId)}` : "/api/events",
+        {
+          method: editId ? "PUT" : "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(readApiErrorMessage(data, editId ? "Failed to update event." : "Failed to create event."));
+      setStatusMsg(editId ? "Event updated." : "Event created.");
+      closeForm();
+      loadEvents();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/events/${encodeURIComponent(deleteTarget.id)}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: getCrmProjectHeaders(),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(readApiErrorMessage(data, "Failed to delete event."));
+      }
+      if (editId === deleteTarget.id) closeForm();
+      setDeleteTarget(null);
+      setStatusMsg("Event deleted.");
+      loadEvents();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to delete event.");
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const isAllDay = form.allDay === "true";
+  const dateInputType = isAllDay ? "date" : "datetime-local";
+
+  const eventForm = formOpen ? (
+    <form className="builder-event-manager-form" onSubmit={handleSubmit}>
+      <h3 className="builder-event-manager-form-title">{editId ? "Edit Event" : "New Event"}</h3>
+
+      <div className="builder-event-manager-field">
+        <label className="builder-event-manager-label" htmlFor="event-title">Event Name *</label>
+        <input
+          id="event-title"
+          className="builder-event-manager-input"
+          value={form.title}
+          onChange={(e) => {
+            const next = e.target.value;
+            setForm((f) => ({ ...f, title: next, slug: f.slug || textToSlug(next) }));
+          }}
+        />
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-slug">Slug</label>
+          <input
+            id="event-slug"
+            className="builder-event-manager-input"
+            value={form.slug}
+            onChange={(e) => setField("slug", e.target.value)}
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-status">Status</label>
+          <select
+            id="event-status"
+            className="builder-event-manager-input"
+            value={form.status}
+            onChange={(e) => setField("status", e.target.value)}
+          >
+            {EVENT_STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-starts">Starts</label>
+          <input
+            id="event-starts"
+            className="builder-event-manager-input"
+            type={dateInputType}
+            value={form.startsAt}
+            onChange={(e) => setField("startsAt", e.target.value)}
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-ends">Ends</label>
+          <input
+            id="event-ends"
+            className="builder-event-manager-input"
+            type={dateInputType}
+            value={form.endsAt}
+            onChange={(e) => setField("endsAt", e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <label className="builder-event-manager-check">
+          <input
+            type="checkbox"
+            checked={isAllDay}
+            onChange={(e) => toggleAllDay(e.target.checked)}
+          />
+          <span>All day</span>
+        </label>
+        <label className="builder-event-manager-check">
+          <input
+            type="checkbox"
+            checked={form.featured === "true"}
+            onChange={(e) => setField("featured", e.target.checked ? "true" : "false")}
+          />
+          <span>Featured</span>
+        </label>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-timezone">Time Zone</label>
+          <input
+            id="event-timezone"
+            className="builder-event-manager-input"
+            value={form.timezone}
+            onChange={(e) => setField("timezone", e.target.value)}
+            placeholder="America/Denver"
+          />
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-location-name">Location</label>
+          <input
+            id="event-location-name"
+            className="builder-event-manager-input"
+            value={form.locationName}
+            onChange={(e) => setField("locationName", e.target.value)}
+            placeholder="Center Court"
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-location-address">Address</label>
+          <input
+            id="event-location-address"
+            className="builder-event-manager-input"
+            value={form.locationAddress}
+            onChange={(e) => setField("locationAddress", e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-location-url">Map Link</label>
+          <input
+            id="event-location-url"
+            className="builder-event-manager-input"
+            value={form.locationUrl}
+            onChange={(e) => setField("locationUrl", e.target.value)}
+            placeholder="https://…"
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-url">Event Link</label>
+          <input
+            id="event-url"
+            className="builder-event-manager-input"
+            value={form.url}
+            onChange={(e) => setField("url", e.target.value)}
+            placeholder="Tickets or registration"
+          />
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field">
+        <label className="builder-event-manager-label">Image</label>
+        <BuilderImagePickerField
+          value={form.imageUrl}
+          onChange={(url) => setField("imageUrl", url)}
+          placeholder="https://…"
+        />
+      </div>
+
+      {form.imageUrl ? (
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-image-alt">Image Alt Text</label>
+          <input
+            id="event-image-alt"
+            className="builder-event-manager-input"
+            value={form.imageAlt}
+            onChange={(e) => setField("imageAlt", e.target.value)}
+            placeholder="What the picture shows"
+          />
+        </div>
+      ) : null}
+
+      <div className="builder-event-manager-field">
+        <label className="builder-event-manager-label" htmlFor="event-excerpt">Summary</label>
+        <textarea
+          id="event-excerpt"
+          className="builder-event-manager-input builder-event-manager-textarea"
+          value={form.excerpt}
+          onChange={(e) => setField("excerpt", e.target.value)}
+          placeholder="One or two lines for calendar cards"
+        />
+      </div>
+
+      <div className="builder-event-manager-field">
+        <label className="builder-event-manager-label">Description</label>
+        <BuilderRichTextEditor
+          value={form.description}
+          onChange={(html) => setField("description", html)}
+          placeholder="Full event details…"
+        />
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-organizer">Organizer</label>
+          <input
+            id="event-organizer"
+            className="builder-event-manager-input"
+            value={form.organizerName}
+            onChange={(e) => setField("organizerName", e.target.value)}
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-organizer-contact">Organizer Contact</label>
+          <input
+            id="event-organizer-contact"
+            className="builder-event-manager-input"
+            value={form.organizerContact}
+            onChange={(e) => setField("organizerContact", e.target.value)}
+            placeholder="Email or phone"
+          />
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-seo-title">SEO Title</label>
+          <input
+            id="event-seo-title"
+            className="builder-event-manager-input"
+            value={form.seoTitle}
+            onChange={(e) => setField("seoTitle", e.target.value)}
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-seo-description">SEO Description</label>
+          <input
+            id="event-seo-description"
+            className="builder-event-manager-input"
+            value={form.seoDescription}
+            onChange={(e) => setField("seoDescription", e.target.value)}
+          />
+        </div>
+      </div>
+
+      {errorMsg ? <div className="builder-event-manager-error">{errorMsg}</div> : null}
+
+      <div className="builder-event-manager-form-actions">
+        <button type="button" className="btn btn-ghost" onClick={closeForm} disabled={saving}>Cancel</button>
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={saving}
+          style={{ background: accent, borderColor: accent }}
+        >
+          {saving ? "Saving…" : editId ? "Update Event" : "Create Event"}
+        </button>
+      </div>
+    </form>
+  ) : null;
+
+  const columnCount = 1 + (showStatus ? 1 : 0) + (showDate ? 1 : 0) + (showLocation ? 1 : 0) + 1;
+
+  return (
+    <div
+      className="builder-event-manager-module builder-admin-data-table-module"
+      style={getAdminDataTableThemeStyle(themePalette, theme)}
+    >
+      <h2 className="builder-admin-data-table-title">Events</h2>
+
+      {statusMsg ? <div className="builder-event-manager-notice">{statusMsg}</div> : null}
+      {loadError ? <div className="builder-event-manager-error">{loadError}</div> : null}
+      {errorMsg && !formOpen ? <div className="builder-event-manager-error">{errorMsg}</div> : null}
+
+      <div className="builder-admin-data-table-wrap">
+        <table className="builder-admin-data-table">
+          <thead>
+            {/*
+              * The Add button lives in the FILTER row, not the header row —
+              * the same place the CRM contacts table puts "Add Contact". The
+              * header row is dark, so a button there renders black on black
+              * and reads as a fifth column heading rather than a control.
+              */}
+            <tr className="builder-admin-data-table-filter-row table-filter-row">
+              <th />
+              {showStatus ? <th /> : null}
+              {showDate ? <th /> : null}
+              {showLocation ? <th /> : null}
+              <th className="builder-admin-data-table-actions-col actions-col">
+                <button type="button" className="btn tiny-btn" onClick={startCreate}>Add Event</button>
+              </th>
+            </tr>
+            <tr className="builder-admin-data-table-header-row">
+              <th>Event</th>
+              {showStatus ? <th>Status</th> : null}
+              {showDate ? <th>When</th> : null}
+              {showLocation ? <th>Where</th> : null}
+              <th className="builder-admin-data-table-actions-col actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={columnCount} className="builder-admin-data-table-empty">Loading events…</td>
+              </tr>
+            ) : events.length === 0 ? (
+              <tr>
+                <td colSpan={columnCount} className="builder-admin-data-table-empty">
+                  No events yet. Choose Add Event to create your first one.
+                </td>
+              </tr>
+            ) : events.map((event) => {
+              const viewHref = viewBaseUrl && event.slug
+                ? `${viewBaseUrl}${viewBaseUrl.includes("?") ? "&" : "?"}event=${encodeURIComponent(event.slug)}`
+                : undefined;
+              return (
+                <tr key={event.id}>
+                  <td className="builder-admin-data-table-cell">
+                    <span className="builder-event-manager-title">{event.title || "Untitled event"}</span>
+                    {event.featured ? <span className="builder-event-manager-featured">Featured</span> : null}
+                  </td>
+                  {showStatus ? (
+                    <td className="builder-admin-data-table-cell">
+                      <span className={eventStatusClass(event.status)}>{event.status || "draft"}</span>
+                    </td>
+                  ) : null}
+                  {showDate ? (
+                    <td className="builder-admin-data-table-cell builder-admin-data-table-date">
+                      {formatEventWhen(event)}
+                    </td>
+                  ) : null}
+                  {showLocation ? (
+                    <td className="builder-admin-data-table-cell">{event.locationName || "—"}</td>
+                  ) : null}
+                  <td className="builder-admin-data-table-actions">
+                    <div className="table-actions-row" role="group">
+                      <AdminTableIconButton
+                        icon="view"
+                        label="View"
+                        href={viewHref}
+                        linkTarget="_blank"
+                        disabled={!viewHref}
+                        onClick={!viewHref ? () => {} : undefined}
+                      />
+                      <AdminTableIconButton icon="edit" label="Edit" onClick={() => startEdit(event)} />
+                      {showDelete ? (
+                        <AdminTableIconButton
+                          icon="delete"
+                          label="Delete"
+                          danger
+                          onClick={() => setDeleteTarget(event)}
+                        />
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {eventForm}
+
+      {deleteTarget ? (
+        <BuilderBodyPortal>
+          <div className="crm-contacts-modal-overlay" onClick={() => !deleting && setDeleteTarget(null)}>
+            <div className="crm-contacts-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="crm-contacts-modal-header">
+                <strong>Delete Event</strong>
+                <button type="button" className="crm-contacts-modal-close" onClick={() => setDeleteTarget(null)} disabled={deleting}>✕</button>
+              </div>
+              <div className="crm-contacts-modal-body">
+                <p className="builder-admin-data-table-delete-copy">
+                  Delete <strong>{deleteTarget.title || "this event"}</strong>? This cannot be undone.
+                  To take an event off the calendar without losing it, set its status to Cancelled instead.
+                </p>
+              </div>
+              <div className="crm-contacts-modal-footer">
+                <button type="button" className="crm-contacts-modal-btn" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button>
+                <button type="button" className="crm-contacts-modal-btn crm-contacts-modal-btn-danger" onClick={confirmDelete} disabled={deleting}>
+                  {deleting ? "Deleting…" : "Delete Event"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </BuilderBodyPortal>
+      ) : null}
     </div>
   );
 }
@@ -7522,6 +9484,7 @@ function AdminNavLinkPreview({ settings }: { settings: Record<string, string> })
 const PREMIUM_MODULE_GROUPS: Array<{ key: string; label: string; description: string }> = [
   { key: "crm",  label: "CRM",  description: "Lead capture forms and contact table" },
   { key: "blog", label: "Blog", description: "Blog post feeds, editors, and author bios" },
+  { key: "events", label: "Events", description: "Event calendar with an admin manager" },
 ];
 
 /** Mirrors MAX_CONTACT_ALERT_RECIPIENTS in lib/projectSiteSettingsStore.js. */

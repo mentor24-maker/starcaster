@@ -741,13 +741,56 @@ test('a missing or unparseable number still falls back', () => {
 
 test('the resume sweep sends a stranded build back but leaves a stranded review', () => {
   // Source-level, like the bus-relay wiring tests above: the move itself needs
-  // a live token. What must never come back is one unconditional "-> Queued".
+  // a live token. What must never come back is one unconditional move for
+  // every stranded ticket regardless of what died on it.
   const code = withoutComments(read('scripts/pipeline.mjs'));
   assert.match(code, /const reviewing = s\.kind === 'a review'/,
     'the sweep must branch on what kind of pass died');
-  const queued = code.indexOf("status: 'Queued'");
+  const moved = code.indexOf('status: where.status');
   const branch = code.indexOf('if (reviewing)');
-  assert.ok(branch > -1 && queued > -1 && branch < queued,
-    'the review case must be handled BEFORE the move to Queued, or it is swept anyway');
+  assert.ok(branch > -1 && moved > -1 && branch < moved,
+    'the review case must be handled BEFORE the move, or it is swept anyway');
   assert.match(code, /clearLoopNote\(task\)/, 'releasing a review means clearing its stale claim');
+  // And the destination is never hard-coded: a half-built ticket goes to
+  // Rework (task 86bbr1u9v), so a literal 'Queued' in the move is the bug.
+  assert.doesNotMatch(code, /status: 'Queued'/,
+    'the destination must come from strandedBuildDestination, not from a literal');
+  assert.match(code, /strandedBuildDestination\(dest\.action\)/,
+    'the sweep must ask where a stranded build belongs');
+});
+
+test('a stranded build goes to Rework only when something was actually built', () => {
+  // The rule itself, not its wiring. Both destinations are claimable, so this
+  // is about ORDER and about telling the truth — a half-built ticket dropped
+  // back into Queued restarts the priority contest it has already been losing.
+  assert.equal(pause.strandedBuildDestination('continue').status, 'Rework');
+  assert.equal(pause.strandedBuildDestination('fresh').status, 'Queued');
+  // A PR is named but unreadable: it still belongs with the half-built work.
+  // buildStart refuses to guess because the cost there is a duplicate branch;
+  // here the ticket is claimable either way and `build-start` asks again
+  // before a line is written, so the only thing at stake is which queue it
+  // waits in.
+  assert.equal(pause.strandedBuildDestination('unknown').status, 'Rework');
+  assert.equal(pause.strandedBuildDestination('who knows').status, 'Rework',
+    'an unanticipated answer must not be resolved as fresh work');
+  for (const action of ['continue', 'fresh', 'unknown']) {
+    assert.ok(pause.strandedBuildDestination(action).why, `${action} must carry a reason`);
+  }
+});
+
+test('the swept note names the destination it actually moved to', () => {
+  // A note saying "Queued" above a move to "Rework" is a trail that
+  // contradicts the board, and the trail is the only thing the next pass reads.
+  const rework = pause.sweptTicketNote({ kind: 'a build', destination: 'Rework', why: 'its pull request is still open' });
+  assert.match(rework, /Returned to Rework/);
+  assert.match(rework, /its pull request is still open/);
+  assert.doesNotMatch(rework, /Returned to Queued/);
+
+  const queued = pause.sweptTicketNote({ kind: 'a build', destination: 'Queued', why: 'nothing has been built for it' });
+  assert.match(queued, /Returned to Queued/);
+
+  // A review is released where it stands and never names a destination.
+  const review = pause.sweptTicketNote({ kind: 'a review' });
+  assert.match(review, /stays in "In review"/);
+  assert.doesNotMatch(review, /Returned to/);
 });

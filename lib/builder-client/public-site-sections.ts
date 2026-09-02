@@ -18,6 +18,7 @@ export const PRIVATE_ONLY_MODULE_TYPES: ReadonlySet<string> = new Set([
   "blog-post-create",
   "blog-post-manager",
   "blog-category-manager",
+  "event-manager",
 ]);
 
 export function isPrivateOnlyModuleType(type: string): boolean {

@@ -128,6 +128,10 @@ export const BUILDER_MODULE_TYPES = [
   "blog-card-manager",
   "blog-search",
   "blog-search-results",
+  "event-manager",
+  "event-calendar",
+  "event-detail",
+  "media-manager",
   "site-search",
   "site-search-results",
   "messaging-topic-list",
@@ -2134,6 +2138,10 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-card-manager" ||
     type === "blog-search" ||
     type === "blog-search-results" ||
+    type === "event-manager" ||
+    type === "event-calendar" ||
+    type === "event-detail" ||
+    type === "media-manager" ||
     type === "site-search" ||
     type === "site-search-results" ||
     type === "messaging-topic-list" ||
@@ -3707,6 +3715,51 @@ export function createEmptyModule(
                             viewPageUrl: "",
                             showStatus: "true",
                             showDate: "true",
+                            showDelete: "true",
+                            accentColor: "#0f4f8f"
+                          }
+                      : type === "event-detail"
+                        ? {
+                            backLinkUrl: "",
+                            backLinkLabel: "Back to all events",
+                            ctaLabel: "Get Tickets",
+                            showImage: "true",
+                            showLocation: "true",
+                            showDescription: "true",
+                            showOrganizer: "true",
+                            notFoundMessage: "We could not find that event. It may have been removed.",
+                            accentColor: "#0f4f8f"
+                          }
+                      : type === "event-calendar"
+                        ? {
+                            calendarTitle: "",
+                            eventPageUrl: "",
+                            layout: "month",
+                            columns: "3",
+                            limit: "12",
+                            weekStartsOn: "0",
+                            showPast: "false",
+                            showImages: "true",
+                            showLocation: "true",
+                            showExcerpt: "true",
+                            emptyMessage: "No events scheduled just yet — check back soon.",
+                            accentColor: "#0f4f8f"
+                          }
+                      : type === "media-manager"
+                        ? {
+                            kinds: "all",
+                            showFilters: "true",
+                            showSize: "true",
+                            showDate: "true",
+                            showTags: "true",
+                            showDelete: "true",
+                            accentColor: "#0f4f8f"
+                          }
+                      : type === "event-manager"
+                        ? {
+                            showStatus: "true",
+                            showDate: "true",
+                            showLocation: "true",
                             showDelete: "true",
                             accentColor: "#0f4f8f"
                           }

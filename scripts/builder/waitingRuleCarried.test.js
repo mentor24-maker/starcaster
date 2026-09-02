@@ -123,7 +123,13 @@ test('the comment reads on THIS ticket\'s paths survive a 2xx with an unparseabl
   // verdict, …); those are a real gap and a separate ticket, not something to
   // sweep into an unattended build pass.
   const guard = cli.slice(cli.indexOf('async function alreadyAnsweredRefused('));
-  const guardBody = guard.slice(0, guard.indexOf('\nconst cmd = process.argv[2];'));
+  // Bounded at the command dispatch. `indexOf` returning -1 makes `slice`
+  // count from the END, which silently hands back nearly the whole file
+  // instead of the guard — so the marker is located first and asserted. It
+  // drifted once already, when `const cmd` became `let cmd` (task 86bbr1u9v).
+  const dispatchAt = guard.search(/\n(?:const|let) cmd = process\.argv\[2\];/);
+  assert.ok(dispatchAt > 0, 'could not find the command dispatch — this test has drifted');
+  const guardBody = guard.slice(0, dispatchAt);
   const waitingCmd = cli.slice(cli.indexOf("} else if (cmd === 'waiting') {"));
   const waitingBody = waitingCmd.slice(0, waitingCmd.indexOf("} else if (cmd === 'lists') {"));
 

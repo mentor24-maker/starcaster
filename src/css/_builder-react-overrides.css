@@ -7045,3 +7045,1040 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-primary, #1a202c);
   font-weight: 600;
 }
+
+/* ── Event Manager (admin module) ──────────────────────────────────────────
+ *
+ * The table itself reuses .builder-admin-data-table, shared with the CRM
+ * contacts table and the blog post manager. Only what is particular to events
+ * lives here: the status pills, the featured marker, and the inline form.
+ *
+ * Layout rules are in this base block, never inside a media query (R1) — the
+ * breakpoint below only narrows the form's two-up rows to one column.
+ */
+
+.builder-react-root .builder-event-manager-title {
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-event-manager-featured {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-input);
+  background: var(--bg-alt);
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.builder-react-root .builder-event-manager-status {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-input);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Three states, three readings: live, not yet live, and called off. Cancelled
+ * shares the danger colour deliberately — it is the one an operator must not
+ * mistake for published at a glance. */
+.builder-react-root .builder-event-manager-status-published {
+  background: var(--bg-alt);
+  color: var(--brand-accent-ink);
+}
+
+.builder-react-root .builder-event-manager-status-draft {
+  background: var(--bg-hover);
+  color: var(--ink-muted);
+}
+
+.builder-react-root .builder-event-manager-status-cancelled {
+  background: var(--bg-hover);
+  color: var(--ink-secondary);
+  text-decoration: line-through;
+}
+
+.builder-react-root .builder-event-manager-notice,
+.builder-react-root .builder-event-manager-error {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-input);
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-event-manager-notice {
+  background: var(--bg-alt);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-event-manager-error {
+  background: var(--bg-hover);
+  color: var(--ink-primary);
+  border: 1px solid var(--border-strong);
+}
+
+.builder-react-root .builder-event-manager-form {
+  margin-top: var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-event-manager-form-title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-event-manager-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+  min-width: 0;
+}
+
+/* Two fields per row on a wide form, one on a narrow one. `minmax(0, 1fr)`
+ * rather than `1fr`: a grid track's default minimum is its content, so a long
+ * value would push the row wider than the module instead of wrapping. */
+.builder-react-root .builder-event-manager-field-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-5);
+  align-items: end;
+}
+
+.builder-react-root .builder-event-manager-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--builder-editor-label, var(--ink-secondary));
+}
+
+.builder-react-root .builder-event-manager-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--bg-input);
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+}
+
+.builder-react-root .builder-event-manager-textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+
+.builder-react-root .builder-event-manager-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+/* A checkbox is not a text field, and something upstream in the public-site
+ * render context stretches bare inputs to fill their container — measured at
+ * 648px, which pushed "All day" to the far right of the row and left a tick
+ * box floating in the middle of nowhere. Declared here rather than fixed
+ * upstream: this module does not own that rule, and a module must not depend
+ * on ambient CSS it does not own (R1's corollary). */
+.builder-react-root .builder-event-manager-check input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.builder-react-root .builder-event-manager-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+@media (max-width: 700px) {
+  .builder-react-root .builder-event-manager-field-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+/* The shared admin-table scroll container is `width: 100%` with a 1px border
+ * and inherits `content-box` on a public page, so it renders 2px wider than
+ * its column — at full page width that is the BODY scrolling sideways, which
+ * R5 forbids. Found building the Event Manager (2026-09-01); the fix belongs
+ * to the shared class because the CRM contacts table and the blog post
+ * manager have exactly the same two pixels.
+ *
+ * Here rather than in _builder-react.css: that file is regenerated wholesale
+ * and a hand edit there disappears silently (R2). */
+.builder-react-root .builder-admin-data-table-wrap {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* The events table carries five columns of real words — a title, a date range,
+ * a place. `table-layout: fixed` + `width: 100%` makes them share whatever
+ * width exists, so at 390px every cell crushed to an ellipsis ("S…", "Ap…",
+ * "C…") and the table was legible at no width at all.
+ *
+ * A floor instead: below it the wrap's own `overflow-x: auto` takes over and
+ * the TABLE scrolls, which is what R5 asks for — wide content scrolls inside
+ * its own container and the page body never does. In the base layer, not a
+ * media query (R1): the floor applies at every width, and it is simply never
+ * reached on a wide screen. */
+.builder-react-root .builder-event-manager-module .builder-admin-data-table {
+  min-width: 620px;
+}
+
+/* ── Event Calendar (public) ───────────────────────────────────────────────
+ *
+ * Three layouts, one module: a month grid, an upcoming list, and cards. All
+ * structural rules are in this base block; the one media query below only
+ * adjusts what the base already established (R1).
+ *
+ * `--evt-accent` is set inline by the renderer from the module's Accent
+ * Color, so the tenant's own colour reaches every piece of chrome here
+ * without a second stylesheet.
+ */
+
+.builder-react-root .builder-event-calendar {
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--bx-text, var(--ink-primary));
+  font-family: inherit;
+}
+
+.builder-react-root .builder-event-calendar-heading {
+  margin: 0 0 var(--space-4);
+  color: var(--bx-heading, var(--ink-primary));
+}
+
+.builder-react-root .builder-event-calendar-empty {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-container);
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* ── Month grid ─────────────────────────────────────────────────────────── */
+
+.builder-react-root .builder-event-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.builder-react-root .builder-event-calendar-month {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--bx-heading, var(--ink-primary));
+  min-width: 12ch;
+  text-align: center;
+}
+
+.builder-react-root .builder-event-calendar-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  background: var(--bg-surface);
+  color: var(--evt-accent, var(--accent));
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-event-calendar-nav-btn:hover {
+  background: var(--bg-hover);
+}
+
+.builder-react-root .builder-event-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--border-light);
+  overflow: hidden;
+}
+
+.builder-react-root .builder-event-calendar-weekday {
+  padding: var(--space-2) var(--space-1);
+  background: var(--bg-alt);
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.builder-react-root .builder-event-calendar-weekday abbr {
+  text-decoration: none;
+  border: 0;
+}
+
+.builder-react-root .builder-event-calendar-day {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 92px;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  background: var(--bg-surface);
+}
+
+/* A day from the neighbouring month is drawn, but muted — hiding it leaves
+ * ragged holes, and drawing it unmarked lies about which month you are in. */
+.builder-react-root .builder-event-calendar-day--outside {
+  background: var(--bg-alt);
+  color: var(--ink-muted);
+}
+
+.builder-react-root .builder-event-calendar-day--outside .builder-event-calendar-daynum {
+  opacity: 0.5;
+}
+
+.builder-react-root .builder-event-calendar-day--today .builder-event-calendar-daynum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.55em;
+  height: 1.55em;
+  border-radius: 50%;
+  background: var(--evt-accent, var(--accent));
+  color: var(--btn-text, #fff);
+}
+
+.builder-react-root .builder-event-calendar-daynum {
+  /* The day cell is a flex COLUMN, whose children stretch to its full width
+   * by default — so today's round marker below rendered as an ellipse the
+   * width of the whole cell. The number sizes to itself and the chips keep
+   * the full width. */
+  align-self: flex-start;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: inherit;
+}
+
+.builder-react-root .builder-event-calendar-chip {
+  display: block;
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--evt-accent, #0f4f8f) 12%, transparent);
+  border-left: 3px solid var(--evt-accent, var(--accent));
+  color: inherit;
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+  text-decoration: none;
+  /* One line per event: a long title must not stretch the whole column, and
+   * the day cell must stay the same height whatever is in it. */
+  overflow: hidden;
+}
+
+.builder-react-root .builder-event-calendar-chip:hover {
+  background: color-mix(in srgb, var(--evt-accent, #0f4f8f) 22%, transparent);
+}
+
+.builder-react-root .builder-event-calendar-chip-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.builder-react-root .builder-event-calendar-chip-time {
+  display: block;
+  color: var(--ink-muted);
+}
+
+/* ── List and cards ─────────────────────────────────────────────────────── */
+
+.builder-react-root .builder-event-calendar-items {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.builder-react-root .builder-event-calendar--cards .builder-event-calendar-items {
+  grid-template-columns: repeat(var(--evt-columns, 3), minmax(0, 1fr));
+}
+
+.builder-react-root .builder-event-calendar-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.builder-react-root .builder-event-calendar-item-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.builder-react-root .builder-event-calendar-item-body {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  padding: var(--space-4);
+}
+
+.builder-react-root .builder-event-calendar-item-text {
+  min-width: 0;
+}
+
+/* The date block on a list row — the thing a visitor scans down. */
+.builder-react-root .builder-event-calendar-datechip {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  padding: var(--space-2) 0;
+  border-radius: var(--radius-input);
+  background: var(--evt-accent, var(--accent));
+  color: var(--btn-text, #fff);
+  line-height: var(--leading-tight);
+}
+
+.builder-react-root .builder-event-calendar-datechip-month {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.builder-react-root .builder-event-calendar-datechip-day {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.builder-react-root .builder-event-calendar-item-title {
+  display: block;
+  color: var(--bx-heading, var(--ink-primary));
+  font-size: var(--text-md);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a.builder-react-root .builder-event-calendar-item-title:hover,
+.builder-react-root a.builder-event-calendar-item-title:hover {
+  color: var(--evt-accent, var(--accent));
+  text-decoration: underline;
+}
+
+.builder-react-root .builder-event-calendar-item-when {
+  margin: 2px 0 0;
+  color: var(--evt-accent, var(--accent));
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.builder-react-root .builder-event-calendar-item-where,
+.builder-react-root .builder-event-calendar-item-excerpt {
+  margin: 2px 0 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Below this the month grid cannot show words in a 7th of the width, so each
+ * day keeps its number and its events become dots. The grid itself, its
+ * columns and the cards' single column are adjustments to the base layer
+ * above, never the only place those rules exist (R1). */
+@media (max-width: 700px) {
+  .builder-react-root .builder-event-calendar--cards .builder-event-calendar-items {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .builder-react-root .builder-event-calendar-day {
+    min-height: 52px;
+    padding: var(--space-1);
+  }
+
+  .builder-react-root .builder-event-calendar-chip {
+    height: 6px;
+    padding: 0;
+    border-left: 0;
+    border-radius: 3px;
+    background: var(--evt-accent, var(--accent));
+  }
+
+  .builder-react-root .builder-event-calendar-chip-title,
+  .builder-react-root .builder-event-calendar-chip-time {
+    display: none;
+  }
+}
+
+/* ── Event Detail (public) ─────────────────────────────────────────────────
+ *
+ * One event's own page. All structural rules are in this base block; the one
+ * media query below only adjusts what the base established (R1).
+ */
+
+.builder-react-root .builder-event-detail {
+  display: block;
+  width: 100%;
+  max-width: 46rem;
+  box-sizing: border-box;
+  margin: 0 auto;
+  color: var(--bx-text, var(--ink-primary));
+  font-family: inherit;
+}
+
+.builder-react-root .builder-event-detail-back {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  color: var(--evt-accent, var(--accent));
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.builder-react-root .builder-event-detail-back:hover {
+  text-decoration: underline;
+}
+
+.builder-react-root .builder-event-detail-note {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-container);
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-event-detail-note code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-input);
+  background: var(--bg-alt);
+  font-size: var(--text-xs);
+}
+
+/* The banner that is the whole reason `cancelled` is a status and not a
+ * delete. Loud on purpose: a visitor who already has this in their diary must
+ * not be able to skim past it. */
+.builder-react-root .builder-event-detail-cancelled {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-left: 4px solid var(--evt-accent, var(--accent));
+  border-radius: var(--radius-input);
+  background: var(--bg-hover);
+  color: var(--ink-primary);
+  font-size: var(--text-md);
+}
+
+.builder-react-root .builder-event-detail-title {
+  margin: 0 0 var(--space-2);
+  color: var(--bx-heading, var(--ink-primary));
+}
+
+.builder-react-root .builder-event-detail-when {
+  margin: 0 0 var(--space-1);
+  color: var(--evt-accent, var(--accent));
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.builder-react-root .builder-event-detail-timezone {
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.builder-react-root .builder-event-detail-where {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 var(--space-4);
+  color: var(--ink-secondary);
+  font-size: var(--text-md);
+}
+
+.builder-react-root .builder-event-detail-address {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-event-detail-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 0 var(--space-5);
+  border-radius: var(--radius-container);
+}
+
+.builder-react-root .builder-event-detail-body {
+  margin: 0 0 var(--space-5);
+  line-height: var(--leading-normal);
+}
+
+/* A long unbroken string — a booking URL pasted into the description — must
+ * not push the page sideways (shared rule: long strings and overflow). */
+.builder-react-root .builder-event-detail-body {
+  overflow-wrap: anywhere;
+}
+
+.builder-react-root .builder-event-detail-cta-row {
+  margin: 0 0 var(--space-5);
+}
+
+.builder-react-root .builder-event-detail-cta {
+  display: inline-block;
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-btn);
+  background: var(--evt-accent, var(--accent));
+  color: var(--btn-text, #fff);
+  font-size: var(--text-md);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-event-detail-cta:hover {
+  filter: brightness(1.08);
+}
+
+.builder-react-root .builder-event-detail-organizer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-light);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-event-detail-organizer a {
+  color: var(--evt-accent, var(--accent));
+}
+
+@media (max-width: 700px) {
+  .builder-react-root .builder-event-detail-cta {
+    display: block;
+    text-align: center;
+  }
+}
+
+/* ── Media Manager (admin module) ───────────────────────────────────────────
+   The Media Manager a TENANT admin uses on their own site. Styles live here
+   rather than in _builder-react.css, which is regenerated wholesale by
+   `npm run extract:builder-css` and would silently drop them. */
+
+.builder-react-root .builder-media-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.builder-react-root .builder-media-manager-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.builder-react-root .builder-media-manager-upload {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+/* The real input is kept in the layout (not display:none) so it stays
+   focusable and reachable by keyboard; the visible label sits on top. */
+.builder-react-root .builder-media-manager-file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-media-manager-upload-label {
+  display: inline-block;
+  padding: 0.45rem 0.9rem;
+  border-radius: 6px;
+  background: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.builder-react-root .builder-media-manager-file-input:focus-visible + .builder-media-manager-upload-label {
+  outline: 2px solid var(--builder-media-accent, #0f4f8f);
+  outline-offset: 2px;
+}
+
+.builder-react-root .builder-media-manager-count,
+.builder-react-root .builder-media-manager-meta {
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-media-manager-progress,
+.builder-react-root .builder-media-manager-status,
+.builder-react-root .builder-media-manager-error {
+  font-size: var(--text-sm);
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+}
+
+.builder-react-root .builder-media-manager-progress,
+.builder-react-root .builder-media-manager-status {
+  background: var(--bg-input);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-media-manager-error {
+  background: var(--bg-hover);
+  color: var(--danger, #a03c28);
+}
+
+.builder-react-root .builder-media-manager-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-media-manager-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.builder-react-root .builder-media-manager-card {
+  margin: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-media-manager-thumb {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--bg-input);
+}
+
+.builder-react-root .builder-media-manager-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.builder-react-root .builder-media-manager-badge {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-media-manager-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.builder-react-root .builder-media-manager-name,
+.builder-react-root .builder-media-manager-delete {
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-media-manager-name {
+  color: var(--ink-primary);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.builder-react-root .builder-media-manager-delete {
+  color: var(--danger, #a03c28);
+  align-self: flex-start;
+  font-size: var(--text-xs);
+}
+
+.builder-react-root .builder-media-manager-rename {
+  width: 100%;
+  font-size: var(--text-sm);
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--builder-media-accent, #0f4f8f);
+  border-radius: 4px;
+}
+
+.builder-react-root .builder-media-manager-confirm {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-media-manager-confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* The module's Content text, shown above the grid. `pre-line` keeps the line
+   breaks an admin typed without the value ever being treated as markup. */
+.builder-react-root .builder-media-manager-description {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  white-space: pre-line;
+}
+
+/* ── Media Manager tags ─────────────────────────────────────────────────── */
+
+.builder-react-root .builder-media-manager-tag-btn {
+  border: 0;
+  background: none;
+  padding: 0 0 0 0.35rem;
+  cursor: pointer;
+  color: var(--builder-media-accent, #0f4f8f);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.builder-react-root .builder-media-manager-tag-btn:focus-visible {
+  outline: 2px solid var(--builder-media-accent, #0f4f8f);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.builder-react-root .builder-media-manager-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.builder-react-root .builder-media-manager-tag {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-media-manager-tag-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.builder-react-root .builder-media-manager-tag-modal-inner {
+  width: min(420px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+}
+
+.builder-react-root .builder-media-manager-tag-modal-title {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--ink-primary);
+  word-break: break-word;
+}
+
+.builder-react-root .builder-media-manager-tag-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.builder-react-root .builder-media-manager-tag-choice {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+/* A chosen tag has to read as ON at a glance — the list is a wall of pills
+   otherwise, and which ones apply is the whole question the modal answers. */
+.builder-react-root .builder-media-manager-tag-choice[aria-pressed="true"] {
+  background: var(--builder-media-accent, #0f4f8f);
+  border-color: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+}
+
+.builder-react-root .builder-media-manager-tag-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-media-manager-tag-add {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.builder-react-root .builder-media-manager-tag-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-sm);
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+}
+
+.builder-react-root .builder-media-manager-tag-add-btn {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--builder-media-accent, #0f4f8f);
+  border-radius: 5px;
+  background: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-media-manager-tag-add-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The confirm/cancel buttons in the tag modal and the delete confirmation.
+   These were unstyled, and inherited WHITE text on a transparent background
+   from the public-site button rules — invisible on a white panel, in both
+   places. Nothing tests CSS, so it took a screenshot to see it. */
+.builder-react-root .builder-media-manager-btn {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-media-manager-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.builder-react-root .builder-media-manager-btn-primary {
+  background: var(--builder-media-accent, #0f4f8f);
+  border-color: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+}
+
+.builder-react-root .builder-media-manager-btn-danger {
+  background: var(--danger, #a03c28);
+  border-color: var(--danger, #a03c28);
+  color: var(--btn-text);
+}
+
+/* ── Media Manager filters ──────────────────────────────────────────────── */
+
+.builder-react-root .builder-media-manager-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+.builder-react-root .builder-media-manager-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.builder-react-root .builder-media-manager-filter-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-media-manager-filter-input,
+.builder-react-root .builder-media-manager-filter-select {
+  font-size: var(--text-sm);
+  padding: 0.28rem 0.4rem;
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  max-width: 100%;
+}
+
+.builder-react-root .builder-media-manager-filter-input {
+  min-width: 12rem;
+}
+
+.builder-react-root .builder-media-manager-clear {
+  align-self: flex-end;
+}
+
+/* The clear inside the "no matches" message — a link, not a second button
+   competing with the one in the bar. */
+.builder-react-root .builder-media-manager-clear-inline {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--builder-media-accent, #0f4f8f);
+  text-decoration: underline;
+  cursor: pointer;
+}

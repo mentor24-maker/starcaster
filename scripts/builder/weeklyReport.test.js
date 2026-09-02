@@ -157,6 +157,18 @@ test('an unreadable figure reaches the page as a reason, not as a gap', () => {
   assert.match(html, /tile--unread/);
 });
 
+test('the stage line-up renders Rework, so its tickets cannot vanish from the picture', () => {
+  // Task 86bbr1u9v. This is exactly the surface where a missing status is
+  // INVISIBLE rather than zero: a stage absent from STAGE_ORDER is not
+  // rendered at all, so the report would have kept describing a healthy
+  // pipeline while the rework column filled up.
+  const html = R.renderStages(R.ok({ rework: 4, queued: 12, building: 1, 'in review': 2, live: 30 }));
+  assert.match(html, /Rework/, 'the stage must be drawn');
+  assert.match(html, /<div class="stage-count">4<\/div>/, 'with its real count, read case-insensitively');
+  // And it comes first, because that is the order the pipeline moves in now.
+  assert.ok(html.indexOf('Rework') < html.indexOf('Queued'), 'Rework precedes Queued on the board');
+});
+
 test('a stage block that could not be read never prints confident zeroes', () => {
   const html = R.renderStages(R.notAvailable('ClickUp returned 429'));
   assert.match(html, /not available — ClickUp returned 429/);

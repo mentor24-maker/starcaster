@@ -284,7 +284,8 @@ describe("searchSite — what is never indexed", () => {
   it("skips admin and manager modules", () => {
     for (const type of [
       "admin-team-users", "admin-site-settings", "admin-login",
-      "blog-post-manager", "blog-category-manager", "blog-post-create", "blog-card-manager"
+      "blog-post-manager", "blog-category-manager", "blog-post-create", "blog-card-manager",
+      "event-manager"
     ]) {
       const results = search("secret", [page("A", "a", [{ type, name: "Secret Admin Panel", text: "secret" }])]);
       expect(results, type).toEqual([]);

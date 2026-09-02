@@ -1,6 +1,33 @@
 'use strict';
 
+/**
+ * Asset API.
+ *
+ * Auth is decided centrally in routes/index.js. These routes run behind
+ * EITHER a platform session (Dane in the admin app) or a **project-admin
+ * session** (a tenant admin on their own site, e.g. the Media Manager module
+ * at delraytennis.starcaster.pro/admin-media-manager).
+ *
+ * That second caller is easy to miss, because nothing here opts into it:
+ * `lib/projectAdminApiAuth.js` is a DENY-list, so every asset endpoint is
+ * reachable by a tenant admin unless it is named there. The endpoints that
+ * are named — AI generation, stock video search, anything touching Alphire's
+ * Google Drive, server-side bulk resize — are excluded because they spend the
+ * PLATFORM's money, quota or compute, not because of whose data they read.
+ *
+ * So when adding an endpoint here, ask which of those two it is. Tenant
+ * isolation itself is not this file's job: every read and write goes through
+ * lib/projectScope.js, which scopes on req.projectContext either way.
+ */
+
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
+const { normalizeAssetSource } = require('../lib/assetSource');
+const {
+  listAssetTags,
+  createAssetTag,
+  deleteAssetTag,
+  rowToTag: rowToAssetTag,
+} = require('../lib/assetTagsStore');
 const { listAssets, createAsset, updateAsset, deleteAsset, getAssetById, rowToAsset } = require('../lib/assetsStore');
 const { fetchAssetImageBuffer } = require('../lib/assetImageBytes');
 const {
@@ -236,7 +263,8 @@ async function handle(req, res, pathname, method) {
   const normalizedPath = String(pathname || '').replace(/\/+$/, '') || '/';
   const isAssetApiPath = normalizedPath === '/api/assets'
     || normalizedPath.startsWith('/api/assets/')
-    || normalizedPath.startsWith('/api/asset-categories');
+    || normalizedPath.startsWith('/api/asset-categories')
+    || normalizedPath.startsWith('/api/asset-tags');
   if (!isAssetApiPath) return false;
 
   const isAssetsPath = ASSETS_PATH_RE.test(normalizedPath);
@@ -258,7 +286,11 @@ async function handle(req, res, pathname, method) {
   }
 
   if (isAssetsPath && requestMethod === 'GET') {
-    const result = await listAssets(scope);
+    // An unrecognised ?source= normalizes to '' and is IGNORED, returning the
+    // full list rather than an empty one — a typo'd filter that silently
+    // returns nothing reads as "the project has no assets".
+    const sourceFilter = normalizeAssetSource(parsedUrl?.searchParams?.get('source'));
+    const result = await listAssets(scope, { source: sourceFilter });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const assets = (Array.isArray(result.data) ? result.data : []).map(rowToAsset);
     return sendOk(res, 200, assets, { assets }, { total: assets.length }), true;
@@ -275,6 +307,7 @@ async function handle(req, res, pathname, method) {
     const imageWidth = Math.max(0, Number(body.imageWidth || body.image_width || 0) || 0);
     const imageHeight = Math.max(0, Number(body.imageHeight || body.image_height || 0) || 0);
     const aspect = String(body.aspect || '').trim();
+    const source = normalizeAssetSource(body.source);
 
     if (!assetName) return sendErr(res, 400, 'assetName is required', { code: 'VALIDATION_ERROR' }), true;
     if (!ASSET_TYPES.has(assetType)) {
@@ -286,7 +319,7 @@ async function handle(req, res, pathname, method) {
       ), true;
     }
 
-    const result = await createAsset({ assetName, assetType, category, location, tags, size, imageWidth, imageHeight, aspect }, scope);
+    const result = await createAsset({ assetName, assetType, category, location, tags, size, imageWidth, imageHeight, aspect, source }, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     return sendOk(res, 201, rowToAsset(created), { asset: rowToAsset(created) }), true;
@@ -748,6 +781,7 @@ async function handle(req, res, pathname, method) {
       ),
       imageWidth: Math.max(0, Number(upload.data.imageWidth || 0) || 0) || null,
       imageHeight: Math.max(0, Number(upload.data.imageHeight || 0) || 0) || null,
+      source: normalizeAssetSource(body.source),
     }, scope);
     if (!save.ok) return sendErr(res, save.status || 500, save.error), true;
 
@@ -794,6 +828,7 @@ async function handle(req, res, pathname, method) {
         category: String(body.category || '').trim(),
         tags: Array.isArray(body.tags) ? body.tags : [],
         aspect: String(body.aspect || '').trim(),
+        source: normalizeAssetSource(body.source),
       },
       scope
     );
@@ -949,6 +984,44 @@ async function handle(req, res, pathname, method) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify(result.data));
     return true;
+  }
+
+  /*
+   * Asset tags — the project's tag REGISTRY, which the Media Manager module
+   * offers an admin to choose from. Per-asset tags stay on assets.tags and are
+   * written with PATCH /api/assets/:id; nothing here touches them.
+   *
+   * Reachable by a tenant admin (86bbrqnqu): these are the tenant's own tags
+   * on the tenant's own media, and nothing here spends platform resources.
+   */
+  if (pathname === '/api/asset-tags' && requestMethod === 'GET') {
+    const result = await listAssetTags(scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const tags = (Array.isArray(result.data) ? result.data : []).map(rowToAssetTag).filter(Boolean);
+    return sendOk(res, 200, tags, { tags }, { total: tags.length }), true;
+  }
+
+  if (pathname === '/api/asset-tags' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req);
+    const result = await createAssetTag({ tag: body.tag ?? body.name }, scope);
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error, { code: 'VALIDATION_ERROR' }), true;
+    }
+    const created = Array.isArray(result.data) ? result.data[0] : result.data;
+    const tag = rowToAssetTag(created);
+    // 200 when it already existed, 201 when it is new — the caller can treat
+    // both as success, and the distinction is honest rather than a fake
+    // "created" on a row that was already there.
+    return sendOk(res, result.existed ? 200 : 201, tag, { tag }), true;
+  }
+
+  const assetTagIdMatch = normalizedPath.match(/^\/api\/asset-tags\/(\d+)$/);
+  if (assetTagIdMatch && requestMethod === 'DELETE') {
+    const result = await deleteAssetTag(Number(assetTagIdMatch[1]), scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const deleted = Array.isArray(result.data) ? result.data[0] : result.data;
+    if (!deleted) return sendErr(res, 404, 'Tag not found', { code: 'NOT_FOUND' }), true;
+    return sendOk(res, 200, rowToAssetTag(deleted), { tag: rowToAssetTag(deleted) }), true;
   }
 
   if (pathname === '/api/asset-categories' && requestMethod === 'GET') {
@@ -1332,7 +1405,7 @@ async function handle(req, res, pathname, method) {
 const manifest = {
   id: 'assets',
   label: 'Assets',
-  prefixes: ['/api/assets', '/api/asset-categories'],
+  prefixes: ['/api/assets', '/api/asset-categories', '/api/asset-tags'],
 };
 
 module.exports = {
