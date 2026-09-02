@@ -38,6 +38,35 @@
    */
   --mark-bg: #fff3b0;
 
+  /*
+   * Connection status — the four card states on Settings › Connections
+   * (components/connections/connections-panel.tsx, Connections 4/7).
+   *
+   * Deliberately NOT tenant-themed, the same exception --preview-strip-bg
+   * takes. These sentences are addressed to a CLIENT about whether their own
+   * social account is working, and a theme free to repaint them could resolve
+   * "this connection has stopped working" in the reassuring colour.
+   *
+   * Colour is never the only signal here: every state also carries a badge
+   * with words in it and a line of plain English, so the hue reinforces a
+   * message that is already legible without it.
+   */
+  --status-ok: #16a34a;
+  --status-ok-bg: #dcfce7;
+  --status-ok-ink: #15803d;
+  --status-warn: #d97706;
+  --status-warn-bg: #fef3c7;
+  --status-warn-ink: #b45309;
+
+  /*
+   * Where the keyboard is. The admin app's .btn carries no :focus-visible
+   * rule, so a panel that wants its controls to show focus has to draw the
+   * ring itself — named here so the second panel that needs one cannot pick
+   * a different blue. Measured: removing the rule that uses this leaves every
+   * control on the Connections screen with no ring at all.
+   */
+  --focus-ring-color: #2563eb;
+
   /* Builder Preview strip — admin chrome, deliberately NOT tenant-themed:
      the strip must read "this is a preview" on every site, whatever its
      palette (86bbq2y7x). */
