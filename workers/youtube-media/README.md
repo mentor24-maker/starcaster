@@ -15,6 +15,12 @@ trade Dane accepted: **while the Mini is asleep or the house internet is down,
 downloads wait.** Everything else in StarCaster carries on; the acquire panel
 reports the worker as unreachable and the title/transcript half still works.
 
+Vercel reaches it over **Tailscale Funnel** — a stable public HTTPS hostname
+for the Mini that needed no DNS changes (step 8). The endpoint is on the open
+internet, so the shared secret is the only thing standing in front of it:
+that is why it is 32 random bytes and why `/health` is the sole route that
+does not require it.
+
 Which machine may run it is recorded in `lib/nodeRoles.js` (`youtube-media`),
 the same table that decides where the bus relay runs. Running two copies is
 not a spare — see that file for why it breaks quietly.
@@ -47,8 +53,9 @@ which is already written and expects exactly these shapes.
 
 ## Deploying it on the Mac Mini
 
-Nine steps, in order. Steps 4 and 8 need Dane; an agent session can run every
-other one.
+Ten steps, in order. Three need Dane and only Dane — the shared secret's
+value (step 4) and the two browser sign-ins Tailscale requires (step 8).
+An agent session can run every other one, including the deploy.
 
 ### 1. Install the two programs it shells out to
 
@@ -88,9 +95,12 @@ step 8.
 ### 4. The shared secret — Dane's keystroke
 
 This is the one value that proves a request came from StarCaster and not from
-the open internet. It exists in exactly two places: this worker's environment,
-and the Settings > APIs record in step 8. **Nothing else should ever hold a
-copy, and it must not be pasted into a ticket, a commit, or a chat message.**
+the open internet — and once Funnel is on (step 8) the open internet can reach
+this worker, so it is the only thing standing in front of it. It exists in
+exactly two places: this worker's environment file, and
+`YOUTUBE_MEDIA_WORKER_TOKEN` in Vercel (step 9). **Nothing else should ever
+hold a copy, and it must not be pasted into a ticket, a commit, or a chat
+message.**
 
 Generate one:
 
@@ -171,7 +181,12 @@ Unlike the relay and the weekly report, this is a **service that stays up**,
 not something that wakes on a timer — so the job is `KeepAlive`, and macOS
 restarts it if it ever dies or the Mini reboots.
 
+Resolve the node binary first — the plist pins the real path rather than
+trusting the job's `PATH`:
+
 ```bash
+NODE_BIN="$(command -v node)"; echo "$NODE_BIN"
+
 cat > ~/Library/LaunchAgents/com.starcaster.youtube-media.plist <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -180,7 +195,7 @@ cat > ~/Library/LaunchAgents/com.starcaster.youtube-media.plist <<EOF
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string><string>-lc</string>
-    <string>set -a; . "\$HOME/Library/Application Support/starcaster-youtube-media.env"; set +a; exec /usr/bin/env node server.js</string>
+    <string>set -a; . "\$HOME/Library/Application Support/starcaster-youtube-media.env"; set +a; exec "$NODE_BIN" server.js</string>
   </array>
   <key>WorkingDirectory</key><string>$HOME/WebApps/starcaster/workers/youtube-media</string>
   <key>RunAtLoad</key><true/>
@@ -198,41 +213,97 @@ sleep 2 && curl -s localhost:8080/health
 `-lc` matters: a launchd job gets a bare environment that does not include
 Homebrew's `bin` directory, so `yt-dlp` and `ffmpeg` would be missing and
 `/health` would answer `503` with both fields empty. A login shell fixes that.
+The node path is pinned for the same class of reason, one step worse: a job
+that cannot find `node` at all never starts, and the failure looks exactly
+like the worker crashing on boot.
 If `/health` is silent, read
 `~/Library/Logs/youtube-media-worker.log` — the worker says why it refused to
 start rather than failing quietly.
 
-### 8. Point StarCaster at it — Dane's screen
+### 8. Put it on the internet with Tailscale Funnel
 
-In the admin app: **Settings > APIs**, the `youtube_media_worker` record.
+Production StarCaster runs on Vercel and cannot reach `localhost:8080` on a
+Mini in a house. **Tailscale Funnel** is how it does (Dane chose it on
+2026-09-01 over Cloudflare Tunnel, a router port-forward, and staying
+LAN-only). It gives the Mini a stable public HTTPS hostname without touching
+DNS at all — which mattered because `starcaster.pro`'s nameservers live on
+Vercel and that domain carries live email.
 
-| Field | Value |
-|---|---|
-| Base URL | how the app reaches the Mini (see below) |
-| API key | the shared secret from step 4 — the same string, exactly |
-| Timeout (ms) | `20000` is the default and is fine |
+```bash
+brew install tailscale
 
-**The base URL is the honest catch in this plan.** Production StarCaster runs
-on Vercel and cannot reach `localhost:8080` on a Mini in your house. One of
-these has to be true:
+# Userspace mode: no root needed, and Funnel only exposes one local port
+# outward — it never routes traffic into the machine's network stack.
+mkdir -p ~/.tailscale
+nohup /opt/homebrew/opt/tailscale/bin/tailscaled \
+  --tun=userspace-networking \
+  --statedir="$HOME/.tailscale" \
+  --socket="$HOME/.tailscale/tailscaled.sock" \
+  > ~/Library/Logs/tailscaled.log 2>&1 &
 
-- a tunnel with a stable public hostname (Cloudflare Tunnel or Tailscale
-  Funnel) pointing at port 8080 — the usual answer, and free; or
-- a port forward on the house router with a dynamic-DNS name — works, but it
-  puts the worker on the open internet with only the shared secret in front of
-  it, which is why the secret is 32 random bytes and not a word; or
-- accept that media acquire works only from a StarCaster running on the home
-  network.
+TS="/opt/homebrew/bin/tailscale --socket $HOME/.tailscale/tailscaled.sock"
+$TS login --hostname=mac-mini      # prints a URL Dane opens in a browser
+$TS funnel --bg 8080
+$TS funnel status                  # shows the public https://<host>.ts.net
+```
 
-Slice 4 (`86bbjve6q`) is where that gets settled and set up. Until this record
-is filled in, the client reports `worker-unconfigured` and the rest of acquire
-carries on working — which is the designed behaviour, not a failure.
+Two of those steps are **Dane's browser and nobody else's**: signing in, and
+enabling Funnel for the tailnet the first time (the CLI prints that second
+URL itself and refuses until it is done).
 
-### 9. Check it end to end from the app
+**Give DNS a few minutes and check from off the tailnet before believing it.**
+The AAAA record appears before the A record, so for a window the hostname
+resolves on IPv6 only — a machine without IPv6 egress gets "could not resolve
+host" and it looks like Funnel is broken when it is simply not finished:
+
+```bash
+dig +short @8.8.8.8 <host>.ts.net A       # wait for this to answer
+curl -s https://<host>.ts.net/health      # then this
+```
+
+### 9. Point production at it — environment variables, NOT Settings > APIs
+
+**This is the step the ticket originally got wrong, and it fails silently.**
+Settings > APIs writes to `data/api_settings.json` (`lib/apiSettings.js`),
+which is **gitignored, untracked, and on a read-only filesystem in
+production** — landmine 6. The screen accepts the values and they are gone.
+It is the right screen for a StarCaster running locally, where the file is
+writable, and the wrong one for Vercel.
+
+The client reads env vars first (`lib/acquire/YoutubeMediaWorker.js`), so
+production is configured there:
+
+```bash
+printf 'https://<host>.ts.net' | vercel env add YOUTUBE_MEDIA_WORKER_URL production
+# pipe the secret straight from the Mini so it is never displayed:
+ssh mac-mini "grep '^WORKER_SHARED_SECRET=' \
+  \"\$HOME/Library/Application Support/starcaster-youtube-media.env\" | cut -d= -f2" \
+  | tr -d '\r\n' | vercel env add YOUTUBE_MEDIA_WORKER_TOKEN production
+```
+
+**Then redeploy, or none of it is live.** Vercel bakes environment variables
+into a deployment at build time (landmine 10), so the build already serving
+traffic has neither value. Skipping this produces "the value is right but not
+live", which is indistinguishable from a wrong value and cost an hour on
+2026-07-29:
+
+```bash
+vercel redeploy "$(vercel ls --prod | awk '/Ready/{print $3; exit}')"
+```
+
+### 10. Check it end to end from the app
 
 Run a real acquire with an `.mp4`/`.mp3` requested, and confirm the files land
-in Blob. Then look at `~/Library/Logs/youtube-media-worker.log` once, so you
-know what a healthy run looks like before you ever have to read it in anger.
+in Blob and survive a page reload. Watch the worker's own log while you do it
+— that is how you tell "production reached the Mini" apart from "the panel
+looked busy":
+
+```bash
+ssh mac-mini 'tail -f ~/Library/Logs/youtube-media-worker.log'
+```
+
+Look at that log once when everything is healthy, so you know what healthy
+looks like before you ever have to read it in anger.
 
 ---
 

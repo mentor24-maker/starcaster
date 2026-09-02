@@ -40,11 +40,13 @@ const {
   formatReport,
   exitCodeFor,
 } = require('./builder/pulse.js');
-const { findPullRequest } = require('./builder/mergeOnComment.js');
+const { findPullRequest, mergeDecision, checkState } = require('./builder/mergeOnComment.js');
+const staleReady = require('../lib/staleReady.js');
 
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const LOOP_LOG_DIR = process.env.LOOP_LOG_DIR || path.join(os.homedir(), 'loop-logs');
 const TOKEN = process.env.CLICKUP_API_TOKEN;
+const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
 
 const asJson = process.argv.includes('--json');
 const useExitCode = process.argv.includes('--exit-code');
@@ -170,14 +172,27 @@ function listOpenPrs() {
   }
 }
 
-/** One PR's state. null means "could not tell", which callers must not treat
- *  as an answer (the same rule build-start follows). */
-function prState(number) {
+/**
+ * One PR's state AND every check on it, in a single `gh` call. null means
+ * "could not tell", which callers must not treat as an answer (the same rule
+ * build-start follows).
+ *
+ * `statusCheckRollup` was added on 2026-09-01 (task 86bbqp68c). Until then this
+ * file never read check state anywhere, which is why its `Ready to launch`
+ * bottleneck line could only ever name the operator — it had no way to see a
+ * red build, so a machine-side stall came out as "the machine side is keeping
+ * up" with Dane's name on it.
+ */
+function prSnapshot(number) {
   try {
-    const out = JSON.parse(gh(['pr', 'view', String(number), '--json', 'state,mergedAt']));
-    return String(out.state || '').toUpperCase() || null;
-  } catch {
-    return null;
+    const out = JSON.parse(gh(['pr', 'view', String(number), '--json', 'state,mergedAt,statusCheckRollup']));
+    return {
+      state: String(out.state || '').toUpperCase() || null,
+      checks: checkState(out.statusCheckRollup),
+      why: null,
+    };
+  } catch (err) {
+    return { state: null, checks: null, why: String(err?.message || err).slice(0, 160) };
   }
 }
 
@@ -193,7 +208,7 @@ function prState(number) {
  * four shapes, so skipping it drops no finding — and the report says how many
  * were compared so the number is never mistaken for "all of them".
  */
-async function readDrift(tasks, { prs: openPrs, error: prError }) {
+async function readDrift(tasks, { prs: openPrs, error: prError }, { now } = {}) {
   if (openPrs === null) {
     return {
       findings: [],
@@ -205,6 +220,10 @@ async function readDrift(tasks, { prs: openPrs, error: prError }) {
       }],
       ticketsCompared: 0,
       openPrsCompared: 0,
+      // No PR side means no actor can be identified either, and `readyActors`
+      // being absent is what makes the bottleneck line say so out loud rather
+      // than fall back to naming Dane.
+      readyRecords: null,
     };
   }
 
@@ -217,8 +236,22 @@ async function readDrift(tasks, { prs: openPrs, error: prError }) {
   });
 
   const records = [];
+  // The Ready-to-launch half rides along on THIS loop rather than opening its
+  // own. Comments cost a request each and the `gh pr view` beside them costs
+  // another; a second sweep over the same tickets would double both to answer a
+  // question the data already in hand can answer. See `readyActors` below.
+  const readyRecords = [];
+
   for (const task of candidates) {
     const id = String(task.id);
+    const isReady = String(task?.status?.status || '').trim().toLowerCase() === staleReady.READY_STAGE;
+    const readyBase = {
+      taskId: id,
+      name: task.name,
+      url: task.url || `https://app.clickup.com/t/${id}`,
+      hours: (now - Number(task.date_updated)) / staleReady.MS_PER_HOUR,
+    };
+
     let comments = null;
     try {
       comments = await getComments(id);
@@ -230,12 +263,14 @@ async function readDrift(tasks, { prs: openPrs, error: prError }) {
         statusType: task.status?.type,
         commentsReadable: false,
       });
+      if (isReady) readyRecords.push({ ...readyBase, commentsReadable: false });
       continue;
     }
 
     const joined = comments.map((c) => c.comment_text || '').join('\n');
     const ticketPrNumbers = [...joined.matchAll(PR_OPENED_NUMBER_RE)].map((m) => Number(m[1]));
     const seen = findPullRequest(comments);
+    const snap = seen ? prSnapshot(seen.number) : null;
 
     records.push({
       taskId: id,
@@ -245,15 +280,32 @@ async function readDrift(tasks, { prs: openPrs, error: prError }) {
       commentsReadable: true,
       ticketPrNumbers,
       buildStartSees: seen ? seen.number : null,
-      buildStartPrState: seen ? prState(seen.number) : null,
+      buildStartPrState: snap ? snap.state : null,
       openPrsNamingTicket: byTicket.get(id.toLowerCase()) || [],
     });
+
+    if (isReady) {
+      readyRecords.push({
+        ...readyBase,
+        commentsReadable: true,
+        pr: seen ? { number: seen.number, url: seen.url } : null,
+        prReadable: Boolean(snap && snap.state),
+        prReadError: snap ? snap.why : null,
+        prState: snap ? snap.state : null,
+        checks: snap ? snap.checks : null,
+        mergeWordGiven: (() => {
+          const d = mergeDecision({ status: task.status?.status, comments, operatorId: OPERATOR_ID });
+          return d.act === 'merge' || d.act === 'refuse';
+        })(),
+      });
+    }
   }
 
   return {
     ...driftFindings(records),
     ticketsCompared: records.length,
     openPrsCompared: openPrs.length,
+    readyRecords,
   };
 }
 
@@ -282,15 +334,23 @@ async function main() {
     : null;
 
   const drift = tasks
-    ? await readDrift(tasks, listOpenPrs())
+    ? await readDrift(tasks, listOpenPrs(), { now: Date.parse(generatedAt) })
     : null;
 
-  const result = { generatedAt, job, noOp, residency, drift, queueError };
+  // WHOSE HANDS the Ready-to-launch backlog needs, read from GitHub rather than
+  // assumed (task 86bbqp68c). `null` when the PR side could not be read at all,
+  // which `readyBottleneck` renders as "not known here" — never as the operator.
+  const readyActors = drift && drift.readyRecords
+    ? staleReady.actorTally(staleReady.readyFindings(drift.readyRecords).findings)
+    : null;
+
+  const result = { generatedAt, job, noOp, residency, drift, readyActors, queueError };
 
   if (queueError) {
     // Rule 2: the failure is stated, and the run still completes.
     result.residency = null;
     result.drift = null;
+    result.readyActors = null;
   }
 
   if (asJson) {

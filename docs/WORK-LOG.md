@@ -39,6 +39,159 @@ and both times the check failed, at all three screen widths, naming the carousel
 in every line. Then the breaks were taken back out and it went green again. That
 is the evidence the first pass was missing, and it is now cheap for the next
 person to repeat on any panel.
+## 2026-09-02 — The two stuck pull requests were never actually stuck (#513, #494)
+
+You asked to clear the conflicts on two pull requests. GitHub was flagging both
+of them red, with the word "conflicting" — which normally means two people
+changed the same lines and somebody has to decide which version wins.
+
+Neither one had a conflict. Not a small one, not a resolvable one: none. The
+check that settles it takes about a second and does not touch any files, and
+run every way it could be run — each branch against the version of the site it
+was started from, and against the version that existed by then — all four came
+back clean.
+
+Why that matters more than it sounds: the obvious thing to do when a tool says
+"conflict" is to open the files and start merging them by hand. If there was
+never a conflict, that hand-editing is pure risk. It looks like work
+afterwards, so nobody questions it, and it is one of the ways a branch quietly
+loses lines that were supposed to be in it — which has already happened here
+once, when a stale branch deleted 146 lines of the rules file on its way in.
+
+There was a second trap, and it is the one that would have caused real damage.
+After bringing both branches up to date and pushing, GitHub *still* said
+conflicting. That reads exactly like "your fix did not work" — and the natural
+response is to go back in and cut harder. It was not that at all: the site's
+main copy had moved underneath the work while it was happening. Another change
+had merged a few minutes earlier, so the branches were brought level with a
+version that was already out of date by the time they got there. Fetching again
+and checking a different way — not "did the merge command succeed" but "does
+this branch actually contain the current main" — gave a straight answer
+immediately.
+
+Both are now merged and live. The lasting change is a written rule: when a tool
+reports a conflict, confirm it locally before editing anything, and confirm a
+branch is current by what it contains rather than by a command reporting
+success. A green message from a command only tells you about the moment it ran.
+
+## 2026-09-01 — A ticket waiting on a red build no longer tells you it is waiting on you (#494)
+
+One of the weekly-report tickets sat in the "Ready to launch" column for six
+days with your merge approval already on it. It was never waiting on you. The
+merge step read your "merge", checked the build, found it red — one failing
+test out of 1,846 — declined for that reason, said so once, and then nothing
+in the system ever looked at that ticket again. From where you sit, you had
+already said yes, so it looked handled. The same thing had happened the day
+before on another one. Twice in a week is not bad luck, it is how that column
+fails.
+
+The column has nobody watching it, and that is on purpose: "Ready to launch"
+is yours, so the machines deliberately keep their hands off. The catch is that
+"keep your hands off" quietly became "nobody is looking".
+
+There was one report that would have raised a flag, and what it would have
+said was worse than saying nothing. It read: *"Bottleneck: OPERATOR — approved
+tickets have waited past 24h for a merge. The machine side is keeping up."*
+Both halves of that were false. The machine side was not keeping up, and it
+would have pointed at you as the hold-up when you had already done your part.
+That report only ever looked at ClickUp — it never once asked GitHub whether
+the build had passed — so it could not tell the difference between a ticket
+waiting on your word and a ticket waiting on a broken build. It just picked.
+
+This adds a check that asks the real question: whose hands does this actually
+need? It reads the ticket, finds its pull request the same way the merge step
+does, asks GitHub what state the build is in, and then answers one of three
+ways — yours, a machine's, or "cannot tell", which it says out loud with the
+reason rather than guessing. If the build is red it names the failing check and
+says, in as many words, *not waiting on you*. It runs every ten minutes off the
+existing relay job, stays quiet unless something is genuinely stuck, says the
+same thing at most once every six hours, and shuts up entirely while you have
+the pipeline paused.
+
+The old report's sentence is fixed too: with nothing to go on it now says whose
+hands this needs is not known, and points at the command that does know, rather
+than naming you by default.
+
+You can ask it yourself any time with `npm run stale-ready`.
+## 2026-09-01 — The pipeline's cleanup told the truth, then described itself wrongly (#513)
+
+When Dane takes the deck to work on something urgent, the pipeline pauses, and
+handing it back runs a cleanup pass over any ticket whose helper died mid-job.
+That cleanup was already making the right call. A ticket whose *build* died goes
+back into the queue to be built again. A ticket whose *reviewer* died stays
+exactly where it is, because its work is finished and waiting to be checked —
+sending it back to the queue would throw away a completed job and have somebody
+build it a second time.
+
+What went wrong was the sentence printed underneath. It said "1 stranded ticket
+returned to the queue" about a ticket it had just correctly left alone, one line
+after saying so. Whoever read that would go looking for the ticket in a list it
+was never in. The cause was small: the cleanup kept only a list of ticket
+numbers, so by the time it wrote its summary it had forgotten which ones it had
+moved and which it had left, and it guessed the same answer for all of them.
+
+It now remembers what it did to each ticket and says so one by one. The status
+report had the same fault in its explanation of *why* a ticket is stuck — it
+gave the reason that fits a dead build to every ticket, including ones whose
+position is perfectly correct and whose only problem is a stale note saying
+somebody is already looking at them. Each now gets the reason that actually
+applies to it. Nothing about where a ticket ends up changed; only what the tool
+says about it.
+
+A review of that fix then caught the same fault standing right next to it. When
+the cleanup found nothing to unstick it announced "No stranded tickets needed
+unsticking" — an all-clear. But there are five ways to reach that sentence with
+nothing cleaned up and a ticket still stuck: the note it tries to leave on the
+ticket will not save, a stale marker will not clear, the status change comes
+back refused, the queue cannot be read at all, or the cleanup was deliberately
+skipped. In each of those the terminal read "it is still stranded" on one line
+and "no stranded tickets" on the next — the exact contradiction this job was
+opened to remove, moved one sentence over.
+
+The report now distinguishes three different pieces of news that used to share
+one sentence. Nothing was stuck, so the all-clear is true and it says it.
+Something was stuck and could not be freed, so it says how many are still
+stuck and where to look. Nothing was examined at all, so it says it could not
+tell — which is never an all-clear. The message posted to the team chat used to
+carry its own wording for the same event and could disagree with the terminal;
+both now print the same sentence from the same place, so they cannot drift
+apart.
+## 2026-09-01 — Your words were being read as computer formatting (#515)
+
+There is a switch that lets the machines merge small, safe changes on their own
+— documentation and tests only, nothing that touches the site. It had turned
+itself off two days earlier, which was the right call at the time: a check had
+come back unreadable, and something that cannot verify its own footing should
+not be merging anything.
+
+The problem was everything after that. It wrote down only that "1 thing" could
+not be checked, not which thing, and then it never mentioned it again. So the
+lane sat switched off and looked exactly like a quiet couple of days. You found
+it by noticing that nothing was reaching you and asking whether something was
+stuck.
+
+Turning it back on is your word, on purpose — the machines are not allowed to
+un-brake themselves. You gave that word three times, and all three were
+ignored, because of something nobody had thought about: when you PASTE a phrase
+into ClickUp, ClickUp helpfully reformats it as a block of computer code. The
+switch was comparing your whole message against two exact words, and your
+message was no longer two exact words — it was two words wrapped in punctuation
+you never typed and could not see the significance of.
+
+So: your instruction is now read as what you typed, not as what ClickUp stored.
+That applies to the merge word too, which had the same flaw — your "merge"
+worked only because you happened to type it out by hand rather than paste it.
+
+Two other things were fixed on the way, both invisible from the outside. Every
+one of the machines posts to the party line using your account, so the switch
+had no way to tell your words from theirs; it does now. And the check that was
+supposed to tell them apart turned out to be matching nothing whatsoever —
+found only by running it over the real messages in the channel rather than over
+made-up examples, which is a habit worth keeping.
+
+Still to do, and filed: the brake should say what it could not check, and
+should keep saying it is on. Two days of silence is what made a five-minute
+problem into an evening.
 
 ## 2026-08-24 — The machine that fetches YouTube video files (#419)
 
@@ -60,6 +213,7 @@ factory running on our bill.
 
 Not switched on anywhere yet, and it cannot be until you have chosen where it
 should live — there is a question waiting for you on the ticket. (#PR)
+
 ## 2026-09-01 — A pull request is now named after its ticket, word for word (#514)
 
 Dane pairs up two lists to see what shipped and when: the Closed column in
