@@ -37,6 +37,43 @@ hands this needs is not known, and points at the command that does know, rather
 than naming you by default.
 
 You can ask it yourself any time with `npm run stale-ready`.
+## 2026-09-01 — Your words were being read as computer formatting (#515)
+
+There is a switch that lets the machines merge small, safe changes on their own
+— documentation and tests only, nothing that touches the site. It had turned
+itself off two days earlier, which was the right call at the time: a check had
+come back unreadable, and something that cannot verify its own footing should
+not be merging anything.
+
+The problem was everything after that. It wrote down only that "1 thing" could
+not be checked, not which thing, and then it never mentioned it again. So the
+lane sat switched off and looked exactly like a quiet couple of days. You found
+it by noticing that nothing was reaching you and asking whether something was
+stuck.
+
+Turning it back on is your word, on purpose — the machines are not allowed to
+un-brake themselves. You gave that word three times, and all three were
+ignored, because of something nobody had thought about: when you PASTE a phrase
+into ClickUp, ClickUp helpfully reformats it as a block of computer code. The
+switch was comparing your whole message against two exact words, and your
+message was no longer two exact words — it was two words wrapped in punctuation
+you never typed and could not see the significance of.
+
+So: your instruction is now read as what you typed, not as what ClickUp stored.
+That applies to the merge word too, which had the same flaw — your "merge"
+worked only because you happened to type it out by hand rather than paste it.
+
+Two other things were fixed on the way, both invisible from the outside. Every
+one of the machines posts to the party line using your account, so the switch
+had no way to tell your words from theirs; it does now. And the check that was
+supposed to tell them apart turned out to be matching nothing whatsoever —
+found only by running it over the real messages in the channel rather than over
+made-up examples, which is a habit worth keeping.
+
+Still to do, and filed: the brake should say what it could not check, and
+should keep saying it is on. Two days of silence is what made a five-minute
+problem into an evening.
+
 ## 2026-08-24 — The machine that fetches YouTube video files (#419)
 
 Getting a video's title and captions is easy and happens on the website itself.
@@ -57,6 +94,7 @@ factory running on our bill.
 
 Not switched on anywhere yet, and it cannot be until you have chosen where it
 should live — there is a question waiting for you on the ticket. (#PR)
+
 ## 2026-09-01 — A pull request is now named after its ticket, word for word (#514)
 
 Dane pairs up two lists to see what shipped and when: the Closed column in
