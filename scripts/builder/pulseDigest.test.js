@@ -453,3 +453,47 @@ test('pipeline-pulse has an installer registered, so provisioning does not repor
   assert.ok(row && row.installer, 'a job with no installer row reads as CANNOT DO YET forever');
   assert.equal(row.label, 'com.starcaster.pipeline-pulse');
 });
+
+// --- did the durable record actually land? ----------------------------------
+//
+// Round 2 of this ticket's review: `writeDigest` treated a 200 as proof. A
+// ClickUp description write that normalises to nothing returns a clean 200
+// (DOCTRINE §3.10), and this write replaces the whole field.
+
+test('a record that reads back EMPTY is a failure, not a success', () => {
+  const v = digest.digestWriteVerdict({ sent: 'a full report, hundreds of characters long', readBack: '' });
+  assert.equal(v.ok, false, 'the write returned ok and the ticket is blank — that is the case a 200 hides');
+  assert.match(v.why, /EMPTY/);
+});
+
+test('a record that reads back TRUNCATED is a failure', () => {
+  const sent = 'x'.repeat(1000);
+  const v = digest.digestWriteVerdict({ sent, readBack: 'x'.repeat(100) });
+  assert.equal(v.ok, false, 'a tenth of the report is loss, not markdown normalisation');
+  assert.match(v.why, /TRUNCATED/);
+  assert.match(v.why, /1000 characters sent, 100 read back/, 'the numbers, so nobody has to guess how bad');
+});
+
+test('ClickUp normalising the markdown is NOT treated as loss', () => {
+  const sent = 'x'.repeat(1000);
+  // 80% back: real, and what a save that rewrites list markers and spacing does.
+  const v = digest.digestWriteVerdict({ sent, readBack: 'x'.repeat(800) });
+  assert.equal(v.ok, true, 'an exact-match test would fail every single healthy run');
+  assert.equal(v.verified, true);
+});
+
+test('a read-back that could not be taken is UNVERIFIED, and the pass still completes', () => {
+  const v = digest.digestWriteVerdict({ sent: 'a full report', readable: false, why: 'HTTP 502' });
+  assert.equal(v.ok, true,
+    'failing here would stop this pass posting the alarms it just found — suppressing real '
+    + 'alarms to punish an unverifiable read is the worse of the two failures');
+  assert.equal(v.verified, false, 'and it must be able to SAY it did not check');
+  assert.match(v.why, /UNVERIFIED/);
+  assert.match(v.why, /HTTP 502/, 'naming why, so the reader is not sent hunting');
+});
+
+test('a verified record says so, with nothing to report', () => {
+  const sent = 'a full report';
+  const v = digest.digestWriteVerdict({ sent, readBack: sent });
+  assert.deepEqual(v, { ok: true, verified: true, why: '' });
+});

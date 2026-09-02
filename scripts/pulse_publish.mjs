@@ -68,21 +68,42 @@ const JOB = arg('job', 'loop-build');
 const NOW = Date.now();
 const NODE = nodeRoles.thisNode();
 
-// EVERY subprocess here gets a deadline, and none of them had one.
+// EVERY CALL OUT OF THIS FILE HAS A DEADLINE — the three subprocesses AND the
+// five ClickUp calls this file makes directly.
+//
+// Round 1 of this ticket's review bounded the subprocesses. Round 2 found that
+// the reasoning below applies word for word to the ClickUp reads and writes
+// underneath them, which had no deadline at all: `scripts/lib/clickup.cjs`
+// used a bare `fetch`, and Node's `fetch` has no default request timeout, so a
+// half-open connection hangs rather than fails. Those five calls run in this
+// process, AFTER the reading has been taken. That is the worst place for it.
 //
 // This job runs hourly under launchd, which will not start a second copy while
-// the first is still going. The pulse shells out to `gh` and to ClickUp; one
-// call that hangs instead of failing takes the schedule down completely — no
-// output, no non-zero exit, so `report_job_failure.mjs` never fires either.
-// The only thing that would eventually notice is the 25-hour roll call, and it
-// would report "stopped firing" about a job that is firing and stuck.
+// the first is still going. One call that hangs instead of failing takes the
+// schedule down completely — no output, no non-zero exit, so
+// `report_job_failure.mjs` never fires either. The only thing that would
+// eventually notice is the 25-hour roll call, and it would report "stopped
+// firing" about a job that is firing and stuck, sending the next reader to
+// launchd instead of to a stuck socket.
 //
 // A deadline turns that into an ordinary loud failure: spawnSync kills the
-// child and sets `error`, every caller here already treats `error` as "could
-// not complete", and the next hour tries again.
+// child and sets `error`, a bounded fetch throws with the timeout named, every
+// caller here treats both as "could not complete", and the next hour tries
+// again.
 const READING_TIMEOUT_MS = 10 * 60 * 1000; // the pulse: three sources, many `gh` calls
 const SWITCH_TIMEOUT_MS = 2 * 60 * 1000;   // one ClickUp read
 const BEAT_TIMEOUT_MS = 2 * 60 * 1000;     // a local stamp plus at most one ClickUp write
+
+// The deadline on each ClickUp request this file makes, and it is deliberately
+// TIGHTER than the library's own 60s default, because of the one place a
+// per-request bound still multiplies: `listTasks` pages, up to 50 times. A
+// ClickUp that HANGS throws on the first page and does not multiply — that is
+// the failure this bound exists for. A ClickUp that is merely slow does, and
+// 50 x 60s is 50 minutes, which does not fit inside an hourly cadence. At 30s
+// the worst case is 25 minutes, comfortably inside it, and a single healthy
+// ClickUp call takes well under a second.
+const CLICKUP_TIMEOUT_MS = 30 * 1000;
+const TIMEOUT = { timeoutMs: CLICKUP_TIMEOUT_MS };
 
 // --- suppression stamps -----------------------------------------------------
 //
@@ -208,13 +229,13 @@ function takeReading() {
 async function findDigestTask() {
   if (DIGEST_TASK) {
     try {
-      const out = await clickup.call('GET', `/api/v2/task/${DIGEST_TASK}`);
+      const out = await clickup.call('GET', `/api/v2/task/${DIGEST_TASK}`, undefined, TIMEOUT);
       if (out.ok && out.json && out.json.id) return { readable: true, found: true, task: out.json };
     } catch { /* fall through to the name */ }
   }
   let tasks;
   try {
-    tasks = await clickup.listTasks(LOOP_QUEUE_LIST, { includeClosed: true });
+    tasks = await clickup.listTasks(LOOP_QUEUE_LIST, { includeClosed: true, timeoutMs: CLICKUP_TIMEOUT_MS });
   } catch (err) {
     return { readable: false, found: false, why: `reading the Loop Queue: ${String(err?.message || err).slice(0, 200)}` };
   }
@@ -224,16 +245,51 @@ async function findDigestTask() {
   return task ? { readable: true, found: true, task } : { readable: true, found: false };
 }
 
+/**
+ * Read the record back and say whether it LANDED.
+ *
+ * `clickup_direct.mjs describe` does this for exactly the reason it matters
+ * here: a description write that normalises to nothing returns a clean 200
+ * (docs/DOCTRINE.md §3.10). What the reading MEANS is decided by
+ * `digest.digestWriteVerdict`, which is pure and tested; this only fetches.
+ */
+async function readDigestBack(taskId, sent) {
+  let back;
+  try {
+    back = await clickup.call(
+      'GET', `/api/v2/task/${taskId}?include_markdown_description=true`, undefined, TIMEOUT,
+    );
+  } catch (err) {
+    return digest.digestWriteVerdict({ sent, readable: false, why: String(err?.message || err).slice(0, 200) });
+  }
+  if (!back.ok) {
+    return digest.digestWriteVerdict({ sent, readable: false, why: `HTTP ${back.status}` });
+  }
+  const saved = back.json?.markdown_description ?? back.json?.description ?? '';
+  return digest.digestWriteVerdict({ sent, readBack: saved });
+}
+
 async function writeDigest(body) {
   const found = await findDigestTask();
   if (!found.readable) return { ok: false, why: found.why };
 
+  // The POST and the PUT are the only two ClickUp calls in this file that were
+  // not inside a try/catch, and `clickup.call` THROWS on a network failure
+  // while returning `{ok:false}` on an HTTP error. Unwrapped, a network
+  // failure here escaped as a stack trace — losing the "the reading is now
+  // nowhere but this log" line written for exactly that moment. The run still
+  // exited non-zero, so the alert fired; it just arrived unreadable.
   if (!found.found) {
-    const made = await clickup.call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
-      name: digest.DIGEST_TASK_NAME,
-      status: DIGEST_STATUS,
-      markdown_description: body,
-    });
+    let made;
+    try {
+      made = await clickup.call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
+        name: digest.DIGEST_TASK_NAME,
+        status: DIGEST_STATUS,
+        markdown_description: body,
+      }, TIMEOUT);
+    } catch (err) {
+      return { ok: false, why: `creating the record: ${String(err?.message || err).slice(0, 300)}` };
+    }
     if (!made.ok) {
       return {
         ok: false,
@@ -242,14 +298,25 @@ async function writeDigest(body) {
           + '\n  CLICKUP_PULSE_DIGEST_STATUS to one the Loop Queue has that no loop claims from.',
       };
     }
-    return { ok: true, task: made.json, created: true };
+    const check = await readDigestBack(made.json?.id, body);
+    if (!check.ok) return { ok: false, why: check.why };
+    return { ok: true, task: made.json, created: true, verified: check.verified, warn: check.why };
   }
 
-  const wrote = await clickup.call('PUT', `/api/v2/task/${found.task.id}`, { markdown_description: body });
+  let wrote;
+  try {
+    wrote = await clickup.call(
+      'PUT', `/api/v2/task/${found.task.id}`, { markdown_description: body }, TIMEOUT,
+    );
+  } catch (err) {
+    return { ok: false, why: `writing ${found.task.url}: ${String(err?.message || err).slice(0, 300)}` };
+  }
   if (!wrote.ok) {
     return { ok: false, why: `HTTP ${wrote.status} writing ${found.task.url}` };
   }
-  return { ok: true, task: found.task, created: false };
+  const check = await readDigestBack(found.task.id, body);
+  if (!check.ok) return { ok: false, why: `${check.why} (${found.task.url})` };
+  return { ok: true, task: found.task, created: false, verified: check.verified, warn: check.why };
 }
 
 // --- the pipeline switch ----------------------------------------------------
@@ -375,6 +442,10 @@ if (!wrote.ok) {
 if (!DRY) {
   console.log('');
   console.log(`${wrote.created ? 'Created' : 'Rewrote'} ${digest.DIGEST_TASK_NAME}: ${wrote.task?.url || '(no url)'}`);
+  // Written and read back, or written and NOT checked. The second is said out
+  // loud rather than swallowed: it is not a failure (see digestWriteVerdict),
+  // and an unstated gap is exactly what a watchdog must never produce.
+  if (wrote.verified === false) console.log(`NOT VERIFIED — ${wrote.warn}`);
 }
 
 const cleared = DRY ? [] : clearStale({ items, measured });
@@ -405,6 +476,8 @@ if (!items.length) {
       console.log(text);
     } else {
       try {
+        // Bounded by `clickup.SHELL_TIMEOUT_MS` — it is a subprocess that talks
+        // to ClickUp, so it can hang the schedule exactly as a fetch can.
         clickup.postBusMessage(BUS_CHANNEL, text);
         for (const item of due) {
           const why = writeStamp(item.key, new Date(NOW).toISOString());

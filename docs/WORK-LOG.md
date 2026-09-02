@@ -38,15 +38,33 @@ outcomes, and only the second is loud. A paused hour also records its heartbeat
 now, so a day where Dane has the deck no longer reads on the roll call as the
 job having died.
 
-The rest: every helper the check shells out to now has a deadline, because one
-call that hangs rather than fails takes the whole hourly schedule down with no
-output at all; the rule for forgetting an old alarm is now the one that is
-actually tested rather than a second copy of it living in the script; the
-report's headline is counted from the findings printed underneath it, so it can
-no longer say "nothing to report" above a line saying the queue could not be
-read; and the "is it installed?" command stops printing the number zero twice on
-a log that is empty, which is exactly the state it is in the first time anyone
-runs it.
+The rest: the rule for forgetting an old alarm is now the one that is actually
+tested rather than a second copy of it living in the script; the report's
+headline is counted from the findings printed underneath it, so it can no longer
+say "nothing to report" above a line saying the queue could not be read; and the
+"is it installed?" command stops printing the number zero twice on a log that is
+empty, which is exactly the state it is in the first time anyone runs it.
+
+A second review pass found that the deadlines went on the three big helpers and
+not on the eight-thousand-odd calls a year this thing makes to ClickUp itself.
+That matters more than it sounds. A request to a website does not always fail
+when something goes wrong at the other end — sometimes the connection simply
+opens and then nothing ever comes back, and the code sits there waiting, with no
+error, for as long as the machine is on. If that happens on an hourly job, the
+Mac will not start the next hour's copy while this one is still going, so the
+check stops running entirely and nothing complains: no output, no failure, no
+alert. The one thing that would eventually notice is the daily roll call, and it
+would report that the job had stopped running — sending whoever read it to look
+at the timer, which is fine, rather than at the stuck call, which is not. Every
+call out now gives up after a set time and says plainly that it timed out, which
+turns a permanent silence into an ordinary noisy failure that retries next hour.
+
+The same pass added a check that the report actually arrived. ClickUp answers
+"saved" to a write that in fact saved nothing, which we have been bitten by
+before, and this report is the only thing the whole job produces — so it is now
+read back afterwards and compared. If it comes back empty or a fraction of its
+size, the run says so loudly instead of finishing cheerfully over a blank
+ticket.
 
 ## 2026-09-02 — The Carousel settings panel, and a green check that could not say what it had looked at (#446)
 
