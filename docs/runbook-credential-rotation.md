@@ -73,13 +73,47 @@ days** before anyone noticed (task 86bbq83j0).
 
 Known second homes, to refill by hand after any rotation of that credential:
 
-| Credential | Second home | Refill with |
-|---|---|---|
-| `CLICKUP_API_TOKEN` | `~/pulse/config/clickup-mcp.json` (gitignored) → `mcpServers.clickup.env.CLICKUP_API_KEY` | `cd ~/pulse && doppler run --project starcaster --config dev -- python3 bin/restore-clickup-token.py` |
+**There are TWO ClickUp credentials, and they are not interchangeable.** The
+ClickUp API embeds the account id in the token, so the identity is readable at a
+glance: `pk_48012725_…` is **Dane**, `pk_54254347_…` is **Pulse**. Which account
+a write came from is load-bearing — `mergeDecision` reads it to decide whether a
+"merge" comment is the operator's authorization, and the bus relay and the
+loop-review collision guard both tell operator comments from machine comments by
+author. A Pulse write arriving as Dane reads as the operator having spoken.
 
-That script reads the value from the environment and rewrites only that one key,
-so the value never appears on a command line or in a transcript — an agent may
-run it (it never handles the value, Doppler does).
+| Credential | Identity | Second home | Refill with |
+|---|---|---|---|
+| `CLICKUP_API_TOKEN` | **Dane**, `48012725` | GitHub Actions secret `CLICKUP_API_TOKEN` on `mentor24-maker/starcaster` (the review gate reads it) | `doppler secrets get CLICKUP_API_TOKEN --plain --project starcaster --config dev --silent \| gh secret set CLICKUP_API_TOKEN --repo mentor24-maker/starcaster` |
+| `PULSE_CLICKUP_API_TOKEN` | **Pulse**, `54254347` | `~/pulse/config/clickup-mcp.json` (gitignored) → `mcpServers.clickup.env.CLICKUP_API_KEY` | `cd ~/pulse && doppler run --project starcaster --config dev -- python3 bin/restore-clickup-token.py` |
+
+`restore-clickup-token.py` reads **`PULSE_CLICKUP_API_TOKEN`**, never the bare
+`CLICKUP_API_TOKEN`. That is the whole point of the second name: the two cannot
+be typed for one another. It refuses outright (exit 2) if the token it is about
+to write belongs to a different account than the one already in the file, naming
+both ids, and only `--force` overrides — because the failure is silent and
+unreadable after the fact.
+
+Both refill commands move a value between two stores without rendering it, so an
+agent may run them (DOCTRINE §4.1). **`doppler secrets set` and `doppler secrets
+delete` PRINT what they wrote or what remains** — they are the wrong side of that
+line, and `--silent` does not suppress the secrets table. Put Doppler on the
+`get` side of a pipe, never the `set` side; a value that has to be *entered* goes
+in through the dashboard, by Dane.
+
+### What went wrong here once (2026-08-31 → 09-01)
+
+This table said `CLICKUP_API_TOKEN`'s second home was Pulse's config file. They
+were never the same credential, so the documented refill **overwrote Pulse's
+token with Dane's**, and it happened before anyone disarmed it: on 2026-09-01
+Pulse's config was measured holding `pk_48012725_` — Dane's — so Pulse had been
+acting as him. The mirror image was on the Mac Mini, whose
+`~/WebApps/starcaster/.env.local` set **`CLICKUP_API_TOKEN`** to **Pulse's**
+token, where every other reader of that name means Dane. Both are fixed; the
+Mini's line was removed so it falls back to Doppler like everything else there.
+
+The lesson is the row shape above: **a copies table row names the identity, not
+just the variable.** Two credentials that share a service, a token format and
+half a name are one careless refill apart from becoming each other.
 
 **Adding to this table is part of creating a copy.** If you put a credential
 anywhere outside Doppler, it belongs here in the same commit, or the next
