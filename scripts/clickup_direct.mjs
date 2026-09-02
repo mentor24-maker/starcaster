@@ -351,6 +351,8 @@ function usage(code = 2) {
   console.error('                                             bounds the other end — without it the count runs to NOW,');
   console.error('                                             so a report on an older week credits later closures to it');
   console.error('  get --task <id>                            one task: header lines, then "---", then the body markdown');
+  console.error('  task-name --task <id>                      JUST the task name, on stdout, nothing else — for scripts that title');
+  console.error('                                             a pull request from it (`npm run ship`). Everything else goes to stderr.');
   console.error('  comments --task <id>                       the task\'s comments, oldest first (where the PR URL lives)');
   console.error('  claim --task <id>                          THE build claim: reads the ticket\'s own status, refuses (exit 3) if it is');
   console.error('                                             not one loop-build may take, else moves it to Building guarded on that');
@@ -2166,6 +2168,29 @@ if (cmd === 'whoami') {
   console.log('---');
   console.log(t.markdown_description || t.description || '(no body)');
   reportLimits(out.res);
+
+} else if (cmd === 'task-name') {
+  // The machine-readable half of `get`. `get` prints a header block meant for a
+  // human, so a script wanting the name has to parse `name: ` off line 2 — which
+  // breaks the moment the header gains a line or a name wraps. `npm run ship`
+  // titles the pull request from this (task 86bbqwupk), and the title has to be
+  // BYTE-IDENTICAL to the ticket name for the Closed list and the deploy list to
+  // pair up, so a parse that is nearly right is worse than no parse at all.
+  //
+  // Contract, and the reason every other line here goes to stderr: stdout is the
+  // name and a newline, and nothing else. `reportLimits` is deliberately not
+  // called — it writes to stderr, but a caller reading combined output would
+  // still get the rate-limit line glued onto the title.
+  const task = arg('task');
+  if (!task) usage();
+  const out = await call('GET', `/api/v2/task/${task}`);
+  if (!out.res.ok) die('get task name', out);
+  const name = String(out.json?.name ?? '');
+  if (!name.trim()) {
+    console.error(`Task ${task} has an empty name — nothing to print.`);
+    process.exit(1);
+  }
+  process.stdout.write(`${name}\n`);
 
 } else if (cmd === 'comments') {
   const task = arg('task');
