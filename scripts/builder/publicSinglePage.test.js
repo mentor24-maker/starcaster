@@ -19,17 +19,13 @@ const fs = require('node:fs');
  * the equivalence rather than the implementation.
  */
 
-// The picker, lifted out of the store so it can be tested without a database.
-// Kept identical in shape to getPublishedPageForProject's body — see the guard
-// test at the bottom, which fails if that stops being true.
-function pickPage(pages, slugInput) {
-  const wanted = String(slugInput ?? '').trim().toLowerCase().replace(/^\/+|\/+$/g, '');
-  const slugOf = (page) => String(page?.slug ?? '').trim().toLowerCase();
-  const isRoot = wanted === '' || wanted === 'home';
-  return isRoot
-    ? (pages.find((p) => slugOf(p) === '') ?? pages.find((p) => slugOf(p) === 'home') ?? null)
-    : (pages.find((p) => slugOf(p) === wanted) ?? null);
-}
+// The picker itself — the real one. It used to be a hand-kept COPY of the
+// store's body, guarded by a test that re-read the store and checked the two
+// still looked alike. That guard compared the wrong half: it pinned the
+// normalization (lower-case, trim slashes, ''≡'home') and never the tie-break
+// between two pages sharing an address, which is where the published reader
+// and the draft reader actually disagreed. See lib/publicSitePageAddress.js.
+const { pickPageForAddress: pickPage } = require('../../lib/publicSitePageAddress');
 
 const page = (slug, name) => ({ slug, name });
 
@@ -96,16 +92,27 @@ test('the endpoint refuses private slugs before it reads anything', () => {
   assert.ok(guard < read, 'the guard must run BEFORE the page is loaded');
 });
 
-test('the store picks with the same rule this file tests', () => {
-  // The picker above is a copy. If the store's rule changes shape, these tests
-  // would keep passing against a rule nobody ships — so pin the real one.
-  const store = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'builderPagesStore.js'), 'utf8');
-  const fn = store.slice(store.indexOf('async function getPublishedPageForProject'));
-  const body = fn.slice(0, fn.indexOf('\n}\n'));
-  assert.match(body, /wanted === ''\s*\|\|\s*wanted === 'home'/, 'root equivalence');
-  assert.match(body, /toLowerCase\(\)/, 'case-insensitive');
-  assert.match(body, /replace\(\/\^\\\/\+\|\\\/\+\$\/g, ''\)/, 'trims surrounding slashes');
-  assert.match(body, /listPublishedPagesForProject/, 'must reuse the list path, not re-query');
+test('BOTH readers pick with this exact function — no second copy of the rule', () => {
+  // The whole defect was two implementations of "which page is at this
+  // address". Pin that there is one, and that each reader calls it, rather
+  // than that two bodies happen to resemble each other.
+  const root = path.join(__dirname, '..', '..');
+  const store = fs.readFileSync(path.join(root, 'lib', 'builderPagesStore.js'), 'utf8');
+  const reader = fs.readFileSync(path.join(root, 'lib', 'publishedPageRead.js'), 'utf8');
+
+  const draftFn = store.slice(store.indexOf('async function getPublishedPageForProject'));
+  const draftBody = draftFn.slice(0, draftFn.indexOf('\n}\n'));
+  assert.match(draftBody, /pickPageForAddress\(/, 'the draft path must call the shared picker');
+  assert.match(draftBody, /listPublishedPagesForProject/, 'must reuse the list path, not re-query');
+  assert.doesNotMatch(draftBody, /wanted === ''/, 'must not keep its own copy of the address rule');
+
+  const resolveFn = store.slice(store.indexOf('async function resolvePublicPageIdForSlug'));
+  const resolveBody = resolveFn.slice(0, resolveFn.indexOf('\n}\n'));
+  assert.match(resolveBody, /pickPageForAddress\(/, 'the id resolver must call the shared picker too');
+  assert.match(resolveBody, /filterPublicSitePages/, 'and apply the same slug filter as the list');
+
+  assert.match(reader, /resolvePublicPageIdForSlug/, 'the snapshot reader defers to the drafts for the address');
+  assert.doesNotMatch(reader, /wanted === ''/, 'and keeps no address rule of its own');
 });
 
 test('the list endpoint survives — site-search still needs every page', () => {

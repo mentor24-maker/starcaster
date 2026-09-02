@@ -5,7 +5,8 @@ Read this file plus the `CLAUDE.md` nearest the files you are editing
 Architecture, known issues, and roadmap: `docs/FABLE_OVERHAUL_PLAN.md`.
 **Hard-won rules, each with the incident that produced it: `docs/DOCTRINE.md`.**
 Read it before diagnosing a "it worked yesterday" failure, writing an error
-message, or adding a check that could silently not run.
+message, adding a check that could silently not run, or reporting that
+something is done.
 
 ## IMPORTANT: Coach the operator
 
@@ -227,6 +228,17 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     sources only; a test needing a generated lib goes in the node suite
     (`scripts/builder/*.test.js`, run after the build). Enforced by
     `check_vitest_generated_lib.cjs`; full story in `docs/DOCTRINE.md` §5.18.
+15. **An upsert needs `Prefer: resolution=merge-duplicates`, and a store must
+    not fall back when the database REFUSED.** `on_conflict=<col>` only names
+    the column — PostgREST merges a conflicting row solely when asked, so the
+    first save for a tenant inserts and every save after it returns 409. That
+    alone would be loud; what hides it is a store that catches the failure,
+    writes the local JSON file and returns the merged value, so the API answers
+    **200 with the caller's own input** while the database keeps the old row
+    (and on Vercel the file write vanishes — landmine 6). The blog card template
+    was frozen in production from 2026-06-30 until 2026-09-02 that way, with
+    every save reporting success. A fallback path is for the store being
+    ABSENT, never for it refusing. `docs/DOCTRINE.md` §5.21.
 
 ## Working locally
 
@@ -679,8 +691,13 @@ already merged (moves it to Live), and a branch stamped with a task
 (`npm run thread`) that has since closed but is still on the Mac (flags it to
 the bus — `npm run tidy`'s own closed-task cleanup should have caught it).
 Dry-run by default (`npm run reconcile`); `-- --live` performs the repairs.
-Meant to run on a schedule — see the Mac Mini engine-room task for when that
-lands; today it's a command to run by hand.
+**Scheduled since 2026-09-02** (task 86bbtnk3k): `npm run repair` runs it —
+with the loop's dropped-claim backstop before it and a DRY stranded-ticket
+sweep after it — on the relay's ten-minute idle wake, throttled to one fresh
+reading per half hour. Findings reach the bus once per 6h; unmarked stranded
+work is reported with the apply command, never moved unattended, because the
+pass marker is the only machine-readable difference between a dead loop claim
+and a hand session mid-build.
 
 **Dev servers collide on port 3001, and `pkill` is a shared-resource action.**
 Every worktree's `npm run dev` wants the same port, so the first one started

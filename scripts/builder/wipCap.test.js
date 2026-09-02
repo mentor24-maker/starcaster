@@ -176,9 +176,18 @@ test('the wip-check command reads only — no ClickUp writes anywhere in it', ()
 test('the build skill actually consults it before claiming', () => {
   // A check nothing calls is a check that does not run — the buildStart lesson
   // (86bbjymxr), which shipped a guard and then had to add the instruction.
+  // Consulted through the preflight table since task 86bbtujen. The intent is
+  // unchanged: the cap runs before a claim, and a capped answer is named.
+  const preflight = require('./preflight.js');
+  const cap = preflight.GATES['loop-build'].find((g) => g.id === 'cap');
+  assert.ok(cap, 'the build preflight must include the cap gate');
+  assert.deepEqual([...cap.npmArgs], ['clickup', '--', 'wip-check'], 'and it calls wip-check itself, not a re-implementation');
+  assert.equal(preflight.interpretGate(cap, 3).stop, true, 'capped stops the claim');
   const skill = fs.readFileSync(path.join(__dirname, '../../.claude/skills/loop-build/SKILL.md'), 'utf8');
-  assert.match(skill, /wip-check/, 'SKILL.md must tell the pass to run it');
-  assert.match(skill, /exit 3/i, 'and must say what a capped answer means');
+  assert.match(skill, /npm run preflight -- loop-build/, 'SKILL.md must tell the pass to run the preflight');
+  assert.ok(skill.indexOf('npm run preflight -- loop-build') < skill.indexOf('--claimable'),
+    'and the preflight comes before the claim reference — a check nothing calls is a check that does not run');
+  assert.match(skill, /merge side is full/, 'the capped decline is named in the verdict table');
 });
 
 // ── Counting work in flight, not open PRs (2026-08-25, task 86bbm4zwd) ─────

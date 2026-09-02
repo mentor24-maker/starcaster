@@ -1,5 +1,7 @@
 'use strict';
 
+const loopStatuses = require('./loopStatuses.js');
+
 /**
  * `npm run pulse` — the pipeline's vital signs. Phase 1 of the diagnostics
  * design (task 86bbm9h60): the three checks that would have caught this week.
@@ -442,12 +444,12 @@ const STAGE_THRESHOLDS = {
     severity: 'alarm',
     why: 'a build takes 10-15 minutes; three tickets measured 65-72 hours on 2026-08-25',
   },
-  'in review': {
+  [loopStatuses.IN_REVIEW]: {
     hours: 4,
     severity: 'alarm',
     why: 'a review takes about 10 minutes on an hourly poll, so four hours is already several missed polls',
   },
-  'ready to launch': {
+  [loopStatuses.READY_TO_LAUNCH]: {
     hours: 24,
     severity: 'notice',
     why: 'operator-held — surface it, do not alarm; only Dane moves a ticket out of this stage',
@@ -551,7 +553,8 @@ function truncate(text, max) {
  * A ticket the machine is responsible for moving. Matches `reconcile`'s ladder
  * by role rather than by a second hand-copied name list.
  */
-const IN_FLIGHT_STATUSES = new Set(['building', 'in review', 'needs your input', 'ready to launch']);
+// A view of the one taxonomy (loopStatuses.js, task 86bbtujed).
+const IN_FLIGHT_STATUSES = new Set(loopStatuses.IN_FLIGHT_STATUSES);
 
 /**
  * Finished. `queued` IS DELIBERATELY IN NEITHER SET, and that is the whole
@@ -569,7 +572,9 @@ const IN_FLIGHT_STATUSES = new Set(['building', 'in review', 'needs your input',
  * A diagnostic that cries wolf is worse than no diagnostic, because the reader
  * stops reading it and then misses the real one.
  */
-const TERMINAL_STATUSES = new Set(['live']);
+// `live` only — now decision D1's one definition (loopStatuses.js) rather
+// than this file's private, accidentally-correct copy.
+const TERMINAL_STATUSES = new Set(loopStatuses.TERMINAL_STATUSES);
 
 /** ClickUp's own status.type settles it where present, so a future "Won't do"
  *  is terminal without being name-listed; the name set is the fallback. */
@@ -790,7 +795,7 @@ function driftFindings(records) {
  * break-test in pulse.test.js walks all four.
  */
 function readyBottleneck({ over, ready, readyActors, reworkClause = '' }) {
-  const hours = STAGE_THRESHOLDS['ready to launch'].hours;
+  const hours = STAGE_THRESHOLDS[loopStatuses.READY_TO_LAUNCH].hours;
   const head = `${over} of ${ready} approved tickets have waited past ${hours}h for a merge`;
 
   const tally = readyActors && typeof readyActors === 'object' ? readyActors : null;
@@ -842,8 +847,8 @@ function bottleneckSentence({ noOp, residency, readyActors } = {}) {
   // saying "0 queued" directly above a finding that says 26 — one report
   // contradicting itself is worse than no report.
   const queued = Number.isFinite(noOp?.queuedCount) ? noOp.queuedCount : count('queued');
-  const ready = count('ready to launch');
-  const review = count('in review');
+  const ready = count(loopStatuses.READY_TO_LAUNCH);
+  const review = count(loopStatuses.IN_REVIEW);
   // Rework is named separately everywhere it is counted (task 86bbr1u9v).
   // Folding it into "queued" is what let six half-built tickets read as fresh
   // work for a morning, and this sentence is the one line of the report most
@@ -869,15 +874,15 @@ function bottleneckSentence({ noOp, residency, readyActors } = {}) {
     const why = noOp?.sourceError || noOp?.message || 'the loop log was not read at all';
     return `Bottleneck: CANNOT TELL — ${why}`;
   }
-  if (overIn('in review') >= 2) {
+  if (overIn(loopStatuses.IN_REVIEW) >= 2) {
     return (
-      `Bottleneck: REVIEW — ${overIn('in review')} of ${review} tickets in review are past ` +
-      `${STAGE_THRESHOLDS['in review'].hours}h. Not the builder; ${queued} still queued and the loop is claiming.${reworkClause}`
+      `Bottleneck: REVIEW — ${overIn(loopStatuses.IN_REVIEW)} of ${review} tickets in review are past ` +
+      `${STAGE_THRESHOLDS[loopStatuses.IN_REVIEW].hours}h. Not the builder; ${queued} still queued and the loop is claiming.${reworkClause}`
     );
   }
-  if (overIn('ready to launch') >= 1) {
+  if (overIn(loopStatuses.READY_TO_LAUNCH) >= 1) {
     return readyBottleneck({
-      over: overIn('ready to launch'),
+      over: overIn(loopStatuses.READY_TO_LAUNCH),
       ready,
       readyActors,
       reworkClause,

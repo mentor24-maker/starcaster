@@ -4,6 +4,9 @@ const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { listCategories, getCategory, getCategoryBySlug, createCategory, updateCategory, deleteCategory } = require('../lib/blogCategoriesStore');
 const { listPosts, getPost, getPostBySlug, createPost, updatePost, deletePost } = require('../lib/blogPostsStore');
 const { getCardTemplate, saveCardTemplate } = require('../lib/blogCardTemplateStore');
+const { listImportCandidates, importPosts, IMPORT_BATCH_SIZE } = require('../lib/blogImportStore');
+const { getPublicProjectById } = require('../lib/projectsStore');
+const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { logActivity } = require('../lib/activityLog');
 
 function requestScope(req) {
@@ -166,6 +169,41 @@ async function handle(req, res, pathname, method) {
     if (!deleted) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
     logActivity({ action: 'blog_post.deleted', entityType: 'blog_post', entityId: id, summary: `Blog post deleted: ${id}` });
     return sendOk(res, 200, { deleted: true, id }, { deleted: true }), true;
+  }
+
+  // ── Bulk import from discarded pages ────────────────────────────────────────
+  // docs/BLOG_BULK_IMPORT_HANDOFF.md. Both endpoints require a session (they
+  // are not in the public tenant read list) and are scoped to the caller's
+  // project. Candidates is the dry run: nothing is written until the POST,
+  // and the POST takes page ids only — the fields come from the snapshots.
+
+  if (pathname === '/api/blog/import/candidates' && method === 'GET') {
+    if (checkEndpointLimit(req, res, 'blog.import')) return true;
+    const scope = requestScope(req);
+    const result = await listImportCandidates(scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not list import candidates'), true;
+    // Suggested author for posts whose source names none — the site's name,
+    // editable in the picker before anything is written. The store returns an
+    // envelope, so the name is on .data (landmine 12): reading it off the
+    // envelope silently yields undefined and an empty suggestion box.
+    const project = await getPublicProjectById(scope.projectId);
+    return sendOk(res, 200, {
+      candidates: result.data,
+      defaultAuthorSuggestion: String(project?.data?.name || '').trim(),
+      batchSize: IMPORT_BATCH_SIZE,
+    }), true;
+  }
+
+  if (pathname === '/api/blog/import' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'blog.import')) return true;
+    const body = await parseJsonBody(req);
+    const result = await importPosts({
+      pageIds: Array.isArray(body.pageIds) ? body.pageIds : [],
+      defaultAuthor: String(body.defaultAuthor || '').trim(),
+    }, requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Import failed'), true;
+    logActivity({ action: 'blog_post.bulk_imported', entityType: 'blog_post', entityId: '', summary: `Blog bulk import: ${result.data.created} created, ${result.data.skipped} skipped, ${result.data.failed} failed` });
+    return sendOk(res, 200, result.data), true;
   }
 
   // ── Blog Card Template ──────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createElement, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   EMPTY_MEDIA_FILTERS,
   MEDIA_ASPECTS,
@@ -2481,12 +2481,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
   }
 
-  const cardBorder: CSSProperties =
-    cardStyle === "bordered"
-      ? { border: `1px solid ${accent}40`, boxShadow: "none" }
-      : cardStyle === "shadow"
-      ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
-      : { border: "1px solid #e2e8f0", boxShadow: "none" };
+  const cardBorder: CSSProperties = cardFrameStyle(tpl);
 
   const gridStyle: CSSProperties =
     layout === "list"
@@ -2585,10 +2580,39 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
             const imageUrl = post.featuredImageUrl || post.featured_image_url;
             const isSideBySide = cardLayout === "side-by-side" || layout === "list";
             const hasFeaturedImageInRows = tplRows.some((r) => r.slots.includes("featured_image"));
-            // Full-bleed pulls up over the card's TOP padding only when the
-            // image is the first thing in the card. It used to do so
-            // unconditionally, which slid the image up over whatever sat above it.
-            const firstFilledSlot = tplRows.flatMap((r) => r.slots.slice(0, r.cols)).find(Boolean) ?? null;
+            /*
+             * WHICH SLOTS ACTUALLY RENDER SOMETHING FOR THIS POST.
+             *
+             * A slot being present in the template says nothing about whether it
+             * draws anything: `categories` renders null on a post with no
+             * categories, `excerpt` on a post with no excerpt, and so on. Both
+             * production templates open with `["categories"]`, and the Delray
+             * posts have none — so the template order and the rendered order are
+             * different lists, and reading the wrong one caused both bugs below.
+             *
+             * PR #522 made the image's full-bleed pull-up conditional on being
+             * the first slot IN THE TEMPLATE, to stop it sliding under whatever
+             * sat above it. On those templates that test is false while the
+             * image is visibly at the top, so the card's 1.125rem top padding
+             * showed as a gap (task 86bbtvnr5). The fix is not to go back to
+             * pulling up unconditionally — that reintroduces the sliding — but to
+             * ask the question about CONTENT rather than about the template.
+             */
+            function slotRenders(id: CardElementId | null): boolean {
+              switch (id) {
+                case "categories":     return postCats.length > 0;
+                case "headline":       return true;
+                case "featured_image": return Boolean(imageUrl) && !isSideBySide;
+                case "excerpt":        return Boolean(post.excerpt);
+                case "author":         return Boolean(post.author);
+                case "date":           return Boolean(dateStr);
+                case "tags":           return Boolean(post.tags?.length);
+                case "read_more":      return true;
+                default:               return false;
+              }
+            }
+            const firstRenderedSlot =
+              tplRows.flatMap((r) => r.slots.slice(0, r.cols)).find(slotRenders) ?? null;
 
             function renderEl(id: CardElementId): React.ReactNode {
               switch (id) {
@@ -2612,12 +2636,14 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                   const { frame, img } = featuredImageStyles(tpl, {
                     cardPaddingX: "1.25rem",
                     cardPaddingTop: "1.125rem",
-                    topOfCard: firstFilledSlot === "featured_image",
+                    topOfCard: firstRenderedSlot === "featured_image",
                   });
-                  return (
+                  return withPostLink(
                     <div style={frame}>
                       <img alt={post.title} src={imageUrl} style={img} />
-                    </div>
+                    </div>,
+                    tpl,
+                    href
                   );
                 }
                 case "excerpt":
@@ -2646,9 +2672,17 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
             return (
               <article key={post.id} style={{ ...cardBorder, borderRadius: cardRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? sideBySideDirection(tpl) : "column" }}>
                 {isSideBySide && imageUrl && hasFeaturedImageInRows ? (
-                  <div style={sideStripStyle(tpl)}>
+                  // The strip IS the flex item — it carries flexShrink, width,
+                  // border and shadow. So when the image links, the anchor has to
+                  // BE the strip; an anchor wrapped around it would become the
+                  // flex item instead and none of that styling would apply.
+                  createElement(
+                    tpl.imageLinkToPost && href && href !== "#" ? "a" : "div",
+                    tpl.imageLinkToPost && href && href !== "#"
+                      ? { href, style: sideStripStyle(tpl) }
+                      : { style: sideStripStyle(tpl) },
                     <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
-                  </div>
+                  )
                 ) : null}
                 {/* minWidth 0 is load-bearing: a flex item defaults to
                     min-width:auto, so the text column refuses to shrink below its
@@ -2656,7 +2690,12 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                     wide. Reachable now that the strip's width is an operator control. */}
                 <div style={{ padding: "1.125rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
                   {tplRows.map((row) => {
-                    const hasContent = row.slots.some((s) => s && !(isSideBySide && s === "featured_image"));
+                    // Emptiness is measured against the POST, not the template.
+                    // The old test asked only whether the row HELD a slot, so a
+                    // categories row on a post with no categories still emitted a
+                    // flex child — invisible, but carrying the column's 0.625rem
+                    // gap, which is the other half of the gap above the image.
+                    const hasContent = row.slots.slice(0, row.cols).some(slotRenders);
                     if (!hasContent) return null;
                     return (
                       <div key={row.id} style={row.cols > 1 ? { display: "grid", gridTemplateColumns: `repeat(${row.cols}, 1fr)`, gap: "0.5rem", alignItems: "center" } : {}}>
@@ -3070,6 +3109,277 @@ function blogManagerViewBaseUrl(settings: Record<string, string>): string {
   return defaultBlogPostViewPath();
 }
 
+type BlogImportCandidate = {
+  pageId: string;
+  slug: string;
+  pageName: string;
+  title: string;
+  titleFound: boolean;
+  publishedAt: string | null;
+  dateFound: boolean;
+  author: string;
+  authorFound: boolean;
+  excerpt: string;
+  featuredImageUrl: string;
+  wordCount: number;
+  looksLikePost: boolean;
+  alreadyImported: boolean;
+  maybeDuplicateOf: string;
+};
+
+type BlogImportResult = {
+  pageId: string;
+  ok: boolean;
+  skipped?: boolean;
+  reason?: string;
+  title?: string;
+  slug?: string;
+};
+
+function blogImportDateLabel(candidate: BlogImportCandidate): string {
+  if (!candidate.dateFound || !candidate.publishedAt) return "no date in source";
+  return new Date(candidate.publishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+/**
+ * Recover discarded Builder pages as draft blog posts. A picker, not a
+ * button: every candidate is shown with what would be created, nothing is
+ * written until the operator has seen the preview and confirmed, and
+ * everything lands as a draft (docs/BLOG_BULK_IMPORT_HANDOFF.md).
+ */
+function BlogImportPanel({ onImported, onClose }: { onImported: () => void; onClose: () => void }) {
+  const [candidates, setCandidates] = useState<BlogImportCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [defaultAuthor, setDefaultAuthor] = useState("");
+  const [batchSize, setBatchSize] = useState(10);
+  const [step, setStep] = useState<"pick" | "preview" | "running" | "done">("pick");
+  const [progress, setProgress] = useState(0);
+  const [results, setResults] = useState<BlogImportResult[]>([]);
+
+  useEffect(() => {
+    fetch("/api/blog/import/candidates", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`The server answered ${r.status}`))))
+      .then((d) => {
+        setCandidates(Array.isArray(d?.data?.candidates) ? d.data.candidates : []);
+        setDefaultAuthor(String(d?.data?.defaultAuthorSuggestion || ""));
+        setBatchSize(Number(d?.data?.batchSize) || 10);
+      })
+      .catch((err: Error) => setLoadError(err.message || "Could not load the candidate list"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const probable = candidates.filter((c) => c.looksLikePost);
+  const improbable = candidates.filter((c) => !c.looksLikePost);
+  const chosen = candidates.filter((c) => selected.has(c.pageId));
+
+  function toggle(pageId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageId)) next.delete(pageId); else next.add(pageId);
+      return next;
+    });
+  }
+
+  function selectAllProbable() {
+    setSelected(new Set(probable.filter((c) => !c.alreadyImported).map((c) => c.pageId)));
+  }
+
+  async function runImport() {
+    setStep("running");
+    setProgress(0);
+    const all: BlogImportResult[] = [];
+    const ids = chosen.map((c) => c.pageId);
+    // One small batch per request; a single long request gets cut off
+    // server-side, so the client is the loop.
+    for (let i = 0; i < ids.length; i += batchSize) {
+      try {
+        const res = await fetch("/api/blog/import", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+          body: JSON.stringify({ pageIds: ids.slice(i, i + batchSize), defaultAuthor }),
+        });
+        const data = res.ok ? await res.json() : null;
+        const batch: BlogImportResult[] = Array.isArray(data?.data?.results) ? data.data.results : [];
+        if (!res.ok || !batch.length) {
+          for (const pageId of ids.slice(i, i + batchSize)) {
+            all.push({ pageId, ok: false, reason: `The server answered ${res.status}` });
+          }
+        } else {
+          all.push(...batch);
+        }
+      } catch {
+        for (const pageId of ids.slice(i, i + batchSize)) {
+          all.push({ pageId, ok: false, reason: "The request failed" });
+        }
+      }
+      setProgress(Math.min(ids.length, i + batchSize));
+      setResults([...all]);
+    }
+    setResults(all);
+    setStep("done");
+    onImported();
+  }
+
+  const titleFor = new Map(candidates.map((c) => [c.pageId, c.title || c.pageName || c.slug]));
+
+  function renderCandidateRow(candidate: BlogImportCandidate) {
+    const flags: string[] = [];
+    if (candidate.alreadyImported) flags.push("already imported");
+    if (candidate.maybeDuplicateOf) flags.push(`may duplicate the existing post “${candidate.maybeDuplicateOf}”`);
+    if (!candidate.titleFound) flags.push("no headline in source — using the page name");
+    if (!candidate.dateFound) flags.push("no date in source");
+    if (!candidate.authorFound) flags.push("no author in source");
+    return (
+      <label key={candidate.pageId} className={`builder-blog-import-row${candidate.alreadyImported ? " builder-blog-import-row--disabled" : ""}`}>
+        <input
+          type="checkbox"
+          checked={selected.has(candidate.pageId)}
+          disabled={candidate.alreadyImported}
+          onChange={() => toggle(candidate.pageId)}
+        />
+        <span className="builder-blog-import-row-body">
+          <span className="builder-blog-import-row-title">{candidate.title || candidate.pageName || candidate.slug}</span>
+          <span className="builder-blog-import-row-meta">
+            {blogImportDateLabel(candidate)}
+            {" · "}{candidate.authorFound ? candidate.author : "no author in source"}
+            {" · "}{candidate.wordCount} words
+          </span>
+          {candidate.excerpt ? <span className="builder-blog-import-row-excerpt">{candidate.excerpt}</span> : null}
+          {flags.length ? <span className="builder-blog-import-row-flags">{flags.join(" · ")}</span> : null}
+        </span>
+      </label>
+    );
+  }
+
+  if (loading) {
+    return <div className="builder-blog-import-panel"><div className="builder-blog-post-manager-stub">Looking for discarded pages…</div></div>;
+  }
+  if (loadError) {
+    return (
+      <div className="builder-blog-import-panel">
+        <div className="builder-blog-post-manager-stub">Could not load the candidate list: {loadError}</div>
+        <div className="builder-blog-import-actions">
+          <button type="button" className="builder-blog-import-btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    );
+  }
+  if (!candidates.length) {
+    return (
+      <div className="builder-blog-import-panel">
+        <div className="builder-blog-post-manager-stub">No discarded pages were found for this site.</div>
+        <div className="builder-blog-import-actions">
+          <button type="button" className="builder-blog-import-btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "preview" || step === "running" || step === "done") {
+    return (
+      <div className="builder-blog-import-panel">
+        {step === "preview" ? (
+          <>
+            <div className="builder-blog-import-note">
+              Nothing has been written yet. These {chosen.length} posts would be created, each as a <strong>draft</strong>:
+            </div>
+            <div className="builder-blog-import-preview-list">
+              {chosen.map((candidate) => (
+                <div key={candidate.pageId} className="builder-blog-import-preview-item">
+                  <div className="builder-blog-import-row-title">{candidate.title || candidate.pageName || candidate.slug}</div>
+                  <div className="builder-blog-import-row-meta">
+                    Address: {candidate.slug || "(blank)"}
+                    {" · "}Author: {candidate.authorFound ? candidate.author : (defaultAuthor || "(blank)")}
+                    {" · "}Date: {candidate.dateFound && candidate.publishedAt ? blogImportDateLabel(candidate) : "(blank — no date in source)"}
+                    {" · "}{candidate.wordCount} words
+                    {" · "}Featured image: {candidate.featuredImageUrl ? "yes" : "none found"}
+                  </div>
+                  {candidate.excerpt ? <div className="builder-blog-import-row-excerpt">{candidate.excerpt}</div> : null}
+                </div>
+              ))}
+            </div>
+            <div className="builder-blog-import-actions">
+              <button type="button" className="builder-blog-import-btn" onClick={() => setStep("pick")}>Back</button>
+              <button type="button" className="builder-blog-import-btn builder-blog-import-btn--primary" onClick={runImport}>
+                Import {chosen.length} {chosen.length === 1 ? "post" : "posts"} as drafts
+              </button>
+            </div>
+          </>
+        ) : null}
+        {step === "running" ? (
+          <div className="builder-blog-import-note">Importing… {progress} of {chosen.length} processed.</div>
+        ) : null}
+        {step === "done" ? (
+          <>
+            <div className="builder-blog-import-note">
+              Done: {results.filter((r) => r.ok).length} created as drafts,{" "}
+              {results.filter((r) => r.skipped).length} skipped,{" "}
+              {results.filter((r) => !r.ok && !r.skipped).length} failed.
+            </div>
+            <div className="builder-blog-import-preview-list">
+              {results.map((r) => (
+                <div key={r.pageId} className="builder-blog-import-preview-item">
+                  <div className="builder-blog-import-row-meta">
+                    {r.ok ? "✓ " : "✗ "}
+                    {r.title || titleFor.get(r.pageId) || r.pageId}
+                    {r.reason ? ` — ${r.reason}` : ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="builder-blog-import-actions">
+              <button type="button" className="builder-blog-import-btn" onClick={onClose}>Close</button>
+            </div>
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="builder-blog-import-panel">
+      <div className="builder-blog-import-note">
+        These are discarded pages recovered from this site’s history. Tick the ones to bring back as blog posts —
+        nothing is written until you confirm on the next screen.
+      </div>
+      <div className="builder-blog-import-controls">
+        <button type="button" className="builder-blog-import-btn" onClick={selectAllProbable}>Select all probable posts</button>
+        <button type="button" className="builder-blog-import-btn" onClick={() => setSelected(new Set())}>Select none</button>
+        <label className="builder-blog-import-author">
+          Author when the source has none:{" "}
+          <input
+            type="text"
+            value={defaultAuthor}
+            onChange={(e) => setDefaultAuthor(e.target.value)}
+            placeholder="e.g. the site’s name"
+          />
+        </label>
+      </div>
+      <div className="builder-blog-import-list">
+        {probable.map(renderCandidateRow)}
+        {improbable.length ? (
+          <div className="builder-blog-import-group-label">Probably not posts — tick one only if you recognise it</div>
+        ) : null}
+        {improbable.map(renderCandidateRow)}
+      </div>
+      <div className="builder-blog-import-actions">
+        <button type="button" className="builder-blog-import-btn" onClick={onClose}>Cancel</button>
+        <button
+          type="button"
+          className="builder-blog-import-btn builder-blog-import-btn--primary"
+          disabled={!chosen.length}
+          onClick={() => setStep("preview")}
+        >
+          Preview import ({chosen.length})
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BlogPostManagerPreview({ settings }: { settings: Record<string, string> }) {
   const editBaseUrl = useMemo(() => blogManagerEditBaseUrl(settings), [settings.editPageUrl]);
   const viewBaseUrl = useMemo(() => blogManagerViewBaseUrl(settings), [settings.viewPageUrl, settings.postPageUrl]);
@@ -3087,6 +3397,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cloningId, setCloningId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   function loadPosts() {
     setLoading(true);
@@ -3156,13 +3467,30 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   const statusBg   = (s?: string) => s === "published" ? "#f0fdf4" : s === "archived" ? "#f9fafb" : "#fffbeb";
 
   const listHeading = (
-    <h3 className="builder-admin-data-table-title">Published Blog Posts</h3>
+    <div className="builder-blog-post-manager-heading">
+      <h3 className="builder-admin-data-table-title">Published Blog Posts</h3>
+      <button
+        type="button"
+        className="builder-blog-import-btn builder-blog-import-open"
+        onClick={() => setImportOpen((v) => !v)}
+      >
+        {importOpen ? "Hide import" : "Import from discarded pages"}
+      </button>
+    </div>
   );
+
+  const importPanel = importOpen ? (
+    <BlogImportPanel onImported={loadPosts} onClose={() => setImportOpen(false)} />
+  ) : null;
 
   if (loading) {
     return (
       <div className="builder-blog-post-manager-module builder-admin-data-table-module">
         {listHeading}
+        {/* The panel renders here too, or importing unmounts it: a finished
+            import reloads the post list, and a panel that only lives in the
+            loaded branch loses its results screen at that exact moment. */}
+        {importPanel}
         <div className="builder-blog-post-manager-stub">Loading posts…</div>
       </div>
     );
@@ -3172,6 +3500,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
     return (
       <div className="builder-blog-post-manager-module builder-admin-data-table-module">
         {listHeading}
+        {importPanel}
         <div className="builder-blog-post-manager-stub">
           No posts yet. Use the Create Post module to add your first post.
         </div>
@@ -3182,6 +3511,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   return (
     <div className="builder-blog-post-manager-module builder-admin-data-table-module">
       {listHeading}
+      {importPanel}
       <div className="builder-blog-post-manager-list">
         {posts.map((post) => {
           const editHref = buildBlogPostEditHref(editBaseUrl, post.id);
@@ -3513,6 +3843,9 @@ type CardTemplate = {
   imageSideWidth: number;
   imageHeight: number;
   imageCrop: string;
+  imageLinkToPost: boolean;
+  cardBorderWidth: number;
+  cardBorderColor: string;
   rows: CardRow[];
 };
 
@@ -3548,6 +3881,15 @@ const DEFAULT_CARD_TEMPLATE: CardTemplate = {
   imageSideWidth: 220,
   imageHeight: 0,
   imageCrop: "cover",
+  // Off by default: an existing template is a row without this key, and making
+  // a tenant's card photos clickable unasked is a behaviour change.
+  imageLinkToPost: false,
+  // The card's own border, an operator control since 2026-09-02 (task
+  // 86bbtvnr5). These defaults ARE the old hard-coded "default" preset; a
+  // template saved before this existed derives them from ITS preset in
+  // migrateTemplate, so bordered and shadow cards are unchanged too.
+  cardBorderWidth: 1,
+  cardBorderColor: "#e2e8f0",
   rows: [
     { id: "r1", cols: 1, slots: ["categories"] },
     { id: "r2", cols: 1, slots: ["headline"] },
@@ -3575,6 +3917,67 @@ function cardNum(value: unknown, min: number, max: number, fallback: number): nu
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+// `Boolean("false")` is true, so a template carrying the STRING "false" would
+// link every image on a card that says not to. Parse it, never coerce it.
+/*
+ * The three `cardStyle` presets used to decide the border AND the shadow
+ * together. The border is now explicit, so these two functions exist only to
+ * translate a template saved BEFORE that split into the equivalent explicit
+ * values — which is what makes the change invisible to every existing tenant.
+ */
+function presetBorderWidth(cardStyle: string): number {
+  return cardStyle === "shadow" ? 0 : 1;
+}
+
+function presetBorderColor(cardStyle: string, accentColor: string): string {
+  // "bordered" was the accent at 25% opacity, expressed as an 8-digit hex.
+  if (cardStyle === "bordered") return `${accentColor}40`;
+  return "#e2e8f0";
+}
+
+/**
+ * The card's frame: an explicit border, plus the shadow that `cardStyle` still
+ * governs. One function for both renderers, for the reason `featuredImageStyles`
+ * is one — the Live Preview and the published card have to agree.
+ */
+function cardFrameStyle(tpl: CardTemplate): CSSProperties {
+  return {
+    border: tpl.cardBorderWidth > 0 ? `${tpl.cardBorderWidth}px solid ${tpl.cardBorderColor}` : "none",
+    boxShadow: tpl.cardStyle === "shadow" ? "0 4px 16px rgba(0,0,0,0.10)" : "none",
+  };
+}
+
+function cardBool(value: unknown, fallback: boolean): boolean {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "boolean") return value;
+  const v = String(value).trim().toLowerCase();
+  if (v === "true" || v === "1") return true;
+  if (v === "false" || v === "0" || v === "") return false;
+  return fallback;
+}
+
+/**
+ * Wrap the featured image in a link to its post, when the template asks for it.
+ *
+ * One function for both renderers for the same reason `featuredImageStyles` is
+ * one: the Card Manager's Live Preview and the published card have to agree.
+ * The image already carries the post title as its alt text, so the anchor has an
+ * accessible name without a second label — an anchor whose only content is an
+ * image with an empty alt is a link a screen reader cannot announce.
+ */
+function withPostLink(
+  content: React.ReactNode,
+  tpl: CardTemplate,
+  href: string
+): React.ReactNode {
+  if (!tpl.imageLinkToPost || !href || href === "#") return content;
+  return (
+    <a href={href} style={{ display: "block", textDecoration: "none", color: "inherit" }}>
+      {content}
+    </a>
+  );
 }
 
 function cardOneOf(value: unknown, allowed: string[], fallback: string): string {
@@ -3709,6 +4112,18 @@ function migrateTemplate(raw: unknown): CardTemplate {
     imageSideWidth:    cardNum(d.imageSideWidth,   80, 600, DEFAULT_CARD_TEMPLATE.imageSideWidth),
     imageHeight:       cardNum(d.imageHeight,       0, 800, DEFAULT_CARD_TEMPLATE.imageHeight),
     imageCrop:         cardOneOf(d.imageCrop,   IMAGE_CROPS,   DEFAULT_CARD_TEMPLATE.imageCrop),
+    imageLinkToPost:   cardBool(d.imageLinkToPost, DEFAULT_CARD_TEMPLATE.imageLinkToPost),
+    // ABSENT, not falsy: a saved width of 0 is a real choice ("no border"), and
+    // treating it as missing would put the preset's border back on every read.
+    cardBorderWidth:   d.cardBorderWidth === undefined
+      ? presetBorderWidth(String(d.cardStyle || DEFAULT_CARD_TEMPLATE.cardStyle))
+      : cardNum(d.cardBorderWidth, 0, 16, DEFAULT_CARD_TEMPLATE.cardBorderWidth),
+    cardBorderColor:   d.cardBorderColor === undefined
+      ? presetBorderColor(
+          String(d.cardStyle || DEFAULT_CARD_TEMPLATE.cardStyle),
+          String(d.accentColor || DEFAULT_CARD_TEMPLATE.accentColor)
+        )
+      : String(d.cardBorderColor),
     rows,
   };
 }
@@ -3727,11 +4142,19 @@ function renderSampleElement(id: CardElementId, accentColor: string, readMoreLab
         cardPaddingTop: "1rem",
         topOfCard: isTopOfCard,
       });
-      return (
+      const photo = (
         <div style={frame}>
           <img alt="" src={sampleImageUrl} style={img} />
         </div>
       );
+      // Shown as a link so the operator can see the setting took, but the click
+      // is swallowed: this is a sample post inside the editor, and navigating
+      // away from the Card Manager mid-edit would lose unsaved rows.
+      return tpl.imageLinkToPost ? (
+        <a href="#" onClick={(e) => e.preventDefault()} style={{ display: "block", textDecoration: "none", color: "inherit", cursor: "pointer" }}>
+          {photo}
+        </a>
+      ) : photo;
     }
     case "excerpt":
       return <span style={{ fontSize: "0.78rem", color: "#4a5568", lineHeight: 1.5, display: "block" }}>A brief excerpt giving readers a preview of the content inside this post.</span>;
@@ -3755,10 +4178,7 @@ function renderSampleElement(id: CardElementId, accentColor: string, readMoreLab
 
 function renderCardPreview(tpl: CardTemplate) {
   const { cardLayout, cardStyle, cardBorderRadius, readMoreLabel, accentColor, rows } = tpl;
-  const cardBorder: CSSProperties =
-    cardStyle === "bordered" ? { border: `1px solid ${accentColor}40`, boxShadow: "none" }
-    : cardStyle === "shadow"  ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
-    : { border: "1px solid #e2e8f0", boxShadow: "none" };
+  const cardBorder: CSSProperties = cardFrameStyle(tpl);
   const isSideBySide = cardLayout === "side-by-side";
   const hasFeaturedImage = rows.some((r) => r.slots.includes("featured_image"));
   const firstFilledSlot = rows.flatMap((r) => r.slots.slice(0, r.cols)).find(Boolean) ?? null;
@@ -3770,9 +4190,14 @@ function renderCardPreview(tpl: CardTemplate) {
         // The preview card is 340px wide against a full-width real one, so the
         // strip is shown at half its configured width — the proportion is what
         // the operator is judging here, not the pixel count.
-        <div style={{ ...sideStripStyle(tpl), ...(tpl.imageSide === "top" ? {} : { width: Math.round(tpl.imageSideWidth / 2) }) }}>
+        createElement(
+          tpl.imageLinkToPost ? "a" : "div",
+          {
+            ...(tpl.imageLinkToPost ? { href: "#", onClick: (e: MouseEvent) => e.preventDefault() } : {}),
+            style: { ...sideStripStyle(tpl), ...(tpl.imageSide === "top" ? {} : { width: Math.round(tpl.imageSideWidth / 2) }) },
+          },
           <img alt="" src={sampleImageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
-        </div>
+        )
       ) : null}
       <div style={{ padding: "1rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {rows.map((row) => {
@@ -3912,6 +4337,12 @@ export function BlogCardManagerPreview() {
               <input type="text" style={{ ...sel, width: 110 }} value={tpl.readMoreLabel} onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
             </div>
             <label className="bcm-control">
+              <span className="bcm-label">Link Image</span>
+              <input type="checkbox" className="bcm-checkbox" checked={tpl.imageLinkToPost}
+                title="Make the featured image link to its post, the same place Read More goes"
+                onChange={(e) => setField("imageLinkToPost", e.target.checked)} />
+            </label>
+            <label className="bcm-control">
               <span className="bcm-label">Accent</span>
               <input type="color" className="builder-color-wheel-input builder-color-wheel-input-sm" title="Open the color picker" value={tpl.accentColor} onChange={(e) => setField("accentColor", e.target.value)} />
             </label>
@@ -3990,13 +4421,35 @@ export function BlogCardManagerPreview() {
           <legend className="bcm-group-title">Frame</legend>
           <div className="bcm-group-controls">
             <div className="bcm-control">
-              <span className="bcm-label">Card Style</span>
-              <select style={sel} value={tpl.cardStyle} onChange={(e) => setField("cardStyle", e.target.value)}>
-                <option value="default">Default</option>
-                <option value="bordered">Bordered</option>
+              {/*
+                Was "Card Style" (Default / Bordered / Shadow), which decided the
+                border AND the shadow together — which is why the border colour
+                could not be set. The border is its own pair of controls now, so
+                this governs only the shadow. The stored values are unchanged, and
+                a legacy "bordered" row reads as None, which is what it drew.
+              */}
+              <span className="bcm-label">Card Shadow</span>
+              <select style={sel} value={tpl.cardStyle === "shadow" ? "shadow" : "default"}
+                onChange={(e) => setField("cardStyle", e.target.value)}>
+                <option value="default">None</option>
                 <option value="shadow">Shadow</option>
               </select>
             </div>
+            <div className="bcm-control">
+              <span className="bcm-label">Card Border</span>
+              <div className="bcm-num-row">
+                <input type="number" min={0} max={16} step={1} style={{ ...sel, width: 56 }}
+                  value={tpl.cardBorderWidth} title="0 removes the card's border"
+                  onChange={(e) => setField("cardBorderWidth", parseInt(e.target.value, 10) || 0)} />
+                <span className="bcm-unit">px</span>
+              </div>
+            </div>
+            <label className="bcm-control">
+              <span className="bcm-label">Card Border Color</span>
+              <input type="color" className="builder-color-wheel-input builder-color-wheel-input-sm" title="Open the color picker"
+                value={tpl.cardBorderColor.slice(0, 7)}
+                onChange={(e) => setField("cardBorderColor", e.target.value)} />
+            </label>
             <div className="bcm-control">
               <span className="bcm-label">Card Radius</span>
               <div className="bcm-num-row">
