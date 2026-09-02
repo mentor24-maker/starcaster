@@ -58,6 +58,7 @@ const { waitForChecks } = require('./builder/waitForChecks');
 const {
   decideTrailWrite, bodyWithTicketLink, describeTrailResult, prUrl: prUrlFor,
 } = require('./builder/shipPrTrail');
+const { decidePullRequestTitle } = require('./builder/pullRequestTitle');
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -92,6 +93,35 @@ function quiet(cmd, argv, { cwd = root } = {}) {
   // PR body carries no ticket link) differently from every other failure —
   // they need opposite advice, and "not zero" cannot tell them apart.
   return { ok: result.status === 0, code: result.status, out: `${result.stdout || ''}${result.stderr || ''}`.trim() };
+}
+
+/**
+ * Ask ClickUp for a ticket's name, for the pull-request title.
+ *
+ * NOT `quiet()`, and the difference is the whole point. `quiet` concatenates
+ * stdout and stderr, which is right for the trail step — it wants everything
+ * the command said, to print back. Here the stdout IS the title, and
+ * `clickup_direct.mjs` writes its rate-limit line to stderr, so `quiet` would
+ * glue "ClickUp's own limit: 91 of 100 left this minute" onto the end of every
+ * PR name.
+ *
+ * `--silent` because npm writes its run banner (`> starcaster@1.0.0 clickup`)
+ * to stdout, not stderr. `parseTaskName` strips that shape as well, so the
+ * title survives an npm that stops honouring the flag.
+ *
+ * Never throws and never calls fail(): a ClickUp outage falls back to the
+ * commit subject and says so, rather than stopping a green branch from
+ * shipping.
+ */
+function fetchTaskNameFromClickUp(id) {
+  const result = spawnSync('npm', ['run', '--silent', 'clickup', '--', 'task-name', '--task', String(id)], {
+    cwd: root, encoding: 'utf8',
+  });
+  return {
+    ok: result.status === 0,
+    stdout: result.stdout || '',
+    output: `${result.stderr || ''}`.trim(),
+  };
 }
 
 /** Block for ms without a busy loop — the CI poll is the only place this runs. */
@@ -283,18 +313,33 @@ if (existing.ok && existing.out) prNumber = existing.out.trim();
 
 if (prNumber) {
   say(`    Using the open one: #${prNumber}`);
-} else if (DRY) {
-  say('    Would open a pull request from the commit message.');
 } else {
   const { subject, body } = pickPullRequestCommit(git);
+  // THE TITLE COMES FROM THE TICKET (task 86bbqwupk). `subject` is the newest
+  // hand-authored commit — still the right answer for an unstamped branch, and
+  // still the fallback when ClickUp cannot be reached, but it is a freehand
+  // sentence and the operator pairs the Closed list with the deploy list by
+  // name. The decision, and every reason it might not use the ticket, live in
+  // `builder/pullRequestTitle` where they can be tested without a token.
+  const titled = decidePullRequestTitle({
+    taskId,
+    fallbackSubject: subject,
+    fetchTaskName: fetchTaskNameFromClickUp,
+  });
+  say(titled.message.split('\n').map((line) => `    ${line}`).join('\n'));
+
   // Both halves of the trail, written at the one moment ship owns the body.
   // `pr-opened` refuses its half until the PR names the ticket, so without this
   // line every ship on a stamped branch would ask for the trail and be told no.
   const prBody = bodyWithTicketLink(body || subject, taskId);
-  const created = quiet('gh', ['pr', 'create', '--title', subject, '--body', prBody]);
-  if (!created.ok) fail(`Could not open a pull request:\n\n${created.out}`);
-  prNumber = (created.out.match(/\/pull\/(\d+)/) || [])[1];
-  say(`    Opened #${prNumber || '?'} — ${created.out.split('\n').pop()}`);
+  if (DRY) {
+    say(`    Would open a pull request titled: "${titled.title}"`);
+  } else {
+    const created = quiet('gh', ['pr', 'create', '--title', titled.title, '--body', prBody]);
+    if (!created.ok) fail(`Could not open a pull request:\n\n${created.out}`);
+    prNumber = (created.out.match(/\/pull\/(\d+)/) || [])[1];
+    say(`    Opened #${prNumber || '?'} — ${created.out.split('\n').pop()}`);
+  }
 }
 
 /* -------------------------------------------- 5b. record the PR on the ticket */

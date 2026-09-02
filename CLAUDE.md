@@ -587,10 +587,21 @@ asset-pin commit, and a squash-merge makes that title permanent. Fixed
 (`scripts/builder/pullRequestCommit.js`); the four that already landed are
 listed with their real subjects in `docs/MISLABELED_MERGES.md`. They are not
 being renamed, because that means force-pushing shared history.
-**That fix only skips commits `ship` itself wrote.** The PR is named after the
-newest *hand-authored* commit, so if shipping turns up an unrelated fix, commit
-it BEFORE the feature (or fold it in) — otherwise the chore takes the name,
-which is exactly how #304 landed titled after a `.gitattributes` line.
+**That fix only skips commits `ship` itself wrote.** The PR was named after the
+newest *hand-authored* commit, so if shipping turned up an unrelated fix you had
+to commit it BEFORE the feature (or fold it in) — otherwise the chore took the
+name, which is exactly how #304 landed titled after a `.gitattributes` line.
+
+**Since 2026-09-01 (task 86bbqwupk) that is only the fallback.** `ship` reads the
+branch's `clickup-task` stamp and titles the PR with the **ClickUp task name,
+verbatim** — because Dane pairs the ClickUp Closed list against the deploy list
+by name, and two freehand names for one piece of work do not pair up (two of
+the ten most recently merged PRs did not match their ticket; #481 was one word
+off, which reads as a match until you look twice). An unstamped branch, an
+unreachable ClickUp or an empty name all fall back to the commit subject and
+**say out loud that they did, and why** — a silent fallback is how the rule gets
+lost again. Nothing here stops a ship. `npm run clickup -- task-name --task <id>`
+prints a task's name on its own if you need it by hand.
 
 **The `?v=` asset pins cannot conflict any more, because they are not in git**
 (2026-08-24, task 86bbkh288). They used to live inside committed HTML, which
