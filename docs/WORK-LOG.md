@@ -26,6 +26,88 @@ across six panels with the same shape of defect; four were this panel and the
 rest belong to later tickets in the same sweep. Teaching the checker to look
 inside the slot would fail those panels today, so it is written down here and on
 the ticket rather than done in this change.
+## 2026-09-01 — A ticket waiting on a red build no longer tells you it is waiting on you (#494)
+
+One of the weekly-report tickets sat in the "Ready to launch" column for six
+days with your merge approval already on it. It was never waiting on you. The
+merge step read your "merge", checked the build, found it red — one failing
+test out of 1,846 — declined for that reason, said so once, and then nothing
+in the system ever looked at that ticket again. From where you sit, you had
+already said yes, so it looked handled. The same thing had happened the day
+before on another one. Twice in a week is not bad luck, it is how that column
+fails.
+
+The column has nobody watching it, and that is on purpose: "Ready to launch"
+is yours, so the machines deliberately keep their hands off. The catch is that
+"keep your hands off" quietly became "nobody is looking".
+
+There was one report that would have raised a flag, and what it would have
+said was worse than saying nothing. It read: *"Bottleneck: OPERATOR — approved
+tickets have waited past 24h for a merge. The machine side is keeping up."*
+Both halves of that were false. The machine side was not keeping up, and it
+would have pointed at you as the hold-up when you had already done your part.
+That report only ever looked at ClickUp — it never once asked GitHub whether
+the build had passed — so it could not tell the difference between a ticket
+waiting on your word and a ticket waiting on a broken build. It just picked.
+
+This adds a check that asks the real question: whose hands does this actually
+need? It reads the ticket, finds its pull request the same way the merge step
+does, asks GitHub what state the build is in, and then answers one of three
+ways — yours, a machine's, or "cannot tell", which it says out loud with the
+reason rather than guessing. If the build is red it names the failing check and
+says, in as many words, *not waiting on you*. It runs every ten minutes off the
+existing relay job, stays quiet unless something is genuinely stuck, says the
+same thing at most once every six hours, and shuts up entirely while you have
+the pipeline paused.
+
+The old report's sentence is fixed too: with nothing to go on it now says whose
+hands this needs is not known, and points at the command that does know, rather
+than naming you by default.
+
+You can ask it yourself any time with `npm run stale-ready`.
+## 2026-09-01 — The pipeline's cleanup told the truth, then described itself wrongly (#513)
+
+When Dane takes the deck to work on something urgent, the pipeline pauses, and
+handing it back runs a cleanup pass over any ticket whose helper died mid-job.
+That cleanup was already making the right call. A ticket whose *build* died goes
+back into the queue to be built again. A ticket whose *reviewer* died stays
+exactly where it is, because its work is finished and waiting to be checked —
+sending it back to the queue would throw away a completed job and have somebody
+build it a second time.
+
+What went wrong was the sentence printed underneath. It said "1 stranded ticket
+returned to the queue" about a ticket it had just correctly left alone, one line
+after saying so. Whoever read that would go looking for the ticket in a list it
+was never in. The cause was small: the cleanup kept only a list of ticket
+numbers, so by the time it wrote its summary it had forgotten which ones it had
+moved and which it had left, and it guessed the same answer for all of them.
+
+It now remembers what it did to each ticket and says so one by one. The status
+report had the same fault in its explanation of *why* a ticket is stuck — it
+gave the reason that fits a dead build to every ticket, including ones whose
+position is perfectly correct and whose only problem is a stale note saying
+somebody is already looking at them. Each now gets the reason that actually
+applies to it. Nothing about where a ticket ends up changed; only what the tool
+says about it.
+
+A review of that fix then caught the same fault standing right next to it. When
+the cleanup found nothing to unstick it announced "No stranded tickets needed
+unsticking" — an all-clear. But there are five ways to reach that sentence with
+nothing cleaned up and a ticket still stuck: the note it tries to leave on the
+ticket will not save, a stale marker will not clear, the status change comes
+back refused, the queue cannot be read at all, or the cleanup was deliberately
+skipped. In each of those the terminal read "it is still stranded" on one line
+and "no stranded tickets" on the next — the exact contradiction this job was
+opened to remove, moved one sentence over.
+
+The report now distinguishes three different pieces of news that used to share
+one sentence. Nothing was stuck, so the all-clear is true and it says it.
+Something was stuck and could not be freed, so it says how many are still
+stuck and where to look. Nothing was examined at all, so it says it could not
+tell — which is never an all-clear. The message posted to the team chat used to
+carry its own wording for the same event and could disagree with the terminal;
+both now print the same sentence from the same place, so they cannot drift
+apart.
 ## 2026-09-01 — Your words were being read as computer formatting (#515)
 
 There is a switch that lets the machines merge small, safe changes on their own
