@@ -1,3 +1,45 @@
+## 2026-09-02 — The Carousel settings panel, and a green check that could not say what it had looked at (#446)
+
+The Carousel editor — the panel you open to edit a slideshow's slides — had been
+built up over time rather than laid out. Its list of slides was a grid of titled
+columns with a second, unrelated row of boxes hanging underneath each one, and
+those two halves were sized independently, so nothing below a slide's first row
+lined up with anything above it. This rebuilds the slide list the same way the
+Feature Cards panel was already rebuilt: one labelled block per slide, every
+label starting on one line and every box ending on one line, reusing that
+panel's layout rather than inventing a second one.
+
+The interesting part is why this took a second pass. There is an automatic
+checker that opens every settings panel in a browser and measures whether the
+labels and boxes line up. It went green. But a green result is only worth
+something if you have watched the same check go red — so someone tried to break
+the Carousel panel on purpose, four different ways, and the check stayed green
+through all four. The obvious conclusion was that the checker never opens this
+panel at all, and the work was sent back.
+
+That conclusion was wrong, and finding out why is the rest of this entry. The
+checker does open the panel and does measure it. What failed was the attempts to
+break it: each one tried to make a box far too wide, and the page quietly refused
+in two different ways — one rule capped the box's maximum size, and the boxes sit
+in a row that shrinks its contents to fit. So nothing over-wide was ever drawn on
+screen, and the checker honestly reported that nothing was over-wide. The check
+was telling the truth; the experiment had failed without saying so.
+
+The only reason those two possibilities could not be told apart is that the
+checker's failure messages did not name what they were looking at. A problem was
+reported as "panel #18" — an ordinal in a sweep of 594 panels — and the slide
+list was labelled "chrome strip 3", which reads like anonymous page furniture
+rather than the thing it is. Search that output for the word "carousel" and you
+find nothing, whether or not the panel was ever opened.
+
+So the messages now name the panel and the group: "panel #18 (carousel) /
+Slides". With that in place the panel was broken on purpose twice more — once by
+knocking a single box out of line, once by forcing a box past its size ceiling —
+and both times the check failed, at all three screen widths, naming the carousel
+in every line. Then the breaks were taken back out and it went green again. That
+is the evidence the first pass was missing, and it is now cheap for the next
+person to repeat on any panel.
+
 ## 2026-09-01 — Two changes that never touched each other still broke the build (#503)
 
 A piece of work was checked over, approved, and then sat for four days waiting
