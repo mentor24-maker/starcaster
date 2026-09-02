@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { normalizeLayoutSections } from "@/lib/builder-template";
+import { createDefaultBackgroundSettings, normalizeLayoutSections } from "@/lib/builder-template";
 import { BuilderTemplatePreview } from "./builder-template-preview";
 
 /**
@@ -21,6 +21,7 @@ import { BuilderTemplatePreview } from "./builder-template-preview";
 function managerMarkup() {
   return renderToStaticMarkup(
     <BuilderTemplatePreview
+      pageBackground={createDefaultBackgroundSettings()}
       layoutSections={normalizeLayoutSections([
         {
           id: "row-1",
