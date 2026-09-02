@@ -12,7 +12,7 @@
  */
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
-const { assertProjectIdAllowedOnHost } = require('../lib/publicSiteHostBinding');
+const { resolvePublicProjectForRequest } = require('../lib/publicSiteHostBinding');
 const {
   listContacts, getContact, createContact,
   updateContact, deleteContact, importContacts,
@@ -467,10 +467,12 @@ async function handleContacts(req, res, pathname, method) {
     const lastName  = String(body.lastName  || '').trim().slice(0, 100);
     const phone     = String(body.phone     || '').trim().slice(0, 50);
     const formMode  = String(body.formMode  || '').trim().slice(0, 50);
-    const projectId = String(body.projectId || '').trim();
-    const bind = await assertProjectIdAllowedOnHost(req, projectId);
+    // This WRITES a lead, so the project has to be a real one — on a system
+    // host the body's projectId is otherwise an unverified claim.
+    const bind = await resolvePublicProjectForRequest(req, body.projectId);
     if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
-    const scope = { projectId: bind.projectId || projectId, userId: '' };
+    const projectId = bind.projectId;
+    const scope = { projectId, userId: '' };
 
     const result = await createContact({
       id: nextId('contact'),

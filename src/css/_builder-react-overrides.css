@@ -2935,12 +2935,36 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-module-editor--feature-cards,
 .builder-react-root .builder-module-editor--program-list {
   display: grid;
-  /* Equal halves (operator, 2026-08-12). The settings column was sized to
-     its own lattice — 360px, its longest label plus its widest control —
-     which read as lopsided next to the card list. Controls keep their own
-     widths inside the wider half; the leftover room stays empty rather
-     than stretching them (W-umbrella). */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /*
+   * THE EDITOR OWNS THE LATTICE TRACKS (ticket 86bbmafd6, 2026-08-26).
+   *
+   * The settings half is spelled out as label · control · leftover instead
+   * of one `1fr`, because the chrome and the settings column below it are
+   * two different boxes and tracks cannot be shared between two grids. Both
+   * of them `subgrid` onto these two named tracks now (see THE CHROME AND
+   * THE SETTINGS COLUMN SHARE ONE LATTICE, further down), so `max-content`
+   * measures the longest label and the longest control across BOTH — which
+   * is the whole point, and is what the split into three tracks buys.
+   *
+   * Equal halves survive it (operator, 2026-08-12). The settings column
+   * sized to its own lattice — ~360px — read as lopsided next to the card
+   * list, so the item column is pinned to half the editor rather than
+   * "whatever is left after the lattice": `calc((100% - gap) / 2)` is the
+   * width `minmax(0, 1fr) minmax(0, 1fr)` used to resolve to, written out.
+   * The leftover track is the empty right-hand part of the settings half —
+   * it exists so the lattice stays compact (W-umbrella: the room stays
+   * empty rather than stretching the controls) while the item column still
+   * begins exactly at the halfway line. Measured at 1440: the item column
+   * starts at x=639 before and after.
+   *
+   * `column-gap` is 0 for the same reason it is 0 on every other lattice —
+   * the 40px of room lives on the label as padding, not in a gutter. The
+   * 24px between the halves is inside the pinned track's own calc.
+   */
+  grid-template-columns:
+    [settings-start lattice-start] max-content minmax(0, max-content) [lattice-end]
+    minmax(0, 1fr) [settings-end items-start]
+    calc((100% - var(--space-6, 24px)) / 2) [items-end];
   /*
    * ROW GAP IS ZERO, and the row spacing comes from margins below.
    *
@@ -2951,7 +2975,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    * 2,777px tall around 463px of content, Slideshow 1,868px around the same.
    * Nothing about it is visible in the CSS, which is why it shipped.
    */
-  gap: 0 var(--space-6, 24px);
+  gap: 0;
   align-items: start;
 }
 
@@ -2963,6 +2987,14 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   min-width: 0;
   /* The row spacing the gap used to give, charged to the rows that exist. */
   margin-bottom: var(--space-4, 12px);
+}
+
+/* The settings half is three tracks wide in these two, so "column 1" is the
+   whole half rather than one track. A heading, the module's own copy field,
+   anything the card puts above the panel: all of them span it. */
+.builder-react-root .builder-module-editor--feature-cards > *,
+.builder-react-root .builder-module-editor--program-list > * {
+  grid-column: settings-start / settings-end;
 }
 
 .builder-react-root .builder-module-editor--feature-cards > *:last-child,
@@ -3074,9 +3106,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   align-self: start;
 }
 
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings {
-  grid-column: 1;
-}
+/* Both halves of these two editors are placed by NAMED LINE, down with the
+   rules that make them share the chrome's tracks — see THE CHROME AND THE
+   SETTINGS COLUMN SHARE ONE LATTICE. Placing them here as well would have
+   left two rules of equal specificity disagreeing about the same box, which
+   is the trap the carousel's item column already fell into once (see the
+   note below it). */
 
 
 /*
@@ -3104,12 +3139,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    three-column block above, and while it was still named here as well it
    landed back in track 2 — on top of Image Border, since a later rule of
    equal specificity wins. Caught by measuring the live editor; the two
-   columns reported the same x. */
-.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items {
-  grid-column: 2;
-  grid-row: 1 / span 100;
-  align-self: start;
-}
+   columns reported the same x.
+
+   Moved 2026-08-26 to the named-line block below, with the settings half it
+   is paired with — and it gained `--program-list`, which had never been
+   named in either rule. That omission was visible in the running editor and
+   nowhere in the CSS: with no placement of its own, the Programs list
+   auto-placed into column 1 UNDER the chrome and the Layout settings landed
+   in column 2, the mirror image of Feature Cards. `> *` could not reach
+   them to say otherwise, because `.builder-cards-panel` is `display:
+   contents` and a direct-child selector does not see through it. */
 
 /* The two column names. Bigger than a group title (operator: "make the
    column headings larger font") — they name a whole column, while Layout,
@@ -3326,12 +3365,29 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    has to give up its row-1 placement too, or it would sit above the Label
    row it is supposed to follow. */
 @media (max-width: 1000px) {
-  .builder-react-root .builder-module-editor--feature-cards,
   .builder-react-root .builder-module-editor--carousel {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
+  /*
+   * These two keep their two lattice tracks — a box cannot `subgrid` onto
+   * tracks that are not there, and collapsing to `minmax(0, 1fr)` would take
+   * them away and drop the chrome and the panel back into one cell each.
+   * The names simply all land on the same two lines, so "the settings half"
+   * and "the item column" both become the whole width and the list stacks
+   * under the settings exactly as before.
+   */
+  .builder-react-root .builder-module-editor--feature-cards,
+  .builder-react-root .builder-module-editor--program-list {
+    grid-template-columns:
+      [settings-start items-start lattice-start] max-content minmax(0, max-content) [lattice-end]
+      minmax(0, 1fr) [settings-end items-end];
+  }
+
+  /* Feature Cards and Program List give theirs up further down instead, in
+     the block that pins it — a media query carries no extra specificity, so
+     an override has to come after the rule it is overriding, not merely be
+     wrapped in an `@media`. */
   .builder-react-root .builder-module-editor--carousel .builder-cards-panel-items {
     grid-column: 1;
     grid-row: auto;
@@ -4107,6 +4163,113 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .is-lattice .builder-module-chrome .builder-background-controls-horizontal .builder-module-field-strip,
 .builder-react-root .is-lattice.builder-module-editor > .builder-module-field-strip > .builder-module-field {
   display: contents;
+}
+
+/* ---------------------------------------------------------------------------
+ * THE CHROME AND THE SETTINGS COLUMN SHARE ONE LATTICE
+ * (ticket 86bbmafd6, 2026-08-26 — the second half of the operator's
+ * 2026-08-13 note, *"the column width varies arbitrarily between the
+ * Settings fields and the Layout fields"*.)
+ *
+ * The first half shipped in PR 432 and made the chrome ONE column. It could
+ * not close the rest, because the chrome and the panel below it are two
+ * boxes, and two grids cannot share a track no matter how identically they
+ * are written. Measured on Feature Cards at 1440 after PR 432: the chrome put
+ * its controls at x=125 and the Layout / Card / Icons / Link groups directly
+ * beneath put theirs at x=158. Two label tracks, 33px apart, one under the
+ * other — exactly the pairing he pointed at.
+ *
+ * SUBGRID is what makes one track out of two boxes, and it is already the
+ * house answer to this shape: `.builder-schema-axis-section` joined its
+ * column's lattice the same way on 2026-08-13. Each box keeps its own rows —
+ * they are separate items of the editor and must stack, not interleave —
+ * while its COLUMNS are the editor's, so `max-content` measures the longest
+ * label and the longest control across the chrome AND the panel at once.
+ * That is the sharing; nothing else in here does any work.
+ *
+ * WHY ONLY THESE TWO EDITORS. Because measuring said so, and reading the CSS
+ * had said otherwise:
+ *   · Feature Cards  — the bug, as above.
+ *   · Program List   — the same, plus its own halves had never been placed
+ *                      at all (see the note on the item column above).
+ *   · Carousel       — its chrome is ALONE in column 1; Image Border is a
+ *                      column of its own in track 2. Nothing sits under the
+ *                      chrome to disagree with it.
+ *   · Social         — has no `.builder-module-chrome`. It renders Label,
+ *                      Background, Alignment and the margins as rows of its
+ *                      own Structure column, so the two already ARE one
+ *                      grid. This is the same fix, reached from the React
+ *                      side, and it is why Social measured clean.
+ * Both of those hold today and are asserted, not assumed: `check_panels`
+ * measures every panel that declares a shared lattice, and a panel that
+ * stops sharing one fails.
+ *
+ * `column-gap: 0` on each subgrid is not decoration. A subgrid keeps its OWN
+ * gutters rather than the parent's, and the axis-section rule above paid for
+ * that lesson in six invisible pixels.
+ * ------------------------------------------------------------------------ */
+
+/* The chrome flattens so that the strip inside it — not the chrome box — is
+   the item that lands on the editor's tracks. Keeping the STRIP as the
+   subgrid rather than the chrome is deliberate: `check_panels` measures
+   `.builder-module-chrome > .builder-module-field-strip` and needs it to
+   have a box, and a `display: contents` element measures 0×0 at the origin,
+   which would silently turn every chrome offset in the report into a raw
+   viewport coordinate. */
+.builder-react-root .builder-module-editor--feature-cards > .builder-module-chrome,
+.builder-react-root .builder-module-editor--program-list > .builder-module-chrome {
+  display: contents;
+}
+
+/* Every child, not just the strip: a chrome that grows a second row later
+   lands on the lattice too, instead of auto-placing into the label track. */
+.builder-react-root .builder-module-editor--feature-cards > .builder-module-chrome > *,
+.builder-react-root .builder-module-editor--program-list > .builder-module-chrome > * {
+  grid-column: lattice-start / lattice-end;
+  /* The chrome box carried this from `> *`; flattening it hands the job to
+     the rows, or the panel below would sit against the last margin row. */
+  margin-bottom: var(--space-4, 12px);
+}
+
+.builder-react-root .builder-module-editor--feature-cards > .builder-module-chrome > .builder-module-field-strip,
+.builder-react-root .builder-module-editor--program-list > .builder-module-chrome > .builder-module-field-strip {
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+  column-gap: 0;
+}
+
+/* The settings half, on the same two tracks. This is also where the two
+   editors' columns are PLACED — by name, in one rule, so the placement and
+   the track-sharing can never drift apart. */
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-settings,
+.builder-react-root .builder-module-editor--program-list .builder-cards-panel-settings {
+  grid-column: lattice-start / lattice-end;
+  grid-template-columns: subgrid;
+  column-gap: 0;
+}
+
+/* `span 100` rather than `1 / -1`, for the reason the block above gives: -1
+   on an implicit grid collapses the column to a single row. */
+.builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
+.builder-react-root .builder-module-editor--program-list .builder-cards-panel-items {
+  grid-column: items-start / items-end;
+  grid-row: 1 / span 100;
+  align-self: start;
+}
+
+/* Narrow: one column, the list under the settings rather than beside them.
+   Only the ROW placement has to go — `items-start / items-end` already
+   spans the whole width once the narrow track list puts those two names on
+   the outer lines. It lives here, after the rule it undoes, because an
+   `@media` block adds no specificity and the cascade would otherwise settle
+   it by source order in the wrong direction. */
+@media (max-width: 1000px) {
+  .builder-react-root .builder-module-editor--feature-cards .builder-cards-panel-items,
+  .builder-react-root .builder-module-editor--program-list .builder-cards-panel-items {
+    grid-row: auto;
+  }
 }
 
 /*
@@ -5462,6 +5625,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   line-height: 1.5;
 }
 
+/* "This also renames it on 35 pages." A push from a page carries the page's
+   title, so an overwrite can move the name every other page shows. Its own
+   line, in the body colour rather than the muted one around it: it is the part
+   of the sentence somebody would otherwise find out about afterwards. */
+.builder-react-root .builder-choice-dialog-choices dd .builder-choice-dialog-rename {
+  display: block;
+  margin-top: var(--space-1, 4px);
+  color: var(--ink, #0b2a4a);
+  font-weight: 600;
+}
+
 .builder-react-root .builder-save-conflict-actions,
 .builder-react-root .builder-choice-dialog-actions {
   display: flex;
@@ -6657,4 +6831,1230 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ *
+ * Builder Preview strip (86bbq2y7x)
+ *
+ * The preview page renders the live-site markup (`.builder-public-site`) so
+ * it looks like starcaster.pro/<slug>; the only thing that says "this is a
+ * preview" is this thin yellow strip. It is sticky, not fixed, so it takes
+ * its own 32px and never covers the page's first row.
+ * ------------------------------------------------------------------ */
+.builder-react-root .builder-preview-strip {
+  position: sticky;
+  top: 0;
+  z-index: 10000;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--preview-strip-bg);
+  color: var(--preview-strip-ink);
+  font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+.builder-react-root .builder-preview-strip-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+
+.builder-react-root .builder-preview-strip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.builder-react-root .builder-preview-strip-toggle {
+  display: inline-flex;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.builder-react-root .builder-preview-strip button {
+  appearance: none;
+  margin: 0;
+  padding: 3px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--preview-strip-ink);
+  font: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-preview-strip-toggle button + button {
+  border-left: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.builder-react-root .builder-preview-strip-toggle button.is-active {
+  background: var(--preview-strip-ink);
+  color: var(--preview-strip-bg);
+}
+
+.builder-react-root .builder-preview-strip-close {
+  text-decoration: underline;
+}
+
+/* Browser mode has no wrapper, so the phone frame needs room of its own. */
+.builder-react-root.builder-public-site .builder-preview-device-mobile {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+.builder-react-root.builder-public-site .builder-preview-device-email {
+  padding: 24px 12px;
+}
+
+.builder-react-root .builder-preview-empty {
+  max-width: 640px;
+  margin: 15vh auto;
+  padding: 0 24px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-align: center;
+}
+
+/*
+ * Video backgrounds — the layer, the tint screen over it, and the stacking
+ * that keeps the row's own content in front of both.
+ *
+ * The section paints the POSTER as its own CSS background
+ * (`getBuilderBackgroundStyle`), so everything here sits on top of a still
+ * that is already correct. That is why there is no poster rule below: when the
+ * layer decides not to play — reduce motion, phone width, a refused autoplay —
+ * it renders nothing and the still is simply what remains.
+ */
+.builder-preview-video-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/*
+ * The IMAGE layer, which exists only to parallax — an image background is a
+ * CSS background on the section itself everywhere else, and this element is
+ * mounted only when it has to MOVE. It paints the same picture on top of the
+ * static one so that a visitor with JavaScript off gets the ordinary
+ * background rather than a blank band.
+ *
+ * `inset: 0` is the resting geometry; while parallax is running, the layer's
+ * inline style overrides top/height with the driver's numbers, which make it
+ * taller than the section by the full travel distance so no edge of the band
+ * is ever uncovered.
+ *
+ * `z-index: 0` IS DELIBERATE, AND DO NOT MAKE IT NEGATIVE. The obvious way to
+ * stop this layer covering the section's own background — a theme's photo
+ * overlay tint is composited there — is to push it behind with `z-index: -1`.
+ * That does not work: within a stacking context the context's own background
+ * paints first, so a negative child still lands ON TOP of it. It would only
+ * appear to work while the section happens NOT to form a stacking context, and
+ * the section forms one on several ordinary paths (an overlay slot, a
+ * navigation module, a hero overlap). Silent, theme-dependent, exactly the
+ * failure mode `background-attachment: fixed` was rejected for on this
+ * ticket's own description.
+ *
+ * So the layer CARRIES the tint instead — the component composites the same
+ * `linear-gradient(tint, tint)` the surface used, in front of the same picture
+ * (`builder-background-layer.tsx`). The row overlay screen below stays at
+ * `z-index: 1` so it still paints over the drifting copy.
+ */
+.builder-preview-image-background {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.builder-preview-row-overlay-screen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/*
+ * The columns are grid children; the two layers above are absolutely
+ * positioned and out of flow. Without a stacking context of their own the
+ * columns would paint underneath the video, which reads as the row having
+ * gone blank.
+ */
+.builder-preview-section-layered > .builder-preview-column {
+  position: relative;
+  z-index: 2;
+}
+
+/*
+ * The Video background panel. The warning is a plain sentence rather than a
+ * red error box on purpose: a missing poster is a bad idea, not an invalid
+ * setting, and the operator is allowed to save without one.
+ */
+.builder-video-background-warning,
+.builder-video-background-note,
+.builder-parallax-background-note {
+  margin: 6px 0 0;
+  max-width: 62ch;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--ink-secondary, #4a5568);
+}
+
+.builder-video-background-warning {
+  color: var(--ink-primary, #1a202c);
+  font-weight: 600;
+}
+
+/* ── Event Manager (admin module) ──────────────────────────────────────────
+ *
+ * The table itself reuses .builder-admin-data-table, shared with the CRM
+ * contacts table and the blog post manager. Only what is particular to events
+ * lives here: the status pills, the featured marker, and the inline form.
+ *
+ * Layout rules are in this base block, never inside a media query (R1) — the
+ * breakpoint below only narrows the form's two-up rows to one column.
+ */
+
+.builder-react-root .builder-event-manager-title {
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-event-manager-featured {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-input);
+  background: var(--bg-alt);
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.builder-react-root .builder-event-manager-status {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-input);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Three states, three readings: live, not yet live, and called off. Cancelled
+ * shares the danger colour deliberately — it is the one an operator must not
+ * mistake for published at a glance. */
+.builder-react-root .builder-event-manager-status-published {
+  background: var(--bg-alt);
+  color: var(--brand-accent-ink);
+}
+
+.builder-react-root .builder-event-manager-status-draft {
+  background: var(--bg-hover);
+  color: var(--ink-muted);
+}
+
+.builder-react-root .builder-event-manager-status-cancelled {
+  background: var(--bg-hover);
+  color: var(--ink-secondary);
+  text-decoration: line-through;
+}
+
+.builder-react-root .builder-event-manager-notice,
+.builder-react-root .builder-event-manager-error {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-input);
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-event-manager-notice {
+  background: var(--bg-alt);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-event-manager-error {
+  background: var(--bg-hover);
+  color: var(--ink-primary);
+  border: 1px solid var(--border-strong);
+}
+
+.builder-react-root .builder-event-manager-form {
+  margin-top: var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-event-manager-form-title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-event-manager-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+  min-width: 0;
+}
+
+/* Two fields per row on a wide form, one on a narrow one. `minmax(0, 1fr)`
+ * rather than `1fr`: a grid track's default minimum is its content, so a long
+ * value would push the row wider than the module instead of wrapping. */
+.builder-react-root .builder-event-manager-field-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-5);
+  align-items: end;
+}
+
+.builder-react-root .builder-event-manager-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--builder-editor-label, var(--ink-secondary));
+}
+
+.builder-react-root .builder-event-manager-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--bg-input);
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+}
+
+.builder-react-root .builder-event-manager-textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+
+.builder-react-root .builder-event-manager-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+/* A checkbox is not a text field, and something upstream in the public-site
+ * render context stretches bare inputs to fill their container — measured at
+ * 648px, which pushed "All day" to the far right of the row and left a tick
+ * box floating in the middle of nowhere. Declared here rather than fixed
+ * upstream: this module does not own that rule, and a module must not depend
+ * on ambient CSS it does not own (R1's corollary). */
+.builder-react-root .builder-event-manager-check input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.builder-react-root .builder-event-manager-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+@media (max-width: 700px) {
+  .builder-react-root .builder-event-manager-field-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+/* The shared admin-table scroll container is `width: 100%` with a 1px border
+ * and inherits `content-box` on a public page, so it renders 2px wider than
+ * its column — at full page width that is the BODY scrolling sideways, which
+ * R5 forbids. Found building the Event Manager (2026-09-01); the fix belongs
+ * to the shared class because the CRM contacts table and the blog post
+ * manager have exactly the same two pixels.
+ *
+ * Here rather than in _builder-react.css: that file is regenerated wholesale
+ * and a hand edit there disappears silently (R2). */
+.builder-react-root .builder-admin-data-table-wrap {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* The events table carries five columns of real words — a title, a date range,
+ * a place. `table-layout: fixed` + `width: 100%` makes them share whatever
+ * width exists, so at 390px every cell crushed to an ellipsis ("S…", "Ap…",
+ * "C…") and the table was legible at no width at all.
+ *
+ * A floor instead: below it the wrap's own `overflow-x: auto` takes over and
+ * the TABLE scrolls, which is what R5 asks for — wide content scrolls inside
+ * its own container and the page body never does. In the base layer, not a
+ * media query (R1): the floor applies at every width, and it is simply never
+ * reached on a wide screen. */
+.builder-react-root .builder-event-manager-module .builder-admin-data-table {
+  min-width: 620px;
+}
+
+/* ── Event Calendar (public) ───────────────────────────────────────────────
+ *
+ * Three layouts, one module: a month grid, an upcoming list, and cards. All
+ * structural rules are in this base block; the one media query below only
+ * adjusts what the base already established (R1).
+ *
+ * `--evt-accent` is set inline by the renderer from the module's Accent
+ * Color, so the tenant's own colour reaches every piece of chrome here
+ * without a second stylesheet.
+ */
+
+.builder-react-root .builder-event-calendar {
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--bx-text, var(--ink-primary));
+  font-family: inherit;
+}
+
+.builder-react-root .builder-event-calendar-heading {
+  margin: 0 0 var(--space-4);
+  color: var(--bx-heading, var(--ink-primary));
+}
+
+.builder-react-root .builder-event-calendar-empty {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-container);
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* ── Month grid ─────────────────────────────────────────────────────────── */
+
+.builder-react-root .builder-event-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.builder-react-root .builder-event-calendar-month {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--bx-heading, var(--ink-primary));
+  min-width: 12ch;
+  text-align: center;
+}
+
+.builder-react-root .builder-event-calendar-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  background: var(--bg-surface);
+  color: var(--evt-accent, var(--accent));
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-event-calendar-nav-btn:hover {
+  background: var(--bg-hover);
+}
+
+.builder-react-root .builder-event-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--border-light);
+  overflow: hidden;
+}
+
+.builder-react-root .builder-event-calendar-weekday {
+  padding: var(--space-2) var(--space-1);
+  background: var(--bg-alt);
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.builder-react-root .builder-event-calendar-weekday abbr {
+  text-decoration: none;
+  border: 0;
+}
+
+.builder-react-root .builder-event-calendar-day {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 92px;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  background: var(--bg-surface);
+}
+
+/* A day from the neighbouring month is drawn, but muted — hiding it leaves
+ * ragged holes, and drawing it unmarked lies about which month you are in. */
+.builder-react-root .builder-event-calendar-day--outside {
+  background: var(--bg-alt);
+  color: var(--ink-muted);
+}
+
+.builder-react-root .builder-event-calendar-day--outside .builder-event-calendar-daynum {
+  opacity: 0.5;
+}
+
+.builder-react-root .builder-event-calendar-day--today .builder-event-calendar-daynum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.55em;
+  height: 1.55em;
+  border-radius: 50%;
+  background: var(--evt-accent, var(--accent));
+  color: var(--btn-text, #fff);
+}
+
+.builder-react-root .builder-event-calendar-daynum {
+  /* The day cell is a flex COLUMN, whose children stretch to its full width
+   * by default — so today's round marker below rendered as an ellipse the
+   * width of the whole cell. The number sizes to itself and the chips keep
+   * the full width. */
+  align-self: flex-start;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: inherit;
+}
+
+.builder-react-root .builder-event-calendar-chip {
+  display: block;
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--evt-accent, #0f4f8f) 12%, transparent);
+  border-left: 3px solid var(--evt-accent, var(--accent));
+  color: inherit;
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+  text-decoration: none;
+  /* One line per event: a long title must not stretch the whole column, and
+   * the day cell must stay the same height whatever is in it. */
+  overflow: hidden;
+}
+
+.builder-react-root .builder-event-calendar-chip:hover {
+  background: color-mix(in srgb, var(--evt-accent, #0f4f8f) 22%, transparent);
+}
+
+.builder-react-root .builder-event-calendar-chip-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.builder-react-root .builder-event-calendar-chip-time {
+  display: block;
+  color: var(--ink-muted);
+}
+
+/* ── List and cards ─────────────────────────────────────────────────────── */
+
+.builder-react-root .builder-event-calendar-items {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.builder-react-root .builder-event-calendar--cards .builder-event-calendar-items {
+  grid-template-columns: repeat(var(--evt-columns, 3), minmax(0, 1fr));
+}
+
+.builder-react-root .builder-event-calendar-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.builder-react-root .builder-event-calendar-item-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.builder-react-root .builder-event-calendar-item-body {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  padding: var(--space-4);
+}
+
+.builder-react-root .builder-event-calendar-item-text {
+  min-width: 0;
+}
+
+/* The date block on a list row — the thing a visitor scans down. */
+.builder-react-root .builder-event-calendar-datechip {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  padding: var(--space-2) 0;
+  border-radius: var(--radius-input);
+  background: var(--evt-accent, var(--accent));
+  color: var(--btn-text, #fff);
+  line-height: var(--leading-tight);
+}
+
+.builder-react-root .builder-event-calendar-datechip-month {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.builder-react-root .builder-event-calendar-datechip-day {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.builder-react-root .builder-event-calendar-item-title {
+  display: block;
+  color: var(--bx-heading, var(--ink-primary));
+  font-size: var(--text-md);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a.builder-react-root .builder-event-calendar-item-title:hover,
+.builder-react-root a.builder-event-calendar-item-title:hover {
+  color: var(--evt-accent, var(--accent));
+  text-decoration: underline;
+}
+
+.builder-react-root .builder-event-calendar-item-when {
+  margin: 2px 0 0;
+  color: var(--evt-accent, var(--accent));
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.builder-react-root .builder-event-calendar-item-where,
+.builder-react-root .builder-event-calendar-item-excerpt {
+  margin: 2px 0 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+}
+
+/* Below this the month grid cannot show words in a 7th of the width, so each
+ * day keeps its number and its events become dots. The grid itself, its
+ * columns and the cards' single column are adjustments to the base layer
+ * above, never the only place those rules exist (R1). */
+@media (max-width: 700px) {
+  .builder-react-root .builder-event-calendar--cards .builder-event-calendar-items {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .builder-react-root .builder-event-calendar-day {
+    min-height: 52px;
+    padding: var(--space-1);
+  }
+
+  .builder-react-root .builder-event-calendar-chip {
+    height: 6px;
+    padding: 0;
+    border-left: 0;
+    border-radius: 3px;
+    background: var(--evt-accent, var(--accent));
+  }
+
+  .builder-react-root .builder-event-calendar-chip-title,
+  .builder-react-root .builder-event-calendar-chip-time {
+    display: none;
+  }
+}
+
+/* ── Event Detail (public) ─────────────────────────────────────────────────
+ *
+ * One event's own page. All structural rules are in this base block; the one
+ * media query below only adjusts what the base established (R1).
+ */
+
+.builder-react-root .builder-event-detail {
+  display: block;
+  width: 100%;
+  max-width: 46rem;
+  box-sizing: border-box;
+  margin: 0 auto;
+  color: var(--bx-text, var(--ink-primary));
+  font-family: inherit;
+}
+
+.builder-react-root .builder-event-detail-back {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  color: var(--evt-accent, var(--accent));
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.builder-react-root .builder-event-detail-back:hover {
+  text-decoration: underline;
+}
+
+.builder-react-root .builder-event-detail-note {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-container);
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-event-detail-note code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-input);
+  background: var(--bg-alt);
+  font-size: var(--text-xs);
+}
+
+/* The banner that is the whole reason `cancelled` is a status and not a
+ * delete. Loud on purpose: a visitor who already has this in their diary must
+ * not be able to skim past it. */
+.builder-react-root .builder-event-detail-cancelled {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-left: 4px solid var(--evt-accent, var(--accent));
+  border-radius: var(--radius-input);
+  background: var(--bg-hover);
+  color: var(--ink-primary);
+  font-size: var(--text-md);
+}
+
+.builder-react-root .builder-event-detail-title {
+  margin: 0 0 var(--space-2);
+  color: var(--bx-heading, var(--ink-primary));
+}
+
+.builder-react-root .builder-event-detail-when {
+  margin: 0 0 var(--space-1);
+  color: var(--evt-accent, var(--accent));
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.builder-react-root .builder-event-detail-timezone {
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.builder-react-root .builder-event-detail-where {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 var(--space-4);
+  color: var(--ink-secondary);
+  font-size: var(--text-md);
+}
+
+.builder-react-root .builder-event-detail-address {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-event-detail-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 0 var(--space-5);
+  border-radius: var(--radius-container);
+}
+
+.builder-react-root .builder-event-detail-body {
+  margin: 0 0 var(--space-5);
+  line-height: var(--leading-normal);
+}
+
+/* A long unbroken string — a booking URL pasted into the description — must
+ * not push the page sideways (shared rule: long strings and overflow). */
+.builder-react-root .builder-event-detail-body {
+  overflow-wrap: anywhere;
+}
+
+.builder-react-root .builder-event-detail-cta-row {
+  margin: 0 0 var(--space-5);
+}
+
+.builder-react-root .builder-event-detail-cta {
+  display: inline-block;
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-btn);
+  background: var(--evt-accent, var(--accent));
+  color: var(--btn-text, #fff);
+  font-size: var(--text-md);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-event-detail-cta:hover {
+  filter: brightness(1.08);
+}
+
+.builder-react-root .builder-event-detail-organizer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-light);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-event-detail-organizer a {
+  color: var(--evt-accent, var(--accent));
+}
+
+@media (max-width: 700px) {
+  .builder-react-root .builder-event-detail-cta {
+    display: block;
+    text-align: center;
+  }
+}
+
+/* ── Media Manager (admin module) ───────────────────────────────────────────
+   The Media Manager a TENANT admin uses on their own site. Styles live here
+   rather than in _builder-react.css, which is regenerated wholesale by
+   `npm run extract:builder-css` and would silently drop them. */
+
+.builder-react-root .builder-media-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.builder-react-root .builder-media-manager-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.builder-react-root .builder-media-manager-upload {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+/* The real input is kept in the layout (not display:none) so it stays
+   focusable and reachable by keyboard; the visible label sits on top. */
+.builder-react-root .builder-media-manager-file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-media-manager-upload-label {
+  display: inline-block;
+  padding: 0.45rem 0.9rem;
+  border-radius: 6px;
+  background: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.builder-react-root .builder-media-manager-file-input:focus-visible + .builder-media-manager-upload-label {
+  outline: 2px solid var(--builder-media-accent, #0f4f8f);
+  outline-offset: 2px;
+}
+
+.builder-react-root .builder-media-manager-count,
+.builder-react-root .builder-media-manager-meta {
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-media-manager-progress,
+.builder-react-root .builder-media-manager-status,
+.builder-react-root .builder-media-manager-error {
+  font-size: var(--text-sm);
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+}
+
+.builder-react-root .builder-media-manager-progress,
+.builder-react-root .builder-media-manager-status {
+  background: var(--bg-input);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-media-manager-error {
+  background: var(--bg-hover);
+  color: var(--danger, #a03c28);
+}
+
+.builder-react-root .builder-media-manager-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-media-manager-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.builder-react-root .builder-media-manager-card {
+  margin: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-media-manager-thumb {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--bg-input);
+}
+
+.builder-react-root .builder-media-manager-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.builder-react-root .builder-media-manager-badge {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-media-manager-caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.builder-react-root .builder-media-manager-name,
+.builder-react-root .builder-media-manager-delete {
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-media-manager-name {
+  color: var(--ink-primary);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.builder-react-root .builder-media-manager-delete {
+  color: var(--danger, #a03c28);
+  align-self: flex-start;
+  font-size: var(--text-xs);
+}
+
+.builder-react-root .builder-media-manager-rename {
+  width: 100%;
+  font-size: var(--text-sm);
+  padding: 0.15rem 0.3rem;
+  border: 1px solid var(--builder-media-accent, #0f4f8f);
+  border-radius: 4px;
+}
+
+.builder-react-root .builder-media-manager-confirm {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-media-manager-confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* The module's Content text, shown above the grid. `pre-line` keeps the line
+   breaks an admin typed without the value ever being treated as markup. */
+.builder-react-root .builder-media-manager-description {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  white-space: pre-line;
+}
+
+/* ── Media Manager tags ─────────────────────────────────────────────────── */
+
+.builder-react-root .builder-media-manager-tag-btn {
+  border: 0;
+  background: none;
+  padding: 0 0 0 0.35rem;
+  cursor: pointer;
+  color: var(--builder-media-accent, #0f4f8f);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.builder-react-root .builder-media-manager-tag-btn:focus-visible {
+  outline: 2px solid var(--builder-media-accent, #0f4f8f);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.builder-react-root .builder-media-manager-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.builder-react-root .builder-media-manager-tag {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-media-manager-tag-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.builder-react-root .builder-media-manager-tag-modal-inner {
+  width: min(420px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+}
+
+.builder-react-root .builder-media-manager-tag-modal-title {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--ink-primary);
+  word-break: break-word;
+}
+
+.builder-react-root .builder-media-manager-tag-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.builder-react-root .builder-media-manager-tag-choice {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+/* A chosen tag has to read as ON at a glance — the list is a wall of pills
+   otherwise, and which ones apply is the whole question the modal answers. */
+.builder-react-root .builder-media-manager-tag-choice[aria-pressed="true"] {
+  background: var(--builder-media-accent, #0f4f8f);
+  border-color: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+}
+
+.builder-react-root .builder-media-manager-tag-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-media-manager-tag-add {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.builder-react-root .builder-media-manager-tag-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-sm);
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+}
+
+.builder-react-root .builder-media-manager-tag-add-btn {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--builder-media-accent, #0f4f8f);
+  border-radius: 5px;
+  background: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-media-manager-tag-add-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The confirm/cancel buttons in the tag modal and the delete confirmation.
+   These were unstyled, and inherited WHITE text on a transparent background
+   from the public-site button rules — invisible on a white panel, in both
+   places. Nothing tests CSS, so it took a screenshot to see it. */
+.builder-react-root .builder-media-manager-btn {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-media-manager-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.builder-react-root .builder-media-manager-btn-primary {
+  background: var(--builder-media-accent, #0f4f8f);
+  border-color: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+}
+
+.builder-react-root .builder-media-manager-btn-danger {
+  background: var(--danger, #a03c28);
+  border-color: var(--danger, #a03c28);
+  color: var(--btn-text);
+}
+
+/* ── Media Manager filters ──────────────────────────────────────────────── */
+
+.builder-react-root .builder-media-manager-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+.builder-react-root .builder-media-manager-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.builder-react-root .builder-media-manager-filter-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-media-manager-filter-input,
+.builder-react-root .builder-media-manager-filter-select {
+  font-size: var(--text-sm);
+  padding: 0.28rem 0.4rem;
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  max-width: 100%;
+}
+
+.builder-react-root .builder-media-manager-filter-input {
+  min-width: 12rem;
+}
+
+.builder-react-root .builder-media-manager-clear {
+  align-self: flex-end;
+}
+
+/* The clear inside the "no matches" message — a link, not a second button
+   competing with the one in the bar. */
+.builder-react-root .builder-media-manager-clear-inline {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--builder-media-accent, #0f4f8f);
+  text-decoration: underline;
+  cursor: pointer;
 }

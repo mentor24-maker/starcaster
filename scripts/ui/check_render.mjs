@@ -99,18 +99,92 @@ function documentFor(...specs) {
 /** A page carrying ONE section with the given layout + modules — so a contract
  *  can measure a SECTION-level layout (e.g. the 4/5/6 equal-column rows), which
  *  documentFor (always `layout: 'single'`) cannot reach. */
-function documentForSection({ layout = 'single', modules = [] } = {}) {
+function documentForSection({
+  layout = 'single',
+  modules = [],
+  background,
+  overlayScreen,
+  spacers = 0,
+  themeTreatments,
+} = {}) {
+  /*
+   * SPACER SECTIONS, above and below, so the page is tall enough to SCROLL.
+   *
+   * Most contracts read one frame of a section that fits on the screen, and
+   * for those `spacers` stays 0 and the document is exactly what it always
+   * was. Parallax is the exception: it does not exist as a property of a
+   * frame at all — it is the difference between two scroll positions — and a
+   * page that cannot scroll cannot express it. A contract that could not
+   * scroll would have had to assert on the transform being *present*, which is
+   * the same shape as asserting on a transition property and calling it a
+   * dissolve. That one passed on a completely dead crossfade.
+   */
+  const spacer = (side, index) => ({
+    id: `section-render-contract-spacer-${side}-${index}`,
+    title: `Spacer ${side} ${index}`,
+    layout: 'single',
+    locked: false,
+    alignment: 'left',
+    widthMode: 'contained',
+    minHeight: '600',
+    modules: [moduleFrom({ type: 'heading', text: `Spacer ${side} ${index}`, settings: {} }, index)],
+  });
+
+  const subject = {
+    id: 'section-render-contract',
+    title: 'Render Contract Section',
+    layout,
+    locked: false,
+    alignment: 'left',
+    widthMode: 'contained',
+    // Section-level background and tint. Dropping these was fine while every
+    // background was CSS on the section itself; a video background renders a
+    // real element, so a contract cannot reach it without them.
+    ...(background ? { background } : {}),
+    ...(overlayScreen ? { overlayScreen } : {}),
+    modules: modules.map(moduleFrom),
+  };
+
+  const before = Array.from({ length: spacers }, (_, i) => spacer('before', i));
+  const after = Array.from({ length: spacers }, (_, i) => spacer('after', i));
+
+  /*
+   * A THEME, WITHOUT A DATABASE.
+   *
+   * Some rendering is only wrong when a theme is on — the photo overlay tint
+   * is the case that forced this, because a parallax layer covering it is
+   * invisible on the untinted section every other contract here uses. The
+   * preview page reads `themeShellBackground` straight out of this stored
+   * draft and builds the theme styles from it, and it skips its API call
+   * entirely when the stored palette already carries colours. So a contract
+   * can ask for a themed page and this file keeps its bargain: no database,
+   * no login, no fixture.
+   *
+   * Contracts that want no theme leave it out and the draft is byte-for-byte
+   * what it always was — the keys are not written at all.
+   */
+  const theme = themeTreatments
+    ? {
+        themePalette: {
+          primaryColor: '#1f4d8f',
+          secondaryColor: '#8f1f4d',
+          backgroundColor: '#ffffff',
+          accentColor: '#4d8f1f',
+        },
+        themeShellBackground: {
+          primaryColor: '#1f4d8f',
+          secondaryColor: '#8f1f4d',
+          backgroundColor: '#ffffff',
+          accentColor: '#4d8f1f',
+          treatments: themeTreatments,
+        },
+      }
+    : {};
+
   return {
     name: 'Render Contract Section',
-    layoutSections: [{
-      id: 'section-render-contract',
-      title: 'Render Contract Section',
-      layout,
-      locked: false,
-      alignment: 'left',
-      widthMode: 'contained',
-      modules: modules.map(moduleFrom),
-    }],
+    layoutSections: [...before, subject, ...after],
+    ...theme,
   };
 }
 
@@ -120,14 +194,21 @@ async function render(page, doc) {
   // times out after 30s having rendered perfectly. Wait for the module.
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.builder-preview-module', { timeout: 20000 }).catch(() => {});
+  // Back to the top before anything is measured. A reload restores the
+  // previous scroll position, so a scrolling contract would otherwise start
+  // wherever the one before it finished — and read completely different
+  // numbers depending on the order of the list.
+  await page.evaluate(() => {
+    (document.scrollingElement || document.documentElement).scrollTop = 0;
+  });
   await page.waitForTimeout(1200);
 }
 
 /**
  * Everything a contract can assert on, sampled twice so motion is provable.
  */
-function sample(page, selector, read, settleMs) {
-  return page.evaluate(async ({ selector, read, settleMs }) => {
+function sample(page, selector, read, settleMs, series) {
+  return page.evaluate(async ({ selector, read, settleMs, series }) => {
     const doc = document.documentElement;
     const modules = document.querySelectorAll('.builder-preview-module');
     const el = document.querySelector(selector);
@@ -154,10 +235,66 @@ function sample(page, selector, read, settleMs) {
     const styles = {};
     for (const prop of read) styles[prop] = cs[prop];
 
+    /*
+     * A TIME SERIES, for behaviour that only exists as a change.
+     *
+     * Some things cannot be read from one frame. A crossfade at a video's loop
+     * seam is the case that forced this: the two elements exist, they carry an
+     * opacity transition, and every single-instant assertion about them passes
+     * with the handoff completely dead — measured, not guessed. What proves a
+     * dissolve is two copies both PARTLY visible at the same moment, and that
+     * only appears if you watch.
+     *
+     * Each entry samples the named selectors' computed properties repeatedly
+     * and hands the whole series to `expect`.
+     */
+    let seriesOut = null;
+    if (series) {
+      seriesOut = [];
+      /*
+       * A SCROLLING series. `scrollBy` moves the page a fixed number of pixels
+       * between frames, which is the only way to sample an effect whose whole
+       * definition is "as the page scrolls". Contracts that read motion in
+       * place leave it unset and nothing scrolls, exactly as before.
+       *
+       * `scrollY` rides along in every frame because the assertion that
+       * matters is a COMPARISON — the background must move LESS than the page
+       * did — and a series that recorded only the element's transform could
+       * not tell "drifting slower" from "not moving because the page did not
+       * move either", which is the way this check would most plausibly die.
+       */
+      const scroller = series.scrollBy
+        ? (document.scrollingElement || document.documentElement)
+        : null;
+      for (let i = 0; i < series.count; i += 1) {
+        if (scroller && i > 0) {
+          scroller.scrollTop += series.scrollBy;
+          // One animation frame, so the rAF loop under test has actually run
+          // against the new scroll position before anything is read.
+          await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+        }
+        const frame = { scrollY: scroller ? scroller.scrollTop : 0 };
+        for (const [name, sel] of Object.entries(series.selectors)) {
+          const node = document.querySelector(sel);
+          if (!node) { frame[name] = null; continue; }
+          const style = getComputedStyle(node);
+          const box = node.getBoundingClientRect();
+          frame[name] = {
+            ...Object.fromEntries(series.read.map((prop) => [prop, style[prop]])),
+            top: box.top,
+            height: box.height,
+          };
+        }
+        seriesOut.push(frame);
+        await new Promise((resolve) => setTimeout(resolve, series.everyMs));
+      }
+    }
+
     const rect = el.getBoundingClientRect();
     return {
       found: true,
       page: page_,
+      series: seriesOut,
       box: { width: Math.round(rect.width), height: Math.round(rect.height) },
       styles,
       animations: after,
@@ -168,7 +305,7 @@ function sample(page, selector, read, settleMs) {
       text: (el.textContent || '').trim().slice(0, 200),
       settleMs,
     };
-  }, { selector, read, settleMs });
+  }, { selector, read, settleMs, series: series ?? null });
 }
 
 /**
@@ -344,9 +481,11 @@ try {
    *      any module overflow before the page ever sees it. Disabling the
    *      corridor's own clip — the regression worth catching — changed the
    *      page width by exactly 0px.
-   *   2. The preview harness's own admin chrome overflows by 2px with NO
-   *      module on the page at all, so the document already "scrolls
-   *      sideways" before anything is rendered.
+   *   2. Until 86bbq2y7x the preview's own admin chrome overflowed by 2px
+   *      with NO module on the page at all, so the document already
+   *      "scrolled sideways" before anything was rendered. The preview now
+   *      renders the live-site markup under a thin strip, so that particular
+   *      noise is gone — but points 1 and 3 still stand on their own.
    *   3. A travelling module sits hundreds of pixels off-screen ON PURPOSE
    *      mid-crossing (measured at left: -332px), which any naive overflow
    *      sweep reports as a violation.
@@ -369,9 +508,51 @@ try {
     );
     process.exit(1);
   }
+  const DEFAULT_VIEWPORT = page.viewportSize();
   for (const contract of RENDER_CONTRACTS) {
+    /*
+     * Optional emulation. Some behaviour is only correct in a condition the
+     * default browser is not in — a visitor who asked for reduced motion, or a
+     * phone-width window. Those paths used to be untestable here, which meant
+     * the only evidence they worked was somebody remembering to toggle a
+     * system setting by hand.
+     */
+    if (contract.emulate?.reducedMotion) {
+      await page.emulateMedia({ reducedMotion: contract.emulate.reducedMotion });
+    }
+    if (contract.emulate?.viewport) {
+      await page.setViewportSize(contract.emulate.viewport);
+    }
+
     await render(page, contract.section ? documentForSection(contract.section) : documentFor(contract.module));
-    const result = await sample(page, contract.selector, contract.read || [], SETTLE_MS);
+    const result = await sample(
+      page,
+      contract.selector,
+      contract.read || [],
+      SETTLE_MS,
+      contract.series
+    );
+
+    if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });
+    if (contract.emulate?.viewport && DEFAULT_VIEWPORT) await page.setViewportSize(DEFAULT_VIEWPORT);
+
+    /*
+     * An ABSENCE contract inverts R1: the whole assertion is that nothing
+     * matches. Kept explicit rather than letting "not found" quietly pass,
+     * because a silent not-found is exactly how the checks in this repo have
+     * died before — this one has to say out loud that absence is the point.
+     */
+    if (contract.absent) {
+      if (result.found) {
+        failures.push(
+          `${contract.id}: \`${contract.selector}\` IS present and it must not be. ` +
+          (contract.why ? `${contract.why}` : '')
+        );
+      } else {
+        measured += 1;
+      }
+      continue;
+    }
 
     // R1 — IT RENDERED AT ALL. Zero measured is a failure, never a pass: this
     // is the single most repeated way a check dies in this repo, and

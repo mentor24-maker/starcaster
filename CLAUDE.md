@@ -32,6 +32,32 @@ does not land. Every agent working here must:
   then say so immediately and completely. Everything else is a chore, and
   chores are silent.
 
+- **CC runs the operational commands.** Scripts, `doppler run`, SSH to the
+  Mini, publishing: the agent session runs them and reports the outcome in
+  plain English. Handing him a command to paste is itself a claim that CC
+  cannot run it, and he reads it that way every time. There are four
+  exceptions — a real secret VALUE (`docs/DOCTRINE.md` §4.1), a billing
+  screen, a browser login, and a decision that is genuinely his — and a
+  hand-off **names which one applies**. A gate or permission refusal is not
+  one of them: it refused one call, not the session, so retry it when the
+  step actually comes and say so in one line if it is refused again. And
+  never leave a production fix as a two-step for him — if a script has a dry
+  run and an `--apply`, run both and report what changed. He has raised this
+  three times (2026-08-07, 08-23, 08-30); the incident is
+  `docs/DOCTRINE.md` §6.9.
+
+- **A person is a human being. An agent is not.** `person` and `human` mean
+  Dane, or another actual human. An agent session is an **agent session** —
+  never a person, a human, somebody, or anyone. He has raised this at least
+  three times and it is not a style note: it is the answer to *whose hands
+  does this need, and are they mine?* Saying an automation "asked a person"
+  when it posted a request for an agent session told him he was the blocker
+  when he was not, and hid the fact that nothing was listening — four days
+  on ticket 86bbmfc15. The rule and its guardrail (a hand-off names the
+  actor; passive voice implying an unnamed one is itself the defect) are
+  `docs/DOCTRINE.md` §2.5, ratified in vault `doctrine/TERMINOLOGY.md`.
+  Do not over-correct: most existing uses mean a human and are right.
+
 StarCaster (company: Alphire) is a multi-tenant platform: an admin SPA plus a
 visual site Builder whose published pages serve as tenant public sites on
 custom domains. Backend is Node with a shared dispatcher `routes/index.js`
@@ -143,6 +169,14 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
    pre-commit and CI, but it catches syntax only: a typo like
    `App.assset.foo()` still parses and fails at runtime. Open the app and
    check the browser console after editing these files.
+   **`scripts/` and `lib/` have the same hole**, and it is worse there because
+   most of those files are one-shot tools nothing imports, so no test executes
+   them. On 2026-08-30 a "keep both sides" merge resolution fused two
+   statements in `scripts/clickup_direct.mjs` — valid to git, a SyntaxError to
+   node, and it would have stopped every loop pass on line 1 with no verdict
+   written anywhere. `check:syntax` now parses every hand-written
+   `.js`/`.mjs`/`.cjs` under both (generated artifacts excluded — landmine 14
+   means they do not exist at CI time). `docs/DOCTRINE.md` §6.7.
 10. **Vercel bakes env vars in at build time.** Editing one in the dashboard
     does NOT reach the deployment already serving traffic — it takes a redeploy.
     So "the value is wrong" and "the value is right but not live" look
@@ -240,7 +274,64 @@ setting somebody flips on one machine at 2am.
 ```
 npm run node:whoami          # which machine is this, and what may it run
 npm run node:owns -- <job>   # 0 = yes, 3 = another machine's job, 1 = cannot tell
+npm run doctor:node          # is this MACHINE a valid node? (read-only, safe anywhere)
+npm run provision:node       # what would it take to make it one? (dry run)
 ```
+
+**Standing a new machine up is a script, not a document**
+(`docs/NODE_PROVISIONING.md`). `doctor:node` is to a machine what `doctor` is to
+a folder: identity, toolchain, checkouts, config and schedules, each answered
+PASS / FAIL / **CANNOT TELL** — never a pass for a check that could not run.
+`provision:node` fixes what a script is allowed to fix and prints the rest as
+`::: PROMPT FOR DANE :::` blocks; it is a dry run unless you add `--apply`.
+The two are separate programs on purpose — a provisioner that graded its own
+work would grade it by the assumptions it acted on — but they read ONE inventory
+(`lib/nodeProvision.js`), because two definitions of "provisioned" disagree
+quietly. **Installing the pulse schedules reports CANNOT DO YET on every run**
+until Slice B (`86bbh9kh2`) exists: a green check on a machine that runs no jobs
+is the exact failure the NODES plan was written against.
+
+### A job that stops firing has to say so
+
+`doctor:node` answers "is this machine set up?", and a schedule can be
+installed, loaded and completely dead. Two different things go wrong on a
+machine nobody is looking at, and only one of them used to make a noise:
+
+```
+npm run heartbeat                        the roll call — when did each job last succeed?
+npm run heartbeat -- --check             the same, and post to the bus if one has gone quiet
+npm run heartbeat -- --beat --role X     record a successful run (jobs call this; you never do)
+```
+
+A job that **fails** writes a log line and posts to the bus
+(`scripts/report_job_failure.mjs`, one post per job per 6h, cleared by the next
+success). A job that **never fires** writes nothing at all, and nothing is
+indistinguishable from a quiet week — so each job records a *beat* when it
+succeeds, and something notices when the beats stop.
+
+**The beats live where both machines can read them**, on a ClickUp ticket
+called *Node roll call* whose description is rewritten in place — no channel
+messages, so no "all is well" ×365. The bus only ever hears about a **miss**.
+
+**And the check runs from the machine that does NOT own the job.** This is the
+whole trick, and it is easy to get backwards: a watchdog running only where its
+job runs cannot detect that machine being switched off, which is the case it
+exists for. `scripts/run_bus_relay.sh` therefore performs the check *before* it
+asks whether it owns the relay — the non-owning machine was already waking
+every ten minutes and doing nothing at all, and that idle wake is the one
+vantage point that survives the owning machine being dead.
+
+Two clocks, on purpose: the local stamp is written on **every** success (free,
+offline — it is what `doctor:node` reads to say when each owned job last
+actually worked here), and the shared row is pushed **at most once a day**,
+which is the resolution the requirement needs and what keeps the ticket quiet.
+
+**Only `bus-relay` beats today.** The two loop lanes run inside long-lived
+agent sessions with no committed runner to hang an emitter on, `db-refresh` has
+no schedule on purpose, and `pulse-pipelines` lives in another repo. Those
+report **NOT REPORTING with the reason**, every run — never as healthy, because
+a system that is one-fifth instrumented must not read as a green board. Adding
+a role to `lib/nodeRoles.js` without deciding either way fails a test.
 
 Each machine says who it is in `~/.alphire-node` (one short line:
 `macbook-pro` or `mac-mini`). Without that file it falls back to the hostname,
@@ -249,13 +340,150 @@ name is not recognised does not quietly skip; it refuses out loud**, because
 "another machine is doing it" and "nobody is doing it" look identical
 otherwise, and only one of them is safe.
 
-## One thread, one topic, one session
+### And a job that runs but ships nothing has to say so too
+
+The heartbeat measures **liveness**. There is a failure it structurally cannot
+see, and it is worse, because it writes a full cheerful log:
+
+```
+npm run throughput                          is the queue getting shorter?
+npm run throughput -- --check               the same, and post to the bus if it has STALLED
+npm run throughput -- --check --dry-run     say what it WOULD post, send nothing
+```
+
+On 2026-08-31 the build loop fired every hour, exited 0 every time, and did not
+move the queue — 52 queued, 1 in review, the oldest rework PR sitting since
+Aug 25. Every gate was green and every green was honest. Nothing in the system
+asked *is the queue getting shorter?*, so finding it took a morning of reading
+logs by hand (task 86bbqrw3p).
+
+It prints tickets closed per day, the backlog at the end of each day, and how
+long the oldest rework pull request has sat — and gives one of **four**
+verdicts, never two: `MOVING`, `IDLE` (nothing closed because there was nothing
+to close — healthy, and it says why), `STALLED`, or `UNKNOWN` when a reading
+could not be taken. Exit 0 / 0 / 1 / 2. **"Alive but useless" never renders as
+healthy**, and neither does "could not tell".
+
+`--check` posts to the bus only on `STALLED`, once per 6 hours, cleared by the
+next run that is not stalled — the same discipline the failure alert uses, so
+there is no "all is well" ×365. `scripts/run_bus_relay.sh` runs it **before**
+the ownership check, for the same reason the heartbeat runs there: the machine
+that does not own the relay is already awake doing nothing, and that idle wake
+is the vantage point that survives the owning machine being dead.
+
+Two numbers in that report answer the same question — the last point of the
+backlog curve and "open in total" — so they are computed to agree by
+construction. The first live run had them disagreeing by one, because a single
+ticket sat in `Live` with no closure date; the curve now defers to the status
+and **says how many tickets it had to guess about** rather than adjusting
+quietly.
+
+## The pipeline can be paused — ask before you claim or merge
+
+Sometimes Dane needs the deck: something is urgent, and the loop lane — spec,
+build, review, merge — is about a day end to end. Until 2026-08-25 the only way
+to go fast was to step outside the system entirely, into the one place where
+none of the guards apply. That is a missing lane, not a person being careless,
+so there is now a switch:
+
+```
+npm run pipeline -- status                    is it running? if not, since when, who, and why
+npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
+npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
+npm run pipeline -- resume --operator-asked   hand the deck back (Dane's call, never an agent's)
+```
+
+**Type the `--`.** It is not decoration: without it npm swallows every `--flag`
+before the command sees it. Leave it out and `resume --operator-asked` is
+refused for missing the very flag you just typed, and `pause --now` waits the
+full half hour instead of returning at once.
+
+**Every actor asks, not just the loops.** A pause only the loops respected
+would not have prevented the collision it was written for — the session that
+merged PR #432 was hand-driven and would never have looked. So: **before
+claiming a ticket, and before merging anything, run `npm run pipeline -- check`.**
+Exit 3 means claim nothing, merge nothing, write nothing to ClickUp; say so
+once and stop. That is a normal outcome, exactly like `node:owns` saying
+another machine owns the job.
+
+**It fails safe.** If the switch cannot be read, it counts as paused. Running
+while Dane has the deck collides with whatever he is doing on it; pausing when
+he does not costs idle machines and a loud message. Those are not symmetric.
+
+**It drains, it does not kill.** `pause` stops new claims the instant it writes
+the flag and then waits for anything already building, because killing a pass
+mid-build strands its ticket in `Building` forever — the loops only claim from
+`Rework` and `Queued`, and that happened twice in the week the switch was
+written. `--now` skips the wait and names exactly what it left running.
+`resume` also unsticks anything a dead pass left behind: a stranded build goes
+back to `Rework` if a pull request is already open for it and to `Queued` if
+nothing was ever built, with a note either way, while a stranded review stays
+in `In review` — its build is finished and its PR is open, so only the stale
+claim is cleared.
+
+**An agent may pause; only Dane resumes.** Anyone should be able to stop the
+line — it is a safety move. Handing the deck back is his, because only the
+person standing on it knows whether he is finished. A pause that outlives two
+hours announces itself on the bus and keeps saying so hourly, because a pause
+nobody remembers looks exactly like a pipeline that has broken.
+
+## The fast-track lane — "Let's fast track <ticket-id>"
+
+Said at the start of a session, that sentence is a **complete instruction**
+(Dane, 2026-08-30): run the human lane end to end, and end the session with a
+clean merge. It is the loop's job done by hand, not a way around the loop's
+guards — every check below is one the loops also run. Full version, with the
+incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
+
+1. `npm run pipeline -- check` — exit 3 means stop; say so once.
+2. Read the ticket **and its comments**. On a send-back, the review notes ARE
+   the job; the description is context.
+3. Claim it: `npm run clickup -- claim --task <id>` — it reads the ticket's
+   own status, refuses (exit 3) if it is not one a build may take, and guards
+   the write on that exact status. **Priority is not a guard** — only status
+   is, and only the `--if-status` guard `claim` fills in makes it atomic.
+   Leave the priority alone. Two statuses are claimable now, `Rework` and
+   `Queued`; a send-back lands in `Rework`, and `queue --claimable` lists them
+   in the order they must be drained (all rework first, oldest first).
+4. `npm run clickup -- build-start --task <id>` — exit 3 means a branch
+   already exists; work on THAT branch (`git worktree add
+   .claude/worktrees/<topic> -b <branch> origin/<branch>`, then `npm ci`,
+   `npm run build`, `npm run env:local`, and stamp
+   `git config branch.<branch>.clickup-task <id>`). Otherwise
+   `npm run thread <topic> <id>`.
+5. **On a send-back, merge `origin/main` in BEFORE touching a line.** The fix
+   review asked for may already have landed on `main` under another name —
+   on 2026-08-30 it had, and reworking first cost a conflict (`docs/DOCTRINE.md`
+   §6.7).
+6. Build. Every Definition-of-done gate, and break each fix on purpose —
+   revert it, watch the named test fail, restore it.
+7. `npm run ship`. **No pause to merge**: merges never collide with the
+   loops, `pause` drains for up to half an hour, and a pause older than two
+   hours nags the bus hourly. `ship` re-runs the gates, pushes, **records the
+   PR on its ticket**, waits for CI, merges and tidies; if it stops on a
+   conflict, resolve by hand and run it again.
+   You do not run `clickup pr-opened` by hand here — `ship` writes that trail
+   itself, from the branch's `clickup-task` stamp, which is why step 4 stamps
+   it even on an existing branch. Without the trail the review gate answers
+   CANNOT TELL and refuses the PR once branch protection is enforcing
+   (`docs/LOOP_ENGINEERING.md`, "Who writes the PR trail"). A branch with no
+   stamp still ships; it says out loud that nothing was recorded.
+8. Ticket to Live with the closing note (gates, live probe, what was
+   break-tested); `npm run tidy`; one line on the bus.
+
+A ticket in **Rework** is a send-back: step 4 will find its branch, and the
+review notes on the ticket ARE the job. A ticket already **In review** with an
+open PR is the review half of this lane: skip the claim in step 3 (never drag
+it back to `Building`), do steps
+4–8 on the existing branch, re-run the gates on the *merged* code yourself, and
+close with `--if-status "in review"`. A job another machine owns (`bus-relay`)
+exits 0 here having tested nothing — rehearse it on the owning machine.
+
+## One topic, one worktree — a session may hold more than one
 
 A worktree keeps two threads from corrupting each other's files. It does
 nothing about the other failure, which is quieter and cost a whole epic on
-2026-08-20: **a single session that starts on one topic and drifts onto
-another.** Nothing objects, because every tool here answers "which folder am
-I in" and none of them answers "is this still the same job".
+2026-08-20: **two sessions building the same thing, neither ticket claimed.**
 
 That day a session opened to set up the Mac Mini — ops work, no repo changes,
 correctly in the main folder. It drifted into building the ecosystem-map epic,
@@ -265,34 +493,50 @@ a *different* session was building the same epic. They collided: the other one
 pushed a commit onto this one's branch, merged its PR, and closed its ticket,
 all discovered afterwards. Neither had any way to see the other.
 
-Four rules, in the order they would have broken that chain:
+Until 2026-09-01 the rule drawn from that day was **one topic per session**,
+with a hard stop at the first commit and a hand-off to a new window. **Dane
+lifted that** (2026-09-01, verbatim: *"I want to override the restriction on
+working on two projects with cc-starcaster"*). It lifts cleanly because
+holding two topics is not what collided that day — *neither ticket was ever
+moved to `Building`* is the whole of it. Rules 3 and 4 below are what would
+have broken the chain, and lifting the other two makes them load-bearing:
+they are now **mandatory, not advisory**.
 
-1. **The agent names the thread, and re-names it when it changes.** Every
-   session states its topic in its first substantive reply. When a request
-   does not belong to that topic, the agent **stops** and says so plainly —
-   *"Topic change: this thread is X, you are asking for Y"* — before touching
-   anything. The operator should never be the one to notice first. He has
-   raised this repeatedly; assume he will not raise it again.
+Four rules, in the order they matter:
 
-2. **One session, one folder — a hard stop at the first commit.** Ops,
-   diagnosis, reading and ClickUp work may happen wherever the session already
-   is. The moment work will produce a **commit**, the session sets up the
-   worktree, hands over the command to open a session there, and **stops
-   building**. It does not `cd` in and continue. A session that builds in a
-   folder it did not open in is invisible to every tool the operator has.
+1. **The agent names every thread it is holding, and names a new one the
+   moment it opens.** Every session states its topic in its first substantive
+   reply. When a request does not belong to any topic in hand, the agent says
+   so plainly — *"Second thread: this session is holding X, you are opening
+   Y"* — and then gets on with it. It no longer stops. What it must never do
+   is let a second topic in silently: the operator's status line names one
+   folder, so the session's own words are the only place two topics are
+   visible at all. He should never be the one to notice first.
+
+2. **One topic, one folder — always, and this one did not lift.** Each topic
+   gets its own worktree, and the session works in it by absolute path. Two
+   topics never share a working tree: one folder is one HEAD and one index, so
+   a branch switch rewrites the other topic's files and `git add <file>`
+   stages the other topic's edits into your commit (landmine 5). A session may
+   drive several folders; a folder may not carry several topics.
 
 3. **Claim the ticket before building — hand-built work included.** ClickUp
    status is the only surface where two sessions can see each other, and the
-   atomic claim (`--if-status`) exists exactly for this. Hand-building is not
-   an exemption; on 2026-08-20 two sessions built the same epic because
-   neither ticket was ever moved to `Building`.
+   atomic claim (`npm run clickup -- claim`, which fills in `--if-status` from
+   the ticket itself) exists exactly for this. Hand-building is not an
+   exemption; on 2026-08-20 two sessions built the same epic because neither
+   ticket was ever moved to `Building`. **A ticket another session already
+   holds is not available to this one** — that is the 8/20 failure exactly,
+   and no amount of folder separation catches it.
 
 4. **Before starting on an epic, run `npm run map` and read the queue.** Ten
-   seconds. It catches the case where somebody else is already on it.
+   seconds. It catches the case where somebody else is already on it. With
+   several sessions live on one machine — there were seven on 2026-09-01 —
+   this is the only cheap check that sees them.
 
-Rules 1 and 2 are the agent's job and cost the operator nothing. Rule 2 costs
-him one window-open per piece of real work, which is the whole price of the
-system.
+Rules 1 and 2 are the agent's job and cost the operator nothing. Rules 3 and 4
+are what the whole arrangement now rests on: the old rule bought its safety by
+keeping each session small enough to see, and that margin is spent.
 
 ## One worktree per thread
 
@@ -437,8 +681,10 @@ Before reporting a task complete, run and state the results of:
 3. The rebuild command for every generated artifact your change affects
 4. `node scripts/check_conventions.cjs` (also runs at pre-commit;
    `SKIP_CONVENTIONS=1` bypasses — if you bypass, say so and why)
-5. `npm run check:syntax` if you touched `public/js/` or `public/shared/`
-   (also runs at pre-commit and gates CI)
+5. `npm run check:syntax` if you touched `public/js/`, `public/shared/`,
+   `scripts/` or `lib/` — a parse gate over every hand-written
+   `.js`/`.mjs`/`.cjs` in those trees (also runs at pre-commit and gates CI).
+   Run it after resolving ANY merge conflict by keeping both sides.
 6. **`npm run check:panels` if you touched ANY settings panel or its CSS**,
    and it is not optional because CI cannot run it — CI has no browser, so
    this check only ever runs if a person runs it. A staggered panel reached

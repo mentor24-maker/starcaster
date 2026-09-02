@@ -19,11 +19,13 @@
  * what this save is about to write.
  */
 import { hasSectionDrifted, type DriftableSection } from "./section-drift";
+import { sectionFollowsMaster } from "./canonical-follow";
 
 /** Only the fields usage counting depends on — structural, so tests stay light. */
 export type UsageSection = {
   savedSectionId?: string;
   canonical?: boolean;
+  canonicalLocked?: boolean;
 };
 
 export type UsagePage = {
@@ -80,9 +82,10 @@ export function buildSavedSectionUsageIndex(
         index.set(id, usage);
       }
 
-      // `canonical !== true` covers both an explicit detach and the older rows
-      // that carry provenance without ever having followed.
-      if (section.canonical !== true) {
+      // One question, one answer, one place it is defined — the same helper
+      // the push itself uses, so this column and the engine can never disagree
+      // about which copies are Following.
+      if (!sectionFollowsMaster(section)) {
         usage.independent += 1;
         continue;
       }
@@ -170,7 +173,7 @@ export function driftedFollowingPages(
     const sections: readonly UsageSectionWithContent[] = Array.isArray(page?.layoutSections) ? page.layoutSections : [];
     const drifted = sections.some(
       (s: UsageSectionWithContent) =>
-        s?.canonical === true && String(s?.savedSectionId ?? '') === id && hasSectionDrifted(s, masterSection)
+        sectionFollowsMaster(s) && String(s?.savedSectionId ?? '') === id && hasSectionDrifted(s, masterSection)
     );
     if (drifted) pageLabels.push(labelFor(page));
   }

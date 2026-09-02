@@ -34,6 +34,13 @@ const read = (name) => fs.readFileSync(path.join(sqlDir, name), 'utf8');
 const SCOPED_TABLES = [
   { file: 'develop_builder_published_pages_setup.sql', table: 'builder_published_pages' },
   { file: 'builder_page_revisions_owner_user_id.sql', table: 'builder_page_revisions' },
+  // Connections 1/7 (86bbpz1d0). lib/projectConnectionsStore.js writes through
+  // scopedInsertRow, and an untenanted row here is an OAuth token filed under
+  // no project at all — so the store also refuses the write when the stamp
+  // cannot land (scripts/builder/projectConnectionsStore.test.js proves the
+  // refusal against a table with the column removed). This row is the cheap
+  // half of that: it fails if the column ever leaves the SQL.
+  { file: 'project_connections_setup.sql', table: 'project_connections' },
 ];
 
 for (const { file, table } of SCOPED_TABLES) {
