@@ -326,12 +326,14 @@ offline — it is what `doctor:node` reads to say when each owned job last
 actually worked here), and the shared row is pushed **at most once a day**,
 which is the resolution the requirement needs and what keeps the ticket quiet.
 
-**Only `bus-relay` beats today.** The two loop lanes run inside long-lived
-agent sessions with no committed runner to hang an emitter on, `db-refresh` has
-no schedule on purpose, and `pulse-pipelines` lives in another repo. Those
-report **NOT REPORTING with the reason**, every run — never as healthy, because
-a system that is one-fifth instrumented must not read as a green board. Adding
-a role to `lib/nodeRoles.js` without deciding either way fails a test.
+**Two jobs beat today: `bus-relay` and `pipeline-pulse`.** The two loop lanes
+run inside long-lived agent sessions with no committed runner to hang an emitter
+on, `db-refresh` has no schedule on purpose, `pulse-pipelines` lives in another
+repo, and `weekly-report` runs once a week against a 25-hour overdue window, so
+an honest beat from it would read as overdue six days in seven. Those report
+**NOT REPORTING with the reason**, every run — never as healthy, because a
+system that is part-instrumented must not read as a green board. Adding a role
+to `lib/nodeRoles.js` without deciding either way fails a test.
 
 Each machine says who it is in `~/.alphire-node` (one short line:
 `macbook-pro` or `mac-mini`). Without that file it falls back to the hostname,
@@ -339,6 +341,29 @@ which is a guess — rename the Mac and the guess changes. **A machine whose
 name is not recognised does not quietly skip; it refuses out loud**, because
 "another machine is doing it" and "nobody is doing it" look identical
 otherwise, and only one of them is safe.
+
+### The pipeline's own diagnostics run on a schedule
+
+```
+npm run pulse                            read-only: is the pipeline healthy right now?
+npm run pulse:publish                    the scheduled pass — publish the report, post what needs somebody
+npm run pulse:publish -- --dry-run       say exactly what it would write and send, send nothing
+./scripts/install_pipeline_pulse.sh --status    is the hourly schedule installed here, and did it run?
+```
+
+`npm run pulse` shipped in phase 1 and then **never ran once on a schedule**,
+because nobody created one — for weeks, with two live alarms inside it, while
+its own closing line said "if a scheduled run does not print this line, that
+absence IS the alert" (task 86bbqz7rg). It runs **hourly on the Mini** now: the
+tightest threshold it measures is two hours, so a daily pass would report a
+stall a day late, which is a check that looks like it works. The Mini because
+check A1 reads the build loop's own log, which exists only where the loops run.
+
+The full report is rewritten in place on a ClickUp ticket called **Pipeline
+pulse**, and only **alarms and could-not-tells** reach the bus — once each per
+six hours, cleared when they clear. Notices stay on the ticket. That is the
+same shape the roll call uses, and for the same reason: a clean report posted
+daily is 365 messages a year and gets filtered.
 
 ### And a job that runs but ships nothing has to say so too
 

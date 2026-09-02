@@ -85,7 +85,12 @@ function readNoOp(job, queuedCount, now) {
   return {
     ...result,
     source: file,
-    unterminated: unterminated.map((p) => classifyUnterminated(p, { now, passes })),
+    // `start` rides along with the classification because it is the pass's
+    // IDENTITY, and the only stable part of it: the message carries an age
+    // that changes every hour, so a scheduled consumer keying suppression off
+    // the message would re-announce the same hung pass every single run
+    // (task 86bbqz7rg). Additive — nothing existing reads it.
+    unterminated: unterminated.map((p) => ({ start: p.start, ...classifyUnterminated(p, { now, passes }) })),
   };
 }
 

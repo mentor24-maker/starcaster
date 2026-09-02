@@ -1,0 +1,352 @@
+#!/usr/bin/env node
+/**
+ * `npm run pulse:publish` — the SCHEDULED pulse.
+ *
+ * `npm run pulse` reads and prints. This runs it, puts the full report
+ * somewhere durable, and tells the bus about the parts that need somebody.
+ *
+ *   npm run pulse:publish                 take a reading, publish it, post what is due
+ *   npm run pulse:publish -- --dry-run    say exactly what it WOULD write and send, send nothing
+ *   npm run pulse:publish -- --job X      read a different loop's log for A1
+ *
+ * Exit codes, because launchd and the failure alert both branch on this:
+ *   0  the pass completed — whatever it found. A finding is a reading, not a
+ *      failure of this job.
+ *   1  the pass could not complete: the pulse itself did not run, or the
+ *      durable record could not be written. That is a broken watchdog, and a
+ *      broken watchdog has to be loud.
+ *
+ * THE PULSE IS RUN AS A SUBPROCESS, ON PURPOSE.
+ * `scripts/pulse.cjs` declares read-only as a hard property, not an intention:
+ * three sources, no write path, so it cannot post or repair by accident. That
+ * property is worth more than the few milliseconds saved by requiring it in
+ * here, and importing it would put a ClickUp PUT one typo away from the file
+ * that promises it has none. So: this file writes, that file reads, and the
+ * boundary between them is a process.
+ *
+ * IT NEVER DECIDES FROM THE PULSE'S EXIT CODE. `exitCodeFor` does not count a
+ * total Loop Queue outage (86bbt6hgx), so a run that saw nothing at all can
+ * exit 0. What gets announced is decided from the report's own contents by
+ * lib/pulseDigest.js, which does count it.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const digest = require('../lib/pulseDigest.js');
+const pulse = require('../scripts/builder/pulse.js');
+const heartbeat = require('../lib/nodeHeartbeat.js');
+const nodeRoles = require('../lib/nodeRoles.js');
+const clickup = require('./lib/clickup.cjs');
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
+const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
+const DIGEST_TASK = process.env.CLICKUP_PULSE_DIGEST_TASK || '';
+// The status the record rests in: outside every claim query and every relay
+// watch, for the same reason the roll call and the pause switch sit there — a
+// ticket that could be picked up as work would be picked up as work.
+const DIGEST_STATUS = process.env.CLICKUP_PULSE_DIGEST_STATUS || 'Live';
+const ROLE = 'pipeline-pulse';
+
+const argv = process.argv.slice(2);
+const flag = (name) => argv.includes(`--${name}`);
+const arg = (name, fallback = '') => {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : fallback;
+};
+
+const DRY = flag('dry-run');
+const JOB = arg('job', 'loop-build');
+const NOW = Date.now();
+const NODE = nodeRoles.thisNode();
+
+// --- suppression stamps -----------------------------------------------------
+//
+// Beside the heartbeat's and the stale-ready check's, for the reason they live
+// there: a stamp records what THIS MACHINE has already said, which is a fact
+// about the machine and not about the code, so it must survive a worktree
+// being removed.
+
+const STAMP_DIR = path.join(heartbeat.heartbeatDir(), 'pulse');
+
+function readStamps() {
+  const stamps = new Map();
+  let entries = [];
+  try { entries = fs.readdirSync(STAMP_DIR); } catch { return stamps; }
+  for (const file of entries) {
+    if (!file.endsWith('.stamp')) continue;
+    try {
+      const at = fs.readFileSync(path.join(STAMP_DIR, file), 'utf8').trim();
+      stamps.set(file.replace(/\.stamp$/, ''), at);
+    } catch { /* an unreadable stamp reads as "never posted", which errs towards posting */ }
+  }
+  return stamps;
+}
+
+/**
+ * Stamps are stored under a sanitised FILE name and looked up by KEY, so both
+ * directions have to agree. `stampFileName` is the single definition and this
+ * builds the reverse index from the live items rather than trying to un-mangle
+ * a filename — a format written in one place and taken apart in another is a
+ * format with two definitions.
+ */
+function stampsByKey(keys) {
+  const onDisk = readStamps();
+  const out = new Map();
+  for (const key of keys) {
+    const file = digest.stampFileName(key).replace(/\.stamp$/, '');
+    if (onDisk.has(file)) out.set(key, onDisk.get(file));
+  }
+  return out;
+}
+
+function writeStamp(key, at) {
+  try {
+    fs.mkdirSync(STAMP_DIR, { recursive: true });
+    fs.writeFileSync(path.join(STAMP_DIR, digest.stampFileName(key)), `${at}\n`);
+    return null;
+  } catch (err) {
+    return String(err?.message || err);
+  }
+}
+
+/** Clear the stamps for findings this run measured and did NOT see. A stamp
+ *  that is never cleared is an alarm that fires once and then goes quiet for
+ *  good — the suppression design defeating the thing it protects. */
+function clearStale({ items, measured }) {
+  let files = [];
+  try { files = fs.readdirSync(STAMP_DIR); } catch { return []; }
+  const liveFiles = new Set(items.map((i) => digest.stampFileName(i.key)));
+  const clearable = new Set(measured);
+  const cleared = [];
+  for (const file of files) {
+    if (!file.endsWith('.stamp') || liveFiles.has(file)) continue;
+    if (!clearable.has(digest.scopeOfKey(file))) continue;
+    try { fs.rmSync(path.join(STAMP_DIR, file), { force: true }); cleared.push(file); } catch { /* nothing to clear */ }
+  }
+  return cleared;
+}
+
+// --- the reading ------------------------------------------------------------
+
+/**
+ * Run the pulse and read both of its faces: the JSON it emits for machines and
+ * the human report it prints for people. Two runs would be two readings of a
+ * moving system, and the report on the ticket has to be the report the
+ * findings came from — so the JSON is taken once and the text is rendered from
+ * it with the pulse's OWN formatter rather than by a second invocation.
+ */
+function takeReading() {
+  const out = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'pulse.cjs'), '--json', '--job', JOB], {
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  if (out.error) return { ok: false, why: `the pulse could not be started (${out.error.message})` };
+  const stdout = String(out.stdout || '');
+  if (!stdout.trim()) {
+    return {
+      ok: false,
+      why: `the pulse printed nothing (exit ${out.status}). ${String(out.stderr || '').trim().slice(0, 300)}`,
+    };
+  }
+  let result;
+  try {
+    result = JSON.parse(stdout);
+  } catch (err) {
+    return { ok: false, why: `the pulse's JSON could not be parsed — ${String(err?.message || err).slice(0, 200)}` };
+  }
+  return { ok: true, result, report: pulse.formatReport(result) };
+}
+
+// --- the durable record -----------------------------------------------------
+
+function descriptionOf(task) {
+  const md = String((task && task.markdown_description) || '');
+  const plain = String((task && task.description) || '');
+  return md.trim() ? md : plain;
+}
+
+/**
+ * Find the record. Its identity is its NAME; `CLICKUP_PULSE_DIGEST_TASK` is a
+ * shortcut that must never become the definition — a shortcut pointing at a
+ * deleted task has to fall back to the name, not report the record gone.
+ */
+async function findDigestTask() {
+  if (DIGEST_TASK) {
+    try {
+      const out = await clickup.call('GET', `/api/v2/task/${DIGEST_TASK}`);
+      if (out.ok && out.json && out.json.id) return { readable: true, found: true, task: out.json };
+    } catch { /* fall through to the name */ }
+  }
+  let tasks;
+  try {
+    tasks = await clickup.listTasks(LOOP_QUEUE_LIST, { includeClosed: true });
+  } catch (err) {
+    return { readable: false, found: false, why: `reading the Loop Queue: ${String(err?.message || err).slice(0, 200)}` };
+  }
+  const task = tasks.find(
+    (t) => String(t.name || '').trim().toLowerCase() === digest.DIGEST_TASK_NAME.toLowerCase(),
+  );
+  return task ? { readable: true, found: true, task } : { readable: true, found: false };
+}
+
+async function writeDigest(body) {
+  const found = await findDigestTask();
+  if (!found.readable) return { ok: false, why: found.why };
+
+  if (!found.found) {
+    const made = await clickup.call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
+      name: digest.DIGEST_TASK_NAME,
+      status: DIGEST_STATUS,
+      markdown_description: body,
+    });
+    if (!made.ok) {
+      return {
+        ok: false,
+        why: `HTTP ${made.status} ${String(made.json?.err || made.text || '').slice(0, 200)}`
+          + `\n  If the failure names the status, this list has no "${DIGEST_STATUS}" status — set`
+          + '\n  CLICKUP_PULSE_DIGEST_STATUS to one the Loop Queue has that no loop claims from.',
+      };
+    }
+    return { ok: true, task: made.json, created: true };
+  }
+
+  const wrote = await clickup.call('PUT', `/api/v2/task/${found.task.id}`, { markdown_description: body });
+  if (!wrote.ok) {
+    return { ok: false, why: `HTTP ${wrote.status} writing ${found.task.url}` };
+  }
+  return { ok: true, task: found.task, created: false };
+}
+
+// --- the pipeline switch ----------------------------------------------------
+
+/**
+ * Has Dane taken the deck? Every actor asks, this one included — a watchdog
+ * shouting on the bus while he works through something by hand is exactly the
+ * collision the switch exists to prevent.
+ *
+ * Asked by RUNNING the one implementation rather than reading the flag a
+ * second way here: two readers of a safety flag are two flags, and they
+ * disagree quietly. Fails safe in the same direction the switch does — if it
+ * cannot be asked at all, treat it as paused and stay quiet.
+ *
+ * Checked before POSTING and before WRITING, because both are writes. The
+ * reading itself is free and happens either way, so a paused pass still prints
+ * a complete report to its log.
+ */
+function pipelinePaused() {
+  const out = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'pipeline.mjs'), 'check'], { encoding: 'utf8' });
+  if (out.error) return { paused: true, why: `the pipeline switch could not be read (${out.error.message})` };
+  if (out.status === 0) return { paused: false, why: '' };
+  const said = String(out.stderr || out.stdout || '').trim().split('\n')[0];
+  return { paused: true, why: said || `the pipeline check exited ${out.status}` };
+}
+
+// --- the pass ---------------------------------------------------------------
+
+const reading = takeReading();
+if (!reading.ok) {
+  // The watchdog itself did not work. Loud, and a non-zero exit, so
+  // report_job_failure.mjs turns it into a bus post — silence here is the one
+  // outcome this whole ticket exists to prevent.
+  console.log(`PULSE PUBLISH FAILED — ${reading.why}`);
+  console.log('No reading was taken. This is not an all-clear.');
+  process.exit(1);
+}
+
+const { result, report } = reading;
+console.log(report);
+
+const { items, measured } = digest.announcements(result);
+const body = digest.renderDigest({
+  result, report, items, node: NODE.name, now: NOW, everyMs: heartbeat.REPOST_EVERY_MS,
+});
+
+const paused = pipelinePaused();
+if (paused.paused) {
+  console.log('');
+  console.log(`Not publishing: ${paused.why}`);
+  console.log('Dane has the deck, so this stays quiet. The report above still stands.');
+  process.exit(0);
+}
+
+if (DRY) {
+  console.log('');
+  console.log(`--dry-run — this is what would be written to the "${digest.DIGEST_TASK_NAME}" ticket:`);
+  console.log('');
+  console.log(body);
+}
+
+const wrote = DRY ? { ok: true, task: null, created: false } : await writeDigest(body);
+if (!wrote.ok) {
+  console.log('');
+  console.log(`Could NOT write the durable record — ${wrote.why}`);
+  console.log('The reading above is real and is now nowhere but this log, which is the failure this job exists to prevent.');
+  process.exit(1);
+}
+if (!DRY) {
+  console.log('');
+  console.log(`${wrote.created ? 'Created' : 'Rewrote'} ${digest.DIGEST_TASK_NAME}: ${wrote.task?.url || '(no url)'}`);
+}
+
+const cleared = DRY ? [] : clearStale({ items, measured });
+if (cleared.length) console.log(`Cleared ${cleared.length} suppression stamp(s) for findings that have gone away.`);
+
+if (!items.length) {
+  console.log('Nothing to announce — no alarms and nothing it could not read.');
+} else {
+  const { due, held } = digest.duePosts({
+    items, stamps: stampsByKey(items.map((i) => i.key)), now: NOW, everyMs: heartbeat.REPOST_EVERY_MS,
+  });
+  if (held.length) {
+    console.log(`${held.length} finding(s) already announced within the last `
+      + `${Math.round(heartbeat.REPOST_EVERY_MS / 3600000)}h — not posting those again.`);
+  }
+  if (due.length) {
+    const text = digest.renderPulsePost({
+      items: due,
+      node: NODE.name || 'an unnamed machine',
+      now: NOW,
+      everyMs: heartbeat.REPOST_EVERY_MS,
+      digestUrl: wrote.task?.url || '',
+    });
+    if (DRY) {
+      console.log('');
+      console.log('--dry-run — this is what would go to the bus, and nothing was sent:');
+      console.log('');
+      console.log(text);
+    } else {
+      try {
+        clickup.postBusMessage(BUS_CHANNEL, text);
+        for (const item of due) {
+          const why = writeStamp(item.key, new Date(NOW).toISOString());
+          if (why) console.log(`Posted, but the suppression stamp for ${item.key} could not be written (${why}).`);
+        }
+        console.log(`Posted ${due.length} finding(s) to the bus.`);
+      } catch (err) {
+        // Posted-and-not-stamped costs a duplicate; not-posted-and-stamped
+        // costs a silence. Only one of those is recoverable, so a failed send
+        // is never recorded as sent.
+        console.log(`Could NOT post to the bus (${String(err?.message || err).slice(0, 300)}).`);
+        console.log('Not stamping it as sent, so the next pass tries again.');
+      }
+    }
+  }
+}
+
+// The beat, and only on a pass that actually completed. It is what makes the
+// roll call able to say this job has stopped firing — which is the exact
+// failure that produced this ticket, one floor up.
+if (!DRY) {
+  const beat = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'node_heartbeat.mjs'), '--beat', '--role', ROLE], {
+    encoding: 'utf8',
+  });
+  const said = String(beat.stderr || '').trim();
+  if (said) console.log(said);
+}
+
+process.exit(0);

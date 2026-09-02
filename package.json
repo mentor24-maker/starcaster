@@ -103,6 +103,7 @@
     "build:ecosystem-html": "node scripts/build_ecosystem_html.mjs",
     "check:vault-drift": "node scripts/check_vault_drift.cjs",
     "pulse": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pulse.cjs",
+    "pulse:publish": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pulse_publish.mjs",
     "checkout:current": "doppler run --project starcaster --config dev --no-check-version -- node scripts/checkout_currency.mjs"
   },
   "devDependencies": {
