@@ -83,6 +83,85 @@ project's whole history, and it is a loop you started at your terminal on 23
 August that then ran by itself for seven days. The guard's own notes now say
 plainly that nobody may be reading, which is precisely why the two brakes that
 stop it jamming are not optional.
+## 2026-09-02 — A refusal that named the wrong reason, on a pull request whose real problem was a conflict (#525)
+
+On 1 September Dane told the system to merge a piece of finished work, and it
+came back and said no. The reason it gave was that "a required review or check
+is missing". That was not true, and it was not true in two separate ways: every
+check on that work was green, and the actual problem was a **merge conflict** —
+the branch and the live site's code had both changed the same lines, which is a
+thing only a person can untangle.
+
+A wrong reason is worse than no reason at all, because it looks like an answer.
+Told a review was missing, the natural next move is to go looking for the review
+— and there was never a review to find. The half-hour that costs is the whole
+point of this fix; it is the third time in a week the same shape has bitten
+(a gate reading its own note as the verdict, a blocked pull being called
+"uncommitted changes"), and each time the machine sounded certain about
+something it had not actually checked.
+
+The cause was small and ordinary. GitHub reports the state of a pull request in
+one word, and it has eight of them — behind, blocked, conflicted, clean, still
+computing, and so on. The code was treating five of those as if they were one
+thing and printing a single sentence for all of them. So now each word gets its
+own sentence, saying what is actually true and whose hands it needs: *the branch
+is behind, this machine will catch it up*; *this check failed, here is its name*;
+*the branch conflicts, here are the files*. And where GitHub does not say enough
+to know — it will happily report "blocked" without saying which rule — the
+answer is now the honest one, **CANNOT TELL**, along with a note that a conflict
+it has not finished working out looks exactly like this. It also stops guessing
+in one more place: a state the code has never seen before used to quietly count
+as "fine, merge it", and now it says so and stops.
+
+The proof came from the real thing rather than a rehearsal. Two pull requests
+sitting open right now were read twice a few seconds apart: the first read said
+"still computing", the second said "conflicted". That is the exact sequence that
+produced the wrong message in the first place — and this time it produced "I
+cannot tell yet, I'll ask again" followed by "this is a conflict". Each fix was
+also deliberately broken again afterwards to watch the tests that guard it fail,
+so a future change cannot quietly put the old sentence back.
+
+## 2026-09-02 — The Carousel settings panel, and a green check that could not say what it had looked at (#446)
+
+The Carousel editor — the panel you open to edit a slideshow's slides — had been
+built up over time rather than laid out. Its list of slides was a grid of titled
+columns with a second, unrelated row of boxes hanging underneath each one, and
+those two halves were sized independently, so nothing below a slide's first row
+lined up with anything above it. This rebuilds the slide list the same way the
+Feature Cards panel was already rebuilt: one labelled block per slide, every
+label starting on one line and every box ending on one line, reusing that
+panel's layout rather than inventing a second one.
+
+The interesting part is why this took a second pass. There is an automatic
+checker that opens every settings panel in a browser and measures whether the
+labels and boxes line up. It went green. But a green result is only worth
+something if you have watched the same check go red — so someone tried to break
+the Carousel panel on purpose, four different ways, and the check stayed green
+through all four. The obvious conclusion was that the checker never opens this
+panel at all, and the work was sent back.
+
+That conclusion was wrong, and finding out why is the rest of this entry. The
+checker does open the panel and does measure it. What failed was the attempts to
+break it: each one tried to make a box far too wide, and the page quietly refused
+in two different ways — one rule capped the box's maximum size, and the boxes sit
+in a row that shrinks its contents to fit. So nothing over-wide was ever drawn on
+screen, and the checker honestly reported that nothing was over-wide. The check
+was telling the truth; the experiment had failed without saying so.
+
+The only reason those two possibilities could not be told apart is that the
+checker's failure messages did not name what they were looking at. A problem was
+reported as "panel #18" — an ordinal in a sweep of 594 panels — and the slide
+list was labelled "chrome strip 3", which reads like anonymous page furniture
+rather than the thing it is. Search that output for the word "carousel" and you
+find nothing, whether or not the panel was ever opened.
+
+So the messages now name the panel and the group: "panel #18 (carousel) /
+Slides". With that in place the panel was broken on purpose twice more — once by
+knocking a single box out of line, once by forcing a box past its size ceiling —
+and both times the check failed, at all three screen widths, naming the carousel
+in every line. Then the breaks were taken back out and it went green again. That
+is the evidence the first pass was missing, and it is now cheap for the next
+person to repeat on any panel.
 ## 2026-09-02 — The two stuck pull requests were never actually stuck (#513, #494)
 
 You asked to clear the conflicts on two pull requests. GitHub was flagging both

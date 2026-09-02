@@ -3791,7 +3791,14 @@ function renderCardPreview(tpl: CardTemplate) {
   );
 }
 
-function BlogCardManagerPreview() {
+/**
+ * Exported since 2026-09-02 (task 86bbt62dy) so the Builder's module card can
+ * render the real designer where the operator opens the module. Until then it
+ * rendered only through the public renderer, and the one page carrying this
+ * module was unpublished — so the fifteen controls task 86bbt52fa added had no
+ * route to them at all, while the module's own note claimed there was one.
+ */
+export function BlogCardManagerPreview() {
   const [tpl, setTpl] = useState<CardTemplate>(DEFAULT_CARD_TEMPLATE);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
