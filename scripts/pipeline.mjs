@@ -307,7 +307,7 @@ const fmt = pipelinePause.humanTime;
  * looked at at all. Not looking and finding nothing are different answers
  * (86bbqw49y).
  */
-async function sweepStranded({ by, queue, apply = false, strandedAfterMs = STRANDED_AFTER_MS }) {
+async function sweepStranded({ by, queue, apply = false, strandedAfterMs = STRANDED_AFTER_MS, command = 'resume' }) {
   // Sweep first, then lift the flag. In this order a ticket that was stranded
   // is back in the line BEFORE the loops start claiming again, so the very
   // next pass can pick it up rather than finding it a minute later.
@@ -369,7 +369,7 @@ async function sweepStranded({ by, queue, apply = false, strandedAfterMs = STRAN
       }
       const note = await tryCall('POST', `/api/v2/task/${s.id}/comment`, {
         comment_text: sweptTicketNote({
-          at: new Date().toISOString(), by, kind: s.kind,
+          at: new Date().toISOString(), by, kind: s.kind, command,
           destination: plan?.status, why: plan?.why,
         }),
         notify_all: false,
@@ -496,7 +496,7 @@ if (cmd === 'check') {
   if (strandedAfterMs !== STRANDED_AFTER_MS) {
     console.log(`(counting a ticket stranded after ${humanDuration(strandedAfterMs)}, not the usual ${humanDuration(STRANDED_AFTER_MS)})`);
   }
-  const { swept, found, sweepState } = await sweepStranded({ by, queue: sw.queue, apply, strandedAfterMs });
+  const { swept, found, sweepState } = await sweepStranded({ by, queue: sw.queue, apply, strandedAfterMs, command: 'sweep' });
   console.log(sweptSummary(swept, { ...sweepState, applied: apply }));
 
   // Only a sweep that CHANGED something is worth the party line. A dry run is

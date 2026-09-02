@@ -1123,3 +1123,20 @@ test('status recommends a command that can actually act in the state it is print
   assert.doesNotMatch(block, /resume --operator-asked/,
     'and must never again point a reader at a command that no-ops here');
 });
+
+test('the hand-back note names the command that actually ran', () => {
+  // The first live `sweep --apply` wrote "(Automatic — pipeline resume …)" for
+  // a resume that never happened. The trail is the only account of who moved a
+  // ticket, and a wrong actor in it is the defect itself (DOCTRINE 2.5/2.6).
+  assert.match(pause.sweptTicketNote({ command: 'sweep', by: 'an agent session' }), /Automatic — pipeline sweep/);
+  assert.match(pause.sweptTicketNote({ command: 'resume' }), /Automatic — pipeline resume/);
+  assert.match(pause.sweptTicketNote({}), /Automatic — pipeline resume/, 'the default stays resume, so resume is unchanged');
+  // Both kinds carry it, not just the build arm.
+  assert.match(pause.sweptTicketNote({ kind: 'a review', command: 'sweep' }), /Automatic — pipeline sweep/);
+});
+
+test('each caller tells the note which command it is', () => {
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  assert.match(code, /command: 'sweep'/, 'the standalone command must identify itself');
+  assert.match(code, /kind: s\.kind, command,/, 'and the sweep must pass it through to the note');
+});

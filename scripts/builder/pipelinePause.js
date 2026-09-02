@@ -703,8 +703,14 @@ function strandedBuildDestination(buildStartAction) {
  * was already half done. Say what happened and what the next pass should
  * check before it starts over.
  */
-function sweptTicketNote({ at, by, kind = 'a build', destination = 'Queued', why = '' } = {}) {
-  const signature = `\n\n(Automatic — pipeline resume${by ? `, ${by}` : ''}${at ? `, ${at}` : ''}.)`;
+function sweptTicketNote({ at, by, kind = 'a build', destination = 'Queued', why = '', command = 'resume' } = {}) {
+  // WHICH COMMAND RAN, named. The signature said "pipeline resume" for every
+  // sweep until 2026-09-02, when the sweep became runnable on its own — and
+  // the very first live `sweep --apply` wrote a note crediting a resume that
+  // never happened. A trail that names the wrong actor is the defect, not a
+  // wording preference (DOCTRINE 2.5/2.6: a hand-off names the actor).
+  const ran = `pipeline ${String(command || 'resume')}`;
+  const signature = `\n\n(Automatic — ${ran}${by ? `, ${by}` : ''}${at ? `, ${at}` : ''}.)`;
 
   // A stranded REVIEW keeps its status. It is already in "In review", which is
   // where a ticket waits for a reviewer; the only thing wrong with it is the
