@@ -5,7 +5,8 @@ Read this file plus the `CLAUDE.md` nearest the files you are editing
 Architecture, known issues, and roadmap: `docs/FABLE_OVERHAUL_PLAN.md`.
 **Hard-won rules, each with the incident that produced it: `docs/DOCTRINE.md`.**
 Read it before diagnosing a "it worked yesterday" failure, writing an error
-message, or adding a check that could silently not run.
+message, adding a check that could silently not run, or reporting that
+something is done.
 
 ## IMPORTANT: Coach the operator
 
