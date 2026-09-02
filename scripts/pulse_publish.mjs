@@ -12,9 +12,13 @@
  * Exit codes, because launchd and the failure alert both branch on this:
  *   0  the pass completed — whatever it found. A finding is a reading, not a
  *      failure of this job.
- *   1  the pass could not complete: the pulse itself did not run, or the
- *      durable record could not be written. That is a broken watchdog, and a
- *      broken watchdog has to be loud.
+ *   1  the pass could not complete: the pulse itself did not run, the pause
+ *      switch could not be READ (which is not the same as it being paused —
+ *      see `pipelineSwitch`), or the durable record could not be written.
+ *      That is a broken watchdog, and a broken watchdog has to be loud.
+ *
+ * A PAUSED pipeline is not a failure and exits 0. It is a complete pass that
+ * correctly stayed quiet, so it records its heartbeat like any other.
  *
  * THE PULSE IS RUN AS A SUBPROCESS, ON PURPOSE.
  * `scripts/pulse.cjs` declares read-only as a hard property, not an intention:
@@ -63,6 +67,22 @@ const DRY = flag('dry-run');
 const JOB = arg('job', 'loop-build');
 const NOW = Date.now();
 const NODE = nodeRoles.thisNode();
+
+// EVERY subprocess here gets a deadline, and none of them had one.
+//
+// This job runs hourly under launchd, which will not start a second copy while
+// the first is still going. The pulse shells out to `gh` and to ClickUp; one
+// call that hangs instead of failing takes the schedule down completely — no
+// output, no non-zero exit, so `report_job_failure.mjs` never fires either.
+// The only thing that would eventually notice is the 25-hour roll call, and it
+// would report "stopped firing" about a job that is firing and stuck.
+//
+// A deadline turns that into an ordinary loud failure: spawnSync kills the
+// child and sets `error`, every caller here already treats `error` as "could
+// not complete", and the next hour tries again.
+const READING_TIMEOUT_MS = 10 * 60 * 1000; // the pulse: three sources, many `gh` calls
+const SWITCH_TIMEOUT_MS = 2 * 60 * 1000;   // one ClickUp read
+const BEAT_TIMEOUT_MS = 2 * 60 * 1000;     // a local stamp plus at most one ClickUp write
 
 // --- suppression stamps -----------------------------------------------------
 //
@@ -114,18 +134,24 @@ function writeStamp(key, at) {
   }
 }
 
-/** Clear the stamps for findings this run measured and did NOT see. A stamp
- *  that is never cleared is an alarm that fires once and then goes quiet for
- *  good — the suppression design defeating the thing it protects. */
+/**
+ * Clear the stamps for findings this run measured and did NOT see. A stamp
+ * that is never cleared is an alarm that fires once and then goes quiet for
+ * good — the suppression design defeating the thing it protects.
+ *
+ * THE RULE IS `digest.stampNamesToClear`, AND THIS ONLY DOES THE IO: read the
+ * directory, ask, delete what comes back. It used to reimplement the rule over
+ * filenames, which is the shape where a test proves a function that nothing
+ * runs — the two agreed, so nothing was broken, but changing the rule in the
+ * tested function would have passed CI and changed no behaviour at all.
+ */
 function clearStale({ items, measured }) {
   let files = [];
   try { files = fs.readdirSync(STAMP_DIR); } catch { return []; }
-  const liveFiles = new Set(items.map((i) => digest.stampFileName(i.key)));
-  const clearable = new Set(measured);
+  const onDiskNames = files.filter((f) => f.endsWith('.stamp')).map((f) => f.replace(/\.stamp$/, ''));
   const cleared = [];
-  for (const file of files) {
-    if (!file.endsWith('.stamp') || liveFiles.has(file)) continue;
-    if (!clearable.has(digest.scopeOfKey(file))) continue;
+  for (const name of digest.stampNamesToClear({ onDiskNames, items, measured })) {
+    const file = `${name}.stamp`;
     try { fs.rmSync(path.join(STAMP_DIR, file), { force: true }); cleared.push(file); } catch { /* nothing to clear */ }
   }
   return cleared;
@@ -144,8 +170,18 @@ function takeReading() {
   const out = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'pulse.cjs'), '--json', '--job', JOB], {
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,
+    timeout: READING_TIMEOUT_MS,
   });
-  if (out.error) return { ok: false, why: `the pulse could not be started (${out.error.message})` };
+  if (out.error) {
+    const timedOut = out.error.code === 'ETIMEDOUT' || out.signal;
+    return {
+      ok: false,
+      why: timedOut
+        ? `the pulse did not finish within ${Math.round(READING_TIMEOUT_MS / 60000)} minutes and was killed `
+          + '(most likely a `gh` or ClickUp call that hung rather than failed)'
+        : `the pulse could not be started (${out.error.message})`,
+    };
+  }
   const stdout = String(out.stdout || '');
   if (!stdout.trim()) {
     return {
@@ -163,12 +199,6 @@ function takeReading() {
 }
 
 // --- the durable record -----------------------------------------------------
-
-function descriptionOf(task) {
-  const md = String((task && task.markdown_description) || '');
-  const plain = String((task && task.description) || '');
-  return md.trim() ? md : plain;
-}
 
 /**
  * Find the record. Its identity is its NAME; `CLICKUP_PULSE_DIGEST_TASK` is a
@@ -232,18 +262,59 @@ async function writeDigest(body) {
  * Asked by RUNNING the one implementation rather than reading the flag a
  * second way here: two readers of a safety flag are two flags, and they
  * disagree quietly. Fails safe in the same direction the switch does — if it
- * cannot be asked at all, treat it as paused and stay quiet.
+ * cannot be asked at all, nothing is published.
  *
  * Checked before POSTING and before WRITING, because both are writes. The
  * reading itself is free and happens either way, so a paused pass still prints
  * a complete report to its log.
+ *
+ * IT SEPARATES "PAUSED" FROM "COULD NOT BE READ", WHICH `check` DELIBERATELY
+ * DOES NOT. Both exit 3 there, because both must lead to writing nothing, and
+ * that is right. But they are not the same event to REPORT:
+ *
+ *   paused           a healthy pass. It took a full reading and correctly
+ *                    stayed quiet. It beats, and exits 0.
+ *   could not read   a muzzled watchdog. Left as a quiet exit 0 it publishes
+ *                    nothing, every hour, forever, while `report_job_failure`
+ *                    never fires — and the only thing that eventually notices
+ *                    is the 25-hour roll call, which would say "stopped
+ *                    firing" about a job that is firing. Loud, and exit 1.
+ *
+ * `--json` carries the difference across as `certain`, from the same verdict
+ * `check` prints, so this still is not a second reader of the flag.
  */
-function pipelinePaused() {
-  const out = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'pipeline.mjs'), 'check'], { encoding: 'utf8' });
-  if (out.error) return { paused: true, why: `the pipeline switch could not be read (${out.error.message})` };
-  if (out.status === 0) return { paused: false, why: '' };
-  const said = String(out.stderr || out.stdout || '').trim().split('\n')[0];
-  return { paused: true, why: said || `the pipeline check exited ${out.status}` };
+function pipelineSwitch() {
+  const out = spawnSync(
+    process.execPath,
+    [path.join(ROOT, 'scripts', 'pipeline.mjs'), 'check', '--json'],
+    { encoding: 'utf8', timeout: SWITCH_TIMEOUT_MS },
+  );
+  return digest.switchVerdict({ ...out, timeoutMs: SWITCH_TIMEOUT_MS });
+}
+
+// --- the beat ---------------------------------------------------------------
+
+/**
+ * Recorded by every pass that COMPLETED, which includes a paused one: it took
+ * a full reading and correctly stayed quiet, and that is the job working. An
+ * earlier version returned before this, so Dane holding the deck for a day
+ * made the roll call announce that this job had gone quiet while it was
+ * running perfectly — a false alarm from the very watchdog whose only value is
+ * being trustworthy.
+ */
+function recordBeat() {
+  if (DRY) return;
+  const beat = spawnSync(
+    process.execPath,
+    [path.join(ROOT, 'scripts', 'node_heartbeat.mjs'), '--beat', '--role', ROLE],
+    { encoding: 'utf8', timeout: BEAT_TIMEOUT_MS },
+  );
+  if (beat.error) {
+    console.log(`The beat could not be recorded (${beat.error.message}). The roll call will read this pass as a miss.`);
+    return;
+  }
+  const said = String(beat.stderr || '').trim();
+  if (said) console.log(said);
 }
 
 // --- the pass ---------------------------------------------------------------
@@ -266,12 +337,25 @@ const body = digest.renderDigest({
   result, report, items, node: NODE.name, now: NOW, everyMs: heartbeat.REPOST_EVERY_MS,
 });
 
-const paused = pipelinePaused();
-if (paused.paused) {
+const sw = pipelineSwitch();
+const outcome = digest.switchOutcome(sw);
+if (!outcome.publish) {
   console.log('');
-  console.log(`Not publishing: ${paused.why}`);
-  console.log('Dane has the deck, so this stays quiet. The report above still stands.');
-  process.exit(0);
+  if (outcome.loud) {
+    // Not a pause — a broken read of the thing that decides whether to
+    // publish. Loud and non-zero so `report_job_failure.mjs` turns it into a
+    // bus post; the alternative is publishing nothing hourly with nobody told.
+    console.log(`PULSE PUBLISH FAILED — ${sw.why}`);
+    console.log('The reading above is real, and nothing was published because the pause switch could not be');
+    console.log('read. That is not "Dane has the deck" — it is this job unable to tell, and not an all-clear.');
+  } else {
+    console.log(`Not publishing: ${sw.why}`);
+    console.log('Dane has the deck, so this stays quiet. The report above still stands.');
+  }
+  // A paused pass is a COMPLETE pass and beats; an unreadable one did not
+  // complete and must not, or the roll call certifies a blind watchdog.
+  if (outcome.beat) recordBeat();
+  process.exit(outcome.exit);
 }
 
 if (DRY) {
@@ -341,12 +425,6 @@ if (!items.length) {
 // The beat, and only on a pass that actually completed. It is what makes the
 // roll call able to say this job has stopped firing — which is the exact
 // failure that produced this ticket, one floor up.
-if (!DRY) {
-  const beat = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'node_heartbeat.mjs'), '--beat', '--role', ROLE], {
-    encoding: 'utf8',
-  });
-  const said = String(beat.stderr || '').trim();
-  if (said) console.log(said);
-}
+recordBeat();
 
 process.exit(0);

@@ -205,6 +205,31 @@ test('a stamp for a finding this run STILL sees is never cleared', () => {
   assert.deepEqual(digest.staleStampKeys([key], { items: [{ key }], measured: ['b1'] }), []);
 });
 
+test('a live finding whose key is SANITISED on disk still matches, so its stamp is not cleared', () => {
+  // The real case, not a hypothetical one: an A1 hung-pass key carries the
+  // pass's start time, and those spaces become dashes in the filename. The
+  // publisher reads basenames off disk and asks about them, so both sides have
+  // to be in the stored form. Comparing a raw key against a stored name finds
+  // no match, decides the alarm has gone away, clears its stamp — and
+  // re-announces a still-live alarm every hour, which is how a channel gets
+  // filtered and the check stops being read.
+  const key = 'a1:loop-build:hung:2026-09-01 03:00:00';
+  const onDisk = digest.stampFileName(key).replace(/\.stamp$/, '');
+  assert.notEqual(onDisk, key, 'the fixture is only meaningful while this key IS sanitised');
+  assert.deepEqual(
+    digest.stampNamesToClear({ onDiskNames: [onDisk], items: [{ key }], measured: ['a1'] }), [],
+    'the finding is still live, so its stamp stays',
+  );
+});
+
+test('a stamp whose finding HAS gone away is cleared, sanitised name and all', () => {
+  const gone = digest.stampFileName('a1:loop-build:hung:2026-09-01 03:00:00').replace(/\.stamp$/, '');
+  assert.deepEqual(
+    digest.stampNamesToClear({ onDiskNames: [gone], items: [], measured: ['a1'] }), [gone],
+    'never clearing turns a six-hour suppression window into a permanent silence',
+  );
+});
+
 test('the stamp filename keeps the colon, so the scope can be read back off disk', () => {
   const key = 'b1:86bb1:shape-4:449';
   const file = digest.stampFileName(key).replace(/\.stamp$/, '');
@@ -260,6 +285,146 @@ test('the bus post separates alarms from could-not-tells and says the window', (
   assert.match(text, /once every 6 hours/);
   assert.match(text, /https:\/\/app\.clickup\.com\/t\/abc/);
   assert.match(text, /— \[CC-starcaster\]/);
+});
+
+// --- the pause switch: paused and unreadable are NOT the same outcome -------
+
+test('a PAUSED pass still records its heartbeat — it is a complete pass that stayed quiet', () => {
+  const outcome = digest.switchOutcome({ readable: true, paused: true });
+  assert.equal(outcome.publish, false, 'Dane has the deck, so nothing is written');
+  assert.equal(outcome.beat, true,
+    'without the beat, a day on the deck makes the roll call announce this job has gone quiet '
+    + 'while it is running perfectly — a false alarm from the watchdog whose only value is being trusted');
+  assert.equal(outcome.exit, 0);
+  assert.equal(outcome.loud, false);
+});
+
+test('an UNREADABLE switch does not beat, exits non-zero, and says so loudly', () => {
+  const outcome = digest.switchOutcome({ readable: false, paused: true });
+  assert.equal(outcome.publish, false);
+  assert.equal(outcome.beat, false,
+    'a beat here would certify a blind watchdog as healthy');
+  assert.equal(outcome.exit, 1,
+    'a quiet 0 publishes nothing every hour forever and report_job_failure never fires');
+  assert.equal(outcome.loud, true);
+});
+
+test('a RUNNING pipeline publishes and beats', () => {
+  assert.deepEqual(digest.switchOutcome({ readable: true, paused: false }),
+    { publish: true, beat: true, exit: 0, loud: false });
+});
+
+test('the switch verdict reads `certain: false` as unreadable, not as paused', () => {
+  // The two shapes pipeline.mjs reports this way: a failed ClickUp read, and a
+  // trail truncated so badly that a "still paused" reminder arrived without
+  // the pause it refers to. Both exit 3 there — deliberately — so the exit
+  // code cannot be what tells them apart.
+  const v = digest.switchVerdict({
+    status: 3,
+    stdout: JSON.stringify({ paused: true, certain: false, code: 3, message: 'Could not read the pipeline pause switch.' }),
+  });
+  assert.equal(v.readable, false);
+  assert.match(v.why, /Could not read/);
+});
+
+test('a genuine pause is readable, so it is reported as a pause and not as a fault', () => {
+  const v = digest.switchVerdict({
+    status: 3,
+    stdout: JSON.stringify({ paused: true, certain: true, code: 3, message: 'The pipeline is PAUSED — Dane has the deck.\nWhy: shipping by hand' }),
+  });
+  assert.equal(v.readable, true);
+  assert.equal(v.paused, true);
+  assert.equal(v.why, 'The pipeline is PAUSED — Dane has the deck.', 'the first line, not the whole message');
+});
+
+test('a switch check that printed no verdict at all is unreadable, never an all-clear', () => {
+  // The shape when pipeline.mjs bails before it can answer — no token, a crash.
+  const v = digest.switchVerdict({ status: 2, stdout: '', stderr: 'CLICKUP_API_TOKEN is not set in this environment.' });
+  assert.equal(v.readable, false);
+  assert.equal(v.paused, true, 'and it still fails safe: nothing is published');
+  assert.match(v.why, /CLICKUP_API_TOKEN/, 'the reason has to travel, or the log says only "something went wrong"');
+});
+
+test('a switch check that HUNG is unreadable and names the timeout', () => {
+  // This is what spawnSync reports when its deadline kills the child. Without
+  // a deadline it never reports anything: launchd will not start a second copy
+  // while the first is stuck, so the schedule is simply dead.
+  const v = digest.switchVerdict({
+    error: Object.assign(new Error('spawnSync ETIMEDOUT'), { code: 'ETIMEDOUT' }),
+    signal: 'SIGTERM',
+    timeoutMs: 2 * 60 * 1000,
+  });
+  assert.equal(v.readable, false);
+  assert.match(v.why, /did not answer within 2 minutes/);
+});
+
+test('the verdict is the LAST parseable line, so anything printed before it cannot be mistaken for it', () => {
+  // The decoy is deliberately verdict-SHAPED and says the opposite. An earlier
+  // version of this test used a decoy with no `paused` key, which the shape
+  // guard skipped either way — so scanning forwards passed just as happily and
+  // the assertion could not fail. Break-testing it is what found that.
+  const v = digest.switchVerdict({
+    status: 0,
+    stdout: JSON.stringify({ paused: true, certain: false, code: 3, message: 'a stale line printed first' })
+      + '\nsome prose that does not parse\n'
+      + JSON.stringify({ paused: false, certain: true, code: 0, message: 'The pipeline is RUNNING.' }),
+  });
+  assert.equal(v.readable, true, 'the last word is the answer, not the first');
+  assert.equal(v.paused, false);
+  assert.equal(v.why, 'The pipeline is RUNNING.');
+});
+
+// --- SCOPES actually decides something --------------------------------------
+
+test('every scope announcements() can produce is listed in SCOPES', () => {
+  // SCOPES is documented as the authoritative list of clearable scopes, and it
+  // used to be referenced by nothing at all — so a scope invented by a typo
+  // would have been honoured silently, and a genuinely new section would have
+  // had its stamps quietly never cleared. It bounds staleStampKeys now, which
+  // makes this pairing load-bearing rather than decorative.
+  const result = cleanResult({
+    noOp: { verdict: 'finding', message: 'not claiming', unterminated: [{ start: 's', state: 'hung', message: 'hung' }] },
+    residency: {
+      findings: [{ taskId: '86bb1', status: 'building', severity: 'alarm', message: 'stuck' }],
+      cannotTell: [{ taskId: '86bb2', status: 'queued', reason: 'no date' }],
+      census: {},
+    },
+    drift: {
+      findings: [{ shape: 'shape-4', severity: 'alarm', taskId: '86bb3', pr: 1, message: 'one-way' }],
+      cannotTell: [{ taskId: '86bb4', status: 'building', reason: 'unreadable' }],
+    },
+  });
+  const { items, measured } = digest.announcements(result);
+  for (const scope of [...items.map((i) => i.scope), ...measured]) {
+    assert.ok(digest.SCOPES.includes(scope), `scope "${scope}" is produced but is not in SCOPES`);
+  }
+  const outage = digest.announcements(cleanResult({ residency: null, drift: null, queueError: 'HTTP 500' }));
+  assert.ok(digest.SCOPES.includes(outage.items[0].scope), 'including the queue scope');
+});
+
+test('a scope that is not in SCOPES can never clear a stamp', () => {
+  const existing = ['b2:86bb1:whatever'];
+  assert.deepEqual(digest.staleStampKeys(existing, { items: [], measured: ['b2'] }), [],
+    'a section nothing declares must not be able to authorise a delete');
+  assert.deepEqual(digest.staleStampKeys(['b1:86bb1:x'], { items: [], measured: ['b1'] }), ['b1:86bb1:x'],
+    'while a declared one still can — otherwise this test would pass with the rule removed');
+});
+
+// --- the durable record must not contradict itself --------------------------
+
+test('the headline agrees with the findings under it when the Loop Queue is unreadable', () => {
+  // pulse.tally() does not count queueError (86bbt6hgx), so a headline taken
+  // from it read "0 alarm(s), 0 notice(s), 0 could-not-tell" directly above a
+  // CANNOT TELL line saying the queue could not be read at all — a
+  // contradiction on the one surface a person actually scans.
+  const result = cleanResult({ residency: null, drift: null, queueError: 'HTTP 500' });
+  const { items } = digest.announcements(result);
+  const body = digest.renderDigest({
+    result, report: 'the full report', items, node: 'mac-mini', now: NOW, everyMs: 6 * HOUR,
+  });
+  assert.match(body, /0 alarm\(s\), 0 notice\(s\), 1 could-not-tell/);
+  assert.match(body, /CANNOT TELL/, 'and the finding it is counting is right underneath');
+  assert.equal(pulse.tally(result).cannotTell, 0, 'tally still says 0 — the headline no longer asks it');
 });
 
 // --- the registry entries this job depends on -------------------------------

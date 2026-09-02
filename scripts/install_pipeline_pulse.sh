@@ -70,8 +70,13 @@ status() {
     # "Installed and loaded" and "actually completing" are different questions,
     # and this job exists because the second one went unasked for weeks. The
     # publisher prints one line per pass; the last one is the honest answer.
-    last_run="$(grep -c '^=== pipeline-pulse ' "$LOG" 2>/dev/null || echo 0)"
-    echo "runs:     $last_run pass(es) recorded in that log"
+    # `grep -c` on a log with no matches prints 0 AND exits 1, so `|| echo 0`
+    # fired as well and printed "0\n0" — on the very first --status anyone runs
+    # after installing, when the log is empty by definition. `|| true` keeps
+    # grep's own 0; the fallback below covers grep failing for a real reason
+    # (an unreadable file), where it prints nothing at all.
+    last_run="$(grep -c '^=== pipeline-pulse ' "$LOG" 2>/dev/null || true)"
+    echo "runs:     ${last_run:-0} pass(es) recorded in that log"
     echo "last:     $(grep '^=== pipeline-pulse ' "$LOG" 2>/dev/null | tail -1 || echo '(none yet)')"
     echo "          $(grep '^=== exit ' "$LOG" 2>/dev/null | tail -1 || echo 'no pass has finished yet')"
   else

@@ -73,8 +73,8 @@ if [ "$owns" -ne 0 ]; then
   exit 1
 fi
 
-# --job is the loop whose log A1 reads. loop-build is the default and the one
-# whose claims the check is actually about.
+# No --job: the publisher defaults to loop-build, which is the loop whose log
+# A1 reads and the one whose claims the check is actually about.
 npm run --silent pulse:publish
 status=$?
 echo "=== exit $status"

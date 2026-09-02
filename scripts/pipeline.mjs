@@ -81,7 +81,9 @@ function usage(code = 2) {
   console.error('Usage: npm run pipeline -- <status|check|pause|resume> [options]');
   console.error('  (the `--` is required — without it npm eats every flag before this script sees it)');
   console.error('  status                          plain English: running or paused, since when, by whom, what is in flight');
-  console.error('  check                           for a machine: exit 0 = running, 3 = paused (or unreadable, which counts as paused)');
+  console.error('  check [--json]                  for a machine: exit 0 = running, 3 = paused (or unreadable, which counts as paused)');
+  console.error('                                  --json adds the same verdict as one parseable line, with `certain: false`');
+  console.error('                                  marking the unreadable case — same exit code, different report');
   console.error('  pause [--now] [--why "..."] [--by NAME] [--wait-minutes N]');
   console.error('                                  stop new claims immediately, then wait for work in flight to finish.');
   console.error('                                  --now skips the wait and names exactly what it left running.');
@@ -274,6 +276,26 @@ if (cmd === 'check') {
   // being described in the same words.
   const sw = await readSwitch();
   const v = verdictFrom(sw);
+
+  // `--json` emits THAT SAME verdict as one line a caller can branch on
+  // without reading prose. The exit code is untouched, and deliberately so:
+  // both outcomes still exit 3, because both must still lead to claiming
+  // nothing. What `certain` adds is which of the two it was, for a caller
+  // that must ACT the same and REPORT differently.
+  //
+  // The scheduled pulse is that caller. A paused pass took a full reading and
+  // correctly stayed quiet, so it is a healthy pass and must record its
+  // heartbeat; a pass that could not READ the switch is a muzzled watchdog and
+  // has to be loud, or it publishes nothing every hour forever while the roll
+  // call reports it as "stopped firing" and sends the next reader to launchd
+  // instead of to the switch.
+  if (flag('json')) {
+    console.log(JSON.stringify({
+      paused: Boolean(v.paused), certain: v.certain !== false, code: v.code, message: v.message,
+    }));
+    process.exit(v.code);
+  }
+
   (v.code === 0 ? console.log : console.error)(v.message);
   process.exit(v.code);
 
