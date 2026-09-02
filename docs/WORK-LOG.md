@@ -35,6 +35,22 @@ July. This session could not read the production settings to check whether it is
 there. If it is not, the Connect button will fail — for the earlier slices as
 much as this one.
 
+Review sent this back once, over the Disconnect button, and it was the right
+catch. A client with three Facebook Pages under one sign-in was asked
+"Disconnect Delray Tennis Center?" — one Page, by name — and pressing yes
+removed all three. Both halves were reasonable on their own: the message
+described the Page currently in use, and the delete cleared the platform. Put
+together they promised one thing and did another, on the one kind of action you
+cannot undo. The dialog now says what it means — "This removes all 3 connected
+accounts", and names them — because that sentence IS the client's consent, and
+consent to something that does not happen is not consent at all. Removing only
+the one named Page was the other option and was rejected for a concrete reason:
+a Page connected the old way is not stored the same way, so a narrower delete
+would have quietly removed nothing and left the card connected. Both old tests
+had seeded a single account, where the two behaviours look identical — the case
+that could tell them apart now has a test in each suite, and both were watched
+failing before the fix went back in.
+
 ## 2026-09-02 — The pipeline's own health check finally runs on a timer (#524)
 
 We have a command, `npm run pulse`, that looks the whole build pipeline over and
