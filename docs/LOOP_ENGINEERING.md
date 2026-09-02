@@ -1221,9 +1221,30 @@ mode from "is the token present?" would have exactly that hole.
 to be *correct* and still stop every merge in the pipeline. Two are done; one is
 open.
 
-1. **The CI ClickUp token must exist.** ☑ DONE — `CLICKUP_API_TOKEN` was set as
-   a repository Actions secret on 2026-08-31 at 00:57Z, and the gate now returns
-   real verdicts instead of CANNOT TELL. Confirmed on PR #437: the run named the
+1. **The CI ClickUp token must exist — and still work.** ☑ DONE, but this is a
+   **reading with a date, not a fact**: it has gone stale twice since, and a tick
+   cannot notice that. `CLICKUP_API_TOKEN` was first set as a repository Actions
+   secret on 2026-08-31 at 00:57Z, went two rotations stale, and was refreshed on
+   2026-09-02 at 05:13Z.
+
+   **A stale token is silent.** The gate answers `CANNOT TELL — could not read
+   ticket <id> from ClickUp: ClickUp answered HTTP 401`, and then **exits 0 and
+   passes**, because advisory mode exits 0 for every verdict. So the gate ran
+   completely blind from roughly 2026-08-30 until 2026-09-02 with every check
+   green, and nothing in the repository said so. The day the box below is ticked,
+   that same silence becomes a hard block on every merge at once, with the cause
+   two rotations in the past.
+
+   **Proving a refresh worked — the timestamp is not proof.** A GitHub secret
+   cannot be read back, so a fresh `gh secret list` date shows only that
+   *something* was written. The proof is that the gate's **verdict changes**:
+   re-run a recent review-gate run (`gh run rerun <id> --repo ...`) and read its
+   log. `CANNOT TELL — HTTP 401` becoming a real verdict — a PASS, or a FAIL that
+   names the ticket and its newest verdict — is the gate authenticating. It stayed
+   green either way, which is exactly why the verdict, not the colour, is the
+   thing to read. Check the identity before copying, too: the token must be
+   **Dane's** (`pk_48012725_`), never Pulse's (`pk_54254347_`) —
+   `docs/runbook-credential-rotation.md`. Confirmed on PR #437: the run named the
    ticket and read its newest verdict correctly ("a send-back, not a PASS"), and
    the ticket was checked independently to be sure the gate was right and not
    merely plausible. The workflow reads `secrets.CLICKUP_API_TOKEN` — the same
@@ -2758,9 +2779,12 @@ day one.
    nowhere else, so a skill parked in another folder cannot be invoked by name.
 5. Confirm Doppler holds the ClickUp token in the config this machine uses:
    `npm run clickup -- whoami` must print "Token valid. Acting as: ...". If it
-   does not, the OPERATOR (never an agent) adds it once:
-   `pbpaste | tr -d '[:space:]' | doppler secrets set CLICKUP_API_TOKEN --project starcaster --config dev`
-   with the token on the clipboard.
+   does not, the OPERATOR (never an agent) adds it once **through the Doppler
+   dashboard**. Not `doppler secrets set`: that command **prints the value it just
+   wrote**, and `--silent` does not suppress it — so entering a secret that way
+   renders it into a terminal and a transcript. Doppler belongs on the `get` side
+   of a pipe, never the `set` side; a value that has to be *entered* goes in
+   through the dashboard. `docs/DOCTRINE.md` §4.1 carries the incident.
 6. Do a **dry run:** spec 1–2 tiny test-coverage tasks, run one `loop-build`
    pass, watch it produce a clean PR, then run one `loop-review` pass. Only
    after that cycle works should you trust it with real feature work.
