@@ -16,7 +16,8 @@ The more useful half of this is that nothing had been *looking* at that row.
 The browser check that enforces the alignment rules examines three kinds of
 block, and this was none of them, so it was skipped in silence — the gap had
 been passing as a clean green run for as long as the row has existed. It now
-announces itself to the check, which went from measuring 558 panels to 570.
+announces itself to the check, which picks up twelve more blocks than it
+could see before.
 
 Two of the mistakes on the way there are worth writing down, because every
 automated check passed while the panel was visibly wrong both times. Pulling
@@ -29,6 +30,7 @@ Two panels named in the ticket, Image and Floating Image, turned out to need
 nothing — measuring them showed they already obeyed the rules — so they are
 unchanged to the pixel. The shared row also appears on the two Proximity
 Effect panels, which get the same improvement for free.
+
 ## 2026-09-02 — The two stuck pull requests were never actually stuck (#513, #494)
 
 You asked to clear the conflicts on two pull requests. GitHub was flagging both
