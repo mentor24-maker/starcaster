@@ -26,6 +26,7 @@ across six panels with the same shape of defect; four were this panel and the
 rest belong to later tickets in the same sweep. Teaching the checker to look
 inside the slot would fail those panels today, so it is written down here and on
 the ticket rather than done in this change.
+
 ## 2026-09-01 — Handing you a command to paste is now something the machine refuses to do (#499)
 
 There is a rule here that CC runs the operational commands itself and tells you
