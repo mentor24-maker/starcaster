@@ -202,6 +202,9 @@ const closed = throughput.closedPerDay({ tasks, now: NOW, days: DAYS });
 const closedLast24h = throughput.closedSince({ tasks, now: NOW });
 const curve = throughput.depthPerDay({ tasks, now: NOW, days: DAYS });
 const plateau = throughput.depthPlateau(curve);
+// A FACT for the reader, not an input to any rule — `sinceLastClose` says why.
+const lastClose = throughput.sinceLastClose({ tasks, now: NOW });
+const trend = throughput.depthTrend(curve);
 
 // The rework bucket, from classifyPrs. An unreadable `gh` is NOT fatal: the
 // stall verdict does not depend on it, and refusing to report a stall because
@@ -235,11 +238,11 @@ const touchedRecently = tasks.some((t) => {
 });
 const loopsFiring = touchedRecently ? true : null;
 
-const v = throughput.verdict({ closedLast24h, queue, loopsFiring });
+const v = throughput.verdict({ closedLast24h, queue, loopsFiring, trend, lastClose });
 
 const colour = v.state === 'STALLED' ? red : v.state === 'UNKNOWN' ? yellow : green;
 console.log(throughput.renderReport({
-  verdict: { ...v, state: colour(v.state) }, closed, curve, plateau, rework, queue, now: NOW,
+  verdict: { ...v, state: colour(v.state) }, closed, curve, plateau, rework, queue, now: NOW, lastClose, trend,
   undated: throughput.undatedClosures(tasks),
 }));
 
@@ -259,7 +262,7 @@ if (!v.stalled) {
 }
 
 const text = throughput.renderStallPost({
-  verdict: v, closed, plateau, rework, queue, now: NOW, node: NODE.name || 'an unnamed machine',
+  verdict: v, closed, plateau, rework, queue, now: NOW, lastClose, node: NODE.name || 'an unnamed machine',
 });
 
 if (DRY) {
