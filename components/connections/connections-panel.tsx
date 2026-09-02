@@ -120,6 +120,55 @@ function platformIconUrl(iconKey: string): string {
   return safe ? `/images/logos/${safe}.svg` : '';
 }
 
+/**
+ * The sentence a client agrees to before a connection is deleted.
+ *
+ * This dialog IS the consent for a destructive action, so it has to describe
+ * what the code actually does. It did not: DELETE /api/connections/<provider>
+ * removes EVERY account stored for that platform, while this message named
+ * only `card.account` — the single active one. Three Facebook Pages under one
+ * grant meant a client agreed to lose one Page by name and lost three, with no
+ * mention that the other two were involved (send-back round 1, 86bbpz1gd).
+ *
+ * The fix is to tell the truth rather than to narrow the delete. Disconnect
+ * sits on a PLATFORM card, so removing the platform is the least surprising
+ * reading of it — and the alternative (send `?accountId=` and remove only the
+ * named one) would silently break the legacy Facebook bridge: a bridged Page
+ * is not a row in project_connections, so an accountId-scoped delete would
+ * match nothing AND skip the bridge, and the card would come straight back
+ * connected. See the bridge note in routes/connections.js.
+ *
+ * The count is exact and comes first, because that is the fact consent turns
+ * on. The names are the same list the route deletes from — `accounts` is built
+ * from the very rows the DELETE filters — so the two cannot drift apart. Long
+ * lists are trimmed rather than dumped into a confirm() box; the count stays
+ * exact, so nothing is hidden by the trim.
+ */
+const CONFIRM_NAME_LIMIT = 6;
+
+export function disconnectConfirmMessage(card: {
+  displayName: string;
+  account: ConnectionAccount | null;
+  accounts: ConnectionAccount[];
+}): string {
+  const accounts = Array.isArray(card.accounts) ? card.accounts : [];
+  const labelOf = (a: ConnectionAccount) => a?.accountLabel || a?.accountId || '';
+  const names = accounts.map(labelOf).filter(Boolean);
+
+  if (accounts.length > 1) {
+    const shown = names.slice(0, CONFIRM_NAME_LIMIT).join(', ');
+    const extra = names.length - CONFIRM_NAME_LIMIT;
+    const listed = extra > 0 ? `${shown} and ${extra} more` : shown;
+    return `Disconnect ${card.displayName}? This removes all ${accounts.length} connected `
+      + `accounts: ${listed}. Starcaster stops posting to them straight away. `
+      + `You can connect them again at any time.`;
+  }
+
+  const who = labelOf(card.account as ConnectionAccount) || card.displayName;
+  return `Disconnect ${who}? Starcaster stops posting to it straight away. `
+    + `You can connect it again at any time.`;
+}
+
 const STATE_LABEL: Record<CardState, string> = {
   connected: 'Connected',
   not_connected: 'Not connected',
@@ -458,11 +507,7 @@ export default function ConnectionsPanel(): JSX.Element {
   const onDisconnect = async (card: ConnectionCard) => {
     const api = getAppApi();
     if (!api) return;
-    const who = card.account?.accountLabel || card.displayName;
-    if (!window.confirm(
-      `Disconnect ${who}? Starcaster stops posting to it straight away. `
-      + `You can connect it again at any time.`
-    )) return;
+    if (!window.confirm(disconnectConfirmMessage(card))) return;
 
     setBusyProvider(card.provider);
     try {

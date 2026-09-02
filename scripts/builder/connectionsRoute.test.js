@@ -421,6 +421,63 @@ test('a Facebook Page connected the old way still reads as connected, and discon
     'or Disconnect would appear to do nothing — the card would come straight back');
 });
 
+/**
+ * The case round 1 of 86bbpz1gd got wrong, and the one the suite could not see.
+ *
+ * "disconnecting removes the grant" seeded ONE account, so a DELETE that
+ * removes everything for a provider and a DELETE that removes the named
+ * account are indistinguishable in it. The wording and the effect only come
+ * apart when a grant covers SEVERAL accounts — three Facebook Pages behind one
+ * consent — which is exactly the case the account picker in this same slice
+ * exists for.
+ *
+ * The panel's confirmation is built from `accounts`, so this pins the fact
+ * that sentence depends on: `accounts` lists every row the DELETE will remove,
+ * and the DELETE removes every one of them. If either half changes alone, the
+ * dialog starts lying again.
+ */
+test('a grant covering several accounts: the card lists all of them, and disconnect removes all of them', async (t) => {
+  const h = withRoute();
+  t.after(h.restore);
+
+  const pages = [
+    { accountId: 'page-a', accountLabel: 'Delray Tennis Center' },
+    { accountId: 'page-b', accountLabel: 'Delray Swim Club' },
+    { accountId: 'page-c', accountLabel: 'Delray Junior Program' },
+  ];
+  for (const page of pages) {
+    await grant(h.store, SCOPE, {
+      provider: 'facebook_page',
+      accountId: page.accountId,
+      accountLabel: page.accountLabel,
+      accessToken: `token-${page.accountId}`,
+      status: 'connected',
+    });
+  }
+
+  // The list the confirmation counts and names. One card, three accounts on it.
+  let cards = await call(h.route);
+  let facebook = cards.payload.connections.find((card) => card.provider === 'facebook_page');
+  assert.equal(facebook.cardState, 'connected');
+  assert.equal(facebook.accounts.length, 3,
+    'the card carries every account the DELETE will remove — this is what the dialog counts');
+  assert.deepEqual(
+    facebook.accounts.map((a) => a.accountLabel).sort(),
+    pages.map((p) => p.accountLabel).sort()
+  );
+
+  // And the DELETE the panel sends — no accountId — takes all three.
+  const gone = await call(h.route, { method: 'DELETE', path: '/api/connections/facebook_page' });
+  assert.equal(gone.status, 200);
+  assert.equal(gone.payload.removed, 3,
+    'all three, not just the active one — so a dialog naming only the active one is untrue');
+
+  cards = await call(h.route);
+  facebook = cards.payload.connections.find((card) => card.provider === 'facebook_page');
+  assert.equal(facebook.cardState, 'not_connected');
+  assert.equal(facebook.accounts.length, 0, 'nothing was left behind');
+});
+
 test('disconnecting a provider that was never connected reports removing nothing', async (t) => {
   const h = withRoute();
   t.after(h.restore);

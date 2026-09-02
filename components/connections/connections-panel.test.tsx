@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { AppPasswordForm, ConnectionCardRow } from './connections-panel';
+import { AppPasswordForm, ConnectionCardRow, disconnectConfirmMessage } from './connections-panel';
 
 /**
  * The Connections screen's four card states. Connections 4 of 7 (86bbpz1gd).
@@ -214,5 +214,100 @@ describe('The app-password form', () => {
   it('shows an error above the buttons when there is one', () => {
     expect(formHtml({ error: 'App password is required' })).toContain('App password is required');
     expect(formHtml()).not.toContain('connections-card-form-error');
+  });
+});
+
+/**
+ * The confirmation is the consent for a delete, so what it PROMISES and what
+ * the route DOES have to be the same thing.
+ *
+ * Round 1 of this ticket was sent back because they were not: the message named
+ * `card.account` — one Page — while DELETE /api/connections/<provider> removes
+ * every account stored for that platform. Three Facebook Pages under one grant
+ * meant a client agreed to lose one by name and lost three.
+ *
+ * These assert the wording against `accounts.length`, which is the SAME list
+ * the route deletes from (routes/connections.js builds both from the identical
+ * provider rows), so a future change that narrows the delete without changing
+ * the sentence — or the reverse — fails here.
+ */
+describe('Disconnect confirmation — it names everything it removes', () => {
+  const page = (n: number) => ({
+    accountId: `page-${n}`,
+    accountLabel: `Delray Page ${n}`,
+    accountAvatarUrl: '',
+  });
+
+  it('one account: names that account', () => {
+    const message = disconnectConfirmMessage(card({
+      cardState: 'connected',
+      displayName: 'Bluesky',
+      account: ACCOUNT,
+      accounts: [ACCOUNT],
+    }));
+    expect(message).toContain('Disconnect Delray Beach Tennis?');
+    expect(message).not.toContain('removes all');
+  });
+
+  /**
+   * The exact case from the send-back: three Pages behind one grant. The count
+   * has to be in the sentence, and every name with it — a client cannot consent
+   * to losing an account the dialog never mentioned.
+   */
+  it('several accounts: gives the count AND every name, not just the active one', () => {
+    const accounts = [page(1), page(2), page(3)];
+    const message = disconnectConfirmMessage(card({
+      cardState: 'connected',
+      displayName: 'Facebook Page',
+      account: accounts[0],
+      accounts,
+    }));
+    expect(message).toContain('Disconnect Facebook Page?');
+    expect(message).toContain('removes all 3 connected accounts');
+    expect(message).toContain('Delray Page 1');
+    expect(message).toContain('Delray Page 2');
+    expect(message).toContain('Delray Page 3');
+  });
+
+  /**
+   * The bug was a message that was true about one account and silent about the
+   * rest, so "does it mention the others" is the assertion that would have
+   * caught it — not merely "does it mention the active one".
+   */
+  it('several accounts: does not describe the delete as touching only one', () => {
+    const accounts = [page(1), page(2)];
+    const message = disconnectConfirmMessage(card({
+      cardState: 'connected',
+      displayName: 'Facebook Page',
+      account: accounts[0],
+      accounts,
+    }));
+    expect(message).toContain('them straight away');
+    expect(message).not.toContain('Disconnect Delray Page 1?');
+    expect(message).not.toContain('to it straight away');
+  });
+
+  /** A long list is trimmed for readability, but the COUNT stays exact. */
+  it('many accounts: keeps the count honest even when the names are trimmed', () => {
+    const accounts = Array.from({ length: 9 }, (_, i) => page(i + 1));
+    const message = disconnectConfirmMessage(card({
+      cardState: 'connected',
+      displayName: 'Facebook Page',
+      account: accounts[0],
+      accounts,
+    }));
+    expect(message).toContain('removes all 9 connected accounts');
+    expect(message).toContain('and 3 more');
+  });
+
+  /** An account with no label still has to be countable rather than blank. */
+  it('falls back to the platform name when there is nothing to name', () => {
+    const message = disconnectConfirmMessage(card({
+      cardState: 'connected',
+      displayName: 'Bluesky',
+      account: null,
+      accounts: [],
+    }));
+    expect(message).toContain('Disconnect Bluesky?');
   });
 });
