@@ -1,3 +1,38 @@
+## 2026-09-02 — The alarm that watches the queue could go blind and say nothing (#535)
+
+Two days ago we added a check that asks the one question nothing else asked:
+*is the queue actually getting shorter?* It exists because on 31 August the
+build loop ran every hour, finished cleanly every time, and shipped nothing —
+a cheerful log that read as health. A review of that new check found six ways
+the check itself could go quiet. Four are fixed here.
+
+The worst of them: the check has four possible answers, and one of them is "I
+could not take a reading." That answer went to a log file nobody opens. So if
+the ClickUp password were ever rotated, the alarm would simply be dead —
+forever, silently, while every other job on the board still looked fine. It
+now says so on the party line, with the reason, at most once every six hours,
+and shuts up as soon as it can see again.
+
+It was also making its own trouble worse. It is meant to check once an hour,
+but it only wrote down "I checked" when the check *succeeded*. So the one time
+it most needed to back off — ClickUp saying "too many requests" — it went
+straight back six times an hour instead, keeping itself broken. It now starts
+the clock when it tries.
+
+The other two were wrong sentences rather than silence. It could announce
+"the loops ARE firing, so the problem is elsewhere" on evidence that only
+showed *somebody edited a ticket* — which could be Dane leaving a comment.
+That is exactly the sentence that sends you hunting in the wrong place. And a
+day where everything shipped could be reported as a stall, because a handful
+of tickets finish without a closure date on them and the count could not see
+those. It now says "I am not sure" instead of accusing the pipeline, and only
+when such a ticket was touched in the last day, so the alarm still fires for
+real stalls. Measured against the live queue: the one ticket in that state was
+last touched 36 days ago, so nothing is switched off by this.
+
+Every fix was broken on purpose afterwards and watched to fail, which is the
+only way to know a test for a monitor is a real test.
+
 ## 2026-09-02 — The pipeline's own health check finally runs on a timer (#524)
 
 We have a command, `npm run pulse`, that looks the whole build pipeline over and
