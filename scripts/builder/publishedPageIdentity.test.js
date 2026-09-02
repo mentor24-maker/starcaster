@@ -33,6 +33,14 @@ const {
  * tests are about ORDER and IDENTITY, not about lower-casing.
  */
 
+/**
+ * Comments out, so an assertion cannot pass against code that has been
+ * commented out. Break-testing this file caught exactly that: commenting out
+ * the `removeBuildForPage` call left the words on the line and the test went
+ * on passing. Anchor on what runs, not on what is written.
+ */
+const codeOnly = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
 const page = (slug, id, updatedAt) => ({ slug, id, updatedAt });
 
 test('two pages at one address: the most recently edited draft wins, in either input order', () => {
@@ -86,7 +94,7 @@ test('the snapshot is fetched by page id, never by address', () => {
   // what happened. Same key both directions, or it happens again.
   const reader = read('lib/publishedPageRead.js');
   const fn = reader.slice(reader.indexOf('async function getPublishedPageById'));
-  const body = fn.slice(0, fn.indexOf('\n}\n'));
+  const body = codeOnly(fn.slice(0, fn.indexOf('\n}\n')));
   assert.match(body, /page_id=eq\./, 'selects on page_id');
   assert.doesNotMatch(body, /slug=in\.|slug=eq\./, 'must not select on slug');
   assert.match(body, /limit=1/, 'one page id is one row');
@@ -99,7 +107,7 @@ test('the address is resolved against the DRAFTS, which own it — not the snaps
   // the sole matching row belonged to the abandoned one.
   const reader = read('lib/publishedPageRead.js');
   const fn = reader.slice(reader.indexOf('async function getPublishedPage('));
-  const body = fn.slice(0, fn.indexOf('\n}\n'));
+  const body = codeOnly(fn.slice(0, fn.indexOf('\n}\n')));
   const resolve = body.indexOf('resolvePublicPageIdForSlug');
   const fetch = body.indexOf('getPublishedPageById');
   assert.ok(resolve > -1 && fetch > -1, 'both steps present');
@@ -111,7 +119,7 @@ test('an unpublished or private page cannot resolve an address', () => {
   // Otherwise taking a page private would still serve its snapshot.
   const store = read('lib/builderPagesStore.js');
   const fn = store.slice(store.indexOf('async function resolvePublicPageIdForSlug'));
-  const body = fn.slice(0, fn.indexOf('\n}\n'));
+  const body = codeOnly(fn.slice(0, fn.indexOf('\n}\n')));
   assert.match(body, /is_published\.eq\.true,is_published\.is\.null/, 'published only');
   assert.match(body, /is_private=eq\.false/, 'not private');
   assert.match(body, /filterPublicSitePages/, 'and not a private slug');
@@ -122,7 +130,7 @@ test('the resolver tells "no such page" apart from "the lookup failed"', () => {
   // Collapsing the two would turn a database blip into a 404 on a live site.
   const store = read('lib/builderPagesStore.js');
   const fn = store.slice(store.indexOf('async function resolvePublicPageIdForSlug'));
-  const body = fn.slice(0, fn.indexOf('\n}\n'));
+  const body = codeOnly(fn.slice(0, fn.indexOf('\n}\n')));
   assert.match(body, /if \(!res\.ok \|\| !Array\.isArray\(res\.data\)\) return null;/, 'a failed read is null');
   assert.match(body, /return page \? String\(page\.id\) : '';/, 'a clean miss is empty string');
 });
@@ -133,12 +141,12 @@ test('deleting a page deletes its published snapshot', () => {
   // any surface the operator has.
   const store = read('lib/builderPagesStore.js');
   const fn = store.slice(store.indexOf('async function deletePage'));
-  const body = fn.slice(0, fn.indexOf('\n}\n'));
-  assert.match(body, /removeBuildForPage/, 'the snapshot is removed');
+  const body = codeOnly(fn.slice(0, fn.indexOf('\n}\n')));
+  assert.match(body, /await removeBuildForPage\(/, 'the snapshot removal actually runs');
 
-  const del = body.indexOf('removeBuildForPage');
+  const del = body.indexOf('await removeBuildForPage(');
   const ret = body.indexOf('ok: true');
-  assert.ok(del < ret, 'before the success is reported');
+  assert.ok(del > -1 && ret > -1 && del < ret, 'before the success is reported');
   assert.match(body, /catch \(_\)/, 'best-effort: the page is already gone');
 });
 
@@ -146,7 +154,7 @@ test('the snapshot delete is project-scoped', () => {
   // A DELETE on page_id alone would reach across tenants.
   const publish = read('lib/builderPublishStore.js');
   const fn = publish.slice(publish.indexOf('async function removeBuildForPage'));
-  const body = fn.slice(0, fn.indexOf('\n}\n'));
+  const body = codeOnly(fn.slice(0, fn.indexOf('\n}\n')));
   assert.match(body, /method: 'DELETE'/);
   assert.match(body, /project_id=eq\./, 'scoped to the project');
   assert.match(body, /page_id=eq\./, 'and to the one page');
