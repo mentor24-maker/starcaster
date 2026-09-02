@@ -252,13 +252,34 @@ enabling Funnel for the tailnet the first time (the CLI prints that second
 URL itself and refuses until it is done).
 
 **Give DNS a few minutes and check from off the tailnet before believing it.**
-The AAAA record appears before the A record, so for a window the hostname
-resolves on IPv6 only — a machine without IPv6 egress gets "could not resolve
-host" and it looks like Funnel is broken when it is simply not finished:
+"Could not resolve host" here has *two* causes and they need opposite
+responses, so find out which one you have before changing anything. Both were
+hit on 2026-09-01, by two sessions, within an hour.
+
+*The record is not published yet.* The **AAAA appears before the A**, so for a
+window the hostname resolves on IPv6 only, and a machine without IPv6 egress
+cannot reach it. Waiting fixes this.
+
+*Your resolver cached the failure.* A lookup made **before** Funnel was
+switched on leaves a negative answer cached, and waiting does **not** fix it —
+the resolver keeps answering from that cache until its negative TTL expires,
+long after the record exists. On 2026-09-01 Google (`8.8.8.8`) and Cloudflare
+(`1.1.1.1`) both did this while Quad9 (`9.9.9.9`) and the authoritative
+nameservers answered correctly the whole time.
+
+Ask an authoritative nameserver, which cannot be stale, and compare:
 
 ```bash
-dig +short @8.8.8.8 <host>.ts.net A       # wait for this to answer
-curl -s https://<host>.ts.net/health      # then this
+dig +short @ns1.dnsimple.com <host>.ts.net A   # the truth
+dig +short @8.8.8.8          <host>.ts.net A   # what your resolver believes
+```
+
+If those disagree, it is a stale cache, not a broken Funnel — prove the
+endpoint works by going around the resolver, and let the cache expire on its
+own:
+
+```bash
+curl -s --resolve <host>.ts.net:443:<the A record> https://<host>.ts.net/health
 ```
 
 ### 9. Point production at it — environment variables, NOT Settings > APIs
