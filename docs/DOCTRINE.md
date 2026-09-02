@@ -1700,6 +1700,80 @@ where the result parses fine and two files now assert opposite rules.
   the gate lets through, never less) plus three pinned assertions naming the
   ticket that set the rule.
 
+### 6.12 Match what he typed, not what the tool stored — and prove a filter against real input
+
+**The incident (2026-09-01, ticket 86bbt038u, PR #515, merged as `3d821bd7`).**
+Dane came back from a break and asked whether the loops were stuck. They were
+not: both lanes were building and reviewing normally. What was stuck was the
+auto-merge lane, which had latched itself off on 08-30 at 8:31pm and stayed off
+for two days without telling anybody.
+
+He tried to release it the sanctioned way — posting `resume auto-merging` on
+the party line — three times. All three were ignored. `switchCommand` matches
+`resume` as the WHOLE message, deliberately, because a resume that fires when
+he was only *talking* about resuming costs an unwanted merge. But ClickUp's
+message box turns a **pasted** phrase into a fenced code block and guesses a
+language, so what the switch actually received was:
+
+````
+```cpp
+resume auto-merging
+```
+````
+
+Three defects, and only the first was visible from the code:
+
+1. `normalizeCommand` never stripped the editor's formatting, so the backticks
+   were being read as part of what he said. The same hole sat on the merge
+   path — his `merge` worked only because he happened to type it by hand.
+2. `readBusSwitchSignals` carried the comment *"Only HIS words. An agent post
+   quoting the phrase is a machine talking to itself"* and did not enforce it:
+   it accepted any message whose `user_id` was Dane's, which every agent's
+   posts are, because they all post under his token. The ticket path next door
+   had been enforcing exactly that rule with the machine marker all along.
+3. **The filter added for (2) matched nothing at all.** ClickUp's chat api
+   escapes the brackets — `\[CC-starcaster bus-relay\] ...` — and every entry
+   in `LEGACY_MACHINE_PREFIXES` begins with `[`. Run over the live channel
+   before the fix, six of six recent messages classified as Dane's own words,
+   three of them posted by the relay itself.
+
+The third is the one that nearly shipped. Every unit test passed, because every
+fixture had been hand-written in the shape its author expected rather than
+captured from the surface the code actually reads.
+
+**Do this:**
+
+- **An input box you do not control is part of the wire format.** When a
+  command must match exactly, normalise away what the *editor* added before
+  comparing — fences, language tags, smart quotes, escaping. Strictness is
+  only honest when it is strict about things the operator can control;
+  otherwise "whole message" quietly means "whole message plus whatever the
+  client decided to wrap it in". Note the fix here did **not** loosen the
+  matcher: the deliberate `stop`/`resume` asymmetry survived untouched, because
+  the bug was never the strictness.
+- **Prove a filter against real captured input before believing it.** A filter
+  that matches nothing is silent in precisely the same way as a filter with
+  nothing to catch — this is §3.11's failure wearing a different hat. Fixtures
+  written by the same author as the filter share its blind spot by
+  construction. Fetch a page of the real messages, run the predicate over them,
+  and look at the classifications one by one.
+- **A stated intent is not a guard.** If a comment says what must not happen,
+  either the code enforces it or the comment is a false statement with a shelf
+  life — and the next reader will trust it, because it is written in the
+  imperative and sits directly above the code. When you find one, the fix is
+  the enforcement, not a better comment.
+- **Two doors into the same decision must be guarded the same way.** The ticket
+  path and the bus path both answered "is this Dane's word?", and only one of
+  them checked. The weaker door was the one nobody watched. Where a rule has
+  more than one entrance, read them together, or derive them from one shared
+  predicate so they cannot drift apart (§6.2's ancestor, and the same argument
+  as the single-reading rule for shared questions).
+- **A latch must keep saying it is latched.** The self-disable recorded
+  `"1 thing(s)"` — the count, not the sentences it was holding — and announced
+  nothing on the passes that followed. That is why two days passed. A brake
+  that cannot say why it engaged is one nobody can safely release; a brake that
+  says so once and then goes quiet is indistinguishable from a quiet week.
+
 ---
 
 ## 7. Operator-facing gotchas
