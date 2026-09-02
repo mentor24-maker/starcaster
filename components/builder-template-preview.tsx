@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createElement, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   EMPTY_MEDIA_FILTERS,
   MEDIA_ASPECTS,
@@ -2614,10 +2614,12 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                     cardPaddingTop: "1.125rem",
                     topOfCard: firstFilledSlot === "featured_image",
                   });
-                  return (
+                  return withPostLink(
                     <div style={frame}>
                       <img alt={post.title} src={imageUrl} style={img} />
-                    </div>
+                    </div>,
+                    tpl,
+                    href
                   );
                 }
                 case "excerpt":
@@ -2646,9 +2648,17 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
             return (
               <article key={post.id} style={{ ...cardBorder, borderRadius: cardRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? sideBySideDirection(tpl) : "column" }}>
                 {isSideBySide && imageUrl && hasFeaturedImageInRows ? (
-                  <div style={sideStripStyle(tpl)}>
+                  // The strip IS the flex item — it carries flexShrink, width,
+                  // border and shadow. So when the image links, the anchor has to
+                  // BE the strip; an anchor wrapped around it would become the
+                  // flex item instead and none of that styling would apply.
+                  createElement(
+                    tpl.imageLinkToPost && href && href !== "#" ? "a" : "div",
+                    tpl.imageLinkToPost && href && href !== "#"
+                      ? { href, style: sideStripStyle(tpl) }
+                      : { style: sideStripStyle(tpl) },
                     <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
-                  </div>
+                  )
                 ) : null}
                 {/* minWidth 0 is load-bearing: a flex item defaults to
                     min-width:auto, so the text column refuses to shrink below its
@@ -3513,6 +3523,7 @@ type CardTemplate = {
   imageSideWidth: number;
   imageHeight: number;
   imageCrop: string;
+  imageLinkToPost: boolean;
   rows: CardRow[];
 };
 
@@ -3548,6 +3559,9 @@ const DEFAULT_CARD_TEMPLATE: CardTemplate = {
   imageSideWidth: 220,
   imageHeight: 0,
   imageCrop: "cover",
+  // Off by default: an existing template is a row without this key, and making
+  // a tenant's card photos clickable unasked is a behaviour change.
+  imageLinkToPost: false,
   rows: [
     { id: "r1", cols: 1, slots: ["categories"] },
     { id: "r2", cols: 1, slots: ["headline"] },
@@ -3575,6 +3589,39 @@ function cardNum(value: unknown, min: number, max: number, fallback: number): nu
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+// `Boolean("false")` is true, so a template carrying the STRING "false" would
+// link every image on a card that says not to. Parse it, never coerce it.
+function cardBool(value: unknown, fallback: boolean): boolean {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "boolean") return value;
+  const v = String(value).trim().toLowerCase();
+  if (v === "true" || v === "1") return true;
+  if (v === "false" || v === "0" || v === "") return false;
+  return fallback;
+}
+
+/**
+ * Wrap the featured image in a link to its post, when the template asks for it.
+ *
+ * One function for both renderers for the same reason `featuredImageStyles` is
+ * one: the Card Manager's Live Preview and the published card have to agree.
+ * The image already carries the post title as its alt text, so the anchor has an
+ * accessible name without a second label — an anchor whose only content is an
+ * image with an empty alt is a link a screen reader cannot announce.
+ */
+function withPostLink(
+  content: React.ReactNode,
+  tpl: CardTemplate,
+  href: string
+): React.ReactNode {
+  if (!tpl.imageLinkToPost || !href || href === "#") return content;
+  return (
+    <a href={href} style={{ display: "block", textDecoration: "none", color: "inherit" }}>
+      {content}
+    </a>
+  );
 }
 
 function cardOneOf(value: unknown, allowed: string[], fallback: string): string {
@@ -3709,6 +3756,7 @@ function migrateTemplate(raw: unknown): CardTemplate {
     imageSideWidth:    cardNum(d.imageSideWidth,   80, 600, DEFAULT_CARD_TEMPLATE.imageSideWidth),
     imageHeight:       cardNum(d.imageHeight,       0, 800, DEFAULT_CARD_TEMPLATE.imageHeight),
     imageCrop:         cardOneOf(d.imageCrop,   IMAGE_CROPS,   DEFAULT_CARD_TEMPLATE.imageCrop),
+    imageLinkToPost:   cardBool(d.imageLinkToPost, DEFAULT_CARD_TEMPLATE.imageLinkToPost),
     rows,
   };
 }
@@ -3727,11 +3775,19 @@ function renderSampleElement(id: CardElementId, accentColor: string, readMoreLab
         cardPaddingTop: "1rem",
         topOfCard: isTopOfCard,
       });
-      return (
+      const photo = (
         <div style={frame}>
           <img alt="" src={sampleImageUrl} style={img} />
         </div>
       );
+      // Shown as a link so the operator can see the setting took, but the click
+      // is swallowed: this is a sample post inside the editor, and navigating
+      // away from the Card Manager mid-edit would lose unsaved rows.
+      return tpl.imageLinkToPost ? (
+        <a href="#" onClick={(e) => e.preventDefault()} style={{ display: "block", textDecoration: "none", color: "inherit", cursor: "pointer" }}>
+          {photo}
+        </a>
+      ) : photo;
     }
     case "excerpt":
       return <span style={{ fontSize: "0.78rem", color: "#4a5568", lineHeight: 1.5, display: "block" }}>A brief excerpt giving readers a preview of the content inside this post.</span>;
@@ -3770,9 +3826,14 @@ function renderCardPreview(tpl: CardTemplate) {
         // The preview card is 340px wide against a full-width real one, so the
         // strip is shown at half its configured width — the proportion is what
         // the operator is judging here, not the pixel count.
-        <div style={{ ...sideStripStyle(tpl), ...(tpl.imageSide === "top" ? {} : { width: Math.round(tpl.imageSideWidth / 2) }) }}>
+        createElement(
+          tpl.imageLinkToPost ? "a" : "div",
+          {
+            ...(tpl.imageLinkToPost ? { href: "#", onClick: (e: MouseEvent) => e.preventDefault() } : {}),
+            style: { ...sideStripStyle(tpl), ...(tpl.imageSide === "top" ? {} : { width: Math.round(tpl.imageSideWidth / 2) }) },
+          },
           <img alt="" src={sampleImageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
-        </div>
+        )
       ) : null}
       <div style={{ padding: "1rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {rows.map((row) => {
@@ -3911,6 +3972,12 @@ export function BlogCardManagerPreview() {
               <span className="bcm-label">Read More</span>
               <input type="text" style={{ ...sel, width: 110 }} value={tpl.readMoreLabel} onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
             </div>
+            <label className="bcm-control">
+              <span className="bcm-label">Link Image</span>
+              <input type="checkbox" className="bcm-checkbox" checked={tpl.imageLinkToPost}
+                title="Make the featured image link to its post, the same place Read More goes"
+                onChange={(e) => setField("imageLinkToPost", e.target.checked)} />
+            </label>
             <label className="bcm-control">
               <span className="bcm-label">Accent</span>
               <input type="color" className="builder-color-wheel-input builder-color-wheel-input-sm" title="Open the color picker" value={tpl.accentColor} onChange={(e) => setField("accentColor", e.target.value)} />

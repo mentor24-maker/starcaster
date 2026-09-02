@@ -81,3 +81,35 @@ test('the store and the client agree on the template shape', () => {
     assert.ok(block.includes(`${key}:`), `${key} is in the server default but not the client's`);
   }
 });
+
+/**
+ * LINKING THE IMAGE TO ITS POST (2026-09-02, task 86bbt72jw).
+ *
+ * The whole risk in this one checkbox is `Boolean("false") === true`. A template
+ * carrying the STRING "false" — from a hand edit, an older client, or any path
+ * that stringifies settings — would coerce to true and quietly link every card
+ * photo on a site whose template says not to. The store parses it instead.
+ */
+const { mergeTemplate } = require('../../lib/blogCardTemplateStore');
+
+test('the image does not link unless the template says so', () => {
+  assert.equal(DEFAULT_TEMPLATE.imageLinkToPost, false, 'default must not change existing cards');
+  // A template saved before this key existed.
+  assert.equal(mergeTemplate({ cardLayout: 'single' }).imageLinkToPost, false);
+});
+
+test('a stored "false" is false, not a truthy string', () => {
+  assert.equal(mergeTemplate({ imageLinkToPost: 'false' }).imageLinkToPost, false);
+  assert.equal(mergeTemplate({ imageLinkToPost: '0' }).imageLinkToPost, false);
+  assert.equal(mergeTemplate({ imageLinkToPost: '' }).imageLinkToPost, false);
+});
+
+test('the checkbox turns it on, however it was stored', () => {
+  assert.equal(mergeTemplate({ imageLinkToPost: true }).imageLinkToPost, true);
+  assert.equal(mergeTemplate({ imageLinkToPost: 'true' }).imageLinkToPost, true);
+  assert.equal(mergeTemplate({ imageLinkToPost: '1' }).imageLinkToPost, true);
+});
+
+test('a value that means nothing falls back rather than guessing', () => {
+  assert.equal(mergeTemplate({ imageLinkToPost: 'yes please' }).imageLinkToPost, false);
+});
