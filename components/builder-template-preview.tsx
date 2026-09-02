@@ -2650,7 +2650,11 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                     <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
                   </div>
                 ) : null}
-                <div style={{ padding: "1.125rem 1.25rem", flex: 1, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+                {/* minWidth 0 is load-bearing: a flex item defaults to
+                    min-width:auto, so the text column refuses to shrink below its
+                    content and the card overflows sideways once the image strip is
+                    wide. Reachable now that the strip's width is an operator control. */}
+                <div style={{ padding: "1.125rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
                   {tplRows.map((row) => {
                     const hasContent = row.slots.some((s) => s && !(isSideBySide && s === "featured_image"));
                     if (!hasContent) return null;
@@ -3770,7 +3774,7 @@ function renderCardPreview(tpl: CardTemplate) {
           <img alt="" src={sampleImageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
         </div>
       ) : null}
-      <div style={{ padding: "1rem 1.25rem", flex: 1, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      <div style={{ padding: "1rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {rows.map((row) => {
           const filledSlots = row.slots.filter(Boolean);
           if (filledSlots.length === 0) return null;
