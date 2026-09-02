@@ -447,6 +447,20 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    - Inspect `git diff --cached` before committing (staging is whole-file; make
      sure no stray edits ride along). Never commit generated artifacts.
    - Commit message ends with the Co-Authored-By trailer from CLAUDE.md.
+   - **The PR title is the ClickUp task name, copied exactly.** Not a
+     paraphrase, not your commit subject — the same string, byte for byte.
+     GitHub appends `(#NNN)` on squash-merge, which is expected and fine.
+     Dane pairs the ClickUp Closed list against the GitHub/Vercel deploy list
+     by name and time, and that only works while the two names ARE the same
+     string. Measured on 2026-08-31, two of the ten most recently merged PRs
+     did not match their ticket; #481 differed by one word ("drifts" against
+     "scrolls"), which reads as a match until you look twice — a near-match is
+     worse than an obvious mismatch, because nobody checks it. You have the
+     task name in hand from step 1, so this costs you nothing. If you are ever
+     unsure of the exact string, ask for it:
+     `npm run clickup -- task-name --task <id>` prints the name and nothing
+     else. (`npm run ship` does this for itself, from the branch stamp — task
+     86bbqwupk.)
    - Push the branch and open a PR to `main` with `gh`. The PR body must
      include: **the ClickUp task URL** (`https://app.clickup.com/t/<id>`, on a
      line of its own — this is not optional), a plain-language summary, the
