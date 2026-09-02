@@ -1,0 +1,61 @@
+{
+  "templates": {
+    "proj_1786991733897_gqmjs2": {
+      "cardLayout": "single",
+      "imageAspectRatio": "16:9",
+      "cardStyle": "default",
+      "cardBorderRadius": 12,
+      "readMoreLabel": "Read More",
+      "accentColor": "#0f4f8f",
+      "imageBorderWidth": 7,
+      "imageBorderColor": "#e2e8f0",
+      "imageBorderRadius": 0,
+      "imageShadow": "none",
+      "imageBleed": "full",
+      "imageSide": "left",
+      "imageSideWidth": 220,
+      "imageHeight": 0,
+      "imageCrop": "cover",
+      "imageLinkToPost": true,
+      "rows": [
+        {
+          "id": "r1",
+          "cols": 1,
+          "slots": [
+            "categories"
+          ]
+        },
+        {
+          "id": "r2",
+          "cols": 1,
+          "slots": [
+            "headline"
+          ]
+        },
+        {
+          "id": "r3",
+          "cols": 1,
+          "slots": [
+            "featured_image"
+          ]
+        },
+        {
+          "id": "r4",
+          "cols": 1,
+          "slots": [
+            "excerpt"
+          ]
+        },
+        {
+          "id": "r5",
+          "cols": 3,
+          "slots": [
+            "author",
+            "date",
+            "read_more"
+          ]
+        }
+      ]
+    }
+  }
+}
