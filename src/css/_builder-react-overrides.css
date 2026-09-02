@@ -1432,22 +1432,6 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-secondary);
 }
 
-/* --- The settings panel's item sub-row ---
-   Link, link label, alt/caption title and description ride a row spanning the
-   item grid, which is what the sub-row mechanism exists for (see the item
-   grid block below). W0: the COLUMN is the grid — these fields declare no
-   widths of their own, the auto-fit tracks measure them. */
-.builder-react-root .builder-carousel-item-sub {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16ch, 1fr));
-  gap: var(--space-2, 6px) var(--space-3, 8px);
-  align-items: start;
-}
-
-.builder-react-root .builder-carousel-item-sub-full {
-  grid-column: 1 / -1;
-}
-
 /* --- Carousel: alignment and narrow screens ---
    The retired types were named in alignment and mobile rules inside
    _builder-react.css, which is regenerated wholesale and must not be
@@ -2889,8 +2873,11 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * row spanning the grid under its item's primary row. Columns use minmax(...,
  * 1fr) so they expand rather than crop (L4/W5). Adopted by: breadcrumb.
  * Feature Cards left this system on 2026-08-12 for a labelled lattice — see
- * .builder-card-editor below. New managers add a modifier here rather than a
- * new system.
+ * .builder-card-editor below — and Carousel followed it in the panel sweep,
+ * for the reason L6a gives: a manager with a picker, a textarea and a spanning
+ * sub-row is the shape this system stops holding. New managers add a modifier
+ * here rather than a new system; a manager that needs a sub-row should ask
+ * whether it wants the labelled lattice instead.
  * ------------------------------------------------------------------------ */
 .builder-react-root .builder-item-grid {
   display: grid;
@@ -2902,17 +2889,6 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-item-grid--crumbs {
   grid-template-columns: minmax(12ch, 1fr) minmax(12ch, 1.4fr) max-content;
 }
-/* Slideshow: a slide is an image and its alt text, nothing else, so both fit
-   the primary row and there is no sub-row. The image column is wider because
-   it carries the URL and the Choose From Gallery button together. */
-.builder-react-root .builder-item-grid--carousel {
-  /* The image column carries a URL AND the Choose From Gallery button, which
-     is ~200px of that track before the input gets any. At 1.6fr the input came
-     out around 140px — "https://astujhe2h" and nothing more. 2.4fr is what
-     leaves it a readable width while the alt text keeps a usable one. */
-  grid-template-columns: minmax(16ch, 2.4fr) minmax(12ch, 1fr) max-content;
-}
-
 /* The image picker renders its input and its Gallery button as siblings, so
    the grid cell has to be their flex row — dropped straight into the grid
    they would land in two different columns and push the actions out. */
