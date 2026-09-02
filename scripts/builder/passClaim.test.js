@@ -121,10 +121,23 @@ test('the marker is written BEFORE the status write, never after', () => {
   // status write would not exist for exactly the failure it exists to catch.
   const code = withoutComments(read('scripts/clickup_direct.mjs'));
   const claim = code.slice(code.indexOf("if (cmd === 'claim') {"), code.indexOf("} else if (cmd === 'build-start')"));
-  const wrote = claim.indexOf('writePassMarker(');
-  const fell = claim.indexOf("cmd = 'status'");
-  assert.ok(wrote > 0 && fell > 0, 'both steps are in the claim command');
-  assert.ok(wrote < fell, 'the marker must be written before the claim is performed');
+  assert.match(claim, /writePassMarker\(/, 'the claim command writes the marker');
+  // The invariant that matters is not the order of two lines inside `claim` —
+  // everything there runs before the status write. It is that the write is not
+  // in the STATUS SUCCESS path, where it would only ever run for a pass that
+  // survived long enough to finish claiming. That is precisely the pass that
+  // does not need a marker.
+  assert.equal((code.match(/writePassMarker\(/g) || []).length, 2,
+    'exactly one definition and one call site');
+  // Anchored on the status command itself, not on a phrase — "verified from
+  // the write response" also appears in the usage text 2000 lines earlier, and
+  // an assertion that matches the wrong occurrence is an assertion that cannot
+  // fail. (It could not, until break-testing said so.)
+  const statusCmd = code.indexOf('} else if (cmd === \'status\') {');
+  assert.ok(statusCmd > 0, 'found the status command');
+  assert.ok(code.indexOf('writePassMarker(task, passSkill)') < statusCmd,
+    'the marker is written by `claim`, which runs before any status write — not in the status success path, '
+    + 'which only ever runs for a pass that survived long enough to finish claiming');
 });
 
 test('the marker is opt-in, so a hand-driven claim never arms a loop', () => {
@@ -168,7 +181,20 @@ test('the skill runs the reconcile FIRST and states the invariant', () => {
   assert.match(skill, /claim --task <id> --pass loop-build/, 'and the claim arms the marker');
   assert.match(skill, /A PASS MAY NOT END WITH ITS TICKET STILL IN `Building`/, 'the invariant is stated');
   assert.match(skill, /YOU CANNOT PROMISE TO COME BACK/, 'and the shape that broke it is named');
-  // Before the claim, or it repairs nothing.
-  assert.ok(skill.indexOf('npm run clickup -- pass-reconcile') < skill.indexOf('--pass loop-build'),
-    'the reconcile must come before the claim');
+  // Before the claim, or it repairs nothing. Anchored on the SECTION, not on
+  // the first mention of the command — the command also appears in the
+  // reference list further down, which satisfied a naive ordering check even
+  // with the step itself deleted. (Break-testing found that; the assertion
+  // could not fail.)
+  const step = skill.indexOf('## Then: did the last pass finish what it started?');
+  const deck = skill.indexOf('## Then: has the operator taken the deck?');
+  assert.ok(step > 0, 'the reconcile has a step of its own, not just a mention');
+  assert.ok(step < deck, 'and it runs before the rest of the pass');
+  assert.match(skill.slice(step, deck), /npm run clickup -- pass-reconcile/,
+    'that step actually runs the command');
+  // All four outcomes are spelled out, or a pass will report a repair as
+  // nothing having happened.
+  for (const code of ['exit 0', 'exit 3', 'exit 2', 'exit 1']) {
+    assert.match(skill.slice(step, deck), new RegExp(`\\*\\*${code}\\*\\*`), `${code} is explained`);
+  }
 });
