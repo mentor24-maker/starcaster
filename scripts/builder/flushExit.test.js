@@ -9,10 +9,20 @@
  * against the broken version too — which is exactly how a `console.log` +
  * `process.exit()` pair survived being written, reviewed and shipped.
  *
- * The threshold is not arbitrary: a macOS pipe buffer is 65,536 bytes, and on
- * POSIX Node's stdout-to-a-pipe is asynchronous, so `process.exit()` discards
- * whatever has not yet been handed to the kernel. Anything up to the buffer
- * survives by luck; the first byte past it is lost, and so is everything after.
+ * The threshold is not arbitrary: a macOS pipe buffer is 65,536 bytes, and
+ * anything up to it survives by luck. The first byte past it is lost, and so is
+ * everything after.
+ *
+ * AND IT IS PLATFORM-SPECIFIC, which is the part worth knowing. From Node's own
+ * docs, writes to `process.stdout` are synchronous for pipes on Linux and
+ * Windows and ASYNCHRONOUS for pipes on macOS. So `process.exit()` discards
+ * unflushed output on a Mac and does not on CI's Linux runner — this bug could
+ * never have been caught by CI, and the machine that actually runs the hourly
+ * job is a Mac. The control tests below therefore assert the behaviour of the
+ * platform they are ON, and say which one that was, rather than skipping: a
+ * check that quietly does not run is the failure this whole PR is about
+ * (docs/DOCTRINE.md 3.11). The tests of the FIX are unconditional, because
+ * flushing before leaving is correct everywhere.
  */
 
 const test = require('node:test');
@@ -24,6 +34,10 @@ const { spawnSync } = require('node:child_process');
 
 const HELPER = path.join(__dirname, '..', 'lib', 'flushExit.cjs');
 const PIPE_BUFFER = 65536;
+// macOS: stdout-to-a-pipe is asynchronous, so exiting straight after printing
+// loses whatever has not flushed. Linux/Windows: synchronous, so it does not.
+const PIPE_IS_ASYNC = process.platform === 'darwin';
+const WHERE = `measured on ${process.platform}`;
 
 /** Run a child that prints `bytes` of output through a pipe, and see what arrives. */
 function printThrough(body, { bytes = 200000, args = [] } = {}) {
@@ -63,25 +77,40 @@ console.log('x'.repeat(n));
 process.exit(0);
 `;
 
-test('the control: console.log then process.exit really does truncate at the pipe buffer', () => {
+test('the control: what the OLD shape does on this platform, stated out loud', () => {
+  // Not a skip on Linux — an assertion of the opposite, so the platform split
+  // itself is pinned. If macOS ever stops truncating, or Linux ever starts,
+  // this fails and the next reader learns it here rather than in production.
   const big = printThrough(THE_OLD_WAY, { bytes: 200000 });
-  assert.equal(big.stdout.length, PIPE_BUFFER,
-    'if this is no longer 65536 the instrument has changed and every test below is uncalibrated');
+  if (PIPE_IS_ASYNC) {
+    assert.equal(big.stdout.length, PIPE_BUFFER,
+      `${WHERE}: the old shape must truncate at exactly the pipe buffer, or every test below `
+      + 'is uncalibrated and the bug this PR fixes is not the bug that was measured');
+  } else {
+    assert.equal(big.stdout.length, 200001,
+      `${WHERE}: pipes are synchronous here, so the old shape does NOT lose output. This is why `
+      + 'CI could never have caught this, and why the Mac that runs the hourly job could.');
+  }
 });
 
 test('BREAK-TEST: 200,000 bytes printed through a pipe arrive whole', () => {
   // Revert printAndExit to `console.log(text); process.exit(code)` and this
-  // reads 65536 instead of 200001.
+  // reads 65536 instead of 200001 — ON A MAC. On Linux the revert passes,
+  // which is exactly why the break-test has to be run where the job runs.
   const r = printThrough(WITH_HELPER, { bytes: 200000 });
   assert.equal(r.stdout.length, 200001, 'the payload plus its newline, nothing lost');
   assert.equal(r.stdout.trimEnd().length, 200000);
 });
 
 test('the first byte past the buffer is where the old way started losing, and the new way does not', () => {
-  // 65,536 survives by luck under both. 66,000 is the smallest round number
-  // that does not, and it is the measurement in the helper's header.
-  assert.equal(printThrough(THE_OLD_WAY, { bytes: 65535 }).stdout.length, 65536);
-  assert.equal(printThrough(THE_OLD_WAY, { bytes: 66000 }).stdout.length, PIPE_BUFFER);
+  // 65,536 survives by luck everywhere. 66,000 is the smallest round number
+  // that does not on a Mac, and it is the measurement in the helper's header.
+  assert.equal(printThrough(THE_OLD_WAY, { bytes: 65535 }).stdout.length, 65536,
+    'under the buffer, both shapes and both platforms agree');
+  assert.equal(printThrough(THE_OLD_WAY, { bytes: 66000 }).stdout.length,
+    PIPE_IS_ASYNC ? PIPE_BUFFER : 66001,
+    `${WHERE}: where the old shape starts losing, if it does`);
+  // The fix, on every platform: past the buffer, nothing is lost.
   assert.equal(printThrough(WITH_HELPER, { bytes: 66000 }).stdout.length, 66001);
 });
 

@@ -59,6 +59,13 @@ function run({ owns = 0, publish = 0, report = 0 } = {}) {
         STUB_REPORT: String(report),
       },
     });
+    // A harness that could not RUN the script must say so, not report its
+    // silence as a status. Without this, an image with no bash fails every
+    // test below with "null !== 0" and sends the reader hunting in the script.
+    assert.equal(r.error, undefined,
+      `the runner could not be executed at all: ${r.error && r.error.message}`);
+    assert.notEqual(r.status, null,
+      `the runner did not exit normally (signal ${r.signal}) — no verdict was taken`);
     return {
       status: r.status,
       out: `${r.stdout || ''}${r.stderr || ''}`,
