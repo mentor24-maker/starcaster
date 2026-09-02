@@ -147,3 +147,89 @@ test('the stage line-up carries every status, Rework included', () => {
     assert.ok(STAGE_ORDER.includes(loopStatuses.DISPLAY[s]), `${s} must be renderable`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// The taxonomy (2026-09-02, task 86bbtujed — audit Phase 2). Until today
+// wipCap, pipelinePause and pulse each kept a private, partial copy of these
+// sets; Rework (8/31) had to be threaded through each by hand, and wipCap and
+// pulse had drifted into DISAGREEING about what "done" means. The sets live
+// here now; consumers hold views.
+// ---------------------------------------------------------------------------
+
+const tfs = require('node:fs');
+const tpath = require('node:path');
+const wipCapMod = require('./wipCap.js');
+const pauseMod = require('./pipelinePause.js');
+const pulseMod = require('./pulse.js');
+const throughputMod = require('../../lib/loopThroughput.js');
+
+test('the taxonomy is internally coherent', () => {
+  const s = require('./loopStatuses.js');
+  assert.deepEqual([...s.TERMINAL_STATUSES], [s.LIVE],
+    'decision D1 (Dane, 2026-09-02): live is the ONLY terminal status');
+  for (const alias of s.TERMINAL_ALIASES) {
+    assert.ok(!(alias in s.DISPLAY),
+      `"${alias}" is an alias for a status this list does not have — it must never become a real one silently`);
+  }
+  for (const held of s.OPERATOR_HELD_STATUSES) {
+    assert.ok(s.IN_FLIGHT_STATUSES.includes(held),
+      'operator-held work is still in-flight work — a full inbox is a full pipeline');
+  }
+});
+
+test('every consumer holds a VIEW of the taxonomy, not a copy', () => {
+  // Same object, not merely equal arrays: an equal copy is a copy that can
+  // drift the day someone edits one of them.
+  const s = require('./loopStatuses.js');
+  assert.equal(wipCapMod.IN_FLIGHT_STATUSES, s.IN_FLIGHT_STATUSES);
+  assert.equal(wipCapMod.TERMINAL_STATUSES, s.TERMINAL_STATUSES);
+  assert.equal(throughputMod.TERMINAL_STATUSES, s.TERMINAL_STATUSES);
+  // pipelinePause's pair is the NARROW view — is a PASS running — which is
+  // exactly IN_FLIGHT minus OPERATOR_HELD, derived here so the relationship
+  // itself is what breaks if someone edits one side.
+  const narrow = s.IN_FLIGHT_STATUSES.filter((x) => !s.OPERATOR_HELD_STATUSES.includes(x));
+  assert.deepEqual(Object.keys(pauseMod.IN_FLIGHT_STATUSES).sort(), [...narrow].sort());
+});
+
+test('no consumer file defines a status name in executable text any more', () => {
+  // The enforcement of "defined here and only here". Multi-word names cannot
+  // appear by accident; a quoted one in executable text is a new private list
+  // being born. `building`/`live` alone are too common in prose to scan for —
+  // but no private list of these sets has ever omitted the multi-word names.
+  const files = [
+    ['scripts/builder/wipCap.js', __dirname + '/wipCap.js'],
+    ['scripts/builder/pipelinePause.js', __dirname + '/pipelinePause.js'],
+    ['scripts/builder/pulse.js', __dirname + '/pulse.js'],
+    ['lib/loopThroughput.js', tpath.join(__dirname, '..', '..', 'lib', 'loopThroughput.js')],
+  ];
+  for (const [label, file] of files) {
+    const src = tfs.readFileSync(file, 'utf8');
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n');
+    for (const name of ['in review', 'ready to launch', 'needs your input']) {
+      assert.ok(!code.includes(`'${name}'`) && !code.includes(`"${name}"`),
+        `${label} quotes "${name}" in executable text — that is a private status list being born; import loopStatuses instead`);
+    }
+  }
+});
+
+test('an alias status is reported loudly, never silently counted either way', () => {
+  const s = require('./loopStatuses.js');
+  // wipCap: a PR whose ticket wears "complete" lands in `unrecognised`, which
+  // QUOTES the status — not in `live` (the pre-D1 silent reading), and never
+  // in flight.
+  const g = wipCapMod.classifyPrs({
+    prs: [{ number: 9, state: 'OPEN', body: 'ClickUp: https://app.clickup.com/t/x1' }],
+    ticketStatusById: { x1: 'Complete' },
+  });
+  assert.deepEqual(g.live, [], 'not silently "done"');
+  assert.deepEqual(g.inFlight, [], 'not silently in flight either');
+  assert.deepEqual(g.unrecognised, [{ number: 9, status: 'Complete' }], 'said out loud, by name');
+  // pulse: the NAME is not terminal…
+  assert.equal(pulseMod.isTerminalStatus('complete', ''), false);
+  // …but ClickUp's own status.type saying closed still is — that check is a
+  // different sense of "done" and D1 deliberately left it alone.
+  assert.equal(pulseMod.isTerminalStatus('complete', 'closed'), true);
+  assert.equal(pulseMod.isTerminalStatus(s.LIVE, ''), true);
+});
