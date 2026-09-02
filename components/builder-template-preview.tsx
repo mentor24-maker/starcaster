@@ -3458,6 +3458,10 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
     return (
       <div className="builder-blog-post-manager-module builder-admin-data-table-module">
         {listHeading}
+        {/* The panel renders here too, or importing unmounts it: a finished
+            import reloads the post list, and a panel that only lives in the
+            loaded branch loses its results screen at that exact moment. */}
+        {importPanel}
         <div className="builder-blog-post-manager-stub">Loading posts…</div>
       </div>
     );

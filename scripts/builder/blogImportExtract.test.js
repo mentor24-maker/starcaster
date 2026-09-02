@@ -106,6 +106,27 @@ test('no usable paragraph: excerpt is empty, not a fragment of chrome', () => {
   assert.equal(post.excerpt, '');
 });
 
+
+test('the 2018 footer and sidebar are cut off the end of the article', () => {
+  const post = extractPost(
+    '<h1>T</h1><p>The article itself, long enough to read as a real paragraph of content.</p>' +
+    '<h2 class="genesis-sidebar-title screen-reader-text">Primary Sidebar</h2>' +
+    'Copyright &copy; 2026 Delray Beach Tennis Center All Rights Reserved.Powered by'
+  );
+  assert.equal(post.trailingChromeRemoved, true);
+  assert.ok(post.body.includes('The article itself'));
+  assert.ok(!/Primary Sidebar/.test(post.body), 'the sidebar heading survived into the body');
+  assert.ok(!/Copyright/.test(post.body), 'the site copyright line survived into the body');
+});
+
+test('an article with no trailing furniture is not truncated', () => {
+  // The cut must not fire on its own: a body that simply ends is left whole,
+  // and says so, or a missing marker would silently shorten every post.
+  const post = extractPost('<h1>T</h1><p>An article that ends where it ends, with nothing after it at all.</p>');
+  assert.equal(post.trailingChromeRemoved, false);
+  assert.ok(post.body.includes('ends where it ends'));
+});
+
 // ── parseHumanDate ──
 
 test('parseHumanDate handles the human formats the scrape uses', () => {

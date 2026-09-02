@@ -183,11 +183,13 @@ async function handle(req, res, pathname, method) {
     const result = await listImportCandidates(scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not list import candidates'), true;
     // Suggested author for posts whose source names none — the site's name,
-    // editable in the picker before anything is written.
+    // editable in the picker before anything is written. The store returns an
+    // envelope, so the name is on .data (landmine 12): reading it off the
+    // envelope silently yields undefined and an empty suggestion box.
     const project = await getPublicProjectById(scope.projectId);
     return sendOk(res, 200, {
       candidates: result.data,
-      defaultAuthorSuggestion: String(project?.name || '').trim(),
+      defaultAuthorSuggestion: String(project?.data?.name || '').trim(),
       batchSize: IMPORT_BATCH_SIZE,
     }), true;
   }
