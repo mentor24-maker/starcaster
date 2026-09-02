@@ -1,3 +1,42 @@
+## 2026-09-01 — A ticket waiting on a red build no longer tells you it is waiting on you (#494)
+
+One of the weekly-report tickets sat in the "Ready to launch" column for six
+days with your merge approval already on it. It was never waiting on you. The
+merge step read your "merge", checked the build, found it red — one failing
+test out of 1,846 — declined for that reason, said so once, and then nothing
+in the system ever looked at that ticket again. From where you sit, you had
+already said yes, so it looked handled. The same thing had happened the day
+before on another one. Twice in a week is not bad luck, it is how that column
+fails.
+
+The column has nobody watching it, and that is on purpose: "Ready to launch"
+is yours, so the machines deliberately keep their hands off. The catch is that
+"keep your hands off" quietly became "nobody is looking".
+
+There was one report that would have raised a flag, and what it would have
+said was worse than saying nothing. It read: *"Bottleneck: OPERATOR — approved
+tickets have waited past 24h for a merge. The machine side is keeping up."*
+Both halves of that were false. The machine side was not keeping up, and it
+would have pointed at you as the hold-up when you had already done your part.
+That report only ever looked at ClickUp — it never once asked GitHub whether
+the build had passed — so it could not tell the difference between a ticket
+waiting on your word and a ticket waiting on a broken build. It just picked.
+
+This adds a check that asks the real question: whose hands does this actually
+need? It reads the ticket, finds its pull request the same way the merge step
+does, asks GitHub what state the build is in, and then answers one of three
+ways — yours, a machine's, or "cannot tell", which it says out loud with the
+reason rather than guessing. If the build is red it names the failing check and
+says, in as many words, *not waiting on you*. It runs every ten minutes off the
+existing relay job, stays quiet unless something is genuinely stuck, says the
+same thing at most once every six hours, and shuts up entirely while you have
+the pipeline paused.
+
+The old report's sentence is fixed too: with nothing to go on it now says whose
+hands this needs is not known, and points at the command that does know, rather
+than naming you by default.
+
+You can ask it yourself any time with `npm run stale-ready`.
 ## 2026-09-01 — The pipeline's cleanup told the truth, then described itself wrongly (#513)
 
 When Dane takes the deck to work on something urgent, the pipeline pauses, and

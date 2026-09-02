@@ -443,11 +443,162 @@ test('a backed-up review stage names REVIEW', () => {
   assert.match(s, /2 of 3/, 'the count with its denominator, not a bare number');
 });
 
-test('approved work waiting past a day names the OPERATOR, and says the machines kept up', () => {
+/**
+ * THE SENTENCE THIS BLOCK EXISTS FOR (2026-09-01, task 86bbqp68c).
+ *
+ * It used to read, unconditionally:
+ *
+ *   Bottleneck: OPERATOR — N of M approved tickets have waited past 24h for a
+ *   merge. The machine side is keeping up.
+ *
+ * On 86bbkw1mn both halves were false: CI was red, and Dane's approval had
+ * been sitting there for six days. The pulse reads ClickUp status and
+ * date_updated and NOTHING about GitHub, so it never had the evidence that
+ * identifies an actor — it simply asserted one. Three tests, one per state.
+ */
+test('approved work past a day, with NO PR evidence, refuses to name an actor', () => {
   const residency = stageResidency([task('86bb1', 'ready to launch', 40)], { now: NOW });
   const s = bottleneckSentence({ noOp: noOpStreak([claimed()], { queuedCount: 0 }), residency });
+  assert.match(s, /^Bottleneck: READY TO LAUNCH/);
+  assert.match(s, /NOT known here/, 'it must say the actor is unknown, not pick one');
+  assert.match(s, /stale-ready/, 'and name the command that does know');
+  assert.doesNotMatch(s, /Bottleneck: OPERATOR/);
+  assert.doesNotMatch(s, /machine side is keeping up/,
+    'the false half of the old sentence must be unreachable without evidence');
+});
+
+test('BREAK-TEST: a RED build names the MACHINE side, never Dane — the whole point of 86bbqp68c', () => {
+  const residency = stageResidency([task('86bb1', 'ready to launch', 40)], { now: NOW });
+  const s = bottleneckSentence({
+    noOp: noOpStreak([claimed()], { queuedCount: 0 }),
+    residency,
+    readyActors: { operator: 0, machine: 1, cannotTell: 0 },
+  });
+  assert.match(s, /^Bottleneck: MERGE/);
+  assert.match(s, /MACHINE side/);
+  assert.match(s, /none of them waiting on Dane/);
+  assert.doesNotMatch(s, /Bottleneck: OPERATOR/);
+});
+
+test('an unresolvable ticket is CANNOT TELL, never folded into "waiting on Dane"', () => {
+  const residency = stageResidency([task('86bb1', 'ready to launch', 40)], { now: NOW });
+  const s = bottleneckSentence({
+    noOp: noOpStreak([claimed()], { queuedCount: 0 }),
+    residency,
+    readyActors: { operator: 0, machine: 0, cannotTell: 1 },
+  });
+  assert.match(s, /^Bottleneck: CANNOT TELL/);
+  assert.match(s, /not known/);
+});
+
+test('green, reviewed and waiting only on the merge word DOES name the operator — with its evidence', () => {
+  const residency = stageResidency([task('86bb1', 'ready to launch', 40)], { now: NOW });
+  const s = bottleneckSentence({
+    noOp: noOpStreak([claimed()], { queuedCount: 0 }),
+    residency,
+    readyActors: { operator: 1, machine: 0, cannotTell: 0 },
+  });
   assert.match(s, /^Bottleneck: OPERATOR/);
-  assert.match(s, /machine side is keeping up/);
+  assert.match(s, /checked against GitHub, not assumed/,
+    'the claim that the machines kept up must cite how it was established');
+});
+
+/**
+ * THE MERGE THIS TEST EXISTS FOR (2026-09-01, task 86bbqp68c round 2).
+ *
+ * Two changes landed on the same seven lines for different reasons. #489 gave
+ * every bottleneck sentence a `reworkClause`, so the rework count can never be
+ * hidden; this ticket replaced the Ready-to-launch branch with
+ * `readyBottleneck()`, which was written before Rework existed.
+ *
+ * Git merges either side cleanly, and taking this branch's wholesale — the
+ * obvious resolution — drops the clause from all four paths. Nothing above
+ * catches it: every one of those four tests has a census with no rework in it,
+ * and "the bottleneck sentence never hides the rework count" only exercises
+ * the No-bottleneck line. That is the "a clean merge is not agreement" shape.
+ *
+ * So: all FOUR readyBottleneck paths, each with rework on the board.
+ */
+test('BREAK-TEST: every readyBottleneck path still names the rework count', () => {
+  // Two in rework, one approved and stuck — so the ready branch is the one
+  // taken, and the rework count must survive into whichever it returns.
+  const census = [
+    task('86bb1', 'ready to launch', 40),
+    task('r1', 'rework', 1),
+    task('r2', 'rework', 1),
+  ];
+  const residency = stageResidency(census, { now: NOW });
+  const noOp = noOpStreak([claimed()], { queuedCount: 0 });
+
+  const paths = [
+    ['no PR evidence', undefined, /^Bottleneck: READY TO LAUNCH/],
+    ['a red build', { operator: 0, machine: 1, cannotTell: 0 }, /^Bottleneck: MERGE/],
+    ['unresolvable', { operator: 0, machine: 0, cannotTell: 1 }, /^Bottleneck: CANNOT TELL/],
+    ['green, his word', { operator: 1, machine: 0, cannotTell: 0 }, /^Bottleneck: OPERATOR/],
+  ];
+
+  for (const [label, readyActors, head] of paths) {
+    const s = bottleneckSentence({ noOp, residency, readyActors });
+    assert.match(s, head, `${label}: the path under test must be the one taken`);
+    assert.match(s, /2 in rework/,
+      `${label}: #489's rework count must survive — dropping it is the merge defect`);
+  }
+});
+
+/**
+ * The other half of the same merge: naming rework must not cost the evidence
+ * that identifies the actor. A resolution that appended the clause but lost
+ * "checked against GitHub" would pass the test above and still reopen 86bbqp68c.
+ */
+test('BREAK-TEST: with rework on the board, a red build STILL refuses to blame Dane', () => {
+  const census = [
+    task('86bb1', 'ready to launch', 40),
+    task('r1', 'rework', 1),
+  ];
+  const residency = stageResidency(census, { now: NOW });
+  const s = bottleneckSentence({
+    noOp: noOpStreak([claimed()], { queuedCount: 0 }),
+    residency,
+    readyActors: { operator: 0, machine: 1, cannotTell: 0 },
+  });
+  assert.match(s, /1 in rework/);
+  assert.match(s, /MACHINE side/);
+  assert.match(s, /none of them waiting on Dane/);
+  assert.doesNotMatch(s, /machine side is keeping up/,
+    'the false half of the pre-86bbqp68c sentence must stay unreachable on a red build');
+});
+
+/**
+ * Found while resolving the 86bbqp68c merge: #489 gave FIVE sentences a
+ * rework clause, and only the No-bottleneck one was ever asserted. Deleting
+ * the clause from the BUILD or REVIEW lines failed nothing at all — on this
+ * branch and on `main` alike, so it is an inherited hole, not one this merge
+ * opened. It is covered here because this ticket's whole subject is a clause
+ * that disappears without a test noticing.
+ */
+test('BREAK-TEST: the BUILD and REVIEW sentences name the rework count too', () => {
+  const rework = [task('r1', 'rework', 1), task('r2', 'rework', 1)];
+
+  // BUILD — a claimless streak while work waits.
+  const build = stageResidency([...rework, task('q1', 'queued', 1)], { now: NOW });
+  const buildSentence = bottleneckSentence({
+    noOp: noOpStreak([...capped(3)], { queuedCount: 1 }),
+    residency: build,
+  });
+  assert.match(buildSentence, /^Bottleneck: BUILD/);
+  assert.match(buildSentence, /2 in rework/, 'BUILD must not hide the rework count either');
+
+  // REVIEW — two tickets past the review threshold.
+  const review = stageResidency(
+    [...rework, task('v1', 'in review', 40), task('v2', 'in review', 40)],
+    { now: NOW }
+  );
+  const reviewSentence = bottleneckSentence({
+    noOp: noOpStreak([claimed()], { queuedCount: 3 }),
+    residency: review,
+  });
+  assert.match(reviewSentence, /^Bottleneck: REVIEW/);
+  assert.match(reviewSentence, /2 in rework/, 'REVIEW must not hide it either');
 });
 
 test('BREAK-TEST: a healthy pipeline says so out loud — silence is never all-clear', () => {

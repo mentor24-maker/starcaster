@@ -86,6 +86,35 @@ npm run --silent heartbeat -- --check || true
 # relay — it exits 1 on a stall, which is a finding, not this script's failure.
 npm run --silent throughput -- --check || true
 
+# THE THIRD WATCHDOG — the one stage that has no owner at all (task 86bbqp68c).
+#
+# The heartbeat asks "did a job stop firing?". The throughput check asks "the
+# job fired, and did anything come out?". Both are about the MACHINES. This one
+# is about `Ready to launch`: operator-held, so the loops never touch it, and
+# the merge step re-declines a red PR forever without ever escalating.
+#
+# 86bbkw1mn sat there for six days with Dane's merge approval already given,
+# blocked on one failing test out of 1,846. Nothing in the system was watching,
+# and the one line that would have fired said "Bottleneck: OPERATOR ... the
+# machine side is keeping up" — false in both halves, and it would have told
+# him he was the blocker when he was not.
+#
+# BEFORE THE OWNERSHIP CHECK, but NOT by inheriting its neighbours' reasoning.
+# Theirs is "a watchdog that runs only where its job runs cannot notice that
+# machine being switched off", and this check watches ClickUp and GitHub rather
+# than a machine, so that argument is not available to it. The reason it
+# belongs here anyway is row 2 of its own table: *approved, green, and still
+# not merged* is exactly what a dead merge step looks like, so a check that ran
+# only where the loops run could not see the case where the loops are not
+# running at all.
+#
+# Posts to the bus only when something is stuck, once per ticket per REASON per
+# 6h, cleared when the ticket stops being stuck — and it asks the pipeline
+# switch first, so it stays quiet while Dane has the deck. Never allowed to
+# fail the relay: it exits 1 on a finding and 2 on a cannot-tell, both of which
+# are readings, not this script's failure.
+npm run --silent stale-ready -- --check || true
+
 npm run --silent clickup -- bus-relay
 status=$?
 echo "=== exit $status"

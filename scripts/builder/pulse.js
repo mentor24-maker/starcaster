@@ -757,7 +757,80 @@ function driftFindings(records) {
  * Build outranks review because a stalled builder starves the reviewer, so
  * fixing review first fixes nothing.
  */
-function bottleneckSentence({ noOp, residency } = {}) {
+/**
+ * The `Ready to launch` line, and the one place in this file that used to lie.
+ *
+ * IT SAID (2026-08-31, ticket 86bbqp68c):
+ *
+ *     Bottleneck: OPERATOR — N of M approved tickets have waited past 24h for
+ *     a merge. The machine side is keeping up.
+ *
+ * On 86bbkw1mn both halves were false. The machine side was NOT keeping up —
+ * CI was red on one test out of 1,846 — and Dane's approval had been sitting
+ * there for six days, so telling him he was the blocker would have sent him to
+ * look at a ticket he had already finished with. `docs/DOCTRINE.md` §2.5 is
+ * about exactly this: *whose hands does this need, and are they mine?*
+ *
+ * The pulse could not have known. It reasons from ClickUp status and
+ * `date_updated`, and never reads GitHub check state at all, so it cannot
+ * separate "waiting on Dane" from "waiting on a red build". The fix is
+ * therefore NOT a cleverer sentence — it is refusing to name an actor without
+ * the evidence that identifies one, and saying where that evidence lives.
+ *
+ * `readyActors` is `lib/staleReady.js`'s tally when the caller has taken the
+ * reading (`scripts/pulse.cjs` does). Without it the honest answer is that the
+ * stage is backed up and this check cannot say whose fault that is.
+ *
+ * `reworkClause` is threaded in from `bottleneckSentence` and appended to ALL
+ * FOUR return paths. It comes from #489, which landed on this same sentence
+ * while this function was being written, and dropping it is the whole hazard
+ * of that merge: git resolves either side cleanly, and taking this one
+ * wholesale silently stops the pulse's headline from ever naming rework.
+ * Appending it to three of the four paths is the same bug, smaller — so the
+ * break-test in pulse.test.js walks all four.
+ */
+function readyBottleneck({ over, ready, readyActors, reworkClause = '' }) {
+  const hours = STAGE_THRESHOLDS['ready to launch'].hours;
+  const head = `${over} of ${ready} approved tickets have waited past ${hours}h for a merge`;
+
+  const tally = readyActors && typeof readyActors === 'object' ? readyActors : null;
+  if (!tally) {
+    return (
+      `Bottleneck: READY TO LAUNCH — ${head}. Whose hands that needs is NOT known here: this check ` +
+      'never reads PR state, so it cannot tell a missing merge word from a red build. ' +
+      '`npm run stale-ready` answers it.' +
+      reworkClause
+    );
+  }
+
+  const machine = Number(tally.machine) || 0;
+  const operator = Number(tally.operator) || 0;
+  const cannotTell = Number(tally.cannotTell) || 0;
+
+  // MACHINE outranks the rest. It is the finding that was being misattributed,
+  // it is the actionable one, and naming it can never wrongly blame Dane —
+  // which is the only error in this sentence that costs him a day.
+  if (machine >= 1) {
+    const tail = cannotTell ? `, and ${cannotTell} could not be resolved to anyone` : '';
+    const yours = operator ? `${operator} genuinely waiting on Dane` : 'none of them waiting on Dane';
+    return (
+      `Bottleneck: MERGE — ${head}, and ${machine} of those are blocked on the MACHINE side ` +
+      `(red or unfinished checks, or a PR the merge step cannot find)${tail} — ${yours}.${reworkClause}`
+    );
+  }
+  if (cannotTell >= 1) {
+    return (
+      `Bottleneck: CANNOT TELL — ${head}, and ${cannotTell} of those could not be resolved to an actor ` +
+      `at all. Not reported as waiting on Dane, because that is not known.${reworkClause}`
+    );
+  }
+  return (
+    `Bottleneck: OPERATOR — ${head}, and every one of them is green, reviewed and waiting only on the ` +
+    `merge word. The machine side is keeping up — checked against GitHub, not assumed.${reworkClause}`
+  );
+}
+
+function bottleneckSentence({ noOp, residency, readyActors } = {}) {
   const census = residency?.census || {};
   const count = (s) => census[s] || 0;
   const overIn = (stage) =>
@@ -803,10 +876,12 @@ function bottleneckSentence({ noOp, residency } = {}) {
     );
   }
   if (overIn('ready to launch') >= 1) {
-    return (
-      `Bottleneck: OPERATOR — ${overIn('ready to launch')} of ${ready} approved tickets have waited past ` +
-      `${STAGE_THRESHOLDS['ready to launch'].hours}h for a merge. The machine side is keeping up.${reworkClause}`
-    );
+    return readyBottleneck({
+      over: overIn('ready to launch'),
+      ready,
+      readyActors,
+      reworkClause,
+    });
   }
   return `No bottleneck: the loop is claiming, ${review} in review, ${ready} awaiting merge, ${queued} queued, ${rework} in rework.`;
 }
@@ -1007,6 +1082,7 @@ module.exports = {
   // report
   COMPLETION_MARKER,
   bottleneckSentence,
+  readyBottleneck,
   describeBreakdown,
   formatDuration,
   formatReport,
