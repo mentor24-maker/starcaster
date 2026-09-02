@@ -43,7 +43,8 @@ const {
   SWITCH_TASK_NAME, STRANDED_AFTER_MS,
   pauseRecord, resumeRecord, readTrail, pauseVerdict,
   inFlight, describeTickets, strandedExplanation, drainReport,
-  resumedMessage, sweptTicketNote, sweptSummary, resumeAuthorization, numericOption,
+  resumedMessage, sweptTicketNote, sweptSummary, sweepExitCode, resumeAuthorization, numericOption,
+  humanTime, humanDuration,
   strandedBuildDestination,
 } = pipelinePause;
 const { resolveBuildStart, prLookupArgs } = buildStart;
@@ -78,10 +79,17 @@ function flag(name) { return process.argv.includes(`--${name}`); }
 function num(name, fallback) { return numericOption(process.argv, name, fallback); }
 
 function usage(code = 2) {
-  console.error('Usage: npm run pipeline -- <status|check|pause|resume> [options]');
+  console.error('Usage: npm run pipeline -- <status|check|sweep|pause|resume> [options]');
   console.error('  (the `--` is required — without it npm eats every flag before this script sees it)');
   console.error('  status                          plain English: running or paused, since when, by whom, what is in flight');
   console.error('  check                           for a machine: exit 0 = running, 3 = paused (or unreadable, which counts as paused)');
+  console.error('  sweep [--apply] [--by NAME] [--stranded-after-minutes N]');
+  console.error('                                  hand back tickets whose pass died — a build with an open PR to Rework, an');
+  console.error('                                  unstarted one to Queued, a review released where it stands. Runs whether the');
+  console.error('                                  pipeline is running or paused. DRY RUN unless --apply.');
+  console.error('                                  exit 0 = clean, 1 = something could not be unstuck, 2 = the queue could not');
+  console.error('                                  be read (never 0 — "could not tell" is not an all-clear), 3 = a dry run found');
+  console.error('                                  work and did not act.');
   console.error('  pause [--now] [--why "..."] [--by NAME] [--wait-minutes N]');
   console.error('                                  stop new claims immediately, then wait for work in flight to finish.');
   console.error('                                  --now skips the wait and names exactly what it left running.');
@@ -90,7 +98,7 @@ function usage(code = 2) {
   console.error('                                  the line but may not un-pause the operator\'s deck. Sweeps tickets that');
   console.error('                                  were stranded mid-pass, with a note: a half-built build goes to Rework, an');
   console.error('                                  unstarted one to Queued, and a review is released where it stands so its');
-  console.error('                                  finished build is not lost.');
+  console.error('                                  finished build is not lost. `sweep` is that same repair on its own.');
   process.exit(code);
 }
 
@@ -265,6 +273,145 @@ const fmt = pipelinePause.humanTime;
 
 // ---------------------------------------------------------------------------
 
+/**
+ * THE STRANDED-TICKET SWEEP — the one repair for work whose pass died, and
+ * until 2026-09-02 it was reachable from nowhere that mattered.
+ *
+ * It used to live inline in `resume`, BELOW that command's early exit for "the
+ * pipeline is already running". So the repair `status` recommends by name could
+ * only run as a side effect of lifting a pause — while a ticket strands when a
+ * session dies, which happens overwhelmingly while the pipeline is RUNNING. On
+ * 2026-09-02 four stranded builds filled four of the five in-flight slots
+ * overnight; `status` printed the advice, `resume --operator-asked` answered
+ * "Nothing to resume — the pipeline is already running", and changed nothing.
+ * A guard placed above the work it protects, never exercised in the state it
+ * exists for (DOCTRINE, unreachable guards).
+ *
+ * So it is a function with a queue passed in, called from two places: `resume`
+ * (before the flag is lifted, exactly as before) and the standalone `sweep`
+ * command (at any time). `--no-sweep` is now decided by the CALLER, because
+ * only `resume` has such a flag — a sweep asked not to sweep is not a thing
+ * the sweep needs to know how to be.
+ *
+ * `apply` is false by default at the command, and the dry run is a real
+ * preview: it asks `build-start` the same question and names the same
+ * destination, and writes nothing. That default is also the safety property
+ * that makes an always-available sweep sound — 90 minutes is longer than any
+ * loop pass but NOT longer than a hand-driven fast-track session, which holds
+ * a ticket in "Building" for hours without touching it. Nothing moves unless
+ * somebody who has read the ages types `--apply`.
+ *
+ * Returns `{ swept, found, sweepState }`. The three-part report is unchanged
+ * and is the reason this is worth reading: `swept` is what moved, `left` is
+ * what was examined and could NOT be moved, `checked` is whether the queue was
+ * looked at at all. Not looking and finding nothing are different answers
+ * (86bbqw49y).
+ */
+async function sweepStranded({ by, queue, apply = false, strandedAfterMs = STRANDED_AFTER_MS }) {
+  // Sweep first, then lift the flag. In this order a ticket that was stranded
+  // is back in the line BEFORE the loops start claiming again, so the very
+  // next pass can pick it up rather than finding it a minute later.
+  // Three things the report needs, and only this loop can know two of them.
+  // `swept` is what was unstuck. `left` is what was EXAMINED and could not be —
+  // invisible to a summary that is only shown what was taken, which is how an
+  // all-clear came to print one line under "it is still stranded" (86bbqw49y).
+  // `checked` is whether the queue was looked at at all: not looking and
+  // finding nothing are different answers, and only one of them is an
+  // all-clear.
+  const swept = [];
+  const left = [];
+  let sweepChecked = false;
+  let sweepWhy = '';
+  let found = 0;
+  if (queue?.readable) {
+    sweepChecked = true;
+    const rows = (queue.tasks || []).map((t) => ({ ...t, loopNote: loopNoteOf(t) }));
+    const { stranded } = inFlight(rows, { nowMs: Date.now(), strandedAfterMs });
+    found = stranded.length;
+    for (const s of stranded) {
+      // WHERE a stranded ticket belongs depends on what died on it.
+      //
+      // A stranded BUILD has no finished work to protect, so it goes back to
+      // Queued and the next build pass picks it up (its `build-start` check
+      // finds any half-pushed branch, which is what the note tells it to do).
+      //
+      // A stranded REVIEW is different: the ticket is already in "In review",
+      // which is where a ticket WAITS for a reviewer. All that is wrong with it
+      // is the stale claim note saying a review is running. Sending it to
+      // Queued would throw away a completed, PR-open build and hand the whole
+      // job to a second builder. So it is released where it stands — note
+      // cleared, status untouched — and the next review pass claims it.
+      const reviewing = s.kind === 'a review';
+      // WHERE a stranded build goes depends on whether anything was built for
+      // it (task 86bbr1u9v). Asked BEFORE the note is written, because the note
+      // names the destination — a note saying "Queued" above a move to "Rework"
+      // is a trail that contradicts the board, and the trail is the only thing
+      // the next pass reads. Reviews skip it: they never move.
+      const dest = reviewing ? { action: 'n/a' } : await buildStartFor(s.id);
+      const plan = reviewing ? null : strandedBuildDestination(dest.action);
+      // HOW STALE, on every line. The sweep can now be run at any moment
+      // rather than only out of a pause, so its reader has to be able to tell
+      // a ticket dead since midnight from one a hand-driven session claimed 91
+      // minutes ago and is still working on. The threshold cannot make that
+      // call for them; the age can.
+      const age = s.ageMs != null ? `, untouched for ${humanDuration(s.ageMs)}` : '';
+
+      // A DRY RUN STOPS HERE, having written nothing. It still does the full
+      // `build-start` lookup above, because "where would this go" is the whole
+      // question the dry run is asked, and answering it from a guess would
+      // make the preview a different program from the thing it previews.
+      if (!apply) {
+        console.error(`  ${s.id} ("${s.name}") WOULD ${reviewing
+          ? 'be released where it stands in "In review" — its build is finished and its PR is open'
+          : `return to ${plan.status} — ${plan.why}`}; it is ${s.kind} with nothing working on it${age}.`);
+        swept.push({ id: s.id, kind: s.kind, destination: reviewing ? 'In review' : plan.status });
+        continue;
+      }
+      const note = await tryCall('POST', `/api/v2/task/${s.id}/comment`, {
+        comment_text: sweptTicketNote({
+          at: new Date().toISOString(), by, kind: s.kind,
+          destination: plan?.status, why: plan?.why,
+        }),
+        notify_all: false,
+      });
+      if (!note.ok) {
+        console.error(`  ${s.id}: could not write the hand-back note (${whyOf(note)}) — LEAVING it where it is rather than moving it silently.`);
+        left.push(s.id);
+        continue;
+      }
+
+      const task = (queue.tasks || []).find((t) => String(t.id) === s.id);
+
+      if (reviewing) {
+        const cleared = await clearLoopNote(task);
+        if (!cleared) {
+          console.error(`  ${s.id}: the note landed but the stale review claim could NOT be cleared — the next review pass will still see it as taken.`);
+          left.push(s.id);
+          continue;
+        }
+        console.error(`  ${s.id} ("${s.name}") released in "In review" — its review pass died${age}, but its build is finished and its PR is open.`);
+        swept.push({ id: s.id, kind: s.kind, destination: 'In review' }); // matches the per-ticket line above, verbatim
+        continue;
+      }
+
+      const rem = (task?.assignees || []).map((a) => a.id);
+      const where = plan;
+      const move = await tryCall('PUT', `/api/v2/task/${s.id}`, { status: where.status, assignees: { add: [], rem } });
+      if (!move.ok || String(move.json?.status?.status || '').toLowerCase() !== where.status.toLowerCase()) {
+        console.error(`  ${s.id}: the note landed but the move to ${where.status} did NOT (${whyOf(move)}) — it is still stranded.`);
+        left.push(s.id);
+        continue;
+      }
+      console.error(`  ${s.id} ("${s.name}") returned to ${where.status} — it was ${s.kind} with nothing working on it${age}; ${where.why}.`);
+      swept.push({ id: s.id, kind: s.kind, destination: where.status });
+    }
+  } else {
+    sweepWhy = 'the queue could not be read';
+    console.error('  the queue could not be read, so nothing was swept — run `npm run pipeline -- status` after this.');
+  }
+  return { swept, found, sweepState: { checked: sweepChecked, left: left.length, why: sweepWhy } };
+}
+
 const cmd = process.argv[2];
 
 if (cmd === 'check') {
@@ -310,12 +457,58 @@ if (cmd === 'check') {
       // and only its stale claim note is wrong. One reason over both sent a
       // reader hunting for a status problem that was not there (86bbqw49y).
       for (const line of strandedExplanation(stranded)) console.log(`               ${line}`);
-      console.log('               `npm run pipeline -- resume --operator-asked` puts them right.');
+      // NOT `resume --operator-asked`. That was the advice here until
+      // 2026-09-02 and it is unreachable in the state this line is printed in
+      // — `resume` exits early when the pipeline is already running, which is
+      // exactly when tickets strand. Telling a reader to run a no-op is worse
+      // than saying nothing: they run it, see a calm sentence, and stop.
+      console.log('               `npm run pipeline -- sweep` says what would put them right; add `--apply` to do it.');
     }
   } else {
     console.log('\nin flight:     could not be read, so this answer is INCOMPLETE.');
   }
   console.error(`  requests this pass: ${requestCount}`);
+
+} else if (cmd === 'sweep') {
+  // The repair, on its own, runnable at ANY time — which is the whole of this
+  // command (2026-09-02). It deliberately does NOT ask whether the pipeline is
+  // paused: a pause stops claims and merges, and unsticking work that nothing
+  // is doing is neither. It says which state it found, because that is context
+  // a reader wants, and then sweeps either way.
+  //
+  // It also does not ask for `--operator-asked`. Resuming is the operator's
+  // call because only he knows whether he is finished with the deck; clearing
+  // dead work is housekeeping, and housekeeping is the agent's job to do
+  // silently (CLAUDE.md). What guards it instead is the dry-run default.
+  const apply = flag('apply');
+  const by = arg('by', `an agent session on ${thisNodeName()}`);
+  // The 90-minute threshold, overridable. It exists so the dry run is a real
+  // instrument: without it the only way to see this command find anything is
+  // to wait an hour and a half for a pass to die, which is how a sweep ships
+  // having never been watched to work. Named in the output whenever it is not
+  // the default, because a reading taken with a moved threshold is a different
+  // reading and must not be quoted as if it were the standard one.
+  const strandedAfterMs = num('stranded-after-minutes', STRANDED_AFTER_MS / 60000) * 60000;
+  const sw = await readSwitch({ withQueue: true });
+  console.log(verdictFrom(sw).message);
+  console.log('');
+
+  if (strandedAfterMs !== STRANDED_AFTER_MS) {
+    console.log(`(counting a ticket stranded after ${humanDuration(strandedAfterMs)}, not the usual ${humanDuration(STRANDED_AFTER_MS)})`);
+  }
+  const { swept, found, sweepState } = await sweepStranded({ by, queue: sw.queue, apply, strandedAfterMs });
+  console.log(sweptSummary(swept, { ...sweepState, applied: apply }));
+
+  // Only a sweep that CHANGED something is worth the party line. A dry run is
+  // a question somebody asked, and a clean run is the normal case — announcing
+  // either is the "all is well ×365" the bus discipline exists to prevent.
+  if (apply && swept.length) await announce(resumedMessage({ by, swept, ...sweepState }).replace(
+    /^\[CC-starcaster\] The build pipeline is RUNNING again[^\n]*\n/,
+    `[CC-starcaster] Stranded work swept by ${by}.\n`,
+  ));
+
+  console.error(`  requests this pass: ${requestCount}`);
+  process.exit(sweepExitCode({ ...sweepState, found, applied: apply }));
 
 } else if (cmd === 'pause') {
   const now = flag('now');
@@ -428,87 +621,9 @@ if (cmd === 'check') {
   // Sweep first, then lift the flag. In this order a ticket that was stranded
   // is back in the line BEFORE the loops start claiming again, so the very
   // next pass can pick it up rather than finding it a minute later.
-  // Three things the report needs, and only this loop can know two of them.
-  // `swept` is what was unstuck. `left` is what was EXAMINED and could not be —
-  // invisible to a summary that is only shown what was taken, which is how an
-  // all-clear came to print one line under "it is still stranded" (86bbqw49y).
-  // `checked` is whether the queue was looked at at all: not looking and
-  // finding nothing are different answers, and only one of them is an
-  // all-clear.
-  const swept = [];
-  const left = [];
-  let sweepChecked = false;
-  let sweepWhy = '';
-  if (flag('no-sweep')) {
-    sweepWhy = 'the --no-sweep flag was used';
-  } else if (sw.queue?.readable) {
-    sweepChecked = true;
-    const rows = (sw.queue.tasks || []).map((t) => ({ ...t, loopNote: loopNoteOf(t) }));
-    const { stranded } = inFlight(rows, { nowMs: Date.now(), strandedAfterMs: STRANDED_AFTER_MS });
-    for (const s of stranded) {
-      // WHERE a stranded ticket belongs depends on what died on it.
-      //
-      // A stranded BUILD has no finished work to protect, so it goes back to
-      // Queued and the next build pass picks it up (its `build-start` check
-      // finds any half-pushed branch, which is what the note tells it to do).
-      //
-      // A stranded REVIEW is different: the ticket is already in "In review",
-      // which is where a ticket WAITS for a reviewer. All that is wrong with it
-      // is the stale claim note saying a review is running. Sending it to
-      // Queued would throw away a completed, PR-open build and hand the whole
-      // job to a second builder. So it is released where it stands — note
-      // cleared, status untouched — and the next review pass claims it.
-      const reviewing = s.kind === 'a review';
-      // WHERE a stranded build goes depends on whether anything was built for
-      // it (task 86bbr1u9v). Asked BEFORE the note is written, because the note
-      // names the destination — a note saying "Queued" above a move to "Rework"
-      // is a trail that contradicts the board, and the trail is the only thing
-      // the next pass reads. Reviews skip it: they never move.
-      const dest = reviewing ? { action: 'n/a' } : await buildStartFor(s.id);
-      const plan = reviewing ? null : strandedBuildDestination(dest.action);
-      const note = await tryCall('POST', `/api/v2/task/${s.id}/comment`, {
-        comment_text: sweptTicketNote({
-          at: new Date().toISOString(), by, kind: s.kind,
-          destination: plan?.status, why: plan?.why,
-        }),
-        notify_all: false,
-      });
-      if (!note.ok) {
-        console.error(`  ${s.id}: could not write the hand-back note (${whyOf(note)}) — LEAVING it where it is rather than moving it silently.`);
-        left.push(s.id);
-        continue;
-      }
-
-      const task = (sw.queue.tasks || []).find((t) => String(t.id) === s.id);
-
-      if (reviewing) {
-        const cleared = await clearLoopNote(task);
-        if (!cleared) {
-          console.error(`  ${s.id}: the note landed but the stale review claim could NOT be cleared — the next review pass will still see it as taken.`);
-          left.push(s.id);
-          continue;
-        }
-        console.error(`  ${s.id} ("${s.name}") released in "In review" — its review pass died, but its build is finished and its PR is open.`);
-        swept.push({ id: s.id, kind: s.kind, destination: 'In review' }); // matches the per-ticket line above, verbatim
-        continue;
-      }
-
-      const rem = (task?.assignees || []).map((a) => a.id);
-      const where = plan;
-      const move = await tryCall('PUT', `/api/v2/task/${s.id}`, { status: where.status, assignees: { add: [], rem } });
-      if (!move.ok || String(move.json?.status?.status || '').toLowerCase() !== where.status.toLowerCase()) {
-        console.error(`  ${s.id}: the note landed but the move to ${where.status} did NOT (${whyOf(move)}) — it is still stranded.`);
-        left.push(s.id);
-        continue;
-      }
-      console.error(`  ${s.id} ("${s.name}") returned to ${where.status} — it was ${s.kind} with nothing working on it; ${where.why}.`);
-      swept.push({ id: s.id, kind: s.kind, destination: where.status });
-    }
-  } else {
-    sweepWhy = 'the queue could not be read';
-    console.error('  the queue could not be read, so nothing was swept — run `npm run pipeline -- status` after this.');
-  }
-  const sweepState = { checked: sweepChecked, left: left.length, why: sweepWhy };
+  const { swept, sweepState } = flag('no-sweep')
+    ? { swept: [], sweepState: { checked: false, left: 0, why: 'the --no-sweep flag was used' } }
+    : await sweepStranded({ by, queue: sw.queue, apply: true });
 
   const at = new Date().toISOString();
   await writeRecord(sw.task.id, resumeRecord({ by, node: thisNodeName(), at }), 'Resume', at);

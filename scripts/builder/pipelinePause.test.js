@@ -817,15 +817,18 @@ test('the resume sweep hands its report what it left behind, and whether it look
 
   // Not looking and finding nothing are different answers. `checked` may only
   // be asserted inside the arm that actually read the queue.
-  assert.match(code, /} else if \(sw\.queue\?\.readable\) {\s*sweepChecked = true;/,
+  // The sweep is a FUNCTION now (2026-09-02) rather than an inline block in
+  // `resume`, so the queue arrives as a parameter — but the invariant is
+  // untouched: `checked` may only be asserted inside the arm that read it.
+  assert.match(code, /if \(queue\?\.readable\) {\s*sweepChecked = true;/,
     'checked may only be set where the queue was actually examined');
   assert.equal((code.match(/sweepChecked = true/g) || []).length, 1,
     'one place may claim the sweep ran');
 
   // And BOTH reports carry it, so neither can print an all-clear the other
   // contradicts.
-  assert.match(code, /sweptSummary\(swept, sweepState\)/,
-    'the terminal summary must be told what was left and whether it looked');
+  assert.match(code, /sweptSummary\(swept, \{ \.\.\.sweepState, applied: apply \}\)/,
+    'the terminal summary must be told what was left, whether it looked, and whether it acted');
   assert.match(code, /resumedMessage\(\{ by, pausedForMs, swept, \.\.\.sweepState \}\)/,
     'the party-line message must be told the same thing, or the two disagree');
 });
@@ -991,4 +994,132 @@ test('the stranded reason matches each kind, and a mixed list gets both', () => 
 
 test('nothing stranded means nothing to explain', () => {
   assert.deepEqual(pause.strandedExplanation([]), []);
+});
+
+// ---------------------------------------------------------------------------
+// The sweep, reachable on its own (2026-09-02, task 86bbtmbnr).
+//
+// The defect: the stranded-ticket sweep lived below `resume`'s early exit for
+// "the pipeline is already running", so the repair `status` recommends by name
+// could only run while un-pausing. Four builds stranded overnight, `status`
+// printed the advice, and the advice was a no-op.
+// ---------------------------------------------------------------------------
+
+test('a length of time is said in the unit the reader is asking in', () => {
+  // The first live run printed "untouched for Dec 31, 1969, 5:06 PM" — an
+  // INSTANT formatter handed a DURATION. Hence a separate function.
+  assert.equal(pause.humanDuration(30 * 1000), 'under a minute');
+  assert.equal(pause.humanDuration(1 * MIN), '1 minute');
+  assert.equal(pause.humanDuration(23 * MIN), '23 minutes');
+  assert.equal(pause.humanDuration(90 * MIN), '1.5 hours');
+  assert.equal(pause.humanDuration(8 * HOUR), '8.0 hours');
+  assert.equal(pause.humanDuration(50 * HOUR), '2.1 days');
+  assert.equal(pause.humanDuration(undefined), null);
+  assert.equal(pause.humanDuration(-1), null);
+});
+
+test('a dry run may not report an outcome it did not cause', () => {
+  const rows = [{ id: 'a1', kind: 'a build', destination: 'Rework' }];
+
+  const dry = pause.sweptSummary(rows, { applied: false });
+  assert.match(dry, /WOULD be unstuck/, 'the verb must be conditional');
+  assert.doesNotMatch(dry, /stranded tickets? unstuck:/,
+    'it must not read as a completed sweep — that is the applied wording');
+  assert.match(dry, /would return to Rework/, 'the per-ticket phrase is conditional too');
+  assert.match(dry, /Nothing has been changed/, 'and it must say so plainly');
+  assert.match(dry, /--apply/, 'naming the flag that would do it');
+
+  // The same rows, applied: past tense, and no invitation to run anything.
+  const done = pause.sweptSummary(rows, { applied: true });
+  assert.match(done, /1 stranded ticket unstuck: a1 \(returned to Rework\)\./);
+  assert.doesNotMatch(done, /Nothing has been changed/);
+});
+
+test('a dry run that found nothing says so in the present tense', () => {
+  assert.equal(pause.sweptSummary([], { applied: false }), 'No stranded tickets need unsticking.');
+  assert.equal(pause.sweptSummary([], { applied: true }), 'No stranded tickets needed unsticking.');
+});
+
+test('a dry run still cannot turn "could not tell" into an all-clear', () => {
+  // The `checked` gate outranks `applied`: nobody looked, so there is nothing
+  // to preview either. DOCTRINE 3.11, and this file's oldest scar.
+  const line = pause.sweptSummary([], { checked: false, why: 'the queue could not be read', applied: false });
+  assert.match(line, /NOT checked/);
+  assert.doesNotMatch(line, /No stranded tickets/);
+});
+
+test('a released review reads conditionally in a dry run too', () => {
+  const dry = pause.sweptTicketPhrase({ id: 'r1', kind: 'a review', destination: 'In review' }, { applied: false });
+  assert.equal(dry, 'r1 (would be released in "In review")');
+  assert.equal(pause.sweptTicketPhrase({ id: 'r1', kind: 'a review', destination: 'In review' }),
+    'r1 (released in "In review")', 'the default is unchanged, so every existing caller is');
+});
+
+test('the sweep exit code separates all four outcomes', () => {
+  assert.equal(pause.sweepExitCode({ checked: true, left: 0, found: 0, applied: true }), 0, 'clean');
+  assert.equal(pause.sweepExitCode({ checked: true, left: 0, found: 2, applied: true }), 0, 'swept everything it found');
+  assert.equal(pause.sweepExitCode({ checked: true, left: 1, found: 2, applied: true }), 1, 'something is STILL stranded');
+  assert.equal(pause.sweepExitCode({ checked: false, left: 0, found: 0, applied: true }), 2, 'could not read the queue');
+  assert.equal(pause.sweepExitCode({ checked: false, left: 0, found: 0, applied: false }), 2,
+    'a dry run that could not look is still "could not tell", never a decline');
+  assert.equal(pause.sweepExitCode({ checked: true, left: 0, found: 2, applied: false }), 3, 'dry run with work to do');
+  assert.equal(pause.sweepExitCode({ checked: true, left: 0, found: 0, applied: false }), 0, 'dry run with nothing to do');
+});
+
+test('"could not tell" never exits 0, whatever else is true of the run', () => {
+  // The single most important line of the four. A sweep that could not read
+  // the queue and exits 0 tells a caller the decks are clear.
+  for (const applied of [true, false]) {
+    for (const found of [0, 5]) {
+      assert.notEqual(pause.sweepExitCode({ checked: false, found, applied }), 0);
+    }
+  }
+});
+
+test('the sweep is reachable without pausing anything', () => {
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  assert.match(code, /} else if \(cmd === 'sweep'\) {/, 'there must be a standalone command');
+  // It must be the SAME sweep, not a second copy that drifts from it.
+  assert.equal((code.match(/async function sweepStranded\(/g) || []).length, 1,
+    'one sweep exists');
+  assert.equal((code.match(/await sweepStranded\(/g) || []).length, 2,
+    'and exactly two callers: `resume` and `sweep`');
+});
+
+test('the sweep command does not sit behind the pause state or an authorization', () => {
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  const cmd = code.slice(code.indexOf("} else if (cmd === 'sweep') {"), code.indexOf("} else if (cmd === 'pause') {"));
+  assert.ok(cmd.length > 100, 'found the sweep command body');
+  // The whole defect was a guard above the work. A sweep that refused while
+  // running, or demanded --operator-asked, would reintroduce it in a new shape:
+  // clearing dead work is housekeeping, not a hand-back of the operator's deck.
+  assert.doesNotMatch(cmd, /resumeAuthorization|operator-asked/,
+    'sweeping is housekeeping — it may not require the operator to authorize it');
+  assert.doesNotMatch(cmd, /process\.exit\(3\)[\s\S]*sweepStranded/,
+    'nothing may exit before the sweep runs');
+});
+
+test('a dry run writes nothing at all', () => {
+  // The safety property that makes an always-available sweep sound. 90 minutes
+  // is longer than any loop pass but SHORTER than a hand-driven fast-track
+  // session, which holds a ticket in "Building" for hours without touching it.
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  const fn = code.slice(code.indexOf('async function sweepStranded('), code.indexOf("const cmd = process.argv[2];"));
+  const bail = fn.indexOf('if (!apply) {');
+  assert.ok(bail > 0, 'the dry run must bail out explicitly');
+  // Every write in the sweep is a tryCall; none may come before the bail-out.
+  const firstWrite = fn.search(/await tryCall\(/);
+  assert.ok(firstWrite > bail,
+    'the dry-run bail-out must come BEFORE the first write, or a preview mutates');
+});
+
+test('status recommends a command that can actually act in the state it is printing', () => {
+  // The regression itself. `status` printed
+  //   "`npm run pipeline -- resume --operator-asked` puts them right."
+  // while the pipeline was running, which is the one state where it cannot.
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  const block = code.slice(code.indexOf('STRANDED:'), code.indexOf("} else if (cmd === 'sweep') {"));
+  assert.match(block, /pipeline -- sweep/, 'it must point at the sweep');
+  assert.doesNotMatch(block, /resume --operator-asked/,
+    'and must never again point a reader at a command that no-ops here');
 });
