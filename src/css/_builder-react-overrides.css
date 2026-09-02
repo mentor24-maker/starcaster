@@ -7869,3 +7869,158 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   color: var(--ink-secondary);
   white-space: pre-line;
 }
+
+/* ── Media Manager tags ─────────────────────────────────────────────────── */
+
+.builder-react-root .builder-media-manager-tag-btn {
+  border: 0;
+  background: none;
+  padding: 0 0 0 0.35rem;
+  cursor: pointer;
+  color: var(--builder-media-accent, #0f4f8f);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.builder-react-root .builder-media-manager-tag-btn:focus-visible {
+  outline: 2px solid var(--builder-media-accent, #0f4f8f);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.builder-react-root .builder-media-manager-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.builder-react-root .builder-media-manager-tag {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-media-manager-tag-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.builder-react-root .builder-media-manager-tag-modal-inner {
+  width: min(420px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+}
+
+.builder-react-root .builder-media-manager-tag-modal-title {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--ink-primary);
+  word-break: break-word;
+}
+
+.builder-react-root .builder-media-manager-tag-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.builder-react-root .builder-media-manager-tag-choice {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+/* A chosen tag has to read as ON at a glance — the list is a wall of pills
+   otherwise, and which ones apply is the whole question the modal answers. */
+.builder-react-root .builder-media-manager-tag-choice[aria-pressed="true"] {
+  background: var(--builder-media-accent, #0f4f8f);
+  border-color: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+}
+
+.builder-react-root .builder-media-manager-tag-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-media-manager-tag-add {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.builder-react-root .builder-media-manager-tag-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-sm);
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+}
+
+.builder-react-root .builder-media-manager-tag-add-btn {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--builder-media-accent, #0f4f8f);
+  border-radius: 5px;
+  background: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-media-manager-tag-add-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The confirm/cancel buttons in the tag modal and the delete confirmation.
+   These were unstyled, and inherited WHITE text on a transparent background
+   from the public-site button rules — invisible on a white panel, in both
+   places. Nothing tests CSS, so it took a screenshot to see it. */
+.builder-react-root .builder-media-manager-btn {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-media-manager-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.builder-react-root .builder-media-manager-btn-primary {
+  background: var(--builder-media-accent, #0f4f8f);
+  border-color: var(--builder-media-accent, #0f4f8f);
+  color: var(--btn-text);
+}
+
+.builder-react-root .builder-media-manager-btn-danger {
+  background: var(--danger, #a03c28);
+  border-color: var(--danger, #a03c28);
+  color: var(--btn-text);
+}

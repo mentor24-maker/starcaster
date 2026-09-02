@@ -552,7 +552,7 @@ const buildTuned = (ids) => ({
     name: 'Media Manager',
     settings: {
       kinds: 'all', showSize: 'true', showDate: 'true',
-      showDelete: 'true', accentColor: '#0f4f8f',
+      showTags: 'true', showDelete: 'true', accentColor: '#0f4f8f',
     },
   },
 
