@@ -412,6 +412,20 @@ async function sweepStranded({ by, queue, apply = false, strandedAfterMs = STRAN
   return { swept, found, sweepState: { checked: sweepChecked, left: left.length, why: sweepWhy } };
 }
 
+/**
+ * The 90-minute staleness threshold, overridable — ONE definition, read by
+ * both commands that sweep. It exists so the dry run is a real instrument:
+ * without it the only way to watch this find anything is to wait an hour and a
+ * half for a pass to die, which is how a sweep ships having never been seen to
+ * work. Named in the output whenever it is not the default, because a reading
+ * taken with a moved threshold is a different reading.
+ */
+const strandedAfterMs = num('stranded-after-minutes', STRANDED_AFTER_MS / 60000) * 60000;
+function noteThreshold() {
+  if (strandedAfterMs === STRANDED_AFTER_MS) return;
+  console.log(`(counting a ticket stranded after ${humanDuration(strandedAfterMs)}, not the usual ${humanDuration(STRANDED_AFTER_MS)})`);
+}
+
 const cmd = process.argv[2];
 
 if (cmd === 'check') {
@@ -488,14 +502,12 @@ if (cmd === 'check') {
   // having never been watched to work. Named in the output whenever it is not
   // the default, because a reading taken with a moved threshold is a different
   // reading and must not be quoted as if it were the standard one.
-  const strandedAfterMs = num('stranded-after-minutes', STRANDED_AFTER_MS / 60000) * 60000;
+
   const sw = await readSwitch({ withQueue: true });
   console.log(verdictFrom(sw).message);
   console.log('');
 
-  if (strandedAfterMs !== STRANDED_AFTER_MS) {
-    console.log(`(counting a ticket stranded after ${humanDuration(strandedAfterMs)}, not the usual ${humanDuration(STRANDED_AFTER_MS)})`);
-  }
+  noteThreshold();
   const { swept, found, sweepState } = await sweepStranded({ by, queue: sw.queue, apply, strandedAfterMs, command: 'sweep' });
   console.log(sweptSummary(swept, { ...sweepState, applied: apply }));
 
@@ -614,8 +626,25 @@ if (cmd === 'check') {
   }
   const before = readTrail(sw.comments || []).state;
   if (!before?.paused) {
+    // THERE IS NOTHING TO RESUME, BUT THERE MAY BE PLENTY TO SWEEP, and this
+    // is the command muscle memory reaches for — `status` recommended it by
+    // name for months. On 2026-09-02 it was typed against four stranded
+    // builds, printed this sentence, and exited having done nothing. Saying
+    // "nothing to resume" is correct; leaving without looking is not.
     console.log('Nothing to resume — the pipeline is already running.');
-    process.exit(0);
+    console.log('Sweeping for stranded work anyway, which is the other half of what this command does.');
+    noteThreshold();
+    console.log('');
+    const { swept, found, sweepState } = flag('no-sweep')
+      ? { swept: [], found: 0, sweepState: { checked: false, left: 0, why: 'the --no-sweep flag was used' } }
+      : await sweepStranded({ by, queue: sw.queue, apply: true, strandedAfterMs });
+    console.log(sweptSummary(swept, sweepState));
+    if (swept.length) await announce(resumedMessage({ by, swept, ...sweepState }).replace(
+      /^\[CC-starcaster\] The build pipeline is RUNNING again[^\n]*\n/,
+      `[CC-starcaster] Stranded work swept by ${by} (the pipeline was already running).\n`,
+    ));
+    console.error(`  requests this pass: ${requestCount}`);
+    process.exit(sweepExitCode({ ...sweepState, found, applied: true }));
   }
 
   // Sweep first, then lift the flag. In this order a ticket that was stranded
@@ -623,7 +652,7 @@ if (cmd === 'check') {
   // next pass can pick it up rather than finding it a minute later.
   const { swept, sweepState } = flag('no-sweep')
     ? { swept: [], sweepState: { checked: false, left: 0, why: 'the --no-sweep flag was used' } }
-    : await sweepStranded({ by, queue: sw.queue, apply: true });
+    : await sweepStranded({ by, queue: sw.queue, apply: true, strandedAfterMs });
 
   const at = new Date().toISOString();
   await writeRecord(sw.task.id, resumeRecord({ by, node: thisNodeName(), at }), 'Resume', at);

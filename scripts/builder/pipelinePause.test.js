@@ -1082,8 +1082,8 @@ test('the sweep is reachable without pausing anything', () => {
   // It must be the SAME sweep, not a second copy that drifts from it.
   assert.equal((code.match(/async function sweepStranded\(/g) || []).length, 1,
     'one sweep exists');
-  assert.equal((code.match(/await sweepStranded\(/g) || []).length, 2,
-    'and exactly two callers: `resume` and `sweep`');
+  assert.equal((code.match(/await sweepStranded\(/g) || []).length, 3,
+    'and exactly three callers: `sweep`, `resume` on a paused pipeline, and `resume` on a running one');
 });
 
 test('the sweep command does not sit behind the pause state or an authorization', () => {
@@ -1139,4 +1139,35 @@ test('each caller tells the note which command it is', () => {
   const code = withoutComments(read('scripts/pipeline.mjs'));
   assert.match(code, /command: 'sweep'/, 'the standalone command must identify itself');
   assert.match(code, /kind: s\.kind, command,/, 'and the sweep must pass it through to the note');
+});
+
+test('resume on an already-running pipeline sweeps instead of exiting', () => {
+  // The morning of 2026-09-02, verbatim: `status` said four builds were
+  // stranded and named this command; the command printed "Nothing to resume —
+  // the pipeline is already running." and exited 0 having looked at nothing.
+  // Saying there is nothing to resume is correct. Leaving without looking is
+  // the defect, and it is the half a reader never sees because the sentence
+  // sounds like a complete answer.
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  const from = code.indexOf("Nothing to resume — the pipeline is already running.");
+  assert.ok(from > 0, 'the already-running message must still exist');
+  // Everything up to the end of that arm.
+  const arm = code.slice(from, code.indexOf('const at = new Date().toISOString();', from));
+  assert.match(arm, /await sweepStranded\(/, 'it must sweep before it leaves');
+  assert.match(arm, /sweptSummary\(swept, sweepState\)/, 'and report what the sweep found');
+  // The bare `process.exit(0)` that used to be the whole arm must be gone:
+  // the exit code now has to carry the sweep's outcome.
+  assert.doesNotMatch(arm.slice(0, arm.indexOf('sweepStranded')), /process\.exit\(/,
+    'nothing may exit before the sweep runs');
+  assert.match(arm, /process\.exit\(sweepExitCode\(/, 'and the exit code must be the sweep’s');
+});
+
+test('both sweeping commands read ONE staleness threshold', () => {
+  // Two copies of "how old is stranded" are two thresholds, and they drift the
+  // first time one is tuned.
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  assert.equal((code.match(/num\('stranded-after-minutes'/g) || []).length, 1,
+    'the option is parsed in exactly one place');
+  assert.equal((code.match(/strandedAfterMs \}\)/g) || []).length, 3,
+    'and passed to all three sweep call sites (sweep, resume-running, resume-paused)');
 });
