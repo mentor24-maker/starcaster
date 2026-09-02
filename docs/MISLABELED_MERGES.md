@@ -72,3 +72,57 @@ If this recurs often enough to be worth automating, the cheap move is a
 rather than having it inferred. Not built yet: one occurrence is a practice
 problem, not a tooling problem, and a flag nobody remembers to pass fixes
 nothing.
+
+## 2026-09-01: the title now comes from the ticket, not from a commit
+
+Task `86bbqwupk`. The practice above — "commit the chore before the feature" —
+is the right instinct and it is still what an unstamped branch relies on. But
+it is a rule a human has to remember at the exact moment they are distracted by
+a conflict, which is the shape of rule that fails. And it only ever addressed
+half the problem: even a perfectly-chosen commit subject is a sentence somebody
+typed freehand, and the operator pairs the ClickUp Closed list against the
+GitHub/Vercel deploy list **by name**. Two freehand names for the same piece of
+work do not pair up.
+
+Measured across the ten most recently merged PRs on 2026-08-31, two did not
+match their ticket:
+
+| PR | PR title | Ticket title |
+|---|---|---|
+| #482 | Builder: put the Overlay Screen editor into the React section panel | Builder: the Overlay Screen editor never made it into the React section panel |
+| #481 | Builder: parallax — a background image or video that drifts slower than the page | Builder: parallax — a background image or video that scrolls slower than the page |
+
+#481 is the dangerous one: a single word apart ("drifts" against "scrolls"), so
+it reads as a match until you look twice. A near-match is worse than an obvious
+mismatch, because nobody checks it.
+
+So `npm run ship` no longer infers the title at all when it does not have to.
+It reads the branch's `clickup-task` stamp, asks ClickUp for the task name
+(`npm run clickup -- task-name --task <id>`, which prints the name on stdout and
+nothing else) and uses it verbatim. GitHub appends `(#NNN)` on squash-merge,
+which is expected.
+
+The flag suggested above — "a `--title` flag so the shipper can state the name
+outright" — was deliberately not built, for the reason given there: a flag
+nobody remembers to pass fixes nothing. Reading the stamp needs nobody to
+remember anything.
+
+**`pickPullRequestCommit` is untouched and is still the fallback**, on three
+paths, each of which says out loud which one it took and why:
+
+- the branch carries no `clickup-task` stamp (a legitimate thing to have);
+- ClickUp cannot be reached, or the token is bad;
+- ClickUp answers with no usable name.
+
+A silent fallback would be how this rule gets quietly lost again — "the title
+came from the ticket" and "the fetch failed and nobody looked" print the same
+nothing — so every fallback names the reason and prints the `gh pr edit` command
+that renames the PR by hand. None of them stops the ship: a ClickUp outage is
+not a reason to abandon a green, mergeable branch.
+
+The `#304` shape — a chore committed second, after the work — therefore cannot
+recur on a stamped branch. On an unstamped one the practice above still stands.
+
+Rules in `scripts/builder/pullRequestTitle.js`, tested in
+`scripts/builder/pullRequestTitle.test.js`. The loop lane never calls `ship`, so
+the same rule is written into `.claude/skills/loop-build/SKILL.md` step 7.

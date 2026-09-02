@@ -2220,6 +2220,12 @@ and a work-log commit is hand-authored. Squash-merge then makes that title
 permanent. That is exactly the #304 failure, and why
 `docs/MISLABELED_MERGES.md` exists.
 
+Since 2026-09-01 (task 86bbqwupk) `ship` titles the PR from the branch's
+`clickup-task` stamp instead, so on a stamped branch a work-log commit can no
+longer steal the name. The ordering above still matters for the other reason —
+a push landing seconds after `gh pr create` makes GitHub drop both check runs —
+and `pickPullRequestCommit` is still what names an unstamped branch's PR.
+
 ## The party line is not the only way out — and the 2026-08-23 outage
 
 The relay only hands a ticket back once the operator's answer has been
