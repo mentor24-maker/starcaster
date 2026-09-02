@@ -3748,6 +3748,7 @@ export function createEmptyModule(
                       : type === "media-manager"
                         ? {
                             kinds: "all",
+                            showFilters: "true",
                             showSize: "true",
                             showDate: "true",
                             showTags: "true",

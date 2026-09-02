@@ -4,6 +4,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  EMPTY_MEDIA_FILTERS,
+  MEDIA_ASPECTS,
+  mediaAssetMatchesFilters,
+  mediaFiltersActive,
+  mediaTagKey,
+  mediaTagOptions,
+  normalizeMediaTag,
+  type MediaFilters
+} from "@/lib/media-manager-filters";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import {
   builderBackgroundParallaxActive,
@@ -4430,6 +4440,8 @@ type MediaAsset = {
   id: number;
   assetName: string;
   assetType: string;
+  category?: string;
+  aspect?: string;
   location: string;
   thumbnailUrl?: string;
   tags?: string[];
@@ -4444,18 +4456,7 @@ type MediaUploadProgress = { name: string; index: number; total: number };
 
 type MediaTag = { id: number; tag: string };
 
-/**
- * One spelling of a tag, matching lib/assetTagsStore.js. Comparison is
- * case-insensitive but the casing an admin typed is kept — "Courts" reads as
- * "Courts", while "courts " never becomes a second entry.
- */
-function normalizeMediaTag(value: string): string {
-  return String(value || "").trim().replace(/\s+/g, " ");
-}
-
-function mediaTagKey(value: string): string {
-  return normalizeMediaTag(value).toLowerCase();
-}
+type MediaCategory = { id: number; assetType: string; category: string };
 
 function mediaIsVideo(asset: MediaAsset): boolean {
   if (String(asset.assetType || "").toLowerCase() === "video") return true;
@@ -4513,6 +4514,7 @@ function MediaManagerPreview({
   const showDate = (settings.showDate ?? "true") !== "false";
   const showDelete = (settings.showDelete ?? "true") !== "false";
   const showTags = (settings.showTags ?? "true") !== "false";
+  const showFilters = (settings.showFilters ?? "true") !== "false";
 
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -4525,6 +4527,8 @@ function MediaManagerPreview({
   const [deleteTarget, setDeleteTarget] = useState<MediaAsset | null>(null);
   const [busy, setBusy] = useState(false);
   const [projectTags, setProjectTags] = useState<MediaTag[]>([]);
+  const [projectCategories, setProjectCategories] = useState<string[]>([]);
+  const [filters, setFilters] = useState<MediaFilters>(EMPTY_MEDIA_FILTERS);
   const [tagTarget, setTagTarget] = useState<MediaAsset | null>(null);
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
@@ -4568,7 +4572,31 @@ function MediaManagerPreview({
       .catch(() => setProjectTags([]));
   }
 
-  useEffect(() => { loadAssets(); loadProjectTags(); }, []);
+  function loadProjectCategories() {
+    fetch("/api/asset-categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, "Failed to load categories"));
+        const list = (d?.categories ?? d?.data ?? []) as MediaCategory[];
+        // The endpoint returns one entry per (assetType, category) pair, so the
+        // same category arrives once per type it is used on. De-duplicated by
+        // name here or the select lists "Logos" three times.
+        const seen = new Map<string, string>();
+        (Array.isArray(list) ? list : []).forEach((c) => {
+          const name = String(c?.category || "").trim();
+          if (name && !seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+        });
+        setProjectCategories([...seen.values()].sort((a, b) => a.localeCompare(b)));
+      })
+      // A category list that will not load must not stop the grid rendering.
+      .catch(() => setProjectCategories([]));
+  }
+
+  useEffect(() => { loadAssets(); loadProjectTags(); loadProjectCategories(); }, []);
+
+  function setFilter(key: keyof MediaFilters, value: string) {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }
 
   function openTagEditor(asset: MediaAsset) {
     setTagTarget(asset);
@@ -4641,11 +4669,19 @@ function MediaManagerPreview({
     }
   }
 
-  const visible = assets.filter((asset) => {
+  // What the module is configured to hold at all. Separate from the operator's
+  // filters below, so an empty grid can say WHICH of the two emptied it.
+  const inScope = assets.filter((asset) => {
     if (kinds === "images") return !mediaIsVideo(asset);
     if (kinds === "videos") return mediaIsVideo(asset);
     return true;
   });
+
+  const filtersOn = showFilters && mediaFiltersActive(filters);
+
+  const visible = !filtersOn
+    ? inScope
+    : inScope.filter((asset) => mediaAssetMatchesFilters(asset, filters));
 
   async function uploadOne(file: File) {
     const isVideo = /^video\//i.test(file.type) || /\.(mp4|mov|m4v|webm|ogg)$/i.test(file.name);
@@ -4799,7 +4835,13 @@ function MediaManagerPreview({
           </span>
         </label>
         <span className="builder-media-manager-count">
-          {loading ? "Loading…" : `${visible.length} file${visible.length === 1 ? "" : "s"}`}
+          {loading
+            ? "Loading…"
+            : filtersOn
+              // "0 files" while 40 sit behind a filter is the same lie as the
+              // wrong empty state, in a smaller space.
+              ? `${visible.length} of ${inScope.length} file${inScope.length === 1 ? "" : "s"}`
+              : `${visible.length} file${visible.length === 1 ? "" : "s"}`}
         </span>
       </div>
 
@@ -4809,13 +4851,97 @@ function MediaManagerPreview({
         </div>
       ) : null}
 
+      {showFilters ? (
+        <div className="builder-media-manager-filters">
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Name</span>
+            <input
+              className="builder-media-manager-filter-input"
+              onChange={(e) => setFilter("name", e.target.value)}
+              placeholder="Search filenames"
+              type="search"
+              value={filters.name}
+            />
+          </label>
+
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Aspect</span>
+            <select
+              className="builder-media-manager-filter-select"
+              onChange={(e) => setFilter("aspect", e.target.value)}
+              value={filters.aspect}
+            >
+              <option value="">All</option>
+              {MEDIA_ASPECTS.map((a) => (
+                <option key={a.value} value={a.value}>{a.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Tag</span>
+            <select
+              className="builder-media-manager-filter-select"
+              onChange={(e) => setFilter("tag", e.target.value)}
+              value={filters.tag}
+            >
+              <option value="">All</option>
+              {mediaTagOptions(projectTags, assets).map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="builder-media-manager-filter">
+            <span className="builder-media-manager-filter-label">Category</span>
+            <select
+              className="builder-media-manager-filter-select"
+              onChange={(e) => setFilter("category", e.target.value)}
+              value={filters.category}
+            >
+              <option value="">All</option>
+              {projectCategories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+
+          {/* Only when there is something to clear — a permanently visible
+              Clear reads as an action with no effect. */}
+          {mediaFiltersActive(filters) ? (
+            <button
+              className="builder-media-manager-btn builder-media-manager-clear"
+              onClick={() => setFilters(EMPTY_MEDIA_FILTERS)}
+              type="button"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {statusMsg ? <div className="builder-media-manager-status">{statusMsg}</div> : null}
       {errorMsg ? <div className="builder-media-manager-error">{errorMsg}</div> : null}
       {loadError ? <div className="builder-media-manager-error">{loadError}</div> : null}
 
-      {!loading && !visible.length && !loadError ? (
+      {/* Two different emptinesses, and they must never be confused: nothing
+          uploaded, versus everything hidden by a filter. */}
+      {!loading && !visible.length && !loadError && !filtersOn ? (
         <p className="builder-media-manager-empty">
           No media yet. Use Upload Files to add images or video.
+        </p>
+      ) : null}
+
+      {!loading && !visible.length && !loadError && filtersOn ? (
+        <p className="builder-media-manager-empty">
+          No files match these filters.{" "}
+          <button
+            className="builder-media-manager-clear-inline"
+            onClick={() => setFilters(EMPTY_MEDIA_FILTERS)}
+            type="button"
+          >
+            Clear filters
+          </button>
         </p>
       ) : null}
 
