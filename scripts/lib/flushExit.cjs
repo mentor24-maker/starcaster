@@ -1,17 +1,19 @@
 /**
  * Print, then leave — without losing the last 64KB of what you printed.
  *
- * `process.exit()` does not flush. Writes to `process.stdout` are synchronous
- * for pipes on Linux and Windows and ASYNCHRONOUS for pipes on macOS (Node's
- * own docs), so on a Mac anything still sitting in the stream when `exit` is
- * called is simply discarded. Measured on both, 2026-09-02, not reasoned about
- * — the same child printing 200,000 bytes into the same parent:
+ * `process.exit()` does not flush: anything still sitting in the stream when it
+ * is called is discarded. Node's docs say stdout-to-a-pipe is asynchronous on
+ * macOS and synchronous on Linux, which makes it sound like a Mac bug. It is
+ * not. Measured 2026-09-02, the same child printing 200,000 bytes into the same
+ * parent, three places:
  *
- *     darwin  -> the parent got  65535     *** 134,465 bytes gone ***
- *     linux   -> the parent got 200000     intact
+ *     macOS (the Mini, where the hourly job runs)    65,535   every time
+ *     Linux (node:20 in Docker, on that Mac)        200,000   nothing lost
+ *     Linux (the GitHub Actions runner)             146,176   53,825 lost
  *
- * Which is why CI could not have caught this and the machine that runs the
- * hourly job could: the runner is Linux, the Mini is not. On the Mac, by size:
+ * It is a race everywhere. The Mac loses it every single time; Linux loses it
+ * only when the reader is slow, which is the worse half to own because it is
+ * the half that passes in testing and fails in production. On the Mac, by size:
  *
  *     printed   65535 bytes -> the parent got   65535   intact
  *     printed   65536 bytes -> the parent got   65536   intact

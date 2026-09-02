@@ -13,16 +13,29 @@
  * anything up to it survives by luck. The first byte past it is lost, and so is
  * everything after.
  *
- * AND IT IS PLATFORM-SPECIFIC, which is the part worth knowing. From Node's own
- * docs, writes to `process.stdout` are synchronous for pipes on Linux and
- * Windows and ASYNCHRONOUS for pipes on macOS. So `process.exit()` discards
- * unflushed output on a Mac and does not on CI's Linux runner — this bug could
- * never have been caught by CI, and the machine that actually runs the hourly
- * job is a Mac. The control tests below therefore assert the behaviour of the
- * platform they are ON, and say which one that was, rather than skipping: a
- * check that quietly does not run is the failure this whole PR is about
- * (docs/DOCTRINE.md 3.11). The tests of the FIX are unconditional, because
- * flushing before leaving is correct everywhere.
+ * HOW MUCH is lost is platform-dependent, and the first version of this file
+ * got that wrong — worth writing down, because the wrong version is the
+ * intuitive one. Node's docs say stdout-to-a-pipe is synchronous on Linux and
+ * asynchronous on macOS, so the obvious reading is "a Mac bug." Measured, the
+ * same child printing 200,000 bytes into the same parent:
+ *
+ *     macOS (the Mini, where the hourly job runs)   65,535   every time
+ *     Linux (node:20 in Docker, this machine)      200,000   nothing lost
+ *     Linux (the GitHub Actions runner)            146,176   53,825 lost
+ *
+ * So it is not a Mac bug. It is a race everywhere — the Mac loses it reliably
+ * at size, Linux loses it only when the reader is slow, and that second half is
+ * the worse one to own because it is the half that passes in testing.
+ *
+ * The first version of this file asserted the exact figure, 65,536, and that
+ * was itself flaky: run the 66,000-byte case on a loaded Mac and all 66,001
+ * bytes arrive, because the parent drains the pipe before the child reaches
+ * `exit`. Reproduced deliberately under fourteen busy CPUs. So the control
+ * asserts the PROPERTY — the old shape loses output, the fix never does — and
+ * REPORTS the exact number as a diagnostic rather than pinning it. A racy
+ * assertion in the test file of a watchdog is the same defect the watchdog is
+ * for. It never skips and always says what it measured: a check that quietly
+ * does not run is what this whole PR is about (docs/DOCTRINE.md 3.11).
  */
 
 const test = require('node:test');
@@ -34,9 +47,13 @@ const { spawnSync } = require('node:child_process');
 
 const HELPER = path.join(__dirname, '..', 'lib', 'flushExit.cjs');
 const PIPE_BUFFER = 65536;
-// macOS: stdout-to-a-pipe is asynchronous, so exiting straight after printing
-// loses whatever has not flushed. Linux/Windows: synchronous, so it does not.
-const PIPE_IS_ASYNC = process.platform === 'darwin';
+// Where a 200KB payload is reliably lost by the old shape, and so where the
+// break-test of the fix actually bites. Elsewhere the race can go either way —
+// see the header; CI lost 53,825 bytes and Docker lost none.
+const LOSS_IS_RELIABLE = process.platform === 'darwin';
+// The size to measure at. Just past the buffer is racy even on a Mac; well past
+// it is not, because the child cannot outrun a parent that has 200KB to drain.
+const WELL_PAST_THE_BUFFER = 200000;
 const WHERE = `measured on ${process.platform}`;
 
 /** Run a child that prints `bytes` of output through a pipe, and see what arrives. */
@@ -77,40 +94,49 @@ console.log('x'.repeat(n));
 process.exit(0);
 `;
 
-test('the control: what the OLD shape does on this platform, stated out loud', () => {
-  // Not a skip on Linux — an assertion of the opposite, so the platform split
-  // itself is pinned. If macOS ever stops truncating, or Linux ever starts,
-  // this fails and the next reader learns it here rather than in production.
-  const big = printThrough(THE_OLD_WAY, { bytes: 200000 });
-  if (PIPE_IS_ASYNC) {
-    assert.equal(big.stdout.length, PIPE_BUFFER,
-      `${WHERE}: the old shape must truncate at exactly the pipe buffer, or every test below `
-      + 'is uncalibrated and the bug this PR fixes is not the bug that was measured');
-  } else {
-    assert.equal(big.stdout.length, 200001,
-      `${WHERE}: pipes are synchronous here, so the old shape does NOT lose output. This is why `
-      + 'CI could never have caught this, and why the Mac that runs the hourly job could.');
+test('the control: the old shape is measured here, and reported whether or not it can be pinned', (t) => {
+  const got = printThrough(THE_OLD_WAY, { bytes: WELL_PAST_THE_BUFFER }).stdout.length;
+  t.diagnostic(`${WHERE}: the old shape printed ${WELL_PAST_THE_BUFFER + 1} bytes and the parent received ${got}`);
+
+  if (LOSS_IS_RELIABLE) {
+    // The property, not the figure. `got` is 65,536 every time it has been
+    // looked at, and the header records that — but asserting it is how this
+    // file became flaky once already.
+    assert.ok(got < 200001,
+      `${WHERE}: the old shape must LOSE output at this size, or the break-tests below prove `
+      + `nothing — the instrument has changed. It delivered all ${got} bytes.`);
+    return;
   }
+
+  // Elsewhere the loss is a race, so there is no stable number to assert — and
+  // an assertion that cannot fail is worse than none, because it reads as
+  // proof. What IS true on every platform gets asserted instead: the old shape
+  // never delivers more than was printed, and the fix always delivers all of
+  // it. That keeps this a real check rather than a skip wearing a green tick.
+  assert.ok(got <= 200001, `${WHERE}: received more than was printed (${got}) — impossible`);
+  assert.equal(printThrough(WITH_HELPER, { bytes: 200000 }).stdout.length, 200001,
+    `${WHERE}: whatever this platform does to the old shape, the fix must lose nothing`);
 });
 
 test('BREAK-TEST: 200,000 bytes printed through a pipe arrive whole', () => {
   // Revert printAndExit to `console.log(text); process.exit(code)` and this
-  // reads 65536 instead of 200001 — ON A MAC. On Linux the revert passes,
-  // which is exactly why the break-test has to be run where the job runs.
+  // reads 65536 instead of 200001 on a Mac, and something unpredictable
+  // elsewhere. Break-test it where the job runs, or the revert may pass.
   const r = printThrough(WITH_HELPER, { bytes: 200000 });
   assert.equal(r.stdout.length, 200001, 'the payload plus its newline, nothing lost');
   assert.equal(r.stdout.trimEnd().length, 200000);
 });
 
-test('the first byte past the buffer is where the old way started losing, and the new way does not', () => {
-  // 65,536 survives by luck everywhere. 66,000 is the smallest round number
-  // that does not on a Mac, and it is the measurement in the helper's header.
+test('just past the buffer, the fix delivers everything — and the old shape is a coin toss', () => {
+  // Under the buffer, every shape on every platform agrees — the kernel takes
+  // it in one go and there is nothing left to lose.
   assert.equal(printThrough(THE_OLD_WAY, { bytes: 65535 }).stdout.length, 65536,
-    'under the buffer, both shapes and both platforms agree');
-  assert.equal(printThrough(THE_OLD_WAY, { bytes: 66000 }).stdout.length,
-    PIPE_IS_ASYNC ? PIPE_BUFFER : 66001,
-    `${WHERE}: where the old shape starts losing, if it does`);
-  // The fix, on every platform: past the buffer, nothing is lost.
+    'under the buffer, both shapes and every platform agree');
+
+  // The fix, everywhere and unconditionally. This is the assertion that matters,
+  // and the only one at this size: what the OLD shape does with 66,000 bytes is
+  // a coin toss even on a Mac — measured, it delivers all of it under load —
+  // so there is nothing here to assert about it and nothing is asserted.
   assert.equal(printThrough(WITH_HELPER, { bytes: 66000 }).stdout.length, 66001);
 });
 
