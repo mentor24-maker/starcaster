@@ -201,6 +201,14 @@ test('clickup_direct has a machine-readable task-name command that keeps stdout 
   );
 });
 
+test('task-name is listed in the command help, or nobody will find it', () => {
+  // A command that only `ship` knows about is a command a hand-driven session
+  // re-invents by parsing `get`, which is the parse this exists to replace.
+  const src = read('scripts/clickup_direct.mjs');
+  const usage = src.slice(src.indexOf('function usage'), src.indexOf('function usage') + 20000);
+  assert.match(usage, /task-name --task <id>/, 'the usage block must advertise it');
+});
+
 test('loop-build writes the title rule down, since the loop lane never calls ship', () => {
   const skill = read('.claude/skills/loop-build/SKILL.md');
   assert.match(
