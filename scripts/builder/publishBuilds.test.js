@@ -46,12 +46,22 @@ test('a broken publish table degrades to the draft, never to no page', () => {
   assert.match(reader, /if \(!res\.ok \|\| !Array\.isArray\(res\.data\) \|\| !res\.data\.length\) return null;/);
 });
 
-test('the build read uses the same address rules as the draft', () => {
-  // If these disagree, publishing a site silently moves its pages.
+test('the build read does not have address rules of its own to disagree with', () => {
+  // This test used to compare the two readers' NORMALIZATION — lower-case,
+  // trim slashes, ''≡'home' — and pass, under a comment warning that if they
+  // disagreed "publishing a site would silently move its pages". They did
+  // disagree, on the half it never looked at: the tie-break between two pages
+  // sharing an address. On 2026-09-02 that served Delray's
+  // /pickleball-videos from an abandoned page for hours.
+  //
+  // Two copies of a rule cannot be kept in step by a test that eyeballs them.
+  // There is one copy now (lib/publicSitePageAddress.js), and the assertion is
+  // that the snapshot reader owns no second one.
   const reader = read('lib/publishedPageRead.js');
-  assert.match(reader, /wanted === ''\s*\|\|\s*wanted === 'home'/, 'root equivalence');
-  assert.match(reader, /toLowerCase\(\)/, 'case-insensitive');
-  assert.match(reader, /replace\(\/\^\\\/\+\|\\\/\+\$\/g, ''\)/, 'trims surrounding slashes');
+  assert.match(reader, /resolvePublicPageIdForSlug/, 'it defers the address question to the drafts');
+  for (const rule of [/wanted === ''/, /toLowerCase\(\)/, /replace\(\/\^\\\/\+/]) {
+    assert.doesNotMatch(reader, rule, `must not reimplement the address rule: ${rule}`);
+  }
 });
 
 test('publishing writes a batch and reports what remains', () => {
