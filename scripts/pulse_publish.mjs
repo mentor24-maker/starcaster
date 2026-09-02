@@ -14,8 +14,13 @@
  *      failure of this job.
  *   1  the pass could not complete: the pulse itself did not run, the pause
  *      switch could not be READ (which is not the same as it being paused —
- *      see `pipelineSwitch`), or the durable record could not be written.
- *      That is a broken watchdog, and a broken watchdog has to be loud.
+ *      see `pipelineSwitch`), the durable record could not be written, or it
+ *      found something and could not DELIVER it to the bus. That last one is
+ *      the newest and the least obvious: a run that reads perfectly and ships
+ *      nothing is still a watchdog nobody is hearing. A broken watchdog has to
+ *      be loud, and "loud" here means both surfaces — non-zero so the failure
+ *      alert fires this hour, and no heartbeat so the roll call notices even if
+ *      the bus is what is down.
  *
  * A PAUSED pipeline is not a failure and exits 0. It is a complete pass that
  * correctly stayed quiet, so it records its heartbeat like any other.
@@ -451,6 +456,11 @@ if (!DRY) {
 const cleared = DRY ? [] : clearStale({ items, measured });
 if (cleared.length) console.log(`Cleared ${cleared.length} suppression stamp(s) for findings that have gone away.`);
 
+// What the bus was OWED and what it actually got. A pass that found things and
+// delivered none of them must not end as a success — see digest.deliveryOutcome.
+let owed = 0;
+let sendFailure = null;
+
 if (!items.length) {
   console.log('Nothing to announce — no alarms and nothing it could not read.');
 } else {
@@ -462,6 +472,7 @@ if (!items.length) {
       + `${Math.round(heartbeat.REPOST_EVERY_MS / 3600000)}h — not posting those again.`);
   }
   if (due.length) {
+    owed = due.length;
     const text = digest.renderPulsePost({
       items: due,
       node: NODE.name || 'an unnamed machine',
@@ -487,17 +498,28 @@ if (!items.length) {
       } catch (err) {
         // Posted-and-not-stamped costs a duplicate; not-posted-and-stamped
         // costs a silence. Only one of those is recoverable, so a failed send
-        // is never recorded as sent.
-        console.log(`Could NOT post to the bus (${String(err?.message || err).slice(0, 300)}).`);
+        // is never recorded as sent — that is what makes a TRANSIENT failure
+        // heal itself on the next run.
+        sendFailure = String(err?.message || err).slice(0, 300);
+        console.log(`Could NOT post to the bus (${sendFailure}).`);
         console.log('Not stamping it as sent, so the next pass tries again.');
       }
     }
   }
 }
 
-// The beat, and only on a pass that actually completed. It is what makes the
-// roll call able to say this job has stopped firing — which is the exact
-// failure that produced this ticket, one floor up.
-recordBeat();
+// The beat, and only on a pass that actually completed AND delivered what it
+// found. It is what makes the roll call able to say this job has stopped
+// firing — which is the exact failure that produced this ticket, one floor up.
+// A beat on a pass that shipped nothing certifies the opposite of that.
+const delivery = digest.deliveryOutcome({ due: owed, delivered: !sendFailure, why: sendFailure || '' });
+if (delivery.loud) {
+  console.log('');
+  console.log(`PULSE PUBLISH FAILED — ${delivery.why}`);
+  console.log('The reading above is real and the durable record holds it, but the alert did not go out.');
+  console.log('Exiting non-zero so report_job_failure.mjs says so, and NOT beating, so the roll call');
+  console.log('notices too if the bus stays unreachable for longer than the failure alert can cover.');
+}
+if (delivery.beat) recordBeat();
 
-process.exit(0);
+process.exit(delivery.exit);

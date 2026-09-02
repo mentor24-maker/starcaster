@@ -66,6 +66,43 @@ read back afterwards and compared. If it comes back empty or a fraction of its
 size, the run says so loudly instead of finishing cheerfully over a blank
 ticket.
 
+A third review pass found the last shape of the same problem, and it is the one
+that sounds least like a bug: the check could run perfectly, find everything,
+deliver none of it, and report a clean pass. If the message to the party line
+failed to send, the code wrote a line about it in a log nobody reads and then
+carried on to record its heartbeat and finish successfully. So a day where
+ClickUp was refusing messages — it has a daily limit, and the chat has gone down
+before — would have been a full day of real alarms reaching nobody, with every
+surface saying the job was healthy. A run that ships nothing now ends as a
+failure: it raises the ordinary failure alert straight away, and it withholds
+its heartbeat, so the daily roll call notices too if the party line itself is the
+thing that is down. Those two surfaces fail for different reasons, which is why
+it takes both. What has not changed is that a failed message is never marked as
+sent, so the next hour simply tries again and a one-off blip fixes itself.
+
+The same pass fixed a bug that had not happened yet but had a date on it. When
+one program prints something and another reads it, the pipe between them holds
+64 kilobytes, and the printing program was quitting the instant it finished
+writing rather than waiting for the reader to take it — so anything past 64
+kilobytes was thrown away. Today's report is 39 kilobytes, comfortably under.
+But it grows by about 145 bytes for every finished ticket, and there are 195 of
+them; at somewhere around 380 the report would have crossed the line, and from
+that hour on every single run would have failed to be read, posted an alarm
+about a fault that did not exist, and gone blind to the real ones. It now waits
+for its output to be taken before it leaves. Measured rather than reasoned
+about: with the fix a 135-kilobyte report arrives whole, and without it the same
+report arrives cut off at exactly 65,536 bytes and unreadable.
+
+And the third: when the Mini cannot tell which machine it is — a one-line file
+that says so has gone missing — the job correctly refuses to run rather than
+guess. Its own comment said it refuses "out loud." It did not: it stopped one
+step before the part that raises the alert, so the refusal went into a system
+log and nowhere a person looks. Nothing would have surfaced for up to 25 hours,
+and then as "the job has stopped firing," which points whoever reads it at the
+timer rather than at the missing file. It now leaves by the same door as every
+other failure, and a test fails if a future change ever adds a second exit ahead
+of the alert again.
+
 ## 2026-09-02 — The Carousel settings panel, and a green check that could not say what it had looked at (#446)
 
 The Carousel editor — the panel you open to edit a slideshow's slides — had been

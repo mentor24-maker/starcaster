@@ -10,6 +10,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const digest = require('../../lib/pulseDigest.js');
 const pulse = require('./pulse.js');
@@ -312,6 +314,55 @@ test('an UNREADABLE switch does not beat, exits non-zero, and says so loudly', (
 test('a RUNNING pipeline publishes and beats', () => {
   assert.deepEqual(digest.switchOutcome({ readable: true, paused: false }),
     { publish: true, beat: true, exit: 0, loud: false });
+});
+
+// --- round-3 send-back: a pass that delivered nothing is not a pass ---------
+
+test('a pass that found things and DELIVERED NONE of them does not beat and exits non-zero', () => {
+  // The defect verbatim: the catch around postBusMessage logged the failure and
+  // fell through to recordBeat() and exit(0), so six alarms reaching nobody
+  // ended as a green run on every surface — exit 0, heartbeat recorded,
+  // report_job_failure never fired, roll call showing the job alive and well.
+  const outcome = digest.deliveryOutcome({ due: 6, delivered: false, why: 'ClickUp 429' });
+  assert.equal(outcome.exit, 1,
+    'non-zero is what makes report_job_failure fire this hour');
+  assert.equal(outcome.beat, false,
+    'and withholding the beat is what makes the roll call notice at 25h even when the '
+    + 'bus itself is what is down — the two surfaces fail independently, so it takes both');
+  assert.equal(outcome.loud, true);
+  assert.match(outcome.why, /6 finding\(s\) were found and NONE of them reached the bus/);
+  assert.match(outcome.why, /ClickUp 429/, 'and it names the reason it could not send');
+});
+
+test('a delivered pass beats and exits 0', () => {
+  assert.deepEqual(digest.deliveryOutcome({ due: 6, delivered: true }),
+    { beat: true, exit: 0, loud: false, why: '' });
+});
+
+test('nothing due is delivered trivially — a quiet pass is a complete pass', () => {
+  // The common case by far, and it must not be dragged into the failure branch
+  // by a `delivered: false` default or by counting an empty send as a failure.
+  assert.deepEqual(digest.deliveryOutcome({ due: 0, delivered: true }),
+    { beat: true, exit: 0, loud: false, why: '' });
+  assert.deepEqual(digest.deliveryOutcome({ due: 0, delivered: false }),
+    { beat: true, exit: 0, loud: false, why: '' });
+  assert.deepEqual(digest.deliveryOutcome(),
+    { beat: true, exit: 0, loud: false, why: '' });
+});
+
+test('BREAK-TEST: the publisher decides its ending from what it DELIVERED, not from getting there', () => {
+  // Pins the wiring, not just the decision. The bug was entirely in the call
+  // site: the pure function did not exist, and `recordBeat(); process.exit(0)`
+  // sat unconditionally at the bottom of the file.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'pulse_publish.mjs'), 'utf8');
+  assert.match(src, /digest\.deliveryOutcome\(\{[^}]*delivered: !sendFailure/,
+    'pulse_publish.mjs must ask deliveryOutcome whether the send actually happened');
+  assert.match(src, /if \(delivery\.beat\) recordBeat\(\);/,
+    'the beat must be conditional on delivery');
+  assert.match(src, /process\.exit\(delivery\.exit\);/,
+    'and so must the exit code');
+  assert.doesNotMatch(src, /^recordBeat\(\);$/m,
+    'an unconditional recordBeat() at the bottom is the exact shape that was sent back');
 });
 
 test('the switch verdict reads `certain: false` as unreadable, not as paused', () => {

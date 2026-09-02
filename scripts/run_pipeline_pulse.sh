@@ -69,14 +69,21 @@ if [ "$owns" -ne 0 ]; then
   echo "Refusing to run rather than skipping quietly — a silent skip here is indistinguishable from"
   echo "a healthy pass, and this job's whole purpose is to make silence detectable."
   echo "Fix it once: echo <machine-name> > ~/.alphire-node   (npm run node:whoami shows the picture)"
-  echo "=== exit 1"
-  exit 1
+  # And it does NOT leave here. Until 2026-09-02 this branch was `exit 1` on the
+  # spot, which jumped over the report:failure block below — so "refusing out
+  # loud" was loud in the launchd log and silent everywhere a person looks.
+  # Nothing would surface for up to 25 hours, and then only as "stopped firing",
+  # which sends the next reader to launchd instead of to a one-line file in
+  # $HOME. `run_bus_relay.sh` never had this hole because its ownership check
+  # sits inside the command whose exit code feeds the reporter; this now has the
+  # same shape, with ONE exit path for every non-zero outcome.
+  status=1
+else
+  # No --job: the publisher defaults to loop-build, which is the loop whose log
+  # A1 reads and the one whose claims the check is actually about.
+  npm run --silent pulse:publish
+  status=$?
 fi
-
-# No --job: the publisher defaults to loop-build, which is the loop whose log
-# A1 reads and the one whose claims the check is actually about.
-npm run --silent pulse:publish
-status=$?
 echo "=== exit $status"
 
 if [ "$status" -ne 0 ]; then
