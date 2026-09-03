@@ -201,6 +201,17 @@ function main() {
   for (const note of vitestNotes) console.log(`[conventions] ${note}`);
   failures.push(...vitestFailures);
 
+  // A note written for whoever is BUILDING the page ("set a Form ID in module
+  // settings") rendering on the published tenant site, where the reader can do
+  // nothing about it. Own module and own blocking CI step for the same reason
+  // as the two above. Six were live on 2026-09-03, two of them re-introduced
+  // the same day they were fixed — which is why this is a check and not a note
+  // in a doc.
+  const builderOnlyNotes = require('./check_builder_only_notes.cjs');
+  const { failures: noteFailures, notes: noteNotes } = builderOnlyNotes.run({ all: MODE_ALL });
+  for (const note of noteNotes) console.log(`[conventions] ${note}`);
+  failures.push(...noteFailures);
+
   if (failures.length) {
     console.error('\n[conventions] Commit blocked — fix the following (or SKIP_CONVENTIONS=1 with a stated reason):\n');
     for (const f of failures) console.error(`  ✗ ${f}\n`);
