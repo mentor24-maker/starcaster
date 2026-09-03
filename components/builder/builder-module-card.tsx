@@ -63,6 +63,7 @@ import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-fi
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { MerchModuleEditor } from "./builder-merch-module-editor";
 import { BuilderCodeEmbed } from "./builder-code-embed";
+import { normalizeEmbedActivationMode } from "@/lib/builder-code-embed-activation";
 import { BuilderFloatingImageModuleSettings } from "./builder-floating-image-module-settings";
 import { BuilderSpeechBubbleModuleSettings } from "./builder-speech-bubble-module-settings";
 import { BuilderReminderModuleSettings } from "./builder-reminder-module-settings";
@@ -4091,6 +4092,22 @@ export function BuilderModuleCard({
                   }
                   placeholder="Optional internal label"
                 />
+              </label>
+              <label className="field">
+                <span>Loading</span>
+                <select
+                  value={normalizeEmbedActivationMode(module.settings.embedActivation)}
+                  onChange={(event) =>
+                    onUpdateModule((current) => ({
+                      ...current,
+                      settings: { ...current.settings, embedActivation: event.target.value }
+                    }))
+                  }
+                >
+                  <option value="auto">Automatic — charts wait for a click, everything else loads</option>
+                  <option value="immediate">Load right away</option>
+                  <option value="click">Wait for a click before loading</option>
+                </select>
               </label>
               <label className="field builder-code-editor-field">
                 <span>Embed code / snippet</span>
