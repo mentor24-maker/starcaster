@@ -655,6 +655,58 @@ export const RENDER_CONTRACTS = [
   },
 
   {
+    id: 'gradient-background-still-runs-at-135-degrees-by-default',
+    why:
+      'THE SAFETY HALF OF THE ANGLE SETTING, and the one worth measuring. Every gradient in the ' +
+      'Builder ran at a hardcoded 135deg — sections, pages, buttons, modules and the overlay screen, ' +
+      'all off one line. Making that a setting means every stored background in production is now ' +
+      'reading a field it has never carried, and getting the fallback wrong repaints live tenant ' +
+      'sites at a different angle with nothing failing and nobody told.',
+    section: {
+      layout: 'single',
+      background: { mode: 'gradient', color: '#ff0000', color2: '#0000ff' },
+      modules: [{ type: 'heading', text: 'Gradient at the default angle', settings: {} }],
+    },
+    selector: '.builder-preview-section-layout-single',
+    read: ['backgroundImage'],
+    expect(sample) {
+      if (!/\b135deg\b/.test(sample.styles.backgroundImage || '')) {
+        return `a gradient with no saved angle painted \`${sample.styles.backgroundImage || 'nothing'}\` — ` +
+          'it is not 135deg, so every existing page with a gradient has just changed direction.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'gradient-background-honours-a-saved-angle',
+    why:
+      'The feature half. A setting that reaches the type, the normalizer and the panel and then does ' +
+      'not reach the CSS is the failure this repo keeps meeting — a class name is not a rendering ' +
+      '(docs/IMAGE_EFFECTS.md), and two image effects shipped for months that way. This is the only ' +
+      'assertion here that reads what the browser actually painted.',
+    section: {
+      layout: 'single',
+      background: { mode: 'gradient', color: '#ff0000', color2: '#0000ff', gradientAngle: 90 },
+      modules: [{ type: 'heading', text: 'Gradient at 90 degrees', settings: {} }],
+    },
+    selector: '.builder-preview-section-layout-single',
+    read: ['backgroundImage'],
+    expect(sample) {
+      const painted = sample.styles.backgroundImage || '';
+      if (/\b135deg\b/.test(painted)) {
+        return 'a gradient saved at 90deg still painted 135deg — the angle reaches the panel and the ' +
+          'stored settings but never the CSS, which is a control that looks like it works.';
+      }
+      if (!/\b90deg\b/.test(painted)) {
+        return `a gradient saved at 90deg painted \`${painted || 'nothing'}\` — neither the saved angle ` +
+          'nor the default, so the value is being mangled on the way through.';
+      }
+      return null;
+    },
+  },
+
+  {
     id: 'video-background-renders-a-real-video',
     why:
       'Video is the one background mode that is not CSS. Every other mode is a property on the ' +
