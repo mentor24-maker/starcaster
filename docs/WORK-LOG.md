@@ -31,6 +31,15 @@ long-standing warning about there being three copies of one dropdown turned out
 to describe two different mechanisms as if they were one. All three were
 corrected on the task before a word was written, and the document says what is
 actually true of the code today.
+
+The list of what is built and what is not then went wrong twice more before this
+landed, in opposite directions on the same three features — which is the best
+argument for how it is now written. It no longer records where a feature stands
+with a reviewer, because that changes hourly; it records only whether the code
+is on the live branch, which anyone can check and which cannot go stale. All
+three follow-ups have since shipped, so the "not yet merged" list is currently
+empty, and it says so out loud rather than being deleted.
+
 ## 2026-09-03 — A safety brake that had never once been applied (#567)
 
 When an agent finishes a turn, a check looks at whether the work added a

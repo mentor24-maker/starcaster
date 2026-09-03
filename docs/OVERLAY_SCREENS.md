@@ -36,13 +36,17 @@ rather than asserting where it stands.
   can tint a photograph instead of fogging it. This is the worked example of why
   the list is keyed to `main`: it merged on 2026-09-03 and its ticket was still
   reading `Ready to launch` hours later.
+* **Cell-level overlays** (86bbqb0ac, #557) — an overlay screen on an individual
+  cell rather than the whole row. Its control is **not** in the section panel:
+  the cell editor is `components/builder/builder-cell-style-settings.tsx`, under
+  Cell Style settings. This is the second worked example, and a sharper one — it
+  was written up here as unmerged, with a send-back against it, and merged the
+  same afternoon.
 
-**Built, with a pull request open, not on `main`:**
-
-* **Cell-level overlays** — an overlay screen on an individual cell rather than
-  the whole row (86bbqb0ac, PR #557). Check the ticket for where it currently
-  stands. Do not describe it to an operator as available, and do not assume its
-  shape is final — it has already been through one send-back.
+**Built, with a pull request open, not on `main`:** nothing, as of 2026-09-03.
+All three follow-up slices spec'd alongside the editor have landed. This bucket
+is kept rather than deleted because it is where the next slice goes, and because
+an empty bucket says *checked and none* where a missing one says nothing.
 
 **Not built:** anything else. There is no per-breakpoint overlay, no animation,
 and no second overlay layer on a single row.
@@ -96,7 +100,7 @@ colour; for **image, video and style** modes it is not applied there at all.
 applied to the whole painted screen at the end:
 
 ```ts
-// lib/builder-client/builder-template.ts:1480 — getBuilderRowOverlayScreenStyle
+// lib/builder-client/builder-template.ts:1490 — getBuilderRowOverlayScreenStyle
 const style = getBuilderBackgroundStyle(normalized.background);
 if (!style) return undefined;
 const blendMode = normalized.blendMode ?? "normal";
@@ -130,7 +134,7 @@ Two more details worth knowing:
 ## Seeds, never owns
 
 When a row first becomes a **video** row, `seedVideoBackgroundOverlayScreen`
-(`builder-template.ts:1452`) fills in a dark neutral tint — `#101820` at 45% —
+(`builder-template.ts:1462`) fills in a dark neutral tint — `#101820` at 45% —
 because text laid over moving footage is unreadable without something between
 them. Operator's call, 2026-08-31: *"Default overlay tint ON"*.
 
@@ -234,9 +238,13 @@ the pass.
 (`scripts/ui/render-contracts.mjs:1275`), which asserts
 `.builder-preview-row-overlay-screen` is present and painted. The element is
 rendered conditionally — no element at all when there is no overlay
-(`components/builder-template-preview.tsx:1726`) — so an assertion that only
-checks the element's style would pass on an absent overlay. Check the element
-exists first.
+(`components/builder-template-preview.tsx:1798`), which is exactly the state an
+assertion about its style would sail straight through. The harness closes that
+for you: `check_render.mjs` fails any contract whose `selector` matches nothing
+before it ever calls `expect(sample)` ("NOTHING WAS MEASURED"). So the existing
+contract is sound, and the thing to watch is anything you check *inside* an
+`expect` body — a property read off an element that may not be there is your own
+guard to write, not the harness's.
 
 ---
 
