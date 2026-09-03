@@ -16,13 +16,19 @@
  * read it -- attention is not a control.
  *
  * ONCE PER FILE PER SESSION
- * State lives in .git/sql-handoff-<session>.json. A file that has been handed
- * off stays handed off for the rest of the session, so follow-up turns are not
- * held hostage to repeating a block the operator already has.
+ * State lives in sql-handoff-<session>.json inside the git dir -- see
+ * lib/hook_state_dir.cjs for why that is NOT `<toplevel>/.git/`. A file that
+ * has been handed off stays handed off for the rest of the session, so
+ * follow-up turns are not held hostage to repeating a block the operator
+ * already has.
  *
  * LOOP SAFETY
  * Three refusals per session, then it steps aside and lets the turn end. A
  * hook that can wedge a conversation shut is worse than the miss it prevents.
+ * Both halves of that depend on the state file actually being written: from
+ * 2026-08-19 until 2026-09-03 it never was, in any worktree, because the path
+ * was built from `--show-toplevel` and `.git` is a FILE there. Measured in five
+ * real sessions -- every one of them in a worktree.
  *
  * Escape hatch: SKIP_SQL_HANDOFF=1 (say so and why, per CLAUDE.md).
  */
@@ -37,12 +43,13 @@ const {
   renderBlock,
   messageHandsOff,
 } = require('../lib/sql_handoff.cjs');
+const { gitStateDir } = require('../lib/hook_state_dir.cjs');
 
 const MAX_REFUSALS = 3;
 
-function stateFile(root, sessionId) {
+function stateFile(gitDir, sessionId) {
   const safe = String(sessionId || 'nosession').replace(/[^a-z0-9-]/gi, '').slice(0, 60);
-  return path.join(root, '.git', `sql-handoff-${safe}.json`);
+  return path.join(gitDir, `sql-handoff-${safe}.json`);
 }
 
 function readState(file) {
@@ -57,7 +64,13 @@ function writeState(file, state) {
   try {
     fs.writeFileSync(file, JSON.stringify(state));
   } catch {
-    // Best-effort: losing the state means at worst one extra prompt.
+    // Swallowed on purpose -- but do NOT read this as harmless. The comment
+    // here used to say "at worst one extra prompt", and that sentence is what
+    // let the ENOTDIR bug above live for two weeks: a write that never lands
+    // means `refusals` reads 0 forever, so the stand-down cannot fire, and
+    // `handedOff` never persists, so a file already handed off is re-demanded
+    // every turn. The state file is the ONLY thing standing between this hook
+    // and a wedged conversation. Losing it costs the brake, not a prompt.
   }
 }
 
@@ -83,7 +96,15 @@ function main(input) {
   const files = newSqlFiles(root);
   if (!files.length) process.exit(0);
 
-  const file = stateFile(root, payload?.session_id);
+  // No git dir means no state, which means no refusal counter -- and a hook
+  // that refuses with no limit is the wedged conversation this file's header
+  // calls worse than the miss it prevents. So stand aside instead. In practice
+  // this is unreachable: `repoRoot()` above shells out to the same git binary
+  // and already exited 0 if it was not there.
+  const gitDir = gitStateDir(root);
+  if (!gitDir) process.exit(0);
+
+  const file = stateFile(gitDir, payload?.session_id);
   const state = readState(file);
 
   const message = String(payload?.last_assistant_message || '');
