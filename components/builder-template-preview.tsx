@@ -3174,6 +3174,8 @@ type BlogImportCandidate = {
   dateFound: boolean;
   author: string;
   authorFound: boolean;
+  tags: string[];
+  tagsFound: boolean;
   excerpt: string;
   featuredImageUrl: string;
   wordCount: number;
@@ -3302,6 +3304,9 @@ function BlogImportPanel({ onImported, onClose }: { onImported: () => void; onCl
             {" · "}{candidate.authorFound ? candidate.author : "no author in source"}
             {" · "}{candidate.wordCount} words
           </span>
+          <span className="builder-blog-import-row-meta">
+            Tags: {candidate.tagsFound ? candidate.tags.join(", ") : "no tags in source"}
+          </span>
           {candidate.excerpt ? <span className="builder-blog-import-row-excerpt">{candidate.excerpt}</span> : null}
           {flags.length ? <span className="builder-blog-import-row-flags">{flags.join(" · ")}</span> : null}
         </span>
@@ -3351,6 +3356,9 @@ function BlogImportPanel({ onImported, onClose }: { onImported: () => void; onCl
                     {" · "}Date: {candidate.dateFound && candidate.publishedAt ? blogImportDateLabel(candidate) : "(blank — no date in source)"}
                     {" · "}{candidate.wordCount} words
                     {" · "}Featured image: {candidate.featuredImageUrl ? "yes" : "none found"}
+                  </div>
+                  <div className="builder-blog-import-row-meta">
+                    Tags: {candidate.tagsFound ? candidate.tags.join(", ") : "(none — no tags in source)"}
                   </div>
                   {candidate.excerpt ? <div className="builder-blog-import-row-excerpt">{candidate.excerpt}</div> : null}
                 </div>

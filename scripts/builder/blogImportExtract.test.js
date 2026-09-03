@@ -229,3 +229,100 @@ test('titles one word apart still flag as lookalikes', () => {
   assert.equal(titlesLookAlike('Adult Clinics', 'Directions & Hours'), false);
   assert.equal(titlesLookAlike('', 'Anything'), false);
 });
+
+// ── Tags ────────────────────────────────────────────────────────────────────
+//
+// WordPress files the post's tags in the entry footer. That block sits inside
+// the article region (before the sidebar marker `cutTrailingChrome` cuts at)
+// and inside the `entry-meta` wrapper `cleanBody` deletes — so tag extraction
+// is a race against the body clean, and these tests are what pin the order.
+
+const TAGGED_ARTICLE =
+  CHROME +
+  '<h1>Summer Tennis Camp Fun</h1>' +
+  '<p>The junior players had a wonderful week of drills at the camp.</p>' +
+  '<p class="entry-meta"><span class="entry-categories">Filed Under: ' +
+  '<a href="/category-junior-tennis" rel="category tag">Junior Tennis</a></span> ' +
+  '<span class="entry-tags">Tagged With: ' +
+  '<a href="/tag-junior-tennis" rel="tag">junior tennis</a>, ' +
+  '<a href="/tag-summer-camp" rel="tag">Summer Camp</a>, ' +
+  '<a href="/tag-junior-tennis" rel="tag">Junior Tennis</a></span></p>' +
+  '<h2 class="genesis-sidebar-title">Primary Sidebar</h2>' +
+  '<a href="/tag-not-a-post-tag" rel="tag">sidebar cloud tag</a>';
+
+test('the tags come off the entry footer, in source order, de-duplicated', () => {
+  const post = extractPost(TAGGED_ARTICLE);
+  assert.deepEqual(post.tags, ['junior tennis', 'Summer Camp']);
+  assert.equal(post.tagsFound, true);
+});
+
+test('a category is not a tag', () => {
+  // WordPress marks category links rel="category tag". Matching rel loosely
+  // would file every category into the tags column.
+  const post = extractPost(TAGGED_ARTICLE);
+  assert.ok(!post.tags.includes('Junior Tennis'), 'the category was filed as a tag');
+});
+
+test('a tag cloud below the article is not this post\'s tags', () => {
+  // The cloud sits after the sidebar marker, so the trailing cut removes it
+  // before the tags are read. Reading tags from the untrimmed HTML would file
+  // the whole site's tag list onto one post.
+  const post = extractPost(TAGGED_ARTICLE);
+  assert.ok(!post.tags.includes('sidebar cloud tag'), 'a sidebar tag cloud leaked into the post tags');
+});
+
+test('the tag markup does not survive into the body', () => {
+  const post = extractPost(TAGGED_ARTICLE);
+  assert.ok(!post.body.includes('rel="tag"'), 'tag links survived into the body');
+  assert.ok(!post.body.includes('Tagged With'), 'the "Tagged With" label survived into the body');
+  assert.ok(!post.body.includes('Filed Under'), 'the "Filed Under" label survived into the body');
+  assert.ok(post.body.includes('wonderful week'), 'the article itself was cut away');
+});
+
+test('a post with no tags says so rather than looking the same as a failure', () => {
+  const post = extractPost(ARTICLE_HTML);
+  assert.deepEqual(post.tags, []);
+  assert.equal(post.tagsFound, false);
+});
+
+test('tags are found when the links carry rel="noopener" instead of rel="tag"', () => {
+  // One real post in the Delray scrape is shaped this way: the only thing
+  // marking the links as tags is the "Tagged With:" label and the /tag- href.
+  // A rel-only matcher reports it as untagged, which is visibly wrong in the
+  // picker — the tags are right there in the source.
+  const html =
+    CHROME +
+    '<h1>Picklers Unite On July 4th</h1>' +
+    '<p>A full house for the holiday social.</p>' +
+    '<p>Filed Under: <a rel="noopener noreferrer" href="/category-pickleball">Pickleball</a> ' +
+    'Tagged With: <a rel="noopener noreferrer" href="/tag-delray-beach">Delray Beach</a>, ' +
+    '<a rel="noopener noreferrer" href="/tag-pickle-ball">pickle ball</a></p>';
+  const post = extractPost(html);
+  assert.deepEqual(post.tags, ['Delray Beach', 'pickle ball']);
+  assert.equal(post.tagsFound, true);
+  // And that unclassed meta paragraph must not be left sitting in the article.
+  assert.ok(!post.body.includes('Tagged With'), 'the bare meta paragraph survived into the body');
+  assert.ok(!post.body.includes('Filed Under'), 'the bare meta paragraph survived into the body');
+});
+
+test('the category link in the fallback route is not filed as a tag', () => {
+  const html =
+    '<h1>Picklers Unite</h1><p>Body.</p>' +
+    '<p>Filed Under: <a rel="noopener noreferrer" href="/category-pickleball">Pickleball</a> ' +
+    'Tagged With: <a rel="noopener noreferrer" href="/tag-pickle-ball">pickle ball</a></p>';
+  const post = extractPost(html);
+  assert.deepEqual(post.tags, ['pickle ball']);
+});
+
+test('a candidate carries its tags through to the import', () => {
+  const candidate = buildCandidate({
+    page_id: 77,
+    slug: 'summer-tennis-camp-fun',
+    payload: JSON.stringify({
+      name: 'Summer Tennis Camp Fun',
+      layoutSections: [{ title: 'Imported', modules: [{ type: 'text', text: TAGGED_ARTICLE }] }],
+    }),
+  });
+  assert.deepEqual(candidate.tags, ['junior tennis', 'Summer Camp']);
+  assert.equal(candidate.tagsFound, true);
+});
