@@ -157,6 +157,80 @@ test('gives up after three refusals rather than wedging the conversation', () =>
   assert.deepEqual(codes.slice(3), [0, 0], 'then it steps aside');
 });
 
+/**
+ * Build a real linked worktree off a real repo. `makeRepo()` above uses
+ * `git init`, where `.git` is a DIRECTORY -- so every test that leans on it
+ * passes with the state-path bug present and could never have caught it. Only
+ * an actual `git worktree add` produces the `.git` FILE that broke the write.
+ */
+function makeWorktree() {
+  const dir = makeRepo();
+  const wt = path.join(dir, 'wt');
+  execFileSync('git', ['worktree', 'add', wt, '-b', 'add-revisions'], { cwd: dir, stdio: 'ignore' });
+  return wt;
+}
+
+test('the stand-down engages from inside a REAL worktree', () => {
+  // The regression: state was written to `<toplevel>/.git/<file>`, and in a
+  // linked worktree `.git` is a one-line FILE, so the write failed with
+  // ENOTDIR -- silently, inside writeState's try/catch. `refusals` then read 0
+  // forever and the three-refusal valve could never fire. Every thread in this
+  // repo runs in a worktree, and all five refusals ever recorded in the
+  // transcripts happened in one, so this was the only case that mattered.
+  // Without the --absolute-git-dir fix this refuses five times, not three.
+  const wt = makeWorktree();
+  assert.ok(
+    fs.statSync(path.join(wt, '.git')).isFile(),
+    'precondition: .git must be a FILE here, or this test is just makeRepo() again'
+  );
+  addSql(wt);
+
+  const codes = [];
+  for (let i = 0; i < 5; i++) codes.push(runHook(wt, { message: 'nope', sessionId: 'wt-loopy' }).code);
+  assert.deepEqual(
+    codes,
+    [2, 2, 2, 0, 0],
+    'the counter never persisted in a worktree, so it could never stand down'
+  );
+});
+
+test('a worktree writes its state file where it can actually be read back', () => {
+  // The stand-down above is the behaviour; this is the mechanism, asserted
+  // directly so a future refactor that reintroduces a swallowed write fails
+  // here with a clear reason rather than as a mysterious off-by-one in the
+  // codes array.
+  const wt = makeWorktree();
+  addSql(wt);
+  const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: wt, encoding: 'utf8' }).trim();
+
+  assert.equal(runHook(wt, { message: 'nope', sessionId: 'wt-state' }).code, 2);
+
+  const written = path.join(gitDir, 'sql-handoff-wt-state.json');
+  assert.ok(fs.existsSync(written), `expected the counter at ${written}`);
+  assert.equal(JSON.parse(fs.readFileSync(written, 'utf8')).refusals, 1);
+});
+
+test('a file handed off in a worktree is not re-demanded on the next turn', () => {
+  // The second half of the same bug, and the more annoying one in practice:
+  // `handedOff` is persisted by the same write, so with the state lost a file
+  // already handed off correctly was demanded again every single turn for the
+  // rest of the session. The equivalent test above ('once handed off...') runs
+  // in a `git init` repo, where the write succeeds, so it never saw this.
+  const wt = makeWorktree();
+  const file = addSql(wt);
+
+  assert.equal(
+    runHook(wt, { message: renderBlock('add-revisions', file), sessionId: 'wt-sticky' }).code,
+    0,
+    'a correct handoff must not block'
+  );
+  assert.equal(
+    runHook(wt, { message: 'Anything else?', sessionId: 'wt-sticky' }).code,
+    0,
+    're-demanding a file the operator already has is the other half of the lost-state bug'
+  );
+});
+
 test('SKIP_SQL_HANDOFF=1 is a real escape hatch', () => {
   const dir = makeRepo();
   onBranch(dir, 'add-revisions');
