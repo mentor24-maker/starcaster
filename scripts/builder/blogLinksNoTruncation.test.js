@@ -66,14 +66,27 @@ test('no stylesheet rule for this module clips text', () => {
 });
 
 test('the module does not cap the width of the pane holding taxonomy names', () => {
+  /*
+   * Two exemptions, both narrow and both named here rather than left to a
+   * reader to infer:
+   *
+   *   checkbox      pinned to a fixed size on purpose — a tenant theme's
+   *                 `input { width: 100% }` blew it out to 1056px.
+   *   posts-modal   the popup SHELL, which is a dialog box rather than a
+   *                 column of names. Its own row rule is `1fr auto` and its
+   *                 title wraps, so capping the shell cannot clip a title —
+   *                 that pairing is asserted separately below, and this
+   *                 exemption is only safe while it holds.
+   *
+   * Anything else capping its width is the 86bbue8ux defect coming back.
+   */
+  const ALLOWED_TO_CAP = /checkbox|posts-modal/;
   for (const { selector, body } of moduleCssBlocks()) {
     if (!/max-width/.test(body)) continue;
-    // The checkbox is deliberately pinned to a fixed size (a tenant theme's
-    // `input { width: 100% }` blew it out to 1056px). Nothing else may.
     assert.match(
       selector,
-      /checkbox/,
-      `${selector} caps its width; only the checkbox is allowed to, and a cap on a name column is what truncated the live page`
+      ALLOWED_TO_CAP,
+      `${selector} caps its width; only the checkbox and the popup shell may, and a cap on a name column is what truncated the live page`
     );
   }
 });
@@ -125,5 +138,110 @@ test('there is no create control for tags either, because a tag cannot exist wit
   assert.ok(
     !/New Tag/.test(src),
     'a "New Tag" control would be a button that cannot do anything: a tag exists only by being on a post'
+  );
+});
+
+// ── 3. The post count opens the posts behind it (86bbugbxb) ───────────────
+//
+// Same instrument as above, and for the same reason: there is no DOM testing
+// library here, `check:panels` measures the editor, and `check:render` drives
+// a database-less preview where this module renders its empty state. So these
+// anchor on structure, with comments stripped, and each one names the failure
+// it exists to catch.
+
+test('the post count is a control, not a dead number', () => {
+  const src = moduleSource();
+  assert.match(
+    src,
+    /openTagPosts\(term\.label\)/,
+    'clicking a tag row\'s count should open that tag\'s posts; the count is the affordance the operator asked for'
+  );
+  assert.match(
+    src,
+    /term\.postCount\s*>\s*0\s*\?/,
+    'a tag with no posts must not render a button — a control that opens an empty box is worse than a number'
+  );
+});
+
+test('it reads the posts for a tag rather than inventing an endpoint', () => {
+  const src = moduleSource();
+  assert.match(
+    src,
+    /\/api\/blog\/tags\/posts\?tag=\$\{encodeURIComponent/,
+    'the popup should use the existing tag-posts endpoint, with the tag encoded'
+  );
+});
+
+test('a failed load is not rendered as "no posts"', () => {
+  const src = moduleSource();
+  // The error must be its own state, and it must be TESTED BEFORE the empty
+  // case — otherwise a dropped request renders as "this tag has no posts",
+  // which is a confident lie about the data.
+  assert.match(src, /tagPostsError/, 'the popup should keep the load error in its own state');
+  const errorAt = src.indexOf('tagPostsError ?');
+  const emptyAt = src.indexOf('tagPosts.length === 0');
+  assert.ok(errorAt > 0 && emptyAt > 0, 'the popup should render both an error branch and an empty branch');
+  assert.ok(
+    errorAt < emptyAt,
+    'the empty-list branch is reached before the error branch, so a failed load renders as "no posts"'
+  );
+});
+
+test('the popup is portalled out of the tenant theme', () => {
+  const src = moduleSource();
+  assert.match(
+    src,
+    /<BuilderBodyPortal>/,
+    'the popup must portal to <body> through BuilderBodyPortal: this module renders inside arbitrary tenant ' +
+    'themes, and one already blew a control out to 1056px'
+  );
+});
+
+test('Escape is bound on the document, not on the dialog element', () => {
+  const src = moduleSource();
+  // A key handler on the dialog only fires when focus is already inside it,
+  // and the popup opens from a click on the count — which leaves focus on the
+  // button OUTSIDE the dialog. Escape would then do nothing.
+  assert.match(
+    src,
+    /document\.addEventListener\(\s*["']keydown["']/,
+    'Escape should be a document listener; an onKeyDown on the dialog cannot fire when focus is outside it'
+  );
+  assert.match(
+    src,
+    /document\.removeEventListener\(\s*["']keydown["']/,
+    'the Escape listener must be removed when the popup closes, or every open leaks another one'
+  );
+});
+
+test('a post in the popup opens by id, and the destination is configurable', () => {
+  const src = moduleSource();
+  assert.match(
+    src,
+    /id=\$\{encodeURIComponent\(post\.id\)\}/,
+    'the edit link should address the post by id, encoded'
+  );
+  assert.match(
+    src,
+    /settings\.managerPageUrl/,
+    'the Blog Manager page should come from a setting so a tenant who renamed that page can point at it'
+  );
+  assert.match(
+    src,
+    /["']\/admin-blog-manager["']/,
+    'the default should be the slug the admin scaffold gives every tenant, not an empty string'
+  );
+});
+
+test('the popup rows do not clip a post title', () => {
+  const rowBlocks = moduleCssBlocks().filter(({ selector }) => /posts-(row|title)/.test(selector));
+  assert.ok(rowBlocks.length > 0, 'the popup rows should have stylesheet rules; the class may have been renamed');
+  const row = rowBlocks.find(({ selector }) => /posts-row/.test(selector));
+  assert.ok(row, 'the popup row rule is missing');
+  assert.match(
+    row.body,
+    /grid-template-columns:\s*1fr\s+auto/,
+    'the title should take the leftover width and the actions size to their icons, so a long headline ' +
+    'never buys its room from the title'
   );
 });

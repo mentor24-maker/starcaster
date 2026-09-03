@@ -4,7 +4,8 @@ import {
   pairKey,
   pairsForRelatedSet,
   pairsToAdd,
-  relatedIdsFor
+  relatedIdsFor,
+  relationChangesForPost
 } from "./blog-post-relations";
 
 describe("canonicalPair", () => {
@@ -90,5 +91,54 @@ describe("pairsToAdd", () => {
   it("treats a stored pair as matching however it was ordered", () => {
     const existing = [{ postIdA: "b", postIdB: "a" }];
     expect(pairsToAdd(pairsForRelatedSet(["a", "b"]), existing)).toEqual([]);
+  });
+});
+
+describe("relationChangesForPost", () => {
+  const keys = (pairs: { postIdA: string; postIdB: string }[]) => pairs.map(pairKey).sort();
+
+  it("adds a pair for each newly checked post", () => {
+    const change = relationChangesForPost("a", ["b", "c"], []);
+    expect(keys(change.add)).toEqual(["a b", "a c"]);
+    expect(change.remove).toEqual([]);
+  });
+
+  it("removes the pair for a post that was unchecked", () => {
+    const existing = pairsForRelatedSet(["a", "b"]);
+    const change = relationChangesForPost("a", [], existing);
+    expect(change.add).toEqual([]);
+    expect(keys(change.remove)).toEqual(["a b"]);
+  });
+
+  it("writes nothing when the selection is unchanged", () => {
+    const existing = [...pairsForRelatedSet(["a", "b"]), ...pairsForRelatedSet(["a", "c"])];
+    const change = relationChangesForPost("a", ["c", "b"], existing);
+    expect(change.add).toEqual([]);
+    expect(change.remove).toEqual([]);
+  });
+
+  it("leaves pairs between two OTHER posts alone", () => {
+    // b--c is somebody else's relation. Saving post a must not touch it, even
+    // though it is in the same list of stored pairs.
+    const existing = pairsForRelatedSet(["b", "c"]);
+    const change = relationChangesForPost("a", ["b"], existing);
+    expect(keys(change.add)).toEqual(["a b"]);
+    expect(change.remove).toEqual([]);
+  });
+
+  it("never relates a post to itself, however the id arrives", () => {
+    const change = relationChangesForPost("a", ["a", "", "  ", "b"], []);
+    expect(keys(change.add)).toEqual(["a b"]);
+  });
+
+  it("matches a stored pair however it was ordered", () => {
+    const change = relationChangesForPost("b", ["a"], [{ postIdA: "a", postIdB: "b" }]);
+    expect(change.add).toEqual([]);
+    expect(change.remove).toEqual([]);
+  });
+
+  it("does nothing at all without a post id", () => {
+    const change = relationChangesForPost("", ["a", "b"], []);
+    expect(change).toEqual({ add: [], remove: [] });
   });
 });

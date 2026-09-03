@@ -22,6 +22,7 @@
  */
 
 const path = require('path');
+const { retryDecision } = require('../builder/clickupRetry.js');
 const { execFileSync } = require('child_process');
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
@@ -77,6 +78,31 @@ function requireToken() {
 }
 
 async function call(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {}) {
+  // See scripts/builder/clickupRetry.js for the decision and its reasoning —
+  // notably why a 429, unlike a timeout, is safe to repeat even for a write.
+  // `npm run reconcile` reported fourteen tickets it "could not check" on
+  // 2026-09-03, every one an HTTP 429 it had the time to wait out.
+  let attempt = 0;
+  let waitedMs = 0;
+  for (;;) {
+    attempt += 1;
+    const out = await callOnce(method, apiPath, body, { timeoutMs });
+    if (out.status !== 429) return out;
+    const decision = retryDecision({
+      status: 429,
+      attempt,
+      elapsedMs: waitedMs,
+      resetSeconds: out.resetSeconds,
+      nowSeconds: Math.floor(Date.now() / 1000),
+    });
+    console.error(`  ClickUp ${decision.retry ? 'rate limit' : 'rate limit — not retrying'}: ${decision.why}`);
+    if (!decision.retry) return out;
+    await new Promise((r) => setTimeout(r, decision.waitMs));
+    waitedMs += decision.waitMs;
+  }
+}
+
+async function callOnce(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {}) {
   requireToken();
   let res;
   try {
@@ -100,7 +126,9 @@ async function call(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {})
   }
   let json = null;
   try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
-  return { ok: res.ok, status: res.status, json, text };
+  // resetSeconds is surfaced so the retry loop above can wait exactly as long
+  // as ClickUp asks, rather than guessing.
+  return { ok: res.ok, status: res.status, json, text, resetSeconds: res.headers.get('x-ratelimit-reset') };
 }
 
 /**

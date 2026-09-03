@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import type { BackgroundSettings, BuilderTemplateSection } from "@/lib/builder-template";
-import { createDefaultBackgroundSettings } from "@/lib/builder-template";
+import { createDefaultBackgroundSettings, normalizeRowOverlayScreenSettings } from "@/lib/builder-template";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderSettingRow } from "./builder-setting-row";
@@ -17,6 +17,9 @@ type BuilderCellStyleSettingsProps = {
   onUpdateCellBorderWidth: (column: string, value: string) => void;
   onUpdateCellBorderColor: (column: string, value: string) => void;
   onUpdateCellBorderRadius: (column: string, value: string) => void;
+  /** The cell's tint screen: its picker, and its strength. See the Overlay group. */
+  onUpdateCellOverlayBackground: (column: string, updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
+  onUpdateCellOverlayOpacity: (column: string, opacity: number) => void;
   onSetCellExtra: (column: string, key: string, value: string) => void;
   getCellExtra: (column: string, key: string, fallback?: string) => string;
   themeBackgroundColor?: string;
@@ -74,6 +77,8 @@ export function BuilderCellStyleSettings({
   onUpdateCellBorderWidth,
   onUpdateCellBorderColor,
   onUpdateCellBorderRadius,
+  onUpdateCellOverlayBackground,
+  onUpdateCellOverlayOpacity,
   onSetCellExtra,
   getCellExtra,
   themeBackgroundColor,
@@ -101,6 +106,13 @@ export function BuilderCellStyleSettings({
     );
   }
 
+  /*
+   * Through the normalizer, never off the section: `cellOverlayScreens` is
+   * optional and a row saved before 2026-09-03 carries nothing at all, so
+   * `section.cellOverlayScreens[column].background` is the crash. Same reason
+   * the row panel reads its own screen this way.
+   */
+  const overlayScreen = normalizeRowOverlayScreenSettings(section.cellOverlayScreens?.[column]);
   const borderStyle = getCellExtra(column, "cellBorderStyle", "solid");
   const shadow = getCellExtra(column, "cellShadow", "none");
   const opacity = getCellExtra(column, "cellOpacity", "1");
@@ -128,7 +140,7 @@ export function BuilderCellStyleSettings({
 
   return (
     <div className="builder-cell-style-settings is-lattice">
-      <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "3" } as CSSProperties}>
+      <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "4" } as CSSProperties}>
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Placement</div>
           <BuilderSettingRow label="Horizontal">
@@ -237,6 +249,44 @@ export function BuilderCellStyleSettings({
               <option value="heavy">Heavy</option>
             </select>
           </BuilderSettingRow>
+        </div>
+
+        {/* The same Overlay group the ROW panel carries, on the cell — one
+            control the operator learns once (S1). It is a lattice column and
+            not a trailing strip for the reason the row panel spells out at
+            length: `check_panels` measures `.builder-schema-panel-column` and
+            nothing else, so a group parked below the lattice can stagger and
+            the check still goes green.
+
+            `BuilderBackgroundControls` is the shared picker, writing to the
+            OVERLAY rather than to the cell's fill — note it gets no gallery
+            callback, so it opens its own picker; handing it the cell fill's
+            would quietly repaint the fill instead. `allowVideo` is off here
+            for the same reason it is off on the row: a video screen over a
+            background is a second <video> element. */}
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Overlay</div>
+          <BuilderBackgroundControls
+            horizontal
+            label="Overlay"
+            modeLabel="Overlay Type"
+            background={overlayScreen.background}
+            onChange={(updater) => onUpdateCellOverlayBackground(column, updater)}
+            themeBackgroundColor={themeBackgroundColor}
+            themeColors={themeColors}
+            themePrimaryColor={themePrimaryColor}
+          />
+          {overlayScreen.background.mode !== "none" ? (
+            <BuilderSettingRow label="Opacity">
+              <BuilderNumberSelectControl
+                value={String(overlayScreen.opacity)}
+                min={0}
+                max={100}
+                fallback="100"
+                onChange={(value) => onUpdateCellOverlayOpacity(column, Number(value))}
+              />
+            </BuilderSettingRow>
+          ) : null}
         </div>
 
         <div className="builder-schema-panel-column">

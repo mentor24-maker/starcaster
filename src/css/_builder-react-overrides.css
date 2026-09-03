@@ -3991,6 +3991,83 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /*
+ * THE TRIGGER BLOCK JOINS THE LATTICE (2026-08-29, panel sweep 8/15).
+ *
+ * "Trigger" (and, on Confetti, "Button Label") sit above the axis columns on
+ * Speech Bubble, Confetti and the two Proximity Effect panels. They are
+ * `BuilderSettingRow fullWidth`, whose base rule is
+ * `grid-template-columns: minmax(0,1fr) minmax(0,2fr)` — PROPORTIONAL tracks
+ * measured against the whole panel rather than against their own content,
+ * which is the per-row sizing W0 replaced everywhere else on 8/13.
+ *
+ * Measured at 1440 before this rule: the label "Trigger" occupied a 414px
+ * track, and the control — correctly capped at `--builder-field-long-max` by
+ * W9 — ended at 1079 inside a block whose right edge was 1347. A 268px notch,
+ * on every panel that has a trigger.
+ *
+ * That is W9's ceiling and L8's block edge fighting, and the ticket names the
+ * winner: BOUND THE BLOCK, do not widen the control. So the block takes the
+ * same two `max-content` tracks every other lattice group uses. The rows then
+ * hug the left edge at their own content width — the 268px of dead space goes
+ * because the CONTROL stops being stretched to a 2fr share, not because
+ * anything was widened. The tracks come from the shared mechanism, never from
+ * a per-field width (W0); the control still stops at the 560px ceiling (W9).
+ *
+ * The block itself stays FULL WIDTH on purpose. Sizing the box to
+ * `max-content` as well was tried first and made the game-trigger note below
+ * it 235px wide — one readable line became a five-line ragged column on Speech
+ * Bubble, which is a worse panel than the one being fixed. The note spans both
+ * tracks, so the box has to stay wide enough for it to read (L7); the rows are
+ * compact either way, which is the part the eye was complaining about.
+ *
+ * `display: contents` on the rows is what makes the two rows share ONE pair of
+ * tracks — without it each row is its own formatting context and "Trigger" and
+ * "Button Label" measure separately, which is the original stagger in miniature.
+ */
+.builder-react-root .is-lattice .builder-module-trigger-settings {
+  display: grid;
+  /* Two content-measured tracks for the pairs, then a filler that soaks up
+     the leftover width. Without the third track a `1 / -1` item spans only
+     the two ~330px pair tracks, which is what squeezed the note. */
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+  column-gap: 0;
+}
+
+.builder-react-root .is-lattice .builder-module-trigger-settings .builder-setting-row,
+.builder-react-root .is-lattice .builder-module-trigger-settings .builder-setting-row-full {
+  display: contents;
+}
+
+/*
+ * The pairs are PINNED to the first two tracks. Auto-placement alone put
+ * Confetti's four flattened children across a three-track row — "Trigger",
+ * its select, then the words "Button Label" sitting in the filler — and the
+ * input dropped to a line of its own. Two items per row, two named columns.
+ */
+.builder-react-root .is-lattice .builder-module-trigger-settings .builder-setting-label {
+  grid-column: 1;
+}
+
+.builder-react-root .is-lattice .builder-module-trigger-settings .builder-setting-value {
+  grid-column: 2;
+}
+
+/*
+ * The game-trigger note is a sentence, not a row of the lattice — the same
+ * treatment as the offset hint below. `min-content` so a long sentence cannot
+ * widen the control track behind it; `min-width: 100%` so it fills the row
+ * once the tracks have resolved; spanning to `-1` so it reaches the filler
+ * track and reads on one line.
+ */
+.builder-react-root .is-lattice .builder-module-trigger-settings > .panel-copy {
+  grid-column: 1 / -1;
+  width: min-content;
+  min-width: 100%;
+}
+
+/*
  * A hint is a sentence, and the control track is `max-content`. Left in
  * that track the sentence would BE the track's width, dragging every
  * control in the column out to the length of "Positive moves right;
@@ -7064,6 +7141,91 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /*
+ * THE CELL'S OWN TINT SCREEN — the per-cell twin of the row screen above.
+ *
+ * TWO RUNGS AND NO STACKING CONTEXT, and the missing `isolation: isolate` is
+ * the deliberate part. This shipped as `isolation: isolate` with the screen at
+ * 1 and the modules at 2, on the argument that without a context of its own
+ * the cell's rungs would be "numbered inside whatever ancestor happens to own
+ * the stack". That argument is true and it is beside the point: the screen and
+ * the modules are numbered in the SAME ancestor whichever one it is, and 0 is
+ * below 1 in every stacking context there has ever been. The relative order
+ * this setting depends on never needed a context to hold it.
+ *
+ * Isolating cost something real, measured in a browser (round 2 of 86bbqb0ac).
+ * A floating image is `z-index: 40` and is MEANT to hang out of its column —
+ * `horizontalOffset` is the control for exactly that. Until this feature, 40
+ * was resolved in the SECTION's stacking context, where it beat the column
+ * next door. Isolating the cell resolved it INSIDE the cell instead, and the
+ * cell itself is `z-index: auto`, so the neighbouring column — later in DOM
+ * order — painted straight over the overhang. Same scene, four ways, reading
+ * `elementFromPoint` where the image crosses into the next column:
+ *
+ *     row screen   cell screen   what was on top in the overlap
+ *        no            no        the image           <- correct
+ *        no           YES        the NEXT COLUMN     <- the regression
+ *       yes            no        the next column     <- already true, not ours
+ *       yes           YES        the next column     <- already true, not ours
+ *
+ * The image never moved: its rect was identical in all four runs. Only what
+ * painted over it changed. Rows 3 and 4 are why this was narrow — a row with
+ * its own screen already puts its columns at `z-index: 2` above, which is
+ * already a stacking context, so the decor was already clamped there and this
+ * feature changed nothing. The regression existed only on a row with no
+ * overlay of its own, which is the ordinary case and the one the ticket's own
+ * example describes.
+ *
+ * So: screen at 0, modules at 1, and the decor left alone at 40 to be resolved
+ * where it always was. The order is the whole setting — the screen covers the
+ * cell's own fill, and the modules stay in front of it. A tint that washed
+ * over the operator's words instead of sitting behind them would make the
+ * control useless, because the reason to dim a photograph is to make the text
+ * on it readable.
+ *
+ * Held by three render contracts, which measure this in a real browser rather
+ * than trusting the reasoning above: `cell-overlay-stays-behind-the-words`,
+ * `cell-overlay-leaves-floating-decor-on-its-own-rung` (within the cell) and
+ * `cell-overlay-leaves-overhanging-decor-over-the-next-column` (across the
+ * column boundary, which is the one this round was missing).
+ */
+.builder-preview-cell-overlay-screen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/*
+ * The content rung, and the two exclusions are not tidiness — they are the
+ * bug this selector shipped with.
+ *
+ * A floating image is a direct module child of the cell like any paragraph,
+ * but it is DECOR: it rides at `z-index: 40` from `_builder-react.css`, above
+ * the words on purpose. That rule is two classes
+ * (`.builder-react-root .builder-preview-module-overlay-flow`) and so is this
+ * one, and this file is imported AFTER it — so on equal specificity source
+ * order handed the decor the content rung as well, and only on a cell that
+ * had just been given an overlay. The image did not fall into the flow (its
+ * `position` is an inline style) — it simply stopped being reliably in front,
+ * tying with the paragraph beside it where paint order falls back to DOM
+ * order.
+ *
+ * The TSX guard above does not cover this: it skips the tint only for a column
+ * where EVERY module is overlay decor. A mixed column — a floating image plus
+ * ordinary content, which is the ordinary way to use one — is tinted, so the
+ * rung reached the decor too.
+ *
+ * Held by the render contract `cell-overlay-leaves-floating-decor-on-its-own-rung`,
+ * which measures a mixed column in a real browser and names both readings.
+ */
+.builder-preview-column-layered
+  > .builder-preview-module:not(.builder-preview-module-overlay-flow):not(.builder-preview-module-overlay-slot) {
+  position: relative;
+  z-index: 1;
+}
+
+/*
  * The Video background panel. The warning is a plain sentence rather than a
  * red error box on purpose: a missing poster is a bad idea, not an invalid
  * setting, and the operator is allowed to save without one.
@@ -8466,4 +8628,141 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   margin: 3px 0 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+/* ── Tag manager: the posts behind one tag (86bbugbxb) ───────────────────────
+   Modelled on .crm-contacts-modal, the established admin popup here. Written
+   in THIS file rather than _builder-react.css because that one is regenerated
+   wholesale and a hand edit in it disappears silently (src/css/CLAUDE.md).
+
+   Every rule is scoped under .builder-react-root, which BuilderBodyPortal
+   re-establishes on the portal subtree — without that class the portal escapes
+   the builder's scoped stylesheet and the popup renders unpositioned.
+
+   Colours are tokens and sizes are scale steps (R3/R8): a hex literal here is
+   a module that will not follow a tenant's theme, and this module renders
+   inside arbitrary tenant themes. */
+.builder-react-root .admin-blog-links-posts-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(9 16 24 / 45%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647;
+  padding: 16px;
+}
+
+/* A floor, not a cap (D7): the dialog sizes to its content and only stops
+   growing at the viewport, so a long post title widens the box instead of
+   being squeezed. */
+.builder-react-root .admin-blog-links-posts-modal {
+  background: var(--bg-surface);
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgb(9 16 24 / 20%);
+  width: max-content;
+  min-width: min(560px, 100%);
+  max-width: min(75vw, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.builder-react-root .admin-blog-links-posts-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-light);
+  font-size: var(--text-md);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .admin-blog-links-posts-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--text-md);
+  line-height: 1;
+  color: var(--ink-secondary);
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.builder-react-root .admin-blog-links-posts-close:hover { color: var(--ink-primary); }
+
+.builder-react-root .admin-blog-links-posts-body {
+  padding: 6px 0;
+  overflow-y: auto;
+}
+
+/* The title takes the leftover width and WRAPS; the actions column sizes to
+   its two icons, so a long headline never buys its room from the title — the
+   same rule the tag table follows (docs/BLOG_LINKS_MANAGER.md). */
+.builder-react-root .admin-blog-links-posts-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 12px;
+  align-items: center;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.builder-react-root .admin-blog-links-posts-row:last-child { border-bottom: none; }
+
+.builder-react-root .admin-blog-links-posts-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--ink-primary);
+  min-width: 0;
+}
+
+.builder-react-root .admin-blog-links-posts-status {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-transform: capitalize;
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .admin-blog-links-posts-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.builder-react-root .admin-blog-links-posts-empty,
+.builder-react-root .admin-blog-links-posts-error {
+  margin: 0;
+  padding: 18px;
+  font-size: var(--text-base);
+  text-align: center;
+}
+
+.builder-react-root .admin-blog-links-posts-empty { color: var(--ink-muted); }
+.builder-react-root .admin-blog-links-posts-error { color: var(--error); }
+
+.builder-react-root .admin-blog-links-posts-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-light);
+}
+
+.builder-react-root .admin-blog-links-posts-btn {
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  cursor: pointer;
+  font-size: var(--text-base);
+  color: var(--ink-primary);
 }

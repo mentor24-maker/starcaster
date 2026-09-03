@@ -15,7 +15,7 @@ import {
   type MediaFilters
 } from "@/lib/media-manager-filters";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
-import { relatedIdsFor, type PostRelationPair } from "@/lib/blog-post-relations";
+import { relatedIdsFor, relationChangesForPost, type PostRelationPair } from "@/lib/blog-post-relations";
 import {
   builderBackgroundParallaxActive,
   createDefaultBackgroundSettings,
@@ -45,6 +45,7 @@ import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import {
   type CloudTag,
   PLACEHOLDER_TAGS,
+  blogTagsToCloudTags,
   activeTagSlug,
   maxTagCount,
   parseCloudTags,
@@ -1769,6 +1770,23 @@ function BuilderSectionPreview({
           columnModules.every((module) => isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module));
         const isSectionOverlayColumn = columnHasOnlySectionScopedOverlayModules(columnModules);
         /*
+         * The cell's own tint screen — the per-cell twin of the row's.
+         *
+         * Same reader as the row (`getBuilderRowOverlayScreenStyle` takes the
+         * settings object and knows nothing about rows), so a cell overlay and
+         * a row overlay can never drift apart in how they composite.
+         *
+         * The two collapsed-slot guards mirror the ones on padding, margin and
+         * border directly below: an overlay-flow column and a section-scoped
+         * overlay slot are not really cells, they are decor mounts with their
+         * box thrown away, and painting a tint over one would put a coloured
+         * rectangle where the operator expects a floating image.
+         */
+        const cellOverlayScreenStyle =
+          isPageOverlayFlowColumn || isSectionOverlayColumn
+            ? undefined
+            : getBuilderRowOverlayScreenStyle(section.cellOverlayScreens?.[columnKey]);
+        /*
          * The cell's own numbers, as one answer each, used BOTH by the inline
          * properties below and by the variables the narrow-screen rules read.
          *
@@ -1844,9 +1862,32 @@ function BuilderSectionPreview({
               section.cellMobileHidden?.[columnKey] === "true" ? "builder-preview-column-mobile-hidden" : ""
             } ${isNavigationColumn ? "builder-preview-column-navigation" : ""}${
               isPageOverlayFlowColumn ? " builder-preview-column-overlay-flow" : ""
-            } ${isSectionOverlayColumn ? " builder-preview-column-overlay-slot" : ""}`}
+            } ${isSectionOverlayColumn ? " builder-preview-column-overlay-slot" : ""}${
+              cellOverlayScreenStyle ? " builder-preview-column-layered" : ""
+            }`}
             style={columnStyle}
           >
+            {/*
+              Above the cell's own fill, below its modules. The stacking is not
+              done here — the class above is what the stylesheet hangs two
+              rungs off, this layer at 0 and the modules at 1, the same
+              arrangement the row already uses for its own screen.
+
+              Doing it inline instead would leave the modules unnumbered, and
+              an unnumbered in-flow sibling paints UNDER a positioned layer —
+              which is a tint over the operator's text, the one outcome this
+              setting must never produce.
+
+              The cell deliberately opens NO stacking context of its own. It
+              did at first, and that clamped a floating image's `z-index: 40`
+              inside the cell so the next column painted over the part of it
+              that overhangs (round 2 of 86bbqb0ac). The rungs never needed a
+              context: 0 is below 1 in whichever ancestor resolves them. See
+              `_builder-react-overrides.css` for the measurements.
+            */}
+            {cellOverlayScreenStyle ? (
+              <div className="builder-preview-cell-overlay-screen" style={cellOverlayScreenStyle} />
+            ) : null}
             {columnModules.map((module) => {
               const isPageOverlayFlowModule =
                 isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module);
@@ -2254,7 +2295,7 @@ function BuilderModulePreview({
     return <BlogCategoryFilterPreview settings={module.settings} />;
   }
   if (module.type === "blog-tag-cloud") {
-    return <BlogTagCloudPreview settings={module.settings} />;
+    return <BlogTagCloudPreview settings={module.settings} projectId={projectId} liveSite={liveSite} />;
   }
   if (module.type === "blog-post-tags") {
     return <BlogPostTagsPreview settings={module.settings} />;
@@ -2739,7 +2780,11 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
   const showAuthorField = settings.showAuthorField === "true";
   const showCategories = (settings.showCategories ?? "true") !== "false";
   const showTags = (settings.showTags ?? "true") !== "false";
+  const showRelatedPosts = (settings.showRelatedPosts ?? "true") !== "false";
   const showSeoFields = settings.showSeoFields === "true";
+  // Categories, Tags and Related Posts share one collapsible container between
+  // Excerpt and Body. It only exists if at least one of them is on.
+  const showPostOptions = showCategories || showTags || showRelatedPosts;
   const submitLabel = settings.submitLabel || "Publish Post";
   const draftLabel = settings.draftLabel || "Save as Draft";
   const successMessage = settings.successMessage || "Post created successfully.";
@@ -2757,6 +2802,26 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
   const [statusMsg, setStatusMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // ── Categories / Tags / Related Posts ────────────────────────────────────
+  // Collapsed by default: the three of them together are longer than the rest
+  // of the form, and most saves do not touch them.
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [relatedIds, setRelatedIds] = useState<string[]>([]);
+  // Whether this post's stored relations have actually been READ. Saving is
+  // guarded on it: a PUT built from an empty list we never loaded would wipe
+  // every relation the post has, and report success doing it.
+  const [relationsLoaded, setRelationsLoaded] = useState(!isEditMode);
+  const [postChoices, setPostChoices] = useState<{ id: string; title: string; status: string }[]>([]);
+  const [choicesState, setChoicesState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerFilter, setPickerFilter] = useState("");
+  const [categoryChoices, setCategoryChoices] = useState<{ id: string; slug: string; name: string }[]>([]);
+  // Same guard as relations, for the same reason: the form holds category
+  // SLUGS and the API takes ids, so without the list the field cannot be
+  // translated — and sending [] would clear the post's categories.
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+  const [loadedCategoryIds, setLoadedCategoryIds] = useState<string[] | null>(isEditMode ? null : []);
 
   useEffect(() => {
     if (!editId) return;
@@ -2780,15 +2845,117 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
             seoTitle: String(post.seoTitle ?? post.seo_title ?? ""),
             seoDescription: String(post.seoDescription ?? post.seo_description ?? ""),
           });
+          // Held as ids until the category list arrives — the field shows
+          // slugs, so it cannot be filled in until both are here.
+          const catIds = post.categoryIds ?? post.category_ids;
+          setLoadedCategoryIds(Array.isArray(catIds) ? catIds.map(String) : []);
         }
       })
       .catch(() => {})
       .finally(() => setLoadingPost(false));
   }, [editId]);
 
+  // This post's existing relations. One request, on mount, so the collapsed
+  // header can say how many there are without opening anything.
+  useEffect(() => {
+    if (!editId || !showRelatedPosts) return;
+    let cancelled = false;
+    fetch(`/api/blog/relations?postId=${encodeURIComponent(editId)}`, {
+      credentials: "include",
+      headers: getCrmProjectHeaders()
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("relations"))))
+      .then((d) => {
+        if (cancelled) return;
+        const ids = Array.isArray(d?.relatedIds) ? d.relatedIds : Array.isArray(d?.data) ? d.data : [];
+        setRelatedIds(ids.map(String).filter(Boolean));
+        setRelationsLoaded(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [editId, showRelatedPosts]);
+
+  // The project's categories, so the slugs typed in the field can be turned
+  // into the ids the API stores (and back again on load).
+  useEffect(() => {
+    if (!showCategories) return;
+    let cancelled = false;
+    fetch("/api/blog/categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("categories"))))
+      .then((d) => {
+        if (cancelled) return;
+        const list = Array.isArray(d?.categories) ? d.categories : Array.isArray(d?.data) ? d.data : [];
+        setCategoryChoices(
+          (list as Record<string, unknown>[]).map((c) => ({
+            id: String(c.id ?? ""),
+            slug: String(c.slug ?? ""),
+            name: String(c.name ?? "")
+          })).filter((c) => c.id)
+        );
+        setCategoriesLoaded(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [showCategories]);
+
+  // Once both halves are in, fill the Categories field with the post's slugs.
+  useEffect(() => {
+    if (!categoriesLoaded || loadedCategoryIds === null) return;
+    const bySlug = loadedCategoryIds
+      .map((id) => categoryChoices.find((c) => c.id === id)?.slug || "")
+      .filter(Boolean);
+    setValues((prev) => (prev.categoryIds === undefined ? { ...prev, categoryIds: bySlug.join(", ") } : prev));
+  }, [categoriesLoaded, loadedCategoryIds, categoryChoices]);
+
+  /** Every post that could be related — the whole project's list, minus this one. */
+  const loadPostChoices = useCallback(() => {
+    if (choicesState === "loading" || choicesState === "ready") return;
+    setChoicesState("loading");
+    fetch("/api/blog/posts?limit=500", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("posts"))))
+      .then((d) => {
+        const list = Array.isArray(d?.posts) ? d.posts : Array.isArray(d?.data) ? d.data : [];
+        setPostChoices(
+          (list as Record<string, unknown>[])
+            .map((post) => ({
+              id: String(post.id ?? ""),
+              title: String(post.title ?? "") || "(untitled)",
+              status: String(post.status ?? "")
+            }))
+            .filter((post) => post.id && post.id !== editId)
+        );
+        setChoicesState("ready");
+      })
+      .catch(() => setChoicesState("error"));
+  }, [choicesState, editId]);
+
   function setField(key: string, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
   }
+
+  function toggleRelated(id: string) {
+    setRelatedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  /** The slugs typed into the Categories field, in order, without blanks. */
+  const typedCategorySlugs = (values.categoryIds || "")
+    .split(",")
+    .map((slug) => slug.trim())
+    .filter(Boolean);
+
+  function matchCategory(slug: string) {
+    const needle = slug.toLowerCase();
+    return categoryChoices.find(
+      (c) => c.slug.toLowerCase() === needle || c.name.toLowerCase() === needle
+    );
+  }
+
+  // Slugs that match no category in this project. They are dropped on save --
+  // the API stores ids -- so the form has to say so rather than appear to have
+  // saved them.
+  const unknownCategorySlugs = categoriesLoaded
+    ? typedCategorySlugs.filter((slug) => !matchCategory(slug))
+    : [];
 
   async function submitPost(status: "published" | "draft") {
     if (!values.title?.trim()) {
@@ -2799,13 +2966,23 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
     setStatusMsg("");
     setSubmitting(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...values,
         status,
         tags: values.tags
           ? values.tags.split(",").map((t) => t.trim()).filter(Boolean)
           : []
       };
+      // The field holds slugs; the API takes category ids. Without the list
+      // loaded there is no translation, and sending [] would clear the post's
+      // categories -- so the key is left out entirely and they are untouched.
+      if (showCategories && categoriesLoaded) {
+        payload.categoryIds = typedCategorySlugs
+          .map((slug) => matchCategory(slug)?.id)
+          .filter((id): id is string => Boolean(id));
+      } else {
+        delete payload.categoryIds;
+      }
       const url = isEditMode ? `/api/blog/posts/${encodeURIComponent(editId)}` : "/api/blog/posts";
       const method = isEditMode ? "PUT" : "POST";
       const res = await fetch(url, {
@@ -2822,8 +2999,52 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
             : (data.error as { message?: string } | undefined)?.message || (isEditMode ? "Failed to update post." : "Failed to create post.");
         throw new Error(errMsg);
       }
-      setStatusMsg(isEditMode ? "Post updated successfully." : successMessage);
-      if (!isEditMode) setValues({});
+      // A new post has no id until the server hands one back, which is why the
+      // relations are written after the post rather than with it.
+      const savedRecord = ((data as Record<string, unknown>)?.data
+        ?? (data as Record<string, unknown>)?.post) as Record<string, unknown> | undefined;
+      const savedPostId = isEditMode ? editId : String(savedRecord?.id ?? "");
+
+      let relationsMsg = "";
+      if (showRelatedPosts && savedPostId && relationsLoaded) {
+        const relRes = await fetch("/api/blog/relations", {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+          body: JSON.stringify({ postId: savedPostId, relatedIds })
+        });
+        if (!relRes.ok) {
+          // The post itself IS saved. Saying "saved" flat would be a lie about
+          // the half that failed, so both halves are reported.
+          setStatusMsg("");
+          setErrorMsg("The post was saved, but the related posts were not. Try saving again.");
+          setSubmitting(false);
+          return;
+        }
+        // Read the relations back rather than trusting the response -- the
+        // point of the control is what is STORED.
+        const readBack = await fetch(`/api/blog/relations?postId=${encodeURIComponent(savedPostId)}`, {
+          credentials: "include",
+          headers: getCrmProjectHeaders()
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        const storedIds = Array.isArray(readBack?.relatedIds)
+          ? readBack.relatedIds
+          : Array.isArray(readBack?.data) ? readBack.data : null;
+        if (storedIds) {
+          setRelatedIds(storedIds.map(String).filter(Boolean));
+          relationsMsg = ` ${storedIds.length} related post${storedIds.length === 1 ? "" : "s"} saved.`;
+        }
+      }
+
+      setStatusMsg((isEditMode ? "Post updated successfully." : successMessage) + relationsMsg);
+      if (!isEditMode) {
+        setValues({});
+        setRelatedIds([]);
+        setPickerOpen(false);
+        setPickerFilter("");
+      }
       if (redirectAfterCreate) {
         setTimeout(() => { window.location.href = redirectAfterCreate; }, 1500);
       }
@@ -2854,6 +3075,35 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
     color: "#374151"
   };
   const fieldStyle: CSSProperties = { marginBottom: "1rem" };
+
+  // ── The collapsible container's header ───────────────────────────────────
+  const optionsTitle = [
+    showCategories ? "Categories" : "",
+    showTags ? "Tags" : "",
+    showRelatedPosts ? "Related Posts" : ""
+  ].filter(Boolean).join(" · ");
+
+  const typedTags = (values.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
+  const optionsCounts = [
+    showCategories ? `${typedCategorySlugs.length} categor${typedCategorySlugs.length === 1 ? "y" : "ies"}` : "",
+    showTags ? `${typedTags.length} tag${typedTags.length === 1 ? "" : "s"}` : "",
+    showRelatedPosts ? `${relatedIds.length} related` : ""
+  ].filter(Boolean);
+  const nothingSet =
+    (!showCategories || typedCategorySlugs.length === 0) &&
+    (!showTags || typedTags.length === 0) &&
+    (!showRelatedPosts || relatedIds.length === 0);
+  const optionsSummary = nothingSet ? "none set" : optionsCounts.join(" · ");
+
+  /** A related post's title, falling back to its id until the list arrives. */
+  function relatedTitleFor(id: string): string {
+    return postChoices.find((post) => post.id === id)?.title || id;
+  }
+
+  const pickerNeedle = pickerFilter.trim().toLowerCase();
+  const visiblePostChoices = pickerNeedle
+    ? postChoices.filter((post) => post.title.toLowerCase().includes(pickerNeedle))
+    : postChoices;
 
   return (
     <div
@@ -2994,6 +3244,251 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
         </div>
       ) : null}
 
+      {/* Categories, Tags and Related Posts — one collapsible container,
+          collapsed by default, sitting between Excerpt and Body. The three of
+          them are what a post is FILED under, as opposed to what it says. */}
+      {showPostOptions ? (
+        <div
+          className="builder-blog-post-options"
+          style={{
+            border: "1px solid #e5e7eb",
+            borderRadius: 6,
+            background: "#f9fafb",
+            marginBottom: "1rem"
+          }}
+        >
+          <button
+            type="button"
+            aria-expanded={optionsOpen}
+            onClick={() => {
+              const next = !optionsOpen;
+              setOptionsOpen(next);
+              if (next && showRelatedPosts) loadPostChoices();
+            }}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.625rem 0.875rem",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              textAlign: "left",
+              font: "inherit",
+              boxSizing: "border-box"
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: "inline-block",
+                fontSize: "0.6rem",
+                color: "#6b7280",
+                transform: optionsOpen ? "rotate(90deg)" : "none",
+                transition: "transform 120ms ease"
+              }}
+            >
+              ▶
+            </span>
+            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>
+              {optionsTitle}
+            </span>
+            {/* A collapsed container must not be a hiding place: the header
+                says what is set inside it without being opened. */}
+            <span style={{ marginLeft: "auto", fontSize: "0.75rem", color: "#6b7280" }}>
+              {optionsSummary}
+            </span>
+          </button>
+
+          {optionsOpen ? (
+            <div style={{ padding: "0 0.875rem 0.875rem" }}>
+              {showCategories ? (
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Categories (slugs, comma-separated)</label>
+                  <input
+                    style={inputStyle}
+                    type="text"
+                    value={values.categoryIds || ""}
+                    onChange={(e) => setField("categoryIds", e.target.value)}
+                    placeholder="news, announcements"
+                  />
+                  {unknownCategorySlugs.length > 0 ? (
+                    <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: "#b45309" }}>
+                      No category in this project matches {unknownCategorySlugs.join(", ")} — those will not be saved.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {showTags ? (
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Tags (comma-separated)</label>
+                  <input
+                    style={inputStyle}
+                    type="text"
+                    value={values.tags || ""}
+                    onChange={(e) => setField("tags", e.target.value)}
+                    placeholder="react, tutorial, design"
+                  />
+                </div>
+              ) : null}
+
+              {showRelatedPosts ? (
+                <div style={{ ...fieldStyle, marginBottom: 0 }}>
+                  <label style={labelStyle}>
+                    Related Posts
+                    <span style={{ fontWeight: 400, color: "#6b7280" }}>
+                      {" "}— what the “You Might Also Like” list shows
+                    </span>
+                  </label>
+
+                  {relatedIds.length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem", marginBottom: "0.5rem" }}>
+                      {relatedIds.map((id) => (
+                        <span
+                          key={id}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.375rem",
+                            padding: "0.15rem 0.5rem",
+                            background: "#fff",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 999,
+                            fontSize: "0.75rem",
+                            color: "#374151"
+                          }}
+                        >
+                          {relatedTitleFor(id)}
+                          <button
+                            type="button"
+                            aria-label={`Remove ${relatedTitleFor(id)}`}
+                            onClick={() => toggleRelated(id)}
+                            style={{
+                              border: "none",
+                              background: "transparent",
+                              cursor: "pointer",
+                              color: "#9ca3af",
+                              padding: 0,
+                              fontSize: "0.85rem",
+                              lineHeight: 1
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ margin: "0 0 0.5rem", fontSize: "0.75rem", color: "#6b7280" }}>
+                      Nothing related yet. Relations are mutual — each post you check will show this one too.
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !pickerOpen;
+                      setPickerOpen(next);
+                      if (next) loadPostChoices();
+                    }}
+                    style={{
+                      padding: "0.35rem 0.75rem",
+                      border: `1px solid ${accent}`,
+                      borderRadius: 6,
+                      background: "#fff",
+                      color: accent,
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      cursor: "pointer"
+                    }}
+                  >
+                    {pickerOpen ? "Done choosing" : "Choose related posts…"}
+                  </button>
+
+                  {pickerOpen ? (
+                    <div
+                      style={{
+                        marginTop: "0.5rem",
+                        border: "1px solid #d1d5db",
+                        borderRadius: 6,
+                        background: "#fff"
+                      }}
+                    >
+                      <div style={{ padding: "0.5rem", borderBottom: "1px solid #e5e7eb" }}>
+                        <input
+                          style={inputStyle}
+                          type="search"
+                          value={pickerFilter}
+                          onChange={(e) => setPickerFilter(e.target.value)}
+                          placeholder="Filter by title…"
+                        />
+                      </div>
+                      <div style={{ maxHeight: 260, overflowY: "auto", padding: "0.25rem 0" }}>
+                        {choicesState === "loading" ? (
+                          <p style={{ margin: 0, padding: "0.75rem", fontSize: "0.8rem", color: "#6b7280" }}>
+                            Loading posts…
+                          </p>
+                        ) : choicesState === "error" ? (
+                          <p style={{ margin: 0, padding: "0.75rem", fontSize: "0.8rem", color: "#991b1b" }}>
+                            The list of posts could not be loaded, so nothing can be chosen right now.
+                          </p>
+                        ) : visiblePostChoices.length === 0 ? (
+                          <p style={{ margin: 0, padding: "0.75rem", fontSize: "0.8rem", color: "#6b7280" }}>
+                            {postChoices.length === 0
+                              ? "There are no other posts to relate this one to yet."
+                              : "No post matches that filter."}
+                          </p>
+                        ) : (
+                          visiblePostChoices.map((post) => (
+                            <label
+                              key={post.id}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                padding: "0.3rem 0.75rem",
+                                fontSize: "0.8rem",
+                                color: "#374151",
+                                cursor: "pointer"
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={relatedIds.includes(post.id)}
+                                onChange={() => toggleRelated(post.id)}
+                                // The site stylesheet gives form inputs
+                                // width:100%, which a checkbox obeys: the box
+                                // stretched to 1166px and squeezed the title
+                                // to a one-character column at the far right.
+                                style={{ width: "auto", flex: "0 0 auto", margin: 0 }}
+                              />
+                              <span style={{ flex: 1, minWidth: 0 }}>{post.title}</span>
+                              {post.status && post.status !== "published" ? (
+                                <span style={{ fontSize: "0.7rem", color: "#9ca3af", textTransform: "uppercase" }}>
+                                  {post.status}
+                                </span>
+                              ) : null}
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {!relationsLoaded ? (
+                    <p style={{ margin: "0.5rem 0 0", fontSize: "0.75rem", color: "#b45309" }}>
+                      This post’s existing related posts could not be read, so saving will leave them exactly as they are.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div style={fieldStyle}>
         <label style={labelStyle}>Body</label>
         <BuilderRichTextEditor
@@ -3002,32 +3497,6 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
           placeholder="Post content…"
         />
       </div>
-
-      {showCategories ? (
-        <div style={fieldStyle}>
-          <label style={labelStyle}>Categories (slugs, comma-separated)</label>
-          <input
-            style={inputStyle}
-            type="text"
-            value={values.categoryIds || ""}
-            onChange={(e) => setField("categoryIds", e.target.value)}
-            placeholder="news, announcements"
-          />
-        </div>
-      ) : null}
-
-      {showTags ? (
-        <div style={fieldStyle}>
-          <label style={labelStyle}>Tags (comma-separated)</label>
-          <input
-            style={inputStyle}
-            type="text"
-            value={values.tags || ""}
-            onChange={(e) => setField("tags", e.target.value)}
-            placeholder="react, tutorial, design"
-          />
-        </div>
-      ) : null}
 
       {showSeoFields ? (
         <>
@@ -3134,6 +3603,8 @@ type BlogImportCandidate = {
   dateFound: boolean;
   author: string;
   authorFound: boolean;
+  tags: string[];
+  tagsFound: boolean;
   excerpt: string;
   featuredImageUrl: string;
   wordCount: number;
@@ -3262,6 +3733,9 @@ function BlogImportPanel({ onImported, onClose }: { onImported: () => void; onCl
             {" · "}{candidate.authorFound ? candidate.author : "no author in source"}
             {" · "}{candidate.wordCount} words
           </span>
+          <span className="builder-blog-import-row-meta">
+            Tags: {candidate.tagsFound ? candidate.tags.join(", ") : "no tags in source"}
+          </span>
           {candidate.excerpt ? <span className="builder-blog-import-row-excerpt">{candidate.excerpt}</span> : null}
           {flags.length ? <span className="builder-blog-import-row-flags">{flags.join(" · ")}</span> : null}
         </span>
@@ -3311,6 +3785,9 @@ function BlogImportPanel({ onImported, onClose }: { onImported: () => void; onCl
                     {" · "}Date: {candidate.dateFound && candidate.publishedAt ? blogImportDateLabel(candidate) : "(blank — no date in source)"}
                     {" · "}{candidate.wordCount} words
                     {" · "}Featured image: {candidate.featuredImageUrl ? "yes" : "none found"}
+                  </div>
+                  <div className="builder-blog-import-row-meta">
+                    Tags: {candidate.tagsFound ? candidate.tags.join(", ") : "(none — no tags in source)"}
                   </div>
                   {candidate.excerpt ? <div className="builder-blog-import-row-excerpt">{candidate.excerpt}</div> : null}
                 </div>
@@ -6822,10 +7299,61 @@ function BlogCategoryFilterPreview({ settings }: { settings: Record<string, stri
  * lib/builder-client/blog-tag-cloud.ts now and the canvas card reads the same
  * ones, so the two cannot drift apart again.
  */
-function BlogTagCloudPreview({ settings }: { settings: Record<string, string> }) {
+function BlogTagCloudPreview({
+  settings,
+  projectId: projectIdProp = "",
+  liveSite = false,
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+  liveSite?: boolean;
+}) {
   const resolved = resolveTagCloudSettings(settings);
   const configured = parseCloudTags(settings);
-  const tags = configured.length ? configured : PLACEHOLDER_TAGS;
+
+  /*
+   * In `auto` the cloud shows the tenant's real BLOG tags — the same derived
+   * list the Blog Links manager shows, from `/api/blog/tags`, which already
+   * returns a post count per tag ordered busiest first. Not
+   * `/api/messaging/tags`: that is a different feature's table, and pointing a
+   * blog widget at it is what put "Add tags in the Messaging section" on a
+   * public page.
+   */
+  const headers = useMemo(() => getCrmProjectHeaders(projectIdProp), [projectIdProp]);
+  const [autoTags, setAutoTags] = useState<CloudTag[] | null>(null);
+
+  useEffect(() => {
+    if (resolved.source !== "auto") return;
+    let cancelled = false;
+    const projectId = headers["X-Project-ID"] || "";
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    fetch(`/api/blog/tags${qs}`, { credentials: "include", headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        setAutoTags(blogTagsToCloudTags(d?.tags ?? d?.data ?? []));
+      })
+      .catch(() => { if (!cancelled) setAutoTags([]); });
+    return () => { cancelled = true; };
+  }, [resolved.source, headers]);
+
+  const sourced = resolved.source === "auto" ? autoTags : configured;
+
+  /*
+   * PLACEHOLDERS ARE A BUILDER AFFORDANCE, NOT CONTENT.
+   *
+   * The old line here was `configured.length ? configured : PLACEHOLDER_TAGS`,
+   * so a real tenant's blog advertised "react / typescript / design /
+   * tutorial" to its visitors (operator report, 2026-09-03). They exist so the
+   * module is not an empty box while somebody designs the page; on a live
+   * site, no tags means the module renders nothing.
+   */
+  const tags = sourced && sourced.length ? sourced : liveSite ? [] : PLACEHOLDER_TAGS;
+
+  // `auto` has not answered yet, or answered with nothing. Either way a live
+  // page shows no widget rather than a heading over an empty space.
+  if (liveSite && tags.length === 0) return null;
+
   const maxCount = maxTagCount(tags);
   const currentSlug = activeTagSlug(
     typeof window === "undefined" ? "" : window.location.search,
@@ -11156,6 +11684,14 @@ function AdminBlogLinksPreview({
   const relateLabel    = settings.relateButtonLabel || "Relate Checked";
   const articleStatus  = settings.articleStatus || "all";
   const accent         = settings.accentColor || "#0f4f8f";
+  /*
+   * Where a post in the "posts with this tag" popup opens. The default is the
+   * slug the admin scaffold gives every tenant's Blog Manager
+   * (lib/projectAdminScaffold.js), so it is a convention rather than a guess —
+   * the setting exists for a tenant who renamed that page.
+   */
+  const managerPageUrl = (settings.managerPageUrl || "/admin-blog-manager").trim();
+  const postViewUrl    = (settings.postViewUrl || "/blog-post-view").trim();
 
   const [terms, setTerms]       = useState<BlogLinkTerm[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
@@ -11172,6 +11708,18 @@ function AdminBlogLinksPreview({
   /** The tag being renamed, and the box holding the new name. */
   const [editTag, setEditTag]   = useState<string | null>(null);
   const [tagDraft, setTagDraft] = useState("");
+
+  /*
+   * The "which posts carry this tag?" popup. `postsTag` is the open/closed
+   * state AND the heading, so there is never a modal with no tag behind it.
+   * The error is kept separate from the list because an empty list and a
+   * failed load must not render the same — "this tag has no posts" would be a
+   * lie told by a dropped request.
+   */
+  const [postsTag, setPostsTag] = useState<string | null>(null);
+  const [tagPosts, setTagPosts] = useState<BlogLinkArticle[]>([]);
+  const [tagPostsLoading, setTagPostsLoading] = useState(false);
+  const [tagPostsError, setTagPostsError] = useState("");
 
   /*
    * MEMOISED, and it has to be. getCrmProjectHeaders() builds a fresh object
@@ -11203,6 +11751,53 @@ function AdminBlogLinksPreview({
     if (!r.ok) throw new Error(readApiErrorMessage(d, `Request failed (${r.status})`));
     return d;
   }, [headers, isPreview]);
+
+  /*
+   * Open the popup for one tag and load its posts. The same endpoint the
+   * relate picker below already uses — a tag's posts are a read the server
+   * has always been able to answer.
+   */
+  const openTagPosts = useCallback(async (tag: string) => {
+    setPostsTag(tag);
+    setTagPosts([]);
+    setTagPostsError("");
+    setTagPostsLoading(true);
+    try {
+      const q = projectQuery();
+      const d = await api(`/api/blog/tags/posts?tag=${encodeURIComponent(tag)}${q ? `&${q}` : ""}`);
+      const rows = (d?.posts ?? d?.data ?? []) as Array<Record<string, unknown>>;
+      setTagPosts((Array.isArray(rows) ? rows : []).map((row) => ({
+        id: String(row.id || ""),
+        title: String(row.title || "(untitled)"),
+        slug: String(row.slug || ""),
+        status: String(row.status || ""),
+      })));
+    } catch (e) {
+      // Never fall through to an empty list: that reads as "no posts".
+      setTagPostsError((e as Error).message || "Could not load the posts for this tag.");
+    } finally {
+      setTagPostsLoading(false);
+    }
+  }, [api, projectQuery]);
+
+  const closeTagPosts = useCallback(() => {
+    setPostsTag(null);
+    setTagPosts([]);
+    setTagPostsError("");
+  }, []);
+
+  /*
+   * Escape closes it. This is a document listener rather than onKeyDown on the
+   * dialog: a key handler on the element only fires when focus is already
+   * inside it, and the popup opens from a click on the count, which leaves
+   * focus on the button outside.
+   */
+  useEffect(() => {
+    if (postsTag === null) return undefined;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeTagPosts(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [postsTag, closeTagPosts]);
 
   /** Reload both taxonomies. Called after every write, so counts stay true. */
   const loadTerms = useCallback(async () => {
@@ -11457,7 +12052,25 @@ function AdminBlogLinksPreview({
                   <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c", overflowWrap: "anywhere" }}>
                     {term.label}
                   </span>
-                  <span style={{ fontSize: "0.8125rem", color: "#94a3b8", textAlign: "right" }}>{term.postCount}</span>
+                  {/* The count is the affordance: it opens the list of posts
+                      carrying this tag. A tag with no posts is not a button —
+                      a control that opens an empty box is worse than a number. */}
+                  <span style={{ fontSize: "0.8125rem", textAlign: "right" }}>
+                    {term.postCount > 0 ? (
+                      <button
+                        type="button"
+                        className="admin-blog-links-count-btn"
+                        onClick={() => void openTagPosts(term.label)}
+                        title={`Show the ${term.postCount} post${term.postCount === 1 ? "" : "s"} tagged "${term.label}"`}
+                        style={{
+                          background: "none", border: "none", padding: 0, cursor: "pointer",
+                          font: "inherit", color: accent, textDecoration: "underline",
+                        }}
+                      >{term.postCount}</button>
+                    ) : (
+                      <span style={{ color: "#94a3b8" }}>{term.postCount}</span>
+                    )}
+                  </span>
                   <span style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "flex-end" }}>
                     <button
                       type="button"
@@ -11636,6 +12249,94 @@ function AdminBlogLinksPreview({
             </>
           )}
         </section>
+      )}
+
+      {/*
+        The posts carrying one tag. Portalled to <body> through
+        BuilderBodyPortal for the reason that component documents, and for a
+        second one specific to this module: it renders inside ARBITRARY tenant
+        themes, where a site rule has already blown one of this panel's own
+        controls out to 1056px (docs/BLOG_LINKS_MANAGER.md). A popup left
+        inside the tenant's container inherits whatever that theme does to
+        positioned children.
+      */}
+      {postsTag !== null && (
+        <BuilderBodyPortal>
+          <div
+            className="admin-blog-links-posts-overlay"
+            onClick={closeTagPosts}
+            role="presentation"
+          >
+            <div
+              aria-label={`Posts tagged ${postsTag}`}
+              aria-modal="true"
+              className="admin-blog-links-posts-modal"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+            >
+              <div className="admin-blog-links-posts-header">
+                {/* The tag is the content here too — it wraps, never clips. */}
+                <strong style={{ overflowWrap: "anywhere" }}>Posts tagged “{postsTag}”</strong>
+                <button
+                  type="button"
+                  className="admin-blog-links-posts-close"
+                  onClick={closeTagPosts}
+                  aria-label="Close"
+                >✕</button>
+              </div>
+
+              <div className="admin-blog-links-posts-body">
+                {tagPostsLoading ? (
+                  <p className="admin-blog-links-posts-empty">Loading…</p>
+                ) : tagPostsError ? (
+                  /* An error is NOT an empty list. Saying "no posts" here
+                     would be a lie told by a dropped request. */
+                  <p className="admin-blog-links-posts-error" role="alert">{tagPostsError}</p>
+                ) : tagPosts.length === 0 ? (
+                  <p className="admin-blog-links-posts-empty">No posts carry this tag.</p>
+                ) : (
+                  tagPosts.map((post) => {
+                    const editHref = `${managerPageUrl}${managerPageUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(post.id)}`;
+                    const viewHref = post.slug
+                      ? `${postViewUrl}${postViewUrl.includes("?") ? "&" : "?"}post=${encodeURIComponent(post.slug)}`
+                      : "";
+                    return (
+                      <div className="admin-blog-links-posts-row" key={post.id}>
+                        <span className="admin-blog-links-posts-title" style={{ overflowWrap: "anywhere" }}>
+                          {post.title}
+                          {post.status && post.status !== "published" && (
+                            <span className="admin-blog-links-posts-status">{post.status}</span>
+                          )}
+                        </span>
+                        {/* The same two controls the Blog Manager's own rows
+                            use, in the same order — not a third convention. */}
+                        <span className="admin-blog-links-posts-actions">
+                          <AdminTableIconButton
+                            icon="view"
+                            label="View"
+                            href={viewHref || undefined}
+                            linkTarget="_blank"
+                            disabled={!viewHref}
+                            onClick={!viewHref ? () => {} : undefined}
+                          />
+                          <AdminTableIconButton
+                            icon="edit"
+                            label="Edit"
+                            href={editHref}
+                          />
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="admin-blog-links-posts-footer">
+                <button type="button" className="admin-blog-links-posts-btn" onClick={closeTagPosts}>Close</button>
+              </div>
+            </div>
+          </div>
+        </BuilderBodyPortal>
       )}
     </div>
   );

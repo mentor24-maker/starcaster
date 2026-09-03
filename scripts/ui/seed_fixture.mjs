@@ -505,7 +505,7 @@ const buildTuned = (ids) => ({
       fieldsHeader: 'Fields on the form',
       showSlug: 'true', showFeaturedImage: 'true', showExcerpt: 'true',
       showAuthorField: 'true', showCategories: 'true', showTags: 'true',
-      showSeoFields: 'true',
+      showRelatedPosts: 'true', showSeoFields: 'true',
     },
   },
 
@@ -942,6 +942,30 @@ const buildPanelCheckSection = (ids) => {
   overlayScreen: {
     background: { mode: 'gradient', color: '#1b2a4a', color2: '#4cbb17' },
     opacity: 45,
+  },
+  /*
+   * AND THE SAME THING ON THE CELL, which is a different panel.
+   *
+   * The row overlay above seeds the SECTION editor's Overlay group. The cell
+   * editor is its own lattice with its own Overlay group, and it is gated the
+   * same way — the colour picker and the opacity select exist only while the
+   * type is not "none". Seeding one does nothing for the other.
+   *
+   * Measured, not assumed: with the cell left unseeded, wrapping the cell
+   * Overlay group's Opacity row in a grid of its own — a flat W0 violation —
+   * still reported a clean 660-panel pass, because that control was never on
+   * the page. With this here it fails. That is the whole reason the fixture
+   * carries content rather than an empty row.
+   *
+   * `main` because this section is single-column; a gradient for the same
+   * reason the row above uses one, and the angle left unset for the same
+   * reason too.
+   */
+  cellOverlayScreens: {
+    main: {
+      background: { mode: 'gradient', color: '#2a1b4a', color2: '#bb4c17' },
+      opacity: 55,
+    },
   },
   modules: [
     ...BUILDER_MODULE_TYPES.map((type) => {

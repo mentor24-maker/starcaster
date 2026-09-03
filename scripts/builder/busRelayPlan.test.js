@@ -3,11 +3,41 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { defaultWatches, handbackTarget } = require('./busRelayPlan.js');
+const { defaultWatches, handbackTarget, mergeEnabled, sweepVerdict } = require('./busRelayPlan.js');
 
 const watches = defaultWatches({ agentResponseList: 'AR', loopQueueList: 'LQ' });
 const agentResponse = watches.find((w) => w.list === 'AR');
 const loopQueue = watches.find((w) => w.list === 'LQ');
+
+/*
+ * ORDER (2026-09-03, task 86bbugakw). The relay sweeps the watches in order,
+ * spending one request per open ticket against a ~100-per-minute allowance
+ * shared by the whole company's token. With Agent Response first — 92 open
+ * tickets, never drained — the budget was gone before the sweep reached the
+ * only list that can merge, and the merge lane was dead for sixteen hours.
+ *
+ * Asserted on the MERGE CAPABILITY rather than on the label or the list id.
+ * The rule is "the list that can merge must not be starved", so that is the
+ * property worth pinning; a future rename or a third watch should not be able
+ * to satisfy this test while breaking the thing it protects.
+ */
+test('the merge-capable watch is swept FIRST, so a spent budget lands on a notify-only list', () => {
+  const order = defaultWatches({ agentResponseList: 'AR', loopQueueList: 'LQ' });
+  const firstMergeable = order.findIndex(mergeEnabled);
+  assert.notEqual(firstMergeable, -1, 'no watch can merge — the relay could never merge anything');
+  assert.equal(
+    firstMergeable,
+    0,
+    'a merge-capable watch is not first: the budget would run out before reaching it'
+  );
+});
+
+test('every watch after the merge-capable one is notify-only', () => {
+  const order = defaultWatches({ agentResponseList: 'AR', loopQueueList: 'LQ' });
+  const mergeable = order.filter(mergeEnabled);
+  assert.equal(mergeable.length, 1, 'exactly one watch should be able to merge');
+  assert.equal(order.slice(1).some(mergeEnabled), false);
+});
 
 test('both standing watches exist and carry their statuses', () => {
   assert.deepEqual(agentResponse.statuses, ['pending response', 'responding']);
@@ -533,4 +563,90 @@ test('without an isMachine predicate the filter is id-only — the caller must p
   // would fall back to if a future edit dropped the predicate. If this ever
   // needs changing, the relay's call site is what to look at first.
   assert.equal(operatorComments([itsOwnCard], { operatorId: DANE }).length, 1);
+});
+
+
+/*
+ * THE SWEEP VERDICT (2026-09-03, task 86bbugdv9). The unit is the LIST, not
+ * the ticket: on 2026-09-03 a pass that had entirely failed to sweep the
+ * merge-capable list reported "3 could not be checked" and three ticket ids,
+ * one of which was carrying Dane's own merge command. Three ids read as three
+ * minor gaps; the truth was that the merge lane had not run.
+ */
+const COMPLETE_BOTH = [
+  { label: 'Loop Queue', merge: true, complete: true },
+  { label: 'Agent Response', merge: false, complete: true },
+];
+
+test('a fully swept pass is COMPLETE and exits 0', () => {
+  const v = sweepVerdict(COMPLETE_BOTH);
+  assert.equal(v.complete, true);
+  assert.equal(v.exitCode, 0);
+  assert.match(v.line, /^COMPLETE/);
+});
+
+test('an empty sweep with nothing relayed is still COMPLETE — quiet is not broken', () => {
+  const v = sweepVerdict(COMPLETE_BOTH);
+  assert.equal(v.exitCode, 0);
+  assert.equal(v.mergeLaneRan, true);
+});
+
+test('an unfinished merge-capable list is named, and named AS the merge list', () => {
+  const v = sweepVerdict([
+    { label: 'Loop Queue', merge: true, complete: false, why: 'HTTP 429' },
+    { label: 'Agent Response', merge: false, complete: true },
+  ]);
+  assert.equal(v.complete, false);
+  assert.equal(v.exitCode, 1);
+  assert.match(v.line, /^INCOMPLETE/);
+  assert.match(v.line, /Loop Queue/);
+  assert.match(v.line, /merge-capable/);
+  assert.equal(v.mergeLaneRan, false);
+});
+
+/*
+ * The consequence, not the mechanism. "Could not read comments" is what broke;
+ * "a merge command may be sitting unacted on" is what it COSTS, and the cost is
+ * what a reader needs at 2am.
+ */
+test('an unfinished merge list says a merge command may be sitting unacted on', () => {
+  const v = sweepVerdict([
+    { label: 'Loop Queue', merge: true, complete: false, why: 'HTTP 429' },
+  ]);
+  assert.match(v.line, /Merge commands on that list were NOT read/);
+});
+
+test('an unfinished notify-only list does NOT claim a merge was missed', () => {
+  const v = sweepVerdict([
+    { label: 'Loop Queue', merge: true, complete: true },
+    { label: 'Agent Response', merge: false, complete: false, why: '3 ticket(s) on it could not be read' },
+  ]);
+  assert.equal(v.complete, false);
+  assert.equal(v.exitCode, 1);
+  assert.equal(v.mergeLaneRan, true, 'the merge lane DID run — only the notify-only list fell short');
+  assert.doesNotMatch(v.line, /Merge commands on that list were NOT read/);
+  assert.match(v.line, /Agent Response/);
+});
+
+test('no sweep at all is INCOMPLETE — absence of evidence is not a clean pass', () => {
+  const v = sweepVerdict([]);
+  assert.equal(v.complete, false);
+  assert.equal(v.exitCode, 1);
+  assert.match(v.line, /no list was swept at all/);
+});
+
+test('a complete pass and an unfinished one never produce the same line', () => {
+  const ok = sweepVerdict(COMPLETE_BOTH).line;
+  const bad = sweepVerdict([
+    { label: 'Loop Queue', merge: true, complete: false, why: 'HTTP 429' },
+    { label: 'Agent Response', merge: false, complete: true },
+  ]).line;
+  assert.notEqual(ok, bad);
+});
+
+test('the reason a list fell short is carried into the line, not dropped', () => {
+  const v = sweepVerdict([
+    { label: 'Loop Queue', merge: true, complete: false, why: 'HTTP 429' },
+  ]);
+  assert.match(v.line, /HTTP 429/);
 });
