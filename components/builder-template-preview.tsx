@@ -2058,7 +2058,9 @@ function BuilderModulePreview({
         {module.settings.label ? (
           <div className="builder-preview-code-label">{module.settings.label}</div>
         ) : null}
-        {module.text ? <BuilderCodeEmbed html={sanitizeEmbedHtml(module.text)} /> : null}
+        {module.text ? (
+          <BuilderCodeEmbed html={sanitizeEmbedHtml(module.text)} activation={module.settings.embedActivation} />
+        ) : null}
       </div>
     );
   }

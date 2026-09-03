@@ -3455,7 +3455,12 @@ export function createEmptyModule(
       : type === "code"
       ? {
           label: "",
-          snippetMode: "html"
+          snippetMode: "html",
+          // "auto" shields only the focus-stealing chart widgets the shield
+          // was written for; a map, a video, a Calendly render on first paint
+          // (task 86bbugzep). Absent reads as "auto" too, so pages built
+          // before this key behave the same as new ones.
+          embedActivation: "auto"
         }
       : type === "merch"
       ? {
