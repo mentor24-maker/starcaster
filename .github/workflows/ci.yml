@@ -160,6 +160,17 @@ jobs:
         # it red.
         run: npm run check:paths
 
+      - name: Builder-only notes cannot reach visitors (blocking)
+        # A module that finds nothing sometimes explains itself — "Set a Form ID
+        # in module settings", "Add tags in the Messaging section". That text is
+        # written for whoever is BUILDING the page and was rendering on published
+        # client sites, where the reader has no module settings and nothing to
+        # act on. Dane reported one under a blog post on 2026-09-03; six were
+        # live, and two of them had been fixed earlier the SAME DAY and came
+        # straight back. Blocking, because a shape that returns within hours of
+        # being fixed is not one an advisory warning will hold.
+        run: npm run check:builder-notes
+
       - name: AI token metering coverage (blocking)
         # A model call that records nothing is invisible spending. The meter was
         # restored repo-wide on 2026-08-17 (13 call sites); this gate keeps it
