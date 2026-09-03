@@ -665,9 +665,11 @@ test('the caller actually posts the unknown, on BOTH paths that can produce one'
   const fs = require('node:fs');
   const path = require('node:path');
   const code = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8');
-  assert.match(code, /function announceUnknown\(v\)/);
-  // Once for the unreadable queue, once for the undated-closure verdict.
-  const calls = code.match(/^\s*announceUnknown\(v\);$/gm) || [];
+  assert.match(code, /function announceUnknown\(v, evidence = null\)/);
+  // Once for the unreadable queue, once for the undated-closure verdict. The
+  // second one now carries the stall evidence with it, so this matches the
+  // call rather than the exact argument list.
+  const calls = code.match(/^\s*announceUnknown\(v[,)]/gm) || [];
   assert.equal(calls.length, 2,
     'an unreadable queue AND an untrustworthy zero both have to reach the bus');
   assert.match(code, /unknownStampFile/, 'and it is suppressed on the same 6h discipline');
@@ -832,4 +834,186 @@ test('the caller feeds the report and the post everything it just computed', () 
   assert.match(code, /const undatedRecent = throughput\.recentUndatedClosures\(\{ tasks, now: NOW \}\)/);
   assert.match(code, /reworkUnreadable: prRead\.why/,
     'the stall post must be told when gh could not be read, or the caveat is inert');
+});
+
+// --- review round 1 of 86bbr2jpq (2026-09-02) -------------------------------
+
+/**
+ * A LOOP QUEUE FIXTURE WITH ONE UNDATED CLOSURE IN IT — the state that produces
+ * the second UNKNOWN. `closedSince` sees zero, and the ticket that shipped is
+ * invisible to it because ClickUp recorded no closure date.
+ */
+function undatedScene() {
+  const tasks = [
+    task({ id: 'q1', status: 'queued', created: NOW - 9 * DAY, updated: NOW - 2 * HOUR }),
+    task({ id: 'q2', status: 'queued', created: NOW - 9 * DAY, updated: NOW - 3 * HOUR }),
+    task({ id: '86bb4uyvp', status: 'live', created: NOW - 9 * DAY, closed: null, updated: NOW - HOUR }),
+  ];
+  const queue = lt.queueShape(tasks);
+  const curve = lt.depthPerDay({ tasks, now: NOW, days: 7, calendar: UTC });
+  return {
+    tasks,
+    queue,
+    closed: lt.closedPerDay({ tasks, now: NOW, days: 7, calendar: UTC }),
+    plateau: lt.depthPlateau(curve),
+    verdict: lt.verdict({
+      closedLast24h: lt.closedSince({ tasks, now: NOW }),
+      queue,
+      queueTouched: true,
+      undatedRecent: lt.recentUndatedClosures({ tasks, now: NOW }),
+    }),
+  };
+}
+
+/**
+ * ROUND 1, FINDING 1: one post described one of the two UNKNOWNs.
+ *
+ * `renderUnknownPost` was shared by both, and its fixed text only fitted the
+ * unreadable-queue one. On the undated-closure path the reading had SUCCEEDED
+ * — ClickUp answered, every number existed, and the repair was one ticket in
+ * `Live` missing a closure date — while the message headlined "could not take
+ * a reading", claimed "nothing in the system is watching", and sent the reader
+ * off to check whether ClickUp was reachable at all. Only `v.why` was true.
+ *
+ * BREAK TEST, MEASURED. Deleting the `if (v && v.kind === 'undated-closure')`
+ * dispatch from `renderUnknownPost` fails this test and the evidence test
+ * below it (2 failed of 53); removing `kind` from the undated return in
+ * `verdict` fails the same two, because the dispatch is what reads it.
+ */
+test('the undated-closure unknown gets its own post, and does not claim the check is blind', () => {
+  const scene = undatedScene();
+  assert.equal(scene.verdict.kind, 'undated-closure', 'the verdict says which unknown it is');
+
+  const text = lt.renderUnknownPost({
+    verdict: scene.verdict, now: NOW, node: 'mac-mini',
+    evidence: {
+      closed: scene.closed, plateau: scene.plateau, queue: scene.queue,
+      rework: { rows: [], oldest: null }, undated: 1, undatedIds: ['86bb4uyvp'],
+    },
+  });
+
+  assert.doesNotMatch(text, /could not take a reading/i,
+    'the reading succeeded on this path — saying otherwise is the defect');
+  assert.doesNotMatch(text, /nothing in the system is watching/i,
+    'the stall detector is watching perfectly well; one number cannot be trusted');
+  assert.doesNotMatch(text, /can ClickUp be read at all/,
+    'and the reader must not be sent to diagnose an outage that did not happen');
+  assert.match(text, /cannot be read as a zero/, 'it says what is actually wrong');
+  assert.match(text, /86bb4uyvp/, 'and names the ticket whose closure date is missing');
+  assert.match(text, /\[CC-starcaster\]/);
+});
+
+test('the unreadable-queue post is untouched by that branch', () => {
+  const v = lt.verdict({ unreadable: 'ClickUp returned HTTP 429' });
+  assert.equal(v.kind, 'unreadable');
+  const text = lt.renderUnknownPost({ verdict: v, now: NOW, node: 'mac-mini' });
+  assert.match(text, /could not take a reading/i, 'that wording is correct HERE and stays');
+  assert.match(text, /429/);
+  assert.doesNotMatch(text, /cannot be read as a zero/);
+});
+
+/**
+ * ROUND 1, FINDING 2: the actionable numbers disappeared on that path.
+ *
+ * `verdict` returns UNKNOWN before it can ever reach STALLED, so a GENUINE
+ * stall that coincides with one recently-edited undated closure comes out of
+ * the unknown branch — and that post carried no queue breakdown, no plateau
+ * and no oldest rework PR. The stall is still the likelier reading, so the
+ * evidence has to travel with it.
+ *
+ * BREAK TEST, MEASURED. Emptying the `evidenceBullets` spread in
+ * `renderUndatedPost` fails this test (1 failed of 53); dropping the
+ * `evidence` object from the `announceUnknown(v, {...})` call in
+ * loop_throughput.mjs fails the caller test below it (1 failed of 53).
+ */
+test('the undated-closure post carries the stall evidence anyway', () => {
+  const scene = undatedScene();
+  const text = lt.renderUnknownPost({
+    verdict: scene.verdict, now: NOW, node: 'mac-mini',
+    evidence: {
+      closed: scene.closed, plateau: scene.plateau, queue: scene.queue,
+      rework: { rows: [{ number: 449, ageMs: 3 * DAY }], oldest: { number: 449, ageMs: 3 * DAY } },
+      undated: 1, undatedIds: ['86bb4uyvp'],
+    },
+  });
+  assert.match(text, /2 queued, 0 in flight/, 'the queue breakdown a stall post would have had');
+  assert.match(text, /#449/, 'and the oldest rework PR, which is the most actionable number');
+  assert.match(text, /carry no closure date/, 'and the caveat, in the words of THIS verdict');
+  assert.match(text, /re-arms the 24h window/,
+    'it says out loud that editing that ticket can defer this indefinitely');
+});
+
+test('the caller hands the evidence to the undated post', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const code = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8');
+  assert.match(code, /const undatedRecentIds = throughput/,
+    'the ids are read, or the post cannot name the ticket');
+  assert.match(
+    code,
+    /announceUnknown\(v, \{\s*\n\s*closed, plateau, rework, queue, undated,/,
+    'and the numbers reach it, or finding 2 is fixed only in the library',
+  );
+});
+
+/**
+ * ROUND 1, FINDING 3: the caveat had a hole of exactly the shape it closed.
+ *
+ * The bullet said "could NOT be read" only when `gh` itself failed. But
+ * `reworkPrs` returns `oldest = rows.find(r => r.ageMs !== null) || null` — so
+ * if `gh` reads perfectly and no rework PR's `createdAt` parses, `rows` is
+ * non-empty, `oldest` is null, `why` is null, and the bullet vanished with
+ * nothing said at all. `reworkPrs` sorts such a PR LAST precisely so it is not
+ * dropped; the post was dropping it anyway.
+ *
+ * BREAK TEST, MEASURED. Deleting the `else if (Array.isArray(rework.rows) &&
+ * ...)` branch from `evidenceBullets` fails this test (1 failed of 53).
+ */
+test('a rework PR with no readable open date is named, not silently dropped', () => {
+  const tasks = [task({ id: 'q', status: 'queued' })];
+  const queue = lt.queueShape(tasks);
+  const closed = lt.closedPerDay({ tasks, now: NOW, days: 7, calendar: UTC });
+  const curve = lt.depthPerDay({ tasks, now: NOW, days: 7, calendar: UTC });
+  const common = {
+    verdict: lt.verdict({ closedLast24h: 0, queue, queueTouched: true }),
+    closed, plateau: lt.depthPlateau(curve), queue, now: NOW, node: 'mac-mini',
+  };
+
+  // gh read fine — no `why` — but neither PR carries a parseable createdAt.
+  const text = lt.renderStallPost({
+    ...common,
+    rework: { rows: [{ number: 449, ageMs: null }, { number: 452, ageMs: null }], oldest: null },
+  });
+  assert.match(text, /2 rework PR\(s\) open/, 'the count is known even when the ages are not');
+  assert.match(text, /none with a readable open date/, 'and the gap says it is a gap');
+  assert.match(text, /#449.*#452|#452.*#449/, 'and names them, so they can be looked at');
+  assert.doesNotMatch(text, /was opened/, 'it must not invent an age it does not have');
+
+  // Truly empty is still silent: a report that always hedges teaches the
+  // reader to skip the hedge.
+  const none = lt.renderStallPost({ ...common, rework: { rows: [], oldest: null } });
+  assert.doesNotMatch(none, /rework PR\(s\) open/);
+  assert.doesNotMatch(none, /could NOT be read/);
+});
+
+/**
+ * ROUND 1, FINDING 4: the file the first fix NAMED still described the old
+ * behaviour. `run_bus_relay.sh` said "Posts to the bus only on a STALLED
+ * verdict ... Silent otherwise" directly above the call that now posts on
+ * UNKNOWN too. CLAUDE.md was updated; the comment at the call site was not.
+ *
+ * BREAK TEST, MEASURED. Putting "only on a STALLED verdict" back into that
+ * comment fails this test (1 failed of 53).
+ */
+test('the relay call site describes what the check now does', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const sh = fs.readFileSync(path.join(__dirname, '..', 'run_bus_relay.sh'), 'utf8');
+  const at = sh.indexOf('npm run --silent throughput -- --check');
+  assert.ok(at > 0, 'the call is still there');
+  const preamble = sh.slice(Math.max(0, at - 900), at);
+  assert.match(preamble, /UNKNOWN/,
+    'the comment above the call has to mention the other state it posts on');
+  assert.doesNotMatch(preamble, /only on a STALLED verdict/,
+    'and must not still say it posts only on a stall');
 });

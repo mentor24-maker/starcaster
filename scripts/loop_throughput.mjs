@@ -219,10 +219,10 @@ function clearUnknownStamp() {
  * still worth attempting, because the other UNKNOWN — an undated closure
  * inside the window — happens while ClickUp is perfectly healthy.
  */
-function announceUnknown(v) {
+function announceUnknown(v, evidence = null) {
   if (!CHECK) return;
   const text = throughput.renderUnknownPost({
-    verdict: v, now: NOW, node: NODE.name || 'an unnamed machine',
+    verdict: v, now: NOW, node: NODE.name || 'an unnamed machine', evidence,
   });
   if (DRY) {
     console.log('');
@@ -325,6 +325,13 @@ const queueTouched = withTimestamps.length
 // makes the verdict UNKNOWN rather than STALLED — see `recentUndatedClosures`.
 const undated = throughput.undatedClosures(tasks);
 const undatedRecent = throughput.recentUndatedClosures({ tasks, now: NOW });
+// The ids as well as the count. The repair for that verdict is "give this
+// ticket a closure date", and a message that says so without naming which
+// ticket sends the reader to read a whole column by hand (2026-09-02, review
+// round 1).
+const undatedRecentIds = throughput
+  .recentUndatedClosureTasks({ tasks, now: NOW })
+  .map((t) => String(t?.id ?? '')).filter(Boolean);
 
 const v = throughput.verdict({
   closedLast24h, queue, queueTouched, trend, lastClose, undatedRecent,
@@ -351,7 +358,15 @@ if (!CHECK) process.exit(v.exitCode);
 // a stall, so the stall suppression clears; it is not health either.
 if (v.state === 'UNKNOWN') {
   clearStamp();
-  announceUnknown(v);
+  // WITH THE STALL EVIDENCE, because `verdict` returns UNKNOWN before it can
+  // reach STALLED — so a genuine stall coinciding with one recently-edited
+  // undated closure comes out of THIS branch, and used to arrive with none of
+  // the numbers that make an alert worth acting on (2026-09-02, review round
+  // 1, finding 2). A stall is still the likelier reading here.
+  announceUnknown(v, {
+    closed, plateau, rework, queue, undated,
+    reworkUnreadable: prRead.why, undatedIds: undatedRecentIds,
+  });
   process.exit(v.exitCode);
 }
 

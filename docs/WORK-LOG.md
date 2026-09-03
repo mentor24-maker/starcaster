@@ -32,6 +32,21 @@ last touched 36 days ago, so nothing is switched off by this.
 
 Every fix was broken on purpose afterwards and watched to fail, which is the
 only way to know a test for a monitor is a real test.
+
+Review sent this back once, and caught something worth having. The new
+"I could not take a reading" message was being used for two quite different
+situations, and it only described one of them. On the other — the day where a
+ticket finished without a closure date — the reading had actually worked
+perfectly, every number was there, and the fix was one missing field on one
+ticket. The message nevertheless announced that the check had gone blind and
+told the reader to go and find out whether ClickUp was reachable at all. That
+is the same fault this whole ticket is about, arriving through the fix for it:
+a message saying something its own evidence does not support, in the direction
+that wastes the most of the reader's morning. There are two messages now. The
+second one names the ticket to go and fix, and carries the queue numbers with
+it, because a real stall can happen on that day too and used to arrive stripped
+of everything that made it worth acting on.
+
 ## 2026-09-02 — The screen a client uses to connect their own accounts (#526)
 
 Until now, putting a client's social account onto Starcaster meant you pasting
