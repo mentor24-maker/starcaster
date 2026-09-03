@@ -772,6 +772,36 @@ any edit resets it, so on 86bbqw49y the twenty-five automated refusal comments
 would each have reset the very clock built to catch them.
 
 
+### 3.19 Break-test a check in the PASSING direction too — a false positive is worse than a miss
+
+2026-09-03, writing `check_builder_only_notes.cjs` (86bbunq4c).
+
+Every check here gets broken on purpose to prove it can fail. That is half the
+job. The other half is proving it can **pass**, and it is the half that gets
+skipped, because a green check feels like the finished state rather than a
+claim to be tested.
+
+This one caught a leak correctly and then flagged a note that was correctly
+guarded: an inline `<BuilderOnlyNote …>text</BuilderOnlyNote>` written on a
+single line. The scan walked backwards from the match looking for an opening
+tag, and met that line's own CLOSING tag first. Only writing the compliant case
+and running it found that.
+
+**A false positive on a gate is worse than a missed defect**, and the asymmetry
+is not close. A miss costs one bug. A check that fails work which is already
+correct teaches people to reach for `SKIP_CONVENTIONS=1` — and that switch is
+not per-rule, so one annoying check disables every check in the file. The
+cheapest way to lose a whole gate is to make it cry wolf once.
+
+So a check ships with two rehearsals, not one:
+
+- the defect it exists for → it must fail;
+- the **compliant** version of the same code → it must pass.
+
+Related: §3.12 (a guard after the refusal is unreachable) and §3.11 (a survey
+that skips what it cannot read has surveyed nothing) — this check fails when it
+scans zero files for exactly that reason.
+
 ## 4. Secrets
 
 ### 4.1 The rule is about EXPOSURE, not custody
@@ -1820,6 +1850,31 @@ demo strings are absent — `components/builder-template-preview-tag-cloud.test.
 "placeholder tags never reach a visitor". Copy that shape for any module
 carrying an affordance.
 
+**This rule was written, and then broken twice more the same day, which is why
+there is now a check.** #576 guarded two empty states in `blog-related-posts`
+and left four identical ones untouched a few hundred lines away; the operator
+found one of those four — the very string quoted above — on the live site hours
+later (86bbunq4c, #580). A rule that has to be remembered at each of six call
+sites is not a rule, it is a hope. The six now go through one component,
+`<BuilderOnlyNote liveSite={liveSite}>`, and **`npm run check:builder-notes`**
+(blocking in CI and pre-commit, `scripts/check_builder_only_notes.cjs`) fails on
+a new builder-facing phrase in a render file that is not inside one. It also
+fails when it scans zero files, so renaming a renderer cannot switch it off
+quietly (§3.11).
+
+Two corollaries, each found by getting them wrong first:
+
+**Where the note is ALL the module would render, the module stands down.**
+Hiding just the text leaves a "You Might Also Like" heading over empty space, or
+a coloured newsletter box promising a signup that cannot happen. That is not a
+fix — it is §5.31 below, the exact symptom the operator reported the same
+morning.
+
+**Test both halves: silent for a visitor AND still helpful in the Builder.**
+Asserting only the leak lets the next person "fix" it by deleting the note,
+trading a visible failure for a silent one. Break-testing proves it: removing
+the text passes the leak test and fails the builder-side one.
+
 ### 5.30 When the unit a rule is EVALUATED on is smaller than the unit it is ACTED on, saying it in the acted-on unit is wrong in both directions
 
 2026-09-03, found while verifying #575 (ticket 86bbukxdv), two bugs in two
@@ -1871,6 +1926,61 @@ verdict is summarised per page, per section, per project or per tenant.
 
 The saved-section-specific version, with the code, is `docs/SAVED_SECTIONS.md`
 §3 and landmine 5.
+
+### 5.31 An empty screen that does not say WHY reads as a broken one
+
+2026-09-03. The operator reported three things as broken in one day. All three
+were behaving correctly:
+
+| what he saw | what was true |
+|---|---|
+| `/tags?tag=junior%20tennis` showed no posts while the manager said 13 | all 13 were DRAFTS; the public feed asks for `status=published` |
+| "You Might Also Like" flashed and vanished on a live post | it matched by CATEGORY, and no post on the platform has one |
+| "No posts match your filters" for a `?tag=` the dropdown showed as "All Tags" | no post carries that tag; the `<select>` had no matching `<option>` |
+
+Not one was a code defect in the thing he pointed at. Each cost real diagnosis
+time, and in each case the answer was a single sentence the screen could have
+said itself. **He cannot read the database, so "empty" and "broken" are the
+same picture.**
+
+The rule: anything that can render empty names the value and the cause.
+"No posts tagged 'junior tennis'", not "no results". "This post is not in any
+category, so there is nothing to match on", not a blank space. Where two
+screens count the same thing differently — the manager's 13 and the site's 0 —
+**each says what it counts**, or the operator is left to reconcile them by
+hand: `listTags` now returns `livePostCount` beside `postCount` (#577).
+
+Two things that make an explanation worse than none:
+
+- **On a public page the explanation is for the BUILDER only.** A visitor gets
+  nothing at all. That is §5.29, and it is why the empty state needs
+  `liveSite` before it needs good wording.
+- **Compute the number where the emptiness is decided.** The popup counts the
+  posts it actually loaded, not the row's stored count — two reads at two
+  moments, and summarising from the wrong one reports a figure nobody measured.
+
+### 5.32 A count and its qualifier come out of ONE pass, or they will disagree
+
+2026-09-03, while fixing 5.31. The tag manager needed "13 posts, 0 of them
+live". The obvious implementation counts the posts, then counts the published
+ones — two scans of a list that can change between them, and a live count that
+contradicts its own total is worse than the single misleading number it
+replaced.
+
+`listTags` accumulates both in the same loop over the same array
+(`lib/blogTagsStore.js`). The test that holds it reads the source and asserts
+`await allPosts(` appears exactly once in the function — a second scan is a
+second answer.
+
+The same rule caught a subtler case: the counts must fold **across spellings**
+the way the total does. "Junior Tennis" and "junior tennis" are one tag; a live
+count accumulated per-spelling produces a number larger than the total beside
+it.
+
+And the mirror of it: **absent is not zero.** A client reading a field an older
+server does not send must render nothing, never `0`. Defaulting
+`livePostCount ?? 0` would have told the operator every tag on his blog was
+dead during a deploy.
 
 ## 6. Working in this repo
 
@@ -2819,6 +2929,34 @@ and the next honest thing anyone did would have been to explain why the setting
 The same discipline caught the other half of that task: the 13 posts were
 published through the app's own store rather than raw SQL, and each row was read
 back — 13 of 13 confirmed — rather than trusted from a write that reported OK.
+
+### 6.19 Search the queue for the SYMPTOM before filing — doctrine cites its own open tickets
+
+2026-09-03. The operator reported *"No tags found. Add tags in the Messaging
+section."* on a client's live blog. A ticket was filed for it (86bbunq4c), the
+sweep was done, six leaks were fixed and it shipped as #580.
+
+**A ticket for that exact string was already open.** 86bbugd2e, filed the same
+morning, named it verbatim, named the second half of the same defect ("Tags:
+Example Tag"), and set out the same scope. Worse, `docs/DOCTRINE.md` §5.29 —
+read during the very work that duplicated it — **quotes both the string and the
+ticket number**. It was read past.
+
+`npm run map` and reading the queue is already the rule (CLAUDE.md, "One topic,
+one worktree", rule 4). What this adds is *what to search for*: the rule as
+written protects against two sessions building the same EPIC, and this was not
+an epic. It was a one-line bug report whose text already existed in the tracker.
+
+- Search the queue for the **operator's own words** — the error string, the page,
+  the module — not for the name you are about to give the work.
+- When doctrine names an open ticket, **read that ticket** before filing a new
+  one. A `§` that cites a task id is a live cross-reference, not a footnote.
+- Filing the duplicate was the cheap part; the cost is that 86bbugd2e's OTHER
+  half stayed queued behind a ticket that looked done, and the operator's
+  report of it was answered twice with half an answer.
+
+The repair is not to close the older ticket. It is to fold the finished half
+into it, leave the unfinished half visible, and say plainly which is which.
 
 ## 7. Operator-facing gotchas
 
