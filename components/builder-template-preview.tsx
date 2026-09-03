@@ -2316,7 +2316,10 @@ function BuilderModulePreview({
     );
   }
   if (module.type === "blog-related-posts") {
-    return <BlogRelatedPostsPreview settings={module.settings} />;
+    // liveSite decides whether an empty result explains itself or simply is
+    // not there. A visitor gets nothing; the person building the page gets a
+    // reason. See the empty state inside the component.
+    return <BlogRelatedPostsPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-search") {
     return <BlogSearchPreview settings={module.settings} />;
@@ -2433,6 +2436,13 @@ function resolveBlogPostManagerSettings(settings: Record<string, string>): Recor
   return resolved;
 }
 
+/*
+ * The <option> value standing in for "the URL named a category that does not
+ * exist". It cannot be "" (that is All Categories) and it cannot be a category
+ * id, so it is a value no id can collide with.
+ */
+const UNMATCHED_FILTER_VALUE = "__starcaster_unmatched_filter__";
+
 function BlogPostListPreview({ settings }: { settings: Record<string, string> }) {
   const [allPosts, setAllPosts] = useState<BlogPostRecord[]>([]);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
@@ -2442,6 +2452,16 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   // User filter state
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("");
+  /*
+   * A ?category= slug that matches no category is held HERE rather than in
+   * catFilter, which carries a category id. Before task 86bbuk7xz an unknown
+   * slug was dropped on the floor: catFilter stayed "" and the page showed
+   * every post, as though the visitor had asked for no filter at all. An
+   * unknown ?tag= failed the opposite way (nothing at all). One of those two
+   * has to be wrong; this makes both of them say "no posts", and say which
+   * value they mean.
+   */
+  const [missingCatSlug, setMissingCatSlug] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [authorFilter, setAuthorFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -2502,6 +2522,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
         if (urlCatSlug) {
           const match = fetchedCats.find((c) => c.slug === urlCatSlug);
           if (match) setCatFilter(match.id);
+          else setMissingCatSlug(urlCatSlug);
         }
         const urlTag = params.get("tag") ?? "";
         if (urlTag) setTagFilter(urlTag);
@@ -2511,9 +2532,27 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   }, []);
 
   const allTags = useMemo(
-    () => [...new Set(allPosts.flatMap((p) => p.tags || []))].filter(Boolean).sort(),
+    () =>
+      [...new Set(allPosts.flatMap((p) => p.tags || []))]
+        .filter(Boolean)
+        // Plain .sort() is codepoint order, which files every capitalised tag
+        // ("ATP tennis", "US Open") above every lowercase one. A reader looking
+        // for a tag alphabetically does not know its capitalisation.
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
     [allPosts]
   );
+  /*
+   * The tag the URL asked for is always an option, even when no post carries
+   * it. A <select> whose value matches none of its options displays the FIRST
+   * one, so ?tag=junior%20tennis used to read "All Tags" over an empty page —
+   * the control flatly contradicting the filter it was applying.
+   */
+  const tagOptions = useMemo(() => {
+    if (!tagFilter || allTags.includes(tagFilter)) return allTags;
+    return [...allTags, tagFilter].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [allTags, tagFilter]);
   const allAuthors = useMemo(
     () => [...new Set(allPosts.map((p) => p.author).filter((a): a is string => Boolean(a)))].sort(),
     [allPosts]
@@ -2523,6 +2562,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
     const q = search.trim().toLowerCase();
     return allPosts.filter((post) => {
       if (q && !`${post.title} ${post.excerpt || ""}`.toLowerCase().includes(q)) return false;
+      if (missingCatSlug) return false;
       if (catFilter && !post.categoryIds?.includes(catFilter)) return false;
       if (tagFilter && !post.tags?.includes(tagFilter)) return false;
       if (authorFilter && post.author !== authorFilter) return false;
@@ -2530,10 +2570,34 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
       if (dateTo && (!post.published_at || new Date(post.published_at) > new Date(dateTo + "T23:59:59"))) return false;
       return true;
     });
-  }, [allPosts, search, catFilter, tagFilter, authorFilter, dateFrom, dateTo]);
+  }, [allPosts, search, catFilter, missingCatSlug, tagFilter, authorFilter, dateFrom, dateTo]);
 
   const visiblePosts = filteredPosts.slice(0, postsPerPage);
-  const hasActiveFilter = search || catFilter || tagFilter || authorFilter || dateFrom || dateTo;
+  const hasActiveFilter =
+    search || catFilter || missingCatSlug || tagFilter || authorFilter || dateFrom || dateTo;
+
+  function clearFilters() {
+    setSearch("");
+    setCatFilter("");
+    setMissingCatSlug("");
+    setTagFilter("");
+    setAuthorFilter("");
+    setDateFrom("");
+    setDateTo("");
+  }
+
+  const activeCategoryName =
+    missingCatSlug || categories.find((c) => c.id === catFilter)?.name || "";
+  /*
+   * "No posts match your filters" cannot tell a tag that does not exist from a
+   * parameter that did nothing — which is exactly how a working page read as a
+   * broken one on 2026-09-03. Name the value that emptied the page.
+   */
+  const emptyFilteredMessage = tagFilter
+    ? `No posts tagged \u201c${tagFilter}\u201d.`
+    : activeCategoryName
+      ? `No posts in the category \u201c${activeCategoryName}\u201d.`
+      : "No posts match your filters.";
 
   if (loading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
@@ -2578,16 +2642,22 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
               style={{ ...inputStyle, flex: "1 1 180px", minWidth: 140 }}
             />
           ) : null}
-          {showCategoryFilter && categories.length > 0 ? (
-            <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
+          {showCategoryFilter && (categories.length > 0 || missingCatSlug) ? (
+            <select
+              value={missingCatSlug ? UNMATCHED_FILTER_VALUE : catFilter}
+              onChange={(e) => { setMissingCatSlug(""); setCatFilter(e.target.value === UNMATCHED_FILTER_VALUE ? "" : e.target.value); }}
+              style={{ ...inputStyle, cursor: "pointer" }}
+            >
               <option value="">All Categories</option>
+              {/* The slug the URL asked for, when no category answers to it. */}
+              {missingCatSlug ? <option value={UNMATCHED_FILTER_VALUE}>{missingCatSlug}</option> : null}
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           ) : null}
-          {showTagFilter && allTags.length > 0 ? (
+          {showTagFilter && tagOptions.length > 0 ? (
             <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
               <option value="">All Tags</option>
-              {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
+              {tagOptions.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           ) : null}
           {showAuthorFilter && allAuthors.length > 0 ? (
@@ -2606,7 +2676,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
           {hasActiveFilter ? (
             <button
               type="button"
-              onClick={() => { setSearch(""); setCatFilter(""); setTagFilter(""); setAuthorFilter(""); setDateFrom(""); setDateTo(""); }}
+              onClick={clearFilters}
               style={{ ...inputStyle, color: "#718096", cursor: "pointer", background: "#fff" }}
             >
               Clear
@@ -2622,9 +2692,22 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
 
       {visiblePosts.length === 0 ? (
         <div style={{ padding: "2rem", textAlign: "center", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
-          {allPosts.length === 0
-            ? "No published posts yet. Use the Create Post module to add your first post."
-            : "No posts match your filters."}
+          {allPosts.length === 0 ? (
+            "No published posts yet. Use the Create Post module to add your first post."
+          ) : (
+            <>
+              <div>{emptyFilteredMessage}</div>
+              {hasActiveFilter ? (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  style={{ ...inputStyle, marginTop: "0.875rem", color: "#4a5568", cursor: "pointer", background: "#fff" }}
+                >
+                  Show all posts
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
       ) : (
         <div style={gridStyle}>
@@ -7695,7 +7778,67 @@ function BlogNewsletterSubscribePreview({
   );
 }
 
-function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string> }) {
+/**
+ * Why "match by category / tag" found nothing.
+ *
+ * There are two completely different causes and the fix differs: the post has
+ * nothing to match ON, or it has plenty and no other post shares any of it.
+ * The first is the one that bit Delray — every post on the platform had zero
+ * categories, because the post editor's Categories field never saved
+ * (fixed in #568), so match-by-categories could not work anywhere and said
+ * nothing about it.
+ */
+function matchFailureReason(
+  current: BlogPostRecord,
+  matchBy: string,
+  publishedCount: number
+): string {
+  const cats = current.categoryIds ?? [];
+  const tags = current.tags ?? [];
+  const onlyOne = publishedCount <= 1;
+
+  if (matchBy === "tags") {
+    if (tags.length === 0) return "This post has no tags, so there is nothing to match on. Add tags to it in the editor.";
+    return onlyOne
+      ? "No other post is published yet, so there is nothing to match against."
+      : "No other published post shares a tag with this one.";
+  }
+
+  if (matchBy === "categories") {
+    if (cats.length === 0) {
+      return "This post is not in any category, so there is nothing to match on. Put it in one in the editor, or set Match By to Tags or Hand-picked.";
+    }
+    return onlyOne
+      ? "No other post is published yet, so there is nothing to match against."
+      : "No other published post shares a category with this one.";
+  }
+
+  // Categories OR tags.
+  if (cats.length === 0 && tags.length === 0) {
+    return "This post has no categories and no tags, so there is nothing to match on.";
+  }
+  return onlyOne
+    ? "No other post is published yet, so there is nothing to match against."
+    : "No other published post shares a category or a tag with this one.";
+}
+
+function BlogRelatedPostsPreview({
+  settings,
+  liveSite = false,
+}: {
+  settings: Record<string, string>;
+  /**
+   * True only on a real published tenant page. It decides what an EMPTY
+   * result looks like: a visitor gets nothing at all, and anyone building the
+   * page gets a sentence saying why nothing matched.
+   *
+   * The module used to render `null` on empty in both places. On 2026-09-03
+   * that read as the feature being broken — it flashed "Loading related
+   * posts…" and then the whole section, heading included, disappeared — when
+   * in fact it was set to match by category on a site where no post has one.
+   */
+  liveSite?: boolean;
+}) {
   const matchBy = settings.matchBy ?? "categories";
   const isManual = matchBy === "manual";
   /**
@@ -7734,6 +7877,14 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
   const [relatedPosts, setRelatedPosts] = useState<BlogPostRecord[]>([]);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
   const [loading, setLoading] = useState(!isManual);
+  /**
+   * WHY the result is empty, in the words the person building the page needs.
+   * Set wherever the emptiness is decided, because that is the only place that
+   * still knows the difference between "nothing is picked", "what is picked is
+   * unpublished" and "this post has no categories to match on" — three states
+   * that look identical from the outside and need three different actions.
+   */
+  const [emptyReason, setEmptyReason] = useState("");
 
   useEffect(() => {
     function sync() {
@@ -7786,6 +7937,7 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
 
         if (!current) {
           setRelatedPosts([]);
+          setEmptyReason("That post could not be loaded, so there is nothing to match against.");
           return;
         }
 
@@ -7806,7 +7958,17 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
           );
           // Order follows the article list, not the order they were linked:
           // relations are mutual and unordered, so there is no "first".
-          setRelatedPosts(allPosts.filter((p) => relatedIds.has(p.id)).slice(0, count));
+          const picked = allPosts.filter((p) => relatedIds.has(p.id));
+          setRelatedPosts(picked.slice(0, count));
+          // "None chosen" and "the chosen ones are drafts" are different
+          // problems with different fixes, and they look the same from here.
+          setEmptyReason(
+            picked.length > 0
+              ? ""
+              : relatedIds.size === 0
+                ? "Nothing is related to this post yet. Open the post in the editor and pick its related posts."
+                : `${relatedIds.size} post${relatedIds.size === 1 ? " is" : "s are"} related to this one, but ${relatedIds.size === 1 ? "it is" : "none are"} published — a draft cannot appear here.`
+          );
           return;
         }
 
@@ -7822,8 +7984,12 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
         });
 
         setRelatedPosts(filtered.slice(0, count));
+        setEmptyReason(filtered.length > 0 ? "" : matchFailureReason(current, matchBy, allPosts.length));
       })
-      .catch(() => setRelatedPosts([]))
+      .catch(() => {
+        setRelatedPosts([]);
+        setEmptyReason("The related posts could not be loaded.");
+      })
       .finally(() => setLoading(false));
   }, [postSlug, isManual, isPicked, matchBy, count, showCategories]);
 
@@ -7949,8 +8115,14 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
   }
 
   if (!postSlug) {
+    // Same rule as the empty state below: this is a note to whoever is
+    // building the page, so a visitor must not be shown it. It said
+    // "Related posts appear here when viewing a blog post" on any published
+    // page the module sat on off a post — an instruction to a reader who
+    // cannot act on it.
+    if (liveSite) return null;
     return (
-      <div>
+      <div className="builder-related-posts-empty">
         {sectionTitle}
         <div
           style={{
@@ -7969,7 +8141,45 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
   }
 
   if (relatedPosts.length === 0) {
-    return null;
+    /*
+     * A VISITOR gets nothing. An empty box on a published page is worse than
+     * no box, and this is the behaviour that was always correct.
+     *
+     * Everyone else — the Builder canvas, the preview — gets the reason. The
+     * old code returned null in both places, so a module that had found no
+     * matches was indistinguishable from one that was broken: it flashed
+     * "Loading related posts…" and then the whole section vanished, heading
+     * and all. That is what a correctly-behaving module looked like on
+     * 2026-09-03 while it was set to match by category on a site where no post
+     * had one, and it read as the feature being broken.
+     */
+    if (liveSite) return null;
+    return (
+      <div className="builder-related-posts-empty">
+        {sectionTitle}
+        <div
+          style={{
+            padding: "1rem 1.25rem",
+            border: "1px dashed #d1d5db",
+            borderRadius: 8,
+            color: "#6b7280",
+            fontSize: "0.8125rem",
+            lineHeight: 1.5,
+            background: "#f9fafb",
+          }}
+        >
+          <strong style={{ display: "block", color: "#374151", marginBottom: 2 }}>
+            Nothing to show here yet.
+          </strong>
+          {emptyReason}
+          {/* Said plainly, because the box itself is the thing that looks
+              wrong: it is not an error, and it is not what a visitor sees. */}
+          <span style={{ display: "block", marginTop: 6, fontStyle: "italic" }}>
+            This note is only visible while building. Visitors see nothing at all.
+          </span>
+        </div>
+      </div>
+    );
   }
 
   return (

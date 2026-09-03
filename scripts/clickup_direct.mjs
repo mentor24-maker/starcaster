@@ -83,7 +83,7 @@ import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled, operatorComments,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
-  SIMULATED_BUS_WHY, simulationGuard, simulationLine,
+  SIMULATED_BUS_WHY, simulationGuard, simulationLine, sweepVerdict,
 } = busRelayPlan;
 const { retryDecision } = clickupRetry;
 const {
@@ -3414,10 +3414,25 @@ if (cmd === 'whoami') {
   const laneSwitchSignals = [];
   const laneCandidates = [];
   let lastRes = null;
+  // One entry per watch — see busRelayPlan.sweepVerdict for why the unit is
+  // the LIST and not the ticket.
+  const sweeps = [];
 
   for (const watch of watches) {
-    const { tasks, res: listRes } = await fetchAllTasks(watch.list);
+    // fatal:false so a list this pass could not READ becomes an INCOMPLETE
+    // verdict rather than process.exit(1) three lines in. Dying here is how a
+    // 429 on the first list left the second one — the merge-capable one —
+    // never even attempted, with no record that it had been skipped.
+    const uncheckedBefore = unchecked.length;
+    const { tasks, res: listRes, failed } = await fetchAllTasks(watch.list, { fatal: false });
     if (listRes) lastRes = listRes;
+    if (!tasks) {
+      const why = failed || 'the list could not be read';
+      unchecked.push(`${watch.label}: could not read the list (${why}) — no ticket on it was examined`);
+      sweeps.push({ label: watch.label, merge: mergeEnabled(watch), complete: false, why });
+      console.error(`${watch.label}: COULD NOT READ THE LIST (${why}) — skipping it, and this pass is INCOMPLETE`);
+      continue;
+    }
     const open = tasks
       .filter((t) => watch.statuses.includes((t.status?.status ?? '').toLowerCase()))
       .filter((t) => !onlyTask || String(t.id) === String(onlyTask));
@@ -3611,6 +3626,18 @@ if (cmd === 'whoami') {
       console.error(`  handed back: "${t.name}" -> "${now}" (verified from the write response)`);
       handedBack++;
     }
+
+    // The list is finished. It counts as COMPLETE only if nothing on it went
+    // unchecked — a list swept with three unreadable tickets has not been
+    // swept, and saying so at the list level is the whole point of this
+    // verdict (see busRelayPlan.sweepVerdict).
+    const missed = unchecked.length - uncheckedBefore;
+    sweeps.push({
+      label: watch.label,
+      merge: mergeEnabled(watch),
+      complete: missed === 0,
+      why: missed ? `${missed} ticket(s) on it could not be read` : '',
+    });
   }
 
   // ── Lane A: announce, wait one hour, merge ─────────────────────────────────
@@ -3923,7 +3950,21 @@ if (cmd === 'whoami') {
   // the pipeline's consumer and slowing it down is what the ticket undid.
   console.error(`  requests this pass: ${requestCount} (ClickUp allows ~100/minute)`);
   if (lastRes) reportLimits(lastRes);
-  if (unchecked.length) process.exit(1);
+
+  // THE VERDICT, at LIST granularity (task 86bbugdv9). Everything above says
+  // what happened to individual tickets; this says whether the pass actually
+  // DID its job, and names the list it did not finish. A pass that never
+  // reached the merge-capable list used to be indistinguishable from a quiet
+  // one, and was, for sixteen hours on 2026-09-03.
+  const verdict = sweepVerdict(sweeps);
+  console.log(verdict.line);
+  // The sweep verdict covers the watch loop. Steps that run AFTER it — Lane A,
+  // the merge step's own follow-ups — can still add to `unchecked`, and those
+  // used to be what forced exit 1. Keep that: a pass is non-zero if EITHER the
+  // sweep was incomplete or anything at all went unverified. Dropping the
+  // second half would have been a silent regression in the quiet direction,
+  // which is the one that costs.
+  process.exit(verdict.exitCode || (unchecked.length ? 1 : 0));
 
 } else if (cmd === 'loop-note') {
   // Stamp the "Loop note" custom field with a plain-language transition line

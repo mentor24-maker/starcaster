@@ -32,6 +32,12 @@ const PATH_REWRITES: Array<[RegExp, string, string]> = [
   // the project-scope headers — a 404 that looks like a missing feature.
   [/^\/api\/admin\/propagation-runs(\/|$)/, '/api/builder/propagation-runs$1', 'propagation-runs'],
   [/^\/api\/admin\/page-snapshots(\/|$)/, '/api/builder/page-snapshots$1', 'page-snapshots'],
+  // Publish a named set of pages — what "Save & Publish" on a saved section
+  // sends. It needs a rewrite for the same reason propagation-runs above does:
+  // an unmapped path falls through to a plain fetch that carries neither the
+  // /api/builder prefix nor the project-scope headers, and the 404 that
+  // produces looks like a missing feature rather than a missing line here.
+  [/^\/api\/admin\/publish(\/|$)/, '/api/builder/publish$1', 'publish'],
   [/^\/api\/admin\/acquire-runs(\/|$)/, '/api/builder/acquire-runs$1', 'acquire-runs'],
   [/^\/api\/admin\/cell-modules(\/|$)/, '/api/builder/modules$1', 'cell-modules'],
   [/^\/api\/admin\/saved-sections(\/|$)/, '/api/builder/saved-sections$1', 'saved-sections'],
