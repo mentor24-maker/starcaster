@@ -429,16 +429,74 @@ function CrmFormFieldControl({
   );
 }
 
+/**
+ * A note addressed to whoever is BUILDING the page — "set a Form ID in module
+ * settings", "add tags in the Messaging section", "add posts in module
+ * settings".
+ *
+ * It renders NOTHING on a live published page. A visitor has no module
+ * settings, no Messaging section and no way to act on any of it, so the note
+ * is at best noise and at worst reads as the site being broken. Dane reported
+ * exactly that on 2026-09-03: "No tags found. Add tags in the Messaging
+ * section." printed under a blog post on delraytennis.starcaster.pro, from a
+ * module that reads the MESSAGING tag list and can never find a blog tag in
+ * it. Six of these were shipping to visitors when he asked.
+ *
+ * Every builder-facing instruction goes through here, and
+ * check_conventions.cjs fails the commit on a new one that does not — this
+ * shape had already been fixed twice in two days (PR #576) and came back.
+ */
+function BuilderOnlyNote({
+  liveSite = false,
+  className,
+  style,
+  children,
+}: {
+  liveSite?: boolean;
+  className?: string;
+  style?: CSSProperties;
+  children: React.ReactNode;
+}) {
+  if (liveSite) return null;
+  /*
+   * A legible default, because this renders inside ARBITRARY tenant themes.
+   * The two Messaging notes were pale grey italic with no background: perfectly
+   * readable on white, and nearly invisible over the photo Delray uses behind
+   * its pages — a note nobody can read is the same as no note (seen 2026-09-03).
+   * A caller may still override any of it.
+   */
+  const base: CSSProperties = {
+    padding: "0.75rem 1rem",
+    border: "1px dashed #d1d5db",
+    borderRadius: 6,
+    background: "#f9fafb",
+    color: "#4b5563",
+    fontSize: "0.8125rem",
+    lineHeight: 1.5,
+  };
+  return (
+    <div
+      className={`builder-only-note${className ? ` ${className}` : ""}`}
+      style={{ ...base, ...style }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function CrmFormPreview({
   settings,
   theme,
   themePalette,
-  projectId = ""
+  projectId = "",
+  liveSite = false
 }: {
   settings: Record<string, string>;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
   projectId?: string;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const crmFormId = settings.crmFormId ?? "";
   const [form, setForm] = useState<CrmFormData | null>(null);
@@ -496,7 +554,11 @@ function CrmFormPreview({
   }
 
   if (!crmFormId) {
-    return <div className="builder-contact-form-stub">No CRM form selected. Set a Form ID in module settings.</div>;
+    return (
+      <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
+        No CRM form selected. Set a Form ID in module settings.
+      </BuilderOnlyNote>
+    );
   }
 
   if (!form) {
@@ -734,11 +796,14 @@ function CrmContactsTablePreview({
   projectId: projectIdProp = "",
   theme,
   themePalette,
+  liveSite = false,
 }: {
   settings: Record<string, string>;
   projectId?: string;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const crmConfigId    = settings.crmConfigId ?? "";
   const tableTitle     = settings.tableTitle || "Contacts";
@@ -933,7 +998,13 @@ function CrmContactsTablePreview({
 
   if (loading)    return <div className="builder-contact-form-stub">Loading contacts…</div>;
   if (loadError)  return <div className="builder-contact-form-stub">{loadError}</div>;
-  if (!config)    return <div className="builder-contact-form-stub">No CRM configured. Set one up in Builder › CRM, or select a config in module settings.</div>;
+  if (!config) {
+    return (
+      <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
+        No CRM configured. Set one up in Builder › CRM, or select a config in module settings.
+      </BuilderOnlyNote>
+    );
+  }
 
   return (
     <div
@@ -2115,7 +2186,7 @@ function BuilderModulePreview({
   }
 
   if (module.type === "crm-form") {
-    return <CrmFormPreview settings={module.settings} theme={theme} themePalette={themePalette} projectId={projectId} />;
+    return <CrmFormPreview settings={module.settings} theme={theme} themePalette={themePalette} projectId={projectId} liveSite={liveSite} />;
   }
 
   if (module.type === "crm-contacts-table") {
@@ -2125,6 +2196,7 @@ function BuilderModulePreview({
         projectId={projectId}
         theme={theme}
         themePalette={themePalette}
+        liveSite={liveSite}
       />
     );
   }
@@ -2288,10 +2360,10 @@ function BuilderModulePreview({
     return <BlogCardManagerPreview />;
   }
   if (module.type === "messaging-topic-list") {
-    return <MessagingTopicListPreview settings={module.settings} />;
+    return <MessagingTopicListPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "messaging-tag-list") {
-    return <MessagingTagListPreview settings={module.settings} />;
+    return <MessagingTagListPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-category-filter") {
     return <BlogCategoryFilterPreview settings={module.settings} />;
@@ -2312,6 +2384,7 @@ function BuilderModulePreview({
         theme={theme}
         themePalette={themePalette}
         projectId={projectId}
+        liveSite={liveSite}
       />
     );
   }
@@ -4243,7 +4316,7 @@ function textToSlug(str: string) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-function MessagingTopicListPreview({ settings }: { settings: Record<string, string> }) {
+function MessagingTopicListPreview({ settings, liveSite = false }: { settings: Record<string, string>; liveSite?: boolean }) {
   const [topics, setTopics] = useState<Array<{ id: number; topic: string }>>([]);
 
   useEffect(() => {
@@ -4289,9 +4362,11 @@ function MessagingTopicListPreview({ settings }: { settings: Record<string, stri
 
   if (items.length === 0) {
     return (
-      <div style={{ padding: "0.75rem", color: "#94a3b8", fontSize: "0.875rem", fontStyle: "italic" }}>
-        No topics found. Add topics in the Messaging section.
-      </div>
+      <BuilderOnlyNote liveSite={liveSite}>
+        No topics found. This module lists <strong>Messaging</strong> topics, which
+        are separate from the blog — add them under Messaging, or use the Blog
+        Tag Cloud module if a blog page is what you meant.
+      </BuilderOnlyNote>
     );
   }
 
@@ -4356,7 +4431,7 @@ function MessagingTopicListPreview({ settings }: { settings: Record<string, stri
   return <div style={wrapperStyle}>{renderContent()}</div>;
 }
 
-function MessagingTagListPreview({ settings }: { settings: Record<string, string> }) {
+function MessagingTagListPreview({ settings, liveSite = false }: { settings: Record<string, string>; liveSite?: boolean }) {
   const [tags, setTags] = useState<Array<{ id: number; tag: string; importance?: number }>>([]);
 
   useEffect(() => {
@@ -4403,9 +4478,11 @@ function MessagingTagListPreview({ settings }: { settings: Record<string, string
 
   if (tags.length === 0) {
     return (
-      <div style={{ padding: "0.75rem", color: "#94a3b8", fontSize: "0.875rem", fontStyle: "italic" }}>
-        No tags found. Add tags in the Messaging section.
-      </div>
+      <BuilderOnlyNote liveSite={liveSite}>
+        No tags found. This module lists <strong>Messaging</strong> tags, which are
+        separate from your blog’s tags — add them under Messaging, or use the
+        Blog Tag Cloud module if a blog page is what you meant.
+      </BuilderOnlyNote>
     );
   }
 
@@ -7801,12 +7878,15 @@ function BlogNewsletterSubscribePreview({
   settings,
   theme,
   themePalette,
-  projectId = ""
+  projectId = "",
+  liveSite = false
 }: {
   settings: Record<string, string>;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
   projectId?: string;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const headline = settings.headline || "Stay in the loop";
   const description = settings.description || "";
@@ -7814,6 +7894,11 @@ function BlogNewsletterSubscribePreview({
   const crmFormId = settings.crmFormId ?? "";
   const showImage = settings.showImage === "true";
   const imageUrl = settings.imageUrl ?? "";
+
+  // No form id means there is no signup to offer. On a live page the block
+  // would be a headline and a coloured box over nothing - worse than absent,
+  // because it looks like a form that failed to load.
+  if (liveSite && !crmFormId) return null;
 
   return (
     <div style={{ background: bgColor, borderRadius: 8, padding: "1.5rem" }}>
@@ -7833,11 +7918,11 @@ function BlogNewsletterSubscribePreview({
             <p style={{ margin: "0 0 1rem", fontSize: "0.875rem", color: "#4a5568" }}>{description}</p>
           ) : null}
           {crmFormId ? (
-            <CrmFormPreview settings={settings} theme={theme} themePalette={themePalette} projectId={projectId} />
+            <CrmFormPreview settings={settings} theme={theme} themePalette={themePalette} projectId={projectId} liveSite={liveSite} />
           ) : (
-            <div className="builder-contact-form-stub">
+            <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
               Paste a CRM Form ID in module settings to activate this newsletter block.
-            </div>
+            </BuilderOnlyNote>
           )}
         </div>
       </div>
@@ -8104,10 +8189,14 @@ function BlogRelatedPostsPreview({
 
   if (isManual) {
     if (manualPosts.length === 0) {
+      // Nothing at all for a visitor — heading included. Rendering the title
+      // over an empty space is what "flashes and disappears" looks like.
+      if (liveSite) return null;
       return (
-        <div>
+        <div className="builder-related-posts-empty">
           {sectionTitle}
-          <div
+          <BuilderOnlyNote
+            liveSite={liveSite}
             style={{
               padding: "1.5rem",
               border: "1px dashed #d1d5db",
@@ -8118,7 +8207,7 @@ function BlogRelatedPostsPreview({
             }}
           >
             Add posts in module settings.
-          </div>
+          </BuilderOnlyNote>
         </div>
       );
     }
