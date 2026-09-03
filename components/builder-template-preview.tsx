@@ -2314,7 +2314,10 @@ function BuilderModulePreview({
     );
   }
   if (module.type === "blog-related-posts") {
-    return <BlogRelatedPostsPreview settings={module.settings} />;
+    // liveSite decides whether an empty result explains itself or simply is
+    // not there. A visitor gets nothing; the person building the page gets a
+    // reason. See the empty state inside the component.
+    return <BlogRelatedPostsPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-search") {
     return <BlogSearchPreview settings={module.settings} />;
@@ -7773,7 +7776,67 @@ function BlogNewsletterSubscribePreview({
   );
 }
 
-function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string> }) {
+/**
+ * Why "match by category / tag" found nothing.
+ *
+ * There are two completely different causes and the fix differs: the post has
+ * nothing to match ON, or it has plenty and no other post shares any of it.
+ * The first is the one that bit Delray — every post on the platform had zero
+ * categories, because the post editor's Categories field never saved
+ * (fixed in #568), so match-by-categories could not work anywhere and said
+ * nothing about it.
+ */
+function matchFailureReason(
+  current: BlogPostRecord,
+  matchBy: string,
+  publishedCount: number
+): string {
+  const cats = current.categoryIds ?? [];
+  const tags = current.tags ?? [];
+  const onlyOne = publishedCount <= 1;
+
+  if (matchBy === "tags") {
+    if (tags.length === 0) return "This post has no tags, so there is nothing to match on. Add tags to it in the editor.";
+    return onlyOne
+      ? "No other post is published yet, so there is nothing to match against."
+      : "No other published post shares a tag with this one.";
+  }
+
+  if (matchBy === "categories") {
+    if (cats.length === 0) {
+      return "This post is not in any category, so there is nothing to match on. Put it in one in the editor, or set Match By to Tags or Hand-picked.";
+    }
+    return onlyOne
+      ? "No other post is published yet, so there is nothing to match against."
+      : "No other published post shares a category with this one.";
+  }
+
+  // Categories OR tags.
+  if (cats.length === 0 && tags.length === 0) {
+    return "This post has no categories and no tags, so there is nothing to match on.";
+  }
+  return onlyOne
+    ? "No other post is published yet, so there is nothing to match against."
+    : "No other published post shares a category or a tag with this one.";
+}
+
+function BlogRelatedPostsPreview({
+  settings,
+  liveSite = false,
+}: {
+  settings: Record<string, string>;
+  /**
+   * True only on a real published tenant page. It decides what an EMPTY
+   * result looks like: a visitor gets nothing at all, and anyone building the
+   * page gets a sentence saying why nothing matched.
+   *
+   * The module used to render `null` on empty in both places. On 2026-09-03
+   * that read as the feature being broken — it flashed "Loading related
+   * posts…" and then the whole section, heading included, disappeared — when
+   * in fact it was set to match by category on a site where no post has one.
+   */
+  liveSite?: boolean;
+}) {
   const matchBy = settings.matchBy ?? "categories";
   const isManual = matchBy === "manual";
   /**
@@ -7812,6 +7875,14 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
   const [relatedPosts, setRelatedPosts] = useState<BlogPostRecord[]>([]);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
   const [loading, setLoading] = useState(!isManual);
+  /**
+   * WHY the result is empty, in the words the person building the page needs.
+   * Set wherever the emptiness is decided, because that is the only place that
+   * still knows the difference between "nothing is picked", "what is picked is
+   * unpublished" and "this post has no categories to match on" — three states
+   * that look identical from the outside and need three different actions.
+   */
+  const [emptyReason, setEmptyReason] = useState("");
 
   useEffect(() => {
     function sync() {
@@ -7864,6 +7935,7 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
 
         if (!current) {
           setRelatedPosts([]);
+          setEmptyReason("That post could not be loaded, so there is nothing to match against.");
           return;
         }
 
@@ -7884,7 +7956,17 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
           );
           // Order follows the article list, not the order they were linked:
           // relations are mutual and unordered, so there is no "first".
-          setRelatedPosts(allPosts.filter((p) => relatedIds.has(p.id)).slice(0, count));
+          const picked = allPosts.filter((p) => relatedIds.has(p.id));
+          setRelatedPosts(picked.slice(0, count));
+          // "None chosen" and "the chosen ones are drafts" are different
+          // problems with different fixes, and they look the same from here.
+          setEmptyReason(
+            picked.length > 0
+              ? ""
+              : relatedIds.size === 0
+                ? "Nothing is related to this post yet. Open the post in the editor and pick its related posts."
+                : `${relatedIds.size} post${relatedIds.size === 1 ? " is" : "s are"} related to this one, but ${relatedIds.size === 1 ? "it is" : "none are"} published — a draft cannot appear here.`
+          );
           return;
         }
 
@@ -7900,8 +7982,12 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
         });
 
         setRelatedPosts(filtered.slice(0, count));
+        setEmptyReason(filtered.length > 0 ? "" : matchFailureReason(current, matchBy, allPosts.length));
       })
-      .catch(() => setRelatedPosts([]))
+      .catch(() => {
+        setRelatedPosts([]);
+        setEmptyReason("The related posts could not be loaded.");
+      })
       .finally(() => setLoading(false));
   }, [postSlug, isManual, isPicked, matchBy, count, showCategories]);
 
@@ -8027,8 +8113,14 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
   }
 
   if (!postSlug) {
+    // Same rule as the empty state below: this is a note to whoever is
+    // building the page, so a visitor must not be shown it. It said
+    // "Related posts appear here when viewing a blog post" on any published
+    // page the module sat on off a post — an instruction to a reader who
+    // cannot act on it.
+    if (liveSite) return null;
     return (
-      <div>
+      <div className="builder-related-posts-empty">
         {sectionTitle}
         <div
           style={{
@@ -8047,7 +8139,45 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
   }
 
   if (relatedPosts.length === 0) {
-    return null;
+    /*
+     * A VISITOR gets nothing. An empty box on a published page is worse than
+     * no box, and this is the behaviour that was always correct.
+     *
+     * Everyone else — the Builder canvas, the preview — gets the reason. The
+     * old code returned null in both places, so a module that had found no
+     * matches was indistinguishable from one that was broken: it flashed
+     * "Loading related posts…" and then the whole section vanished, heading
+     * and all. That is what a correctly-behaving module looked like on
+     * 2026-09-03 while it was set to match by category on a site where no post
+     * had one, and it read as the feature being broken.
+     */
+    if (liveSite) return null;
+    return (
+      <div className="builder-related-posts-empty">
+        {sectionTitle}
+        <div
+          style={{
+            padding: "1rem 1.25rem",
+            border: "1px dashed #d1d5db",
+            borderRadius: 8,
+            color: "#6b7280",
+            fontSize: "0.8125rem",
+            lineHeight: 1.5,
+            background: "#f9fafb",
+          }}
+        >
+          <strong style={{ display: "block", color: "#374151", marginBottom: 2 }}>
+            Nothing to show here yet.
+          </strong>
+          {emptyReason}
+          {/* Said plainly, because the box itself is the thing that looks
+              wrong: it is not an error, and it is not what a visitor sees. */}
+          <span style={{ display: "block", marginTop: 6, fontStyle: "italic" }}>
+            This note is only visible while building. Visitors see nothing at all.
+          </span>
+        </div>
+      </div>
+    );
   }
 
   return (
