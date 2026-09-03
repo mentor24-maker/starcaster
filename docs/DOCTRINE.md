@@ -1786,6 +1786,58 @@ demo strings are absent — `components/builder-template-preview-tag-cloud.test.
 "placeholder tags never reach a visitor". Copy that shape for any module
 carrying an affordance.
 
+### 5.30 When the unit a rule is EVALUATED on is smaller than the unit it is ACTED on, saying it in the acted-on unit is wrong in both directions
+
+2026-09-03, found while verifying #575 (ticket 86bbukxdv), two bugs in two
+files, neither caught by any test.
+
+A saved section's **drift** — has this copy been hand-edited since the master
+last changed? — is evaluated on one **copy of a section**. Everything done with
+that answer happens to a **page**: pages are what get written, what get
+published, and what a dialog names to the operator. A page can hold more than
+one copy of the same master, so the two units come apart, and the whole class of
+error is what you write when you forget that:
+
+```js
+const drifted = sections.some(s => follows(s) && hasDrifted(s, master));
+if (drifted) pageLabels.push(labelFor(page));      // "this page is left alone"
+```
+
+That is true of a **copy** and false of the **page**. A page holding one
+hand-edited copy and one untouched copy is written — the untouched copy takes
+the update — so it is neither skipped nor left alone, and a "Save & Publish"
+built on this list named a page in its *left alone* column and then published
+it. The mirror image sat in the engine: `overwritten` was filled in from
+`outcome.drifted`, which says a copy on this page drifted, not that a drifted
+copy was written over — so the save reported "1 page with local changes was
+overwritten" about an edit still sitting untouched on that page. **One told him
+a page would not be touched when it was; the other told him his edit was gone
+when it was not.**
+
+**Both quantifiers are reachable and they are different questions.** `some`
+answers *is any copy here drifted?*; `every` answers *is this page entirely
+drifted?*. Neither is the default reading of "drifted pages" — which is why the
+phrase should not appear without one of them beside it.
+
+**Neither bug was findable by the test suite, and that is the part to take
+seriously.** Every fixture in the suite gave each page exactly one copy, so the
+two quantifiers agreed on every input any test could produce. They were found by
+driving the real UI against the local database, where the seeded fixture's own
+**Block States** page happens to carry two copies of one master — an accident,
+not a design. The suite now has that shape in it deliberately
+(`lib/builder-client/shared-block-usage.test.ts`, "a page holding a drifted copy
+AND an untouched one is NOT left alone").
+
+**What to do with this.** When a rule is evaluated per element and reported per
+container, write the aggregation explicitly and put a container holding *two
+elements that disagree* into the fixtures. One-element-per-container fixtures
+cannot distinguish `some` from `every`, so a green suite says nothing at all
+about the one line that matters. The same shape is waiting anywhere a per-item
+verdict is summarised per page, per section, per project or per tenant.
+
+The saved-section-specific version, with the code, is `docs/SAVED_SECTIONS.md`
+§3 and landmine 5.
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
