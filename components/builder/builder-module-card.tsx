@@ -88,6 +88,12 @@ import { BuilderBlogRelatedPostsModuleSettings, parseRelatedPosts } from "./buil
 import { BuilderBlogCategoryFilterModuleSettings, parseFilterCategories } from "./builder-blog-category-filter-module-settings";
 import { BuilderBlogPostModuleSettings } from "./builder-blog-post-module-settings";
 import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blog-tag-cloud-module-settings";
+import {
+  PLACEHOLDER_TAGS,
+  maxTagCount,
+  resolveTagCloudSettings,
+  tagFontSize as sharedTagFontSize
+} from "@/lib/blog-tag-cloud";
 import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-module-settings";
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
@@ -114,6 +120,7 @@ import { BuilderAdminLoginModuleSettings } from "./builder-admin-login-module-se
 import { BuilderAdminNavLinkModuleSettings } from "./builder-admin-nav-link-module-settings";
 import { BuilderBugReportModuleSettings } from "./builder-bug-report-module-settings";
 import { BuilderAdminSiteSettingsModuleSettings } from "./builder-admin-site-settings-module-settings";
+import { BuilderAdminBlogLinksModuleSettings } from "./builder-admin-blog-links-module-settings";
 import { BuilderAdminSupportFormModuleSettings } from "./builder-admin-support-form-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
@@ -1723,31 +1730,32 @@ function renderModulePreview(module: BuilderTemplateModule) {
   }
 
   if (module.type === "blog-tag-cloud") {
+    // The canvas card and the LIVE renderer (BlogTagCloudPreview) read one
+    // shared set of rules now — lib/builder-client/blog-tag-cloud.ts. They used
+    // to carry a copy each and disagree: the card honoured the layout and the
+    // count-weighted sizes, the live site honoured neither, so an operator set
+    // a layout, watched it apply here, published, and got a plain pill row.
     const s = module.settings;
-    const layout = s.layout ?? "cloud";
-    const inactiveColor = s.inactiveColor || "#587592";
-    const inactiveBg = s.inactiveBg || "#f0f4f8";
-    const activeColor = s.activeColor || "#0f4f8f";
-    const minFont = parseInt(s.minFontSize ?? "12", 10) || 12;
-    const maxFont = parseInt(s.maxFontSize ?? "22", 10) || 22;
-    const gap = parseInt(s.gap ?? "8", 10) || 8;
-    const showCounts = s.showCounts === "true";
+    const resolved = resolveTagCloudSettings(s);
+    const { layout, inactiveColor, inactiveBg, activeColor, gap } = resolved;
+    const minFont = resolved.minFontSize;
+    const showCounts = resolved.showCounts;
     const justifyMap: Record<string, string> = { left: "flex-start", center: "center" };
     const tags = parseCloudTags(s);
-    const placeholders = tags.length === 0
-      ? [{ id: "p1", label: "react", slug: "react", count: 24 }, { id: "p2", label: "typescript", slug: "typescript", count: 18 }, { id: "p3", label: "design", slug: "design", count: 12 }, { id: "p4", label: "tutorial", slug: "tutorial", count: 8 }]
-      : tags;
-    const maxCount = Math.max(...placeholders.map((t) => t.count ?? 1), 1);
+    const placeholders = tags.length === 0 ? PLACEHOLDER_TAGS : tags;
+    const maxCount = maxTagCount(placeholders);
+    const heading = resolved.title
+      ? <div style={{ fontWeight: 600, marginBottom: 6, color: activeColor }}>{resolved.title}</div>
+      : null;
 
     function tagFontSize(count: number | undefined) {
-      if (layout !== "cloud") return minFont;
-      const pct = (count ?? 1) / maxCount;
-      return Math.round(minFont + pct * (maxFont - minFont));
+      return sharedTagFontSize(count, maxCount, resolved);
     }
 
     if (layout === "list") {
       return (
         <div className="builder-module-preview-copy">
+          {heading}
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap }}>
             {placeholders.map((tag, i) => (
               <li key={tag.id} style={{ fontSize: minFont, color: i === 0 ? activeColor : inactiveColor, fontWeight: i === 0 ? 600 : 400 }}>
@@ -1761,7 +1769,8 @@ function renderModulePreview(module: BuilderTemplateModule) {
 
     return (
       <div className="builder-module-preview-copy">
-        <div style={{ display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[s.alignment ?? "left"] ?? "flex-start", alignItems: "baseline" }}>
+        {heading}
+        <div style={{ display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[resolved.alignment] ?? "flex-start", alignItems: "baseline" }}>
           {placeholders.map((tag, i) => {
             const fs = tagFontSize(tag.count);
             return (
@@ -2319,6 +2328,61 @@ function renderModulePreview(module: BuilderTemplateModule) {
         <input type="password" disabled placeholder="••••••••" style={inputStyle} />
         <div style={{ marginTop: 14, padding: "8px 0", background: "#0f4f8f", color: "#fff", borderRadius: 6, textAlign: "center", fontSize: 12, fontWeight: 700, cursor: "default" }}>{btnText}</div>
         {showForgot && <div style={{ marginTop: 12, textAlign: "center", fontSize: 11, color: "#587592", textDecoration: "underline", cursor: "default" }}>Forgot your password?</div>}
+      </div>
+    );
+  }
+
+  if (module.type === "admin-blog-links") {
+    const showTitle    = module.settings.showTitle !== "false";
+    const title        = module.settings.panelTitle || "Blog Links";
+    const showRelate   = module.settings.showRelate !== "false";
+    const relateLabel  = module.settings.relateButtonLabel || "Relate Checked";
+    const showCats     = module.settings.showCategories !== "false";
+    const showTags     = module.settings.showTags !== "false";
+    const termRow = (label: string, count: string, active = false) => (
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 7px", borderRadius: 5, fontSize: 11, background: active ? "#e7f1fa" : "transparent", color: active ? "#0f4f8f" : "#4d6a83", fontWeight: active ? 700 : 500 }}>
+        <span>{label}</span>
+        <span style={{ fontSize: 10, color: "#8ba9be" }}>{count}</span>
+      </div>
+    );
+    const articleRow = (label: string, checked: boolean) => (
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", fontSize: 11, color: "#4d6a83" }}>
+        <span style={{ width: 11, height: 11, flex: "0 0 auto", borderRadius: 3, border: "1px solid #9dbdd4", background: checked ? "#0f4f8f" : "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 8, lineHeight: 1 }}>{checked ? "✓" : ""}</span>
+        <span>{label}</span>
+      </div>
+    );
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
+        <div style={{ display: "flex", gap: 10, alignItems: "stretch", border: "1px solid #c9dcea", borderRadius: 7, background: "#fff", padding: 10 }}>
+          <div style={{ flex: "0 0 40%", minWidth: 0, borderRight: "1px solid #e3eef6", paddingRight: 10 }}>
+            {showCats && (
+              <>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#8ba9be", marginBottom: 3 }}>Categories</div>
+                {termRow("Immigration", "4", true)}
+                {termRow("Criminal Law", "7")}
+              </>
+            )}
+            {showTags && (
+              <>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#8ba9be", margin: "7px 0 3px" }}>Tags</div>
+                {termRow("visas", "3")}
+                {termRow("asylum", "2")}
+              </>
+            )}
+            {!showCats && !showTags && (
+              <div style={{ fontSize: 11, color: "#8ba9be", fontStyle: "italic" }}>No taxonomies shown</div>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {showRelate && (
+              <div style={{ display: "inline-block", padding: "4px 10px", background: "#0f4f8f", color: "#fff", borderRadius: 5, fontSize: 11, fontWeight: 700, marginBottom: 6, cursor: "default" }}>{relateLabel}</div>
+            )}
+            {articleRow("Applying for asylum in 2026", true)}
+            {articleRow("What a U-visa actually covers", true)}
+            {articleRow("Family petitions, step by step", false)}
+          </div>
+        </div>
       </div>
     );
   }
@@ -3178,6 +3242,7 @@ export function BuilderModuleCard({
     const isBugReportModule = module.type === "bug-report";
     const isAdminSiteSettingsModule = module.type === "admin-site-settings";
     const isAdminSupportFormModule = module.type === "admin-support-form";
+    const isAdminBlogLinksModule = module.type === "admin-blog-links";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     // The rich-text editor left the shared chrome on 2026-08-15: its
     // Background / Alignment / margins / Width now live on the D8 axes in
@@ -3241,7 +3306,8 @@ export function BuilderModuleCard({
       isAdminLoginModule ||
       isAdminNavLinkModule ||
       isAdminSiteSettingsModule ||
-      isAdminSupportFormModule;
+      isAdminSupportFormModule ||
+      isAdminBlogLinksModule;
 
     /**
      * The module's internal name. Rendered in ONE of two places and never
@@ -3496,6 +3562,8 @@ export function BuilderModuleCard({
               <BuilderBugReportModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminNavLinkModule ? (
               <BuilderAdminNavLinkModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminBlogLinksModule ? (
+              <BuilderAdminBlogLinksModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminSiteSettingsModule ? (
               <BuilderAdminSiteSettingsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminSupportFormModule ? (

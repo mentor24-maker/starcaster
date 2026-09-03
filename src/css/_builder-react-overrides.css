@@ -6833,6 +6833,67 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 
+/* ---------------------------------------------------------------------------
+ * TRACTOR NAV — the slider rows end on the block edge (ticket 86bbjt1b0,
+ * 2026-08-29, panel sweep 6/15).
+ *
+ * L8 asks the form to be one rectangle: every row's rightmost thing ends at
+ * the same x. Four rows in this panel are a range slider with a numeric
+ * readout beside it, and neither half was reaching the edge on its own.
+ *
+ * The slider carried the shared `input[type="range"] { width: 200px }` rule,
+ * which is a fixed length inside a track that is not fixed — so Falloff sat
+ * 44px short of the Structure column's edge at 1440. The readout was three
+ * inline style declarations sized to its own text, so "80%" ended at x=472
+ * and "200ms" at x=475 in the SAME column: a 3px ragged edge, which is small
+ * enough to look like nothing and is exactly the kind of unresolved outline
+ * L8 was written after.
+ *
+ * The shape here is the one L6a already uses for buttons — the readout gets a
+ * TRACK rather than its natural width, and the slider takes the slack. That
+ * makes both halves identical down the column and puts the readout's right
+ * edge on the slot's right edge by construction, at any panel width, rather
+ * than by the two happening to add up.
+ *
+ * Scoped to this panel deliberately: the 200px range rule is shared with
+ * panels this ticket's Non-goals put out of scope, and widening the fix into
+ * them would be the big-bang sweep the sweep was split up to avoid.
+ */
+.builder-react-root .builder-tractor-nav-module-settings {
+  /* Fits the longest readout this panel can render ("200ms"), plus room. One
+     value for all four rows so the sliders are the same length as each other. */
+  --tractor-nav-readout-w: 46px;
+}
+
+.builder-react-root
+  .builder-tractor-nav-module-settings
+  .builder-module-field-control
+  > input[type="range"] {
+  /* Overrides the shared 200px. `flex: 1 1 0` rather than `1 1 auto` so every
+     slider is sized by its TRACK and not by its own intrinsic width — two
+     sliders in one column are then identical, which `auto` does not promise. */
+  width: auto;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.builder-react-root
+  .builder-tractor-nav-module-settings
+  .builder-tractor-nav-readout {
+  flex: 0 0 var(--tractor-nav-readout-w, 46px);
+  /* Right-aligned so the DIGITS land on the block edge too, not just the box:
+     a left-aligned readout would put "2.0" and "200ms" at different x while
+     their boxes agreed. */
+  text-align: right;
+  /* 12px, the size it already had as an inline style. NO `color` here. The
+     readout sits on the builder's blue, and `var(--muted)` on that blue is
+     the exact R9 pairing the note above `.builder-module-field-label` in this
+     file was written after — a first cut of this rule set it, and the readout
+     came back visibly fainter than it had been. It inherits, as before. */
+  font-size: var(--text-xs, 0.75rem);
+  white-space: nowrap;
+}
+
 /* ------------------------------------------------------------------ *
  * Builder Preview strip (86bbq2y7x)
  *
@@ -8342,4 +8403,320 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ── Blog Links manager (admin-blog-links) ─────────────────────────────────
+   The module a tenant admin uses to tidy categories and tags and to link
+   articles together with Relate Checked. Two panes: the taxonomy on the left,
+   the articles under the selected term on the right.
+
+   These live here rather than in _builder-react.css because that file is
+   regenerated wholesale by `npm run extract:builder-css` and a hand-written
+   rule in it survives, ships, works, and then silently disappears at the next
+   regeneration (see src/css/CLAUDE.md). */
+
+.admin-blog-links {
+  font-size: var(--text-sm);
+  color: var(--admin-table-ink, #18324a);
+}
+
+.admin-blog-links-title {
+  margin: 0 0 10px;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.admin-blog-links-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.admin-blog-links-side {
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 320px;
+}
+
+.admin-blog-links-main {
+  flex: 3 1 320px;
+  min-width: 0;
+}
+
+.admin-blog-links-group + .admin-blog-links-group {
+  margin-top: 14px;
+}
+
+.admin-blog-links-group-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--admin-table-muted, #587592);
+  margin-bottom: 4px;
+}
+
+.admin-blog-links-terms {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-blog-links-terms > li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 6px;
+}
+
+.admin-blog-links-terms > li:hover {
+  background: var(--admin-table-row-alt, #f7fbff);
+}
+
+.admin-blog-links-term {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-blog-links-term.is-selected {
+  background: var(--admin-accent-soft, #e7f1fa);
+  color: var(--admin-accent, #0f4f8f);
+  font-weight: 700;
+}
+
+.admin-blog-links-term-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-blog-links-term-count {
+  flex: 0 0 auto;
+  font-size: var(--text-xs);
+  color: var(--admin-table-muted, #587592);
+}
+
+/* The row actions stay out of the way until the row is hovered or something
+   inside it has keyboard focus - they are destructive-adjacent and should not
+   compete with the term names for attention. focus-within keeps them
+   reachable by keyboard, where a hover rule alone would strand them. */
+.admin-blog-links-term-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.admin-blog-links-terms > li:hover .admin-blog-links-term-actions,
+.admin-blog-links-terms > li:focus-within .admin-blog-links-term-actions {
+  opacity: 1;
+}
+
+.admin-blog-links-term-actions button {
+  padding: 3px 6px;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  font-size: var(--text-xs);
+  color: var(--admin-table-muted, #587592);
+  cursor: pointer;
+}
+
+.admin-blog-links-term-actions button:hover:not(:disabled) {
+  background: var(--admin-table-border, #c9dcea);
+  color: var(--admin-table-ink, #18324a);
+}
+
+.admin-blog-links-term-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.admin-blog-links-add {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.admin-blog-links-add input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 9px;
+  border: 1px solid var(--admin-table-border, #c9dcea);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.admin-blog-links-add button {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  background: var(--admin-accent, #0f4f8f);
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-blog-links-add button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.admin-blog-links-main-head {
+  /* A tenant theme styles its own site header; this is a module's internal
+     strip and must not inherit that. It was rendering as a solid black block
+     with dark text on it when this element was a <header>. */
+  background: none;
+  color: inherit;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--admin-table-border, #c9dcea);
+}
+
+.admin-blog-links-main-title {
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.admin-blog-links-main-sub {
+  font-size: var(--text-xs);
+  color: var(--admin-table-muted, #587592);
+}
+
+.admin-blog-links-relate {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  background: var(--admin-accent, #0f4f8f);
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-blog-links-relate:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.admin-blog-links-articles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-blog-links-articles > li + li {
+  border-top: 1px solid var(--admin-table-border, #c9dcea);
+}
+
+.admin-blog-links-article {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px 4px;
+  cursor: pointer;
+}
+
+/* An explicit size, because this module renders inside ARBITRARY tenant
+   themes and many of them set `input { width: 100% }`. `flex: 0 0 auto` does
+   not save you there: the basis is `auto`, so the flex item takes its width
+   property -- the checkbox computed to 1056px and starved the title beside it
+   to zero, which rendered as tall empty rows with the text wrapped to nothing.
+   Same reason the accent and margin are pinned rather than inherited. */
+.admin-blog-links-article input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 13px;
+  min-width: 13px;
+  max-width: 13px;
+  height: 13px;
+  margin: 2px 0 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* `flex: 1 1 auto` is load-bearing, not tidiness. As a flex child with
+   `min-width: 0` and no growth, this box computed to ZERO width: every title
+   wrapped to one character per line, so the rows were tall and looked empty
+   while the text was technically present. */
+.admin-blog-links-article-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-blog-links-article-title {
+  font-weight: 600;
+}
+
+.admin-blog-links-article-status {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--admin-table-row-alt, #f7fbff);
+  border: 1px solid var(--admin-table-border, #c9dcea);
+  font-size: var(--text-xs);
+  text-transform: capitalize;
+  color: var(--admin-table-muted, #587592);
+}
+
+.admin-blog-links-article-related {
+  font-size: var(--text-xs);
+  color: var(--admin-table-muted, #587592);
+}
+
+.admin-blog-links-empty {
+  padding: 12px 4px;
+  font-size: var(--text-sm);
+  color: var(--admin-table-muted, #587592);
+}
+
+.admin-blog-links-error,
+.admin-blog-links-note {
+  padding: 8px 11px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  font-size: var(--text-sm);
+}
+
+.admin-blog-links-error {
+  background: var(--surface-warning, #fdf0ef);
+  border: 1px solid var(--ink-warning, #b3261e);
+  color: var(--ink-warning, #b3261e);
+}
+
+.admin-blog-links-note {
+  background: var(--admin-accent-soft, #e7f1fa);
+  border: 1px solid var(--admin-table-border, #c9dcea);
+  color: var(--admin-accent, #0f4f8f);
+}
+
+@media (max-width: 700px) {
+  .admin-blog-links-side {
+    max-width: none;
+    flex-basis: 100%;
+  }
 }

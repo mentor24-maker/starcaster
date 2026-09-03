@@ -142,6 +142,7 @@ export const BUILDER_MODULE_TYPES = [
   "admin-nav-link",
   "admin-site-settings",
   "admin-support-form",
+  "admin-blog-links",
   "bug-report"
 ] as const;
 
@@ -2207,6 +2208,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "admin-nav-link" ||
     type === "admin-site-settings" ||
     type === "admin-support-form" ||
+    type === "admin-blog-links" ||
     type === "bug-report"
   ) {
     return type;
@@ -3717,6 +3719,7 @@ export function createEmptyModule(
                           }
                       : type === "blog-tag-cloud"
                         ? {
+                            title: "",
                             tags: JSON.stringify([]),
                             layout: "cloud",
                             showCounts: "false",
@@ -3902,6 +3905,23 @@ export function createEmptyModule(
                         ? {
                             panelTitle: "Site Settings",
                             showTitle: "true"
+                          }
+                      : type === "admin-blog-links"
+                        ? {
+                            panelTitle: "Blog Links",
+                            showTitle: "true",
+                            // Categories and Tags are the two taxonomies the
+                            // blog actually has: categories are a table, tags
+                            // are a text[] on each post. Both on by default -
+                            // a manager showing neither has nothing to manage.
+                            showCategories: "true",
+                            showTags: "true",
+                            // The right-hand article list and its Relate
+                            // Checked button. Turning this off leaves a plain
+                            // taxonomy editor.
+                            showRelate: "true",
+                            relateButtonLabel: "Relate Checked",
+                            articleStatus: "all"
                           }
                       : type === "admin-support-form"
                         ? {
