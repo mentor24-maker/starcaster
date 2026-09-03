@@ -8629,3 +8629,140 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   padding: 0;
   box-sizing: border-box;
 }
+
+/* ── Tag manager: the posts behind one tag (86bbugbxb) ───────────────────────
+   Modelled on .crm-contacts-modal, the established admin popup here. Written
+   in THIS file rather than _builder-react.css because that one is regenerated
+   wholesale and a hand edit in it disappears silently (src/css/CLAUDE.md).
+
+   Every rule is scoped under .builder-react-root, which BuilderBodyPortal
+   re-establishes on the portal subtree — without that class the portal escapes
+   the builder's scoped stylesheet and the popup renders unpositioned.
+
+   Colours are tokens and sizes are scale steps (R3/R8): a hex literal here is
+   a module that will not follow a tenant's theme, and this module renders
+   inside arbitrary tenant themes. */
+.builder-react-root .admin-blog-links-posts-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(9 16 24 / 45%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647;
+  padding: 16px;
+}
+
+/* A floor, not a cap (D7): the dialog sizes to its content and only stops
+   growing at the viewport, so a long post title widens the box instead of
+   being squeezed. */
+.builder-react-root .admin-blog-links-posts-modal {
+  background: var(--bg-surface);
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgb(9 16 24 / 20%);
+  width: max-content;
+  min-width: min(560px, 100%);
+  max-width: min(75vw, 100%);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.builder-react-root .admin-blog-links-posts-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-light);
+  font-size: var(--text-md);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .admin-blog-links-posts-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--text-md);
+  line-height: 1;
+  color: var(--ink-secondary);
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.builder-react-root .admin-blog-links-posts-close:hover { color: var(--ink-primary); }
+
+.builder-react-root .admin-blog-links-posts-body {
+  padding: 6px 0;
+  overflow-y: auto;
+}
+
+/* The title takes the leftover width and WRAPS; the actions column sizes to
+   its two icons, so a long headline never buys its room from the title — the
+   same rule the tag table follows (docs/BLOG_LINKS_MANAGER.md). */
+.builder-react-root .admin-blog-links-posts-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 12px;
+  align-items: center;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.builder-react-root .admin-blog-links-posts-row:last-child { border-bottom: none; }
+
+.builder-react-root .admin-blog-links-posts-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--ink-primary);
+  min-width: 0;
+}
+
+.builder-react-root .admin-blog-links-posts-status {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-transform: capitalize;
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .admin-blog-links-posts-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.builder-react-root .admin-blog-links-posts-empty,
+.builder-react-root .admin-blog-links-posts-error {
+  margin: 0;
+  padding: 18px;
+  font-size: var(--text-base);
+  text-align: center;
+}
+
+.builder-react-root .admin-blog-links-posts-empty { color: var(--ink-muted); }
+.builder-react-root .admin-blog-links-posts-error { color: var(--error); }
+
+.builder-react-root .admin-blog-links-posts-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-light);
+}
+
+.builder-react-root .admin-blog-links-posts-btn {
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  cursor: pointer;
+  font-size: var(--text-base);
+  color: var(--ink-primary);
+}
