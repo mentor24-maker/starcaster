@@ -135,13 +135,37 @@ function normalizeDepth(depth) {
  * The curve itself: claimable depth in, seconds and a reason out.
  * Pure, and the only place the table above is consulted.
  */
-function intervalForDepth(depth) {
+function intervalForDepth(depth, { blockedNote = '' } = {}) {
   const { depth: d, absurd } = normalizeDepth(depth);
   const row = CURVE.find((r) => d >= r.minDepth) || CURVE[CURVE.length - 1];
   const seconds = clampToFloor(row.seconds);
+
+  // "NOTHING TO DO" IS A CLAIM ABOUT THE QUEUE, AND AT DEPTH 0 IT IS OFTEN
+  // FALSE (2026-09-02, task 86bbtmbvn).
+  //
+  // The curve's `why` for depth 0 is "nothing to do; do not pay to find that
+  // out often". That is right when the queue is empty and wrong every other
+  // way of reaching zero — a full work-in-progress cap, a queue of foreign-repo
+  // tickets, a queue blocked on dependencies. On the morning of 2026-09-02 it
+  // printed under 48 queued tickets, two lines below `claimableDepth`'s own
+  // accurate note, and it was the line that got read: it is last, and it is
+  // the one prefixed `interval:`.
+  //
+  // That is the contradicting-pair shape this codebase has written down twice
+  // already (see `sweptSummary` in pipelinePause.js, whose comment describes a
+  // summary printing an all-clear one line under "it is still stranded" and
+  // calls the summary "again the false half"). Same defect, different file.
+  //
+  // THE NUMBER DOES NOT CHANGE. Backing off on a blocked queue is deliberate
+  // and correct — a capped `loop-build` is bounded by the merge rate, not by
+  // how often it wakes, and `loop-review` (which drains the very PRs the cap
+  // waits on) is never throttled by it. Only the sentence changes, and only
+  // where it would otherwise be false.
+  const why = d === 0 && blockedNote ? blockedNote : row.why;
+
   const reason = absurd
-    ? `${seconds}s — depth reading "${String(depth)}" is not a number of tickets, so it was read as 0 (${row.why})`
-    : `${seconds}s (${d} claimable — ${row.why})`;
+    ? `${seconds}s — depth reading "${String(depth)}" is not a number of tickets, so it was read as 0 (${why})`
+    : `${seconds}s (${d} claimable — ${why})`;
   return { seconds, reason, depth: d, absurd };
 }
 
@@ -262,6 +286,30 @@ function outsideBlockerIds(tasks) {
  *   claimable themselves, whatever status they carry.
  * @returns {{ depth:number, claimable:object[], excluded:Array<{id:string,why:string}>, note:string|null }}
  */
+/**
+ * "3 ticket(s) are the right status but none can be claimed: 2 for another
+ * repo; 1 blocked on a dependency."
+ *
+ * Grouped by reason and counted rather than listed by id: the ids are already
+ * printed one per line by the caller, and what the interval line needs is the
+ * SHAPE of the blockage — a reader deciding whether this is normal or wrong.
+ * Reasons are ordered by how many tickets share them, so the dominant cause
+ * leads.
+ */
+function blockedSummary(excluded) {
+  const rows = Array.isArray(excluded) ? excluded : [];
+  if (!rows.length) return null;
+  const counts = new Map();
+  for (const x of rows) {
+    const why = String(x?.why || 'no reason given').trim();
+    counts.set(why, (counts.get(why) || 0) + 1);
+  }
+  const parts = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([why, n]) => `${n} ${why}`);
+  return `${rows.length} ticket(s) are the right status but none can be claimed: ${parts.join('; ')}`;
+}
+
 function claimableDepth({ loop, tasks, capReached = false, resolveRepo, blockers } = {}) {
   const wantStatus = LOOP_STATUS[String(loop || '').trim()];
   if (!wantStatus) {
@@ -309,7 +357,17 @@ function claimableDepth({ loop, tasks, capReached = false, resolveRepo, blockers
   // reads `claimable[0]` gets the ticket the claim rule actually names rather
   // than whichever one ClickUp's paging happened to return first.
   const ordered = loop === 'loop-build' ? loopStatuses.claimOrder(claimable) : claimable;
-  return { depth: ordered.length, claimable: ordered, excluded, note: null };
+
+  // A ZERO WITH TICKETS BEHIND IT IS NOT AN EMPTY QUEUE, and the difference is
+  // the whole of task 86bbtmbvn. `excluded` holds every ticket that was the
+  // RIGHT status and still could not be claimed — a foreign repo, an unmet
+  // dependency. Reaching depth 0 that way is a blocked queue, not an idle one,
+  // and the interval line must not call it "nothing to do".
+  //
+  // Said only when the depth is actually 0. With work claimable, the excluded
+  // ones are ordinary background and already listed line by line.
+  const note = ordered.length === 0 && excluded.length ? blockedSummary(excluded) : null;
+  return { depth: ordered.length, claimable: ordered, excluded, note };
 }
 
 /**
@@ -334,9 +392,9 @@ function claimableDepth({ loop, tasks, capReached = false, resolveRepo, blockers
  * @param {number} opts.fallbackSeconds  the runner's configured interval
  * @returns {{ seconds:number, reason:string, state:object, held:boolean }}
  */
-function decideInterval({ depth, state, fallbackSeconds } = {}) {
+function decideInterval({ depth, state, fallbackSeconds, blockedNote = '' } = {}) {
   const configured = clampToFloor(fallbackSeconds ?? DEFAULT_FALLBACK_SECONDS);
-  const proposal = intervalForDepth(depth);
+  const proposal = intervalForDepth(depth, { blockedNote });
   const proposed = proposal.seconds;
 
   const prev = Number.isFinite(Number(state?.interval)) ? clampToFloor(state.interval) : null;
@@ -413,6 +471,7 @@ module.exports = {
   wantedStatuses,
   unclaimableReason,
   outsideBlockerIds,
+  blockedSummary,
   claimableDepth,
   decideInterval,
   fallbackInterval,

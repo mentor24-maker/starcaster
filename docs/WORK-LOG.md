@@ -27,6 +27,329 @@ rest belong to later tickets in the same sweep. Teaching the checker to look
 inside the slot would fail those panels today, so it is written down here and on
 the ticket rather than done in this change.
 
+## 2026-09-02 — The alarm that watches the queue could go blind and say nothing (#535)
+
+Two days ago we added a check that asks the one question nothing else asked:
+*is the queue actually getting shorter?* It exists because on 31 August the
+build loop ran every hour, finished cleanly every time, and shipped nothing —
+a cheerful log that read as health. A review of that new check found six ways
+the check itself could go quiet. Four are fixed here.
+
+The worst of them: the check has four possible answers, and one of them is "I
+could not take a reading." That answer went to a log file nobody opens. So if
+the ClickUp password were ever rotated, the alarm would simply be dead —
+forever, silently, while every other job on the board still looked fine. It
+now says so on the party line, with the reason, at most once every six hours,
+and shuts up as soon as it can see again.
+
+It was also making its own trouble worse. It is meant to check once an hour,
+but it only wrote down "I checked" when the check *succeeded*. So the one time
+it most needed to back off — ClickUp saying "too many requests" — it went
+straight back six times an hour instead, keeping itself broken. It now starts
+the clock when it tries.
+
+The other two were wrong sentences rather than silence. It could announce
+"the loops ARE firing, so the problem is elsewhere" on evidence that only
+showed *somebody edited a ticket* — which could be Dane leaving a comment.
+That is exactly the sentence that sends you hunting in the wrong place. And a
+day where everything shipped could be reported as a stall, because a handful
+of tickets finish without a closure date on them and the count could not see
+those. It now says "I am not sure" instead of accusing the pipeline, and only
+when such a ticket was touched in the last day, so the alarm still fires for
+real stalls. Measured against the live queue: the one ticket in that state was
+last touched 36 days ago, so nothing is switched off by this.
+
+Every fix was broken on purpose afterwards and watched to fail, which is the
+only way to know a test for a monitor is a real test.
+
+Review sent this back once, and caught something worth having. The new
+"I could not take a reading" message was being used for two quite different
+situations, and it only described one of them. On the other — the day where a
+ticket finished without a closure date — the reading had actually worked
+perfectly, every number was there, and the fix was one missing field on one
+ticket. The message nevertheless announced that the check had gone blind and
+told the reader to go and find out whether ClickUp was reachable at all. That
+is the same fault this whole ticket is about, arriving through the fix for it:
+a message saying something its own evidence does not support, in the direction
+that wastes the most of the reader's morning. There are two messages now. The
+second one names the ticket to go and fix, and carries the queue numbers with
+it, because a real stall can happen on that day too and used to arrive stripped
+of everything that made it worth acting on.
+
+Review sent it back a second time, on the same theme once more. Having split
+that message in two, we were still using one "already said this recently" note
+for both of them — and the whole point of that note is to stop the same alarm
+repeating every ten minutes for six hours. So the two alarms could gag each
+other. The likelier direction was the bad one: there is a real ticket in the
+Live column that is never going to grow a closure date, so the gentler message
+("one field needs filling in") would tend to fire first, and could then silence
+the serious one ("nothing is watching whether the queue is getting shorter")
+for six hours. Each alarm now keeps its own note. Driven for real: with the
+gentle one just fired, the serious one still gets through — and with the old
+shared note put back, it vanishes, which is what the defect looked like.
+
+Review sent it back a third time, on the same theme a third time — a second
+road to the same silence. Giving each alarm its own note fixed the case where
+both of them fire. It left the case where one of them simply stops applying.
+The note that says *I could not read the queue* was only being torn up at the
+very end of a completely clean run, and the gentle alarm finishes early, before
+that point. So: ClickUp goes down at nine and the serious alarm fires; at ten
+ClickUp answers fine and the gentle alarm fires — which is itself proof the
+queue can be read again; at eleven ClickUp goes down once more and the serious
+alarm is swallowed until three in the afternoon, on the strength of a note that
+ten o'clock should already have torn up. Now the moment the queue is read at
+all, that note goes, before any of the later exits. The reverse is deliberately
+*not* true, and the code says so where somebody would be tempted to tidy it: a
+run that could not read the queue proves nothing about whether some ticket has
+grown a closure date, so it leaves the gentle alarm's note exactly where it is.
+
+Two smaller things. A verdict of "I cannot tell" was being treated as an
+all-clear for the stall alarm on one of its two paths, quietly re-arming an
+alert that had already been sent; it now leaves that alarm exactly as it found
+it, because not being able to tell is not the same as recovering, and the note
+expires on its own after six hours either way. And the command cheat-sheet at
+the top of the repo still said this check "posts if it has STALLED" — the
+prose ten lines below it had been corrected, but not the one line anybody
+skimming for the command actually reads. That line now has a test on it, so it
+cannot drift back.
+## 2026-09-02 — Instagram connects itself, and says why when it cannot (#545)
+
+Instagram is now a real card on the Connections screen rather than a greyed
+"coming soon" one, so a client can hook up their own account without Dane
+pasting a token into Vercel for them. It rides the same Facebook sign-in the
+Facebook Page card already uses — it is one consent screen, asked for two more
+permissions — so the connecting part was the easy half.
+
+The hard half, and most of this work, is the two checks that run before
+anything is saved. Instagram will not let *any* app post to a personal
+account, and every Instagram post an app can make physically travels out
+through a Facebook Page. Break either rule and Meta's own answer is a code
+like `OAuthException` with a number after it, or — far more often — a
+perfectly cheerful "success" that just never mentions Instagram at all. A
+client reading either of those has no idea what went wrong. So both cases now
+stop the connection dead and say, in English, what to change and which screen
+to change it on: "This Instagram account is a personal account. Instagram only
+allows posting to Business or Creator accounts. Change it in the Instagram app
+under Settings, Account type and tools, then try again."
+
+Telling those two apart turned out to hinge on one detail. Facebook reports a
+Page's linked Instagram account under two different names: one that appears
+only for Business and Creator accounts, and one that appears for any account
+at all. Ask for only the first — which is where Meta's own instructions send
+you — and "your account is the wrong type" and "you have not linked anything"
+look exactly the same, so there is no honest way to tell someone which of two
+quite different things to go and fix. Asking for both is the whole trick.
+
+One nicety worth knowing: the card shows the Instagram handle, `@delraytennis`,
+not the name of the Facebook Page the post travels through. Clients recognise
+the first and do not recognise the second.
+
+Review sent this back once, and the catch was a good one. If a client's
+Facebook account covers two Pages and they only gave us posting permission on
+one of them, the second Page came back from Facebook with no key attached —
+and the code built a connection out of it anyway. What the client then saw was
+their good account blocked by their bad one, an error message with the word
+`accessToken` in it, and a card sitting there saying "connected" with nothing
+behind it. That is precisely the failure the whole ticket was written to
+prevent, arriving by a door nobody had checked. Now a Page with no key is
+recognised for what it is and skipped, the good account connects normally, and
+a client whose *only* Page is missing that permission is told exactly that
+rather than being told they do not have a Facebook Page at all. The saving step
+underneath was also changed to check every account before it writes any of
+them, so "all of it or none of it" is now how the code is shaped rather than
+something each new platform has to remember.
+
+Two things nobody was testing are now tested: that Facebook handing us back an
+Instagram sign-in reaches the Instagram code at all — the only route by which a
+real Instagram connection can ever be made — and that a Facebook sign-in still
+goes where it always did, which matters because there are clients on it today.
+
+The existing Facebook connection is untouched — deliberately, byte for byte.
+Facebook only accepts one return address for this app, so Instagram comes back
+through Facebook's, and the signed token that makes the round trip now says
+which of the two asked. A token issued before this went live does not say, and
+is treated as Facebook, so anyone half-way through connecting when it deployed
+still landed where they expected.
+
+## 2026-09-02 — Gradients can point any direction now, not just diagonally (#540)
+
+Every gradient background in the Builder ran at exactly one angle — diagonally,
+top-left corner down to bottom-right. That was never a choice anybody made in
+the design; the number was simply written into the code, on a single line that
+happens to draw the gradients for everything at once: row backgrounds, page
+backgrounds, buttons, module backgrounds and the overlay screen. There was no
+way to make one run left-to-right or top-to-bottom.
+
+There is now an **Angle** box sitting beside the two colour pickers, which shows
+up only when the background Type is set to Gradient. Type 90 and the gradient
+runs top to bottom; 0 runs it bottom to top.
+
+The care in this one went into making sure nothing that already exists moved.
+A gradient that was saved before today has no angle written on it, and every one
+of those still paints at exactly the old angle — that is what most of the new
+tests check, and each of them was deliberately broken first and watched failing,
+because a test that cannot fail proves nothing. One of those break tests found a
+real gap: the automated panel check could not see the new box at all, because
+the test page it measures had no gradient anywhere on it, so a clean result was
+not evidence of anything. That page now carries one. Six pages were also
+photographed before and after and came out pixel-for-pixel identical.
+## 2026-09-02 — The screen a client uses to connect their own accounts (#526)
+
+Until now, putting a client's social account onto Starcaster meant you pasting
+their tokens into Vercel by hand. This is the screen that replaces that: the
+client opens Settings › Connections and sees one card per platform — Facebook
+Page, Bluesky, and Instagram and X greyed as "coming soon" — and connects the
+ones they want themselves. Four states, and each card is in exactly one of
+them: not connected, connected (with the account name on it), needs attention
+(with a plain sentence saying what broke), or coming soon with no button at all.
+
+The cards are not written into the screen. They are generated from the list of
+platforms the earlier slices built, so when Instagram is finished next, its card
+turns from grey to a working Connect button with nothing in this screen edited.
+There is a test that proves it by inventing a platform the code has never heard
+of and checking a card appears for it.
+
+Two things turned up while building it that were worth stopping for. The first:
+one Facebook sign-in can cover several Pages, and they all get saved in the same
+instant — so the screen could tell a client "posting to your main Page" while
+the thing that actually posts had picked a different one. Nothing would have
+looked wrong. The screen now reads back which one will really be used instead of
+assuming. The second: none of the buttons on this screen showed anything when
+you tabbed to them with the keyboard, because the admin app has never had a rule
+for that. Measured both ways in a real browser — six controls with no ring
+before, six with one after.
+
+Disconnecting is deliberately honest about its limits: it forgets the account
+here, and says out loud that it has not withdrawn the permission at Facebook or
+Bluesky itself. That comes in a later slice, and until it does, "disconnected"
+must not be read as "revoked".
+
+One thing to confirm before this goes live: storing a connection needs an
+encryption key that has been missing since a rotation was left unfinished in
+July. This session could not read the production settings to check whether it is
+there. If it is not, the Connect button will fail — for the earlier slices as
+much as this one.
+
+Review sent this back once, over the Disconnect button, and it was the right
+catch. A client with three Facebook Pages under one sign-in was asked
+"Disconnect Delray Tennis Center?" — one Page, by name — and pressing yes
+removed all three. Both halves were reasonable on their own: the message
+described the Page currently in use, and the delete cleared the platform. Put
+together they promised one thing and did another, on the one kind of action you
+cannot undo. The dialog now says what it means — "This removes all 3 connected
+accounts", and names them — because that sentence IS the client's consent, and
+consent to something that does not happen is not consent at all. Removing only
+the one named Page was the other option and was rejected for a concrete reason:
+a Page connected the old way is not stored the same way, so a narrower delete
+would have quietly removed nothing and left the card connected. Both old tests
+had seeded a single account, where the two behaviours look identical — the case
+that could tell them apart now has a test in each suite, and both were watched
+failing before the fix went back in.
+
+## 2026-09-02 — The pipeline's own health check finally runs on a timer (#524)
+
+We have a command, `npm run pulse`, that looks the whole build pipeline over and
+says whether anything is stuck: is the build loop still picking up work, has any
+ticket been sitting in one stage too long, does every ticket and its pull
+request point at each other. It was built, checked, and marked finished back in
+July — and it had never once run on its own, because nobody ever set up the
+timer. It even ends with a line saying "if a scheduled run does not print this,
+that absence IS the alert." There were no scheduled runs, so the absence was
+permanent and told nobody anything. Run by hand on 31 August it turned up two
+real problems and a third worth knowing about, none of which anyone had seen.
+
+It now runs every hour on the Mac Mini. Every hour it writes its full report to
+a single ClickUp ticket called "Pipeline pulse", replacing what was there before
+— so there is exactly one of it and it is always today's. Only the things that
+actually need somebody get announced on the party line, once each per six hours,
+and they stop being announced when they clear. A clean report posted daily would
+be 365 messages a year, which is how a channel stops getting read.
+
+Two smaller things came with it. The job now records a heartbeat every time it
+finishes, so if the Mini is ever switched off the missing heartbeat is noticed
+by whichever machine is awake — a watchdog sitting on the machine it watches
+cannot spot that machine going dark, and this closes that. And the whole
+schedule is a committed script rather than something typed into one Mac by
+hand, which is the mistake that lost the failure alert the last time a job moved
+machines.
+
+A review pass sent this back once and found seven things worth fixing, all of
+them the same shape: ways this health check could go quiet without saying so.
+The largest was that it treated "Dane has paused the pipeline" and "I could not
+tell whether the pipeline is paused" as the same event. The first is normal —
+the check looks, finds the line is stopped, and stays quiet. The second means
+the check is blindfolded, and left as it was it would have published nothing,
+every hour, indefinitely, with no alert; the only thing that would eventually
+have noticed is the daily roll call, which would have said the job had stopped
+running when it was running fine and being silenced. Those are now different
+outcomes, and only the second is loud. A paused hour also records its heartbeat
+now, so a day where Dane has the deck no longer reads on the roll call as the
+job having died.
+
+The rest: the rule for forgetting an old alarm is now the one that is actually
+tested rather than a second copy of it living in the script; the report's
+headline is counted from the findings printed underneath it, so it can no longer
+say "nothing to report" above a line saying the queue could not be read; and the
+"is it installed?" command stops printing the number zero twice on a log that is
+empty, which is exactly the state it is in the first time anyone runs it.
+
+A second review pass found that the deadlines went on the three big helpers and
+not on the eight-thousand-odd calls a year this thing makes to ClickUp itself.
+That matters more than it sounds. A request to a website does not always fail
+when something goes wrong at the other end — sometimes the connection simply
+opens and then nothing ever comes back, and the code sits there waiting, with no
+error, for as long as the machine is on. If that happens on an hourly job, the
+Mac will not start the next hour's copy while this one is still going, so the
+check stops running entirely and nothing complains: no output, no failure, no
+alert. The one thing that would eventually notice is the daily roll call, and it
+would report that the job had stopped running — sending whoever read it to look
+at the timer, which is fine, rather than at the stuck call, which is not. Every
+call out now gives up after a set time and says plainly that it timed out, which
+turns a permanent silence into an ordinary noisy failure that retries next hour.
+
+The same pass added a check that the report actually arrived. ClickUp answers
+"saved" to a write that in fact saved nothing, which we have been bitten by
+before, and this report is the only thing the whole job produces — so it is now
+read back afterwards and compared. If it comes back empty or a fraction of its
+size, the run says so loudly instead of finishing cheerfully over a blank
+ticket.
+
+A third review pass found the last shape of the same problem, and it is the one
+that sounds least like a bug: the check could run perfectly, find everything,
+deliver none of it, and report a clean pass. If the message to the party line
+failed to send, the code wrote a line about it in a log nobody reads and then
+carried on to record its heartbeat and finish successfully. So a day where
+ClickUp was refusing messages — it has a daily limit, and the chat has gone down
+before — would have been a full day of real alarms reaching nobody, with every
+surface saying the job was healthy. A run that ships nothing now ends as a
+failure: it raises the ordinary failure alert straight away, and it withholds
+its heartbeat, so the daily roll call notices too if the party line itself is the
+thing that is down. Those two surfaces fail for different reasons, which is why
+it takes both. What has not changed is that a failed message is never marked as
+sent, so the next hour simply tries again and a one-off blip fixes itself.
+
+The same pass fixed a bug that had not happened yet but had a date on it. When
+one program prints something and another reads it, the pipe between them holds
+64 kilobytes, and the printing program was quitting the instant it finished
+writing rather than waiting for the reader to take it — so anything past 64
+kilobytes was thrown away. Today's report is 39 kilobytes, comfortably under.
+But it grows by about 145 bytes for every finished ticket, and there are 195 of
+them; at somewhere around 380 the report would have crossed the line, and from
+that hour on every single run would have failed to be read, posted an alarm
+about a fault that did not exist, and gone blind to the real ones. It now waits
+for its output to be taken before it leaves. Measured rather than reasoned
+about: with the fix a 135-kilobyte report arrives whole, and without it the same
+report arrives cut off at exactly 65,536 bytes and unreadable.
+
+And the third: when the Mini cannot tell which machine it is — a one-line file
+that says so has gone missing — the job correctly refuses to run rather than
+guess. Its own comment said it refuses "out loud." It did not: it stopped one
+step before the part that raises the alert, so the refusal went into a system
+log and nowhere a person looks. Nothing would have surfaced for up to 25 hours,
+and then as "the job has stopped firing," which points whoever reads it at the
+timer rather than at the missing file. It now leaves by the same door as every
+other failure, and a test fails if a future change ever adds a second exit ahead
+of the alert again.
 ## 2026-09-01 — Handing you a command to paste is now something the machine refuses to do (#499)
 
 There is a rule here that CC runs the operational commands itself and tells you

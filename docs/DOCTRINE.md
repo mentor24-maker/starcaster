@@ -332,6 +332,57 @@ new Date(x).toLocaleString('en-US', { timeZone: 'America/Denver' })   # node
 Two clocks in one report is one question he has to ask every time, and this
 section exists so that he never has to ask it again.
 
+### 2.8 A refusal that cannot clear must not promise that it will
+
+§2.1 is about a message whose **diagnosis** is wrong. This is the opposite and
+costs more: a message whose diagnosis is right every single time, and whose
+**prognosis** is invented.
+
+On 2026-09-02, task 86bbqw49y sat in "Ready to launch" for twelve hours with its
+pull request already merged and its work live in production. The merge-on-comment
+step read Dane's `merge`, went to GitHub, found PR #513 already merged, and
+declined. That was correct — there was nothing left to merge. It then said this,
+every ten minutes from 06:26 to 10:40 UTC:
+
+```
+Merge not performed. PR #513 is not in a state that can be merged safely.
+Why: the PR is already merged.
+
+Your approval is still standing — you do not have to say "merge" again. Every
+later pass re-checks this ticket, so the moment the reason above is dealt with
+it goes through on its own. You will only hear from this step again if the
+answer changes.
+```
+
+Nothing will deal with it. No later pass can. "Already merged" is terminal, and
+the sentence promising otherwise is exactly what stopped anyone looking. Three
+reasons appeared on that one ticket, all carrying the same reassurance, and only
+one of them was transient:
+
+| Count | Reason | Can a later pass clear it? |
+|---|---|---|
+| 16 | the PR is already merged | **No — terminal** |
+| 3 | no "PR opened:" comment on this ticket | **No — terminal** |
+| 6 | no review verdict on this ticket | Yes |
+
+Two thirds of the refusals told the reader to wait for something that was never
+coming. Then the repeat-suppressor noticed the reason had not changed and
+silenced them, so the ticket went from reassuring-and-wrong to saying nothing at
+all. **Dedup without escalation converts a loud wrong answer into a quiet one**,
+which is not an improvement — it is the same defect with the evidence removed.
+
+**Do this:** classify every refusal reason as `terminal` or `transient` **at the
+point it is raised**, never by inferring from its wording later. A reason with no
+classification is a build error, not a default. Only a transient reason may say
+the approval stands and the pass will retry. A terminal one drops that sentence
+entirely, says plainly what it needs instead, posts **once**, and then escalates
+rather than repeating — and it names who must act, an agent session or Dane, in
+the active voice (§2.5).
+
+The general form is worth carrying past merges: **a message can be completely
+accurate about the present and still lie about the future, and the lie is the
+expensive half, because it is the part that tells the reader to stop looking.**
+
 ---
 
 ## 3. Designing checks
@@ -670,6 +721,55 @@ schema-generated panel without having made it fail first. Say plainly that it
 passed and that the pass is not evidence, and then look at the panel. On the
 Media Manager nobody has yet — recorded in `docs/MEDIA_MANAGER.md` §7 rather
 than quietly left as a green tick.
+
+
+### 3.18 A watchdog that is awake, correct and unread is indistinguishable from coverage
+
+§3.13 asks *where* a watchdog runs. This asks the two questions that remain once
+it is running in the right place, and a check can pass both of §3.13's tests and
+still miss everything.
+
+The twelve hours in §2.8 were not unwatched. **Three watchdogs were awake and
+pointed straight at that ticket, and none of them reached Dane.**
+
+| Watchdog | Cadence | What it saw | Why it did not land |
+|---|---|---|---|
+| `stale-ready` | every 10 min, on the Mini, inside `run_bus_relay.sh` | `READY TO LAUNCH — 1 ticket in the stage, 0 past 24h / Nothing is stuck.` | Its threshold is **24 hours**. The ticket was stuck twelve. It reported all-clear, honestly. |
+| `reconcile` | by hand only | Named the ticket exactly: *"sits in ready to launch but PR #513 is already MERGED"* | Nothing schedules it, and its finding goes to the bus. |
+| merge-on-comment | every 10 min | Refused 25 times, correctly | Reassured while refusing (§2.8). |
+
+Note what is *not* wrong here. Every one of them was correctly placed by §3.13's
+rule, running on the right machine, reading live state, and telling the truth.
+The instinct on discovering this was to schedule `reconcile` — and that would
+have found the same thing sooner and filed it into the same unread channel.
+**The cadence was never the problem.** The two failures were:
+
+- **Threshold.** Twenty-four hours is a reasonable grace period for a ticket
+  nobody has looked at. It is far too patient for one the operator has
+  personally approved: he stated an expectation the moment he typed `merge`, and
+  he noticed inside a day, so the machine must notice sooner than he does. Dane
+  ruled on this the same day, verbatim: *"Yes → tickets carrying your merge
+  comment get a short fuse (1–2h)"*.
+- **Destination.** All three write to the bus. The bus was not read. A finding
+  in an unread channel is not a quieter alert — **it is silence wearing an
+  alert's clothes**, and it is worse than having no watchdog at all, because it
+  reads as coverage on the board and nobody builds the thing that would have
+  worked.
+
+**Do this:** for every check, answer two questions in writing before believing
+it works. *What is the longest this can be wrong before somebody who cares finds
+out by other means?* — if that number is smaller than the threshold, the
+threshold is wrong. And *who reads where this lands, and how would I know if
+they stopped?* — if there is no answer, the check is not finished, however
+correct its logic.
+
+A threshold is a claim about who is allowed to notice first. Whenever the
+operator has stated an expectation — an approval, a `merge`, a deadline — the
+clock starts there and runs faster than his patience, not slower.
+
+Measure that clock from the event itself, never from a record's `date_updated`:
+any edit resets it, so on 86bbqw49y the twenty-five automated refusal comments
+would each have reset the very clock built to catch them.
 
 
 ## 4. Secrets
@@ -1326,6 +1426,221 @@ paint.
 The sibling failure lives one section up (§3.10): a write that normalizes to
 nothing looks exactly like a success. This is its front end — a write that
 never happened looks exactly like one that did.
+
+**This rule was broken the day after it was written.** 2026-09-02, task
+86bbt72jw: the Card Manager's settings were verified in its Live Preview, which
+renders from component state. Every control worked on screen and not one value
+reached the database. See §5.22 — knowing to reload is not enough if you reload
+the surface that cannot see the write.
+
+
+### 5.21 An upsert without `merge-duplicates` is not an upsert — and a store that falls back on failure reports a save that did not happen
+
+2026-09-02, task 86bbt72jw, fixed in PR #533. `lib/blogCardTemplateStore.js`
+saved the blog card template with:
+
+```js
+sbQuery({ method: 'POST', table: t(), query: 'on_conflict=project_id', body: row })
+```
+
+`on_conflict=` only NAMES the column. PostgREST merges a conflicting row solely
+when it is asked to, with `Prefer: resolution=merge-duplicates`. So the first
+save for a project inserted, and every save after it came back **409 duplicate
+key value violates unique constraint**. Eleven other stores in this repo
+(`builderPublishStore`, `trainingStore`, `promoLeads`, `credentialIdentityStore`,
+…) already sent that header. This one never had.
+
+On its own that would have been loud. **The second bug is why it lasted two
+months.** On failure the function fell through to the local-JSON path, wrote the
+file, and returned the merged template:
+
+```js
+if (result.ok || result.status === 200 || result.status === 201) return safe;
+// ↓ reached on 409, and it "succeeds"
+const store = readStore();
+store.templates[projectId || '_default'] = safe;
+writeStore(store);
+return safe;
+```
+
+The route answered **200 carrying the operator's new values while the database
+still held the old ones**. On Vercel the file write vanishes outright (landmine
+6), so production had no record at all. Save, reload, everything reverted, no
+error logged anywhere.
+
+Production cost, read straight from the table after the fix:
+
+```
+proj_1780601274760_97i84r  |  last written 2026-06-30
+```
+
+Frozen for over two months. Every change made to that card template in that
+window was silently discarded.
+
+**Two rules, and the second is the load-bearing one:**
+
+1. An upsert sends `Prefer: resolution=merge-duplicates`. `on_conflict=` alone
+   is not an upsert, and it fails only once a row exists — so it passes every
+   first-run test and every fresh fixture.
+2. **A fallback path is for the case the primary store is ABSENT, never for the
+   case it REFUSED.** When Supabase is configured it IS the store; a write it
+   rejected must raise, not divert to a file and return the value the caller
+   hoped for. A store that answers with its input rather than with what landed
+   is not a store, it is an echo.
+
+### 5.22 The surface you verify on decides what you are able to see
+
+2026-09-02, tasks 86bbt62dy and 86bbt72jw — twice in two days, on one feature,
+in two different ways. Both times the work was verified, both times the
+verification was real, and both times it was performed somewhere that
+structurally could not show the defect.
+
+**Once by rendering a different code path.** 86bbt52fa added fifteen Card
+Manager controls, checked on `builder-preview.html` — the harness page, which
+renders the module's PUBLIC component. The controls were there. In the Builder,
+where the operator actually opens the module, `renderModulePreview` had no
+branch for that type and drew nothing at all. He refreshed repeatedly and saw
+an empty panel. The check was honest and answered a question nobody had asked.
+
+**Once by reading back component state.** 86bbt72jw's settings were exercised in
+the Card Manager's Live Preview, which re-renders from React state. Every
+control moved the sample card. None of the values reached the database (§5.21).
+A surface that shows you what you just typed cannot tell you the write failed —
+it will agree with you forever.
+
+The shared shape is not "we tested the wrong thing". It is that **a convenient
+surface and the operator's surface are different programs**, and only one of
+them is the deliverable. `builder-preview.html` exists precisely because it
+needs no database, no login and no fixture — which is the same sentence as *it
+does not exercise the database, the session or the real page*.
+
+**So: the closing check runs on the surface the operator uses, reached the way
+he reaches it.** For this repo that usually means signing in and driving the
+real Builder, not the harness; and for anything that writes, reading the value
+back out of the DATABASE or the published page, not out of the editor that just
+sent it. §5.20 says reload and read it back. This says: and make sure the thing
+you reload is the thing he opens.
+
+The harness pages keep their job — they are how `check:render` and
+`check:panels` stay cheap enough to run every time. They are instruments for
+regression, not evidence that a feature works where it ships.
+
+
+### 5.23 A condition that narrows a behaviour must be written in the same terms as the symptom
+
+2026-09-02. PR #522 → fixed by #543, three lines apart.
+
+The blog card's featured image bleeds to the card edges by pulling up over the
+card's top padding. That pull-up was unconditional, which meant it slid up
+underneath anything sitting above it. #522 narrowed it:
+
+```js
+topOfCard: firstFilledSlot === "featured_image"   // first IN THE TEMPLATE
+```
+
+The symptom was **visual** — *is anything drawn above the image?* The condition
+written was **structural** — *is the image first in the template's slot list?*
+Those two agree only when every slot renders something.
+
+Both production card templates open with `["categories"]`, and the Delray posts
+carry no categories. So the categories row rendered nothing, remained "first",
+and the image — visibly at the top of the card — got no pull-up. The card's
+1.125rem top padding showed as a gap, plus the flex column's own gap from the
+empty row, which still emitted an element. **The fix for one bug created another
+in the same three lines, and shipped.**
+
+The corrected condition asks the visual question directly, by testing what the
+POST renders (`slotRenders`) rather than what the template holds. It fixes the
+gap without reintroducing the sliding, because it is finally the same question.
+
+**So: when you narrow an unconditional behaviour, write the condition in the
+vocabulary of the symptom.** A structural proxy for a visual question — or a
+schema proxy for a content question — is only ever accidentally right, and it
+is right on exactly the fixture you were looking at when you wrote it. §3.14 is
+the same confusion running the other way: an unpopulated field is not an empty
+answer.
+
+### 5.24 A preset that bundles two properties makes both unreachable — and splitting one safely means deriving from it, not defaulting past it
+
+2026-09-02, task 86bbtvnr5, PR #543. `cardStyle` had three values and set the
+card's border **and** its shadow together:
+
+```js
+cardStyle === "bordered" ? { border: `1px solid ${accent}40`, boxShadow: "none" }
+: cardStyle === "shadow"  ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
+: { border: "1px solid #e2e8f0", boxShadow: "none" }
+```
+
+Every production template is `default`, so every tenant card carried that
+hard-coded grey and no control could reach it — while nine image controls were
+added around it in the same panel. Neither property could be exposed without
+dismantling the preset, so neither was.
+
+Splitting it is a data migration wearing a UI change, and the safety is entirely
+in one detail: the new explicit keys are **derived from the old preset when
+ABSENT**, per preset value, so every already-saved template renders identically.
+
+```js
+cardBorderWidth: d.cardBorderWidth === undefined
+  ? presetBorderWidth(d.cardStyle)          // bordered→1, shadow→0, default→1
+  : cardNum(d.cardBorderWidth, 0, 16, …)
+```
+
+**`=== undefined`, never falsiness.** `d.cardBorderWidth || preset()` restores
+the preset's border on every read, so "no border" can never be saved — and it
+fails silently, on the one value an operator is most likely to have chosen
+deliberately. The same trap waits on every numeric or boolean setting where `0`
+or `false` is a real choice.
+
+Verify a split like this against **every** preset value, not the one in use. Two
+of the three cases here would never have been exercised by the fixture in front
+of me.
+
+
+### 5.25 A field the interface promises to fill is not filled by the promise
+
+2026-09-03, task 86bbu23n7, PR #549. The Create Post form's Slug box carries the
+placeholder **"post-slug (auto-generated if blank)"**. `createPost` stored what
+it was handed:
+
+```js
+slug: safeText(input.slug),      // '' when the operator left the box empty
+```
+
+Nothing generated anything. A blog post is addressed **by** its slug, so a post
+saved with the box empty had no address at all: the row was written, the manager
+listed it, the operator saw his post in the list, and every link to it went
+nowhere. Five of Delray's eight published posts sat that way — the oldest for
+four days, written 08-30 and found 09-03.
+
+There was no error to find, because nothing failed. The insert succeeded. The
+list read succeeded. The only surface that could have told anyone is the one
+place nobody looks at their own new post — the public site.
+
+**The rule: a promise made in an interface is kept by the code behind it, or it
+is not kept.** Placeholder text, a help line, a label saying "optional" — each
+is a claim about behaviour that lives somewhere else, and the two drift apart
+silently because nothing connects them. When you read a promise like that in a
+form, go and find the line that keeps it. It is a two-minute check, and here it
+was the whole defect.
+
+The repair also answered *where* it belongs. Deriving the slug in the Create
+Post component would have fixed that one form and left the API, the bulk import
+and every future caller with the same hole. It belongs in the store, which is
+the last place every path passes through — and the rule itself belongs in one
+file (`lib/slugify.js`), because `eventsStore` had already written its own copy
+and a second definition of "what is this thing's address" drifts by definition.
+
+**And the report that brought it in was a reasonable misdiagnosis.** The
+operator said the bulk import had not populated the slugs and so no posts
+loaded. Reading the live rows first said otherwise: all 47 imported posts had
+slugs, and they did not load because they were **drafts**, which is the review
+step working exactly as specified. The posts genuinely missing an address were
+five he had written by hand, days before the import existed. Had the stated
+cause been taken at face value, the fix would have gone into the import — the
+one code path that was already correct — and the five broken posts would still
+be broken. §6.13 says a reported conflict is a claim to verify; the same is true
+of a reported cause, and it costs one query to check.
 
 
 ## 6. Working in this repo
@@ -2133,6 +2448,92 @@ silent in one direction. Deleting a wanted file announces itself the moment some
 needs it, and the restore line is one command away. **Shipping an unwanted one
 announces nothing at all** — it lands looking current, and the next session reads
 it as the plan.
+
+### 6.16 A claim only counts with the receipt — and a session cannot promise to come back
+
+§6.3 covers gates: run them, report what they printed. It does not cover the
+other half, which failed twice in one morning on 2026-09-02.
+
+**a. The reported action that never happened.** This session told Dane it had
+filed ticket `86bbtw2k4` for follow-up work. That ticket does not exist and never
+did — the body was written and sound, the ClickUp call was simply never made, and
+the summary had no way to tell the difference between a task drafted and a task
+created. In the same reply it quoted `86bbtvbhk` for a ticket that *did* exist
+under a different id. Both were caught only by reading the queue back afterwards.
+
+The irony is the lesson: this is §2.8 committed by the agent instead of the
+merge step. A confident report that something is handled, when it is not, and no
+way for the reader to tell.
+
+**Do this:** for any call with a side effect whose identifier is its receipt —
+a ticket created, a comment posted, a status moved, a PR opened, a file written,
+a row inserted — report the id you **read back**, never the one you intended to
+create. If a summary names an id, that id was observed in a response or a
+follow-up query, or it does not go in the summary. §5.20 is the same rule for
+screens; this is the rule for records.
+
+**b. The promise to return.** Dane asked, reasonably, to be reminded
+periodically to run `npm run reconcile`. **An agent session cannot do that.**
+The window closes and the promise dies with it, silently, leaving him unable to
+distinguish *"CC is watching this for me"* from *"nothing is watching this"* —
+which is §2.8 again, relocated to the human layer, and it is the more dangerous
+location because there is no log to check.
+
+**Do this:** when asked to remember or to recur, say plainly in one sentence
+that a session cannot, and offer the durable form instead — a schedule, a
+watchdog, a ClickUp ticket, a memory file, a line in this document. Never accept
+the reminder. "An agent will remind you" names an actor that does not persist,
+which is the §2.5 defect with a future tense.
+
+Both halves reduce to one habit: **before reporting that something is true, ask
+what you would have to have observed for it to be true, and check that you
+observed it.**
+
+
+### 6.17 When doctrine answers yes AND no, the contradiction is the defect — three merge-lane decisions, decided once
+
+**The incident (2026-09-02, the "State of the Line" audit).** Three questions
+had two live answers each, every answer individually defensible:
+
+- What does "done" mean? `wipCap.js` counted four statuses as terminal
+  (live/complete/closed/done) while `pulse.js` counted one — the WIP cap and
+  the flow diagnostics running on different definitions of finished.
+- Does a merge ask the pause switch? This file's pipeline section said
+  *"before merging anything, run `pipeline -- check`"* while the fast-track
+  lane said *"No pause to merge."* `ship` merged via a direct `gh pr merge`
+  and never read the switch (`ship_thread.cjs:553` at audit time).
+- Is `ship` part of the one merge gate (task 86bbkw2au's "ONE GATE"), or a
+  second path? It was a second path, silently.
+
+Nobody had been careless; each half was written on a different day against a
+different incident. That is exactly how a system built at speed accumulates
+contradictions, and the rule this section exists for: **when two rules answer
+the same question differently, resolving it is an OPERATOR DECISION to make
+once and record where both readers will find it — not a thing each session
+re-derives** (§6.6 is the sibling rule for decisions already made).
+
+**The decisions, made by Dane on the audit's recommendations (D1 on
+2026-09-02, D2 and D3 on 2026-09-03, verbatim as recommended):**
+
+- **D1 — `live` is the only terminal status.** The other three names are a
+  tested alias list, reported loudly by name (wipCap's `unrecognised`
+  bucket), never silently counted either way. Recorded beside the code in
+  `scripts/builder/loopStatuses.js` (task 86bbtujed, PR #539).
+- **D2 — every merge asks the pause switch; nobody pauses in order to
+  merge.** `ship` runs `pipeline -- check` itself before merging and stops,
+  quoting the switch, when the deck is taken — failing safe like every other
+  actor. The fast-track sentence now says what it always meant (task
+  86bbu2uhq).
+- **D3 — `ship` STATES the review gate's context before merging, and only
+  states it.** The read-only `waiting` reader's own lines are reprinted;
+  enforcement stays with the one merge gate, and folding `ship` fully into
+  it waits for a driving incident (task 86bbu2uhq).
+
+**How to use this section:** when you find doctrine or two modules answering
+one question two ways, do not pick quietly and do not build both. Name the
+contradiction as its own finding, take it to the operator as a decision with
+a recommendation, and record the answer once — in the code that enforces it
+and here.
 
 ## 7. Operator-facing gotchas
 

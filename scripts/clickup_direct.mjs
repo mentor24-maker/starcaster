@@ -2059,7 +2059,12 @@ if (cmd === 'whoami') {
   if (note) console.error(`  (${note})`);
   for (const x of excluded) console.error(`  (not claimable: ${x.id} — ${x.why})`);
 
-  const decision = loopInterval.decideInterval({ depth, state, fallbackSeconds });
+  // The note goes INTO the decision, not merely alongside it. Printing the
+  // truth two lines above a summary that contradicts it is what happened on
+  // 2026-09-02: three accurate lines said the cap was full, and the last line
+  // — the one prefixed `interval:` — said "nothing to do" under 48 queued
+  // tickets. The last line is the one that gets read.
+  const decision = loopInterval.decideInterval({ depth, state, fallbackSeconds, blockedNote: note });
   if (res) reportLimits(res);
   answer(decision);
 

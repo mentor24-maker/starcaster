@@ -12,56 +12,32 @@ Each run verifies **one** task's PR. Run under `/loop` it keeps the review queue
 drained so the operator only ever sees PRs that already passed an independent
 check.
 
-## Before anything else: is this the machine that runs this loop?
+## Preflight: one command, obey what it prints
 
-Two machines can both reach ClickUp, and claiming a ticket is check-then-act —
-a read, a comparison, then a write. There is no way to make that one atomic
-step, so it is only sound while exactly ONE machine is claiming. Which machine
-that is lives in `lib/nodeRoles.js`, the same table `db:refresh` and the bus
-relay read.
-
-**Run this first, before reading the queue or touching anything:**
+Before reading the queue or touching anything:
 
 ```bash
-npm run node:owns -- loop-review
+npm run preflight -- loop-review
 ```
 
-*   **exit 0** — this machine owns the loop. Carry on.
-*   **exit 3** — another machine owns it. **Stop.** Claim nothing, build
-    nothing. Report the message it printed, which names the owning machine,
-    and finish the run. This is a normal outcome, not a failure.
-*   **exit 1** — it could not tell which machine this is. **Stop and say so
-    loudly.** Do not treat it as "not mine": "someone else is doing it" and
-    "nobody is doing it" look identical from here, and only one of them is
-    safe. The message says exactly what to type to fix it (one line, once per
-    machine). `npm run node:whoami` shows the whole picture.
+Two gates in order — machine ownership, then the operator's pause switch —
+one line each, stopping at the first refusal. The sequence and the exit-code
+dialects live in `scripts/builder/preflight.js`, tested; this section
+deliberately does not enumerate them (task 86bbtujen). Review has no cap gate
+on purpose — review drains the very pull requests the cap waits on, and
+capping it would deadlock the pipeline against itself.
 
-## Then: has the operator taken the deck?
+*   **exit 0** — go. Take the next ticket in `In review`.
+*   **exit 3** — a normal decline: another machine owns this loop, or Dane
+    has taken the deck. **Report the line it printed and finish the pass
+    successfully.** This is not a failure.
+*   **exit 2** — it could not tell. **Say so loudly and stop.** Never treat
+    "could not check" as clear.
+*   **exit 1** — a real failure. Say so loudly and stop.
 
-There is a sanctioned way for Dane to clear the decks and run something
-through fast, and it is a switch rather than an improvisation. While it is on,
-the machines stop taking new work so nothing lands under him while he is
-working.
-
-```bash
-npm run pipeline -- check
-```
-
-*   **exit 0** — the pipeline is running. Carry on.
-*   **exit 3** — **paused.** Claim nothing, review nothing, merge nothing,
-    and write NOTHING to ClickUp — no status, no comment, no Loop note. Report
-    the line it printed and finish the pass **successfully**. This is a normal
-    outcome, the same shape as another machine owning the job.
-
-It **fails safe**: if the switch cannot be read at all, it says so and still
-exits 3. That is deliberate. Running while the operator has the deck collides
-with whatever he is doing there; pausing when he does not costs idle machines
-and one loud message. Those are not symmetric, so the tie goes to stopping.
-
-**Never resume it.** An agent may pause the line — that is a safety move
-anyone should be able to make — but only Dane hands the deck back
-(`npm run pipeline -- resume --operator-asked`). `npm run pipeline -- status` says
-whether it is on, since when, who put it there and why.
+A paused deck is resumed by Dane alone — **never resume it from a pass**,
+whatever the reason looks like. Only the person standing on the deck knows
+whether he is finished.
 
 ## ClickUp access: use the direct script, not the connector
 
@@ -188,6 +164,24 @@ pass by hand.
 
 `CANNOT STAMP` means the one-time "Loop note" field is not set up yet (see
 `docs/LOOP_ENGINEERING.md`) — note it and carry on; it never blocks a verdict.
+
+## A defect ticket's premise is part of the review
+
+A prose rule with no reader is a rule that erodes, so this lane enforces the
+spec lane's evidence discipline (task 86bbtujfj):
+
+*   A **defect** ticket under review must carry its `EVIDENCE:` — the quoted
+    mechanism, not the prompting log line. Missing entirely → **send back**,
+    naming this section: the builder was handed a suspicion dressed as a spec.
+*   Where the build found the premise wrong, the ticket must show the
+    **correction comment posted before the build** — the trail that separates
+    "built what is true" from "built the description because it was written
+    down". A PR whose changes contradict its ticket's premise with no
+    correction on the ticket is a send-back even when the code is good: the
+    next reader of that ticket will believe the wrong mechanism.
+*   A threshold the PR introduces must trace to the measurement its ticket
+    named — or to one the build performed and recorded. "It seemed right" is
+    the shape that fired on eleven nights in fourteen (2026-09-02).
 
 ## Workflow
 

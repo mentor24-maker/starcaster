@@ -78,6 +78,71 @@ const STAGE_ORDER = Object.freeze([
  */
 const CLAIMABLE_BY_BUILD = Object.freeze([REWORK, QUEUED]);
 
+// ── The taxonomy: every SET of these seven is defined here, and only here ────
+//
+// (2026-09-02, task 86bbtujed — audit Phase 2.) Until today wipCap,
+// pipelinePause and pulse each kept a private, partial copy of these
+// groupings. When Rework was added on 2026-08-31 it had to be threaded
+// through each file by hand, and wipCap and pulse had already drifted into
+// DISAGREEING about what "done" means — four names versus one, both
+// load-bearing. A set defined below is imported by its consumers as a view;
+// the reasons a consumer cares about a particular view stay as comments ON
+// that view, where they belong.
+
+/**
+ * Work that genuinely occupies the pipeline: a pull request whose ticket
+ * wears one of these is real in-flight work — the merge side's question,
+ * which is wipCap's question. pipelinePause asks a NARROWER one (is a PASS
+ * actually running?) and derives its pair of machine statuses from these
+ * minus OPERATOR_HELD, with its reasoning kept on that view.
+ */
+const IN_FLIGHT_STATUSES = Object.freeze([
+  BUILDING, IN_REVIEW, READY_TO_LAUNCH, NEEDS_YOUR_INPUT,
+]);
+
+/** Parked on Dane, on purpose — only he moves a ticket out of these. */
+const OPERATOR_HELD_STATUSES = Object.freeze([READY_TO_LAUNCH, NEEDS_YOUR_INPUT]);
+
+/**
+ * DECISION D1 (Dane, 2026-09-02, recorded on task 86bbtujed): `live` is the
+ * ONLY terminal status. The evidence that made the recommendation: every one
+ * of the 204 closed tickets in the Loop Queue is `live`, and the list defines
+ * no other closed status. Before this decision wipCap counted four names as
+ * finished (live/complete/closed/done) while pulse counted one — two
+ * definitions of "done" running the cap and the flow diagnostics at once.
+ */
+const TERMINAL_STATUSES = Object.freeze([LIVE]);
+
+/**
+ * Names that mean "finished" in other systems and NEVER legitimately appear
+ * in this list. Deliberately NOT terminal: silently counting one as done
+ * (wipCap's old reading) while another instrument counts it in flight
+ * (pulse's) is exactly the disagreement D1 closed. A ticket wearing one is
+ * reported LOUDLY by name — it lands in wipCap's `unrecognised` bucket, which
+ * quotes the status back — and a status ClickUp itself marks with a closed
+ * TYPE is still honoured by pulse's own `status.type` check, which is a
+ * different sense of "done" and stays where it is.
+ */
+const TERMINAL_ALIASES = Object.freeze(['complete', 'closed', 'done']);
+
+// ── The two staleness clocks, side by side (audit finding C4) ────────────────
+//
+// They live with their owners, but they are RECORDED together here because
+// they gate adjacent questions about the same objects and were chosen
+// separately:
+//
+//   STRANDED_AFTER_MS      90 minutes — pipelinePause.js. A ticket sitting in
+//                          a machine status untouched this long has no pass on
+//                          it; the sweep, the WIP cap discount and
+//                          pass-reconcile all act on this one number.
+//   LOOP_STALE_AFTER_HOURS ~3 hours — pulse.js. A loop LOG silent this long
+//                          means the lane looks dead (three times the pacing
+//                          curve's longest interval).
+//
+// Both are defensible alone. Tune either only with the other in view, so the
+// next adjustment is ONE decision — that sentence is the whole reason this
+// comment exists.
+
 /** ClickUp's priority names, best first. Anything unrecognised sorts last. */
 const PRIORITY_RANK = Object.freeze({ urgent: 1, high: 2, normal: 3, low: 4 });
 const PRIORITY_UNKNOWN = 9;
@@ -158,6 +223,10 @@ function claimOrder(tasks) {
 }
 
 module.exports = {
+  IN_FLIGHT_STATUSES,
+  OPERATOR_HELD_STATUSES,
+  TERMINAL_STATUSES,
+  TERMINAL_ALIASES,
   REWORK,
   QUEUED,
   BUILDING,

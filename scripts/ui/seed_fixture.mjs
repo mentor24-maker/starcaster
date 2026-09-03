@@ -400,6 +400,7 @@ const buildTuned = (ids) => ({
   'blog-tag-cloud': {
     name: 'Tag Cloud',
     settings: {
+      title: 'Browse by tag',
       filterParam: 'tag', targetPageUrl: '/blog', showCounts: 'true',
       layout: 'cloud', alignment: 'left', minFontSize: '11', maxFontSize: '22',
       tags: JSON.stringify([
@@ -835,6 +836,23 @@ const buildTuned = (ids) => ({
     name: 'Site Settings',
     settings: { showTitle: 'true', panelTitle: LONG },
   },
+  /*
+   * Both gating toggles are ON deliberately. Three of this panel's fields are
+   * `visibleWhen`-gated — `panelTitle` behind `showTitle`, and
+   * `relateButtonLabel` + `articleStatus` behind `showRelate` — so seeding
+   * either toggle off would measure the panel three controls short and still
+   * report green. That is exactly how the proximity-effects panel passed
+   * while two gated fields went unseen.
+   */
+  'admin-blog-links': {
+    name: 'Blog Links',
+    settings: {
+      showTitle: 'true', panelTitle: LONG,
+      showCategories: 'true', showTags: 'true',
+      showRelate: 'true', relateButtonLabel: 'Relate the checked articles',
+      articleStatus: 'published',
+    },
+  },
   'admin-login': {
     name: 'Admin Login',
     settings: {
@@ -902,12 +920,22 @@ const buildPanelCheckSection = (ids) => {
    * had never actually tested (the same shape as #432). Breaking the group's
    * layout on purpose passes without this; with it, it fails.
    *
-   * Colour rather than image so the fixture does not depend on a seeded
-   * asset, and 45 rather than 100 so the opacity select shows a value that
-   * would be visibly wrong if it stopped being read.
+   * GRADIENT rather than a flat colour so the gradient branch is measured
+   * too. It still renders the Color picker this comment was written for — that
+   * field shows for "color" and "gradient" alike — and adds the two controls
+   * that exist ONLY here: Color 2 and Angle. Those are in exactly the position
+   * the video sub-panel was in before this fixture seeded a video: present in
+   * the code, rendered for nobody, and reported green by a check that never
+   * saw them. A gradient needs no seeded asset either, so the reason the
+   * original said colour-rather-than-image still holds.
+   *
+   * The angle is left UNSET on purpose. Absent is the state every background
+   * in production is in, and it is the state whose fallback the whole change
+   * rests on — seeding a value here would measure the one case that cannot
+   * regress.
    */
   overlayScreen: {
-    background: { mode: 'color', color: '#1b2a4a' },
+    background: { mode: 'gradient', color: '#1b2a4a', color2: '#4cbb17' },
     opacity: 45,
   },
   modules: [

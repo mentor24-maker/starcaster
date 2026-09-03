@@ -42,6 +42,7 @@ const {
 } = require('./builder/pulse.js');
 const { findPullRequest, mergeDecision, checkState } = require('./builder/mergeOnComment.js');
 const staleReady = require('../lib/staleReady.js');
+const { printAndExit } = require('./lib/flushExit.cjs');
 
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const LOOP_LOG_DIR = process.env.LOOP_LOG_DIR || path.join(os.homedir(), 'loop-logs');
@@ -85,7 +86,12 @@ function readNoOp(job, queuedCount, now) {
   return {
     ...result,
     source: file,
-    unterminated: unterminated.map((p) => classifyUnterminated(p, { now, passes })),
+    // `start` rides along with the classification because it is the pass's
+    // IDENTITY, and the only stable part of it: the message carries an age
+    // that changes every hour, so a scheduled consumer keying suppression off
+    // the message would re-announce the same hung pass every single run
+    // (task 86bbqz7rg). Additive — nothing existing reads it.
+    unterminated: unterminated.map((p) => ({ start: p.start, ...classifyUnterminated(p, { now, passes }) })),
   };
 }
 
@@ -353,17 +359,23 @@ async function main() {
     result.readyActors = null;
   }
 
+  const code = useExitCode ? exitCodeFor(result) : 0;
+
+  // `printAndExit`, never `console.log` followed by `process.exit` — on macOS
+  // stdout to a pipe is asynchronous, so exiting straight after printing
+  // discards everything past the 64KB the kernel had already taken. This
+  // output IS read through a pipe: `scripts/pulse_publish.mjs` spawns this
+  // command with --json and parses what comes back. See scripts/lib/flushExit.cjs
+  // for the measurements.
   if (asJson) {
-    console.log(JSON.stringify(result, null, 2));
+    printAndExit(JSON.stringify(result, null, 2), code);
   } else {
     if (queueError) {
       console.log(`CANNOT TELL — the Loop Queue could not be read: ${queueError}`);
       console.log('A2 and B1 need it, so both are reported as unread rather than as clear.\n');
     }
-    console.log(formatReport(result));
+    printAndExit(formatReport(result), code);
   }
-
-  process.exit(useExitCode ? exitCodeFor(result) : 0);
 }
 
 function argValue(flag) {
@@ -373,7 +385,9 @@ function argValue(flag) {
 
 main().catch((err) => {
   // Rule 5: even a crash says so loudly rather than producing a quiet nothing.
+  // Through the same flush-then-leave door: a crash message discarded by
+  // `process.exit` IS the quiet nothing this rule forbids, and stderr is a
+  // pipe here too.
   console.error(`PULSE FAILED — ${err.message}`);
-  console.error('This is not an all-clear. No check ran.');
-  process.exit(useExitCode ? 2 : 0);
+  printAndExit('This is not an all-clear. No check ran.', useExitCode ? 2 : 0, { stream: 'stderr' });
 });

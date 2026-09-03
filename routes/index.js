@@ -47,6 +47,7 @@ const promoLeads  = require('./promoLeads');
 const assets      = require('./assets');
 const assetRenditions = require('./assetRenditions');
 const channels    = require('./channels');
+const connections = require('./connections');
 const contacts    = require('./contacts');
 const activityLog = require('./activityLog');
 const config      = require('./config');
@@ -89,6 +90,7 @@ const ROUTE_MODULES = [
   assets,
   associations,
   channels,
+  connections,
   contacts,
   engage,
   // Ahead of `builder` on purpose. Both claim '/api/builder/*'; builder

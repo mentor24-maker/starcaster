@@ -11,112 +11,49 @@ See `docs/LOOP_ENGINEERING.md` for the whole system.
 Each run of this skill builds **one** task into **one** PR. When run under
 `/loop`, it repeats, draining the queue one clean PR at a time.
 
-## Before anything else: is this the machine that runs this loop?
+## Preflight: one command, obey what it prints
 
-Two machines can both reach ClickUp, and claiming a ticket is check-then-act —
-a read, a comparison, then a write. There is no way to make that one atomic
-step, so it is only sound while exactly ONE machine is claiming. Which machine
-that is lives in `lib/nodeRoles.js`, the same table `db:refresh` and the bus
-relay read.
-
-**Run this first, before reading the queue or touching anything:**
+Before reading the queue or touching anything:
 
 ```bash
-npm run node:owns -- loop-build
+npm run preflight -- loop-build
 ```
 
-*   **exit 0** — this machine owns the loop. Carry on.
-*   **exit 3** — another machine owns it. **Stop.** Claim nothing, build
-    nothing. Report the message it printed, which names the owning machine,
-    and finish the run. This is a normal outcome, not a failure.
-*   **exit 1** — it could not tell which machine this is. **Stop and say so
-    loudly.** Do not treat it as "not mine": "someone else is doing it" and
-    "nobody is doing it" look identical from here, and only one of them is
-    safe. The message says exactly what to type to fix it (one line, once per
-    machine). `npm run node:whoami` shows the whole picture.
+Four gates in order — machine ownership → hand back whatever the last pass
+dropped → the operator's pause switch → the work-in-progress cap — one line
+each, stopping at the first refusal. The sequence and every exit-code dialect
+live in `scripts/builder/preflight.js`, tested; this section deliberately does
+not enumerate them, because a sequence that lives as prose is a sequence a
+pass can skip by summarizing badly (task 86bbtujen — three gates were added as
+prose in a single day).
 
-## Then: did the last pass finish what it started?
+*   **exit 0** — go. Claim from the queue and get to work.
+*   **exit 3** — a normal decline: another machine owns this loop, Dane has
+    taken the deck, or the merge side is full. **Report the lines it printed
+    and finish the pass successfully.** This is not a failure.
+*   **exit 2** — it could not tell. **Say so loudly and stop.** Never treat
+    "could not check" as clear.
+*   **exit 1** — a real failure. Say so loudly and stop.
 
-```bash
-npm run clickup -- pass-reconcile
-```
+A paused deck is resumed by Dane alone — **never resume it from a pass**,
+whatever the reason looks like. Only the person standing on the deck knows
+whether he is finished.
 
-A pass claims a ticket by moving it to `Building`, and **the loops claim only
-from `Rework` and `Queued`**. So a pass that ends without handing its ticket on
-does not leave it slow — it leaves it *invisible*, forever, until a person
-moves it by hand. Two went that way on the night of 2026-09-01 and sat there
-until 9:30 the next morning.
+Whatever the verdict: **if the `reconcile` line says the previous pass DROPPED
+its ticket, put that in your report** — that line is the only evidence
+anywhere that it happened, and a defect nobody can see is a defect nobody
+fixes.
 
-This command reads the marker the previous pass's claim left behind. Four
-outcomes, and you report whichever you get:
+Why each gate exists, one line each — the full stories live with the gates:
 
-*   **exit 0** — nothing to do, or a stale marker cleared. The normal case.
-*   **exit 3** — **the previous pass dropped its ticket** and this one handed it
-    back. Not your fault and not a failure, but **say so in your report**: that
-    line is the only evidence in the log that it happened, and a defect nobody
-    can see is a defect nobody fixes.
-*   **exit 2** — it could not tell (an unreadable marker, or the ticket's status
-    would not read). Nothing was moved. Say so; do not assume the deck is clear.
-*   **exit 1** — a hand-back was needed and failed. The ticket is still stranded.
-    Say so loudly. It will be retried next pass.
-
-Then carry on with your own pass either way.
-
-## Then: has the operator taken the deck?
-
-There is a sanctioned way for Dane to clear the decks and run something
-through fast, and it is a switch rather than an improvisation. While it is on,
-the machines stop taking new work so nothing lands under him while he is
-working.
-
-```bash
-npm run pipeline -- check
-```
-
-*   **exit 0** — the pipeline is running. Carry on.
-*   **exit 3** — **paused.** Claim nothing, review nothing, merge nothing,
-    and write NOTHING to ClickUp — no status, no comment, no Loop note. Report
-    the line it printed and finish the pass **successfully**. This is a normal
-    outcome, the same shape as another machine owning the job.
-
-It **fails safe**: if the switch cannot be read at all, it says so and still
-exits 3. That is deliberate. Running while the operator has the deck collides
-with whatever he is doing there; pausing when he does not costs idle machines
-and one loud message. Those are not symmetric, so the tie goes to stopping.
-
-**Never resume it.** An agent may pause the line — that is a safety move
-anyone should be able to make — but only Dane hands the deck back
-(`npm run pipeline -- resume --operator-asked`). `npm run pipeline -- status` says
-whether it is on, since when, who put it there and why.
-
-## Then: is the merge side already full?
-
-Branch protection is `strict: true`, so a branch must be current with `main` to
-merge — which means **every merge invalidates every other open branch**. With N
-PRs open, each merge dates N-1 branches, each needing its own catch-up and its
-own CI run. On 2026-08-23 with 24 open, a single merge dated 23 branches and
-the relay spent most of its work re-catching-up branches that went stale again
-before it could use them.
-
-So building faster than the merge side can absorb does not ship anything
-sooner. It just rots, and rotting costs real work.
-
-```bash
-npm run clickup -- wip-check
-```
-
-*   **exit 0** — room to claim. Carry on.
-*   **exit 3** — the cap is reached. **Claim nothing.** Report the line it
-    printed and finish the pass **successfully** — this is a normal outcome,
-    the same shape as `node:owns` saying another machine owns the job. Write
-    NOTHING to ClickUp: no status, no comment, no Loop note. A capped pass
-    leaves the queue exactly as it found it, and says so once, not per ticket.
-*   **exit 1** — the count could not be read. It proceeds deliberately rather
-    than stopping all work on a transient `gh` failure, but the pass is
-    unbounded by the cap — say so in the run report.
-
-The cap is `DEFAULT_WIP_CAP` in `scripts/builder/wipCap.js`, with the reasoning
-beside it. `CLAUDE_LOOP_WIP_CAP` overrides it for experiments.
+*   *ownership* — claiming is check-then-act, only safe with a single
+    claimant; two review loops overwrote each other on 2026-08-22.
+*   *reconcile* — a ticket left in `Building` is invisible forever; two sat
+    from midnight to 9:30am on 2026-09-02.
+*   *pause* — Dane sometimes needs the deck, and the session that collided
+    with him (PR #432) was one that never looked.
+*   *cap* — merge is the slow side; with 24 PRs open, one merge re-dated 23
+    branches (2026-08-23).
 
 ## ClickUp access: use the direct script, not the connector
 
@@ -128,7 +65,7 @@ list, the ids, and the reasoning live in ONE place: `docs/LOOP_ENGINEERING.md`
 
 ```bash
 npm run clickup -- queue --list 901418546619 --claimable       # FIRST LINE is the task to claim (all Rework, then Queued)
-npm run clickup -- pass-reconcile                               # FIRST: hand back whatever the last pass dropped
+npm run clickup -- pass-reconcile                               # (the preflight runs this; listed for by-hand use)
 npm run clickup -- claim --task <id> --pass loop-build          # safe claim; exit 3 = someone beat you (or it moved), take the next
 npm run clickup -- status --task <id> --status "In review"                   # hand off (assignees auto-cleared)
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file - # escalate: card + status together
@@ -565,6 +502,17 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
   cannot wait, hand the ticket back to `Rework` with a note naming what is
   outstanding — a ticket in a claimable status with an honest note is a
   perfectly good outcome. An unfinished promise is not.
+
+- **VERIFY THE PREMISE BEFORE BUILDING IT.** A defect ticket is a claim to
+  verify, not a specification to obey. Before touching a line, read the
+  mechanism the ticket names (its `EVIDENCE:` line says where; a defect
+  ticket without one is itself send-back material — the spec lane owes it).
+  When the premise is wrong: **post the correction on the ticket FIRST, then
+  build what is true** — never silently build the description as written, and
+  never silently build something else instead. On 2026-09-02 four of five
+  defect tickets filed by the highest-context session had materially wrong
+  premises; the fixes only landed right because each was re-derived from the
+  code and corrected on the ticket before the build (task 86bbtujfj).
 
 - **One task, one worktree, one PR.** Never build two tasks in one branch.
 - **The PR and the ticket must name each other.** `pr-opened` enforces both

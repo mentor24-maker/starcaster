@@ -81,9 +81,13 @@ npm run --silent heartbeat -- --check || true
 # that does NOT own the relay is already awake here doing nothing, and that
 # idle wake is the vantage point that survives the owning machine being dead.
 #
-# Posts to the bus only on a STALLED verdict, once per 6h, cleared by the next
-# run that is not stalled. Silent otherwise, and never allowed to fail the
-# relay — it exits 1 on a stall, which is a finding, not this script's failure.
+# Posts to the bus on a STALLED verdict AND on an UNKNOWN one — a reading that
+# could not be taken is itself the alarm, and until 2026-09-01 it was the one
+# state that reached nobody, because the `|| true` below discards the exit code
+# it announced itself with. Each is once per 6h, cleared by the next pass that
+# is not in that state. Silent otherwise, and never allowed to fail the relay:
+# it exits 1 on a stall and 2 on an unknown, which are findings about the
+# pipeline, not this script's failure.
 npm run --silent throughput -- --check || true
 
 # THE THIRD WATCHDOG — the one stage that has no owner at all (task 86bbqp68c).
@@ -114,6 +118,18 @@ npm run --silent throughput -- --check || true
 # fail the relay: it exits 1 on a finding and 2 on a cannot-tell, both of which
 # are readings, not this script's failure.
 npm run --silent stale-ready -- --check || true
+# THE ONE REPAIR, on the idle wake (task 86bbtnk3k — audit Phase 4). The sweep
+# became reachable on 2026-09-02 and was then called by nothing, which is the
+# defect that opened that morning's stall report wearing a new coat. It rides
+# here for the same reason every sentinel above does: this wake happens on the
+# machine that does NOT own the loops too, and that vantage survives the
+# owning machine being dead — which is precisely when the marker step's usual
+# runner (the next loop pass) no longer exists. Writes are evidence-based
+# only; unmarked strandings are POSTED, never auto-applied
+# (scripts/builder/repair.js carries the whole safety argument). Throttled to
+# one fresh reading per half hour; findings post once per 6h, cleared by the
+# next clean run. Never allowed to fail the relay, like its neighbours.
+npm run --silent repair -- --check || true
 
 npm run --silent clickup -- bus-relay
 status=$?

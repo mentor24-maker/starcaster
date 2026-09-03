@@ -146,6 +146,16 @@ held everywhere it applied.
   honors, no control), related-posts cardBorderRadius (honored + seeded,
   no control), quote variant (previews vary by it; nothing sets it).
   Fix F11.
+- **FIXED 2026-09-02 — blog-card-manager card border (PR #543).** The
+  renderer honored a border the editor could not reach: `cardStyle`'s
+  "default" branch hard-coded `1px solid #e2e8f0`, and every production
+  template is `default`, so every tenant card carried that grey with no
+  control. It was recorded here as UNCLEAR C7 rather than as a violation
+  — the reason it stayed invisible is that the preset bundled the border
+  with the shadow, so neither could be exposed without splitting it
+  (`docs/DOCTRINE.md` §5.24). Border width and colour are now their own
+  controls and `cardStyle` governs only the shadow. Operator-reported,
+  not caught by this audit.
 
 ### C8 — same concept, same control
 - **Violations:** two competing number controls
@@ -224,8 +234,26 @@ n/a. Full evidence in the audit transcripts (2026-08-09).
 ### Batch: blog modules A
 - **blog-author-bio** — FAIL L4 (23ch option in 9.5ch select), D1, D2,
   D3, W3. EXEMPLAR: shared image picker (C8).
-- **blog-card-manager** — clean (pointer panel). UNCLEAR C7 (canvas
-  designer owns the settings).
+- **blog-card-manager** — *was:* "clean (pointer panel). UNCLEAR C7
+  (canvas designer owns the settings)." **Both halves were wrong, and the
+  audit could not see either.**
+  - The "pointer panel" was one sentence reading *"Configure the card
+    template using the interactive designer in the canvas above"* — and
+    there was no designer in the canvas above. `renderModulePreview` in
+    `builder-module-card.tsx` carries a branch for every sibling admin
+    module and never had one for this type, so the working controls
+    rendered only through the public renderer, on a page that is not
+    published. A panel scored "clean" was pointing at nothing.
+    **Fixed 2026-09-02, PR #523:** the designer renders in the panel.
+  - The UNCLEAR C7 was a **violation** (see §1 C7). **Fixed 2026-09-02,
+    PR #543.**
+  - Now: PASS C7. The panel holds the designer — Content / Structure /
+    Frame groups, the row editor and the live preview — and every setting
+    the card renderer honors has a control (PRs #522, #523, #533, #543).
+  - **Lesson for this audit, not just for the module:** "clean (pointer
+    panel)" scored the panel's *conformance* without checking that what it
+    pointed at existed. A pointer is only clean if its target is reachable
+    — that is C7 applied to the panel itself.
 - **blog-category-filter** — FAIL L7 (↑/↓ vs "Move left/right"), C1/C2
   (hand-typed label+slug for enumerable categories), C3, D3. EXEMPLARS:
   visibleWhen row pairing; uniform 4-color strip (W2).

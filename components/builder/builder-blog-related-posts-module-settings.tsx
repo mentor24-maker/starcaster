@@ -124,6 +124,12 @@ export function BuilderBlogRelatedPostsModuleSettings({ module, onUpdateModule }
                 { value: "categories", label: "Categories" },
                 { value: "tags", label: "Tags" },
                 { value: "both", label: "Categories + Tags" },
+                // Reads the links made in the Blog Links Manager module
+                // (admin-blog-links) with its Relate Checked button. Unlike
+                // "Manual selection" below, which is titles and URLs typed
+                // into THIS panel, hand-picked links live in the database and
+                // one linking serves every page this module sits on.
+                { value: "picked", label: "Hand-picked (Blog Links Manager)" },
                 { value: "manual", label: "Manual selection" }
               ],
               fallback: "categories",

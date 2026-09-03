@@ -1,5 +1,10 @@
 'use strict';
 
+// Top of file, not beside its first use: the taxonomy view below is built at
+// module load, and a require that sits under it is a ReferenceError — found
+// the hard way (task 86bbtujed).
+const loopStatuses = require('./loopStatuses.js');
+
 /**
  * pipelinePause — is the pipeline running, or has the operator taken the deck?
  *
@@ -86,7 +91,15 @@ const NAG_EVERY_MS = 60 * 60 * 1000;
 const STRANDED_AFTER_MS = 90 * 60 * 1000;
 
 /** The statuses a pass in flight can hold, and what kind of pass it is. */
-const IN_FLIGHT_STATUSES = { building: 'a build', 'in review': 'a review' };
+// The NARROW view of the taxonomy (loopStatuses.js, task 86bbtujed): not
+// "does this ticket occupy the pipeline" but "is a PASS actually running on
+// it". Deliberately IN_FLIGHT minus OPERATOR_HELD — a ticket parked on Dane
+// has no pass to strand, so the drain never waits on one and the sweep never
+// touches one.
+const IN_FLIGHT_STATUSES = {
+  [loopStatuses.BUILDING]: 'a build',
+  [loopStatuses.IN_REVIEW]: 'a review',
+};
 
 /**
  * The Loop note a review pass stamps when it claims a ticket to check —
@@ -345,7 +358,7 @@ function classifyTicket(task, { nowMs, strandedAfterMs = STRANDED_AFTER_MS } = {
   // "In review" is a resting status as well as a working one: a ticket waits
   // there for a review pass to pick it up. Only one carrying the review claim
   // note has a pass actually running on it.
-  if (status === 'in review' && !String(task.loopNote || '').startsWith(REVIEW_CLAIM_NOTE)) return null;
+  if (status === loopStatuses.IN_REVIEW && !String(task.loopNote || '').startsWith(REVIEW_CLAIM_NOTE)) return null;
 
   const updated = Number(task.date_updated);
   const age = Number.isFinite(updated) && Number.isFinite(nowMs) ? nowMs - updated : null;
@@ -794,6 +807,7 @@ function resumeAuthorization({ operatorAsked } = {}) {
 }
 
 module.exports = {
+  IN_FLIGHT_STATUSES,
   humanTime,
   humanDuration,
   PAUSE_MARKER,

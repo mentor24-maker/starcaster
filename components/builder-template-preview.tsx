@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   EMPTY_MEDIA_FILTERS,
   MEDIA_ASPECTS,
@@ -15,6 +15,7 @@ import {
   type MediaFilters
 } from "@/lib/media-manager-filters";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
+import { relatedIdsFor, type PostRelationPair } from "@/lib/blog-post-relations";
 import {
   builderBackgroundParallaxActive,
   createDefaultBackgroundSettings,
@@ -41,6 +42,16 @@ import {
   getCarouselImageShadowGutter
 } from "@/lib/builder-carousel-image-frame";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
+import {
+  type CloudTag,
+  PLACEHOLDER_TAGS,
+  activeTagSlug,
+  maxTagCount,
+  parseCloudTags,
+  resolveTagCloudSettings,
+  tagFontSize,
+  tagHref
+} from "@/lib/blog-tag-cloud";
 import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
 import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
 import {
@@ -2307,6 +2318,10 @@ function BuilderModulePreview({
     return <AdminSiteSettingsPreview settings={module.settings} projectId={projectId} />;
   }
 
+  if (module.type === "admin-blog-links") {
+    return <AdminBlogLinksPreview settings={module.settings} projectId={projectId} />;
+  }
+
   if (module.type === "admin-support-form") {
     return <AdminSupportFormPreview settings={module.settings} projectId={projectId} />;
   }
@@ -2481,12 +2496,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
   }
 
-  const cardBorder: CSSProperties =
-    cardStyle === "bordered"
-      ? { border: `1px solid ${accent}40`, boxShadow: "none" }
-      : cardStyle === "shadow"
-      ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
-      : { border: "1px solid #e2e8f0", boxShadow: "none" };
+  const cardBorder: CSSProperties = cardFrameStyle(tpl);
 
   const gridStyle: CSSProperties =
     layout === "list"
@@ -2585,10 +2595,39 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
             const imageUrl = post.featuredImageUrl || post.featured_image_url;
             const isSideBySide = cardLayout === "side-by-side" || layout === "list";
             const hasFeaturedImageInRows = tplRows.some((r) => r.slots.includes("featured_image"));
-            // Full-bleed pulls up over the card's TOP padding only when the
-            // image is the first thing in the card. It used to do so
-            // unconditionally, which slid the image up over whatever sat above it.
-            const firstFilledSlot = tplRows.flatMap((r) => r.slots.slice(0, r.cols)).find(Boolean) ?? null;
+            /*
+             * WHICH SLOTS ACTUALLY RENDER SOMETHING FOR THIS POST.
+             *
+             * A slot being present in the template says nothing about whether it
+             * draws anything: `categories` renders null on a post with no
+             * categories, `excerpt` on a post with no excerpt, and so on. Both
+             * production templates open with `["categories"]`, and the Delray
+             * posts have none — so the template order and the rendered order are
+             * different lists, and reading the wrong one caused both bugs below.
+             *
+             * PR #522 made the image's full-bleed pull-up conditional on being
+             * the first slot IN THE TEMPLATE, to stop it sliding under whatever
+             * sat above it. On those templates that test is false while the
+             * image is visibly at the top, so the card's 1.125rem top padding
+             * showed as a gap (task 86bbtvnr5). The fix is not to go back to
+             * pulling up unconditionally — that reintroduces the sliding — but to
+             * ask the question about CONTENT rather than about the template.
+             */
+            function slotRenders(id: CardElementId | null): boolean {
+              switch (id) {
+                case "categories":     return postCats.length > 0;
+                case "headline":       return true;
+                case "featured_image": return Boolean(imageUrl) && !isSideBySide;
+                case "excerpt":        return Boolean(post.excerpt);
+                case "author":         return Boolean(post.author);
+                case "date":           return Boolean(dateStr);
+                case "tags":           return Boolean(post.tags?.length);
+                case "read_more":      return true;
+                default:               return false;
+              }
+            }
+            const firstRenderedSlot =
+              tplRows.flatMap((r) => r.slots.slice(0, r.cols)).find(slotRenders) ?? null;
 
             function renderEl(id: CardElementId): React.ReactNode {
               switch (id) {
@@ -2612,12 +2651,14 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                   const { frame, img } = featuredImageStyles(tpl, {
                     cardPaddingX: "1.25rem",
                     cardPaddingTop: "1.125rem",
-                    topOfCard: firstFilledSlot === "featured_image",
+                    topOfCard: firstRenderedSlot === "featured_image",
                   });
-                  return (
+                  return withPostLink(
                     <div style={frame}>
                       <img alt={post.title} src={imageUrl} style={img} />
-                    </div>
+                    </div>,
+                    tpl,
+                    href
                   );
                 }
                 case "excerpt":
@@ -2646,9 +2687,17 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
             return (
               <article key={post.id} style={{ ...cardBorder, borderRadius: cardRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? sideBySideDirection(tpl) : "column" }}>
                 {isSideBySide && imageUrl && hasFeaturedImageInRows ? (
-                  <div style={sideStripStyle(tpl)}>
+                  // The strip IS the flex item — it carries flexShrink, width,
+                  // border and shadow. So when the image links, the anchor has to
+                  // BE the strip; an anchor wrapped around it would become the
+                  // flex item instead and none of that styling would apply.
+                  createElement(
+                    tpl.imageLinkToPost && href && href !== "#" ? "a" : "div",
+                    tpl.imageLinkToPost && href && href !== "#"
+                      ? { href, style: sideStripStyle(tpl) }
+                      : { style: sideStripStyle(tpl) },
                     <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
-                  </div>
+                  )
                 ) : null}
                 {/* minWidth 0 is load-bearing: a flex item defaults to
                     min-width:auto, so the text column refuses to shrink below its
@@ -2656,7 +2705,12 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
                     wide. Reachable now that the strip's width is an operator control. */}
                 <div style={{ padding: "1.125rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
                   {tplRows.map((row) => {
-                    const hasContent = row.slots.some((s) => s && !(isSideBySide && s === "featured_image"));
+                    // Emptiness is measured against the POST, not the template.
+                    // The old test asked only whether the row HELD a slot, so a
+                    // categories row on a post with no categories still emitted a
+                    // flex child — invisible, but carrying the column's 0.625rem
+                    // gap, which is the other half of the gap above the image.
+                    const hasContent = row.slots.slice(0, row.cols).some(slotRenders);
                     if (!hasContent) return null;
                     return (
                       <div key={row.id} style={row.cols > 1 ? { display: "grid", gridTemplateColumns: `repeat(${row.cols}, 1fr)`, gap: "0.5rem", alignItems: "center" } : {}}>
@@ -3070,6 +3124,277 @@ function blogManagerViewBaseUrl(settings: Record<string, string>): string {
   return defaultBlogPostViewPath();
 }
 
+type BlogImportCandidate = {
+  pageId: string;
+  slug: string;
+  pageName: string;
+  title: string;
+  titleFound: boolean;
+  publishedAt: string | null;
+  dateFound: boolean;
+  author: string;
+  authorFound: boolean;
+  excerpt: string;
+  featuredImageUrl: string;
+  wordCount: number;
+  looksLikePost: boolean;
+  alreadyImported: boolean;
+  maybeDuplicateOf: string;
+};
+
+type BlogImportResult = {
+  pageId: string;
+  ok: boolean;
+  skipped?: boolean;
+  reason?: string;
+  title?: string;
+  slug?: string;
+};
+
+function blogImportDateLabel(candidate: BlogImportCandidate): string {
+  if (!candidate.dateFound || !candidate.publishedAt) return "no date in source";
+  return new Date(candidate.publishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+/**
+ * Recover discarded Builder pages as draft blog posts. A picker, not a
+ * button: every candidate is shown with what would be created, nothing is
+ * written until the operator has seen the preview and confirmed, and
+ * everything lands as a draft (docs/BLOG_BULK_IMPORT_HANDOFF.md).
+ */
+function BlogImportPanel({ onImported, onClose }: { onImported: () => void; onClose: () => void }) {
+  const [candidates, setCandidates] = useState<BlogImportCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [defaultAuthor, setDefaultAuthor] = useState("");
+  const [batchSize, setBatchSize] = useState(10);
+  const [step, setStep] = useState<"pick" | "preview" | "running" | "done">("pick");
+  const [progress, setProgress] = useState(0);
+  const [results, setResults] = useState<BlogImportResult[]>([]);
+
+  useEffect(() => {
+    fetch("/api/blog/import/candidates", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`The server answered ${r.status}`))))
+      .then((d) => {
+        setCandidates(Array.isArray(d?.data?.candidates) ? d.data.candidates : []);
+        setDefaultAuthor(String(d?.data?.defaultAuthorSuggestion || ""));
+        setBatchSize(Number(d?.data?.batchSize) || 10);
+      })
+      .catch((err: Error) => setLoadError(err.message || "Could not load the candidate list"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const probable = candidates.filter((c) => c.looksLikePost);
+  const improbable = candidates.filter((c) => !c.looksLikePost);
+  const chosen = candidates.filter((c) => selected.has(c.pageId));
+
+  function toggle(pageId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageId)) next.delete(pageId); else next.add(pageId);
+      return next;
+    });
+  }
+
+  function selectAllProbable() {
+    setSelected(new Set(probable.filter((c) => !c.alreadyImported).map((c) => c.pageId)));
+  }
+
+  async function runImport() {
+    setStep("running");
+    setProgress(0);
+    const all: BlogImportResult[] = [];
+    const ids = chosen.map((c) => c.pageId);
+    // One small batch per request; a single long request gets cut off
+    // server-side, so the client is the loop.
+    for (let i = 0; i < ids.length; i += batchSize) {
+      try {
+        const res = await fetch("/api/blog/import", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+          body: JSON.stringify({ pageIds: ids.slice(i, i + batchSize), defaultAuthor }),
+        });
+        const data = res.ok ? await res.json() : null;
+        const batch: BlogImportResult[] = Array.isArray(data?.data?.results) ? data.data.results : [];
+        if (!res.ok || !batch.length) {
+          for (const pageId of ids.slice(i, i + batchSize)) {
+            all.push({ pageId, ok: false, reason: `The server answered ${res.status}` });
+          }
+        } else {
+          all.push(...batch);
+        }
+      } catch {
+        for (const pageId of ids.slice(i, i + batchSize)) {
+          all.push({ pageId, ok: false, reason: "The request failed" });
+        }
+      }
+      setProgress(Math.min(ids.length, i + batchSize));
+      setResults([...all]);
+    }
+    setResults(all);
+    setStep("done");
+    onImported();
+  }
+
+  const titleFor = new Map(candidates.map((c) => [c.pageId, c.title || c.pageName || c.slug]));
+
+  function renderCandidateRow(candidate: BlogImportCandidate) {
+    const flags: string[] = [];
+    if (candidate.alreadyImported) flags.push("already imported");
+    if (candidate.maybeDuplicateOf) flags.push(`may duplicate the existing post “${candidate.maybeDuplicateOf}”`);
+    if (!candidate.titleFound) flags.push("no headline in source — using the page name");
+    if (!candidate.dateFound) flags.push("no date in source");
+    if (!candidate.authorFound) flags.push("no author in source");
+    return (
+      <label key={candidate.pageId} className={`builder-blog-import-row${candidate.alreadyImported ? " builder-blog-import-row--disabled" : ""}`}>
+        <input
+          type="checkbox"
+          checked={selected.has(candidate.pageId)}
+          disabled={candidate.alreadyImported}
+          onChange={() => toggle(candidate.pageId)}
+        />
+        <span className="builder-blog-import-row-body">
+          <span className="builder-blog-import-row-title">{candidate.title || candidate.pageName || candidate.slug}</span>
+          <span className="builder-blog-import-row-meta">
+            {blogImportDateLabel(candidate)}
+            {" · "}{candidate.authorFound ? candidate.author : "no author in source"}
+            {" · "}{candidate.wordCount} words
+          </span>
+          {candidate.excerpt ? <span className="builder-blog-import-row-excerpt">{candidate.excerpt}</span> : null}
+          {flags.length ? <span className="builder-blog-import-row-flags">{flags.join(" · ")}</span> : null}
+        </span>
+      </label>
+    );
+  }
+
+  if (loading) {
+    return <div className="builder-blog-import-panel"><div className="builder-blog-post-manager-stub">Looking for discarded pages…</div></div>;
+  }
+  if (loadError) {
+    return (
+      <div className="builder-blog-import-panel">
+        <div className="builder-blog-post-manager-stub">Could not load the candidate list: {loadError}</div>
+        <div className="builder-blog-import-actions">
+          <button type="button" className="builder-blog-import-btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    );
+  }
+  if (!candidates.length) {
+    return (
+      <div className="builder-blog-import-panel">
+        <div className="builder-blog-post-manager-stub">No discarded pages were found for this site.</div>
+        <div className="builder-blog-import-actions">
+          <button type="button" className="builder-blog-import-btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "preview" || step === "running" || step === "done") {
+    return (
+      <div className="builder-blog-import-panel">
+        {step === "preview" ? (
+          <>
+            <div className="builder-blog-import-note">
+              Nothing has been written yet. These {chosen.length} posts would be created, each as a <strong>draft</strong>:
+            </div>
+            <div className="builder-blog-import-preview-list">
+              {chosen.map((candidate) => (
+                <div key={candidate.pageId} className="builder-blog-import-preview-item">
+                  <div className="builder-blog-import-row-title">{candidate.title || candidate.pageName || candidate.slug}</div>
+                  <div className="builder-blog-import-row-meta">
+                    Address: {candidate.slug || "(blank)"}
+                    {" · "}Author: {candidate.authorFound ? candidate.author : (defaultAuthor || "(blank)")}
+                    {" · "}Date: {candidate.dateFound && candidate.publishedAt ? blogImportDateLabel(candidate) : "(blank — no date in source)"}
+                    {" · "}{candidate.wordCount} words
+                    {" · "}Featured image: {candidate.featuredImageUrl ? "yes" : "none found"}
+                  </div>
+                  {candidate.excerpt ? <div className="builder-blog-import-row-excerpt">{candidate.excerpt}</div> : null}
+                </div>
+              ))}
+            </div>
+            <div className="builder-blog-import-actions">
+              <button type="button" className="builder-blog-import-btn" onClick={() => setStep("pick")}>Back</button>
+              <button type="button" className="builder-blog-import-btn builder-blog-import-btn--primary" onClick={runImport}>
+                Import {chosen.length} {chosen.length === 1 ? "post" : "posts"} as drafts
+              </button>
+            </div>
+          </>
+        ) : null}
+        {step === "running" ? (
+          <div className="builder-blog-import-note">Importing… {progress} of {chosen.length} processed.</div>
+        ) : null}
+        {step === "done" ? (
+          <>
+            <div className="builder-blog-import-note">
+              Done: {results.filter((r) => r.ok).length} created as drafts,{" "}
+              {results.filter((r) => r.skipped).length} skipped,{" "}
+              {results.filter((r) => !r.ok && !r.skipped).length} failed.
+            </div>
+            <div className="builder-blog-import-preview-list">
+              {results.map((r) => (
+                <div key={r.pageId} className="builder-blog-import-preview-item">
+                  <div className="builder-blog-import-row-meta">
+                    {r.ok ? "✓ " : "✗ "}
+                    {r.title || titleFor.get(r.pageId) || r.pageId}
+                    {r.reason ? ` — ${r.reason}` : ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="builder-blog-import-actions">
+              <button type="button" className="builder-blog-import-btn" onClick={onClose}>Close</button>
+            </div>
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="builder-blog-import-panel">
+      <div className="builder-blog-import-note">
+        These are discarded pages recovered from this site’s history. Tick the ones to bring back as blog posts —
+        nothing is written until you confirm on the next screen.
+      </div>
+      <div className="builder-blog-import-controls">
+        <button type="button" className="builder-blog-import-btn" onClick={selectAllProbable}>Select all probable posts</button>
+        <button type="button" className="builder-blog-import-btn" onClick={() => setSelected(new Set())}>Select none</button>
+        <label className="builder-blog-import-author">
+          Author when the source has none:{" "}
+          <input
+            type="text"
+            value={defaultAuthor}
+            onChange={(e) => setDefaultAuthor(e.target.value)}
+            placeholder="e.g. the site’s name"
+          />
+        </label>
+      </div>
+      <div className="builder-blog-import-list">
+        {probable.map(renderCandidateRow)}
+        {improbable.length ? (
+          <div className="builder-blog-import-group-label">Probably not posts — tick one only if you recognise it</div>
+        ) : null}
+        {improbable.map(renderCandidateRow)}
+      </div>
+      <div className="builder-blog-import-actions">
+        <button type="button" className="builder-blog-import-btn" onClick={onClose}>Cancel</button>
+        <button
+          type="button"
+          className="builder-blog-import-btn builder-blog-import-btn--primary"
+          disabled={!chosen.length}
+          onClick={() => setStep("preview")}
+        >
+          Preview import ({chosen.length})
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function BlogPostManagerPreview({ settings }: { settings: Record<string, string> }) {
   const editBaseUrl = useMemo(() => blogManagerEditBaseUrl(settings), [settings.editPageUrl]);
   const viewBaseUrl = useMemo(() => blogManagerViewBaseUrl(settings), [settings.viewPageUrl, settings.postPageUrl]);
@@ -3087,6 +3412,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cloningId, setCloningId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   function loadPosts() {
     setLoading(true);
@@ -3156,13 +3482,30 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   const statusBg   = (s?: string) => s === "published" ? "#f0fdf4" : s === "archived" ? "#f9fafb" : "#fffbeb";
 
   const listHeading = (
-    <h3 className="builder-admin-data-table-title">Published Blog Posts</h3>
+    <div className="builder-blog-post-manager-heading">
+      <h3 className="builder-admin-data-table-title">Published Blog Posts</h3>
+      <button
+        type="button"
+        className="builder-blog-import-btn builder-blog-import-open"
+        onClick={() => setImportOpen((v) => !v)}
+      >
+        {importOpen ? "Hide import" : "Import from discarded pages"}
+      </button>
+    </div>
   );
+
+  const importPanel = importOpen ? (
+    <BlogImportPanel onImported={loadPosts} onClose={() => setImportOpen(false)} />
+  ) : null;
 
   if (loading) {
     return (
       <div className="builder-blog-post-manager-module builder-admin-data-table-module">
         {listHeading}
+        {/* The panel renders here too, or importing unmounts it: a finished
+            import reloads the post list, and a panel that only lives in the
+            loaded branch loses its results screen at that exact moment. */}
+        {importPanel}
         <div className="builder-blog-post-manager-stub">Loading posts…</div>
       </div>
     );
@@ -3172,6 +3515,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
     return (
       <div className="builder-blog-post-manager-module builder-admin-data-table-module">
         {listHeading}
+        {importPanel}
         <div className="builder-blog-post-manager-stub">
           No posts yet. Use the Create Post module to add your first post.
         </div>
@@ -3182,6 +3526,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
   return (
     <div className="builder-blog-post-manager-module builder-admin-data-table-module">
       {listHeading}
+      {importPanel}
       <div className="builder-blog-post-manager-list">
         {posts.map((post) => {
           const editHref = buildBlogPostEditHref(editBaseUrl, post.id);
@@ -3513,6 +3858,9 @@ type CardTemplate = {
   imageSideWidth: number;
   imageHeight: number;
   imageCrop: string;
+  imageLinkToPost: boolean;
+  cardBorderWidth: number;
+  cardBorderColor: string;
   rows: CardRow[];
 };
 
@@ -3548,6 +3896,15 @@ const DEFAULT_CARD_TEMPLATE: CardTemplate = {
   imageSideWidth: 220,
   imageHeight: 0,
   imageCrop: "cover",
+  // Off by default: an existing template is a row without this key, and making
+  // a tenant's card photos clickable unasked is a behaviour change.
+  imageLinkToPost: false,
+  // The card's own border, an operator control since 2026-09-02 (task
+  // 86bbtvnr5). These defaults ARE the old hard-coded "default" preset; a
+  // template saved before this existed derives them from ITS preset in
+  // migrateTemplate, so bordered and shadow cards are unchanged too.
+  cardBorderWidth: 1,
+  cardBorderColor: "#e2e8f0",
   rows: [
     { id: "r1", cols: 1, slots: ["categories"] },
     { id: "r2", cols: 1, slots: ["headline"] },
@@ -3575,6 +3932,67 @@ function cardNum(value: unknown, min: number, max: number, fallback: number): nu
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+// `Boolean("false")` is true, so a template carrying the STRING "false" would
+// link every image on a card that says not to. Parse it, never coerce it.
+/*
+ * The three `cardStyle` presets used to decide the border AND the shadow
+ * together. The border is now explicit, so these two functions exist only to
+ * translate a template saved BEFORE that split into the equivalent explicit
+ * values — which is what makes the change invisible to every existing tenant.
+ */
+function presetBorderWidth(cardStyle: string): number {
+  return cardStyle === "shadow" ? 0 : 1;
+}
+
+function presetBorderColor(cardStyle: string, accentColor: string): string {
+  // "bordered" was the accent at 25% opacity, expressed as an 8-digit hex.
+  if (cardStyle === "bordered") return `${accentColor}40`;
+  return "#e2e8f0";
+}
+
+/**
+ * The card's frame: an explicit border, plus the shadow that `cardStyle` still
+ * governs. One function for both renderers, for the reason `featuredImageStyles`
+ * is one — the Live Preview and the published card have to agree.
+ */
+function cardFrameStyle(tpl: CardTemplate): CSSProperties {
+  return {
+    border: tpl.cardBorderWidth > 0 ? `${tpl.cardBorderWidth}px solid ${tpl.cardBorderColor}` : "none",
+    boxShadow: tpl.cardStyle === "shadow" ? "0 4px 16px rgba(0,0,0,0.10)" : "none",
+  };
+}
+
+function cardBool(value: unknown, fallback: boolean): boolean {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "boolean") return value;
+  const v = String(value).trim().toLowerCase();
+  if (v === "true" || v === "1") return true;
+  if (v === "false" || v === "0" || v === "") return false;
+  return fallback;
+}
+
+/**
+ * Wrap the featured image in a link to its post, when the template asks for it.
+ *
+ * One function for both renderers for the same reason `featuredImageStyles` is
+ * one: the Card Manager's Live Preview and the published card have to agree.
+ * The image already carries the post title as its alt text, so the anchor has an
+ * accessible name without a second label — an anchor whose only content is an
+ * image with an empty alt is a link a screen reader cannot announce.
+ */
+function withPostLink(
+  content: React.ReactNode,
+  tpl: CardTemplate,
+  href: string
+): React.ReactNode {
+  if (!tpl.imageLinkToPost || !href || href === "#") return content;
+  return (
+    <a href={href} style={{ display: "block", textDecoration: "none", color: "inherit" }}>
+      {content}
+    </a>
+  );
 }
 
 function cardOneOf(value: unknown, allowed: string[], fallback: string): string {
@@ -3709,6 +4127,18 @@ function migrateTemplate(raw: unknown): CardTemplate {
     imageSideWidth:    cardNum(d.imageSideWidth,   80, 600, DEFAULT_CARD_TEMPLATE.imageSideWidth),
     imageHeight:       cardNum(d.imageHeight,       0, 800, DEFAULT_CARD_TEMPLATE.imageHeight),
     imageCrop:         cardOneOf(d.imageCrop,   IMAGE_CROPS,   DEFAULT_CARD_TEMPLATE.imageCrop),
+    imageLinkToPost:   cardBool(d.imageLinkToPost, DEFAULT_CARD_TEMPLATE.imageLinkToPost),
+    // ABSENT, not falsy: a saved width of 0 is a real choice ("no border"), and
+    // treating it as missing would put the preset's border back on every read.
+    cardBorderWidth:   d.cardBorderWidth === undefined
+      ? presetBorderWidth(String(d.cardStyle || DEFAULT_CARD_TEMPLATE.cardStyle))
+      : cardNum(d.cardBorderWidth, 0, 16, DEFAULT_CARD_TEMPLATE.cardBorderWidth),
+    cardBorderColor:   d.cardBorderColor === undefined
+      ? presetBorderColor(
+          String(d.cardStyle || DEFAULT_CARD_TEMPLATE.cardStyle),
+          String(d.accentColor || DEFAULT_CARD_TEMPLATE.accentColor)
+        )
+      : String(d.cardBorderColor),
     rows,
   };
 }
@@ -3727,11 +4157,19 @@ function renderSampleElement(id: CardElementId, accentColor: string, readMoreLab
         cardPaddingTop: "1rem",
         topOfCard: isTopOfCard,
       });
-      return (
+      const photo = (
         <div style={frame}>
           <img alt="" src={sampleImageUrl} style={img} />
         </div>
       );
+      // Shown as a link so the operator can see the setting took, but the click
+      // is swallowed: this is a sample post inside the editor, and navigating
+      // away from the Card Manager mid-edit would lose unsaved rows.
+      return tpl.imageLinkToPost ? (
+        <a href="#" onClick={(e) => e.preventDefault()} style={{ display: "block", textDecoration: "none", color: "inherit", cursor: "pointer" }}>
+          {photo}
+        </a>
+      ) : photo;
     }
     case "excerpt":
       return <span style={{ fontSize: "0.78rem", color: "#4a5568", lineHeight: 1.5, display: "block" }}>A brief excerpt giving readers a preview of the content inside this post.</span>;
@@ -3755,10 +4193,7 @@ function renderSampleElement(id: CardElementId, accentColor: string, readMoreLab
 
 function renderCardPreview(tpl: CardTemplate) {
   const { cardLayout, cardStyle, cardBorderRadius, readMoreLabel, accentColor, rows } = tpl;
-  const cardBorder: CSSProperties =
-    cardStyle === "bordered" ? { border: `1px solid ${accentColor}40`, boxShadow: "none" }
-    : cardStyle === "shadow"  ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
-    : { border: "1px solid #e2e8f0", boxShadow: "none" };
+  const cardBorder: CSSProperties = cardFrameStyle(tpl);
   const isSideBySide = cardLayout === "side-by-side";
   const hasFeaturedImage = rows.some((r) => r.slots.includes("featured_image"));
   const firstFilledSlot = rows.flatMap((r) => r.slots.slice(0, r.cols)).find(Boolean) ?? null;
@@ -3770,9 +4205,14 @@ function renderCardPreview(tpl: CardTemplate) {
         // The preview card is 340px wide against a full-width real one, so the
         // strip is shown at half its configured width — the proportion is what
         // the operator is judging here, not the pixel count.
-        <div style={{ ...sideStripStyle(tpl), ...(tpl.imageSide === "top" ? {} : { width: Math.round(tpl.imageSideWidth / 2) }) }}>
+        createElement(
+          tpl.imageLinkToPost ? "a" : "div",
+          {
+            ...(tpl.imageLinkToPost ? { href: "#", onClick: (e: MouseEvent) => e.preventDefault() } : {}),
+            style: { ...sideStripStyle(tpl), ...(tpl.imageSide === "top" ? {} : { width: Math.round(tpl.imageSideWidth / 2) }) },
+          },
           <img alt="" src={sampleImageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
-        </div>
+        )
       ) : null}
       <div style={{ padding: "1rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {rows.map((row) => {
@@ -3912,6 +4352,12 @@ export function BlogCardManagerPreview() {
               <input type="text" style={{ ...sel, width: 110 }} value={tpl.readMoreLabel} onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
             </div>
             <label className="bcm-control">
+              <span className="bcm-label">Link Image</span>
+              <input type="checkbox" className="bcm-checkbox" checked={tpl.imageLinkToPost}
+                title="Make the featured image link to its post, the same place Read More goes"
+                onChange={(e) => setField("imageLinkToPost", e.target.checked)} />
+            </label>
+            <label className="bcm-control">
               <span className="bcm-label">Accent</span>
               <input type="color" className="builder-color-wheel-input builder-color-wheel-input-sm" title="Open the color picker" value={tpl.accentColor} onChange={(e) => setField("accentColor", e.target.value)} />
             </label>
@@ -3990,13 +4436,35 @@ export function BlogCardManagerPreview() {
           <legend className="bcm-group-title">Frame</legend>
           <div className="bcm-group-controls">
             <div className="bcm-control">
-              <span className="bcm-label">Card Style</span>
-              <select style={sel} value={tpl.cardStyle} onChange={(e) => setField("cardStyle", e.target.value)}>
-                <option value="default">Default</option>
-                <option value="bordered">Bordered</option>
+              {/*
+                Was "Card Style" (Default / Bordered / Shadow), which decided the
+                border AND the shadow together — which is why the border colour
+                could not be set. The border is its own pair of controls now, so
+                this governs only the shadow. The stored values are unchanged, and
+                a legacy "bordered" row reads as None, which is what it drew.
+              */}
+              <span className="bcm-label">Card Shadow</span>
+              <select style={sel} value={tpl.cardStyle === "shadow" ? "shadow" : "default"}
+                onChange={(e) => setField("cardStyle", e.target.value)}>
+                <option value="default">None</option>
                 <option value="shadow">Shadow</option>
               </select>
             </div>
+            <div className="bcm-control">
+              <span className="bcm-label">Card Border</span>
+              <div className="bcm-num-row">
+                <input type="number" min={0} max={16} step={1} style={{ ...sel, width: 56 }}
+                  value={tpl.cardBorderWidth} title="0 removes the card's border"
+                  onChange={(e) => setField("cardBorderWidth", parseInt(e.target.value, 10) || 0)} />
+                <span className="bcm-unit">px</span>
+              </div>
+            </div>
+            <label className="bcm-control">
+              <span className="bcm-label">Card Border Color</span>
+              <input type="color" className="builder-color-wheel-input builder-color-wheel-input-sm" title="Open the color picker"
+                value={tpl.cardBorderColor.slice(0, 7)}
+                onChange={(e) => setField("cardBorderColor", e.target.value)} />
+            </label>
             <div className="bcm-control">
               <span className="bcm-label">Card Radius</span>
               <div className="bcm-num-row">
@@ -6338,39 +6806,136 @@ function BlogCategoryFilterPreview({ settings }: { settings: Record<string, stri
   );
 }
 
+/**
+ * THE LIVE TENANT SITE'S TAG CLOUD.
+ *
+ * Not a preview despite the name: routes/publicSitePages.js serves
+ * public/site.html, which mounts BuilderPublicSitePage -> BuilderTemplatePreview
+ * -> here. There is no server-side renderer for this module type, so this is
+ * the whole of what a visitor sees.
+ *
+ * It used to read four of the module's twelve settings. `layout`, the
+ * count-weighted font sizes, `alignment` and `inactiveColor` were dropped, and
+ * every tag rendered as a `<span>` with no href — so the "Tag navigation
+ * widget … that filters posts by ?tag=slug" navigated nowhere, while the
+ * Builder canvas showed the layout applying. The rules live in
+ * lib/builder-client/blog-tag-cloud.ts now and the canvas card reads the same
+ * ones, so the two cannot drift apart again.
+ */
 function BlogTagCloudPreview({ settings }: { settings: Record<string, string> }) {
-  let tags: Array<{ id: string; label: string; slug: string; count?: number }> = [];
-  try {
-    tags = JSON.parse(settings.tags || "[]") as typeof tags;
-  } catch {}
-  if (!tags.length) {
-    tags = [
-      { id: "a", label: "News", slug: "news" },
-      { id: "b", label: "Tutorial", slug: "tutorial" },
-      { id: "c", label: "Design", slug: "design" }
-    ];
-  }
-  const activeColor = settings.activeColor || "#0f4f8f";
-  const inactiveBg = settings.inactiveBg || "#f3f4f6";
+  const resolved = resolveTagCloudSettings(settings);
+  const configured = parseCloudTags(settings);
+  const tags = configured.length ? configured : PLACEHOLDER_TAGS;
+  const maxCount = maxTagCount(tags);
+  const currentSlug = activeTagSlug(
+    typeof window === "undefined" ? "" : window.location.search,
+    resolved
+  );
 
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: settings.gap || "0.5rem" }}>
-      {tags.map((tag) => (
-        <span
-          key={tag.id}
+  const heading = resolved.title ? (
+    <div
+      className="builder-blog-tag-cloud-title"
+      style={{
+        fontSize: "1.05rem",
+        fontWeight: 600,
+        marginBottom: "0.6rem",
+        color: resolved.activeColor,
+        textAlign: resolved.alignment
+      }}
+    >
+      {resolved.title}
+    </div>
+  ) : null;
+
+  function countSuffix(tag: CloudTag, fontSize: number) {
+    if (!resolved.showCounts) return null;
+    return (
+      <span style={{ marginLeft: 3, opacity: 0.6, fontSize: Math.round(fontSize * 0.8) }}>
+        ({tag.count ?? 1})
+      </span>
+    );
+  }
+
+  if (resolved.layout === "list") {
+    return (
+      <div className="builder-blog-tag-cloud" data-tag-cloud-layout="list">
+        {heading}
+        <ul
           style={{
-            padding: "0.3rem 0.85rem",
-            borderRadius: "999px",
-            background: inactiveBg,
-            color: activeColor,
-            fontSize: "0.8rem",
-            cursor: "pointer"
+            listStyle: "none",
+            padding: 0,
+            margin: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: resolved.gap,
+            textAlign: resolved.alignment
           }}
         >
-          {tag.label}
-          {settings.showCounts !== "false" && tag.count ? ` (${tag.count})` : ""}
-        </span>
-      ))}
+          {tags.map((tag) => {
+            const isActive = Boolean(currentSlug) && currentSlug === tag.slug;
+            return (
+              <li key={tag.id}>
+                <a
+                  className="builder-blog-tag-cloud-tag"
+                  href={tagHref(tag.slug, resolved)}
+                  style={{
+                    fontSize: resolved.minFontSize,
+                    color: isActive ? resolved.activeColor : resolved.inactiveColor,
+                    fontWeight: isActive ? 600 : 400,
+                    textDecoration: "none"
+                  }}
+                >
+                  {tag.label}
+                  {countSuffix(tag, resolved.minFontSize)}
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <div className="builder-blog-tag-cloud" data-tag-cloud-layout={resolved.layout}>
+      {heading}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: resolved.gap,
+          justifyContent: resolved.alignment === "center" ? "center" : "flex-start",
+          alignItems: "baseline"
+        }}
+      >
+        {tags.map((tag) => {
+          const isActive = Boolean(currentSlug) && currentSlug === tag.slug;
+          const fontSize = tagFontSize(tag.count, maxCount, resolved);
+          return (
+            <a
+              key={tag.id}
+              className="builder-blog-tag-cloud-tag"
+              href={tagHref(tag.slug, resolved)}
+              style={{
+                fontSize,
+                padding:
+                  resolved.layout === "cloud"
+                    ? `${Math.round(fontSize * 0.2)}px ${Math.round(fontSize * 0.55)}px`
+                    : "3px 10px",
+                borderRadius: resolved.layout === "cloud" ? 4 : 20,
+                background: isActive ? `${resolved.activeColor}18` : resolved.inactiveBg,
+                color: isActive ? resolved.activeColor : resolved.inactiveColor,
+                fontWeight: isActive ? 600 : 400,
+                textDecoration: "none",
+                display: "inline-block"
+              }}
+            >
+              {tag.label}
+              {countSuffix(tag, fontSize)}
+            </a>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -6603,6 +7168,13 @@ function BlogNewsletterSubscribePreview({
 function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string> }) {
   const matchBy = settings.matchBy ?? "categories";
   const isManual = matchBy === "manual";
+  /**
+   * "Hand-picked" — the articles an admin ticked in the Blog Links Manager
+   * and linked with Relate Checked. Unlike `manual`, which is a list of
+   * titles and URLs typed into module settings, this reads real relations
+   * from the database, so one linking serves every page the module sits on.
+   */
+  const isPicked = matchBy === "picked";
   const count = Math.max(1, parseInt(settings.count ?? "3", 10) || 3);
   const layout = settings.layout ?? "grid";
   const cols = Math.max(1, parseInt(settings.columns ?? "3", 10) || 3);
@@ -6670,7 +7242,7 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
           )
         : Promise.resolve(null)
     ])
-      .then(([currentData, allData, catData]) => {
+      .then(async ([currentData, allData, catData]) => {
         const current: BlogPostRecord | null =
           (currentData?.data ?? currentData?.post ?? null) as BlogPostRecord | null;
         const allPosts: BlogPostRecord[] = Array.isArray(allData?.posts)
@@ -6684,6 +7256,27 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
 
         if (!current) {
           setRelatedPosts([]);
+          return;
+        }
+
+        // Hand-picked: the links an admin made in the Blog Links Manager.
+        // This read is open to a visitor with no login (the single-post form
+        // only) — without that opening the mode would 401 on every published
+        // page and the Relate Checked button would link nothing anyone sees.
+        if (isPicked) {
+          const rel = await fetch(
+            `/api/blog/relations?postId=${encodeURIComponent(current.id)}`,
+            { credentials: "include", headers }
+          )
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null);
+          const relatedIds = new Set(
+            (Array.isArray(rel?.relatedIds) ? rel.relatedIds : Array.isArray(rel?.data) ? rel.data : [])
+              .map((id: unknown) => String(id))
+          );
+          // Order follows the article list, not the order they were linked:
+          // relations are mutual and unordered, so there is no "first".
+          setRelatedPosts(allPosts.filter((p) => relatedIds.has(p.id)).slice(0, count));
           return;
         }
 
@@ -6702,7 +7295,7 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
       })
       .catch(() => setRelatedPosts([]))
       .finally(() => setLoading(false));
-  }, [postSlug, isManual, matchBy, count, showCategories]);
+  }, [postSlug, isManual, isPicked, matchBy, count, showCategories]);
 
   const manualPosts = useMemo((): Array<{
     id: string;
@@ -10496,6 +11089,435 @@ function AdminModulesPreview({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Blog Links manager (admin-blog-links) ───────────────────────────────────
+
+type BlogLinkTerm = {
+  /** "category" or "tag" — decides which endpoint lists its articles. */
+  kind: "category" | "tag";
+  /** Stable identity: a category id, or the tag word itself. */
+  key: string;
+  label: string;
+  /** Categories list articles by slug; tags list them by the word. */
+  slug: string;
+  postCount: number;
+};
+
+type BlogLinkArticle = {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+};
+
+/**
+ * The tenant's blog links manager.
+ *
+ * Left: the two taxonomies the blog actually has — categories (a real table)
+ * and tags (a text[] on each post, so the list is derived and a rename
+ * rewrites every post carrying the word). Right: the articles under whichever
+ * term is selected, each with a checkbox, and a Relate Checked button above
+ * them that links the ticked articles to each other.
+ *
+ * Relating is MUTUAL: ticking three articles relates each to the other two.
+ * The blog-related-posts module reads those links back in its "Hand-picked"
+ * match mode — without that the button would save into something nothing
+ * displays.
+ */
+function AdminBlogLinksPreview({
+  settings,
+  projectId: projectIdProp = "",
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+}) {
+  const panelTitle     = settings.panelTitle || "Blog Links";
+  const showTitle      = settings.showTitle !== "false";
+  const showCategories = settings.showCategories !== "false";
+  const showTags       = settings.showTags !== "false";
+  const showRelate     = settings.showRelate !== "false";
+  const relateLabel    = settings.relateButtonLabel || "Relate Checked";
+  const articleStatus  = settings.articleStatus || "all";
+
+  const [terms, setTerms]       = useState<BlogLinkTerm[]>([]);
+  const [selected, setSelected] = useState<BlogLinkTerm | null>(null);
+  const [articles, setArticles] = useState<BlogLinkArticle[]>([]);
+  const [checked, setChecked]   = useState<Set<string>>(new Set());
+  const [relatedTitles, setRelatedTitles] = useState<Record<string, string[]>>({});
+
+  const [loadingTerms, setLoadingTerms]       = useState(true);
+  const [loadingArticles, setLoadingArticles] = useState(false);
+  const [busy, setBusy]         = useState(false);
+  const [error, setError]       = useState("");
+  const [note, setNote]         = useState("");
+  const [newCategory, setNewCategory] = useState("");
+
+  /*
+   * MEMOISED, and it has to be. getCrmProjectHeaders() builds a fresh object
+   * on every call, so an unmemoised `headers` is a new identity each render —
+   * which makes every useCallback below new, which makes the load effect fire
+   * again, which sets state, which renders again. That is an unbounded request
+   * loop, and it is not subtle: the browser gave up with
+   * ERR_INSUFFICIENT_RESOURCES rather than a React warning.
+   */
+  const headers = useMemo(() => getCrmProjectHeaders(projectIdProp), [projectIdProp]);
+  const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
+
+  const projectQuery = useCallback(() => {
+    const projectId = headers["X-Project-ID"] || "";
+    return projectId ? `projectId=${encodeURIComponent(projectId)}` : "";
+  }, [headers]);
+
+  const api = useCallback(async (path: string, init?: RequestInit) => {
+    const r = await fetch(path, { credentials: "include", ...init, headers: { ...(init?.body ? { "Content-Type": "application/json" } : {}), ...headers, ...(init?.headers || {}) } });
+    if (r.status === 401 && !isPreview) {
+      window.location.href = "/admin-login";
+      return null;
+    }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(readApiErrorMessage(d, `Request failed (${r.status})`));
+    return d;
+  }, [headers, isPreview]);
+
+  /** Reload both taxonomies. Called after every write, so counts stay true. */
+  const loadTerms = useCallback(async () => {
+    setLoadingTerms(true);
+    try {
+      const next: BlogLinkTerm[] = [];
+      if (showCategories) {
+        const d = await api(`/api/blog/categories?${projectQuery()}`);
+        const rows = (d?.categories ?? d?.data ?? []) as Array<Record<string, unknown>>;
+        for (const row of Array.isArray(rows) ? rows : []) {
+          next.push({
+            kind: "category",
+            key: String(row.id || ""),
+            label: String(row.name || "(untitled)"),
+            slug: String(row.slug || ""),
+            postCount: 0,
+          });
+        }
+      }
+      if (showTags) {
+        const d = await api(`/api/blog/tags?${projectQuery()}`);
+        const rows = (d?.tags ?? d?.data ?? []) as Array<Record<string, unknown>>;
+        for (const row of Array.isArray(rows) ? rows : []) {
+          const tag = String(row.tag || "");
+          if (!tag) continue;
+          next.push({ kind: "tag", key: `tag:${tag}`, label: tag, slug: tag, postCount: Number(row.postCount ?? 0) });
+        }
+      }
+      setTerms(next);
+      setError("");
+    } catch (e) {
+      setError((e as Error).message || "Could not load the blog taxonomy.");
+    } finally {
+      setLoadingTerms(false);
+    }
+  }, [api, projectQuery, showCategories, showTags]);
+
+  useEffect(() => { void loadTerms(); }, [loadTerms]);
+
+  /** Articles under a term, plus each one's existing relations. */
+  const loadArticles = useCallback(async (term: BlogLinkTerm) => {
+    setLoadingArticles(true);
+    setChecked(new Set());
+    try {
+      const q = projectQuery();
+      const path = term.kind === "category"
+        ? `/api/blog/posts?category=${encodeURIComponent(term.slug)}&limit=100${q ? `&${q}` : ""}`
+        : `/api/blog/tags/posts?tag=${encodeURIComponent(term.slug)}${q ? `&${q}` : ""}`;
+      const d = await api(path);
+      const rows = (d?.posts ?? d?.data ?? []) as Array<Record<string, unknown>>;
+      let list: BlogLinkArticle[] = (Array.isArray(rows) ? rows : []).map((row) => ({
+        id: String(row.id || ""),
+        title: String(row.title || "(untitled)"),
+        slug: String(row.slug || ""),
+        status: String(row.status || ""),
+      })).filter((a) => a.id);
+      if (articleStatus !== "all") list = list.filter((a) => a.status === articleStatus);
+      setArticles(list);
+
+      // Show what each article is ALREADY related to, so pressing the button
+      // again on an existing set reads as "no change" rather than as a failure.
+      //
+      // ONE request for the whole project's relations, not one per article: a
+      // per-article loop is N+1 requests, and on a blog of any size that is a
+      // request storm rather than a page load. The pairing arithmetic is the
+      // same tested helper the store uses, so the two cannot disagree.
+      const all = await api(`/api/blog/relations${q ? `?${q}` : ""}`);
+      const pairs = (Array.isArray(all?.relations) ? all.relations : Array.isArray(all?.data) ? all.data : []) as PostRelationPair[];
+      const byId = new Map(list.map((a) => [a.id, a.title]));
+      const titles: Record<string, string[]> = {};
+      for (const article of list) {
+        titles[article.id] = relatedIdsFor(article.id, pairs)
+          .map((id) => byId.get(String(id)) || "")
+          .filter(Boolean);
+      }
+      setRelatedTitles(titles);
+      setError("");
+    } catch (e) {
+      setError((e as Error).message || "Could not load the articles.");
+      setArticles([]);
+    } finally {
+      setLoadingArticles(false);
+    }
+  }, [api, projectQuery, articleStatus]);
+
+  function selectTerm(term: BlogLinkTerm) {
+    setSelected(term);
+    setNote("");
+    void loadArticles(term);
+  }
+
+  function toggleChecked(id: string) {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setNote("");
+  }
+
+  async function handleRelate() {
+    const ids = [...checked];
+    if (ids.length < 2) {
+      setError("Check at least two articles to relate them to each other.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setNote("");
+    try {
+      const d = await api(`/api/blog/relations`, { method: "POST", body: JSON.stringify({ postIds: ids, projectId: headers["X-Project-ID"] || "" }) });
+      const result = (d?.result ?? d?.data ?? {}) as { added?: number; alreadyRelated?: number };
+      const added = Number(result.added ?? 0);
+      const already = Number(result.alreadyRelated ?? 0);
+      setNote(
+        added > 0
+          ? `Linked ${ids.length} articles${already > 0 ? ` (${already} link${already === 1 ? "" : "s"} already existed)` : ""}.`
+          : "Those articles were already related to each other."
+      );
+      // Read the relations back rather than trusting the response: this is the
+      // list the module will actually render.
+      if (selected) await loadArticles(selected);
+      setChecked(new Set(ids));
+    } catch (e) {
+      setError((e as Error).message || "Could not save the relations.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAddCategory(e: React.FormEvent) {
+    e.preventDefault();
+    const name = newCategory.trim();
+    if (!name) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/api/blog/categories`, { method: "POST", body: JSON.stringify({ name, projectId: headers["X-Project-ID"] || "" }) });
+      setNewCategory("");
+      setNote(`Added the category "${name}".`);
+      await loadTerms();
+    } catch (err) {
+      setError((err as Error).message || "Could not add the category.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRenameTerm(term: BlogLinkTerm) {
+    const next = window.prompt(
+      term.kind === "tag"
+        ? `Rename the tag "${term.label}". Renaming it to a tag that already exists merges the two.`
+        : `Rename the category "${term.label}".`,
+      term.label
+    );
+    if (next === null) return;
+    const value = next.trim();
+    if (!value || value === term.label) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (term.kind === "tag") {
+        const d = await api(`/api/blog/tags/rename`, { method: "POST", body: JSON.stringify({ from: term.label, to: value, projectId: headers["X-Project-ID"] || "" }) });
+        const result = (d?.result ?? d?.data ?? {}) as { updated?: number; merged?: boolean };
+        setNote(`${result.merged ? "Merged" : "Renamed"} across ${Number(result.updated ?? 0)} post(s).`);
+      } else {
+        await api(`/api/blog/categories/${encodeURIComponent(term.key)}`, { method: "PUT", body: JSON.stringify({ name: value, projectId: headers["X-Project-ID"] || "" }) });
+        setNote(`Renamed the category to "${value}".`);
+      }
+      await loadTerms();
+      setSelected(null);
+      setArticles([]);
+    } catch (err) {
+      setError((err as Error).message || "Could not rename it.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteTerm(term: BlogLinkTerm) {
+    const ok = window.confirm(
+      term.kind === "tag"
+        ? `Remove the tag "${term.label}" from every post that carries it? The posts themselves are not deleted.`
+        : `Delete the category "${term.label}"? The posts themselves are not deleted.`
+    );
+    if (!ok) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (term.kind === "tag") {
+        const d = await api(`/api/blog/tags`, { method: "DELETE", body: JSON.stringify({ tag: term.label, projectId: headers["X-Project-ID"] || "" }) });
+        const result = (d?.result ?? d?.data ?? {}) as { updated?: number };
+        setNote(`Removed the tag from ${Number(result.updated ?? 0)} post(s).`);
+      } else {
+        await api(`/api/blog/categories/${encodeURIComponent(term.key)}`, { method: "DELETE", body: JSON.stringify({ projectId: headers["X-Project-ID"] || "" }) });
+        setNote(`Deleted the category "${term.label}".`);
+      }
+      await loadTerms();
+      setSelected(null);
+      setArticles([]);
+    } catch (err) {
+      setError((err as Error).message || "Could not remove it.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const categoryTerms = terms.filter((t) => t.kind === "category");
+  const tagTerms      = terms.filter((t) => t.kind === "tag");
+
+  function renderTermList(label: string, list: BlogLinkTerm[], emptyNote: string) {
+    return (
+      <div className="admin-blog-links-group">
+        <div className="admin-blog-links-group-title">{label}</div>
+        {list.length === 0 ? (
+          <div className="admin-blog-links-empty">{emptyNote}</div>
+        ) : (
+          <ul className="admin-blog-links-terms">
+            {list.map((term) => (
+              <li key={term.key}>
+                <button
+                  type="button"
+                  className={`admin-blog-links-term${selected?.key === term.key ? " is-selected" : ""}`}
+                  onClick={() => selectTerm(term)}
+                >
+                  <span className="admin-blog-links-term-label">{term.label}</span>
+                  {term.kind === "tag" && <span className="admin-blog-links-term-count">{term.postCount}</span>}
+                </button>
+                <span className="admin-blog-links-term-actions">
+                  <button type="button" onClick={() => handleRenameTerm(term)} disabled={busy} title={`Rename ${term.label}`}>Rename</button>
+                  <button type="button" onClick={() => handleDeleteTerm(term)} disabled={busy} title={`Remove ${term.label}`}>Remove</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-blog-links">
+      {showTitle && <h3 className="admin-blog-links-title">{panelTitle}</h3>}
+
+      {error && <div className="admin-blog-links-error" role="alert">{error}</div>}
+      {note && !error && <div className="admin-blog-links-note">{note}</div>}
+
+      <div className="admin-blog-links-body">
+        <div className="admin-blog-links-side">
+          {loadingTerms ? (
+            <div className="admin-blog-links-empty">Loading…</div>
+          ) : (
+            <>
+              {showCategories && renderTermList("Categories", categoryTerms, "No categories yet.")}
+              {showCategories && (
+                <form className="admin-blog-links-add" onSubmit={handleAddCategory}>
+                  <input
+                    type="text"
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    placeholder="New category"
+                    aria-label="New category name"
+                  />
+                  <button type="submit" disabled={busy || !newCategory.trim()}>Add</button>
+                </form>
+              )}
+              {showTags && renderTermList("Tags", tagTerms, "No tags yet. Tags come from the posts themselves.")}
+              {!showCategories && !showTags && (
+                <div className="admin-blog-links-empty">Nothing to manage — turn on Categories or Tags in this module&rsquo;s settings.</div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="admin-blog-links-main">
+          {!selected ? (
+            <div className="admin-blog-links-empty">
+              Pick a category or tag on the left to see the articles filed under it.
+            </div>
+          ) : (
+            <>
+              <div className="admin-blog-links-main-head">
+                <div>
+                  <div className="admin-blog-links-main-title">{selected.label}</div>
+                  <div className="admin-blog-links-main-sub">
+                    {loadingArticles
+                      ? "Loading articles…"
+                      : `${articles.length} article${articles.length === 1 ? "" : "s"}${checked.size > 0 ? ` · ${checked.size} checked` : ""}`}
+                  </div>
+                </div>
+                {showRelate && (
+                  <button
+                    type="button"
+                    className="admin-blog-links-relate"
+                    onClick={handleRelate}
+                    disabled={busy || checked.size < 2}
+                    title={checked.size < 2 ? "Check at least two articles" : `Relate the ${checked.size} checked articles to each other`}
+                  >
+                    {busy ? "Linking…" : relateLabel}
+                  </button>
+                )}
+              </div>
+
+              {loadingArticles ? (
+                <div className="admin-blog-links-empty">Loading…</div>
+              ) : articles.length === 0 ? (
+                <div className="admin-blog-links-empty">No articles are filed under this one.</div>
+              ) : (
+                <ul className="admin-blog-links-articles">
+                  {articles.map((article) => (
+                    <li key={article.id}>
+                      <label className="admin-blog-links-article">
+                        <input
+                          type="checkbox"
+                          checked={checked.has(article.id)}
+                          onChange={() => toggleChecked(article.id)}
+                        />
+                        <span className="admin-blog-links-article-body">
+                          <span className="admin-blog-links-article-title">{article.title}</span>
+                          {article.status && article.status !== "published" && (
+                            <span className="admin-blog-links-article-status">{article.status}</span>
+                          )}
+                          {(relatedTitles[article.id]?.length ?? 0) > 0 && (
+                            <span className="admin-blog-links-article-related">
+                              Related to: {relatedTitles[article.id].join(", ")}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -1135,7 +1135,14 @@ test('the pure module reaches nothing outside itself — no clock, no network, n
   // and a threshold nobody can test is a threshold that drifts.
   const src = fs.readFileSync(path.join(__dirname, 'pulse.js'), 'utf8');
   const code = src.split('\n').filter((l) => !/^\s*(\*|\/\*|\/\/)/.test(l)).join('\n');
+  // ONE import is allowed, by name: loopStatuses.js, which is exactly as pure
+  // as this file (constants only — no clock, no network, no disk). The one
+  // status taxonomy lives there since task 86bbtujed, and a purity rule that
+  // forced this file to keep a private copy of the statuses would be
+  // preserving the drift the taxonomy exists to end. Everything else stays
+  // banned — the intent of this test is IO-freedom, not import-freedom.
+  const withoutAllowed = code.replace(/require\('\.\/loopStatuses\.js'\)/g, '');
   for (const re of [/require\(/, /Date\.now\(\)/, /new Date\(\)/, /fetch\(/, /execFileSync/]) {
-    assert.equal(re.test(code), false, `pulse.js must stay pure — found ${re}`);
+    assert.equal(re.test(withoutAllowed), false, `pulse.js must stay pure — found ${re}`);
   }
 });
