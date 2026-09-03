@@ -1,3 +1,37 @@
+## 2026-09-03 — Overlay screens get their own written record (#558)
+
+An overlay screen is the layer of colour, gradient or picture that sits over a
+row's background and under its words. It is what makes white text readable on a
+photograph, and what stops a background video from competing with the writing on
+top of it. It got its editor a few days ago, and until now the only thing
+written down about it was four paragraphs buried inside the video-backgrounds
+document — written back when an overlay was a detail of how video tinting
+worked, rather than a feature in its own right.
+
+It has its own document now, `docs/OVERLAY_SCREENS.md`, including a plain
+section on what an overlay is for and where the controls are. Two things in it
+are worth knowing even if you never open the file. The first is that there are
+**two** opacity controls in that panel and they are not the same knob — one is
+inside the colour swatch, one is the labelled Opacity row below it, and they
+multiply. That is why an overlay sometimes looks stubbornly too faint with the
+slider already at full. The second is the reason the document is named the way
+it is: a setting in the Builder has four separate parts, and all of them have to
+be there. The type, the bit that saves and loads it, the bit that draws it, and
+the panel you change it in. This feature has now shipped **twice** with three of
+the four working perfectly — the value saved, loaded and drew correctly, and
+there was simply no way to reach it. Both times every test passed, because every
+test was true.
+
+Writing it turned up three things the task itself had wrong. It asked for three
+follow-up features to be described as not yet built; one of them, gradient
+direction, had already shipped, so describing it as unbuilt would have been the
+exact mistake the task was trying to prevent, just pointing the other way. The
+line references it gave had drifted by as much as ninety-six lines. And a
+long-standing warning about there being three copies of one dropdown turned out
+to describe two different mechanisms as if they were one. All three were
+corrected on the task before a word was written, and the document says what is
+actually true of the code today.
+
 ## 2026-08-29 — The Tractor Nav settings panel is one rectangle again (#447)
 
 Open the settings for a Tractor Nav module and look down the Placement column.
