@@ -19,6 +19,7 @@
     "check:syntax": "node scripts/check_syntax.cjs",
     "clickup": "doppler run --project starcaster --config dev --no-check-version -- node scripts/clickup_direct.mjs",
     "pipeline": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pipeline.mjs",
+    "connections:verify": "doppler run --project starcaster --config dev --no-check-version -- node scripts/connections_verify_sweep.mjs",
     "reconcile": "doppler run --project starcaster --config dev --no-check-version -- node scripts/reconcile_clickup_github.cjs",
     "repair": "node scripts/repair.mjs",
     "board": "node scripts/board.mjs",

@@ -1,3 +1,60 @@
+## 2026-09-03 — Connections that look after themselves, and a Disconnect that really disconnects (#556)
+
+When a client hands Starcaster permission to post to their own Facebook Page
+or Bluesky account, that permission used to be filed away and never looked at
+again. Three things change here.
+
+A permission can expire — some platforms hand out ones that last only hours.
+Until now a permission with ten minutes left on it passed every check and then
+died halfway through the post it was fetched for. Now the very last thing that
+happens before Starcaster uses a client's permission is a quiet renewal, if it
+is close to running out. If the renewal fails the post still goes out, because
+the permission is genuinely still good for those last few minutes — the
+connection is just flagged as needing attention, so the client's screen can say
+so. (The amber warning on the card itself is the next slice.)
+
+There is also a health check now: it goes round asking each platform "does this
+still work, and is it still the same account?", and writes the answer down. It
+works through a handful at a time and reports how many are left, rather than
+trying to do everything at once — a server that gets cut off partway through a
+long job leaves half of it done and no record of which half. Nothing runs it on
+a timer yet; that is a deliberate separate step, so it gets watched working by
+hand first.
+
+And Disconnect now actually tells the platform. Before, pressing it made
+Starcaster forget the token while the permission stayed granted at Facebook —
+which the client discovers months later, in their own settings, as an app they
+were certain they had removed. Now the platform is told first and the stored
+credential is deleted second. If the platform cannot be reached, nothing is
+deleted and the client is told why, because trying again is the only thing that
+fixes it and trying again needs the credential we would otherwise have thrown
+away. Bluesky is an honest exception: it offers no way for another app to
+retire an app password, so the answer says exactly that rather than claiming a
+revoke that never happened.
+
+Two problems turned up while building it, both of which would have been very
+hard to notice from outside. The health check, written the obvious way, would
+have silently changed *which* of a client's accounts posts — the same column
+that records "this row changed" is also how the app picks the active account,
+so a routine check would have re-elected whichever account it looked at last,
+on a schedule, with every test still green. And a loading order between five
+files formed a loop, which makes Node hand back a half-built file; the practical
+effect would have been every Bluesky post crashing in production while nothing
+at startup said a word. Both are fixed.
+
+One postscript, because it is the more interesting half. The guard that keeps
+the health check from moving which account posts had a test that could not
+fail: it worked by running a check and then asking "which account posts now?",
+and in the test's stand-in database both writes landed inside the same
+millisecond, so the two rows tied and a tie-break put them back in the original
+order all by itself. Delete the guard and the test still said fine. The review
+pass caught it, measured that the hazard is real, and it is fixed two ways —
+the test now watches the guard being passed at the moment of the write, which
+no clock can undo, and the older test pauses the way a real check of a live
+account does so it has a difference to see. Both were confirmed by deleting the
+guard on purpose and watching them fail. No working code changed; a comment
+that promised more protection than existed was corrected.
+
 ## 2026-09-03 — Overlays can tint a photo now, instead of only fogging it (#553)
 
 A section in the Builder can paint a sheet of colour over its own background.
