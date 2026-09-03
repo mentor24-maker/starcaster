@@ -1,12 +1,40 @@
 # Blog Links Manager (`admin-blog-links`)
 
-One page a tenant admin uses to tidy the blog's taxonomy and to hand-pick
-related articles. Ticket 86bbu4qh5, 2026-09-03.
+A **tag manager** for the blog, plus hand-picking related articles. Tickets
+86bbu4qh5 and 86bbue8ux, 2026-09-03.
 
-Left pane: **Categories** and **Tags**, each term with its post count.
-Right pane: the articles filed under whichever term is selected, each with a
-checkbox, and a **Relate Checked** button above them that links the ticked
-articles to each other.
+Top: a table of every tag with its post count, a pencil to rename it across
+every post that carries it, and a cross to remove it from all of them.
+Below: pick a category or tag, and the articles filed under it appear with
+checkboxes and a **Relate Checked** button that links the ticked ones to each
+other.
+
+## It does NOT manage categories, and that is deliberate
+
+There is already a `blog-category-manager` module, and it does the job
+properly — slug, description, colour, sort order. The first version of this
+module shipped a second, worse category list beside it on the same tenant page
+and the operator spotted it immediately (2026-09-03):
+
+> we already have a Category manager. What we need is the Tag manager that
+> follows the same basic format.
+
+So categories appear here only as a way to CHOOSE which articles to relate.
+Creating, renaming and deleting them belongs to the Category manager.
+
+**Tags are the half that never had a manager**, because they are not a table —
+see below.
+
+## Nothing truncates
+
+The first version put the taxonomy in a 320px sidebar with
+`text-overflow: ellipsis`, and on the live Delray page that rendered
+"Tennis Cha…", "Delray Te…", "advanced…", "clay court…". The tag IS the
+content; clipping it makes the panel useless. The table now gives the name a
+`1fr` column and wraps with `overflow-wrap: anywhere` rather than clipping,
+and the article picker is a full-width `<select>` rather than a narrow list.
+
+If you add a column here, do not buy its width from the name.
 
 ## What the blog actually has (read this before extending it)
 
@@ -20,6 +48,19 @@ The three nouns people use for blog taxonomy do not map onto three things:
 
 The module was asked for with "tags, topics, categories". Topics were left out
 deliberately rather than invented — the operator's call, 2026-09-03.
+
+## The table matches the Category manager on purpose
+
+Same bordered container, same uppercase header row, same pencil and cross.
+It has **three** columns rather than four — NAME, POSTS, ACTIONS — because a
+tag genuinely has no slug, description, colour or sort order. Inventing columns
+to match a shape would be decoration.
+
+There is also **no "New Tag" form**, and that is not an omission: a tag cannot
+exist without a post carrying it, so a create box would be a control that
+cannot work. The panel says where tags come from instead. The form that does
+exist is a rename form, and it states before you press it that renaming onto an
+existing tag merges the two.
 
 ## Relations are mutual, and that shapes the storage
 
@@ -92,6 +133,8 @@ Every one of these passed typecheck, both test suites, `check_conventions`,
 `check:panels`, `check:render` and `check:shots`. They were found by opening
 the thing in a browser.
 
+0. **A 320px sidebar with an ellipsis.** See "Nothing truncates" above — the
+   defect that produced the second ticket. Every gate was green on it.
 1. **`getCrmProjectHeaders()` returns a fresh object per render.** Feeding it
    to a `useCallback` dependency list makes every callback new, which refires
    the load effect, which sets state, which renders again — an unbounded
