@@ -40,8 +40,21 @@ so a routine check would have re-elected whichever account it looked at last,
 on a schedule, with every test still green. And a loading order between five
 files formed a loop, which makes Node hand back a half-built file; the practical
 effect would have been every Bluesky post crashing in production while nothing
-at startup said a word. Both are fixed and both now have a test that fails if
-the fix is ever removed.
+at startup said a word. Both are fixed.
+
+One postscript, because it is the more interesting half. The guard that keeps
+the health check from moving which account posts had a test that could not
+fail: it worked by running a check and then asking "which account posts now?",
+and in the test's stand-in database both writes landed inside the same
+millisecond, so the two rows tied and a tie-break put them back in the original
+order all by itself. Delete the guard and the test still said fine. The review
+pass caught it, measured that the hazard is real, and it is fixed two ways —
+the test now watches the guard being passed at the moment of the write, which
+no clock can undo, and the older test pauses the way a real check of a live
+account does so it has a difference to see. Both were confirmed by deleting the
+guard on purpose and watching them fail. No working code changed; a comment
+that promised more protection than existed was corrected.
+
 ## 2026-08-29 — The Tractor Nav settings panel is one rectangle again (#447)
 
 Open the settings for a Tractor Nav module and look down the Placement column.

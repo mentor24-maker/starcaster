@@ -21,8 +21,14 @@ const { spawnSync } = require('node:child_process');
  *      from outside.
  *   2. THE SWEEP DOES NOT CHANGE WHICH ACCOUNT POSTS. `updated_at` is the
  *      active-account selector, so an ordinary status write would re-elect
- *      whichever row was checked last. That test is the reason
- *      `bumpUpdatedAt: false` exists.
+ *      whichever row was checked last, and `bumpUpdatedAt: false` is what stops
+ *      it. TWO tests hold it, and the order matters: the spy test pins the
+ *      option on every write the file makes, and the behavioural test reads the
+ *      posting account back afterwards. Only the first is safe from the clock —
+ *      the second was green with the guard deleted until it was made to pause
+ *      like a real provider call, because two writes in the same millisecond
+ *      tie on `updated_at` and the store's `created_at` tie-break then restores
+ *      the original order all by itself.
  *   3. A FAILED REVOKE KEEPS THE ROW. Deleting anyway leaves a live grant at
  *      the provider that Starcaster can no longer withdraw — the one outcome
  *      the client discovers months later, in their own Facebook settings.
@@ -212,6 +218,18 @@ async function call(route, { method = 'GET', path: urlPath = '/api/connections',
   return { handled, ...written };
 }
 
+/**
+ * A real pause between two writes.
+ *
+ * Not padding: a live sweep awaits a provider HTTP call and a database read per
+ * row, sequentially, so consecutive rows always land in different milliseconds.
+ * A fake that answers instantly does not, and `updated_at` then TIES — which is
+ * enough on its own to satisfy an ordering assertion whether the guard is there
+ * or not. Any test about `updated_at` ordering has to buy that millisecond back
+ * or it cannot fail. See "the sweep does not change which account posts".
+ */
+const tick = (ms = 3) => new Promise((r) => setTimeout(r, ms));
+
 const ok = (data) => ({ ok: true, status: 200, data });
 const fail = (status, error) => ({ ok: false, status, error, data: null });
 
@@ -399,11 +417,96 @@ test('the sweep does ONE batch and reports what is left — it does not loop ove
   );
 });
 
-test('the sweep does not change which account posts', async (t) => {
+/**
+ * THE guard, asserted directly: every write the sweep makes says
+ * "do not re-elect this row".
+ *
+ * This test exists because the behavioural one below could not fail. It was
+ * green with `{ bumpUpdatedAt: false }` deleted from
+ * `lib/connections/verifySweep.js` — in the fake, both status writes landed in
+ * the same millisecond, `updated_at` tied, and the store's `created_at`
+ * tie-break restored the original order. The assertion was being satisfied by
+ * the clock's resolution rather than by the guard (found by loop-review on
+ * PR #556, 2026-09-03).
+ *
+ * So the write is pinned at the call itself. No clock is involved, nothing
+ * about it can tie, and deleting the option from either write site in
+ * verifySweep.js fails HERE regardless of how fast the database answers.
+ */
+test('every status write the sweep makes is marked do-not-re-elect', async (t) => {
   const h = withSweep({
     adapters: {
       bluesky: {
         verify: async (account) => ok({ valid: true, accountId: account.accountId, accountLabel: account.accountLabel }),
+        // Refuses, so the refresh-failure write (verifySweep.js:279) is exercised
+        // too — it is the OTHER place a status reaches the store from this file.
+        refresh: async () => fail(502, 'bluesky refused the refresh'),
+        revoke: async () => ok({ revokedAtProvider: true }),
+        authorizeUrl: () => ok({}), exchange: async () => ok({}), listAccounts: async () => ok({}),
+      },
+    },
+  });
+  t.after(h.restore);
+
+  await grant(h.store, {
+    provider: 'bluesky', accountId: 'did:plc:pinned', accountLabel: 'pinned.bsky.social',
+    accessToken: 'token-pinned', status: 'connected',
+    expiresAt: new Date(NOW + 20 * MINUTE).toISOString(),
+  });
+
+  // A spy in front of the REAL store: the write still happens, and we keep the
+  // options argument the sweep passed with it.
+  const writes = [];
+  const spied = {
+    ...h.store,
+    updateConnectionStatus: async (fields, scope, options) => {
+      writes.push({ fields, options });
+      return h.store.updateConnectionStatus(fields, scope, options);
+    },
+  };
+
+  const swept = await h.sweep.runVerifySweep({ scope: SCOPE, nowMs: NOW, store: spied });
+  assert.equal(swept.ok, true);
+  assert.equal(swept.data.seen, 1);
+
+  const stored = (await h.store.listConnections(10, SCOPE)).data[0];
+  const refresh = await h.sweep.refreshBeforeUse({ connection: stored, scope: SCOPE, nowMs: NOW, store: spied });
+  assert.equal(refresh.refreshed, false, 'the refresh was refused, so the failure write ran');
+
+  assert.ok(writes.length >= 2, `expected the sweep and the refused refresh to both write, saw ${writes.length}`);
+  for (const [i, write] of writes.entries()) {
+    assert.equal(
+      write.options?.bumpUpdatedAt,
+      false,
+      'THE guard: `updated_at` is the active-account selector, so every status write from this file must '
+      + `pass { bumpUpdatedAt: false } or it re-elects the row it just checked (write ${i + 1} of ${writes.length}, `
+      + `fields: ${JSON.stringify(write.fields)})`
+    );
+  }
+});
+
+/**
+ * The same guard, from the outside: does the account that posts actually stay
+ * put across a sweep?
+ *
+ * Worth keeping beside the assertion above because it is the thing a client
+ * would notice, but it is only evidence if the two writes land in DIFFERENT
+ * milliseconds — see `tick`. `verify` therefore pauses the way a real provider
+ * call does. Break-tested by deleting `{ bumpUpdatedAt: false }` from
+ * verifySweep.js and watching this fail, which it did not before that pause
+ * existed.
+ */
+test('the sweep does not change which account posts', async (t) => {
+  const h = withSweep({
+    adapters: {
+      bluesky: {
+        verify: async (account) => {
+          // A live provider call takes longer than a millisecond. Without this
+          // the two status writes tie on `updated_at` and the assertion below
+          // passes on the tie-break alone.
+          await tick();
+          return ok({ valid: true, accountId: account.accountId, accountLabel: account.accountLabel });
+        },
         refresh: async () => ok({ refreshed: false }),
         revoke: async () => ok({ revokedAtProvider: true }),
         authorizeUrl: () => ok({}), exchange: async () => ok({}), listAccounts: async () => ok({}),
@@ -416,7 +519,7 @@ test('the sweep does not change which account posts', async (t) => {
     provider: 'bluesky', accountId: 'did:plc:first', accountLabel: 'first.bsky.social',
     accessToken: 'token-first', status: 'connected',
   });
-  await new Promise((r) => setTimeout(r, 3));
+  await tick();
   await grant(h.store, {
     provider: 'bluesky', accountId: 'did:plc:second', accountLabel: 'second.bsky.social',
     accessToken: 'token-second', status: 'connected',
@@ -428,6 +531,23 @@ test('the sweep does not change which account posts', async (t) => {
   const swept = await h.sweep.runVerifySweep({ scope: SCOPE, nowMs: NOW });
   assert.equal(swept.data.seen, 2);
   assert.equal(swept.data.healthy, 2);
+
+  // The sweep checks the ACTIVE row first and the other one last, so an
+  // unguarded write would hand the election to `did:plc:first`. Stated here
+  // because it is what makes the assertion below capable of failing.
+  assert.deepEqual(
+    swept.data.results.map((r) => r.accountId),
+    ['did:plc:second', 'did:plc:first'],
+    'the row checked LAST is the one an unguarded write would re-elect'
+  );
+
+  const stamps = (await h.store.listConnections(10, SCOPE)).data.map((r) => Date.parse(r.updatedAt));
+  assert.notEqual(
+    stamps[0],
+    stamps[1],
+    'the two rows must carry different `updated_at` values, or the ordering assertion below is decided by the '
+    + 'store\'s created_at tie-break and cannot fail — that is exactly how this test passed with the guard removed'
+  );
 
   const after = await h.resolver.resolveCredentials('bluesky', SCOPE.projectId, { nowMs: NOW });
   assert.equal(
