@@ -165,6 +165,24 @@ pass by hand.
 `CANNOT STAMP` means the one-time "Loop note" field is not set up yet (see
 `docs/LOOP_ENGINEERING.md`) — note it and carry on; it never blocks a verdict.
 
+## A defect ticket's premise is part of the review
+
+A prose rule with no reader is a rule that erodes, so this lane enforces the
+spec lane's evidence discipline (task 86bbtujfj):
+
+*   A **defect** ticket under review must carry its `EVIDENCE:` — the quoted
+    mechanism, not the prompting log line. Missing entirely → **send back**,
+    naming this section: the builder was handed a suspicion dressed as a spec.
+*   Where the build found the premise wrong, the ticket must show the
+    **correction comment posted before the build** — the trail that separates
+    "built what is true" from "built the description because it was written
+    down". A PR whose changes contradict its ticket's premise with no
+    correction on the ticket is a send-back even when the code is good: the
+    next reader of that ticket will believe the wrong mechanism.
+*   A threshold the PR introduces must trace to the measurement its ticket
+    named — or to one the build performed and recorded. "It seemed right" is
+    the shape that fired on eleven nights in fourteen (2026-09-02).
+
 ## Workflow
 
 1. **Claim the next task — visibly, before you verify anything.** Find the
