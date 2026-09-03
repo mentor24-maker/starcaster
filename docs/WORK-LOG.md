@@ -30,6 +30,26 @@ One nicety worth knowing: the card shows the Instagram handle, `@delraytennis`,
 not the name of the Facebook Page the post travels through. Clients recognise
 the first and do not recognise the second.
 
+Review sent this back once, and the catch was a good one. If a client's
+Facebook account covers two Pages and they only gave us posting permission on
+one of them, the second Page came back from Facebook with no key attached —
+and the code built a connection out of it anyway. What the client then saw was
+their good account blocked by their bad one, an error message with the word
+`accessToken` in it, and a card sitting there saying "connected" with nothing
+behind it. That is precisely the failure the whole ticket was written to
+prevent, arriving by a door nobody had checked. Now a Page with no key is
+recognised for what it is and skipped, the good account connects normally, and
+a client whose *only* Page is missing that permission is told exactly that
+rather than being told they do not have a Facebook Page at all. The saving step
+underneath was also changed to check every account before it writes any of
+them, so "all of it or none of it" is now how the code is shaped rather than
+something each new platform has to remember.
+
+Two things nobody was testing are now tested: that Facebook handing us back an
+Instagram sign-in reaches the Instagram code at all — the only route by which a
+real Instagram connection can ever be made — and that a Facebook sign-in still
+goes where it always did, which matters because there are clients on it today.
+
 The existing Facebook connection is untouched — deliberately, byte for byte.
 Facebook only accepts one return address for this app, so Instagram comes back
 through Facebook's, and the signed token that makes the round trip now says

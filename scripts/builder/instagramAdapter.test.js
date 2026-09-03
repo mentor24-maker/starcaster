@@ -113,6 +113,15 @@ const PAGE_PERSONAL = {
   connected_instagram_account: { id: '17999999999999999', username: 'richpersonal' },
 };
 const PAGE_NO_INSTAGRAM = { id: '57', name: 'Empty Page', access_token: 'page-token-3' };
+// The fourth shape, and the one round 1 of review found. Meta lists a Page in
+// `/me/accounts` whether or not the grant covers POSTING to it, so a Page can
+// arrive with a perfectly good Business Instagram account behind it and no
+// `access_token` at all. There is then nothing to authenticate a post with.
+const PAGE_NO_TOKEN = {
+  id: '59',
+  name: 'Second Account',
+  instagram_business_account: { id: '17841400000000002', username: 'secondaccount' },
+};
 
 const TOKEN_REPLIES = [
   { status: 200, body: { access_token: 'short-lived' } },
@@ -172,6 +181,104 @@ test('the refusal carries no account, so nothing can be half-saved', async () =>
   const { res } = await connect([PAGE_PERSONAL]);
   assert.equal(res.ok, false);
   assert.equal(res.data, null, 'a refusal must carry no accounts for a caller to store by accident');
+});
+
+// ---------------------------------------------------------------------------
+// Check 3, added in round 2 of review: the Page has to carry a token.
+//
+// This is the defect that sent the slice back. A grant covering one good Page
+// and one the client has no posting permission on produced TWO accounts, the
+// second with an empty `accessToken`. `storeAccounts` walked the list, wrote
+// the good one, then refused on the bad one — so the client saw the word
+// `accessToken` in an error while their card sat green with nothing behind it.
+// ---------------------------------------------------------------------------
+
+test('a mixed grant connects the good account and stores NOTHING partial', async () => {
+  const { res } = await connect([PAGE_BUSINESS, PAGE_NO_TOKEN]);
+
+  assert.equal(res.ok, true, res.error);
+  assert.equal(res.data.accounts.length, 1,
+    'the tokenless Page must not become an account — it has no credential to post with');
+  assert.deepEqual(res.data.accounts.map((a) => a.accountLabel), ['@delraytennis']);
+
+  // The property that matters, asserted where it is decided rather than
+  // inferred from the count: EVERY account handed up is storable. The old
+  // failure was a list whose second entry was not, and a caller that only found
+  // out half way through writing it.
+  for (const account of res.data.accounts) {
+    assert.deepEqual(contract.accountProblems(account, 'instagram'), [],
+      'an account with a problem must never leave the adapter — that is the half-save');
+  }
+});
+
+test('storeAccounts refuses a mixed list BEFORE writing any of it', async () => {
+  // The other half of the same defect, one layer down. Even with the adapter
+  // fixed, the shared store used to check and write in one pass — so the next
+  // adapter to hand up a mixed list would half-save exactly as this one did.
+  // Driven with the accounts directly, so nothing here depends on Instagram.
+  const writes = [];
+  const { storeAccounts } = require('../../lib/connections/completeConnection.js');
+  const storePath = require.resolve('../../lib/projectConnectionsStore.js');
+  const real = require.cache[storePath];
+  require.cache[storePath] = {
+    id: storePath,
+    filename: storePath,
+    loaded: true,
+    exports: {
+      saveConnection: async (row) => { writes.push(row.accountId); return { ok: true, status: 200, data: row }; },
+      listConnections: async () => ({ ok: true, status: 200, data: [] }),
+    },
+  };
+  try {
+    const good = contract.account({ accountId: 'ig1', accountLabel: '@good', accessToken: 'page-token' });
+    const bad = contract.account({ accountId: 'ig2', accountLabel: '@bad', accessToken: '' });
+    const res = await storeAccounts({
+      provider: 'instagram',
+      displayName: 'Instagram',
+      accounts: [good, bad],
+      scope: { projectId: 'proj_a', userId: 'user_1' },
+    });
+    assert.equal(res.ok, false);
+    assert.equal(res.code, 'BAD_ACCOUNT');
+    assert.deepEqual(writes, [],
+      'a refused grant must write NOTHING — one row already stored is the half-save');
+  } finally {
+    if (real) require.cache[storePath] = real;
+    else delete require.cache[storePath];
+  }
+});
+
+test('a tokenless Page ALONE says the Page permission is missing, not that no Page exists', async () => {
+  // The reason the check is a verdict rather than a filter one layer out. Drop
+  // the Page in `listPagesWithInstagram` and this client — whose Instagram is
+  // set up perfectly — is told "you do not manage any Facebook Page yet", which
+  // they cannot act on and which is not true.
+  const { res } = await connect([PAGE_NO_TOKEN]);
+
+  assert.equal(res.ok, false);
+  assert.equal(res.data, null, 'a refusal must carry no accounts for a caller to store by accident');
+  assert.ok(res.error.startsWith(instagram.MESSAGES.noPageToken), res.error);
+  assert.match(res.error, /Second Account/, 'it names the Page it looked at');
+  assert.equal(res.check, 'page_permission');
+  assert.equal(res.code, CODES.ACCOUNT_INELIGIBLE);
+
+  // It must not be mistaken for either of the other two, nor for "no Pages".
+  assert.ok(!res.error.includes('do not manage any Facebook Page'));
+  assert.ok(!res.error.includes('personal account'));
+  assert.ok(!res.error.includes('not linked to a Facebook Page'));
+
+  // And it must not leak the internal field name the old failure showed a client.
+  assert.ok(!/accessToken/i.test(res.error), 'internal jargon reached the client');
+});
+
+test('a tokenless Page is ranked ABOVE a personal one, because it is the account they meant', () => {
+  // Both are failures; which sentence a client reads decides where they go. The
+  // tokenless Page holds a Business account that would work, so sending them to
+  // change an account type on an unrelated personal account is the confidently
+  // wrong answer.
+  const refusal = instagram.preflight(instagram.inspectPages([PAGE_PERSONAL, PAGE_NO_TOKEN]));
+  assert.ok(refusal);
+  assert.equal(refusal.check, 'page_permission');
 });
 
 // ---------------------------------------------------------------------------
@@ -258,10 +365,24 @@ test('a grant covering several Instagram accounts hands back all of them, and sk
 // The checks as pure functions — pinned directly, and shown to be able to fail.
 // ---------------------------------------------------------------------------
 
-test('inspectPages gives one of exactly three verdicts, from the two Graph fields', () => {
-  const verdicts = instagram.inspectPages([PAGE_BUSINESS, PAGE_PERSONAL, PAGE_NO_INSTAGRAM])
+test('inspectPages gives one of exactly four verdicts, from the two Graph fields and the Page token', () => {
+  const verdicts = instagram.inspectPages([PAGE_BUSINESS, PAGE_PERSONAL, PAGE_NO_INSTAGRAM, PAGE_NO_TOKEN])
     .map((row) => row.verdict);
-  assert.deepEqual(verdicts, ['eligible', 'personal', 'not_linked']);
+  assert.deepEqual(verdicts, ['eligible', 'personal', 'not_linked', 'no_page_token']);
+
+  // `eligible` is the only verdict that becomes an account, so the token is
+  // part of what the word MEANS. Take the token off the good Page and it stops
+  // being eligible — take the id off and it stops too, because a Page we cannot
+  // address is unpostable in exactly the same way.
+  const { access_token: _token, ...noToken } = PAGE_BUSINESS;
+  assert.equal(instagram.inspectPages([noToken])[0].verdict, 'no_page_token');
+  assert.equal(instagram.inspectPages([{ ...PAGE_BUSINESS, id: '' }])[0].verdict, 'no_page_token');
+
+  // But ONLY where a Business account was found: a tokenless Page whose account
+  // is personal or unlinked still reports that, because the missing permission
+  // is not what the client has to fix first.
+  const { access_token: _t2, ...personalNoToken } = PAGE_PERSONAL;
+  assert.equal(instagram.inspectPages([personalNoToken])[0].verdict, 'personal');
 
   // The discriminator, isolated: the SAME Page with the business field removed
   // reads as personal, and with both removed reads as not linked. If Meta ever
@@ -281,7 +402,7 @@ test('preflight passes ONLY when something is actually postable — shown by mak
   // happy path above is the only thing exercising it — so here it is handed
   // each failing shape and must produce a distinct, non-empty sentence.
   const seen = new Set();
-  for (const pages of [[PAGE_PERSONAL], [PAGE_NO_INSTAGRAM], []]) {
+  for (const pages of [[PAGE_PERSONAL], [PAGE_NO_INSTAGRAM], [PAGE_NO_TOKEN], []]) {
     const refusal = instagram.preflight(instagram.inspectPages(pages));
     assert.ok(refusal, 'preflight let an unpostable grant through');
     assert.equal(refusal.ok, false);
@@ -290,7 +411,7 @@ test('preflight passes ONLY when something is actually postable — shown by mak
     assert.ok(refusal.error.length > 40, 'a refusal a client cannot act on is not a refusal');
     seen.add(refusal.error);
   }
-  assert.equal(seen.size, 3, 'the three failures must read differently — a shared sentence tells nobody what to change');
+  assert.equal(seen.size, 4, 'the four failures must read differently — a shared sentence tells nobody what to change');
 
   // One good account beside a bad one is a pass, not a warning.
   assert.equal(instagram.preflight(instagram.inspectPages([PAGE_PERSONAL, PAGE_BUSINESS])), null);
