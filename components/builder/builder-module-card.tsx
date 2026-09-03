@@ -114,6 +114,7 @@ import { BuilderAdminLoginModuleSettings } from "./builder-admin-login-module-se
 import { BuilderAdminNavLinkModuleSettings } from "./builder-admin-nav-link-module-settings";
 import { BuilderBugReportModuleSettings } from "./builder-bug-report-module-settings";
 import { BuilderAdminSiteSettingsModuleSettings } from "./builder-admin-site-settings-module-settings";
+import { BuilderAdminBlogLinksModuleSettings } from "./builder-admin-blog-links-module-settings";
 import { BuilderAdminSupportFormModuleSettings } from "./builder-admin-support-form-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
@@ -2323,6 +2324,61 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "admin-blog-links") {
+    const showTitle    = module.settings.showTitle !== "false";
+    const title        = module.settings.panelTitle || "Blog Links";
+    const showRelate   = module.settings.showRelate !== "false";
+    const relateLabel  = module.settings.relateButtonLabel || "Relate Checked";
+    const showCats     = module.settings.showCategories !== "false";
+    const showTags     = module.settings.showTags !== "false";
+    const termRow = (label: string, count: string, active = false) => (
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 7px", borderRadius: 5, fontSize: 11, background: active ? "#e7f1fa" : "transparent", color: active ? "#0f4f8f" : "#4d6a83", fontWeight: active ? 700 : 500 }}>
+        <span>{label}</span>
+        <span style={{ fontSize: 10, color: "#8ba9be" }}>{count}</span>
+      </div>
+    );
+    const articleRow = (label: string, checked: boolean) => (
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", fontSize: 11, color: "#4d6a83" }}>
+        <span style={{ width: 11, height: 11, flex: "0 0 auto", borderRadius: 3, border: "1px solid #9dbdd4", background: checked ? "#0f4f8f" : "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 8, lineHeight: 1 }}>{checked ? "✓" : ""}</span>
+        <span>{label}</span>
+      </div>
+    );
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
+        <div style={{ display: "flex", gap: 10, alignItems: "stretch", border: "1px solid #c9dcea", borderRadius: 7, background: "#fff", padding: 10 }}>
+          <div style={{ flex: "0 0 40%", minWidth: 0, borderRight: "1px solid #e3eef6", paddingRight: 10 }}>
+            {showCats && (
+              <>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#8ba9be", marginBottom: 3 }}>Categories</div>
+                {termRow("Immigration", "4", true)}
+                {termRow("Criminal Law", "7")}
+              </>
+            )}
+            {showTags && (
+              <>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#8ba9be", margin: "7px 0 3px" }}>Tags</div>
+                {termRow("visas", "3")}
+                {termRow("asylum", "2")}
+              </>
+            )}
+            {!showCats && !showTags && (
+              <div style={{ fontSize: 11, color: "#8ba9be", fontStyle: "italic" }}>No taxonomies shown</div>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {showRelate && (
+              <div style={{ display: "inline-block", padding: "4px 10px", background: "#0f4f8f", color: "#fff", borderRadius: 5, fontSize: 11, fontWeight: 700, marginBottom: 6, cursor: "default" }}>{relateLabel}</div>
+            )}
+            {articleRow("Applying for asylum in 2026", true)}
+            {articleRow("What a U-visa actually covers", true)}
+            {articleRow("Family petitions, step by step", false)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (module.type === "admin-site-settings") {
     const showTitle = module.settings.showTitle !== "false";
     const title     = module.settings.panelTitle || "Site Settings";
@@ -3178,6 +3234,7 @@ export function BuilderModuleCard({
     const isBugReportModule = module.type === "bug-report";
     const isAdminSiteSettingsModule = module.type === "admin-site-settings";
     const isAdminSupportFormModule = module.type === "admin-support-form";
+    const isAdminBlogLinksModule = module.type === "admin-blog-links";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     // The rich-text editor left the shared chrome on 2026-08-15: its
     // Background / Alignment / margins / Width now live on the D8 axes in
@@ -3241,7 +3298,8 @@ export function BuilderModuleCard({
       isAdminLoginModule ||
       isAdminNavLinkModule ||
       isAdminSiteSettingsModule ||
-      isAdminSupportFormModule;
+      isAdminSupportFormModule ||
+      isAdminBlogLinksModule;
 
     /**
      * The module's internal name. Rendered in ONE of two places and never
@@ -3496,6 +3554,8 @@ export function BuilderModuleCard({
               <BuilderBugReportModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminNavLinkModule ? (
               <BuilderAdminNavLinkModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminBlogLinksModule ? (
+              <BuilderAdminBlogLinksModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminSiteSettingsModule ? (
               <BuilderAdminSiteSettingsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminSupportFormModule ? (

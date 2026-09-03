@@ -1184,6 +1184,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "admin-blog-links",
+    type: "admin-blog-links",
+    group: "admin",
+    label: "Blog Links Manager",
+    icon: "🔗",
+    description: "One page for the blog's taxonomy and its hand-picked related articles. Rename or merge tags across every post that carries them, edit categories, then pick a term, tick the articles that belong together and press Relate Checked - those become the related articles the Related Posts module shows in its hand-picked mode.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "admin-support-form",
     type: "admin-support-form",
     group: "admin",
