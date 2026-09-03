@@ -11114,18 +11114,30 @@ type BlogLinkArticle = {
 };
 
 /**
- * The tenant's blog links manager.
+ * The tenant's blog links manager: a TAG manager, plus hand-picking related
+ * articles.
  *
- * Left: the two taxonomies the blog actually has — categories (a real table)
- * and tags (a text[] on each post, so the list is derived and a rename
- * rewrites every post carrying the word). Right: the articles under whichever
- * term is selected, each with a checkbox, and a Relate Checked button above
- * them that links the ticked articles to each other.
+ * WHY THERE IS NO CATEGORY MANAGER HERE. There already is one — the
+ * `blog-category-manager` module, which does it properly with slug,
+ * description, colour and sort order. The first version of this module shipped
+ * a second, worse category list beside it on the same page, which the operator
+ * spotted immediately (2026-09-03). Categories appear below only as a way to
+ * CHOOSE which articles to relate, never to create, rename or delete.
  *
- * Relating is MUTUAL: ticking three articles relates each to the other two.
- * The blog-related-posts module reads those links back in its "Hand-picked"
- * match mode — without that the button would save into something nothing
- * displays.
+ * Tags are the half that never had a manager, because they are not a table —
+ * they are a `text[]` on each post. So the list is derived, a rename rewrites
+ * every post carrying the word, and renaming onto an existing tag MERGES.
+ *
+ * NOTHING IS TRUNCATED. The first version capped the term list at 320px with
+ * `text-overflow: ellipsis`, and on a real tenant page that rendered
+ * "Tennis Cha…", "Delray Te…", "clay court…" — the words ARE the content. The
+ * tag table uses a `1fr` name column and the article picker is full width.
+ *
+ * The table deliberately matches `BlogCategoryManagerPreview` above: same
+ * bordered container, same uppercase header row, same pencil/cross actions.
+ * It has three columns rather than four because a tag genuinely has no slug,
+ * description or colour — inventing columns to match a shape would be
+ * decoration.
  */
 function AdminBlogLinksPreview({
   settings,
@@ -11136,24 +11148,30 @@ function AdminBlogLinksPreview({
 }) {
   const panelTitle     = settings.panelTitle || "Blog Links";
   const showTitle      = settings.showTitle !== "false";
-  const showCategories = settings.showCategories !== "false";
-  const showTags       = settings.showTags !== "false";
+  /** The tag table. Keeps the original `showTags` key so saved pages carry over. */
+  const showTagManager = settings.showTags !== "false";
+  /** Whether categories are offered in the article picker (they are never edited here). */
+  const offerCategories = settings.showCategories !== "false";
   const showRelate     = settings.showRelate !== "false";
   const relateLabel    = settings.relateButtonLabel || "Relate Checked";
   const articleStatus  = settings.articleStatus || "all";
+  const accent         = settings.accentColor || "#0f4f8f";
 
   const [terms, setTerms]       = useState<BlogLinkTerm[]>([]);
-  const [selected, setSelected] = useState<BlogLinkTerm | null>(null);
+  const [selectedKey, setSelectedKey] = useState("");
   const [articles, setArticles] = useState<BlogLinkArticle[]>([]);
   const [checked, setChecked]   = useState<Set<string>>(new Set());
   const [relatedTitles, setRelatedTitles] = useState<Record<string, string[]>>({});
 
   const [loadingTerms, setLoadingTerms]       = useState(true);
   const [loadingArticles, setLoadingArticles] = useState(false);
-  const [busy, setBusy]         = useState(false);
-  const [error, setError]       = useState("");
-  const [note, setNote]         = useState("");
-  const [newCategory, setNewCategory] = useState("");
+  const [busy, setBusy]     = useState(false);
+  const [error, setError]   = useState("");
+  const [note, setNote]     = useState("");
+
+  /** The tag being renamed, and the box holding the new name. */
+  const [editTag, setEditTag]   = useState<string | null>(null);
+  const [tagDraft, setTagDraft] = useState("");
 
   /*
    * MEMOISED, and it has to be. getCrmProjectHeaders() builds a fresh object
@@ -11172,7 +11190,11 @@ function AdminBlogLinksPreview({
   }, [headers]);
 
   const api = useCallback(async (path: string, init?: RequestInit) => {
-    const r = await fetch(path, { credentials: "include", ...init, headers: { ...(init?.body ? { "Content-Type": "application/json" } : {}), ...headers, ...(init?.headers || {}) } });
+    const r = await fetch(path, {
+      credentials: "include",
+      ...init,
+      headers: { ...(init?.body ? { "Content-Type": "application/json" } : {}), ...headers, ...(init?.headers || {}) },
+    });
     if (r.status === 401 && !isPreview) {
       window.location.href = "/admin-login";
       return null;
@@ -11187,7 +11209,7 @@ function AdminBlogLinksPreview({
     setLoadingTerms(true);
     try {
       const next: BlogLinkTerm[] = [];
-      if (showCategories) {
+      if (offerCategories) {
         const d = await api(`/api/blog/categories?${projectQuery()}`);
         const rows = (d?.categories ?? d?.data ?? []) as Array<Record<string, unknown>>;
         for (const row of Array.isArray(rows) ? rows : []) {
@@ -11200,14 +11222,12 @@ function AdminBlogLinksPreview({
           });
         }
       }
-      if (showTags) {
-        const d = await api(`/api/blog/tags?${projectQuery()}`);
-        const rows = (d?.tags ?? d?.data ?? []) as Array<Record<string, unknown>>;
-        for (const row of Array.isArray(rows) ? rows : []) {
-          const tag = String(row.tag || "");
-          if (!tag) continue;
-          next.push({ kind: "tag", key: `tag:${tag}`, label: tag, slug: tag, postCount: Number(row.postCount ?? 0) });
-        }
+      const d = await api(`/api/blog/tags?${projectQuery()}`);
+      const rows = (d?.tags ?? d?.data ?? []) as Array<Record<string, unknown>>;
+      for (const row of Array.isArray(rows) ? rows : []) {
+        const tag = String(row.tag || "");
+        if (!tag) continue;
+        next.push({ kind: "tag", key: `tag:${tag}`, label: tag, slug: tag, postCount: Number(row.postCount ?? 0) });
       }
       setTerms(next);
       setError("");
@@ -11216,7 +11236,7 @@ function AdminBlogLinksPreview({
     } finally {
       setLoadingTerms(false);
     }
-  }, [api, projectQuery, showCategories, showTags]);
+  }, [api, projectQuery, offerCategories]);
 
   useEffect(() => { void loadTerms(); }, [loadTerms]);
 
@@ -11240,9 +11260,6 @@ function AdminBlogLinksPreview({
       if (articleStatus !== "all") list = list.filter((a) => a.status === articleStatus);
       setArticles(list);
 
-      // Show what each article is ALREADY related to, so pressing the button
-      // again on an existing set reads as "no change" rather than as a failure.
-      //
       // ONE request for the whole project's relations, not one per article: a
       // per-article loop is N+1 requests, and on a blog of any size that is a
       // request storm rather than a page load. The pairing arithmetic is the
@@ -11266,10 +11283,14 @@ function AdminBlogLinksPreview({
     }
   }, [api, projectQuery, articleStatus]);
 
-  function selectTerm(term: BlogLinkTerm) {
-    setSelected(term);
+  const selected = terms.find((t) => t.key === selectedKey) || null;
+
+  function selectTerm(key: string) {
+    setSelectedKey(key);
     setNote("");
-    void loadArticles(term);
+    const term = terms.find((t) => t.key === key);
+    if (term) void loadArticles(term);
+    else { setArticles([]); setRelatedTitles({}); setChecked(new Set()); }
   }
 
   function toggleChecked(id: string) {
@@ -11291,7 +11312,10 @@ function AdminBlogLinksPreview({
     setError("");
     setNote("");
     try {
-      const d = await api(`/api/blog/relations`, { method: "POST", body: JSON.stringify({ postIds: ids, projectId: headers["X-Project-ID"] || "" }) });
+      const d = await api(`/api/blog/relations`, {
+        method: "POST",
+        body: JSON.stringify({ postIds: ids, projectId: headers["X-Project-ID"] || "" }),
+      });
       const result = (d?.result ?? d?.data ?? {}) as { added?: number; alreadyRelated?: number };
       const added = Number(result.added ?? 0);
       const already = Number(result.alreadyRelated ?? 0);
@@ -11311,213 +11335,308 @@ function AdminBlogLinksPreview({
     }
   }
 
-  async function handleAddCategory(e: React.FormEvent) {
+  function startRenameTag(tag: string) {
+    setEditTag(tag);
+    setTagDraft(tag);
+    setNote("");
+    setError("");
+  }
+
+  function cancelRenameTag() {
+    setEditTag(null);
+    setTagDraft("");
+  }
+
+  async function submitRenameTag(e: React.FormEvent) {
     e.preventDefault();
-    const name = newCategory.trim();
-    if (!name) return;
+    const from = editTag || "";
+    const to = tagDraft.trim();
+    if (!from || !to || to === from) { cancelRenameTag(); return; }
     setBusy(true);
     setError("");
     try {
-      await api(`/api/blog/categories`, { method: "POST", body: JSON.stringify({ name, projectId: headers["X-Project-ID"] || "" }) });
-      setNewCategory("");
-      setNote(`Added the category "${name}".`);
+      const d = await api(`/api/blog/tags/rename`, {
+        method: "POST",
+        body: JSON.stringify({ from, to, projectId: headers["X-Project-ID"] || "" }),
+      });
+      const result = (d?.result ?? d?.data ?? {}) as { updated?: number; merged?: boolean };
+      setNote(
+        `${result.merged ? "Merged" : "Renamed"} across ${Number(result.updated ?? 0)} post${Number(result.updated ?? 0) === 1 ? "" : "s"}.`
+      );
+      cancelRenameTag();
       await loadTerms();
+      if (selected?.kind === "tag") { setSelectedKey(""); setArticles([]); }
     } catch (err) {
-      setError((err as Error).message || "Could not add the category.");
+      setError((err as Error).message || "Could not rename the tag.");
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleRenameTerm(term: BlogLinkTerm) {
-    const next = window.prompt(
-      term.kind === "tag"
-        ? `Rename the tag "${term.label}". Renaming it to a tag that already exists merges the two.`
-        : `Rename the category "${term.label}".`,
-      term.label
-    );
-    if (next === null) return;
-    const value = next.trim();
-    if (!value || value === term.label) return;
-    setBusy(true);
-    setError("");
-    try {
-      if (term.kind === "tag") {
-        const d = await api(`/api/blog/tags/rename`, { method: "POST", body: JSON.stringify({ from: term.label, to: value, projectId: headers["X-Project-ID"] || "" }) });
-        const result = (d?.result ?? d?.data ?? {}) as { updated?: number; merged?: boolean };
-        setNote(`${result.merged ? "Merged" : "Renamed"} across ${Number(result.updated ?? 0)} post(s).`);
-      } else {
-        await api(`/api/blog/categories/${encodeURIComponent(term.key)}`, { method: "PUT", body: JSON.stringify({ name: value, projectId: headers["X-Project-ID"] || "" }) });
-        setNote(`Renamed the category to "${value}".`);
-      }
-      await loadTerms();
-      setSelected(null);
-      setArticles([]);
-    } catch (err) {
-      setError((err as Error).message || "Could not rename it.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDeleteTerm(term: BlogLinkTerm) {
+  async function handleRemoveTag(tag: string, postCount: number) {
     const ok = window.confirm(
-      term.kind === "tag"
-        ? `Remove the tag "${term.label}" from every post that carries it? The posts themselves are not deleted.`
-        : `Delete the category "${term.label}"? The posts themselves are not deleted.`
+      `Remove the tag "${tag}" from ${postCount} post${postCount === 1 ? "" : "s"}? The posts themselves are not deleted.`
     );
     if (!ok) return;
     setBusy(true);
     setError("");
     try {
-      if (term.kind === "tag") {
-        const d = await api(`/api/blog/tags`, { method: "DELETE", body: JSON.stringify({ tag: term.label, projectId: headers["X-Project-ID"] || "" }) });
-        const result = (d?.result ?? d?.data ?? {}) as { updated?: number };
-        setNote(`Removed the tag from ${Number(result.updated ?? 0)} post(s).`);
-      } else {
-        await api(`/api/blog/categories/${encodeURIComponent(term.key)}`, { method: "DELETE", body: JSON.stringify({ projectId: headers["X-Project-ID"] || "" }) });
-        setNote(`Deleted the category "${term.label}".`);
-      }
+      const d = await api(`/api/blog/tags`, {
+        method: "DELETE",
+        body: JSON.stringify({ tag, projectId: headers["X-Project-ID"] || "" }),
+      });
+      const result = (d?.result ?? d?.data ?? {}) as { updated?: number };
+      setNote(`Removed the tag from ${Number(result.updated ?? 0)} post${Number(result.updated ?? 0) === 1 ? "" : "s"}.`);
+      if (editTag === tag) cancelRenameTag();
       await loadTerms();
-      setSelected(null);
-      setArticles([]);
+      if (selected?.kind === "tag") { setSelectedKey(""); setArticles([]); }
     } catch (err) {
-      setError((err as Error).message || "Could not remove it.");
+      setError((err as Error).message || "Could not remove the tag.");
     } finally {
       setBusy(false);
     }
   }
 
-  const categoryTerms = terms.filter((t) => t.kind === "category");
   const tagTerms      = terms.filter((t) => t.kind === "tag");
+  const categoryTerms = terms.filter((t) => t.kind === "category");
 
-  function renderTermList(label: string, list: BlogLinkTerm[], emptyNote: string) {
-    return (
-      <div className="admin-blog-links-group">
-        <div className="admin-blog-links-group-title">{label}</div>
-        {list.length === 0 ? (
-          <div className="admin-blog-links-empty">{emptyNote}</div>
-        ) : (
-          <ul className="admin-blog-links-terms">
-            {list.map((term) => (
-              <li key={term.key}>
-                <button
-                  type="button"
-                  className={`admin-blog-links-term${selected?.key === term.key ? " is-selected" : ""}`}
-                  onClick={() => selectTerm(term)}
-                >
-                  <span className="admin-blog-links-term-label">{term.label}</span>
-                  {term.kind === "tag" && <span className="admin-blog-links-term-count">{term.postCount}</span>}
-                </button>
-                <span className="admin-blog-links-term-actions">
-                  <button type="button" onClick={() => handleRenameTerm(term)} disabled={busy} title={`Rename ${term.label}`}>Rename</button>
-                  <button type="button" onClick={() => handleDeleteTerm(term)} disabled={busy} title={`Remove ${term.label}`}>Remove</button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
-  }
+  /*
+   * The same three inline-style vocabularies BlogCategoryManagerPreview uses,
+   * so the two tables read as one family on the page they share. Inline rather
+   * than classed for the same reason that component is: this markup renders
+   * inside arbitrary tenant themes, and an explicit value cannot be reached by
+   * a theme rule the way a bare element or a generic class can.
+   */
+  const TAG_COLUMNS = "1fr 84px 76px";
+  const headStyle: CSSProperties = {
+    display: "grid", gridTemplateColumns: TAG_COLUMNS, gap: "0 12px",
+    padding: "7px 12px", background: "#f8fafc", borderBottom: "1px solid #e4ecf2",
+    fontSize: "0.6875rem", fontWeight: 700, color: "#587592",
+    textTransform: "uppercase", alignItems: "center",
+  };
+  const labelStyle: CSSProperties = { display: "block", fontSize: "0.8125rem", fontWeight: 600, color: "#374151", marginBottom: "0.25rem" };
+  const inputStyle: CSSProperties = { width: "100%", padding: "0.5rem 0.625rem", border: "1px solid #d1d5db", borderRadius: 6, fontSize: "0.875rem", boxSizing: "border-box" };
+  const sectionTitle: CSSProperties = { margin: "0 0 0.75rem", fontSize: "1rem", fontWeight: 700, color: "#1a202c" };
 
   return (
-    <div className="admin-blog-links">
+    <div className="admin-blog-links" style={{ fontFamily: "sans-serif" }}>
       {showTitle && <h3 className="admin-blog-links-title">{panelTitle}</h3>}
 
       {error && <div className="admin-blog-links-error" role="alert">{error}</div>}
       {note && !error && <div className="admin-blog-links-note">{note}</div>}
 
-      <div className="admin-blog-links-body">
-        <div className="admin-blog-links-side">
+      {showTagManager && (
+        <section style={{ marginBottom: "1.75rem" }}>
+          <h4 style={sectionTitle}>Tags</h4>
+
           {loadingTerms ? (
-            <div className="admin-blog-links-empty">Loading…</div>
+            <div style={{ padding: "1rem", color: "#888", textAlign: "center" }}>Loading…</div>
+          ) : tagTerms.length === 0 ? (
+            <div style={{ padding: "1rem", color: "#888", textAlign: "center", border: "1px dashed #ccc", borderRadius: 8 }}>
+              No tags yet. Tags come from the posts themselves — add one on a post and it appears here.
+            </div>
           ) : (
-            <>
-              {showCategories && renderTermList("Categories", categoryTerms, "No categories yet.")}
-              {showCategories && (
-                <form className="admin-blog-links-add" onSubmit={handleAddCategory}>
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+              <div style={headStyle}>
+                <span>Name</span>
+                <span style={{ textAlign: "right" }}>Posts</span>
+                <span style={{ textAlign: "right" }}>Actions</span>
+              </div>
+              {tagTerms.map((term, i) => (
+                <div
+                  key={term.key}
+                  style={{
+                    display: "grid", gridTemplateColumns: TAG_COLUMNS, gap: "0 12px",
+                    padding: "8px 12px", alignItems: "center",
+                    borderBottom: i < tagTerms.length - 1 ? "1px solid #f0f4f8" : undefined,
+                    background: editTag === term.label ? "#f2f8ff" : undefined,
+                  }}
+                >
+                  {/* No ellipsis and no width cap: the tag IS the content. A long
+                      tag wraps onto a second line rather than being cut off. */}
+                  <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c", overflowWrap: "anywhere" }}>
+                    {term.label}
+                  </span>
+                  <span style={{ fontSize: "0.8125rem", color: "#94a3b8", textAlign: "right" }}>{term.postCount}</span>
+                  <span style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "flex-end" }}>
+                    <button
+                      type="button"
+                      onClick={() => startRenameTag(term.label)}
+                      disabled={busy}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: accent, fontSize: "1rem", padding: 0, lineHeight: 1 }}
+                      title={`Rename "${term.label}" everywhere`}
+                    >✎</button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(term.label, term.postCount)}
+                      disabled={busy}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "#e53e3e", fontSize: "0.9rem", padding: 0, lineHeight: 1 }}
+                      title={`Remove "${term.label}" from every post`}
+                    >✕</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/*
+            An EDIT form only, never a create form. A tag cannot exist without
+            a post carrying it, so a "New Tag" box would be a control that
+            cannot do anything — the note below says where tags come from
+            instead of offering a button that lies.
+          */}
+          {editTag !== null ? (
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "1.25rem", background: "#fafbfc", marginTop: "1rem" }}>
+              <h4 style={sectionTitle}>Rename Tag</h4>
+              <form onSubmit={submitRenameTag}>
+                <div style={{ marginBottom: "0.75rem" }}>
+                  <label style={labelStyle}>Name *</label>
                   <input
                     type="text"
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    placeholder="New category"
-                    aria-label="New category name"
+                    style={inputStyle}
+                    value={tagDraft}
+                    onChange={(e) => setTagDraft(e.target.value)}
+                    placeholder={editTag}
+                    aria-label={`New name for the tag ${editTag}`}
+                    autoFocus
                   />
-                  <button type="submit" disabled={busy || !newCategory.trim()}>Add</button>
-                </form>
-              )}
-              {showTags && renderTermList("Tags", tagTerms, "No tags yet. Tags come from the posts themselves.")}
-              {!showCategories && !showTags && (
-                <div className="admin-blog-links-empty">Nothing to manage — turn on Categories or Tags in this module&rsquo;s settings.</div>
-              )}
-            </>
-          )}
-        </div>
+                </div>
+                <p style={{ margin: "0 0 0.9rem", fontSize: "0.8125rem", color: "#718096" }}>
+                  Renaming changes this tag on every post that carries it.{" "}
+                  <strong>Renaming it to a tag that already exists merges the two</strong>, and no
+                  post ends up with it twice.
+                </p>
+                <div style={{ display: "flex", gap: "0.75rem" }}>
+                  <button
+                    type="submit"
+                    disabled={busy || !tagDraft.trim() || tagDraft.trim() === editTag}
+                    style={{ padding: "0.5rem 1rem", background: accent, color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, cursor: "pointer", fontSize: "0.875rem" }}
+                  >
+                    {busy ? "Saving…" : "Rename Tag"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelRenameTag}
+                    disabled={busy}
+                    style={{ padding: "0.5rem 1rem", background: "none", color: "#4a5568", border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer", fontSize: "0.875rem" }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          ) : tagTerms.length > 0 ? (
+            <p style={{ margin: "0.75rem 0 0", fontSize: "0.8125rem", color: "#718096" }}>
+              Tags come from the posts themselves. Use ✎ to rename one across every post that
+              carries it, or ✕ to remove it from all of them.
+            </p>
+          ) : null}
+        </section>
+      )}
 
-        <div className="admin-blog-links-main">
+      {showRelate && (
+        <section>
+          <h4 style={sectionTitle}>Related Articles</h4>
+
+          {/* Full width, and a select rather than a narrow sidebar list — the
+              old two-column layout cut every term name off with an ellipsis. */}
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "0.9rem" }}>
+            <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+              <label style={labelStyle} htmlFor="admin-blog-links-term">Show articles filed under</label>
+              <select
+                id="admin-blog-links-term"
+                style={{ ...inputStyle, background: "#fff" }}
+                value={selectedKey}
+                onChange={(e) => selectTerm(e.target.value)}
+                disabled={loadingTerms}
+              >
+                <option value="">Choose a category or tag…</option>
+                {categoryTerms.length > 0 && (
+                  <optgroup label="Categories">
+                    {categoryTerms.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                  </optgroup>
+                )}
+                {tagTerms.length > 0 && (
+                  <optgroup label="Tags">
+                    {tagTerms.map((t) => (
+                      <option key={t.key} value={t.key}>{t.label} ({t.postCount})</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={handleRelate}
+              disabled={busy || checked.size < 2}
+              style={{
+                padding: "0.5rem 1rem", background: accent, color: "#fff", border: "none",
+                borderRadius: 6, fontWeight: 700, fontSize: "0.875rem",
+                cursor: checked.size < 2 ? "default" : "pointer",
+                opacity: busy || checked.size < 2 ? 0.45 : 1,
+                marginBottom: "0.75rem",
+              }}
+              title={checked.size < 2 ? "Check at least two articles" : `Relate the ${checked.size} checked articles to each other`}
+            >
+              {busy ? "Linking…" : relateLabel}
+            </button>
+          </div>
+
           {!selected ? (
-            <div className="admin-blog-links-empty">
-              Pick a category or tag on the left to see the articles filed under it.
+            <div style={{ padding: "1rem", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
+              Pick a category or tag above to see the articles filed under it, then tick the ones
+              that belong together and press {relateLabel}.
+            </div>
+          ) : loadingArticles ? (
+            <div style={{ padding: "1rem", color: "#888", textAlign: "center" }}>Loading…</div>
+          ) : articles.length === 0 ? (
+            <div style={{ padding: "1rem", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
+              No articles are filed under “{selected.label}”.
             </div>
           ) : (
             <>
-              <div className="admin-blog-links-main-head">
-                <div>
-                  <div className="admin-blog-links-main-title">{selected.label}</div>
-                  <div className="admin-blog-links-main-sub">
-                    {loadingArticles
-                      ? "Loading articles…"
-                      : `${articles.length} article${articles.length === 1 ? "" : "s"}${checked.size > 0 ? ` · ${checked.size} checked` : ""}`}
-                  </div>
-                </div>
-                {showRelate && (
-                  <button
-                    type="button"
-                    className="admin-blog-links-relate"
-                    onClick={handleRelate}
-                    disabled={busy || checked.size < 2}
-                    title={checked.size < 2 ? "Check at least two articles" : `Relate the ${checked.size} checked articles to each other`}
-                  >
-                    {busy ? "Linking…" : relateLabel}
-                  </button>
-                )}
+              <div style={{ fontSize: "0.8125rem", color: "#718096", marginBottom: "0.5rem" }}>
+                {articles.length} article{articles.length === 1 ? "" : "s"} under “{selected.label}”
+                {checked.size > 0 ? ` · ${checked.size} checked` : ""}
               </div>
-
-              {loadingArticles ? (
-                <div className="admin-blog-links-empty">Loading…</div>
-              ) : articles.length === 0 ? (
-                <div className="admin-blog-links-empty">No articles are filed under this one.</div>
-              ) : (
-                <ul className="admin-blog-links-articles">
-                  {articles.map((article) => (
-                    <li key={article.id}>
-                      <label className="admin-blog-links-article">
-                        <input
-                          type="checkbox"
-                          checked={checked.has(article.id)}
-                          onChange={() => toggleChecked(article.id)}
-                        />
-                        <span className="admin-blog-links-article-body">
-                          <span className="admin-blog-links-article-title">{article.title}</span>
-                          {article.status && article.status !== "published" && (
-                            <span className="admin-blog-links-article-status">{article.status}</span>
-                          )}
-                          {(relatedTitles[article.id]?.length ?? 0) > 0 && (
-                            <span className="admin-blog-links-article-related">
-                              Related to: {relatedTitles[article.id].join(", ")}
-                            </span>
-                          )}
+              <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+                {articles.map((article, i) => (
+                  <label
+                    key={article.id}
+                    className="admin-blog-links-article"
+                    style={{
+                      display: "flex", alignItems: "flex-start", gap: 10,
+                      padding: "9px 12px", cursor: "pointer",
+                      borderBottom: i < articles.length - 1 ? "1px solid #f0f4f8" : undefined,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked.has(article.id)}
+                      onChange={() => toggleChecked(article.id)}
+                    />
+                    <span style={{ display: "flex", flexDirection: "column", gap: 2, flex: "1 1 auto", minWidth: 0 }}>
+                      <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c", overflowWrap: "anywhere" }}>
+                        {article.title}
+                      </span>
+                      {article.status && article.status !== "published" && (
+                        <span style={{ alignSelf: "flex-start", padding: "1px 6px", borderRadius: 999, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: "0.6875rem", textTransform: "capitalize", color: "#718096" }}>
+                          {article.status}
                         </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                      )}
+                      {(relatedTitles[article.id]?.length ?? 0) > 0 && (
+                        <span style={{ fontSize: "0.75rem", color: "#718096", overflowWrap: "anywhere" }}>
+                          Related to: {relatedTitles[article.id].join(", ")}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </>
           )}
-        </div>
-      </div>
+        </section>
+      )}
     </div>
   );
 }
