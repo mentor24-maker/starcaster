@@ -65,3 +65,22 @@ describe("seeding the video overlay tint", () => {
     expect(twice).toEqual(once);
   });
 });
+
+/**
+ * Seeding sets the colour and the strength. Every other overlay field is the
+ * operator's, and a seed that rebuilds the object from a hand-written list of
+ * fields drops whichever one was added most recently — silently, because the
+ * two that matter today both happen to be the two being set.
+ */
+describe("seeding leaves the rest of the overlay alone", () => {
+  it("keeps a blend mode chosen while the tint was still off", () => {
+    const seeded = seedVideoBackgroundOverlayScreen({
+      background: { mode: "none" },
+      opacity: 100,
+      blendMode: "multiply"
+    });
+
+    expect(seeded.background.mode).toBe("color");
+    expect(seeded.blendMode).toBe("multiply");
+  });
+});
