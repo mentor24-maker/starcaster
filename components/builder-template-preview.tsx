@@ -1868,13 +1868,21 @@ function BuilderSectionPreview({
           >
             {/*
               Above the cell's own fill, below its modules. The stacking is not
-              done here — the class above opens a stacking context on the cell
-              and the stylesheet puts this layer at 1 and the modules at 2, the
-              same two-rung arrangement the row already uses for its own screen.
-              Doing it inline instead would leave the modules unnumbered, and an
-              unnumbered in-flow sibling paints UNDER a positioned z-index: 1 —
+              done here — the class above is what the stylesheet hangs two
+              rungs off, this layer at 0 and the modules at 1, the same
+              arrangement the row already uses for its own screen.
+
+              Doing it inline instead would leave the modules unnumbered, and
+              an unnumbered in-flow sibling paints UNDER a positioned layer —
               which is a tint over the operator's text, the one outcome this
               setting must never produce.
+
+              The cell deliberately opens NO stacking context of its own. It
+              did at first, and that clamped a floating image's `z-index: 40`
+              inside the cell so the next column painted over the part of it
+              that overhangs (round 2 of 86bbqb0ac). The rungs never needed a
+              context: 0 is below 1 in whichever ancestor resolves them. See
+              `_builder-react-overrides.css` for the measurements.
             */}
             {cellOverlayScreenStyle ? (
               <div className="builder-preview-cell-overlay-screen" style={cellOverlayScreenStyle} />

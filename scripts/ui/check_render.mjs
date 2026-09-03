@@ -228,8 +228,8 @@ async function render(page, doc) {
 /**
  * Everything a contract can assert on, sampled twice so motion is provable.
  */
-function sample(page, selector, read, settleMs, series) {
-  return page.evaluate(async ({ selector, read, settleMs, series }) => {
+function sample(page, selector, read, settleMs, series, probes) {
+  return page.evaluate(async ({ selector, read, settleMs, series, probes }) => {
     const doc = document.documentElement;
     const modules = document.querySelectorAll('.builder-preview-module');
     const el = document.querySelector(selector);
@@ -311,11 +311,82 @@ function sample(page, selector, read, settleMs, series) {
       }
     }
 
+    /*
+     * WHAT ACTUALLY PAINTS ON TOP, WHERE TWO ELEMENTS OVERLAP.
+     *
+     * The series above reads z-index, and z-index alone cannot answer this
+     * question — which is the whole reason this exists. Two elements can keep
+     * the same numbers and swap places, because a number only means anything
+     * inside the stacking context that resolves it: giving a cell
+     * `isolation: isolate` moved a floating image's `z-index: 40` from the
+     * section's context into the cell's, and the column next door started
+     * painting over the part of the image that hangs into it. Every z-index
+     * reading in that scene was identical before and after, and so was the
+     * image's rect. Only the answer to "what is on top" changed (round 2 of
+     * 86bbqb0ac).
+     *
+     * Each probe names two selectors, intersects their boxes and asks the
+     * browser what is at the middle of the overlap.
+     *
+     * WHAT IT CANNOT SEE, and this is not a footnote: `elementFromPoint` skips
+     * anything with `pointer-events: none`, which every tint screen in this
+     * codebase sets. A probe can therefore never report a screen as being on
+     * top, and a contract written to prove one covers something would pass
+     * while doing nothing. Probes are for elements that take hit-testing —
+     * decor, text, backgrounds. Use z-index readings, or a person's eye, for
+     * the screens.
+     *
+     * `overlap` rides along in every result on purpose. Two boxes that do not
+     * actually overlap would make any assertion here unfalsifiable — the point
+     * would land somewhere neither element is, and whatever it hit would be
+     * read as an answer. A contract MUST reject a non-positive overlap.
+     */
+    let probesOut = null;
+    if (probes) {
+      probesOut = {};
+      for (const [name, spec] of Object.entries(probes)) {
+        const subject = document.querySelector(spec.subject);
+        const against = document.querySelector(spec.against);
+        if (!subject || !against) {
+          probesOut[name] = {
+            subject: !!subject, against: !!against, overlap: 0,
+            missing: !subject ? spec.subject : spec.against,
+          };
+          continue;
+        }
+        const sb = subject.getBoundingClientRect();
+        const ab = against.getBoundingClientRect();
+        const left = Math.max(sb.left, ab.left);
+        const right = Math.min(sb.right, ab.right);
+        const top = Math.max(sb.top, ab.top);
+        const bottom = Math.min(sb.bottom, ab.bottom);
+        const overlapX = right - left;
+        const overlapY = bottom - top;
+        const x = (left + right) / 2;
+        const y = (top + bottom) / 2;
+        const hit = overlapX > 0 && overlapY > 0 ? document.elementFromPoint(x, y) : null;
+        probesOut[name] = {
+          subject: true,
+          against: true,
+          overlap: Math.round(Math.min(overlapX, overlapY)),
+          overlapX: Math.round(overlapX),
+          overlapY: Math.round(overlapY),
+          point: { x: Math.round(x), y: Math.round(y) },
+          subjectBox: { left: Math.round(sb.left), right: Math.round(sb.right) },
+          againstBox: { left: Math.round(ab.left), right: Math.round(ab.right) },
+          hit: hit ? `${hit.tagName.toLowerCase()}${hit.className ? `.${String(hit.className).trim().split(/\s+/)[0]}` : ''}` : null,
+          onSubject: !!(hit && subject.contains(hit)),
+          onAgainst: !!(hit && against.contains(hit)),
+        };
+      }
+    }
+
     const rect = el.getBoundingClientRect();
     return {
       found: true,
       page: page_,
       series: seriesOut,
+      probes: probesOut,
       box: { width: Math.round(rect.width), height: Math.round(rect.height) },
       styles,
       animations: after,
@@ -326,7 +397,7 @@ function sample(page, selector, read, settleMs, series) {
       text: (el.textContent || '').trim().slice(0, 200),
       settleMs,
     };
-  }, { selector, read, settleMs, series: series ?? null });
+  }, { selector, read, settleMs, series: series ?? null, probes: probes ?? null });
 }
 
 /**
@@ -551,7 +622,8 @@ try {
       contract.selector,
       contract.read || [],
       SETTLE_MS,
-      contract.series
+      contract.series,
+      contract.probes
     );
 
     if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });
