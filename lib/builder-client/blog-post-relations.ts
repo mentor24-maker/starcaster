@@ -125,3 +125,53 @@ export function pairsToAdd(
   }
   return out;
 }
+
+/**
+ * What has to change for ONE post's related set to become `nextRelatedIds`.
+ *
+ * The post editor is a different shape of write from the links manager. The
+ * manager relates a whole checked SET to each other and only ever adds; the
+ * editor owns one post's list, so unchecking has to remove a pair as surely as
+ * checking adds one — and it must touch only the pairs that involve this post.
+ * A pair between two OTHER posts is somebody else's relation and is left alone;
+ * computing "the pairs this post should have" and diffing against "the pairs
+ * this post has" is the only way to get that right, which is why this returns
+ * both halves rather than reusing pairsToAdd on its own.
+ */
+export function relationChangesForPost(
+  postId: unknown,
+  nextRelatedIds: readonly unknown[],
+  existingPairs: readonly PostRelationPair[]
+): { add: PostRelationPair[]; remove: PostRelationPair[] } {
+  const target = clean(postId);
+  if (!target) return { add: [], remove: [] };
+
+  const wanted: PostRelationPair[] = [];
+  const wantedKeys = new Set<string>();
+  for (const raw of nextRelatedIds ?? []) {
+    const pair = canonicalPair(target, raw);
+    if (!pair) continue;
+    const key = pairKey(pair);
+    if (wantedKeys.has(key)) continue;
+    wantedKeys.add(key);
+    wanted.push(pair);
+  }
+
+  const mine: PostRelationPair[] = [];
+  const mineKeys = new Set<string>();
+  for (const pair of existingPairs ?? []) {
+    const canonical = canonicalPair(pair?.postIdA, pair?.postIdB);
+    if (!canonical) continue;
+    // Only this post's own pairs. Everything else belongs to other posts.
+    if (canonical.postIdA !== target && canonical.postIdB !== target) continue;
+    const key = pairKey(canonical);
+    if (mineKeys.has(key)) continue;
+    mineKeys.add(key);
+    mine.push(canonical);
+  }
+
+  return {
+    add: wanted.filter((pair) => !mineKeys.has(pairKey(pair))),
+    remove: mine.filter((pair) => !wantedKeys.has(pairKey(pair))),
+  };
+}

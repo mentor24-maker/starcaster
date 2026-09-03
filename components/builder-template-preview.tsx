@@ -15,7 +15,7 @@ import {
   type MediaFilters
 } from "@/lib/media-manager-filters";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
-import { relatedIdsFor, type PostRelationPair } from "@/lib/blog-post-relations";
+import { relatedIdsFor, relationChangesForPost, type PostRelationPair } from "@/lib/blog-post-relations";
 import {
   builderBackgroundParallaxActive,
   createDefaultBackgroundSettings,
@@ -2780,7 +2780,11 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
   const showAuthorField = settings.showAuthorField === "true";
   const showCategories = (settings.showCategories ?? "true") !== "false";
   const showTags = (settings.showTags ?? "true") !== "false";
+  const showRelatedPosts = (settings.showRelatedPosts ?? "true") !== "false";
   const showSeoFields = settings.showSeoFields === "true";
+  // Categories, Tags and Related Posts share one collapsible container between
+  // Excerpt and Body. It only exists if at least one of them is on.
+  const showPostOptions = showCategories || showTags || showRelatedPosts;
   const submitLabel = settings.submitLabel || "Publish Post";
   const draftLabel = settings.draftLabel || "Save as Draft";
   const successMessage = settings.successMessage || "Post created successfully.";
@@ -2798,6 +2802,26 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
   const [statusMsg, setStatusMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // ── Categories / Tags / Related Posts ────────────────────────────────────
+  // Collapsed by default: the three of them together are longer than the rest
+  // of the form, and most saves do not touch them.
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [relatedIds, setRelatedIds] = useState<string[]>([]);
+  // Whether this post's stored relations have actually been READ. Saving is
+  // guarded on it: a PUT built from an empty list we never loaded would wipe
+  // every relation the post has, and report success doing it.
+  const [relationsLoaded, setRelationsLoaded] = useState(!isEditMode);
+  const [postChoices, setPostChoices] = useState<{ id: string; title: string; status: string }[]>([]);
+  const [choicesState, setChoicesState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerFilter, setPickerFilter] = useState("");
+  const [categoryChoices, setCategoryChoices] = useState<{ id: string; slug: string; name: string }[]>([]);
+  // Same guard as relations, for the same reason: the form holds category
+  // SLUGS and the API takes ids, so without the list the field cannot be
+  // translated — and sending [] would clear the post's categories.
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+  const [loadedCategoryIds, setLoadedCategoryIds] = useState<string[] | null>(isEditMode ? null : []);
 
   useEffect(() => {
     if (!editId) return;
@@ -2821,15 +2845,117 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
             seoTitle: String(post.seoTitle ?? post.seo_title ?? ""),
             seoDescription: String(post.seoDescription ?? post.seo_description ?? ""),
           });
+          // Held as ids until the category list arrives — the field shows
+          // slugs, so it cannot be filled in until both are here.
+          const catIds = post.categoryIds ?? post.category_ids;
+          setLoadedCategoryIds(Array.isArray(catIds) ? catIds.map(String) : []);
         }
       })
       .catch(() => {})
       .finally(() => setLoadingPost(false));
   }, [editId]);
 
+  // This post's existing relations. One request, on mount, so the collapsed
+  // header can say how many there are without opening anything.
+  useEffect(() => {
+    if (!editId || !showRelatedPosts) return;
+    let cancelled = false;
+    fetch(`/api/blog/relations?postId=${encodeURIComponent(editId)}`, {
+      credentials: "include",
+      headers: getCrmProjectHeaders()
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("relations"))))
+      .then((d) => {
+        if (cancelled) return;
+        const ids = Array.isArray(d?.relatedIds) ? d.relatedIds : Array.isArray(d?.data) ? d.data : [];
+        setRelatedIds(ids.map(String).filter(Boolean));
+        setRelationsLoaded(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [editId, showRelatedPosts]);
+
+  // The project's categories, so the slugs typed in the field can be turned
+  // into the ids the API stores (and back again on load).
+  useEffect(() => {
+    if (!showCategories) return;
+    let cancelled = false;
+    fetch("/api/blog/categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("categories"))))
+      .then((d) => {
+        if (cancelled) return;
+        const list = Array.isArray(d?.categories) ? d.categories : Array.isArray(d?.data) ? d.data : [];
+        setCategoryChoices(
+          (list as Record<string, unknown>[]).map((c) => ({
+            id: String(c.id ?? ""),
+            slug: String(c.slug ?? ""),
+            name: String(c.name ?? "")
+          })).filter((c) => c.id)
+        );
+        setCategoriesLoaded(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [showCategories]);
+
+  // Once both halves are in, fill the Categories field with the post's slugs.
+  useEffect(() => {
+    if (!categoriesLoaded || loadedCategoryIds === null) return;
+    const bySlug = loadedCategoryIds
+      .map((id) => categoryChoices.find((c) => c.id === id)?.slug || "")
+      .filter(Boolean);
+    setValues((prev) => (prev.categoryIds === undefined ? { ...prev, categoryIds: bySlug.join(", ") } : prev));
+  }, [categoriesLoaded, loadedCategoryIds, categoryChoices]);
+
+  /** Every post that could be related — the whole project's list, minus this one. */
+  const loadPostChoices = useCallback(() => {
+    if (choicesState === "loading" || choicesState === "ready") return;
+    setChoicesState("loading");
+    fetch("/api/blog/posts?limit=500", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("posts"))))
+      .then((d) => {
+        const list = Array.isArray(d?.posts) ? d.posts : Array.isArray(d?.data) ? d.data : [];
+        setPostChoices(
+          (list as Record<string, unknown>[])
+            .map((post) => ({
+              id: String(post.id ?? ""),
+              title: String(post.title ?? "") || "(untitled)",
+              status: String(post.status ?? "")
+            }))
+            .filter((post) => post.id && post.id !== editId)
+        );
+        setChoicesState("ready");
+      })
+      .catch(() => setChoicesState("error"));
+  }, [choicesState, editId]);
+
   function setField(key: string, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
   }
+
+  function toggleRelated(id: string) {
+    setRelatedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  /** The slugs typed into the Categories field, in order, without blanks. */
+  const typedCategorySlugs = (values.categoryIds || "")
+    .split(",")
+    .map((slug) => slug.trim())
+    .filter(Boolean);
+
+  function matchCategory(slug: string) {
+    const needle = slug.toLowerCase();
+    return categoryChoices.find(
+      (c) => c.slug.toLowerCase() === needle || c.name.toLowerCase() === needle
+    );
+  }
+
+  // Slugs that match no category in this project. They are dropped on save --
+  // the API stores ids -- so the form has to say so rather than appear to have
+  // saved them.
+  const unknownCategorySlugs = categoriesLoaded
+    ? typedCategorySlugs.filter((slug) => !matchCategory(slug))
+    : [];
 
   async function submitPost(status: "published" | "draft") {
     if (!values.title?.trim()) {
@@ -2840,13 +2966,23 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
     setStatusMsg("");
     setSubmitting(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...values,
         status,
         tags: values.tags
           ? values.tags.split(",").map((t) => t.trim()).filter(Boolean)
           : []
       };
+      // The field holds slugs; the API takes category ids. Without the list
+      // loaded there is no translation, and sending [] would clear the post's
+      // categories -- so the key is left out entirely and they are untouched.
+      if (showCategories && categoriesLoaded) {
+        payload.categoryIds = typedCategorySlugs
+          .map((slug) => matchCategory(slug)?.id)
+          .filter((id): id is string => Boolean(id));
+      } else {
+        delete payload.categoryIds;
+      }
       const url = isEditMode ? `/api/blog/posts/${encodeURIComponent(editId)}` : "/api/blog/posts";
       const method = isEditMode ? "PUT" : "POST";
       const res = await fetch(url, {
@@ -2863,8 +2999,52 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
             : (data.error as { message?: string } | undefined)?.message || (isEditMode ? "Failed to update post." : "Failed to create post.");
         throw new Error(errMsg);
       }
-      setStatusMsg(isEditMode ? "Post updated successfully." : successMessage);
-      if (!isEditMode) setValues({});
+      // A new post has no id until the server hands one back, which is why the
+      // relations are written after the post rather than with it.
+      const savedRecord = ((data as Record<string, unknown>)?.data
+        ?? (data as Record<string, unknown>)?.post) as Record<string, unknown> | undefined;
+      const savedPostId = isEditMode ? editId : String(savedRecord?.id ?? "");
+
+      let relationsMsg = "";
+      if (showRelatedPosts && savedPostId && relationsLoaded) {
+        const relRes = await fetch("/api/blog/relations", {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+          body: JSON.stringify({ postId: savedPostId, relatedIds })
+        });
+        if (!relRes.ok) {
+          // The post itself IS saved. Saying "saved" flat would be a lie about
+          // the half that failed, so both halves are reported.
+          setStatusMsg("");
+          setErrorMsg("The post was saved, but the related posts were not. Try saving again.");
+          setSubmitting(false);
+          return;
+        }
+        // Read the relations back rather than trusting the response -- the
+        // point of the control is what is STORED.
+        const readBack = await fetch(`/api/blog/relations?postId=${encodeURIComponent(savedPostId)}`, {
+          credentials: "include",
+          headers: getCrmProjectHeaders()
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        const storedIds = Array.isArray(readBack?.relatedIds)
+          ? readBack.relatedIds
+          : Array.isArray(readBack?.data) ? readBack.data : null;
+        if (storedIds) {
+          setRelatedIds(storedIds.map(String).filter(Boolean));
+          relationsMsg = ` ${storedIds.length} related post${storedIds.length === 1 ? "" : "s"} saved.`;
+        }
+      }
+
+      setStatusMsg((isEditMode ? "Post updated successfully." : successMessage) + relationsMsg);
+      if (!isEditMode) {
+        setValues({});
+        setRelatedIds([]);
+        setPickerOpen(false);
+        setPickerFilter("");
+      }
       if (redirectAfterCreate) {
         setTimeout(() => { window.location.href = redirectAfterCreate; }, 1500);
       }
@@ -2895,6 +3075,35 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
     color: "#374151"
   };
   const fieldStyle: CSSProperties = { marginBottom: "1rem" };
+
+  // ── The collapsible container's header ───────────────────────────────────
+  const optionsTitle = [
+    showCategories ? "Categories" : "",
+    showTags ? "Tags" : "",
+    showRelatedPosts ? "Related Posts" : ""
+  ].filter(Boolean).join(" · ");
+
+  const typedTags = (values.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
+  const optionsCounts = [
+    showCategories ? `${typedCategorySlugs.length} categor${typedCategorySlugs.length === 1 ? "y" : "ies"}` : "",
+    showTags ? `${typedTags.length} tag${typedTags.length === 1 ? "" : "s"}` : "",
+    showRelatedPosts ? `${relatedIds.length} related` : ""
+  ].filter(Boolean);
+  const nothingSet =
+    (!showCategories || typedCategorySlugs.length === 0) &&
+    (!showTags || typedTags.length === 0) &&
+    (!showRelatedPosts || relatedIds.length === 0);
+  const optionsSummary = nothingSet ? "none set" : optionsCounts.join(" · ");
+
+  /** A related post's title, falling back to its id until the list arrives. */
+  function relatedTitleFor(id: string): string {
+    return postChoices.find((post) => post.id === id)?.title || id;
+  }
+
+  const pickerNeedle = pickerFilter.trim().toLowerCase();
+  const visiblePostChoices = pickerNeedle
+    ? postChoices.filter((post) => post.title.toLowerCase().includes(pickerNeedle))
+    : postChoices;
 
   return (
     <div
@@ -3035,6 +3244,251 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
         </div>
       ) : null}
 
+      {/* Categories, Tags and Related Posts — one collapsible container,
+          collapsed by default, sitting between Excerpt and Body. The three of
+          them are what a post is FILED under, as opposed to what it says. */}
+      {showPostOptions ? (
+        <div
+          className="builder-blog-post-options"
+          style={{
+            border: "1px solid #e5e7eb",
+            borderRadius: 6,
+            background: "#f9fafb",
+            marginBottom: "1rem"
+          }}
+        >
+          <button
+            type="button"
+            aria-expanded={optionsOpen}
+            onClick={() => {
+              const next = !optionsOpen;
+              setOptionsOpen(next);
+              if (next && showRelatedPosts) loadPostChoices();
+            }}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.625rem 0.875rem",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              textAlign: "left",
+              font: "inherit",
+              boxSizing: "border-box"
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: "inline-block",
+                fontSize: "0.6rem",
+                color: "#6b7280",
+                transform: optionsOpen ? "rotate(90deg)" : "none",
+                transition: "transform 120ms ease"
+              }}
+            >
+              ▶
+            </span>
+            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>
+              {optionsTitle}
+            </span>
+            {/* A collapsed container must not be a hiding place: the header
+                says what is set inside it without being opened. */}
+            <span style={{ marginLeft: "auto", fontSize: "0.75rem", color: "#6b7280" }}>
+              {optionsSummary}
+            </span>
+          </button>
+
+          {optionsOpen ? (
+            <div style={{ padding: "0 0.875rem 0.875rem" }}>
+              {showCategories ? (
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Categories (slugs, comma-separated)</label>
+                  <input
+                    style={inputStyle}
+                    type="text"
+                    value={values.categoryIds || ""}
+                    onChange={(e) => setField("categoryIds", e.target.value)}
+                    placeholder="news, announcements"
+                  />
+                  {unknownCategorySlugs.length > 0 ? (
+                    <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: "#b45309" }}>
+                      No category in this project matches {unknownCategorySlugs.join(", ")} — those will not be saved.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {showTags ? (
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Tags (comma-separated)</label>
+                  <input
+                    style={inputStyle}
+                    type="text"
+                    value={values.tags || ""}
+                    onChange={(e) => setField("tags", e.target.value)}
+                    placeholder="react, tutorial, design"
+                  />
+                </div>
+              ) : null}
+
+              {showRelatedPosts ? (
+                <div style={{ ...fieldStyle, marginBottom: 0 }}>
+                  <label style={labelStyle}>
+                    Related Posts
+                    <span style={{ fontWeight: 400, color: "#6b7280" }}>
+                      {" "}— what the “You Might Also Like” list shows
+                    </span>
+                  </label>
+
+                  {relatedIds.length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem", marginBottom: "0.5rem" }}>
+                      {relatedIds.map((id) => (
+                        <span
+                          key={id}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.375rem",
+                            padding: "0.15rem 0.5rem",
+                            background: "#fff",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 999,
+                            fontSize: "0.75rem",
+                            color: "#374151"
+                          }}
+                        >
+                          {relatedTitleFor(id)}
+                          <button
+                            type="button"
+                            aria-label={`Remove ${relatedTitleFor(id)}`}
+                            onClick={() => toggleRelated(id)}
+                            style={{
+                              border: "none",
+                              background: "transparent",
+                              cursor: "pointer",
+                              color: "#9ca3af",
+                              padding: 0,
+                              fontSize: "0.85rem",
+                              lineHeight: 1
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ margin: "0 0 0.5rem", fontSize: "0.75rem", color: "#6b7280" }}>
+                      Nothing related yet. Relations are mutual — each post you check will show this one too.
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !pickerOpen;
+                      setPickerOpen(next);
+                      if (next) loadPostChoices();
+                    }}
+                    style={{
+                      padding: "0.35rem 0.75rem",
+                      border: `1px solid ${accent}`,
+                      borderRadius: 6,
+                      background: "#fff",
+                      color: accent,
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      cursor: "pointer"
+                    }}
+                  >
+                    {pickerOpen ? "Done choosing" : "Choose related posts…"}
+                  </button>
+
+                  {pickerOpen ? (
+                    <div
+                      style={{
+                        marginTop: "0.5rem",
+                        border: "1px solid #d1d5db",
+                        borderRadius: 6,
+                        background: "#fff"
+                      }}
+                    >
+                      <div style={{ padding: "0.5rem", borderBottom: "1px solid #e5e7eb" }}>
+                        <input
+                          style={inputStyle}
+                          type="search"
+                          value={pickerFilter}
+                          onChange={(e) => setPickerFilter(e.target.value)}
+                          placeholder="Filter by title…"
+                        />
+                      </div>
+                      <div style={{ maxHeight: 260, overflowY: "auto", padding: "0.25rem 0" }}>
+                        {choicesState === "loading" ? (
+                          <p style={{ margin: 0, padding: "0.75rem", fontSize: "0.8rem", color: "#6b7280" }}>
+                            Loading posts…
+                          </p>
+                        ) : choicesState === "error" ? (
+                          <p style={{ margin: 0, padding: "0.75rem", fontSize: "0.8rem", color: "#991b1b" }}>
+                            The list of posts could not be loaded, so nothing can be chosen right now.
+                          </p>
+                        ) : visiblePostChoices.length === 0 ? (
+                          <p style={{ margin: 0, padding: "0.75rem", fontSize: "0.8rem", color: "#6b7280" }}>
+                            {postChoices.length === 0
+                              ? "There are no other posts to relate this one to yet."
+                              : "No post matches that filter."}
+                          </p>
+                        ) : (
+                          visiblePostChoices.map((post) => (
+                            <label
+                              key={post.id}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                padding: "0.3rem 0.75rem",
+                                fontSize: "0.8rem",
+                                color: "#374151",
+                                cursor: "pointer"
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={relatedIds.includes(post.id)}
+                                onChange={() => toggleRelated(post.id)}
+                                // The site stylesheet gives form inputs
+                                // width:100%, which a checkbox obeys: the box
+                                // stretched to 1166px and squeezed the title
+                                // to a one-character column at the far right.
+                                style={{ width: "auto", flex: "0 0 auto", margin: 0 }}
+                              />
+                              <span style={{ flex: 1, minWidth: 0 }}>{post.title}</span>
+                              {post.status && post.status !== "published" ? (
+                                <span style={{ fontSize: "0.7rem", color: "#9ca3af", textTransform: "uppercase" }}>
+                                  {post.status}
+                                </span>
+                              ) : null}
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {!relationsLoaded ? (
+                    <p style={{ margin: "0.5rem 0 0", fontSize: "0.75rem", color: "#b45309" }}>
+                      This post’s existing related posts could not be read, so saving will leave them exactly as they are.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div style={fieldStyle}>
         <label style={labelStyle}>Body</label>
         <BuilderRichTextEditor
@@ -3043,32 +3497,6 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
           placeholder="Post content…"
         />
       </div>
-
-      {showCategories ? (
-        <div style={fieldStyle}>
-          <label style={labelStyle}>Categories (slugs, comma-separated)</label>
-          <input
-            style={inputStyle}
-            type="text"
-            value={values.categoryIds || ""}
-            onChange={(e) => setField("categoryIds", e.target.value)}
-            placeholder="news, announcements"
-          />
-        </div>
-      ) : null}
-
-      {showTags ? (
-        <div style={fieldStyle}>
-          <label style={labelStyle}>Tags (comma-separated)</label>
-          <input
-            style={inputStyle}
-            type="text"
-            value={values.tags || ""}
-            onChange={(e) => setField("tags", e.target.value)}
-            placeholder="react, tutorial, design"
-          />
-        </div>
-      ) : null}
 
       {showSeoFields ? (
         <>
