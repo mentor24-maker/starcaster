@@ -41,6 +41,16 @@ import {
   getCarouselImageShadowGutter
 } from "@/lib/builder-carousel-image-frame";
 import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
+import {
+  type CloudTag,
+  PLACEHOLDER_TAGS,
+  activeTagSlug,
+  maxTagCount,
+  parseCloudTags,
+  resolveTagCloudSettings,
+  tagFontSize,
+  tagHref
+} from "@/lib/blog-tag-cloud";
 import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
 import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
 import {
@@ -6791,39 +6801,136 @@ function BlogCategoryFilterPreview({ settings }: { settings: Record<string, stri
   );
 }
 
+/**
+ * THE LIVE TENANT SITE'S TAG CLOUD.
+ *
+ * Not a preview despite the name: routes/publicSitePages.js serves
+ * public/site.html, which mounts BuilderPublicSitePage -> BuilderTemplatePreview
+ * -> here. There is no server-side renderer for this module type, so this is
+ * the whole of what a visitor sees.
+ *
+ * It used to read four of the module's twelve settings. `layout`, the
+ * count-weighted font sizes, `alignment` and `inactiveColor` were dropped, and
+ * every tag rendered as a `<span>` with no href — so the "Tag navigation
+ * widget … that filters posts by ?tag=slug" navigated nowhere, while the
+ * Builder canvas showed the layout applying. The rules live in
+ * lib/builder-client/blog-tag-cloud.ts now and the canvas card reads the same
+ * ones, so the two cannot drift apart again.
+ */
 function BlogTagCloudPreview({ settings }: { settings: Record<string, string> }) {
-  let tags: Array<{ id: string; label: string; slug: string; count?: number }> = [];
-  try {
-    tags = JSON.parse(settings.tags || "[]") as typeof tags;
-  } catch {}
-  if (!tags.length) {
-    tags = [
-      { id: "a", label: "News", slug: "news" },
-      { id: "b", label: "Tutorial", slug: "tutorial" },
-      { id: "c", label: "Design", slug: "design" }
-    ];
-  }
-  const activeColor = settings.activeColor || "#0f4f8f";
-  const inactiveBg = settings.inactiveBg || "#f3f4f6";
+  const resolved = resolveTagCloudSettings(settings);
+  const configured = parseCloudTags(settings);
+  const tags = configured.length ? configured : PLACEHOLDER_TAGS;
+  const maxCount = maxTagCount(tags);
+  const currentSlug = activeTagSlug(
+    typeof window === "undefined" ? "" : window.location.search,
+    resolved
+  );
 
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: settings.gap || "0.5rem" }}>
-      {tags.map((tag) => (
-        <span
-          key={tag.id}
+  const heading = resolved.title ? (
+    <div
+      className="builder-blog-tag-cloud-title"
+      style={{
+        fontSize: "1.05rem",
+        fontWeight: 600,
+        marginBottom: "0.6rem",
+        color: resolved.activeColor,
+        textAlign: resolved.alignment
+      }}
+    >
+      {resolved.title}
+    </div>
+  ) : null;
+
+  function countSuffix(tag: CloudTag, fontSize: number) {
+    if (!resolved.showCounts) return null;
+    return (
+      <span style={{ marginLeft: 3, opacity: 0.6, fontSize: Math.round(fontSize * 0.8) }}>
+        ({tag.count ?? 1})
+      </span>
+    );
+  }
+
+  if (resolved.layout === "list") {
+    return (
+      <div className="builder-blog-tag-cloud" data-tag-cloud-layout="list">
+        {heading}
+        <ul
           style={{
-            padding: "0.3rem 0.85rem",
-            borderRadius: "999px",
-            background: inactiveBg,
-            color: activeColor,
-            fontSize: "0.8rem",
-            cursor: "pointer"
+            listStyle: "none",
+            padding: 0,
+            margin: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: resolved.gap,
+            textAlign: resolved.alignment
           }}
         >
-          {tag.label}
-          {settings.showCounts !== "false" && tag.count ? ` (${tag.count})` : ""}
-        </span>
-      ))}
+          {tags.map((tag) => {
+            const isActive = Boolean(currentSlug) && currentSlug === tag.slug;
+            return (
+              <li key={tag.id}>
+                <a
+                  className="builder-blog-tag-cloud-tag"
+                  href={tagHref(tag.slug, resolved)}
+                  style={{
+                    fontSize: resolved.minFontSize,
+                    color: isActive ? resolved.activeColor : resolved.inactiveColor,
+                    fontWeight: isActive ? 600 : 400,
+                    textDecoration: "none"
+                  }}
+                >
+                  {tag.label}
+                  {countSuffix(tag, resolved.minFontSize)}
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <div className="builder-blog-tag-cloud" data-tag-cloud-layout={resolved.layout}>
+      {heading}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: resolved.gap,
+          justifyContent: resolved.alignment === "center" ? "center" : "flex-start",
+          alignItems: "baseline"
+        }}
+      >
+        {tags.map((tag) => {
+          const isActive = Boolean(currentSlug) && currentSlug === tag.slug;
+          const fontSize = tagFontSize(tag.count, maxCount, resolved);
+          return (
+            <a
+              key={tag.id}
+              className="builder-blog-tag-cloud-tag"
+              href={tagHref(tag.slug, resolved)}
+              style={{
+                fontSize,
+                padding:
+                  resolved.layout === "cloud"
+                    ? `${Math.round(fontSize * 0.2)}px ${Math.round(fontSize * 0.55)}px`
+                    : "3px 10px",
+                borderRadius: resolved.layout === "cloud" ? 4 : 20,
+                background: isActive ? `${resolved.activeColor}18` : resolved.inactiveBg,
+                color: isActive ? resolved.activeColor : resolved.inactiveColor,
+                fontWeight: isActive ? 600 : 400,
+                textDecoration: "none",
+                display: "inline-block"
+              }}
+            >
+              {tag.label}
+              {countSuffix(tag, fontSize)}
+            </a>
+          );
+        })}
+      </div>
     </div>
   );
 }
