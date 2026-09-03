@@ -58,6 +58,7 @@ import loopNoteLib from './builder/loopNote.js';
 const { loopNote, heartbeatNote } = loopNoteLib;
 import { spawnSync } from 'node:child_process';
 import busRelayPlan from './builder/busRelayPlan.js';
+import clickupRetry from './builder/clickupRetry.js';
 import mergeOnComment from './builder/mergeOnComment.js';
 import loopTrail from './builder/loopTrail.js';
 import buildStart from './builder/buildStart.js';
@@ -84,6 +85,7 @@ const {
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
   SIMULATED_BUS_WHY, simulationGuard, simulationLine,
 } = busRelayPlan;
+const { retryDecision } = clickupRetry;
 const {
   mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
   refusalNotice, conflictHandOffNotice, mergedNotice,
@@ -229,6 +231,11 @@ function reportLimits(res) {
  */
 let requestCount = 0;
 
+/** Plain sleep. Only the retry loop uses it. */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * A response-shaped stand-in for a request that never reached ClickUp at all
  * — DNS failure, a TLS reset, this machine offline, a connection timeout.
@@ -257,6 +264,35 @@ function unreachable(err) {
 }
 
 async function call(method, path, body) {
+  // Retry loop lives here rather than at each of the many call sites. The
+  // DECISION is in scripts/builder/clickupRetry.js so it is testable without a
+  // network; this function only executes it. See that file for why a 429 —
+  // unlike a timeout — is safe to repeat even for a write.
+  let attempt = 0;
+  let waitedMs = 0;
+  for (;;) {
+    attempt += 1;
+    const out = await callOnce(method, path, body);
+    if (!out.res || out.res.status !== 429) return out;
+    const decision = retryDecision({
+      status: 429,
+      attempt,
+      elapsedMs: waitedMs,
+      resetSeconds: out.res.headers.get('x-ratelimit-reset'),
+      nowSeconds: Math.floor(Date.now() / 1000),
+    });
+    // Say it out loud, every time. A silent retry hides the budget pressure
+    // this whole epic exists to surface — the pass would look healthy and just
+    // run slower, which is how the sixteen-hour outage stayed invisible.
+    console.error(`  ClickUp ${decision.retry ? 'rate limit' : 'rate limit — not retrying'}: ${decision.why}`);
+    if (!decision.retry) return out;
+    await sleep(decision.waitMs);
+    waitedMs += decision.waitMs;
+  }
+}
+
+/** One HTTP attempt. Everything that was `call` before the retry loop. */
+async function callOnce(method, path, body) {
   requestCount += 1;
   // THE ONE PLACE A MACHINE COMMENT IS MARKED (task 86bbqx2xe). The loops post
   // under Dane's own token, so nothing downstream can tell their writing from
