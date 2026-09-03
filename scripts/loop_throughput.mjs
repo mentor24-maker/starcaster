@@ -13,7 +13,7 @@
  * of reading logs by hand (ticket 86bbqrw3p).
  *
  *   npm run throughput                  read everything, print the report, write nothing
- *   npm run throughput -- --check       the same, and post to the bus if the verdict is STALLED
+ *   npm run throughput -- --check       the same, and post to the bus on STALLED or UNKNOWN
  *   npm run throughput -- --check --dry-run   say what it WOULD post, send nothing
  *
  * Exit codes, because scripts branch on this:
@@ -21,6 +21,12 @@
  *   1  STALLED
  *   2  UNKNOWN — a reading needed for the verdict could not be taken. NEVER
  *      rendered as healthy (docs/DOCTRINE.md 3.11)
+ *
+ * UNKNOWN POSTS TOO, SINCE 2026-09-01 (task 86bbr2jpq). It did not, and that
+ * was the quietest failure in the file: run_bus_relay.sh discards this exit
+ * code with `|| true`, so the one state whose entire purpose is "a monitor
+ * must not fail quietly" reached nobody. A rotated ClickUp token left the
+ * stall detector permanently dead with every other job looking fine.
  *
  * The decisions live in lib/loopThroughput.js (pure, no network, fully tested).
  * This file is the IO: the ClickUp read, the `gh` read, the suppression stamp
@@ -148,6 +154,31 @@ const stampFile = `${heartbeat.heartbeatDir()}/stalled-loop-queue.stamp`;
 const readStampFile = `${heartbeat.heartbeatDir()}/throughput-read.stamp`;
 const READ_EVERY_MS = 60 * 60 * 1000;
 
+/**
+ * One post per 6 hours for an UNKNOWN verdict, cleared by the next pass that
+ * CAN take a reading — the same discipline the stall stamp above uses, and the
+ * same folder, for the same reason.
+ *
+ * WHY THERE IS A SECOND STAMP RATHER THAN ONE SHARED ONE. A stall and a
+ * cannot-read are different findings with different repairs, and they can
+ * follow each other: the token is rotated on Monday (UNKNOWN), fixed on
+ * Tuesday, and the queue turns out to have been stalled the whole time. One
+ * stamp would swallow the second announcement inside the first one's window.
+ *
+ * AND WHY THERE IS ONE PER KIND OF UNKNOWN (2026-09-03, review round 2). That
+ * argument does not stop at the stall boundary: the two UNKNOWNs are also
+ * different findings with different repairs — one is "ClickUp is unreachable",
+ * the other is "one ticket in Live needs a closure date filled in" — so a
+ * single shared stamp let either one swallow the other for six hours. The
+ * damaging direction is concrete rather than theoretical: 86bb4uyvp is a real
+ * ticket that is never going to grow a closure date, so the undated post is
+ * the one likely to fire first, and it could then silence "nothing is watching
+ * whether the queue is getting shorter" — the most serious sentence in this
+ * file. Keyed on `v.kind`, which `verdict` already returns.
+ */
+const UNKNOWN_KINDS = ['unreadable', 'undated-closure'];
+const unknownStampFileFor = (kind) => `${heartbeat.heartbeatDir()}/unknown-${kind}-loop-queue.stamp`;
+
 function readFileOrEmpty(file) {
   try { return fs.readFileSync(file, 'utf8').trim(); } catch { return ''; }
 }
@@ -179,7 +210,88 @@ if (CHECK && !flag('force')
   process.exit(0);
 }
 
+// One definition of "tear this window up", so the two callers below cannot
+// drift apart on what clearing a stamp means.
+function clearUnknownStamp(kind) {
+  try { fs.rmSync(unknownStampFileFor(kind), { force: true }); } catch { /* nothing to clear */ }
+}
+
+// BOTH kinds clear together. The thing that clears an unknown is a pass that
+// took a full, readable, non-unknown reading, and such a pass is evidence
+// against either cause — leaving one behind would suppress an announcement the
+// system is once again able to make.
+//
+// This is NOT the only place a window is torn up, and it must not become one:
+// it sits below the UNKNOWN exit, so it is only ever reached by a pass that is
+// neither unreadable nor otherwise unknown. The `unreadable` window clears
+// earlier, on the read itself — see the note at that line.
+function clearUnknownStamps() {
+  for (const kind of UNKNOWN_KINDS) clearUnknownStamp(kind);
+}
+
+/**
+ * An UNKNOWN verdict reaching the bus — the alarm this check did not have
+ * until 2026-09-01 (task 86bbr2jpq, finding 1).
+ *
+ * `run_bus_relay.sh` guards this whole call with `|| true`, so exiting 2 told
+ * nobody anything: a rotated token or a sustained rate limit left the stall
+ * detector permanently dead while every other job on the board looked fine.
+ * It printed UNKNOWN to a launchd log, which is honest and unread.
+ *
+ * KNOWN RESIDUAL, SAID OUT LOUD. When the cause IS ClickUp being unreachable,
+ * this post travels the same wire that just failed, so it will very likely
+ * fail too — the same residual `scripts/report_job_failure.mjs` documents, and
+ * the same answer: the heartbeat notices the absence of success from the OTHER
+ * machine, which is the only vantage point that survives this one. The post is
+ * still worth attempting, because the other UNKNOWN — an undated closure
+ * inside the window — happens while ClickUp is perfectly healthy.
+ */
+function announceUnknown(v, evidence = null) {
+  if (!CHECK) return;
+  const text = throughput.renderUnknownPost({
+    verdict: v, now: NOW, node: NODE.name || 'an unnamed machine', evidence,
+  });
+  if (DRY) {
+    console.log('');
+    console.log('--dry-run — this is what would go to the bus, and nothing was sent:');
+    console.log('');
+    console.log(text);
+    return;
+  }
+  // Per KIND, so the other UNKNOWN is never swallowed by this one's window.
+  const stampFileForThis = unknownStampFileFor(v.kind || 'unreadable');
+  if (!throughput.dueAgain({
+    lastAt: readFileOrEmpty(stampFileForThis), now: NOW, everyMs: heartbeat.REPOST_EVERY_MS,
+  })) {
+    console.log('');
+    console.log(`Already reported as unknown (${v.kind || 'unreadable'}) within the last `
+      + `${Math.round(heartbeat.REPOST_EVERY_MS / 3600000)}h — not posting again. `
+      + '(The other kind of unknown has its own window and is unaffected.)');
+    return;
+  }
+  try {
+    clickup.postBusMessage(BUS_CHANNEL, text);
+    const why = writeStamp(stampFileForThis, new Date(NOW).toISOString());
+    if (why) console.log(`Posted, but the suppression stamp could not be written (${why}).`);
+    console.log('');
+    console.log('Posted to the bus.');
+  } catch (err) {
+    console.log('');
+    console.log(red(`Could NOT post the unknown-reading alert to the bus `
+      + `(${String(err?.message || err).slice(0, 300)}).`));
+    console.log('Not stamping it as sent, so the next pass tries again.');
+  }
+}
+
 // --- the pass ---------------------------------------------------------------
+
+// THE HOURLY CLOCK RESTARTS ON THE ATTEMPT, NOT ON A SUCCESS (task 86bbr2jpq,
+// finding 2). This used to be stamped after the reads had come back, so a
+// ClickUp 429 skipped it — and the relay wakes every ten minutes, so a rate
+// limit made the check hammer the very limit that broke it, six times an hour
+// instead of once, keeping itself broken. Stamped here, a failed pass costs
+// the same hour a successful one does.
+if (CHECK) writeStamp(readStampFile, new Date(NOW).toISOString());
 
 const queueRead = await readQueue();
 const prRead = readOpenPrs();
@@ -188,13 +300,28 @@ if (!queueRead.tasks) {
   // No tickets, no verdict. Said out loud and exited 2 — never as "all quiet".
   const v = throughput.verdict({ unreadable: `the Loop Queue could not be read (${queueRead.why})` });
   console.log(`${yellow(v.state)}\n${v.why}`);
+  announceUnknown(v);
   process.exit(v.exitCode);
 }
 
-// The reading happened, so the hourly clock restarts here — whatever the
-// verdict turns out to be. Stamping it only on a healthy verdict would make a
-// stall re-read every ten minutes, which is the load this is guarding against.
-if (CHECK) writeStamp(readStampFile, new Date(NOW).toISOString());
+// THE QUEUE WAS READ, SO THE OUTAGE IS OVER — and that is recorded HERE, above
+// every exit below it, not at the bottom of the file (2026-09-03, review round
+// 3). `clearUnknownStamps()` further down is only reached by a pass that is
+// neither unreadable nor UNKNOWN. So a pass that read ClickUp perfectly and
+// then landed on the `undated-closure` verdict exited without clearing the
+// `unreadable` window — while its own bus post said, in as many words, "the
+// reading itself SUCCEEDED". Reproduced: 9am outage posts and stamps; 10am
+// reads fine and posts the undated alert; 11am outage is swallowed until 3pm.
+// The sentence being silenced is the most serious one in this file — "nothing
+// in the system is watching whether the queue is getting shorter."
+//
+// ONE DIRECTION ONLY, AND THE ASYMMETRY IS DELIBERATE — do not tidy it into a
+// pair. The unreadable branch above must NOT clear the `undated-closure`
+// window, because a pass that could not read the queue is evidence of nothing
+// at all, least of all that a ticket in `Live` has grown a closure date.
+// Reading the queue is direct evidence that the queue can be read; it is no
+// evidence about anything else.
+if (CHECK) clearUnknownStamp('unreadable');
 
 const tasks = queueRead.tasks;
 const queue = throughput.queueShape(tasks);
@@ -217,33 +344,52 @@ const rework = prRead.prs
   : { rows: [], oldest: null, groups: null };
 
 /**
- * Did the loops fire? Tri-state, and honest about which.
+ * WAS ANYTHING IN THE LOOP QUEUE EDITED INSIDE THE WINDOW? A plain fact about
+ * the list, and the verdict is told only that.
  *
- * The loop lanes have no beat emitter — they run inside long-lived agent
- * sessions with no committed runner to hang one on (lib/nodeHeartbeat.js
- * NOT_REPORTING_WHY). So there is no beat to read, and the only real signal
- * available is MOVEMENT: a loop pass that claims a ticket changes its status
- * and stamps its Loop note, both of which bump `date_updated`.
+ * THIS USED TO BE CALLED `loopsFiring` AND IT CLAIMED TOO MUCH (2026-09-01,
+ * task 86bbr2jpq, finding 3). The evidence is `date_updated`, which ClickUp
+ * bumps on ANY edit — a comment from Dane, a relay note, a priority change —
+ * so "a ticket touched inside the window proves a pass ran", which is what the
+ * old docstring said, is simply not true. It sent the reader hunting a
+ * pipeline bug in the case where the loop lanes were not running at all, and
+ * that case is arguably the likeliest cause of a stall, because the lanes live
+ * inside long-lived agent sessions that somebody has to open.
  *
- * That makes this answerable in one direction only, and it is reported that
- * way rather than guessed. A ticket touched inside the window proves a pass
- * ran. Nothing touched proves nothing — a pass that found the WIP cap full
- * writes nothing at all and is indistinguishable from a pass that never
- * happened, which is precisely the ambiguity a beat emitter would settle.
- * So: `true` or `null`, never a confident `false`.
+ * Naming it after the evidence makes `false` answerable, which the old
+ * question never was: "no loop pass ran" could not be concluded from silence
+ * (a pass that finds the WIP cap full writes nothing), but "nothing edited the
+ * Loop Queue for 24 hours" is exactly what an empty list of recent updates
+ * shows. `null` is kept for the case where no ticket carries a readable
+ * timestamp at all — a shape ClickUp should never return, and not one to
+ * report as a confident `false`.
  */
-const touchedRecently = tasks.some((t) => {
-  const at = Number(t.date_updated);
-  return Number.isFinite(at) && at > NOW - throughput.STALL_WINDOW_MS;
-});
-const loopsFiring = touchedRecently ? true : null;
+const withTimestamps = tasks.filter((t) => throughput.updatedAt(t) !== null);
+const queueTouched = withTimestamps.length
+  ? withTimestamps.some((t) => throughput.updatedAt(t) > NOW - throughput.STALL_WINDOW_MS)
+  : null;
 
-const v = throughput.verdict({ closedLast24h, queue, loopsFiring, trend, lastClose });
+// A finished ticket carrying no closure date is invisible to `closedSince`, so
+// one edited inside the window could be a closure this run cannot see. It
+// makes the verdict UNKNOWN rather than STALLED — see `recentUndatedClosures`.
+const undated = throughput.undatedClosures(tasks);
+const undatedRecent = throughput.recentUndatedClosures({ tasks, now: NOW });
+// The ids as well as the count. The repair for that verdict is "give this
+// ticket a closure date", and a message that says so without naming which
+// ticket sends the reader to read a whole column by hand (2026-09-02, review
+// round 1).
+const undatedRecentIds = throughput
+  .recentUndatedClosureTasks({ tasks, now: NOW })
+  .map((t) => String(t?.id ?? '')).filter(Boolean);
+
+const v = throughput.verdict({
+  closedLast24h, queue, queueTouched, trend, lastClose, undatedRecent,
+});
 
 const colour = v.state === 'STALLED' ? red : v.state === 'UNKNOWN' ? yellow : green;
 console.log(throughput.renderReport({
   verdict: { ...v, state: colour(v.state) }, closed, curve, plateau, rework, queue, now: NOW, lastClose, trend,
-  undated: throughput.undatedClosures(tasks),
+  undated,
 }));
 
 if (prRead.why) {
@@ -255,6 +401,47 @@ if (prRead.why) {
 
 if (!CHECK) process.exit(v.exitCode);
 
+// A READING THAT COULD NOT BE TAKEN IS ITSELF THE ALARM. The queue read
+// succeeded here, so this is the other UNKNOWN: an undated closure inside the
+// window, which means the zero the stall rests on cannot be trusted. It is
+// neither a stall nor health, and — see below — it is not a recovery either.
+if (v.state === 'UNKNOWN') {
+  // THE STALL SUPPRESSION IS LEFT EXACTLY AS IT WAS — neither cleared nor
+  // refreshed — and that is the deliberate answer to a disagreement between
+  // these two paths (2026-09-03, review round 2). This branch used to call
+  // `clearStamp()`; the unreadable-queue branch above never has, because it
+  // exits before reaching here. So the same verdict state meant two different
+  // things about the stall alarm depending on which cause produced it.
+  //
+  // "Could not tell" is not a recovery, so clearing is the wrong half to make
+  // them agree on. Clearing let a stall re-announce inside its own six-hour
+  // window: a real stall posts and stamps, an edit to an undated `Live` ticket
+  // flips the next pass to UNKNOWN and wipes the stamp, the ticket is then
+  // given a date or moved, the verdict returns to STALLED, and the identical
+  // alert posts again. Only a reading that is BOTH complete and not stalled is
+  // evidence the stall ended, and that reading clears the stamp further down.
+  //
+  // The cost of this direction is a stall alert deferred to the end of its
+  // original window rather than re-posted — no alarm is lost, because the
+  // stamp expires on its own after six hours.
+  //
+  // WITH THE STALL EVIDENCE, because `verdict` returns UNKNOWN before it can
+  // reach STALLED — so a genuine stall coinciding with one recently-edited
+  // undated closure comes out of THIS branch, and used to arrive with none of
+  // the numbers that make an alert worth acting on (2026-09-02, review round
+  // 1, finding 2). A stall is still the likelier reading here.
+  announceUnknown(v, {
+    closed, plateau, rework, queue, undated,
+    reworkUnreadable: prRead.why, undatedIds: undatedRecentIds,
+  });
+  process.exit(v.exitCode);
+}
+
+// A reading WAS taken, so an earlier unknown has cleared — the next one is
+// announced at once rather than being swallowed by that window. Both kinds,
+// because this pass is evidence against both causes.
+clearUnknownStamps();
+
 if (!v.stalled) {
   // A recovery clears the suppression, so the next stall is announced at once.
   clearStamp();
@@ -262,7 +449,8 @@ if (!v.stalled) {
 }
 
 const text = throughput.renderStallPost({
-  verdict: v, closed, plateau, rework, queue, now: NOW, lastClose, node: NODE.name || 'an unnamed machine',
+  verdict: v, closed, plateau, rework, queue, now: NOW, lastClose, undated,
+  reworkUnreadable: prRead.why, node: NODE.name || 'an unnamed machine',
 });
 
 if (DRY) {

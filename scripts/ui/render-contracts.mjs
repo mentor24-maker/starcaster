@@ -318,6 +318,97 @@ export const RENDER_DIFFERENTIALS = [
 
 export const RENDER_CONTRACTS = [
   {
+    id: 'tag-cloud-sizes-its-tags-by-count',
+    why:
+      'A tag cloud that does not size by count is a pill row. "Cloud (sized by count)" is the ' +
+      'default layout and the module\'s reason to exist, and the arithmetic reaching the PAGE is the ' +
+      'half a unit test cannot see: lib/builder-client/blog-tag-cloud.ts is tested directly, but it ' +
+      'returns a number, and a number that never becomes a font-size renders as four identical pills. ' +
+      'That was the live state until 2026-09-03 — the Builder canvas sized them and the tenant site ' +
+      'did not, so the operator saw a cloud and the visitor got a row.',
+    module: {
+      type: 'blog-tag-cloud',
+      settings: {
+        layout: 'cloud',
+        minFontSize: '10',
+        maxFontSize: '30',
+        tags: JSON.stringify([
+          { id: 'big', label: 'news', slug: 'news', count: 40 },
+          { id: 'small', label: 'rarely', slug: 'rarely', count: 1 },
+        ]),
+      },
+    },
+    selector: '.builder-blog-tag-cloud',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['fontSize'],
+      selectors: {
+        big: '.builder-blog-tag-cloud a:first-of-type',
+        small: '.builder-blog-tag-cloud a:last-of-type',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame || !frame.big || !frame.small) {
+        return 'the tag cloud rendered no tag links — the module draws nothing a visitor can click.';
+      }
+      const big = parseFloat(frame.big.fontSize);
+      const small = parseFloat(frame.small.fontSize);
+      if (!(big > small)) {
+        return `a 40-post tag renders at ${frame.big.fontSize} and a 1-post tag at ${frame.small.fontSize} — ` +
+          'the cloud is not sized by count, so every tag looks equally important.';
+      }
+      // The BUSIEST tag lands exactly on Max Font; the quietest lands NEAR Min
+      // Font rather than on it, because the scale is proportional: a 1-post tag
+      // among 40 is 10 + (1/40 x 20) = 10.5px, not 10px. Asserting an exact 10
+      // here failed on correct arithmetic the first time this contract ran,
+      // which is the check doing its job on the assertion rather than the code.
+      if (Math.round(big) !== 30) {
+        return `the busiest tag renders at ${frame.big.fontSize} with Max Font set to 30 — ` +
+          'the size controls are not reaching the page.';
+      }
+      if (small > 13) {
+        return `the quietest tag renders at ${frame.small.fontSize} with Min Font set to 10 — ` +
+          'the bottom of the scale is not reaching the page.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'tag-cloud-list-layout-is-a-list',
+    why:
+      'The Layout select offers Cloud, Pills and List, and the live renderer used to ignore it ' +
+      'entirely — all three drew the same pill row while the Builder canvas honoured the choice. An ' +
+      'operator therefore set a layout, watched it apply, published, and got something else. Reading ' +
+      'the list layout from the page is the cheapest proof the setting survives the trip.',
+    module: {
+      type: 'blog-tag-cloud',
+      settings: {
+        layout: 'list',
+        tags: JSON.stringify([
+          { id: 'a', label: 'news', slug: 'news', count: 4 },
+          { id: 'b', label: 'guides', slug: 'guides', count: 2 },
+        ]),
+      },
+    },
+    selector: '.builder-blog-tag-cloud ul',
+    read: ['display', 'flexDirection'],
+    expect(sample) {
+      if (sample.styles.flexDirection !== 'column') {
+        return `the list layout stacks ${sample.styles.flexDirection}, not in a column — ` +
+          'it is rendering as the pill row again.';
+      }
+      if (!/news/.test(sample.text)) {
+        return `the list rendered "${sample.text.slice(0, 60)}" — the tags are not reaching it.`;
+      }
+      return null;
+    },
+  },
+
+  {
     id: 'event-detail-without-a-slug-explains-itself',
     why:
       'The event page renders whichever event the ADDRESS names. On this page there is no ?event= ' +

@@ -400,6 +400,7 @@ const buildTuned = (ids) => ({
   'blog-tag-cloud': {
     name: 'Tag Cloud',
     settings: {
+      title: 'Browse by tag',
       filterParam: 'tag', targetPageUrl: '/blog', showCounts: 'true',
       layout: 'cloud', alignment: 'left', minFontSize: '11', maxFontSize: '22',
       tags: JSON.stringify([
