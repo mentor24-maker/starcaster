@@ -1,3 +1,36 @@
+## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
+
+Until now, when Starcaster posted to X on a client's behalf, the post actually
+went out through Starcaster's own X account. There was one set of X keys for
+the whole platform, and no way to sign in as anybody else. This adds the
+missing half: a client presses Connect on the Connections screen, approves it
+on X's own screen, and from then on their posts go out as them.
+
+Dane's own X posting is untouched and keeps working exactly as before. A
+client with no X connection still goes out the old way, on the same code, so
+nothing that works today can stop working because of this.
+
+The reason this was more than "add another platform" is that X has two
+completely different ways of signing in, and the one Starcaster already used
+cannot represent anybody but the account it was set up with. So the second way
+had to be built alongside it, and the two now have to coexist without ever
+getting muddled — a post signed with half of one and half of the other belongs
+to nobody, X rejects it, and the error names neither account. The code makes
+that mixture impossible to build rather than merely unlikely.
+
+One small thing that turns out to matter a lot: an X permission expires after
+about two hours. The renewal machinery built last week could never actually
+renew one, because the value it needed to renew *with* had nowhere to travel.
+Facebook and Instagram never noticed, since their permissions do not expire.
+That gap is closed here, and a permission that arrives without the means to
+renew itself is now refused outright rather than saved — otherwise it would
+work beautifully for one afternoon and then quietly stop.
+
+Before any of this can be switched on, X's developer site has to issue two new
+values and be told the address to send clients back to. Until that is done the
+Connect button says so in plain English, and says which two values it means —
+they are easy to confuse with the ones already saved.
+
 ## 2026-09-03 — Connections that look after themselves, and a Disconnect that really disconnects (#556)
 
 When a client hands Starcaster permission to post to their own Facebook Page
