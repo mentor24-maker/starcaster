@@ -171,6 +171,14 @@ export type BackgroundSettings = {
   mode: "none" | "color" | "gradient" | "image" | "video" | "style";
   color: string;
   color2: string;
+  /**
+   * Gradient direction in degrees, 0-360. Mode "gradient" only.
+   *
+   * Absent means 135, which is the angle every gradient in the Builder ran at
+   * when it was a literal in `getBuilderBackgroundStyle` — so a stored
+   * background that predates this field renders byte-identically.
+   */
+  gradientAngle?: number;
   imageUrl: string;
   /** StarCaster: asset id behind imageUrl so the asset picker can round-trip. */
   imageAssetId?: string;
@@ -1206,6 +1214,51 @@ function clampBackgroundNumber(value: unknown, min: number, max: number, fallbac
   return Math.min(max, Math.max(min, parsed));
 }
 
+export const BUILDER_GRADIENT_ANGLE_MIN = 0;
+export const BUILDER_GRADIENT_ANGLE_MAX = 360;
+/** The angle every Builder gradient ran at before the angle was a setting. */
+export const BUILDER_GRADIENT_ANGLE_DEFAULT = 135;
+
+/**
+ * The gradient angle a surface should actually paint with.
+ *
+ * One definition, read by BOTH the normalizer and the style builder, because
+ * `getBuilderBackgroundStyle` is called with raw, un-normalized settings on
+ * some surfaces and with normalized ones on others. Two clamps would disagree
+ * the first time one of them changed, and the disagreement would be a gradient
+ * that points one way in the editor and another way on the published page.
+ */
+export function builderGradientAngle(background: { gradientAngle?: unknown } | undefined): number {
+  return clampBackgroundNumber(
+    background?.gradientAngle,
+    BUILDER_GRADIENT_ANGLE_MIN,
+    BUILDER_GRADIENT_ANGLE_MAX,
+    BUILDER_GRADIENT_ANGLE_DEFAULT
+  );
+}
+
+/**
+ * The angle a typed keystroke means, or null when it does not mean one yet.
+ *
+ * An `<input type="number">` reports "" for everything it cannot parse, so a
+ * cleared box and the "-" on the way to a negative arrive identically. Writing
+ * either one to the setting is what makes a field eat its own backspace — the
+ * box snaps to the clamped default and the next keystroke lands beside it. Null
+ * means "leave the stored value alone"; the caller keeps the keystroke in a
+ * draft instead.
+ */
+export function builderGradientAngleFromInput(typed: string): number | null {
+  const trimmed = typed.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.min(BUILDER_GRADIENT_ANGLE_MAX, Math.max(BUILDER_GRADIENT_ANGLE_MIN, parsed));
+}
+
 export const BUILDER_VIDEO_SPEED_MIN = 0.25;
 export const BUILDER_VIDEO_SPEED_MAX = 2;
 export const BUILDER_VIDEO_BLUR_MAX = 20;
@@ -1216,6 +1269,7 @@ export function createDefaultBackgroundSettings(): BackgroundSettings {
     mode: "none",
     color: "#ffffff",
     color2: "#eaf4ff",
+    gradientAngle: BUILDER_GRADIENT_ANGLE_DEFAULT,
     imageUrl: "",
     imageAssetId: "",
     styleKey: "",
@@ -1249,6 +1303,7 @@ export function normalizeBackgroundSettings(value: unknown): BackgroundSettings 
     mode: normalizeBackgroundMode(background.mode),
     color: normalizeBuilderHexColor(safeText(background.color, 40), "#ffffff"),
     color2: normalizeBuilderHexColor(safeText(background.color2, 40), "#eaf4ff"),
+    gradientAngle: builderGradientAngle(background),
     imageUrl: normalizeBuilderAssetUrl(background.imageUrl),
     imageAssetId: safeText(background.imageAssetId, 120),
     styleKey: normalizeBackgroundStyleKey(background.styleKey),
@@ -1822,7 +1877,7 @@ export function getBuilderBackgroundStyle(background: BackgroundSettings | undef
     const color = applyBuilderColorOpacity(background.color, opacity);
     const color2 = applyBuilderColorOpacity(background.color2, opacity);
     return {
-      backgroundImage: `linear-gradient(135deg, ${color} 0%, ${color2} 100%)`
+      backgroundImage: `linear-gradient(${builderGradientAngle(background)}deg, ${color} 0%, ${color2} 100%)`
     };
   }
 
