@@ -1040,7 +1040,12 @@ test('the relay call site describes what the check now does', () => {
  * constant path fails this test (1 failed of 56); dropping either kind from
  * `UNKNOWN_KINDS` fails it too (1 failed of 56).
  */
-test('each kind of unknown has its own 6h window, and a good reading clears both', () => {
+// The name used to say "a good READING clears both", which is the same
+// overclaim round 3 sent this ticket back for: a reading clears the
+// `unreadable` window on its own, but only a reading that is also complete and
+// not stalled clears the other. Which happens WHERE is behaviour, and is
+// covered by loopThroughputUnknownStamps.test.js, not from the source here.
+test('each kind of unknown has its own 6h window, and a clean pass clears every kind', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const code = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8');
@@ -1058,8 +1063,10 @@ test('each kind of unknown has its own 6h window, and a good reading clears both
     assert.match(kinds[1], new RegExp(`'${kind}'`),
       `${kind} is a kind verdict() returns, so it needs its own window`);
   }
-  assert.match(code, /for \(const kind of UNKNOWN_KINDS\)[\s\S]{0,160}rmSync\(unknownStampFileFor\(kind\)/,
+  assert.match(code, /for \(const kind of UNKNOWN_KINDS\) clearUnknownStamp\(kind\)/,
     'and a readable, non-unknown pass clears every kind — it is evidence against all of them');
+  assert.match(code, /function clearUnknownStamp\(kind\)[\s\S]{0,160}rmSync\(unknownStampFileFor\(kind\)/,
+    'and clearing a kind actually removes that kind\'s stamp file');
 
   // The kinds asserted above are the ones the library actually produces.
   assert.strictEqual(lt.verdict({ unreadable: 'ClickUp said 429' }).kind, 'unreadable');

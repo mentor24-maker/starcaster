@@ -210,14 +210,23 @@ if (CHECK && !flag('force')
   process.exit(0);
 }
 
+// One definition of "tear this window up", so the two callers below cannot
+// drift apart on what clearing a stamp means.
+function clearUnknownStamp(kind) {
+  try { fs.rmSync(unknownStampFileFor(kind), { force: true }); } catch { /* nothing to clear */ }
+}
+
 // BOTH kinds clear together. The thing that clears an unknown is a pass that
 // took a full, readable, non-unknown reading, and such a pass is evidence
 // against either cause — leaving one behind would suppress an announcement the
 // system is once again able to make.
+//
+// This is NOT the only place a window is torn up, and it must not become one:
+// it sits below the UNKNOWN exit, so it is only ever reached by a pass that is
+// neither unreadable nor otherwise unknown. The `unreadable` window clears
+// earlier, on the read itself — see the note at that line.
 function clearUnknownStamps() {
-  for (const kind of UNKNOWN_KINDS) {
-    try { fs.rmSync(unknownStampFileFor(kind), { force: true }); } catch { /* nothing to clear */ }
-  }
+  for (const kind of UNKNOWN_KINDS) clearUnknownStamp(kind);
 }
 
 /**
@@ -294,6 +303,25 @@ if (!queueRead.tasks) {
   announceUnknown(v);
   process.exit(v.exitCode);
 }
+
+// THE QUEUE WAS READ, SO THE OUTAGE IS OVER — and that is recorded HERE, above
+// every exit below it, not at the bottom of the file (2026-09-03, review round
+// 3). `clearUnknownStamps()` further down is only reached by a pass that is
+// neither unreadable nor UNKNOWN. So a pass that read ClickUp perfectly and
+// then landed on the `undated-closure` verdict exited without clearing the
+// `unreadable` window — while its own bus post said, in as many words, "the
+// reading itself SUCCEEDED". Reproduced: 9am outage posts and stamps; 10am
+// reads fine and posts the undated alert; 11am outage is swallowed until 3pm.
+// The sentence being silenced is the most serious one in this file — "nothing
+// in the system is watching whether the queue is getting shorter."
+//
+// ONE DIRECTION ONLY, AND THE ASYMMETRY IS DELIBERATE — do not tidy it into a
+// pair. The unreadable branch above must NOT clear the `undated-closure`
+// window, because a pass that could not read the queue is evidence of nothing
+// at all, least of all that a ticket in `Live` has grown a closure date.
+// Reading the queue is direct evidence that the queue can be read; it is no
+// evidence about anything else.
+if (CHECK) clearUnknownStamp('unreadable');
 
 const tasks = queueRead.tasks;
 const queue = throughput.queueShape(tasks);

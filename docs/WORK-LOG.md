@@ -55,10 +55,24 @@ other. The likelier direction was the bad one: there is a real ticket in the
 Live column that is never going to grow a closure date, so the gentler message
 ("one field needs filling in") would tend to fire first, and could then silence
 the serious one ("nothing is watching whether the queue is getting shorter")
-for six hours. Each alarm now keeps its own note, and a run that can see
-properly clears both. Driven for real: with the gentle one just fired, the
-serious one still gets through — and with the old shared note put back, it
-vanishes, which is what the defect looked like.
+for six hours. Each alarm now keeps its own note. Driven for real: with the
+gentle one just fired, the serious one still gets through — and with the old
+shared note put back, it vanishes, which is what the defect looked like.
+
+Review sent it back a third time, on the same theme a third time — a second
+road to the same silence. Giving each alarm its own note fixed the case where
+both of them fire. It left the case where one of them simply stops applying.
+The note that says *I could not read the queue* was only being torn up at the
+very end of a completely clean run, and the gentle alarm finishes early, before
+that point. So: ClickUp goes down at nine and the serious alarm fires; at ten
+ClickUp answers fine and the gentle alarm fires — which is itself proof the
+queue can be read again; at eleven ClickUp goes down once more and the serious
+alarm is swallowed until three in the afternoon, on the strength of a note that
+ten o'clock should already have torn up. Now the moment the queue is read at
+all, that note goes, before any of the later exits. The reverse is deliberately
+*not* true, and the code says so where somebody would be tempted to tidy it: a
+run that could not read the queue proves nothing about whether some ticket has
+grown a closure date, so it leaves the gentle alarm's note exactly where it is.
 
 Two smaller things. A verdict of "I cannot tell" was being treated as an
 all-clear for the stall alarm on one of its two paths, quietly re-arming an
