@@ -2,7 +2,11 @@
 import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createDefaultBackgroundSettings, normalizeLayoutSections } from "@/lib/builder-template";
+import {
+  createDefaultBackgroundSettings,
+  createEmptyModule,
+  normalizeLayoutSections
+} from "@/lib/builder-template";
 import { BuilderTemplatePreview } from "./builder-template-preview";
 
 /**
@@ -13,10 +17,11 @@ import { BuilderTemplatePreview } from "./builder-template-preview";
  * results (Dane, 2026-09-03: "add instructions saying 'Blog posts matching the
  * tag [tag]: n'").
  *
- * The load-bearing test in here is the LAST one. These settings are merged
- * under a module's saved values, so a default of anything but "all" would
- * silently retitle and re-narrow every Post Feed already on a page — the same
- * trap the tag cloud's `tagSource` comment documents.
+ * The load-bearing tests are the last two, and they guard DIFFERENT paths.
+ * createEmptyModule's defaults reach only modules newly dragged from the
+ * palette; a Post Feed already saved on a page carries no filterMode key at
+ * all and depends entirely on the renderer's own "all" fallback. Breaking
+ * either one silently retitles and re-narrows live pages, so both are held.
  */
 
 const POSTS = [
@@ -129,14 +134,21 @@ describe("Post Feed filterMode", () => {
 
   it("changes NOTHING for a feed that never set filterMode", async () => {
     /*
-     * The one that protects every Post Feed already on a page. Defaults are
-     * merged under saved settings, so a default of anything but "all" would
-     * narrow and retitle all of them at once.
+     * Every Post Feed already on a page. Their saved settings have no
+     * filterMode key — nothing backfills one — so this is the renderer's own
+     * fallback and nothing else.
      */
     await renderFeed("?tag=beginner%20tennis");
 
     expect(firstOptions()).toEqual(["All Categories", "All Tags", "All Authors"]);
     expect(resultsLine()).toBe("");
     expect(document.body.textContent).toContain("2 results");
+  });
+
+  it("gives a newly dragged Post Feed the all-filters mode", async () => {
+    // The other path: createEmptyModule seeds modules added from the palette.
+    // Its default and the renderer's fallback must agree, or a brand-new feed
+    // behaves differently from every feed already on a page.
+    expect(createEmptyModule("blog-post-list").settings.filterMode).toBe("all");
   });
 });
