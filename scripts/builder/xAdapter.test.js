@@ -33,12 +33,26 @@ const crypto = require('crypto');
  * refuses before making a request.
  */
 
+const path = require('node:path');
+
 const contract = require('../../lib/connections/contract.js');
 const registry = require('../../lib/connections/registry.js');
 const x = require('../../lib/connections/adapters/x.js');
 const verifySweep = require('../../lib/connections/verifySweep.js');
 const xClient = require('../../lib/xClient.js');
 const { verifyOAuthState } = require('../../lib/metaOAuthState.js');
+
+const { parseSchemaFile, createFakeDb } = require('./sqlSchemaFake.js');
+
+const CONNECTIONS_SQL = path.join(__dirname, '..', '..', 'docs', 'SQL', 'project_connections_setup.sql');
+const supabasePath = require.resolve('../../lib/supabase.js');
+const projectScopePath = require.resolve('../../lib/projectScope.js');
+const storePath = require.resolve('../../lib/projectConnectionsStore.js');
+const completeConnectionPath = require.resolve('../../lib/connections/completeConnection.js');
+
+const STORE_SCOPE = { projectId: 'proj_a', userId: 'user_1' };
+/** A valid AES-256 key: 32 bytes, base64, the shape channelsCipher demands. */
+const TEST_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
 
 const APP_ENV = {
   X_CLIENT_ID: 'x-client-id',
@@ -115,6 +129,60 @@ function withFetch(replies, fn) {
     global.fetch = realFetch;
     throw err;
   }
+}
+
+/**
+ * The real store, over the real `project_connections` schema, on a fake
+ * database — and `completeConnection` re-required so it holds THIS store.
+ *
+ * A stub store cannot see the defect these tests exist for. The field that went
+ * missing did so between the account shape and the row, so anything that skips
+ * the actual column list agrees with whatever it is handed. `sqlSchemaFake`
+ * parses docs/SQL and refuses a field the table does not have, which makes the
+ * round trip a real one.
+ *
+ * `completeConnection` has to be re-required with the store because it captured
+ * its own reference at load — the same stale-require trap connectionsRoute's
+ * harness documents, which reads as "Connection not found" on a row the test
+ * just wrote.
+ */
+function withStore() {
+  const schema = parseSchemaFile(CONNECTIONS_SQL);
+  const db = createFakeDb(schema);
+  const fakeSupabase = {
+    isConfigured: () => true,
+    tableConfig: () => ({ projectConnections: 'project_connections' }),
+    sbQuery: async (args) => db.sbQuery(args),
+  };
+
+  const realSupabase = require.cache[supabasePath];
+  require.cache[supabasePath] = {
+    id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase,
+  };
+  // projectScope destructures sbQuery at load and caches its per-table column
+  // probe, so it goes too or it answers from whatever ran last.
+  delete require.cache[projectScopePath];
+  delete require.cache[storePath];
+  delete require.cache[completeConnectionPath];
+
+  const store = require(storePath);
+  const completeConnection = require(completeConnectionPath);
+
+  const hadKey = Object.prototype.hasOwnProperty.call(process.env, 'CHANNELS_ENCRYPTION_KEY');
+  const previousKey = process.env.CHANNELS_ENCRYPTION_KEY;
+  process.env.CHANNELS_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+
+  function restore() {
+    if (realSupabase) require.cache[supabasePath] = realSupabase;
+    else delete require.cache[supabasePath];
+    delete require.cache[projectScopePath];
+    delete require.cache[storePath];
+    delete require.cache[completeConnectionPath];
+    if (hadKey) process.env.CHANNELS_ENCRYPTION_KEY = previousKey;
+    else delete process.env.CHANNELS_ENCRYPTION_KEY;
+  }
+
+  return { db, store, completeConnection, restore };
 }
 
 const TOKENS = {
@@ -264,6 +332,117 @@ test('the stored account carries the refresh token — the field that did not ex
       assert.equal(contract.storableAccount(account).refreshToken, 'CLIENT_REFRESH_TOKEN');
     });
   });
+});
+
+/**
+ * THE test of review round 1, and the one the ticket's third acceptance
+ * criterion actually turns on.
+ *
+ * The defect it pins: `exchange` computed the expiry carefully — `expiryFrom`
+ * even falls back to two hours rather than to "never", with a comment saying
+ * why — and then nothing carried it. The account vocabulary had no `expiresAt`
+ * and `contract.storableAccount` did not write one, so `expires_at` was NULL on
+ * every X row a grant created. `verifySweep.refreshDue` opens with
+ * `if (!expiresAt) return { due: false, why: 'this token has no recorded
+ * expiry' }`, so the renewal built in slice 6 never fired once. The connection
+ * worked for about two hours and was then dead, with `refreshBeforeUse` still
+ * answering `ok: true` and the card still green.
+ *
+ * Why this test and not the one above it: the existing "hands its refresh token
+ * BACK" test hands `refreshBeforeUse` a connection with `expiresAt` ALREADY
+ * set, so it is structurally blind to a store that never wrote one. The only
+ * thing that can see this is the whole round trip — exchange, into the real
+ * store over the real schema, back out, and asked whether renewal is due.
+ *
+ * It runs against the SQL-schema fake rather than a stub store on purpose. A
+ * stub would have to be told that `expires_at` is a column, which is precisely
+ * the fact in dispute; the fake parses docs/SQL and refuses a field the table
+ * does not have.
+ */
+test('round trip: an exchanged grant lands with its expiry, and refreshDue says it is DUE', async (t) => {
+  const h = withStore();
+  t.after(h.restore);
+
+  // CHANNELS_ENCRYPTION_KEY is pinned alongside the app credentials because
+  // `withEnv` clears every key it knows about, and the vault needs this one to
+  // encrypt the token it is being handed.
+  await withEnv({ ...APP_ENV, CHANNELS_ENCRYPTION_KEY: TEST_ENCRYPTION_KEY }, async () => {
+    const state = new URL(x.authorizeUrl({ projectId: 'p', userId: 'u' }).data.url).searchParams.get('state');
+    // Three hours ago, against X's two-hour lifetime — so the token is an hour
+    // past its deadline by the time the sweep looks at it. That is the live
+    // case: nobody publishes in the first two hours after connecting, so the
+    // first post a client ever makes is already on an expired token.
+    const issuedAt = Date.now() - 3 * 3600_000;
+
+    const exchanged = await withFetch(
+      [{ status: 200, body: TOKENS }, { status: 200, body: ME }],
+      () => x.exchange({ code: 'c', state, nowMs: issuedAt })
+    );
+    assert.equal(exchanged.ok, true, exchanged.error);
+
+    const stored = await h.completeConnection.storeAccounts({
+      provider: 'x',
+      displayName: 'X',
+      accounts: exchanged.data.accounts,
+      scope: STORE_SCOPE,
+    });
+    assert.equal(stored.ok, true, stored.error);
+
+    // The ROW, read back out of the store — not the object handed to it.
+    const row = await h.store.getConnection({ provider: 'x', accountId: '4455' }, STORE_SCOPE);
+    assert.equal(row.ok, true, row.error);
+    assert.ok(
+      row.data.expiresAt,
+      'expires_at is empty on the stored row — the adapter worked out when this token dies and '
+      + 'nothing carried it to the vault, so nothing will ever renew it'
+    );
+    assert.equal(
+      row.data.expiresAt,
+      new Date(issuedAt + 7200_000).toISOString(),
+      'the stored expiry is not the one X issued'
+    );
+
+    const due = verifySweep.refreshDue(row.data, Date.now());
+    assert.equal(
+      due.due,
+      true,
+      `the sweep will not renew this connection: ${due.why}. "this token has no recorded expiry" `
+      + 'is the failure — an expired token that reads as healthy for ever.'
+    );
+    assert.equal(due.expired, true);
+  });
+});
+
+/**
+ * The same join, from the other end: a platform whose tokens do NOT expire must
+ * still come out saying so, rather than inheriting a deadline from nowhere.
+ *
+ * This is the guard on the fix rather than on the defect. `storableAccount` now
+ * writes `expiresAt` unconditionally, and writing a WRONG one would be worse
+ * than writing none — the sweep would spend a refresh token on a Page token
+ * that never needed renewing, and X's rotation makes a needless refresh a real
+ * cost rather than a wasted call.
+ */
+test('a platform with no expiry stores none, and refreshDue correctly says nothing is due', async (t) => {
+  const h = withStore();
+  t.after(h.restore);
+
+  const stored = await h.completeConnection.storeAccounts({
+    provider: 'bluesky',
+    displayName: 'Bluesky',
+    accounts: [contract.account({
+      accountId: 'did:plc:delray',
+      accountLabel: 'delray.bsky.social',
+      accessToken: 'client-app-password',
+    })],
+    scope: STORE_SCOPE,
+  });
+  assert.equal(stored.ok, true, stored.error);
+
+  const row = await h.store.getConnection({ provider: 'bluesky', accountId: 'did:plc:delray' }, STORE_SCOPE);
+  assert.equal(row.ok, true, row.error);
+  assert.equal(row.data.expiresAt, '', 'an app password was given a deadline it does not have');
+  assert.equal(verifySweep.refreshDue(row.data, Date.now()).due, false);
 });
 
 /**
@@ -473,6 +652,49 @@ test('a client whose connection went stale is not sent to a Settings screen they
   assert.equal(res.ok, false);
   assert.match(res.error, /Connections screen/);
   assert.doesNotMatch(res.error, /Save API Key/);
+});
+
+/**
+ * A 403 on a client's connection must not describe Alphire's credential.
+ *
+ * 403 means "signed in, not allowed to post", and it is the single most likely
+ * failure on a per-user grant — the client ticked fewer permissions than X
+ * offered. The branch that handles it sat ABOVE the one that knows a bearer
+ * token from an OAuth 1.0a pair, so the answer was "Set App permissions to Read
+ * and Write at developer.x.com, then regenerate the Access Token and Secret":
+ * Starcaster's own key pair, on a screen the client cannot open, and changing
+ * it would not have helped anybody (86bbpz1hu, review round 1).
+ *
+ * Both directions are asserted. The OAuth 1.0a wording is Dane's own posting
+ * and is exactly right for it, so this pins that it did not move.
+ */
+test('a 403 names the credential that is actually short — the client\'s grant, or Alphire\'s pair', async () => {
+  const forbidden = { status: 403, statusText: 'Forbidden', body: { detail: 'not permitted' } };
+
+  const client = await withFetch(forbidden, () => xClient.checkAuth({
+    credentials: { auth_mode: 'oauth2', access_token: 'CLIENT_BEARER_TOKEN' },
+  }));
+  assert.equal(client.ok, false);
+  assert.equal(client.code, 'insufficient_scope');
+  assert.match(client.error, /Connections screen/,
+    'a client\'s under-scoped grant must be fixed by reconnecting, which is the only door they have');
+  assert.doesNotMatch(client.error, /developer\.x\.com/,
+    'the client was sent to Alphire\'s developer portal to regenerate a credential that is not theirs');
+  assert.doesNotMatch(client.error, /Access Token and Secret/,
+    'this names the OAuth 1.0a pair — a different credential from the one that just failed');
+
+  const platform = await withFetch(forbidden, () => xClient.checkAuth({
+    credentials: {
+      api_key: 'ALPHIRE_KEY',
+      api_secret: 'ALPHIRE_SECRET',
+      access_token: 'DANE_TOKEN',
+      access_token_secret: 'DANE_SECRET',
+    },
+  }));
+  assert.equal(platform.ok, false);
+  assert.equal(platform.code, 'insufficient_scope');
+  assert.match(platform.error, /developer\.x\.com/,
+    'Dane\'s own 403 IS a permissions setting on the app, and that instruction is right');
 });
 
 // ---------------------------------------------------------------------------

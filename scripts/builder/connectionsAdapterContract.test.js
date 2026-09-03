@@ -295,15 +295,18 @@ test('accountRef reads an account whichever vocabulary it arrives in', () => {
   // older stored shape still resolves, so the fix cannot be undone by a caller
   // that hands over something it read from somewhere else.
   assert.deepEqual(contract.accountRef({ id: '55', label: 'Delray', avatarUrl: '/a.png', accessToken: 't' }), {
-    accountId: '55', accountLabel: 'Delray', accountAvatarUrl: '/a.png', accessToken: 't', refreshToken: '', raw: null,
+    accountId: '55', accountLabel: 'Delray', accountAvatarUrl: '/a.png', accessToken: 't', refreshToken: '',
+    expiresAt: '', raw: null,
   });
   assert.deepEqual(contract.accountRef({ accountId: '55', accountLabel: 'Delray', accessToken: 't' }), {
-    accountId: '55', accountLabel: 'Delray', accountAvatarUrl: '', accessToken: 't', refreshToken: '', raw: null,
+    accountId: '55', accountLabel: 'Delray', accountAvatarUrl: '', accessToken: 't', refreshToken: '',
+    expiresAt: '', raw: null,
   });
   // The canonical name wins when both are somehow present.
   assert.equal(contract.accountRef({ accountId: 'right', id: 'wrong' }).accountId, 'right');
   assert.deepEqual(contract.accountRef(), {
-    accountId: '', accountLabel: '', accountAvatarUrl: '', accessToken: '', refreshToken: '', raw: null,
+    accountId: '', accountLabel: '', accountAvatarUrl: '', accessToken: '', refreshToken: '',
+    expiresAt: '', raw: null,
   });
 });
 
@@ -483,6 +486,10 @@ test('facebookPage.exchange returns the same Page rows the route already stores'
       // platform since Connections 7 of 7 (86bbpz1hu); empty here is the
       // correct answer, not a gap.
       refreshToken: '',
+      // Same again for the deadline: a Page token has none, so the empty string
+      // is the honest answer and `verifySweep.refreshDue` reads it as "nothing
+      // to renew". The value that would be wrong here is an invented one.
+      expiresAt: '',
       raw: { id: '55', name: 'Delray Tennis', access_token: 'page-token' },
     }]);
     assert.ok(calls[0].url.includes('/oauth/access_token'), 'the code is exchanged first');
@@ -571,8 +578,10 @@ test('bluesky connects, lists, verifies and revokes through the same contract', 
       accountAvatarUrl: '',
       // The app password, not the two-hour session token — see the adapter.
       accessToken: 'abcd-efgh-ijkl-mnop',
-      // An app password has nothing to refresh; empty is the right answer.
+      // An app password has nothing to refresh and never expires; empty is the
+      // right answer to both.
       refreshToken: '',
+      expiresAt: '',
       raw: { did: 'did:plc:xyz', handle: 'delray.bsky.social', serviceUrl: 'https://bsky.social' },
     }]);
     const sent = JSON.parse(calls[0].options.body);
