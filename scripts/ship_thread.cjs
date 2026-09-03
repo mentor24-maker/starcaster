@@ -531,6 +531,43 @@ if (NO_MERGE) {
   process.exit(0);
 }
 
+// ── D2: a merge asks the pause switch (decided 2026-09-03, task 86bbu2uhq) ──
+// The audit's finding C1: the doctrine said both "before merging anything,
+// run pipeline check" and "no pause to merge". Dane decided it as
+// recommended: you never PAUSE the line in order to merge — but every merge
+// still ASKS the switch, ship included, because the session that collided
+// with the operator (PR #432) was a hand-driven one that never looked.
+// Fails safe like every other actor: an unreadable switch counts as paused.
+heading('Asking the pause switch');
+const deck = quiet('npm', ['run', '--silent', 'pipeline', '--', 'check']);
+if (!deck.ok) {
+  fail(
+    'The pipeline switch says stop — nothing was merged. In its own words:\n' +
+    `${deck.out}\n` +
+    "A pause is Dane's deck, and resume is his call (`npm run pipeline -- resume --operator-asked`).\n" +
+    'The work is safe on the branch — run `npm run ship` again once the line is running.'
+  );
+}
+say(`    ${deck.out.split('\n')[0]}`);
+
+// ── D3: the review gate is STATED, never enforced here (task 86bbu2uhq) ─────
+// The full fold into the one merge gate waits for a driving incident, as
+// recommended. What a merge may not do any more is happen with nothing said
+// about what the review side concluded — the lines below are the read-only
+// `waiting` reader's own words, reprinted, never a re-derivation.
+if (taskId) {
+  const gate = quiet('npm', ['run', '--silent', 'clickup', '--', 'waiting', '--task', String(taskId)]);
+  const gateLines = gate.out.split('\n').filter((l) => /status:|last word:|VERDICT:/.test(l));
+  if (gate.ok && gateLines.length) {
+    say('    review gate context:');
+    for (const l of gateLines) say(`      ${l.trim()}`);
+  } else {
+    say(`    review gate context: could not be read (${gate.ok ? 'no verdict lines in the answer' : `exit ${gate.code}`}) — said out loud, and merging anyway: the gate is reported here, not enforced.`);
+  }
+} else {
+  say('    review gate context: this branch carries no ticket stamp, so there is nothing to read it from.');
+}
+
 heading('Merging');
 const state = quiet('gh', ['pr', 'view', prNumber, '--json', 'mergeStateStatus', '--jq', '.mergeStateStatus']);
 if (state.out === 'DIRTY' || state.out === 'BEHIND') {

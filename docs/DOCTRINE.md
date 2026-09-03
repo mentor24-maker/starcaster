@@ -2444,6 +2444,51 @@ what you would have to have observed for it to be true, and check that you
 observed it.**
 
 
+### 6.17 When doctrine answers yes AND no, the contradiction is the defect — three merge-lane decisions, decided once
+
+**The incident (2026-09-02, the "State of the Line" audit).** Three questions
+had two live answers each, every answer individually defensible:
+
+- What does "done" mean? `wipCap.js` counted four statuses as terminal
+  (live/complete/closed/done) while `pulse.js` counted one — the WIP cap and
+  the flow diagnostics running on different definitions of finished.
+- Does a merge ask the pause switch? This file's pipeline section said
+  *"before merging anything, run `pipeline -- check`"* while the fast-track
+  lane said *"No pause to merge."* `ship` merged via a direct `gh pr merge`
+  and never read the switch (`ship_thread.cjs:553` at audit time).
+- Is `ship` part of the one merge gate (task 86bbkw2au's "ONE GATE"), or a
+  second path? It was a second path, silently.
+
+Nobody had been careless; each half was written on a different day against a
+different incident. That is exactly how a system built at speed accumulates
+contradictions, and the rule this section exists for: **when two rules answer
+the same question differently, resolving it is an OPERATOR DECISION to make
+once and record where both readers will find it — not a thing each session
+re-derives** (§6.6 is the sibling rule for decisions already made).
+
+**The decisions, made by Dane on the audit's recommendations (D1 on
+2026-09-02, D2 and D3 on 2026-09-03, verbatim as recommended):**
+
+- **D1 — `live` is the only terminal status.** The other three names are a
+  tested alias list, reported loudly by name (wipCap's `unrecognised`
+  bucket), never silently counted either way. Recorded beside the code in
+  `scripts/builder/loopStatuses.js` (task 86bbtujed, PR #539).
+- **D2 — every merge asks the pause switch; nobody pauses in order to
+  merge.** `ship` runs `pipeline -- check` itself before merging and stops,
+  quoting the switch, when the deck is taken — failing safe like every other
+  actor. The fast-track sentence now says what it always meant (task
+  86bbu2uhq).
+- **D3 — `ship` STATES the review gate's context before merging, and only
+  states it.** The read-only `waiting` reader's own lines are reprinted;
+  enforcement stays with the one merge gate, and folding `ship` fully into
+  it waits for a driving incident (task 86bbu2uhq).
+
+**How to use this section:** when you find doctrine or two modules answering
+one question two ways, do not pick quietly and do not build both. Name the
+contradiction as its own finding, take it to the operator as a decision with
+a recommendation, and record the answer once — in the code that enforces it
+and here.
+
 ## 7. Operator-facing gotchas
 
 Worth knowing before they cost an hour.
