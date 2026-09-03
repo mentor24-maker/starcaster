@@ -239,6 +239,23 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     was frozen in production from 2026-06-30 until 2026-09-02 that way, with
     every save reporting success. A fallback path is for the store being
     ABSENT, never for it refusing. `docs/DOCTRINE.md` §5.21.
+16. **`POST /api/builder/publish` publishes EVERYTHING pending unless you name
+    the pages**, newest draft first. Any caller that means "put *these* pages
+    live" must send `pageIds`, or a routine edit puts every unrelated
+    half-finished draft in the project in front of visitors. An **empty**
+    `pageIds` means nothing, not everything — `if (pageIds.length)` reads it as
+    "no filter" and publishes the site; the rule is one tested function
+    (`selectPagesToPublish`). And reach the route through `builderAdminFetch`
+    (`/api/admin/publish`): an unmapped path falls through to a plain `fetch`
+    with neither the prefix nor the project-scope headers, and that 404 reads
+    as a missing feature. `docs/SAVED_SECTIONS.md` §2a.
+17. **A verdict evaluated per COPY must not be reported per PAGE.** A page can
+    hold several copies of one saved section, so `.some(drifted)` and
+    `.every(drifted)` are different questions and neither is what "drifted
+    pages" means on its own. Two 2026-09-03 bugs were that one slip: a dialog
+    named a page as left alone and then published it, and a save reported an
+    edit as overwritten while it sat untouched. No test could catch either —
+    every fixture gave each page one copy. `docs/DOCTRINE.md` §5.30.
 
 ## Working locally
 
