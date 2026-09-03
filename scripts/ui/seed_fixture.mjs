@@ -836,6 +836,23 @@ const buildTuned = (ids) => ({
     name: 'Site Settings',
     settings: { showTitle: 'true', panelTitle: LONG },
   },
+  /*
+   * Both gating toggles are ON deliberately. Three of this panel's fields are
+   * `visibleWhen`-gated — `panelTitle` behind `showTitle`, and
+   * `relateButtonLabel` + `articleStatus` behind `showRelate` — so seeding
+   * either toggle off would measure the panel three controls short and still
+   * report green. That is exactly how the proximity-effects panel passed
+   * while two gated fields went unseen.
+   */
+  'admin-blog-links': {
+    name: 'Blog Links',
+    settings: {
+      showTitle: 'true', panelTitle: LONG,
+      showCategories: 'true', showTags: 'true',
+      showRelate: 'true', relateButtonLabel: 'Relate the checked articles',
+      articleStatus: 'published',
+    },
+  },
   'admin-login': {
     name: 'Admin Login',
     settings: {
