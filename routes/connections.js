@@ -40,9 +40,9 @@
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj, normalizeApiPathname } = require('./http');
 const registry = require('../lib/connections/registry');
-const contract = require('../lib/connections/contract');
 const projectConnectionsStore = require('../lib/projectConnectionsStore');
 const projectSocialCredentialsStore = require('../lib/projectSocialCredentialsStore');
+const { makeActive, storeAccounts } = require('../lib/connections/completeConnection');
 
 const PREFIX = '/api/connections';
 
@@ -293,56 +293,14 @@ function routeParts(pathname) {
 }
 
 /**
- * Make one account the one that will actually post, and PROVE it rather than
- * assume it.
- *
- * The resolver takes the first live row `listConnections` returns, which is
- * ordered `updated_at DESC, created_at DESC` — so touching a row is how it is
- * chosen (lib/connections/resolveCredentials.js). That works until two rows
- * carry the SAME instant, which is not hypothetical: finishing one Facebook
- * grant saves every Page it covers inside a single request, and several
- * millisecond-resolution timestamps land identical. The order between them is
- * then whatever the database feels like, so a card reporting "posting to Page
- * A" while the publisher picks Page B is a client's post appearing on the
- * wrong Page with every gate green.
- *
- * So this touches, reads back through the store's OWN ordering, and touches
- * again if the clock has not moved on yet. What it returns is what the
- * publisher will pick, measured — never what the caller intended.
- *
- * The wait is deliberately tiny and bounded. If it still cannot separate them
- * the caller is told, because reporting an active account we have not
- * confirmed is precisely the failure this exists to prevent.
+ * `makeActive` and the store-every-account loop that used to live here are now
+ * lib/connections/completeConnection.js. Connections 5 of 7 (86bbpz1gk) added a
+ * second caller — Meta's shared OAuth callback, which must finish a connection
+ * itself because the code Meta issues can only be exchanged once — and two
+ * copies of a sequence this easy to get subtly wrong is how one of them gets a
+ * fix and the other keeps the bug. A move, not a rewrite: the behaviour below
+ * is unchanged.
  */
-async function makeActive(provider, accountId, scope, attempts = 4) {
-  let last = null;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const touched = await projectConnectionsStore.updateConnectionStatus(
-      { provider, accountId, status: 'connected', lastError: '' },
-      scope
-    );
-    if (!touched.ok) return touched;
-    last = touched;
-
-    const listed = await projectConnectionsStore.listConnections(200, scope);
-    if (!listed.ok) return listed;
-    const first = (Array.isArray(listed.data) ? listed.data : [])
-      .find((row) => safeText(row?.provider).toLowerCase() === provider);
-    if (first && safeText(first.accountId) === safeText(accountId)) {
-      return { ok: true, status: 200, data: first };
-    }
-    // The stored timestamps are identical to the millisecond. Let the clock
-    // move and stamp it again, rather than reporting a choice that did not take.
-    await new Promise((resolve) => setTimeout(resolve, 2));
-  }
-  return {
-    ok: false,
-    status: 409,
-    error: 'Two of these accounts were stored at the same instant and cannot be told apart. '
-      + 'Disconnect this platform and connect it again to choose one.',
-    data: last?.data || null,
-  };
-}
 
 async function handle(req, res, pathname, method) {
   const normalizedPath = normalizeApiPathname(pathname);
@@ -422,72 +380,22 @@ async function handle(req, res, pathname, method) {
       }), true;
     }
 
-    const accounts = Array.isArray(exchanged.data?.accounts) ? exchanged.data.accounts : [];
-    if (!accounts.length) {
-      // The provider said yes and named nobody. Storing nothing and reporting
-      // success would leave a card that says connected with no account behind
-      // it — the exact shape of a connection that silently posts as us.
-      return sendErr(res, 502, `${entry.displayName} accepted the sign-in but returned no account`, {
-        code: 'NO_ACCOUNTS',
-      }), true;
-    }
-
-    /**
-     * Every account the grant covers is stored, not only the one that ends up
-     * active.
-     *
-     * That is what the client authorised — one consent screen, all their Pages
-     * — and it is the only way the account picker below can work without a
-     * second table to park unchosen tokens in for the minute between finishing
-     * and choosing. Slice 6's revoke removes them together.
-     *
-     * They are saved OLDEST-LAST on purpose: `saveConnection` stamps
-     * updated_at, `listConnections` orders by it, and the resolver takes the
-     * first live row — so the last one written is the active one, and the
-     * screen is told which that is rather than inferring it.
-     */
-    const saved = [];
-    for (const account of accounts) {
-      const problems = contract.accountProblems(account, `${provider} account`);
-      if (problems.length) {
-        return sendErr(res, 502, `${entry.displayName} returned an account we cannot store: ${problems.join('; ')}`, {
-          code: 'BAD_ACCOUNT',
-        }), true;
-      }
-      const write = await projectConnectionsStore.saveConnection({
-        ...contract.storableAccount(account),
-        provider,
-        status: 'connected',
-        connectedByUserId: scope.userId,
-        lastVerifiedAt: new Date().toISOString(),
-        lastError: '',
-      }, scope);
-      if (!write.ok) {
-        return sendErr(res, write.status || 500, write.error || 'Could not store the connection', {
-          code: 'SAVE_FAILED',
-        }), true;
-      }
-      saved.push(write.data);
-    }
-
-    // Which one posts is READ BACK, never inferred from the write order — see
-    // makeActive. With one account this is a formality; with several it is the
-    // difference between a card that agrees with the publisher and one that
-    // merely looks like it does.
-    const intended = safeText(saved[saved.length - 1]?.accountId);
-    const active = await makeActive(provider, intended, scope);
-    if (!active.ok) {
-      return sendErr(res, active.status || 500, active.error || 'Could not settle which account posts', {
-        code: 'ACTIVE_ACCOUNT_UNSETTLED',
-      }), true;
+    const stored = await storeAccounts({
+      provider,
+      displayName: entry.displayName,
+      accounts: exchanged.data?.accounts,
+      scope,
+    });
+    if (!stored.ok) {
+      return sendErr(res, stored.status || 500, stored.error, { code: stored.code || 'SAVE_FAILED' }), true;
     }
 
     const payload = {
       provider,
       displayName: entry.displayName,
-      accounts: saved.map(publicAccount).filter(Boolean),
-      activeAccountId: safeText(active.data?.accountId),
-      needsAccountChoice: saved.length > 1,
+      accounts: stored.data.saved.map(publicAccount).filter(Boolean),
+      activeAccountId: stored.data.activeAccountId,
+      needsAccountChoice: stored.data.needsAccountChoice,
     };
     return sendOk(res, 200, payload, payload), true;
   }

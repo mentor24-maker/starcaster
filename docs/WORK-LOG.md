@@ -83,6 +83,64 @@ the top of the repo still said this check "posts if it has STALLED" — the
 prose ten lines below it had been corrected, but not the one line anybody
 skimming for the command actually reads. That line now has a test on it, so it
 cannot drift back.
+## 2026-09-02 — Instagram connects itself, and says why when it cannot (#545)
+
+Instagram is now a real card on the Connections screen rather than a greyed
+"coming soon" one, so a client can hook up their own account without Dane
+pasting a token into Vercel for them. It rides the same Facebook sign-in the
+Facebook Page card already uses — it is one consent screen, asked for two more
+permissions — so the connecting part was the easy half.
+
+The hard half, and most of this work, is the two checks that run before
+anything is saved. Instagram will not let *any* app post to a personal
+account, and every Instagram post an app can make physically travels out
+through a Facebook Page. Break either rule and Meta's own answer is a code
+like `OAuthException` with a number after it, or — far more often — a
+perfectly cheerful "success" that just never mentions Instagram at all. A
+client reading either of those has no idea what went wrong. So both cases now
+stop the connection dead and say, in English, what to change and which screen
+to change it on: "This Instagram account is a personal account. Instagram only
+allows posting to Business or Creator accounts. Change it in the Instagram app
+under Settings, Account type and tools, then try again."
+
+Telling those two apart turned out to hinge on one detail. Facebook reports a
+Page's linked Instagram account under two different names: one that appears
+only for Business and Creator accounts, and one that appears for any account
+at all. Ask for only the first — which is where Meta's own instructions send
+you — and "your account is the wrong type" and "you have not linked anything"
+look exactly the same, so there is no honest way to tell someone which of two
+quite different things to go and fix. Asking for both is the whole trick.
+
+One nicety worth knowing: the card shows the Instagram handle, `@delraytennis`,
+not the name of the Facebook Page the post travels through. Clients recognise
+the first and do not recognise the second.
+
+Review sent this back once, and the catch was a good one. If a client's
+Facebook account covers two Pages and they only gave us posting permission on
+one of them, the second Page came back from Facebook with no key attached —
+and the code built a connection out of it anyway. What the client then saw was
+their good account blocked by their bad one, an error message with the word
+`accessToken` in it, and a card sitting there saying "connected" with nothing
+behind it. That is precisely the failure the whole ticket was written to
+prevent, arriving by a door nobody had checked. Now a Page with no key is
+recognised for what it is and skipped, the good account connects normally, and
+a client whose *only* Page is missing that permission is told exactly that
+rather than being told they do not have a Facebook Page at all. The saving step
+underneath was also changed to check every account before it writes any of
+them, so "all of it or none of it" is now how the code is shaped rather than
+something each new platform has to remember.
+
+Two things nobody was testing are now tested: that Facebook handing us back an
+Instagram sign-in reaches the Instagram code at all — the only route by which a
+real Instagram connection can ever be made — and that a Facebook sign-in still
+goes where it always did, which matters because there are clients on it today.
+
+The existing Facebook connection is untouched — deliberately, byte for byte.
+Facebook only accepts one return address for this app, so Instagram comes back
+through Facebook's, and the signed token that makes the round trip now says
+which of the two asked. A token issued before this went live does not say, and
+is treated as Facebook, so anyone half-way through connecting when it deployed
+still landed where they expected.
 
 ## 2026-09-02 — Gradients can point any direction now, not just diagonally (#540)
 
