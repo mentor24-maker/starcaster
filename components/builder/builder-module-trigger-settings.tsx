@@ -37,7 +37,16 @@ export function BuilderModuleTriggerSettings({
   }
 
   return (
-    <div className="builder-module-trigger-settings">
+    /*
+     * `data-lattice-pairs="1"` is how this block opts INTO `check_panels`
+     * (L6a, docs/UI_RULES.md). Until 2026-08-29 nothing measured it: the
+     * check reads axis columns, the chrome's own strip, and groups carrying
+     * this attribute, and this block is none of the three — so its rows were
+     * skipped in silence, and a 268px notch on every trigger panel passed as
+     * green for as long as the block has existed. One pair of label/field
+     * tracks per row, hence "1".
+     */
+    <div className="builder-module-trigger-settings" data-lattice-pairs="1">
       <BuilderSettingRow label="Trigger" fullWidth>
         <select
           value={trigger}
