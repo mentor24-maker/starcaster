@@ -1769,6 +1769,23 @@ function BuilderSectionPreview({
           columnModules.every((module) => isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module));
         const isSectionOverlayColumn = columnHasOnlySectionScopedOverlayModules(columnModules);
         /*
+         * The cell's own tint screen — the per-cell twin of the row's.
+         *
+         * Same reader as the row (`getBuilderRowOverlayScreenStyle` takes the
+         * settings object and knows nothing about rows), so a cell overlay and
+         * a row overlay can never drift apart in how they composite.
+         *
+         * The two collapsed-slot guards mirror the ones on padding, margin and
+         * border directly below: an overlay-flow column and a section-scoped
+         * overlay slot are not really cells, they are decor mounts with their
+         * box thrown away, and painting a tint over one would put a coloured
+         * rectangle where the operator expects a floating image.
+         */
+        const cellOverlayScreenStyle =
+          isPageOverlayFlowColumn || isSectionOverlayColumn
+            ? undefined
+            : getBuilderRowOverlayScreenStyle(section.cellOverlayScreens?.[columnKey]);
+        /*
          * The cell's own numbers, as one answer each, used BOTH by the inline
          * properties below and by the variables the narrow-screen rules read.
          *
@@ -1844,9 +1861,24 @@ function BuilderSectionPreview({
               section.cellMobileHidden?.[columnKey] === "true" ? "builder-preview-column-mobile-hidden" : ""
             } ${isNavigationColumn ? "builder-preview-column-navigation" : ""}${
               isPageOverlayFlowColumn ? " builder-preview-column-overlay-flow" : ""
-            } ${isSectionOverlayColumn ? " builder-preview-column-overlay-slot" : ""}`}
+            } ${isSectionOverlayColumn ? " builder-preview-column-overlay-slot" : ""}${
+              cellOverlayScreenStyle ? " builder-preview-column-layered" : ""
+            }`}
             style={columnStyle}
           >
+            {/*
+              Above the cell's own fill, below its modules. The stacking is not
+              done here — the class above opens a stacking context on the cell
+              and the stylesheet puts this layer at 1 and the modules at 2, the
+              same two-rung arrangement the row already uses for its own screen.
+              Doing it inline instead would leave the modules unnumbered, and an
+              unnumbered in-flow sibling paints UNDER a positioned z-index: 1 —
+              which is a tint over the operator's text, the one outcome this
+              setting must never produce.
+            */}
+            {cellOverlayScreenStyle ? (
+              <div className="builder-preview-cell-overlay-screen" style={cellOverlayScreenStyle} />
+            ) : null}
             {columnModules.map((module) => {
               const isPageOverlayFlowModule =
                 isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module);

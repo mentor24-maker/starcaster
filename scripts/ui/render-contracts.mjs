@@ -1295,4 +1295,153 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+
+  /*
+   * THE CELL'S OWN TINT SCREEN — two contracts, because it has two ways to be
+   * wrong and only one of them is visible in the markup.
+   *
+   * The React tests beside this prove the layer MOUNTS. They cannot prove it
+   * paints, and they cannot prove it paints in the right ORDER, because a
+   * vitest render has no stylesheet at all: every rule the arrangement rests
+   * on lives in `_builder-react-overrides.css` and is invisible to them. That
+   * is the Tumbleweed shape exactly — a class name is not a rendering — so the
+   * order is asserted here, in a real browser, against the built stylesheet.
+   */
+  {
+    id: 'cell-overlay-tint-actually-paints',
+    why:
+      'A row could be tinted; ONE COLUMN of it could not, so a two-column band with a photo in each ' +
+      'column had no way to darken only one of them. This is the contract that the new per-cell screen ' +
+      'reaches the page as a real painted layer rather than a class nothing styles.',
+    section: {
+      layout: 'two-column',
+      cellBackgrounds: {
+        left: { mode: 'color', color: '#8899aa' },
+        right: { mode: 'color', color: '#8899aa' },
+      },
+      cellOverlayScreens: {
+        left: { background: { mode: 'color', color: '#101820' }, opacity: 50 },
+      },
+      modules: [
+        { type: 'text', column: 'left', text: '<p>Readable</p>', settings: {} },
+        { type: 'text', column: 'right', text: '<p>Untouched</p>', settings: {} },
+      ],
+    },
+    selector: '.builder-preview-cell-overlay-screen',
+    read: ['position', 'opacity', 'backgroundColor'],
+    expect(sample) {
+      if (sample.styles.position !== 'absolute') {
+        return `the cell tint is \`position: ${sample.styles.position}\` — it is sitting in the flow ` +
+          'as a coloured block above the content instead of covering the cell.';
+      }
+      const opacity = Number(sample.styles.opacity);
+      if (!Number.isFinite(opacity) || opacity >= 1) {
+        return `the cell tint rendered at opacity ${sample.styles.opacity} — a fully opaque screen hides ` +
+          'the very photograph it exists to make text readable over.';
+      }
+      if (opacity <= 0) {
+        return 'the cell tint rendered at opacity 0 — it is in the DOM and paints nothing, which is ' +
+          'indistinguishable from the setting not working at all.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-overlay-stays-behind-the-words',
+    why:
+      'The one outcome this setting must never produce is a tint OVER the text. The reason to dim a ' +
+      'photograph is to make the words on it readable, so a screen that covers them inverts the whole ' +
+      'feature — and it would look completely fine in the markup, because the ordering lives entirely ' +
+      'in three CSS rules. Read from the browser, against the built stylesheet, for that reason.',
+    section: {
+      layout: 'two-column',
+      cellBackgrounds: {
+        left: { mode: 'color', color: '#8899aa' },
+        right: { mode: 'color', color: '#8899aa' },
+      },
+      cellOverlayScreens: {
+        left: { background: { mode: 'color', color: '#101820' }, opacity: 50 },
+      },
+      modules: [
+        { type: 'text', column: 'left', text: '<p>Readable</p>', settings: {} },
+        { type: 'text', column: 'right', text: '<p>Untouched</p>', settings: {} },
+      ],
+    },
+    selector: '.builder-preview-column-layered',
+    read: ['isolation', 'position'],
+    /*
+     * `series` is the harness's only multi-selector reader, and the question
+     * here IS a comparison between three elements in one frame — so one frame
+     * is taken and judged. Nothing about this behaviour changes over time.
+     */
+    series: {
+      selectors: {
+        screen: '.builder-preview-column-layered > .builder-preview-cell-overlay-screen',
+        words: '.builder-preview-column-layered > .builder-preview-module',
+        plainCell: '.builder-preview-column:not(.builder-preview-column-layered)',
+      },
+      read: ['zIndex', 'isolation'],
+      count: 1,
+      everyMs: 0,
+    },
+    expect(sample) {
+      /*
+       * The cell must form a stacking context of its own. Without it the two
+       * rungs below are numbered inside whatever ancestor happens to own the
+       * stack, which is the silent theme-dependent failure: right on every row
+       * that has a background, wrong on the ones that do not.
+       */
+      if (sample.styles.isolation !== 'isolate') {
+        return `the tinted cell is \`isolation: ${sample.styles.isolation}\` — it forms no stacking ` +
+          'context, so the screen and the modules are numbered against some ancestor instead of ' +
+          'against each other, and whether the words end up in front depends on the theme.';
+      }
+
+      const frame = sample.series?.[0];
+      if (!frame) {
+        return 'no frame was sampled — the contract measured nothing, which cannot verify anything.';
+      }
+      if (!frame.screen) {
+        return 'the tint layer is not a direct child of the tinted cell — the stylesheet rungs are ' +
+          'written as direct-child selectors, so they no longer reach it.';
+      }
+      if (!frame.words) {
+        return 'no module rendered inside the tinted cell, so the thing this contract exists to ' +
+          'protect — the operator\'s text — was never on the page to be measured.';
+      }
+
+      const screenZ = Number(frame.screen.zIndex);
+      const wordsZ = Number(frame.words.zIndex);
+      /*
+       * Both read as NUMBERS before they are compared. `auto` is what an
+       * unnumbered element reports, and `Number('auto')` is NaN — every
+       * comparison against NaN is false, so a missing rule would have slipped
+       * through whichever direction the assertion was written in.
+       */
+      if (!Number.isFinite(screenZ) || !Number.isFinite(wordsZ)) {
+        return `the stacking rungs are not both set — the screen reads z-index ` +
+          `\`${frame.screen.zIndex}\` and the text reads \`${frame.words.zIndex}\`. An unnumbered ` +
+          'in-flow sibling paints UNDER a positioned z-index: 1, which puts the tint over the words.';
+      }
+      if (!(screenZ < wordsZ)) {
+        return `the tint is at z-index ${screenZ} and the text at ${wordsZ} — the screen is painting ` +
+          'ON TOP of the operator\'s words. The reason to dim a photograph is to make the text on it ' +
+          'readable; this does the opposite.';
+      }
+
+      /*
+       * And the cell BESIDE it is untouched. This is the ticket in one line —
+       * before it, tinting one column of a row was impossible — and it is
+       * asserted as an ABSENCE of the stacking context, so a rule that leaked
+       * onto every cell is caught rather than read as success.
+       */
+      if (frame.plainCell && frame.plainCell.isolation === 'isolate') {
+        return 'the cell with NO overlay also forms a stacking context — the layering rules are ' +
+          'leaking onto every cell instead of only the tinted one, which changes how existing pages ' +
+          'stack for no reason the operator asked for.';
+      }
+      return null;
+    },
+  },
 ];

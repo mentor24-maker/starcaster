@@ -7064,6 +7064,43 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /*
+ * THE CELL'S OWN TINT SCREEN — the per-cell twin of the row screen above.
+ *
+ * `isolation: isolate` is the load-bearing line, not decoration. The cell is
+ * `position: relative` but carries no z-index of its own, so without this it
+ * forms NO stacking context and the two rungs below would be numbered inside
+ * whatever ancestor happens to own the stack — the section when it is layered,
+ * the page when it is not. That is the same theme-dependent, silent failure
+ * the row screen's own comment above warns about, arriving from the other
+ * side: it would look right on every row that happens to have a background and
+ * wrong on the ones that do not. Isolating makes the answer the same every
+ * time, and it is applied only to a cell that actually has an overlay, so no
+ * existing cell's stacking changes at all.
+ *
+ * Two rungs, and the order is the whole setting: the screen at 1 covers the
+ * cell's own fill, and the modules at 2 stay in front of it. A tint that
+ * washed over the operator's words instead of sitting behind them would make
+ * the control useless — the reason to dim a photograph is to make the text on
+ * it readable.
+ */
+.builder-preview-column-layered {
+  isolation: isolate;
+}
+
+.builder-preview-cell-overlay-screen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.builder-preview-column-layered > .builder-preview-module {
+  position: relative;
+  z-index: 2;
+}
+
+/*
  * The Video background panel. The warning is a plain sentence rather than a
  * red error box on purpose: a missing poster is a bad idea, not an invalid
  * setting, and the operator is allowed to save without one.

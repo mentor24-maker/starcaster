@@ -70,11 +70,23 @@ const WIDTH = Number(process.env.UI_HARNESS_WIDTH || 1440);
 const SETTLE_MS = 600;
 
 function moduleFrom(spec, index) {
-  const base = createEmptyModule(spec.type, 'main');
+  /*
+   * `column` defaults to "main", which is the only column a single-column row
+   * has, so every contract written before this reads exactly as it did.
+   *
+   * It is settable because a CELL-level setting cannot be reached otherwise:
+   * proving one column is tinted and the one beside it is not needs a module
+   * in each, and with the column hardcoded both landed in "main" — a column
+   * a two-column row does not have. The renderer then filtered them out of
+   * both cells, so the contract measured an EMPTY row and its own assertion
+   * about the untouched column passed for the wrong reason.
+   */
+  const base = createEmptyModule(spec.type, spec.column ?? 'main');
   return {
     ...base,
     id: `module-render-contract-${spec.type}-${index}`,
     name: spec.type,
+    column: spec.column ?? base.column ?? 'main',
     text: spec.text ?? base.text ?? '',
     settings: { ...base.settings, ...(spec.settings || {}) },
   };
@@ -104,6 +116,8 @@ function documentForSection({
   modules = [],
   background,
   overlayScreen,
+  cellBackgrounds,
+  cellOverlayScreens,
   spacers = 0,
   themeTreatments,
 } = {}) {
@@ -142,6 +156,13 @@ function documentForSection({
     // real element, so a contract cannot reach it without them.
     ...(background ? { background } : {}),
     ...(overlayScreen ? { overlayScreen } : {}),
+    // The CELL's fill and tint, for the same reason as the two above: a cell
+    // overlay is a real element, so a contract cannot reach it unless the
+    // fixture carries the field. Whitelisted rather than spread, so a typo in
+    // a contract is a field that is visibly missing rather than one silently
+    // along for the ride.
+    ...(cellBackgrounds ? { cellBackgrounds } : {}),
+    ...(cellOverlayScreens ? { cellOverlayScreens } : {}),
     modules: modules.map(moduleFrom),
   };
 

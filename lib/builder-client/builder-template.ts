@@ -591,6 +591,16 @@ export type BuilderTemplateSection = {
   overlayScreen?: RowOverlayScreenSettings;
   cellBackgrounds: Record<string, BackgroundSettings>;
   /**
+   * A tint/dimmer screen over ONE cell's background, keyed by column — the
+   * per-cell twin of `overlayScreen` above.
+   *
+   * A cell is not an object in this codebase: every cell setting is a map on
+   * the row, keyed by column, and this is one more of them. Optional because
+   * a row saved before 2026-09-03 carries nothing here, and an absent map has
+   * to read as "no cell has an overlay" rather than crash the renderer.
+   */
+  cellOverlayScreens?: Record<string, RowOverlayScreenSettings>;
+  /**
    * Legacy: one number for all four sides of a cell. Kept as the seed for
    * the two axes below, so a row saved before 2026-08-11 renders identically
    * — and kept in the type because old rows still carry it.
@@ -1995,6 +2005,35 @@ function normalizeCellBackgrounds(
 }
 
 /**
+ * Every cell's tint screen, keyed by column.
+ *
+ * Deliberately NOT `sanitizeCellBackgroundForDrillDown`-ed the way the cell
+ * FILL above is: that sanitiser exists to stop the drill-down surface colour
+ * being mistaken for a fill the operator chose, and a tint is never a surface
+ * default — nothing seeds one, so anything here was set on purpose.
+ *
+ * An unset cell gets a `mode: "none"` screen, which `getBuilderRowOverlayScreenStyle`
+ * reads as "paint nothing". So a row that has never been given a cell overlay
+ * normalizes to a map of no-ops and renders exactly as it did before this
+ * field existed.
+ */
+function normalizeCellOverlayScreens(
+  value: unknown,
+  layout: BuilderTemplateLayout
+): Record<string, RowOverlayScreenSettings> {
+  const columns = getLayoutColumns(layout);
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return Object.fromEntries(columns.map((column) => [column, normalizeRowOverlayScreenSettings(null)]));
+  }
+
+  const raw = value as Record<string, unknown>;
+  return Object.fromEntries(
+    columns.map((column) => [column, normalizeRowOverlayScreenSettings(raw[column])])
+  );
+}
+
+/**
  * Legacy all-sides cell padding.
  *
  * The fallback is 0, not the 18 it was until 2026-08-11. A cell that nobody
@@ -3144,6 +3183,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         background: normalizeBackgroundSettings(normalizedSection.background),
         overlayScreen: normalizeRowOverlayScreenSettings(normalizedSection.overlayScreen),
         cellBackgrounds: normalizeCellBackgrounds(normalizedSection.cellBackgrounds, layout),
+        cellOverlayScreens: normalizeCellOverlayScreens(normalizedSection.cellOverlayScreens, layout),
         cellPadding: cellPadding,
         cellPaddingTop: normalizeCellPaddingSide(
           normalizedSection.cellPaddingTop,
@@ -3257,6 +3297,9 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     overlayScreen: normalizeRowOverlayScreenSettings(null),
     cellBackgrounds: Object.fromEntries(
       getLayoutColumns(layout).map((column) => [column, createDefaultBackgroundSettings()])
+    ),
+    cellOverlayScreens: Object.fromEntries(
+      getLayoutColumns(layout).map((column) => [column, normalizeRowOverlayScreenSettings(null)])
     ),
     cellPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellPaddingTop: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),

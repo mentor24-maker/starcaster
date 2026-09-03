@@ -135,6 +135,38 @@ describe('what one following page takes on', () => {
     expect(changes[0].after).toBe('24');
   });
 
+  /*
+   * A CELL overlay edited on a canonical master must be DETECTED.
+   *
+   * The failure this pins is the quiet one, not a crash: a diff that does not
+   * know a field reports "no visible change", and the propagation engine then
+   * skips every following page — so the operator tints one column of a shared
+   * band, is told nothing changed, and the 35 pages carrying that band keep
+   * the old look. `cellOverlayScreens` is covered by construction (it starts
+   * with "cell", so `isPerColumnField` claims it), and "by construction" is
+   * exactly the kind of claim that is worth one test rather than a comment.
+   */
+  it('sees a cell overlay edited on its own, and names the column', () => {
+    const off = { background: { mode: 'none', color: '', color2: '', imageUrl: '', styleKey: '' }, opacity: 100 };
+    const blue = { background: { mode: 'color', color: '#123456', color2: '', imageUrl: '', styleKey: '' }, opacity: 60 };
+    const changes = diffSectionInstance(
+      section({ cellOverlayScreens: { a: off } }),
+      section({ cellOverlayScreens: { a: blue } })
+    );
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0].label).toBe('Cell overlay screen (column a)');
+    expect(changes[0].before).toBe('none at 100');
+    expect(changes[0].after).toBe('colour #123456 at 60');
+  });
+
+  it('does not report a cell overlay nobody has touched', () => {
+    const off = { background: { mode: 'none', color: '', color2: '', imageUrl: '', styleKey: '' }, opacity: 100 };
+    expect(
+      diffSectionInstance(section({ cellOverlayScreens: { a: off } }), section({ cellOverlayScreens: { a: off } }))
+    ).toEqual([]);
+  });
+
   it('describes a background in words instead of dumping its object', () => {
     const changes = diffSectionInstance(
       section(),
