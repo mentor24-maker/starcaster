@@ -20,6 +20,14 @@ both local dev and Vercel.
 - **Stores live in `lib/`**, one per entity, using `sbQuery()` from
   `lib/supabase.js`. Always `encodeURIComponent` values interpolated into
   PostgREST query strings.
+- **Slugs have one definition: `lib/slugify.js`.** `slugify()` is the rule
+  (lowercase, spaces to dashes, only letters/numbers/dashes, accents folded,
+  apostrophes closed up) and `resolveUniqueSlug()` derives one from the title
+  when the field is blank and suffixes per-project collisions. Do not write a
+  third copy — blog and events each had their own until 2026-09-03. **Deriving
+  it belongs in the store, not the route or the form**: a blank slug is an
+  unreachable record, and doing it in one caller leaves every other caller with
+  the hole (`docs/DOCTRINE.md` §5.25).
 - **Schema changes:** add SQL to `docs/SQL/` and apply on Supabase
   manually; check `docs/SQL/` before assuming a column exists.
 - **Expensive endpoints** (external APIs, scraping, imports) add
