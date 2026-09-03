@@ -1,7 +1,12 @@
 import { useState } from "react";
+import type { ChangeEvent } from "react";
 import type { BackgroundSettings } from "@/lib/builder-template";
 import {
   BACKGROUND_STYLE_PRESETS,
+  BUILDER_GRADIENT_ANGLE_DEFAULT,
+  BUILDER_GRADIENT_ANGLE_MAX,
+  BUILDER_GRADIENT_ANGLE_MIN,
+  builderGradientAngleFromInput,
   createDefaultBackgroundSettings,
   normalizeBuilderAssetUrl
 } from "@/lib/builder-template";
@@ -96,6 +101,8 @@ export function BuilderBackgroundControls({
    * is what it goes back to on blur.
    */
   const [parallaxSpeedDraft, setParallaxSpeedDraft] = useState<string | null>(null);
+  /** Same story as `parallaxSpeedDraft`, for the gradient Angle box. */
+  const [gradientAngleDraft, setGradientAngleDraft] = useState<string | null>(null);
   const [openVideoPicker, setOpenVideoPicker] = useState<"clip" | "poster" | null>(null);
 
   function handleModeChange(newMode: BackgroundSettings["mode"]) {
@@ -112,6 +119,24 @@ export function BuilderBackgroundControls({
       }
       return next;
     });
+  }
+
+  /**
+   * One handler, used by both layouts, for the same reason `handleModeChange`
+   * is shared: the horizontal and stacked forms of this component have already
+   * drifted once, and a second copy of this logic is how the draft-state fix
+   * below ends up living in only one of them.
+   *
+   * The box holds the keystroke either way; only a readable number is written
+   * to the setting. A half-typed one leaves the stored value exactly as it was
+   * rather than snapping to the clamped default, which is what eats a backspace.
+   */
+  function handleGradientAngleInput(event: ChangeEvent<HTMLInputElement>) {
+    const typed = event.target.value;
+    setGradientAngleDraft(typed);
+    const parsed = builderGradientAngleFromInput(typed);
+    if (parsed === null) return;
+    onChange((current) => ({ ...current, gradientAngle: parsed }));
   }
 
   const videoUrl = background.videoUrl ?? "";
@@ -533,6 +558,20 @@ export function BuilderBackgroundControls({
             </BuilderModuleField>
           ) : null}
 
+          {background.mode === "gradient" ? (
+            <BuilderModuleField label="Angle" width="num">
+              <input
+                type="number"
+                min={BUILDER_GRADIENT_ANGLE_MIN}
+                max={BUILDER_GRADIENT_ANGLE_MAX}
+                step={5}
+                value={gradientAngleDraft ?? String(background.gradientAngle ?? BUILDER_GRADIENT_ANGLE_DEFAULT)}
+                onChange={handleGradientAngleInput}
+                onBlur={() => setGradientAngleDraft(null)}
+              />
+            </BuilderModuleField>
+          ) : null}
+
           {background.mode === "style" ? (
             <BuilderModuleField label="Style" width="auto">
               <select
@@ -675,6 +714,21 @@ export function BuilderBackgroundControls({
                   color2
                 }))
               }
+            />
+          </label>
+        ) : null}
+
+        {background.mode === "gradient" ? (
+          <label className="field">
+            <span>Angle</span>
+            <input
+              type="number"
+              min={BUILDER_GRADIENT_ANGLE_MIN}
+              max={BUILDER_GRADIENT_ANGLE_MAX}
+              step={5}
+              value={gradientAngleDraft ?? String(background.gradientAngle ?? BUILDER_GRADIENT_ANGLE_DEFAULT)}
+              onChange={handleGradientAngleInput}
+              onBlur={() => setGradientAngleDraft(null)}
             />
           </label>
         ) : null}

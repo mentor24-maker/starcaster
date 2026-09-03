@@ -501,9 +501,13 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
    §6.7).
 6. Build. Every Definition-of-done gate, and break each fix on purpose —
    revert it, watch the named test fail, restore it.
-7. `npm run ship`. **No pause to merge**: merges never collide with the
-   loops, `pause` drains for up to half an hour, and a pause older than two
-   hours nags the bus hourly. `ship` re-runs the gates, pushes, **records the
+7. `npm run ship`. **You never pause the line in order to merge — but every
+   merge still asks the switch** (decision D2, `docs/DOCTRINE.md` §6.17):
+   `ship` runs `npm run pipeline -- check` itself and stops, quoting the
+   switch, if Dane has the deck. It also states the review gate's context
+   before merging (decision D3 — reported, not enforced). No pausing needed:
+   merges never collide with the loops, and `pause` exists for taking the
+   deck, not for this. `ship` re-runs the gates, pushes, **records the
    PR on its ticket**, waits for CI, merges and tidies; if it stops on a
    conflict, resolve by hand and run it again.
    You do not run `clickup pr-opened` by hand here — `ship` writes that trail

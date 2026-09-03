@@ -21,6 +21,7 @@
     "pipeline": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pipeline.mjs",
     "reconcile": "doppler run --project starcaster --config dev --no-check-version -- node scripts/reconcile_clickup_github.cjs",
     "repair": "node scripts/repair.mjs",
+    "board": "node scripts/board.mjs",
     "check:css": "node scripts/ui/check_css.mjs",
     "check:render": "node scripts/ui/check_render.mjs",
     "check:shots": "node scripts/ui/shoot_changes.mjs",

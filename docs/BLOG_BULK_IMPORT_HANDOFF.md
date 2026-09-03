@@ -1,6 +1,50 @@
 # Blog Manager — bulk import of discarded pages into blog posts
 
-**Ticket:** 86bbtuh3y · **Written:** 2026-09-02 · **For:** the agent session that builds this
+**Ticket:** 86bbtuh3y · **Written:** 2026-09-02 · **Shipped:** 2026-09-03 (PR #541)
+· **Written for:** the agent session that built this
+
+> ## SHIPPED — 2026-09-03. This is now a record, not a plan.
+>
+> Built and merged as **PR #541**; Dane ran it against the live Delray site the
+> same day. The survey below is still accurate and still worth reading — it is
+> why the feature works — but nothing in it is outstanding work.
+>
+> **What the build added beyond this document:**
+>
+> - **A second chrome cut, at the end of the article.** §4 says to cut
+>   everything before the `<h1>`, which removes the 2018 nav, the social strip
+>   and the site title. It does not mention that the same scrape ends with the
+>   site's sidebar and footer, so every imported post finished with *"Primary
+>   Sidebar · Copyright © 2026 Delray Beach Tennis Center · Powered by …"*.
+>   The cut is structural, at `<h2 class="genesis-sidebar-title">` and the
+>   archive-pagination and site-footer wrappers. **It was found by reading
+>   three imported posts end to end, not by any gate** — which is exactly what
+>   §7 asks for, and the only reason it was caught.
+> - **`check:render` cannot cover this module.** Its harness drives
+>   `builder-preview.html`, which applies the live site's rule that admin-only
+>   modules never paint on a public page
+>   (`components/builder-preview-page.tsx`, `filterPublicSections`). A contract
+>   for `blog-post-manager` measures an empty page and reports "nothing
+>   matched". The coverage lives in the vitest component suite instead —
+>   `components/builder-template-preview-blog-import.test.tsx`, which says so
+>   in its header. Read `docs/DOCTRINE.md` §5.25 before adding a render
+>   contract for any `admin-*` or manager module.
+>
+> **And one thing this document got right that the follow-up nearly undid.**
+> §2 says import as drafts, because publishing 44 unreviewed 2018 posts to a
+> client's live site is not recoverable. The next day the report came back as
+> *"it didn't populate the slugs, so no posts actually load"* — and the import
+> was not at fault. All 47 imported posts had slugs. They did not load because
+> they were **drafts**, working as specified. The posts genuinely missing an
+> address were five Dane had written by hand days earlier, through a form whose
+> Slug box promised auto-generation the store never performed (ticket
+> 86bbu23n7, PR #549, `docs/DOCTRINE.md` §5.25). Had the stated cause been
+> taken at face value, the fix would have gone into the one code path that was
+> already correct.
+>
+> **Still owed by Dane, and still the reason §0 matters:** read the imported
+> posts and publish the ones he wants. Until he has, the orphaned snapshots
+> remain the only copy of that content — see §0, which has not expired.
 
 Delray's original site had about 44 blog posts. Site Import brought them in as
 Builder pages; Dane later discarded those pages. He wants the posts back — as
@@ -21,11 +65,14 @@ There are **51** such rows in Delray's project, of which **44** look like blog
 posts. There is a backup:
 
 ```
-~/Desktop/delray-orphan-snapshots-backup-2026-09-02.json     (1.5 MB, 51 rows, payloads included)
+~/Desktop/delray-orphan-snapshots-backup-2026-09-02.json          (MacBook, 1.5 MB, 51 rows)
+~/delray-orphan-snapshots-backup-2026-09-02.json                  (Mac Mini, copied 2026-09-03)
 ```
 
-That file is on one Mac and is **not in git**. It is not a backup in any sense
-that survives a spilled coffee.
+**Updated 2026-09-03:** it was on one Mac when this was written, which is not a
+backup in any sense that survives a spilled coffee. There are now two copies,
+sha256-verified identical. It is still **not in git**, and still the only copy
+of that content outside the snapshot rows themselves.
 
 **Two live hazards:**
 
@@ -306,14 +353,28 @@ browser":
 
 ## 8. Open questions for Dane — ask before building, not after
 
-1. **Both sources, or just the discarded pages?** (§6 recommends both, orphans
-   first.)
+**All four were answered on 2026-09-02, before the build. His answers, and what
+was built:**
+
+1. **Both sources, or just the discarded pages?** (§6 recommended both, orphans
+   first.) — **Discarded pages only.** Verbatim: *"All live pages now are part
+   of the website proper. Blog posts are an entirely different thing, and should
+   be assembled from the discarded pages that can be identified as blog posts."*
+   The live-page source in §6 is **not** a deferred slice; it was declined.
 2. **What should the author be** on the six posts with no author in the source —
-   blank, or a default like "Delray Beach Tennis Center"?
+   blank, or a default like "Delray Beach Tennis Center"? — **Default to the
+   site's name.** The picker pre-fills the box with the project's own name and
+   lets him edit it before anything is written.
 3. **And the date** on the six with no date — blank, or the page's `createdAt`
-   from the snapshot? Blank means they sort to the bottom of the feed.
-4. **The seven non-posts** (§5) — leave them out entirely, or list them at the
-   bottom marked "probably not a post" so he can decide?
+   from the snapshot? — **Blank.** They sort to the bottom, which is the honest
+   position for a post whose date nobody knows.
+4. **The seven non-posts** (§5) — leave them out, or list them marked "probably
+   not a post"? — **List them at the bottom, marked.** Never hidden.
+
+The classifier ended up calling 46 of the 51 probable posts and 5 not, rather
+than the 44/7 this survey predicted: the split here required an `<h1>`, and
+seven real posts have none. Falling back to the page's own name for those (and
+saying so in the picker) is what moved them.
 
 ---
 

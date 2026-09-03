@@ -503,6 +503,17 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
   outstanding — a ticket in a claimable status with an honest note is a
   perfectly good outcome. An unfinished promise is not.
 
+- **VERIFY THE PREMISE BEFORE BUILDING IT.** A defect ticket is a claim to
+  verify, not a specification to obey. Before touching a line, read the
+  mechanism the ticket names (its `EVIDENCE:` line says where; a defect
+  ticket without one is itself send-back material — the spec lane owes it).
+  When the premise is wrong: **post the correction on the ticket FIRST, then
+  build what is true** — never silently build the description as written, and
+  never silently build something else instead. On 2026-09-02 four of five
+  defect tickets filed by the highest-context session had materially wrong
+  premises; the fixes only landed right because each was re-derived from the
+  code and corrected on the ticket before the build (task 86bbtujfj).
+
 - **One task, one worktree, one PR.** Never build two tasks in one branch.
 - **The PR and the ticket must name each other.** `pr-opened` enforces both
   directions and verifies its own write; if it exits non-zero the run has

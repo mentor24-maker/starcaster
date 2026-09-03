@@ -1526,6 +1526,123 @@ The harness pages keep their job — they are how `check:render` and
 regression, not evidence that a feature works where it ships.
 
 
+### 5.23 A condition that narrows a behaviour must be written in the same terms as the symptom
+
+2026-09-02. PR #522 → fixed by #543, three lines apart.
+
+The blog card's featured image bleeds to the card edges by pulling up over the
+card's top padding. That pull-up was unconditional, which meant it slid up
+underneath anything sitting above it. #522 narrowed it:
+
+```js
+topOfCard: firstFilledSlot === "featured_image"   // first IN THE TEMPLATE
+```
+
+The symptom was **visual** — *is anything drawn above the image?* The condition
+written was **structural** — *is the image first in the template's slot list?*
+Those two agree only when every slot renders something.
+
+Both production card templates open with `["categories"]`, and the Delray posts
+carry no categories. So the categories row rendered nothing, remained "first",
+and the image — visibly at the top of the card — got no pull-up. The card's
+1.125rem top padding showed as a gap, plus the flex column's own gap from the
+empty row, which still emitted an element. **The fix for one bug created another
+in the same three lines, and shipped.**
+
+The corrected condition asks the visual question directly, by testing what the
+POST renders (`slotRenders`) rather than what the template holds. It fixes the
+gap without reintroducing the sliding, because it is finally the same question.
+
+**So: when you narrow an unconditional behaviour, write the condition in the
+vocabulary of the symptom.** A structural proxy for a visual question — or a
+schema proxy for a content question — is only ever accidentally right, and it
+is right on exactly the fixture you were looking at when you wrote it. §3.14 is
+the same confusion running the other way: an unpopulated field is not an empty
+answer.
+
+### 5.24 A preset that bundles two properties makes both unreachable — and splitting one safely means deriving from it, not defaulting past it
+
+2026-09-02, task 86bbtvnr5, PR #543. `cardStyle` had three values and set the
+card's border **and** its shadow together:
+
+```js
+cardStyle === "bordered" ? { border: `1px solid ${accent}40`, boxShadow: "none" }
+: cardStyle === "shadow"  ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
+: { border: "1px solid #e2e8f0", boxShadow: "none" }
+```
+
+Every production template is `default`, so every tenant card carried that
+hard-coded grey and no control could reach it — while nine image controls were
+added around it in the same panel. Neither property could be exposed without
+dismantling the preset, so neither was.
+
+Splitting it is a data migration wearing a UI change, and the safety is entirely
+in one detail: the new explicit keys are **derived from the old preset when
+ABSENT**, per preset value, so every already-saved template renders identically.
+
+```js
+cardBorderWidth: d.cardBorderWidth === undefined
+  ? presetBorderWidth(d.cardStyle)          // bordered→1, shadow→0, default→1
+  : cardNum(d.cardBorderWidth, 0, 16, …)
+```
+
+**`=== undefined`, never falsiness.** `d.cardBorderWidth || preset()` restores
+the preset's border on every read, so "no border" can never be saved — and it
+fails silently, on the one value an operator is most likely to have chosen
+deliberately. The same trap waits on every numeric or boolean setting where `0`
+or `false` is a real choice.
+
+Verify a split like this against **every** preset value, not the one in use. Two
+of the three cases here would never have been exercised by the fixture in front
+of me.
+
+
+### 5.25 A field the interface promises to fill is not filled by the promise
+
+2026-09-03, task 86bbu23n7, PR #549. The Create Post form's Slug box carries the
+placeholder **"post-slug (auto-generated if blank)"**. `createPost` stored what
+it was handed:
+
+```js
+slug: safeText(input.slug),      // '' when the operator left the box empty
+```
+
+Nothing generated anything. A blog post is addressed **by** its slug, so a post
+saved with the box empty had no address at all: the row was written, the manager
+listed it, the operator saw his post in the list, and every link to it went
+nowhere. Five of Delray's eight published posts sat that way — the oldest for
+four days, written 08-30 and found 09-03.
+
+There was no error to find, because nothing failed. The insert succeeded. The
+list read succeeded. The only surface that could have told anyone is the one
+place nobody looks at their own new post — the public site.
+
+**The rule: a promise made in an interface is kept by the code behind it, or it
+is not kept.** Placeholder text, a help line, a label saying "optional" — each
+is a claim about behaviour that lives somewhere else, and the two drift apart
+silently because nothing connects them. When you read a promise like that in a
+form, go and find the line that keeps it. It is a two-minute check, and here it
+was the whole defect.
+
+The repair also answered *where* it belongs. Deriving the slug in the Create
+Post component would have fixed that one form and left the API, the bulk import
+and every future caller with the same hole. It belongs in the store, which is
+the last place every path passes through — and the rule itself belongs in one
+file (`lib/slugify.js`), because `eventsStore` had already written its own copy
+and a second definition of "what is this thing's address" drifts by definition.
+
+**And the report that brought it in was a reasonable misdiagnosis.** The
+operator said the bulk import had not populated the slugs and so no posts
+loaded. Reading the live rows first said otherwise: all 47 imported posts had
+slugs, and they did not load because they were **drafts**, which is the review
+step working exactly as specified. The posts genuinely missing an address were
+five he had written by hand, days before the import existed. Had the stated
+cause been taken at face value, the fix would have gone into the import — the
+one code path that was already correct — and the five broken posts would still
+be broken. §6.13 says a reported conflict is a claim to verify; the same is true
+of a reported cause, and it costs one query to check.
+
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
@@ -2372,6 +2489,51 @@ Both halves reduce to one habit: **before reporting that something is true, ask
 what you would have to have observed for it to be true, and check that you
 observed it.**
 
+
+### 6.17 When doctrine answers yes AND no, the contradiction is the defect — three merge-lane decisions, decided once
+
+**The incident (2026-09-02, the "State of the Line" audit).** Three questions
+had two live answers each, every answer individually defensible:
+
+- What does "done" mean? `wipCap.js` counted four statuses as terminal
+  (live/complete/closed/done) while `pulse.js` counted one — the WIP cap and
+  the flow diagnostics running on different definitions of finished.
+- Does a merge ask the pause switch? This file's pipeline section said
+  *"before merging anything, run `pipeline -- check`"* while the fast-track
+  lane said *"No pause to merge."* `ship` merged via a direct `gh pr merge`
+  and never read the switch (`ship_thread.cjs:553` at audit time).
+- Is `ship` part of the one merge gate (task 86bbkw2au's "ONE GATE"), or a
+  second path? It was a second path, silently.
+
+Nobody had been careless; each half was written on a different day against a
+different incident. That is exactly how a system built at speed accumulates
+contradictions, and the rule this section exists for: **when two rules answer
+the same question differently, resolving it is an OPERATOR DECISION to make
+once and record where both readers will find it — not a thing each session
+re-derives** (§6.6 is the sibling rule for decisions already made).
+
+**The decisions, made by Dane on the audit's recommendations (D1 on
+2026-09-02, D2 and D3 on 2026-09-03, verbatim as recommended):**
+
+- **D1 — `live` is the only terminal status.** The other three names are a
+  tested alias list, reported loudly by name (wipCap's `unrecognised`
+  bucket), never silently counted either way. Recorded beside the code in
+  `scripts/builder/loopStatuses.js` (task 86bbtujed, PR #539).
+- **D2 — every merge asks the pause switch; nobody pauses in order to
+  merge.** `ship` runs `pipeline -- check` itself before merging and stops,
+  quoting the switch, when the deck is taken — failing safe like every other
+  actor. The fast-track sentence now says what it always meant (task
+  86bbu2uhq).
+- **D3 — `ship` STATES the review gate's context before merging, and only
+  states it.** The read-only `waiting` reader's own lines are reprinted;
+  enforcement stays with the one merge gate, and folding `ship` fully into
+  it waits for a driving incident (task 86bbu2uhq).
+
+**How to use this section:** when you find doctrine or two modules answering
+one question two ways, do not pick quietly and do not build both. Name the
+contradiction as its own finding, take it to the operator as a decision with
+a recommendation, and record the answer once — in the code that enforces it
+and here.
 
 ## 7. Operator-facing gotchas
 
