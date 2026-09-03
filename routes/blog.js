@@ -5,7 +5,7 @@ const { listCategories, getCategory, getCategoryBySlug, createCategory, updateCa
 const { listPosts, getPost, getPostBySlug, createPost, updatePost, deletePost } = require('../lib/blogPostsStore');
 const { getCardTemplate, saveCardTemplate } = require('../lib/blogCardTemplateStore');
 const { listTags, listPostsWithTag, renameTag, removeTag } = require('../lib/blogTagsStore');
-const { listRelations, listRelatedPostIds, relatePosts, unrelatePosts } = require('../lib/blogPostRelationsStore');
+const { listRelations, listRelatedPostIds, relatePosts, setRelatedPosts, unrelatePosts } = require('../lib/blogPostRelationsStore');
 const { listImportCandidates, importPosts, IMPORT_BATCH_SIZE } = require('../lib/blogImportStore');
 const { getPublicProjectById } = require('../lib/projectsStore');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
@@ -300,6 +300,27 @@ async function handle(req, res, pathname, method) {
     // (landmine 15), so the store returns null and this says so.
     if (!result) return sendErr(res, 500, 'Could not save the relations.'), true;
     logActivity({ action: 'blog_post.related', entityType: 'blog_post', entityId: distinct[0], summary: `Blog articles related: ${distinct.length} articles, ${result.added} new link(s)` });
+    return sendOk(res, 200, result, { result }), true;
+  }
+
+  // The post editor's write: one post's whole related set, replacing what is
+  // stored. POST above only ever ADDS (it relates a checked set to each other,
+  // which is the links manager's move); unchecking a post in the editor has to
+  // remove a pair, and only pairs involving this post may be touched.
+  if (pathname === '/api/blog/relations' && method === 'PUT') {
+    if (checkEndpointLimit(req, res, 'blog.relations')) return true;
+    const body = await parseJsonBody(req);
+    const postId = String(body.postId || '').trim();
+    if (!postId) return sendErr(res, 400, 'postId is required', { code: 'VALIDATION_ERROR' }), true;
+    const relatedIds = [...new Set(
+      (Array.isArray(body.relatedIds) ? body.relatedIds : [])
+        .map((id) => String(id || '').trim())
+        .filter((id) => id && id !== postId)
+    )];
+    const result = await setRelatedPosts(postId, relatedIds, requestScope(req));
+    // null means the database REFUSED — see the POST handler above.
+    if (!result) return sendErr(res, 500, 'Could not save the related posts.'), true;
+    logActivity({ action: 'blog_post.related', entityType: 'blog_post', entityId: postId, summary: `Related posts set: ${relatedIds.length} article(s), ${result.added} added, ${result.removed} removed` });
     return sendOk(res, 200, result, { result }), true;
   }
 
