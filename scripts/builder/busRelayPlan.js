@@ -74,6 +74,77 @@ function defaultWatches({ agentResponseList, loopQueueList }) {
 }
 
 /**
+ * WAS THIS PASS COMPLETE, AND IF NOT, WHICH LIST DID IT NOT FINISH?
+ * (2026-09-03, task 86bbugdv9.)
+ *
+ * The relay already reported what it could not check — but it reported it as
+ * TICKETS, and that is the wrong unit. On 2026-09-03 a pass that had entirely
+ * failed to sweep the merge-capable list printed this:
+ *
+ *     bus-relay: 0 relayed, 0 handed back, 0 merged, ... 3 could not be checked.
+ *     Could not fully verify:
+ *       - 86bbjt1b4 (Panel sweep 8/15...): could not read comments
+ *
+ * Three ticket ids read as three minor gaps. The truth was "the merge lane did
+ * not run", and one of those three ids was carrying Dane's own `merge` command,
+ * described as an unread comment rather than as an unperformed merge. The pass
+ * happened sixteen hours in a row and nobody could tell from its own output.
+ *
+ * The precedent is `npm run throughput`, which gives one of four verdicts and
+ * never two, and says UNKNOWN when it could not take a reading. CLAUDE.md
+ * states the rule it embodies: "alive but useless" never renders as healthy,
+ * and neither does "could not tell". This is that rule at LIST granularity.
+ *
+ * Pure, so a test can reach every branch without a network.
+ *
+ * `sweeps` is one entry per watch: { label, merge, complete, why }.
+ */
+function sweepVerdict(sweeps) {
+  const list = Array.isArray(sweeps) ? sweeps : [];
+  if (!list.length) {
+    // No sweep at all is not a clean pass. It is the absence of evidence, and
+    // the whole point of this function is that those must not look alike.
+    return {
+      complete: false,
+      mergeLaneRan: false,
+      exitCode: 1,
+      line: 'INCOMPLETE — no list was swept at all, so nothing can be concluded about either one.',
+    };
+  }
+  const unfinished = list.filter((s) => !s.complete);
+  const mergeSweep = list.find((s) => s.merge);
+  const mergeLaneRan = Boolean(mergeSweep && mergeSweep.complete);
+
+  if (!unfinished.length) {
+    return {
+      complete: true,
+      mergeLaneRan,
+      exitCode: 0,
+      line: `COMPLETE — swept ${list.length} list(s) in full: ${list.map((s) => s.label).join(', ')}.`,
+    };
+  }
+
+  const named = unfinished
+    .map((s) => `${s.label}${s.merge ? ' (the merge-capable list)' : ''}${s.why ? ` — ${s.why}` : ''}`)
+    .join('; ');
+
+  // The merge-capable list gets its own sentence, in the words that say what it
+  // COSTS rather than what failed. "Could not read comments" is a mechanism; a
+  // merge command going unread is the consequence, and the consequence is the
+  // thing a reader needs at 2am.
+  const mergeWarning = unfinished.some((s) => s.merge)
+    ? ' Merge commands on that list were NOT read this pass, so an authorization may be sitting unacted on.'
+    : '';
+
+  return {
+    complete: false,
+    mergeLaneRan,
+    exitCode: 1,
+    line: `INCOMPLETE — did not finish ${named}.${mergeWarning}`,
+  };
+}
+
+/**
  * The comments on a ticket that are ACTUALLY the operator's word.
  *
  * Two conditions, and the second one is not optional (task 86bbqx2xe). The
@@ -340,6 +411,7 @@ function busFailureBucket({ delivered, cosmetic } = {}) {
 module.exports = {
   operatorComments,
   defaultWatches,
+  sweepVerdict,
   handbackTarget,
   mergeEnabled,
   BUS_RELAY_MARKER,
