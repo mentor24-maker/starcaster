@@ -15,6 +15,7 @@ import {
   type MediaFilters
 } from "@/lib/media-manager-filters";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
+import { relatedIdsFor, type PostRelationPair } from "@/lib/blog-post-relations";
 import {
   builderBackgroundParallaxActive,
   createDefaultBackgroundSettings,
@@ -11047,7 +11048,15 @@ function AdminBlogLinksPreview({
   const [note, setNote]         = useState("");
   const [newCategory, setNewCategory] = useState("");
 
-  const headers = getCrmProjectHeaders(projectIdProp);
+  /*
+   * MEMOISED, and it has to be. getCrmProjectHeaders() builds a fresh object
+   * on every call, so an unmemoised `headers` is a new identity each render —
+   * which makes every useCallback below new, which makes the load effect fire
+   * again, which sets state, which renders again. That is an unbounded request
+   * loop, and it is not subtle: the browser gave up with
+   * ERR_INSUFFICIENT_RESOURCES rather than a React warning.
+   */
+  const headers = useMemo(() => getCrmProjectHeaders(projectIdProp), [projectIdProp]);
   const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
 
   const projectQuery = useCallback(() => {
@@ -11126,12 +11135,17 @@ function AdminBlogLinksPreview({
 
       // Show what each article is ALREADY related to, so pressing the button
       // again on an existing set reads as "no change" rather than as a failure.
-      const titles: Record<string, string[]> = {};
+      //
+      // ONE request for the whole project's relations, not one per article: a
+      // per-article loop is N+1 requests, and on a blog of any size that is a
+      // request storm rather than a page load. The pairing arithmetic is the
+      // same tested helper the store uses, so the two cannot disagree.
+      const all = await api(`/api/blog/relations${q ? `?${q}` : ""}`);
+      const pairs = (Array.isArray(all?.relations) ? all.relations : Array.isArray(all?.data) ? all.data : []) as PostRelationPair[];
       const byId = new Map(list.map((a) => [a.id, a.title]));
+      const titles: Record<string, string[]> = {};
       for (const article of list) {
-        const rel = await api(`/api/blog/relations?postId=${encodeURIComponent(article.id)}${q ? `&${q}` : ""}`);
-        const ids = (rel?.relatedIds ?? rel?.data ?? []) as unknown[];
-        titles[article.id] = (Array.isArray(ids) ? ids : [])
+        titles[article.id] = relatedIdsFor(article.id, pairs)
           .map((id) => byId.get(String(id)) || "")
           .filter(Boolean);
       }
@@ -11308,7 +11322,7 @@ function AdminBlogLinksPreview({
       {note && !error && <div className="admin-blog-links-note">{note}</div>}
 
       <div className="admin-blog-links-body">
-        <aside className="admin-blog-links-side">
+        <div className="admin-blog-links-side">
           {loadingTerms ? (
             <div className="admin-blog-links-empty">Loading…</div>
           ) : (
@@ -11332,16 +11346,16 @@ function AdminBlogLinksPreview({
               )}
             </>
           )}
-        </aside>
+        </div>
 
-        <section className="admin-blog-links-main">
+        <div className="admin-blog-links-main">
           {!selected ? (
             <div className="admin-blog-links-empty">
               Pick a category or tag on the left to see the articles filed under it.
             </div>
           ) : (
             <>
-              <header className="admin-blog-links-main-head">
+              <div className="admin-blog-links-main-head">
                 <div>
                   <div className="admin-blog-links-main-title">{selected.label}</div>
                   <div className="admin-blog-links-main-sub">
@@ -11361,7 +11375,7 @@ function AdminBlogLinksPreview({
                     {busy ? "Linking…" : relateLabel}
                   </button>
                 )}
-              </header>
+              </div>
 
               {loadingArticles ? (
                 <div className="admin-blog-links-empty">Loading…</div>
@@ -11395,7 +11409,7 @@ function AdminBlogLinksPreview({
               )}
             </>
           )}
-        </section>
+        </div>
       </div>
     </div>
   );

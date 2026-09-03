@@ -8518,6 +8518,11 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 }
 
 .admin-blog-links-main-head {
+  /* A tenant theme styles its own site header; this is a module's internal
+     strip and must not inherit that. It was rendering as a solid black block
+     with dark text on it when this element was a <header>. */
+  background: none;
+  color: inherit;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -8573,12 +8578,29 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   cursor: pointer;
 }
 
+/* An explicit size, because this module renders inside ARBITRARY tenant
+   themes and many of them set `input { width: 100% }`. `flex: 0 0 auto` does
+   not save you there: the basis is `auto`, so the flex item takes its width
+   property -- the checkbox computed to 1056px and starved the title beside it
+   to zero, which rendered as tall empty rows with the text wrapped to nothing.
+   Same reason the accent and margin are pinned rather than inherited. */
 .admin-blog-links-article input[type="checkbox"] {
   flex: 0 0 auto;
-  margin-top: 2px;
+  width: 13px;
+  min-width: 13px;
+  max-width: 13px;
+  height: 13px;
+  margin: 2px 0 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
+/* `flex: 1 1 auto` is load-bearing, not tidiness. As a flex child with
+   `min-width: 0` and no growth, this box computed to ZERO width: every title
+   wrapped to one character per line, so the rows were tall and looked empty
+   while the text was technically present. */
 .admin-blog-links-article-body {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
