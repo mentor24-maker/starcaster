@@ -1597,6 +1597,52 @@ of the three cases here would never have been exercised by the fixture in front
 of me.
 
 
+### 5.25 A field the interface promises to fill is not filled by the promise
+
+2026-09-03, task 86bbu23n7, PR #549. The Create Post form's Slug box carries the
+placeholder **"post-slug (auto-generated if blank)"**. `createPost` stored what
+it was handed:
+
+```js
+slug: safeText(input.slug),      // '' when the operator left the box empty
+```
+
+Nothing generated anything. A blog post is addressed **by** its slug, so a post
+saved with the box empty had no address at all: the row was written, the manager
+listed it, the operator saw his post in the list, and every link to it went
+nowhere. Five of Delray's eight published posts sat that way — the oldest for
+four days, written 08-30 and found 09-03.
+
+There was no error to find, because nothing failed. The insert succeeded. The
+list read succeeded. The only surface that could have told anyone is the one
+place nobody looks at their own new post — the public site.
+
+**The rule: a promise made in an interface is kept by the code behind it, or it
+is not kept.** Placeholder text, a help line, a label saying "optional" — each
+is a claim about behaviour that lives somewhere else, and the two drift apart
+silently because nothing connects them. When you read a promise like that in a
+form, go and find the line that keeps it. It is a two-minute check, and here it
+was the whole defect.
+
+The repair also answered *where* it belongs. Deriving the slug in the Create
+Post component would have fixed that one form and left the API, the bulk import
+and every future caller with the same hole. It belongs in the store, which is
+the last place every path passes through — and the rule itself belongs in one
+file (`lib/slugify.js`), because `eventsStore` had already written its own copy
+and a second definition of "what is this thing's address" drifts by definition.
+
+**And the report that brought it in was a reasonable misdiagnosis.** The
+operator said the bulk import had not populated the slugs and so no posts
+loaded. Reading the live rows first said otherwise: all 47 imported posts had
+slugs, and they did not load because they were **drafts**, which is the review
+step working exactly as specified. The posts genuinely missing an address were
+five he had written by hand, days before the import existed. Had the stated
+cause been taken at face value, the fix would have gone into the import — the
+one code path that was already correct — and the five broken posts would still
+be broken. §6.13 says a reported conflict is a claim to verify; the same is true
+of a reported cause, and it costs one query to check.
+
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
