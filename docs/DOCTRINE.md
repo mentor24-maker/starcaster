@@ -1725,8 +1725,42 @@ defaults, and a new cloud still lands on `auto` because
 
 No unit test could have caught it: each half was correct in isolation. The
 differential render check caught it because it builds a module the way the
-Builder does — defaults merged in — and the contracts it ran carried hand-typed
+PALETTE does — defaults merged in — and the contracts it ran carried hand-typed
 lists that abruptly stopped rendering.
+
+**Correction, 2026-09-03 (task 86bbunf43): the mechanism above named the wrong
+file, and the rule is right anyway.** `builder-template.ts`'s default block is
+`createEmptyModule`, and it reaches a module newly created from the palette —
+not a module already saved on a page. Measured rather than argued:
+
+```
+normalizeLayoutSections([ a saved blog-tag-cloud carrying only `tags` ])
+  → keys: tags, marginTop, marginBottom, marginLeft, marginRight
+```
+
+No `layout`, no `minFontSize`, no `tagSource`. So the sentence "every such page
+would have silently swapped its content on a live site" **is false**: live pages
+were never at risk from that edit; newly created clouds, the saved-section
+editor, the module repository and `check:render`'s own harness were, because all
+of them build through `createEmptyModule`.
+
+**There are two default sites and they have different blast radii:**
+
+| where | reaches |
+|---|---|
+| `createEmptyModule` (`builder-template.ts`) | a module created from the palette, and nothing else |
+| a per-type block inside `normalizeBuilderModuleSettingsForType` (`if (!settings.color) settings.color = …`) | EVERY saved module, on every load |
+
+The rule — *a default is not neutral; a key whose absence is the signal must
+stay absent* — applies to both, and applies with real teeth to the second,
+which is the one that can rewrite live pages. Guard the site that matches the
+danger: this doctrine sent a guard to the wrong file once already, during
+86bbunf43, and the test it produced could not fail.
+
+`components/builder-module-defaults-reach.test.tsx` pins all three facts, so the
+next person does not have to take this paragraph's word for it — and so a change
+that DOES make createEmptyModule reach saved modules fails a test instead of
+quietly making this section true again.
 
 ### 5.28 A module renders inside ARBITRARY tenant themes, so it may not rely on element defaults
 
@@ -2147,6 +2181,26 @@ carries. And a break-test asserts the **value** the rule requires, not a bound
 the wrong answer also satisfies: `assert.equal(clampToFloor(null), 3600)`, not
 `>= 900`. A guard that only checks `isFinite` has not checked "is this a
 number" — `Number()` manufactures finite zeros from garbage.
+
+**Two more shapes, 2026-09-03 (tasks 86bbuk7xz, 86bbunf43).** Both were written,
+both passed, and both were found only by reverting the fix and watching the test
+stay green:
+
+- *A fixture that cannot discriminate.* The test for case-insensitive tag order
+  used `ATP tennis` — which sorts first under codepoint order AND under
+  alphabetical order. Reverting to plain `.sort()` changed nothing it measured.
+  `US Open` sorts differently under each rule; that is a fixture, the other is a
+  prop.
+- *An assertion on the wrong path.* The guard for "a feed that never set
+  `filterMode` is unchanged" was routed through
+  `normalizeBuilderModuleSettingsForType` on the belief that module defaults
+  merge there. They do not (§5.27), so flipping the palette default left it
+  green — the assertion never touched the value it was defending.
+
+One sentence covers all four cases in this section: **the fixture must be able
+to tell the two behaviours apart, and the assertion must travel the path the
+value actually comes from.** Break-testing is what surfaces the difference; a
+green break-test is a finding, not a formality.
 
 ### 6.9 CC runs the operational commands — handing one over is a claim it cannot
 
@@ -2729,6 +2783,42 @@ one question two ways, do not pick quietly and do not build both. Name the
 contradiction as its own finding, take it to the operator as a decision with
 a recommendation, and record the answer once — in the code that enforces it
 and here.
+
+### 6.18 A script that edits production data dry-runs first, and a count of zero is a finding
+
+2026-09-03, task 86bbunf43. Setting one module setting on the live Delray
+`/tags` page nearly wrote **nothing at all** and would have reported success.
+
+`getPage` returns `{ ok, status, data }` — every store here does (landmine 12) —
+and the script read the page straight off the return value. So
+`page.layoutSections` was `undefined`, the map that finds the Post Feed ran over
+an empty list, and the script printed, cheerfully and without an error:
+
+```
+page "undefined" slug=undefined sections=0
+0 Post Feed module(s) on this page
+```
+
+Nothing threw. With `--apply` on that run it would have written the page back
+unchanged, republished it, and announced a completed job over an empty set —
+and the next honest thing anyone did would have been to explain why the setting
+"did not take" on a page it never touched.
+
+**Do this**, for any script that writes production data:
+
+- **Dry run by default; `--apply` to write.** Not a flag to skip the dry run —
+  the dry run is the default and writing is the opt-in.
+- **Print what it MATCHED before it writes** — names, not just counts. `page
+  "undefined"` is what gave this away; a bare `0` might not have.
+- **Treat zero as a finding.** A sweep that matched nothing has either found
+  nothing or asked the wrong question, and those look identical from the exit
+  code. Say which one you believe and why.
+- **Read every row back afterwards** and assert the value, not the absence of an
+  error (§5.20, landmines 12 and 13).
+
+The same discipline caught the other half of that task: the 13 posts were
+published through the app's own store rather than raw SQL, and each row was read
+back — 13 of 13 confirmed — rather than trusted from a write that reported OK.
 
 ## 7. Operator-facing gotchas
 
