@@ -1,27 +1,23 @@
 "use client";
 
+import { Fragment } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   BuilderSchemaModuleSettings,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
+import { BuilderModuleField } from "./builder-module-field";
 import type { BuilderThemePalette } from "./builder-theme-color-field";
+import { parseCloudTags, serializeCloudTags, type CloudTag } from "@/lib/blog-tag-cloud";
 
-export type CloudTag = { id: string; label: string; slug: string; count?: number };
-
-export function parseCloudTags(settings: Record<string, string>): CloudTag[] {
-  try {
-    const parsed = JSON.parse(settings.tags || "[]");
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((x): x is CloudTag => x && typeof x.label === "string");
-  } catch {
-    return [];
-  }
-}
-
-function serializeCloudTags(tags: CloudTag[]): string {
-  return JSON.stringify(tags);
-}
+/**
+ * Re-exported so the Builder canvas card keeps its existing import. The
+ * definitions moved to lib/builder-client/blog-tag-cloud.ts, which the LIVE
+ * renderer reads too — the panel, the canvas and the tenant site had three
+ * copies of these rules and disagreed about most of them.
+ */
+export { parseCloudTags };
+export type { CloudTag };
 
 type Props = {
   module: BuilderTemplateModule;
@@ -97,6 +93,22 @@ export function BuilderBlogTagCloudModuleSettings({
       {
         title: "Content",
         strips: [
+          // The module's own heading. It replaces the generic `content`/text
+          // slot every module carries, which this one rendered nowhere — an
+          // operator typing into it saw the words vanish on publish. Empty by
+          // default, and omitted from the markup entirely when empty, so no
+          // existing page gains a stray heading.
+          [
+            {
+              key: "title",
+              label: "Title",
+              width: "text-md",
+              control: "text",
+              fallback: "",
+              placeholder: "Browse by tag",
+              rendersVia: "BlogTagCloudPreview"
+            }
+          ],
           // D9 rung 1: a destination changes what the whole module does, so it
           // leads the Content axis — ahead of the labels it decorates.
           [
@@ -136,50 +148,90 @@ export function BuilderBlogTagCloudModuleSettings({
               bare: true,
               rendersVia: "BlogTagCloudPreview",
               render: () => (
+                /* L6a item manager on its own lattice. It was
+                   `.builder-slider-item-card` holding `label.field` boxes —
+                   the shape W0 says to RETIRE rather than style, because it
+                   stacks a label above a full-width box and so runs a second
+                   label geometry inside a panel whose other columns are on the
+                   lattice. It reuses `.builder-cards-panel-fields` with
+                   `data-lattice-pairs="2"`, the same grid and the same CSS
+                   Feature Cards and Carousel already use, rather than adding a
+                   third pattern.
+
+                   The declaration is what makes it CHECKABLE: check_panels
+                   selects item managers on `[data-lattice-pairs]` and
+                   `[data-lattice-columns]`, and this manager declared neither,
+                   so every panel sweep since the check was written found
+                   nothing to measure here and reported OK. */
                 <>
-                  <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>Tags</div>
-                  <div className="builder-slider-items">
+                  <div className="builder-schema-group-title">Tags</div>
+                  <div className="builder-cards-panel-fields" data-lattice-pairs="2">
                     {tags.map((tag, index) => (
-                      <div key={tag.id} className="builder-slider-item-card">
-                        <div className="builder-slider-item-header">
-                          <strong>{tag.label || `Tag ${index + 1}`}</strong>
-                          <div className="builder-section-actions">
-                            <button type="button" className="builder-icon-button" onClick={() => moveTag(tag.id, -1)}>↑</button>
-                            <button type="button" className="builder-icon-button" onClick={() => moveTag(tag.id, 1)}>↓</button>
-                            <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeTag(tag.id)}>✕</button>
+                      <Fragment key={tag.id}>
+                        <div className="builder-card-editor-head">
+                          <span className="builder-card-editor-name">{tag.label || `Tag ${index + 1}`}</span>
+                          <div className="builder-item-grid-actions">
+                            <button
+                              type="button"
+                              className="builder-icon-button"
+                              onClick={() => moveTag(tag.id, -1)}
+                              aria-label={`Move tag ${index + 1} up`}
+                              title="Move up"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              className="builder-icon-button"
+                              onClick={() => moveTag(tag.id, 1)}
+                              aria-label={`Move tag ${index + 1} down`}
+                              title="Move down"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              className="builder-icon-button builder-icon-button-danger"
+                              onClick={() => removeTag(tag.id)}
+                              aria-label={`Delete tag ${index + 1}`}
+                              title="Delete tag"
+                            >
+                              ✕
+                            </button>
                           </div>
                         </div>
-                        <div className="builder-slider-item-grid">
-                          <label className="field">
-                            <span>Label</span>
+
+                        <BuilderModuleField label="Label" width="text-md" className="builder-card-field--a">
+                          <input
+                            type="text"
+                            value={tag.label}
+                            onChange={(e) => updateTag(tag.id, "label", e.target.value)}
+                            placeholder="react"
+                            aria-label={`Tag ${index + 1} label`}
+                          />
+                        </BuilderModuleField>
+                        <BuilderModuleField label="Slug" width="text-md" className="builder-card-field--b">
+                          <input
+                            type="text"
+                            value={tag.slug}
+                            onChange={(e) => updateTag(tag.id, "slug", e.target.value)}
+                            placeholder="react"
+                            aria-label={`Tag ${index + 1} slug`}
+                          />
+                        </BuilderModuleField>
+                        {isCloud ? (
+                          <BuilderModuleField label="Count" width="num" className="builder-card-field--a">
                             <input
-                              type="text"
-                              value={tag.label}
-                              onChange={(e) => updateTag(tag.id, "label", e.target.value)}
-                              placeholder="react"
+                              type="number"
+                              min={1}
+                              max={999}
+                              value={tag.count ?? 1}
+                              onChange={(e) => updateTag(tag.id, "count", parseInt(e.target.value, 10) || 1)}
+                              aria-label={`Tag ${index + 1} count`}
                             />
-                          </label>
-                          <label className="field">
-                            <span>Slug</span>
-                            <input
-                              type="text"
-                              value={tag.slug}
-                              onChange={(e) => updateTag(tag.id, "slug", e.target.value)}
-                              placeholder="react"
-                            />
-                          </label>
-                          {isCloud ? (
-                            <label className="field">
-                              <span>Count</span>
-                              <input
-                                type="number" min={1} max={999}
-                                value={tag.count ?? 1}
-                                onChange={(e) => updateTag(tag.id, "count", parseInt(e.target.value, 10) || 1)}
-                              />
-                            </label>
-                          ) : null}
-                        </div>
-                      </div>
+                          </BuilderModuleField>
+                        ) : null}
+                      </Fragment>
                     ))}
                   </div>
                   <button type="button" className="secondary-button" onClick={addTag}>

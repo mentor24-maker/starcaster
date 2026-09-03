@@ -3717,6 +3717,7 @@ export function createEmptyModule(
                           }
                       : type === "blog-tag-cloud"
                         ? {
+                            title: "",
                             tags: JSON.stringify([]),
                             layout: "cloud",
                             showCounts: "false",

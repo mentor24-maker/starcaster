@@ -88,6 +88,12 @@ import { BuilderBlogRelatedPostsModuleSettings, parseRelatedPosts } from "./buil
 import { BuilderBlogCategoryFilterModuleSettings, parseFilterCategories } from "./builder-blog-category-filter-module-settings";
 import { BuilderBlogPostModuleSettings } from "./builder-blog-post-module-settings";
 import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blog-tag-cloud-module-settings";
+import {
+  PLACEHOLDER_TAGS,
+  maxTagCount,
+  resolveTagCloudSettings,
+  tagFontSize as sharedTagFontSize
+} from "@/lib/blog-tag-cloud";
 import { BuilderBlogPostTagsModuleSettings } from "./builder-blog-post-tags-module-settings";
 import { BuilderBlogPostCreateModuleSettings } from "./builder-blog-post-create-module-settings";
 import { BuilderBlogPostManagerModuleSettings } from "./builder-blog-post-manager-module-settings";
@@ -1723,31 +1729,32 @@ function renderModulePreview(module: BuilderTemplateModule) {
   }
 
   if (module.type === "blog-tag-cloud") {
+    // The canvas card and the LIVE renderer (BlogTagCloudPreview) read one
+    // shared set of rules now — lib/builder-client/blog-tag-cloud.ts. They used
+    // to carry a copy each and disagree: the card honoured the layout and the
+    // count-weighted sizes, the live site honoured neither, so an operator set
+    // a layout, watched it apply here, published, and got a plain pill row.
     const s = module.settings;
-    const layout = s.layout ?? "cloud";
-    const inactiveColor = s.inactiveColor || "#587592";
-    const inactiveBg = s.inactiveBg || "#f0f4f8";
-    const activeColor = s.activeColor || "#0f4f8f";
-    const minFont = parseInt(s.minFontSize ?? "12", 10) || 12;
-    const maxFont = parseInt(s.maxFontSize ?? "22", 10) || 22;
-    const gap = parseInt(s.gap ?? "8", 10) || 8;
-    const showCounts = s.showCounts === "true";
+    const resolved = resolveTagCloudSettings(s);
+    const { layout, inactiveColor, inactiveBg, activeColor, gap } = resolved;
+    const minFont = resolved.minFontSize;
+    const showCounts = resolved.showCounts;
     const justifyMap: Record<string, string> = { left: "flex-start", center: "center" };
     const tags = parseCloudTags(s);
-    const placeholders = tags.length === 0
-      ? [{ id: "p1", label: "react", slug: "react", count: 24 }, { id: "p2", label: "typescript", slug: "typescript", count: 18 }, { id: "p3", label: "design", slug: "design", count: 12 }, { id: "p4", label: "tutorial", slug: "tutorial", count: 8 }]
-      : tags;
-    const maxCount = Math.max(...placeholders.map((t) => t.count ?? 1), 1);
+    const placeholders = tags.length === 0 ? PLACEHOLDER_TAGS : tags;
+    const maxCount = maxTagCount(placeholders);
+    const heading = resolved.title
+      ? <div style={{ fontWeight: 600, marginBottom: 6, color: activeColor }}>{resolved.title}</div>
+      : null;
 
     function tagFontSize(count: number | undefined) {
-      if (layout !== "cloud") return minFont;
-      const pct = (count ?? 1) / maxCount;
-      return Math.round(minFont + pct * (maxFont - minFont));
+      return sharedTagFontSize(count, maxCount, resolved);
     }
 
     if (layout === "list") {
       return (
         <div className="builder-module-preview-copy">
+          {heading}
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap }}>
             {placeholders.map((tag, i) => (
               <li key={tag.id} style={{ fontSize: minFont, color: i === 0 ? activeColor : inactiveColor, fontWeight: i === 0 ? 600 : 400 }}>
@@ -1761,7 +1768,8 @@ function renderModulePreview(module: BuilderTemplateModule) {
 
     return (
       <div className="builder-module-preview-copy">
-        <div style={{ display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[s.alignment ?? "left"] ?? "flex-start", alignItems: "baseline" }}>
+        {heading}
+        <div style={{ display: "flex", flexWrap: "wrap", gap, justifyContent: justifyMap[resolved.alignment] ?? "flex-start", alignItems: "baseline" }}>
           {placeholders.map((tag, i) => {
             const fs = tagFontSize(tag.count);
             return (
