@@ -1541,4 +1541,65 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+
+  {
+    id: 'row-overlay-blend-mode-reaches-the-browser',
+    why:
+      'Blend is the difference between a sheet over the photo and a photo that has been TINTED, and it ' +
+      'is one CSS property that has to survive the normalizer, the server template bundle and the ' +
+      'renderer to do anything at all. A dropped field here looks exactly like a working setting: the ' +
+      'picker remembers the choice, the page saves, and the overlay just carries on fogging.',
+    section: {
+      layout: 'single',
+      background: { mode: 'image', imageUrl: BANNER },
+      overlayScreen: {
+        background: { mode: 'color', color: '#ff6a00' },
+        opacity: 100,
+        blendMode: 'multiply',
+      },
+      modules: [{ type: 'heading', text: 'Tinted, not fogged', settings: {} }],
+    },
+    selector: '.builder-preview-row-overlay-screen',
+    read: ['mixBlendMode', 'backgroundColor'],
+    expect(sample) {
+      if (sample.styles.mixBlendMode !== 'multiply') {
+        return `the tint screen computed \`mix-blend-mode: ${sample.styles.mixBlendMode}\` — Multiply was ` +
+          'chosen, so the photo underneath is being fogged flat instead of tinted.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'row-overlay-blend-mode-normal-stays-out-of-the-way',
+    why:
+      'Every overlay configured before this setting existed has no blendMode at all, and this proves ' +
+      'nothing writes a REAL blend mode onto those rows — a normalizer that fell back to "multiply", ' +
+      'or a picker default that leaked into storage, would recolour every live tenant section that ' +
+      'has an overlay, and would look deliberate. ' +
+      'WHAT IT CANNOT CHECK, and do not read it as though it can: this reads the COMPUTED ' +
+      '`mix-blend-mode`, which is "normal" whether the property is omitted or written out longhand, ' +
+      'so it can never tell you the style object stayed byte-identical. That guard is the unit test ' +
+      'at lib/builder-client/builder-row-overlay-screen.test.ts — `expect("mixBlendMode" in style)' +
+      '.toBe(false)` — and it is the only thing standing behind the ticket\'s "Normal emits no ' +
+      'property at all" criterion.',
+    section: {
+      layout: 'single',
+      background: { mode: 'image', imageUrl: BANNER },
+      overlayScreen: {
+        background: { mode: 'color', color: '#ff6a00' },
+        opacity: 100,
+      },
+      modules: [{ type: 'heading', text: 'Fogged, as it always was', settings: {} }],
+    },
+    selector: '.builder-preview-row-overlay-screen',
+    read: ['mixBlendMode'],
+    expect(sample) {
+      if (sample.styles.mixBlendMode !== 'normal') {
+        return `an overlay with no blend mode saved computed \`mix-blend-mode: ${sample.styles.mixBlendMode}\` ` +
+          '— something is writing a blend mode onto sections that never asked for one.';
+      }
+      return null;
+    },
+  },
 ];
