@@ -7064,6 +7064,91 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /*
+ * THE CELL'S OWN TINT SCREEN — the per-cell twin of the row screen above.
+ *
+ * TWO RUNGS AND NO STACKING CONTEXT, and the missing `isolation: isolate` is
+ * the deliberate part. This shipped as `isolation: isolate` with the screen at
+ * 1 and the modules at 2, on the argument that without a context of its own
+ * the cell's rungs would be "numbered inside whatever ancestor happens to own
+ * the stack". That argument is true and it is beside the point: the screen and
+ * the modules are numbered in the SAME ancestor whichever one it is, and 0 is
+ * below 1 in every stacking context there has ever been. The relative order
+ * this setting depends on never needed a context to hold it.
+ *
+ * Isolating cost something real, measured in a browser (round 2 of 86bbqb0ac).
+ * A floating image is `z-index: 40` and is MEANT to hang out of its column —
+ * `horizontalOffset` is the control for exactly that. Until this feature, 40
+ * was resolved in the SECTION's stacking context, where it beat the column
+ * next door. Isolating the cell resolved it INSIDE the cell instead, and the
+ * cell itself is `z-index: auto`, so the neighbouring column — later in DOM
+ * order — painted straight over the overhang. Same scene, four ways, reading
+ * `elementFromPoint` where the image crosses into the next column:
+ *
+ *     row screen   cell screen   what was on top in the overlap
+ *        no            no        the image           <- correct
+ *        no           YES        the NEXT COLUMN     <- the regression
+ *       yes            no        the next column     <- already true, not ours
+ *       yes           YES        the next column     <- already true, not ours
+ *
+ * The image never moved: its rect was identical in all four runs. Only what
+ * painted over it changed. Rows 3 and 4 are why this was narrow — a row with
+ * its own screen already puts its columns at `z-index: 2` above, which is
+ * already a stacking context, so the decor was already clamped there and this
+ * feature changed nothing. The regression existed only on a row with no
+ * overlay of its own, which is the ordinary case and the one the ticket's own
+ * example describes.
+ *
+ * So: screen at 0, modules at 1, and the decor left alone at 40 to be resolved
+ * where it always was. The order is the whole setting — the screen covers the
+ * cell's own fill, and the modules stay in front of it. A tint that washed
+ * over the operator's words instead of sitting behind them would make the
+ * control useless, because the reason to dim a photograph is to make the text
+ * on it readable.
+ *
+ * Held by three render contracts, which measure this in a real browser rather
+ * than trusting the reasoning above: `cell-overlay-stays-behind-the-words`,
+ * `cell-overlay-leaves-floating-decor-on-its-own-rung` (within the cell) and
+ * `cell-overlay-leaves-overhanging-decor-over-the-next-column` (across the
+ * column boundary, which is the one this round was missing).
+ */
+.builder-preview-cell-overlay-screen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/*
+ * The content rung, and the two exclusions are not tidiness — they are the
+ * bug this selector shipped with.
+ *
+ * A floating image is a direct module child of the cell like any paragraph,
+ * but it is DECOR: it rides at `z-index: 40` from `_builder-react.css`, above
+ * the words on purpose. That rule is two classes
+ * (`.builder-react-root .builder-preview-module-overlay-flow`) and so is this
+ * one, and this file is imported AFTER it — so on equal specificity source
+ * order handed the decor the content rung as well, and only on a cell that
+ * had just been given an overlay. The image did not fall into the flow (its
+ * `position` is an inline style) — it simply stopped being reliably in front,
+ * tying with the paragraph beside it where paint order falls back to DOM
+ * order.
+ *
+ * The TSX guard above does not cover this: it skips the tint only for a column
+ * where EVERY module is overlay decor. A mixed column — a floating image plus
+ * ordinary content, which is the ordinary way to use one — is tinted, so the
+ * rung reached the decor too.
+ *
+ * Held by the render contract `cell-overlay-leaves-floating-decor-on-its-own-rung`,
+ * which measures a mixed column in a real browser and names both readings.
+ */
+.builder-preview-column-layered
+  > .builder-preview-module:not(.builder-preview-module-overlay-flow):not(.builder-preview-module-overlay-slot) {
+  position: relative;
+  z-index: 1;
+}
+
+/*
  * The Video background panel. The warning is a plain sentence rather than a
  * red error box on purpose: a missing poster is a bad idea, not an invalid
  * setting, and the operator is allowed to save without one.

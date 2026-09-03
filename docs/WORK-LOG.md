@@ -1,3 +1,65 @@
+## 2026-09-03 — A tint on one column, not the whole row (#557)
+
+You could already lay a coloured screen over a whole band of the page — the
+thing that dims a photograph so the words on top of it stay readable. You could
+not lay one over a single column inside that band. So a two-up row with a
+photograph on each side offered exactly one choice: darken both, or neither.
+
+Now each cell has its own Overlay group, with the same controls the row's has.
+Tint the left column dark blue at 60% and the right one keeps its photograph
+completely untouched.
+
+Three of the checks that were supposed to be watching this could not actually
+see it, and each was fixed and then proven by breaking the code on purpose:
+the panel check was blind to the new group because its opacity control only
+appears once an overlay is set and the test fixture had none — a deliberate
+layout violation still reported a clean 660-panel pass; no browser check could
+place content in a named column at all; and one test compared two positions to
+prove the tint sits behind the text, which quietly passed even with the tint
+element deleted entirely.
+
+What the change does was then measured rather than argued about, by reading
+real pixels out of a real browser: the tinted cell, the untouched one beside
+it, and the words themselves, which come through at full strength.
+
+Review caught the feature quietly re-stacking somebody else's decor, and that
+is now fixed too. A floating image is a module like any paragraph, so the rule
+keeping the tint behind the words reached it as well and pulled it down onto
+the same layer as the text beside it. The image did not move, it just stopped
+being reliably in front — at equal layers the browser falls back to whichever
+came first in the page. Only a column that had just been given a tint was
+affected, so nothing already published changed. A browser check now measures
+that exact arrangement — a floating image and ordinary words in one tinted
+column — and it was watched failing on the old rule before the fix went in.
+
+Review then found the other half of that same problem, one column further
+over. A floating image is often set to hang out past the edge of its column on
+purpose — there is a control for exactly that. Switching on a cell tint had
+been sealing the column off as its own self-contained layer, which sounded
+tidy and meant the image's "sit in front of everything" instruction now only
+applied inside that one column. The moment it crossed into the next column, it
+went behind it. Nothing moved and no number changed; only the answer to which
+thing is in front. That sealing turned out to be unnecessary — the tint sits
+behind the words because it is numbered below them, and that holds whether the
+column is sealed or not — so it is gone, and a floating image reaches over its
+neighbour exactly as it did before this feature existed.
+
+Finding it needed a tool the browser checks did not have: they could read the
+layer numbers on every element and all of them were identical before and
+after. What changed was what a person would actually SEE. So the checker can
+now point at a spot where two things overlap and ask the browser which one is
+on top — and the new check does that where the image crosses into the next
+column, and refuses to pass if the scene has drifted so they no longer overlap
+at all. A check that quietly stops overlapping is a check that passes forever
+while testing nothing, which has already happened three times on this one
+ticket.
+
+One thing on the ticket turned out to be wrong, and it was wrong before this
+work started: its test steps predict the row's own faint haze appearing on top
+of the columns. It does not, and never did — a column sits above the row's
+screen, so any column carrying its own background hides it. Both screens
+paint, on different surfaces. Reported on the ticket rather than changed,
+since touching the row overlay was explicitly out of scope.
 ## 2026-09-03 — Connections that look after themselves, and a Disconnect that really disconnects (#556)
 
 When a client hands Starcaster permission to post to their own Facebook Page
