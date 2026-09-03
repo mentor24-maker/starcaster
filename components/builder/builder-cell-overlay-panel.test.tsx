@@ -26,6 +26,8 @@ import { BuilderSectionCard } from "./builder-section-card";
 
 type Mounted = {
   choose(label: string, value: string): BuilderTemplateSection;
+  /** The `<select>` under a named label in the left cell's panel — see `optionsOf`. */
+  selectFor(label: string): HTMLSelectElement;
   labels(): string[];
   groupTitles(): string[];
 };
@@ -118,6 +120,27 @@ function mount(initial?: BuilderTemplateSection): Mounted {
     );
   }
 
+  /**
+   * The one `<select>` under a NAMED label, in the FIRST cell panel — the left
+   * column. Which column a write landed in is itself one of the assertions
+   * below, so the panel is picked by position and the control by its label.
+   *
+   * Every lookup in this file goes through here, and that is the fix for a
+   * test that could not fail. "Offers the paintable modes" used to take the
+   * first `<select>` in the panel that offered `gradient` — but the **Frame**
+   * group renders before Overlay and its cell-FILL picker offers gradient too,
+   * so the assertion was measuring the fill and would have stayed green with
+   * `allowVideo` switched on in the Overlay group. Break-tested that way, and
+   * it does fail now.
+   */
+  function selectFor(label: string): HTMLSelectElement {
+    const panel = cellPanels()[0];
+    if (!panel) throw new Error("no cell style panel rendered");
+    const select = rowFor(label, panel)?.querySelector("select");
+    if (!select) throw new Error(`no select labelled "${label}" in the cell panel`);
+    return select as HTMLSelectElement;
+  }
+
   return {
     labels: () =>
       cellPanels().flatMap((panel) =>
@@ -131,13 +154,9 @@ function mount(initial?: BuilderTemplateSection): Mounted {
           (el.textContent || "").trim()
         )
       ),
+    selectFor: (label) => selectFor(label),
     choose(label, value) {
-      // The FIRST cell panel — the left column. Which column it wrote to is
-      // itself one of the assertions below.
-      const panel = cellPanels()[0];
-      if (!panel) throw new Error("no cell style panel rendered");
-      const select = rowFor(label, panel)?.querySelector("select");
-      if (!select) throw new Error(`no select labelled "${label}" in the cell panel`);
+      const select = selectFor(label);
       act(() => {
         // React listens at the root, so the value has to be set through the
         // native setter it patched over — assigning `.value` directly is
@@ -159,12 +178,10 @@ describe("the cell panel's Overlay group", () => {
   });
 
   it("offers the paintable modes, and not video", () => {
-    mount();
-    const panel = document.querySelector(".builder-cell-style-settings")!;
-    const select = [...panel.querySelectorAll("select")].find((element) =>
-      [...element.options].some((option) => option.value === "gradient")
-    );
-    const modes = [...select!.options].map((option) => option.value);
+    // By LABEL, not "the first select offering gradient" — the Frame group's
+    // cell-fill picker renders first and offers gradient as well, so the
+    // loose lookup measured the fill and this assertion could not fail.
+    const modes = [...mount().selectFor("Overlay Type").options].map((option) => option.value);
 
     for (const mode of ["none", "color", "gradient", "image"]) expect(modes).toContain(mode);
     // A video screen over a background is a second <video>; the row panel

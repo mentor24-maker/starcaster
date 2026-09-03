@@ -7095,7 +7095,30 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   z-index: 1;
 }
 
-.builder-preview-column-layered > .builder-preview-module {
+/*
+ * The content rung, and the two exclusions are not tidiness — they are the
+ * bug this selector shipped with.
+ *
+ * A floating image is a direct module child of the cell like any paragraph,
+ * but it is DECOR: it rides at `z-index: 40` from `_builder-react.css`, above
+ * the words on purpose. That rule is two classes
+ * (`.builder-react-root .builder-preview-module-overlay-flow`) and so is this
+ * one, and this file is imported AFTER it — so on equal specificity source
+ * order handed the decor rung 2 as well, and only on a cell that had just been
+ * given an overlay. The image did not fall into the flow (its `position` is an
+ * inline style) — it simply stopped being reliably in front, tying with the
+ * paragraph beside it where paint order falls back to DOM order.
+ *
+ * The TSX guard above does not cover this: it skips the tint only for a column
+ * where EVERY module is overlay decor. A mixed column — a floating image plus
+ * ordinary content, which is the ordinary way to use one — is tinted, so the
+ * rung reached the decor too.
+ *
+ * Held by the render contract `cell-overlay-leaves-floating-decor-on-its-own-rung`,
+ * which measures a mixed column in a real browser and names both readings.
+ */
+.builder-preview-column-layered
+  > .builder-preview-module:not(.builder-preview-module-overlay-flow):not(.builder-preview-module-overlay-slot) {
   position: relative;
   z-index: 2;
 }

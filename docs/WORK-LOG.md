@@ -22,6 +22,16 @@ What the change does was then measured rather than argued about, by reading
 real pixels out of a real browser: the tinted cell, the untouched one beside
 it, and the words themselves, which come through at full strength.
 
+Review caught the feature quietly re-stacking somebody else's decor, and that
+is now fixed too. A floating image is a module like any paragraph, so the rule
+keeping the tint behind the words reached it as well and pulled it down onto
+the same layer as the text beside it. The image did not move, it just stopped
+being reliably in front — at equal layers the browser falls back to whichever
+came first in the page. Only a column that had just been given a tint was
+affected, so nothing already published changed. A browser check now measures
+that exact arrangement — a floating image and ordinary words in one tinted
+column — and it was watched failing on the old rule before the fix went in.
+
 One thing on the ticket turned out to be wrong, and it was wrong before this
 work started: its test steps predict the row's own faint haze appearing on top
 of the columns. It does not, and never did — a column sits above the row's

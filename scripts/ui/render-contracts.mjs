@@ -1444,4 +1444,101 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+
+  {
+    id: 'cell-overlay-leaves-floating-decor-on-its-own-rung',
+    why:
+      'The rung that keeps the tint behind the words is written as `every direct module child of a ' +
+      'tinted cell`, and a floating image IS a direct module child. It is not content, though — it is ' +
+      'decor that rides at z-index 40, ABOVE the words, and it takes that number from the stylesheet ' +
+      'rather than an inline style whenever its trigger is not `button`. So a selector written for ' +
+      'text quietly re-numbers somebody\'s floating image down to the same rung as the paragraph ' +
+      'beside it, where paint order falls back to DOM order. Nothing errors and the image does not ' +
+      'move; it just stops being reliably in front. The column here is MIXED on purpose — the ' +
+      'renderer skips its cell-tint work entirely for a column that is ALL decor, so an all-decor ' +
+      'scene would pass this while the real case failed.',
+    section: {
+      layout: 'two-column',
+      cellBackgrounds: {
+        left: { mode: 'color', color: '#8899aa' },
+      },
+      cellOverlayScreens: {
+        left: { background: { mode: 'color', color: '#101820' }, opacity: 50 },
+      },
+      modules: [
+        {
+          type: 'floating-image',
+          column: 'left',
+          settings: { ...PICTURE, trigger: 'on-load' },
+        },
+        { type: 'text', column: 'left', text: '<p>Readable</p>', settings: {} },
+      ],
+    },
+    selector: '.builder-preview-column-layered',
+    read: ['isolation'],
+    series: {
+      selectors: {
+        screen: '.builder-preview-column-layered > .builder-preview-cell-overlay-screen',
+        words: '.builder-preview-column-layered > .builder-preview-module:not(.builder-preview-module-overlay-flow):not(.builder-preview-module-overlay-slot)',
+        decor: '.builder-preview-column-layered > .builder-preview-module-overlay-flow',
+      },
+      read: ['zIndex'],
+      count: 1,
+      everyMs: 0,
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame) {
+        return 'no frame was sampled — the contract measured nothing, which cannot verify anything.';
+      }
+      if (!frame.decor) {
+        return 'no floating-image module rendered inside the tinted cell, so the element this contract ' +
+          'exists to protect was never on the page. A `floating-image` whose trigger is not `button` ' +
+          'carries the `builder-preview-module-overlay-flow` class; if that stopped being true, this ' +
+          'contract is measuring the wrong element and cannot fail for the right reason.';
+      }
+      if (!frame.words) {
+        return 'no ordinary module rendered beside the decor, so the column is not MIXED — and the ' +
+          'renderer skips the cell tint entirely on an all-decor column, which is why this contract ' +
+          'would then pass without testing anything.';
+      }
+      if (!frame.screen) {
+        return 'the tint layer is not a direct child of the tinted cell, so the cell overlay is not ' +
+          'actually on this scene and nothing here is being exercised.';
+      }
+
+      const decorZ = Number(frame.decor.zIndex);
+      const wordsZ = Number(frame.words.zIndex);
+      const screenZ = Number(frame.screen.zIndex);
+
+      /*
+       * Read as NUMBERS before comparing, for the same reason the contract
+       * above says so at length: `auto` is what an unnumbered element reports,
+       * `Number('auto')` is NaN, and every comparison against NaN is false —
+       * so a missing rule slips through whichever way the assertion is written.
+       */
+      if (!Number.isFinite(decorZ)) {
+        return `the floating image reads z-index \`${frame.decor.zIndex}\` — it is unnumbered, so it ` +
+          'paints in DOM order against the words instead of above them.';
+      }
+      if (!Number.isFinite(wordsZ) || !Number.isFinite(screenZ)) {
+        return `the cell's own rungs are not both set — the tint reads \`${frame.screen.zIndex}\` and ` +
+          `the text reads \`${frame.words.zIndex}\`, so this scene cannot say where the decor sits ` +
+          'relative to them.';
+      }
+
+      if (!(decorZ > wordsZ)) {
+        return `the floating image is at z-index ${decorZ} and the ordinary text beside it at ` +
+          `${wordsZ} — setting a tint on this cell pulled the decor DOWN onto the content rung. It ` +
+          'still paints (its position is an inline style), but it is no longer reliably in front: at ' +
+          'equal rungs the browser falls back to DOM order, so whether the operator\'s floating image ' +
+          'is visible now depends on where it happens to sit in the module list.';
+      }
+      if (!(decorZ > screenZ)) {
+        return `the floating image is at z-index ${decorZ} and the cell tint at ${screenZ} — the tint ` +
+          'is painting over decor that is supposed to float above the whole cell.';
+      }
+      return null;
+    },
+  },
 ];
