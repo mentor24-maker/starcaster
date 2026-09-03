@@ -13,25 +13,36 @@ lattice, next to Visibility.
 
 ## What is built, and what is not
 
-A doc that describes queued work as though it exists is worse than no doc, so
-this is stated first and in three states rather than two.
+A doc that describes unbuilt work as though it exists is worse than no doc, so
+this is stated first — and keyed to the one fact that cannot go stale.
+
+**The split below is by branch, not by ticket status.** *Is it on `main`?* is
+answerable from the repo at any moment, by anyone, forever. A ticket's status is
+not: it moves daily, and a doc that writes down a review verdict is wrong the
+next time a reviewer or Dane touches the board. So where a slice is not merged
+yet, this doc says only that its pull request is open and points at the ticket,
+rather than asserting where it stands.
 
 **Live on `main` today:**
 
 * The overlay editor itself — type, opacity, and colour / gradient / image
   (#482, commit `c335921a`).
 * The renderer that paints it (#475).
-* **Gradient angle** (86bbqb06q). This one is worth calling out because it was
-  spec'd as an overlay follow-up and has since shipped: an angle box replaced
-  the hardcoded 135°, and because of the shared-type property described below,
-  it arrived working on overlays without an overlay-specific line of code.
+* **Gradient angle** (86bbqb06q). Worth calling out because it was spec'd as an
+  overlay follow-up and has since shipped: an angle box replaced the hardcoded
+  135°, and because of the shared-type property described below, it arrived
+  working on overlays without an overlay-specific line of code.
+* **Blend mode** (86bbqb08p, #553) — `mix-blend-mode` on the screen, so a colour
+  can tint a photograph instead of fogging it. This is the worked example of why
+  the list is keyed to `main`: it merged on 2026-09-03 and its ticket was still
+  reading `Ready to launch` hours later.
 
-**Built, reviewed, not yet merged** — do not describe these as available to the
-operator, and do not assume their shape is final:
+**Built, with a pull request open, not on `main`:**
 
-* **Blend mode** — tint a photo instead of fogging it (86bbqb08p).
 * **Cell-level overlays** — an overlay screen on an individual cell rather than
-  the whole row (86bbqb0ac).
+  the whole row (86bbqb0ac, PR #557). Check the ticket for where it currently
+  stands. Do not describe it to an operator as available, and do not assume its
+  shape is final — it has already been through one send-back.
 
 **Not built:** anything else. There is no per-breakpoint overlay, no animation,
 and no second overlay layer on a single row.
@@ -40,13 +51,15 @@ and no second overlay layer on a single row.
 
 ## The idea the feature rests on
 
-An overlay screen is two fields:
+An overlay screen is a background, plus settings that act on the painted layer
+as a whole:
 
 ```ts
-// lib/builder-client/builder-template.ts:247
+// lib/builder-client/builder-template.ts:277
 export type RowOverlayScreenSettings = {
   background: BackgroundSettings;
   opacity: number;
+  blendMode?: BuilderOverlayBlendMode; // added by #553; "normal" emits no CSS
 };
 ```
 
@@ -83,11 +96,13 @@ colour; for **image, video and style** modes it is not applied there at all.
 applied to the whole painted screen at the end:
 
 ```ts
-// lib/builder-client/builder-template.ts:1439 — getBuilderRowOverlayScreenStyle
+// lib/builder-client/builder-template.ts:1480 — getBuilderRowOverlayScreenStyle
 const style = getBuilderBackgroundStyle(normalized.background);
 if (!style) return undefined;
+const blendMode = normalized.blendMode ?? "normal";
+const blended = blendMode === "normal" ? style : { ...style, mixBlendMode: blendMode };
 const opacity = normalized.opacity / 100;
-return Number.isFinite(opacity) && opacity < 1 ? { ...style, opacity } : style;
+return Number.isFinite(opacity) && opacity < 1 ? { ...blended, opacity } : blended;
 ```
 
 **The Overlay panel's Opacity row drives the outer one.** It is the only one
@@ -107,14 +122,15 @@ Two more details worth knowing:
 * The scales differ. The outer opacity is 0–100; the CSS value is that over 100.
 * An outer opacity of exactly 100 adds no `opacity` property at all, rather than
   `opacity: 1`. That is intentional — it keeps the emitted style identical to
-  what the pre-overlay code produced.
+  what the pre-overlay code produced. A `blendMode` of `"normal"` is omitted for
+  the same reason.
 
 ---
 
 ## Seeds, never owns
 
 When a row first becomes a **video** row, `seedVideoBackgroundOverlayScreen`
-(`builder-template.ts:1416`) fills in a dark neutral tint — `#101820` at 45% —
+(`builder-template.ts:1452`) fills in a dark neutral tint — `#101820` at 45% —
 because text laid over moving footage is unreadable without something between
 them. Operator's call, 2026-08-31: *"Default overlay tint ON"*.
 
@@ -174,7 +190,7 @@ because the three are not three copies of one thing:
    layout mode row.
 2. `builder-background-controls.tsx:665` — the shared picker's **vertical**
    layout mode row.
-3. `builder-section-controls.tsx:401` — a **hand-written `<select>`** labelled
+3. `builder-section-controls.tsx:418` — a **hand-written `<select>`** labelled
    "Row Background", in the Frame column of the section panel. This is a plain
    `<select>` with its own hardcoded `<option>` list, not an instance of the
    shared control, and **it is the one the operator actually uses** for row
@@ -182,7 +198,7 @@ because the three are not three copies of one thing:
 
 The related-but-separate mechanism: the shared control is *also* mounted at the
 bottom of the section panel with `hideModeRow`
-(`builder-section-controls.tsx:551`), which suppresses its own mode row so it
+(`builder-section-controls.tsx:594`), which suppresses its own mode row so it
 does not render a fourth dropdown beside the hand-written one. `hideModeRow` is
 what prevents a duplicate; it is not what creates the third copy.
 
@@ -242,6 +258,8 @@ group.
   swatch, and it stacks with the Opacity row below.
 * **Opacity** — how strong the whole screen is, 0–100. Appears once a type is
   chosen.
+* **Blend** — how the screen mixes with what is under it. Normal is a sheet laid
+  over the picture; the others tint it instead.
 
 **A video row starts with a tint already on.** That is on purpose, and it is
 yours to change: recolour it, weaken it, or set the type to None to remove it.
