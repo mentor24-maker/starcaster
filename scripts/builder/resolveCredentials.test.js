@@ -33,6 +33,7 @@ const projectScopePath = require.resolve('../../lib/projectScope.js');
 const storePath = require.resolve('../../lib/projectConnectionsStore.js');
 const apiSettingsPath = require.resolve('../../lib/apiSettings.js');
 const resolverPath = require.resolve('../../lib/connections/resolveCredentials.js');
+const registryPath = require.resolve('../../lib/connections/registry.js');
 
 const SCOPE_A = { projectId: 'proj_a', userId: 'user_1' };
 const SCOPE_B = { projectId: 'proj_b', userId: 'user_2' };
@@ -87,7 +88,7 @@ const ENV_VALUES = {
  * connection" and "I could not tell", and the resolver must treat those two
  * completely differently.
  */
-function withResolver(envOverrides = {}) {
+function withResolver(envOverrides = {}, registryStub = null) {
   const schema = parseSchemaFile(SQL_PATH);
   const db = createFakeDb(schema);
   const fault = { failNextList: false, failNextRead: false, listFailures: 0 };
@@ -128,6 +129,22 @@ function withResolver(envOverrides = {}) {
 
   const realSupabase = require.cache[supabasePath];
   const realApiSettings = require.cache[apiSettingsPath];
+  /**
+   * The registry, swapped for a stub when a test needs to control what
+   * `adapter.refresh` answers.
+   *
+   * `verifySweep.defaultRegistry()` requires it at CALL time (deliberately —
+   * the top-level require closes a module ring), so putting a stub in the cache
+   * here is enough and no re-require of the sweep is needed. Without one the
+   * real X adapter would be asked to renew, which means a live HTTP call to X
+   * from a unit test.
+   */
+  const realRegistry = require.cache[registryPath];
+  if (registryStub) {
+    require.cache[registryPath] = {
+      id: registryPath, filename: registryPath, loaded: true, exports: registryStub,
+    };
+  }
   require.cache[supabasePath] = {
     id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase,
   };
@@ -164,6 +181,10 @@ function withResolver(envOverrides = {}) {
   process.env.CHANNELS_ENCRYPTION_KEY = TEST_KEY;
 
   function restore() {
+    if (registryStub) {
+      if (realRegistry) require.cache[registryPath] = realRegistry;
+      else delete require.cache[registryPath];
+    }
     if (realSupabase) require.cache[supabasePath] = realSupabase;
     else delete require.cache[supabasePath];
     if (realApiSettings) require.cache[apiSettingsPath] = realApiSettings;
@@ -347,12 +368,20 @@ for (const status of ['expired', 'revoked', 'error']) {
   });
 }
 
-test('a connection whose token expired is skipped even though its status still says connected', async () => {
+test('a lapsed connection with NOTHING to renew it with is skipped, and the fallback is used', async () => {
   const h = withResolver();
   try {
     // The realistic case, and the reason both halves are checked: `status` is
-    // what the last verify wrote down, and nothing sweeps until slice 6, so the
-    // clock and the column disagree for most of a token's dead life.
+    // what the last verify wrote down, and the clock is what is actually true,
+    // so the two disagree for most of a token's dead life.
+    //
+    // Revisited in review round 2 of 86bbpz1hu, which is why the name changed.
+    // This used to read "a connection whose token expired is skipped", and as a
+    // blanket rule that was the defect: a lapsed row that CAN be renewed is now
+    // renewed rather than skipped (see the two tests below). What still holds —
+    // and what this test now pins — is the case where nothing could renew it.
+    // CLIENT_PAGE has no refresh token, so there is no credential to renew
+    // with, and falling back is the only honest answer.
     await grant(h.store, SCOPE_A, {
       ...CLIENT_PAGE,
       status: 'connected',
@@ -362,6 +391,150 @@ test('a connection whose token expired is skipped even though its status still s
     assert.equal(res.ok, true, res.error);
     assert.equal(res.data.source, 'environment', 'a token that expired in 2020 was posted with');
     assert.match(res.data.skipped[0].why, /expired at/);
+  } finally { h.restore(); }
+});
+
+// ── A lapsed token is unrenewed, not dead ───────────────────────────────────
+
+/**
+ * Review round 2 of 86bbpz1hu, and the most expensive failure in this file.
+ *
+ * `liveness` rejected any row past its expiry, and `refreshBeforeUse` ran only
+ * on a row that had ALREADY passed `liveness` — so a token with minutes left
+ * was renewed and a token that had actually lapsed never was. The resolver fell
+ * through to the environment, which for X is a complete OAuth 1.0a pair on
+ * DANE'S OWN account, and answered `ok: true`. The client's post went out on
+ * the wrong timeline with the card still green.
+ *
+ * X's tokens last about two hours against a thirty-minute refresh window, so
+ * this was the ordinary case for any project that went an afternoon without
+ * posting — not an edge one.
+ *
+ * Both tests assert on the TOKEN VALUE, not on `ok`. `ok` was true throughout.
+ */
+const CLIENT_X = Object.freeze({
+  provider: 'x',
+  accountId: '4455',
+  accountLabel: '@delraytennis',
+  status: 'connected',
+  accessToken: 'CLIENT_X_TOKEN_delray',
+  refreshToken: 'CLIENT_X_REFRESH_delray',
+});
+
+/** A registry whose X adapter renews with whatever this test asked for. */
+function registryRenewing(answer, seen = []) {
+  return {
+    adapterFor(provider) {
+      if (provider !== 'x') return null;
+      return {
+        async refresh(account) {
+          seen.push(account);
+          return typeof answer === 'function' ? answer(account) : answer;
+        },
+      };
+    },
+  };
+}
+
+test('an X connection that expired an hour ago is RENEWED and posts as the client', async () => {
+  const seen = [];
+  const h = withResolver({}, registryRenewing({
+    ok: true,
+    status: 200,
+    data: {
+      refreshed: true,
+      accessToken: 'RENEWED_X_TOKEN_delray',
+      refreshToken: 'RENEWED_X_REFRESH_delray',
+      expiresAt: new Date(Date.now() + 7200_000).toISOString(),
+    },
+  }, seen));
+  try {
+    await grant(h.store, SCOPE_A, {
+      ...CLIENT_X,
+      expiresAt: new Date(Date.now() - 3600_000).toISOString(),
+    });
+
+    const res = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
+    assert.equal(res.ok, true, res.error);
+    assert.equal(seen.length, 1, 'the adapter was never asked to renew a token it could have renewed');
+    assert.equal(
+      seen[0].refreshToken,
+      'CLIENT_X_REFRESH_delray',
+      'the adapter was handed an account with no refresh token, so it could not have renewed anything'
+    );
+    assert.equal(
+      res.data.source,
+      'connection',
+      'a lapsed-but-renewable X connection fell back to the shared keys — which are Dane\'s own account'
+    );
+    assert.equal(
+      res.data.values.access_token,
+      'RENEWED_X_TOKEN_delray',
+      'the answer did not carry the renewed token'
+    );
+    assert.notEqual(
+      res.data.values.access_token,
+      'ENV_X_TOKEN_dane',
+      'the client\'s post would have gone out on Starcaster\'s own X account'
+    );
+    // The 1.0a leftover must still be gone: a renewed bearer token sitting on
+    // top of Alphire's token secret is the mixed credential clearOnConnection
+    // exists to make unbuildable.
+    assert.equal(res.data.values.access_token_secret, undefined);
+    assert.match(res.data.sourceDetail, /renewed before use/);
+  } finally { h.restore(); }
+});
+
+test('when the renewal FAILS, it falls back to the shared keys and says which account and why', async () => {
+  const seen = [];
+  const h = withResolver({}, registryRenewing({
+    ok: false,
+    status: 400,
+    error: 'X refused the refresh token (invalid_grant)',
+  }, seen));
+  try {
+    await grant(h.store, SCOPE_A, {
+      ...CLIENT_X,
+      expiresAt: new Date(Date.now() - 3600_000).toISOString(),
+    });
+
+    const res = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
+    assert.equal(res.ok, true, res.error);
+    assert.equal(seen.length, 1, 'the renewal was never attempted, so this test proves nothing');
+    // The branch where the OLD behaviour was right, pinned so the fix above
+    // cannot turn into "post with a dead token".
+    assert.equal(res.data.source, 'environment', 'a token that could not be renewed was posted with anyway');
+    assert.equal(res.data.values.access_token, 'ENV_X_TOKEN_dane');
+    // Skipped ONCE, not twice: the row is amended in place, not appended again.
+    assert.equal(res.data.skipped.length, 1, 'one row was reported as skipped more than once');
+    assert.match(res.data.skipped[0].why, /expired at/);
+    assert.match(res.data.skipped[0].why, /could not be renewed/);
+    assert.match(res.data.skipped[0].why, /invalid_grant/);
+  } finally { h.restore(); }
+});
+
+test('a REVOKED connection is never renewed — only the clock is recoverable', async () => {
+  const seen = [];
+  const h = withResolver({}, registryRenewing({
+    ok: true,
+    status: 200,
+    data: { refreshed: true, accessToken: 'RENEWED_X_TOKEN_delray', expiresAt: new Date(Date.now() + 7200_000).toISOString() },
+  }, seen));
+  try {
+    // Revoked AND lapsed. A refresh token cannot overrule a grant the client or
+    // the provider withdrew, and renewing here would put a permission the
+    // client believes they took back into service.
+    await grant(h.store, SCOPE_A, {
+      ...CLIENT_X,
+      status: 'revoked',
+      expiresAt: new Date(Date.now() - 3600_000).toISOString(),
+    });
+
+    const res = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
+    assert.equal(res.ok, true, res.error);
+    assert.equal(seen.length, 0, 'a revoked grant was put back into service by a refresh');
+    assert.equal(res.data.source, 'environment');
+    assert.match(res.data.skipped[0].why, /status is "revoked"/);
   } finally { h.restore(); }
 });
 

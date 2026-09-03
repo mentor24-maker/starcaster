@@ -64,6 +64,46 @@ their account could not be saved, with a reason nobody could act on, roughly one
 attempt in sixty. It also explains a test that had been failing at random. The
 check now reads the whole seconds and ignores the fraction, so 60 is still
 refused and 59.999 is correctly a real time.
+
+Review then found the thing all of that had made reachable, and it was the
+worst kind: it looked like success. Storing the deadline was right, but two
+places treated "past its deadline" as "dead" when what it actually means is
+"nobody has renewed it yet". A client's X permission lasts about two hours. Any
+project that went an afternoon without posting was past that, and from then on
+every post it sent went out on Starcaster's own X account instead — with the
+card still green, nothing written to any log, and the whole point of this work
+quietly reversed. The renewal machinery was sitting right there and worked
+perfectly; nothing ever asked it, because it only ran on permissions that had
+NOT yet run out, which is exactly backwards.
+
+The second place was the scheduled health check, and it made the first one
+permanent. On finding a lapsed permission it wrote it off as dead without
+trying to renew it — so once the check had been past, that account was
+finished for good rather than until the next renewal.
+
+Both now try renewing first and only give up if the renewal genuinely fails,
+in which case they say which account and why. A permission the client or X
+actually withdrew is still refused outright: only the clock is recoverable, and
+no amount of renewing overrules somebody taking a permission back.
+
+One trap had to be avoided on the way. The act of renewing a permission also
+marks that account as the most recently touched — and "most recently touched"
+is how Starcaster decides which of a client's accounts to post from. That is
+right when the renewal happens because a post is about to go out. It would be
+badly wrong on a schedule: a client with two X accounts would find their posts
+drifting onto whichever one the health check happened to renew last, on a
+timer, with nothing visibly wrong. The scheduled renewal is marked not to
+re-elect. The test proving it does that had to be rewritten once — the first
+version could not actually fail, because everything in a test happens inside
+the same millisecond and the ordering it was checking held by accident.
+
+Finally, the note about image posting being unproven moved out of the code and
+onto the card the client actually reads, and a sign-in route that could never
+have completed an X connection — it dropped one of the two values the sign-in
+needs — was fixed. Nothing visible was broken by that second one, because the
+live screen uses a different route, but a route that looks like it works is
+worse than one that is missing.
+
 ## 2026-09-03 — A map on a directions page shows the map (#571)
 
 Open the Delray directions page and you did not get a map. You got a grey

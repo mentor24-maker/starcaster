@@ -569,6 +569,76 @@ test('every endpoint refuses before it acts when no workspace is chosen', async 
   }
 });
 
+/**
+ * Review round 2 of 86bbpz1hu — a route that looked like it worked and could not.
+ *
+ * `EXCHANGE_FIELDS` is an allow-list: only the fields named there reach an
+ * adapter's `exchange`. `state` and `nonce` were not on it, and the X adapter
+ * derives its PKCE code verifier from the nonce — so every X sign-in driven
+ * through THIS route refused with "the PKCE verifier it was begun with cannot
+ * be reproduced", no matter what was posted to it.
+ *
+ * Nothing visible was broken: the live screen goes through the
+ * `routes/engage.js` callback, which passes both. But the next reader would
+ * have believed this route, so the gap is pinned rather than documented.
+ *
+ * The assertion is that the refusal has MOVED PAST the verifier — it is now the
+ * app-not-configured one, which the adapter reaches only after reproducing the
+ * verifier successfully. Deliberately with no X client credentials in the
+ * environment, so the adapter refuses before it would call X: a unit test must
+ * not make a live HTTP request.
+ */
+test('a PKCE sign-in through the finish route gets its state and nonce', async (t) => {
+  const h = withRoute();
+  t.after(h.restore);
+
+  const previous = {};
+  for (const key of ['META_OAUTH_STATE_SECRET', 'X_CLIENT_ID', 'X_CLIENT_SECRET',
+    'X_OAUTH_CLIENT_ID', 'X_OAUTH_CLIENT_SECRET']) {
+    previous[key] = process.env[key];
+    delete process.env[key];
+  }
+  process.env.META_OAUTH_STATE_SECRET = 'state-secret-for-tests';
+  // Set only long enough to MINT the state — `authorizeUrl` needs them — then
+  // removed again before the route call, so the adapter stops at the
+  // credentials check rather than making a live request to X.
+  process.env.X_CLIENT_ID = 'x-client-id';
+  process.env.X_CLIENT_SECRET = 'x-client-secret';
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  // A REAL state, minted by the adapter that will read it back — so this fails
+  // if the route drops the field, and not because the fixture is malformed.
+  const x = require('../../lib/connections/adapters/x.js');
+  const started = x.authorizeUrl({ projectId: SCOPE.projectId, userId: SCOPE.userId });
+  assert.equal(started.ok, true, started.error);
+  const state = new URL(started.data.url).searchParams.get('state');
+  assert.ok(state, 'the adapter minted no state, so this test proves nothing');
+  delete process.env.X_CLIENT_ID;
+  delete process.env.X_CLIENT_SECRET;
+
+  const res = await call(h.route, {
+    method: 'POST',
+    path: '/api/connections/x/finish',
+    body: { code: 'an-authorization-code', state },
+  });
+
+  const message = String(res.payload?.error?.message || '');
+  assert.doesNotMatch(
+    message,
+    /PKCE verifier/,
+    'the route dropped `state` on the way to the adapter, so an X sign-in through it can never complete: '
+    + `${message}`
+  );
+  // Where it gets to instead: past the verifier, and stopped by the missing
+  // app credentials this test deliberately did not set.
+  assert.match(message, /X_CLIENT_ID|not configured|developer\.x\.com/i, message);
+});
+
 test('the route ignores paths that are not its own', async (t) => {
   const h = withRoute();
   t.after(h.restore);

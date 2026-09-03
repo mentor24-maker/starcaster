@@ -594,7 +594,7 @@ test('a stored grant for a platform with no adapter is a could-not-check, never 
   assert.equal(stored.data[0].lastVerifiedAt !== '', true, 'the cursor moved');
 });
 
-test('a token already past its expiry is marked expired without spending a provider call', async (t) => {
+test('a lapsed token with no refresh token is marked expired without spending a provider call', async (t) => {
   let verifies = 0;
   const h = withSweep({
     adapters: {
@@ -615,13 +615,246 @@ test('a token already past its expiry is marked expired without spending a provi
   });
 
   const swept = await h.sweep.runVerifySweep({ scope: SCOPE, nowMs: NOW });
+  // No refresh token on this row, so there is nothing that could move it and
+  // the clock has already answered — a live API call could add nothing. The
+  // three tests below are the case where there IS something that could move it,
+  // which this branch used to swallow (86bbpz1hu, review round 2).
   assert.equal(verifies, 0, 'the clock already answered; a live API call could add nothing');
   assert.equal(swept.data.results[0].status, 'expired');
   const stored = await h.store.getConnection({ provider: 'bluesky', accountId: 'did:plc:lapsed' }, SCOPE);
   assert.equal(stored.data.status, 'expired');
 });
 
-// ── Identity drift ─────────────────────────────────────────────────────────
+// ── A lapsed token is renewed, not written off ──────────────────────────────
+
+/**
+ * Review round 2 of 86bbpz1hu.
+ *
+ * The branch above wrote `expired` and returned WITHOUT ever calling
+ * `adapter.refresh`, on rows whose refresh token was still good. `expired` is
+ * not a live status, so once the sweep had been past, the resolver rejected
+ * that connection for ever rather than until its next renewal — the sweep made
+ * a two-hour lapse permanent.
+ *
+ * It was dead code before slice 7, because nothing stored an expiry at all.
+ * Carrying X's expiry into the vault made it the ordinary outcome.
+ */
+test('a lapsed token that CAN be renewed is renewed, not written off as expired', async (t) => {
+  let refreshes = 0;
+  let verifies = 0;
+  const h = withSweep({
+    adapters: {
+      bluesky: {
+        verify: async (account) => {
+          verifies += 1;
+          assert.equal(
+            account.accessToken,
+            'RENEWED',
+            'the provider was asked about the OLD token — the renewal did not reach the check'
+          );
+          return ok({ valid: true, accountId: 'did:plc:lapsed', accountLabel: 'lapsed.bsky.social' });
+        },
+        refresh: async (account) => {
+          refreshes += 1;
+          assert.equal(account.refreshToken, 'STILL_GOOD', 'the adapter was handed nothing to renew with');
+          return ok({
+            refreshed: true,
+            accessToken: 'RENEWED',
+            refreshToken: 'ROTATED',
+            expiresAt: new Date(NOW + 2 * DAY).toISOString(),
+          });
+        },
+        revoke: async () => ok({ revokedAtProvider: true }),
+        authorizeUrl: () => ok({}), exchange: async () => ok({}), listAccounts: async () => ok({}),
+      },
+    },
+  });
+  t.after(h.restore);
+
+  await grant(h.store, {
+    provider: 'bluesky', accountId: 'did:plc:lapsed', accountLabel: 'lapsed.bsky.social',
+    accessToken: 'DEAD', refreshToken: 'STILL_GOOD', status: 'connected',
+    expiresAt: new Date(NOW - DAY).toISOString(),
+  });
+
+  const swept = await h.sweep.runVerifySweep({ scope: SCOPE, nowMs: NOW });
+  assert.equal(refreshes, 1, 'a renewable connection was written off without the adapter being asked');
+  assert.equal(verifies, 1, 'the renewed credential was never checked against the provider');
+  assert.equal(
+    swept.data.results[0].status,
+    'connected',
+    'a connection that was successfully renewed was still reported as expired'
+  );
+
+  const stored = await h.store.getConnection({ provider: 'bluesky', accountId: 'did:plc:lapsed' }, SCOPE);
+  assert.equal(stored.data.status, 'connected');
+  assert.equal(stored.data.accessToken, 'RENEWED');
+  assert.equal(stored.data.refreshToken, 'ROTATED', 'the rotated refresh token was not stored');
+  // Not `expiring`: it has two days on it. The status is recomputed against the
+  // NEW deadline, or a just-fixed connection wears an amber card.
+  assert.equal(stored.data.expiresAt, new Date(NOW + 2 * DAY).toISOString());
+});
+
+test('a lapsed token whose renewal FAILS is expired, and the reason names the refusal', async (t) => {
+  let refreshes = 0;
+  let verifies = 0;
+  const h = withSweep({
+    adapters: {
+      bluesky: {
+        verify: async () => { verifies += 1; return ok({ valid: true }); },
+        refresh: async () => { refreshes += 1; return fail(400, 'the refresh token has itself expired'); },
+        revoke: async () => ok({ revokedAtProvider: true }),
+        authorizeUrl: () => ok({}), exchange: async () => ok({}), listAccounts: async () => ok({}),
+      },
+    },
+  });
+  t.after(h.restore);
+
+  await grant(h.store, {
+    provider: 'bluesky', accountId: 'did:plc:gone', accountLabel: 'gone.bsky.social',
+    accessToken: 'DEAD', refreshToken: 'ALSO_DEAD', status: 'connected',
+    expiresAt: new Date(NOW - DAY).toISOString(),
+  });
+
+  const swept = await h.sweep.runVerifySweep({ scope: SCOPE, nowMs: NOW });
+  assert.equal(refreshes, 1, 'the renewal was never attempted, so this test proves nothing');
+  assert.equal(verifies, 0, 'a dead token was still spent on a verify call');
+  assert.equal(swept.data.results[0].status, 'expired');
+  assert.match(swept.data.results[0].reason, /expired at/);
+  assert.match(
+    swept.data.results[0].reason,
+    /could not be renewed/,
+    'the row was written off with no word about the renewal that was tried'
+  );
+  assert.match(swept.data.results[0].reason, /refresh token has itself expired/);
+});
+
+/**
+ * Fact One, at the join the fix above created.
+ *
+ * `refreshBeforeUse` writes through `saveConnection`, which bumps `updated_at`
+ * — and `updated_at` is the ACTIVE-ACCOUNT SELECTOR. That bump is correct when
+ * the resolver renews the row it is about to post with. It is the
+ * wrong-account-post failure when the SWEEP renews on a schedule: a client with
+ * two accounts on one platform would find their posts walking onto whichever
+ * the sweep last happened to renew, with every gate green.
+ *
+ * Asserted with a SPY on the write, for the reason the header of
+ * `verifySweep.js` gives and this test learned the hard way. The behavioural
+ * version below — sweep, then ask who posts — could not fail: every write in a
+ * fake lands in the same millisecond, `updated_at` TIES, and the store's
+ * `created_at` tie-break restores the original order all by itself. It reported
+ * a pass with `{ bumpUpdatedAt: false }` deleted. The spy cannot be defeated by
+ * a clock, so it is the guarantee; the behavioural test beside it buys the
+ * millisecond back with a real pause and is the second opinion.
+ */
+test('renewing a lapsed row during a sweep is marked do-not-re-elect', async (t) => {
+  const h = withSweep({
+    adapters: {
+      bluesky: {
+        verify: async () => ok({ valid: true }),
+        refresh: async () => ok({
+          refreshed: true,
+          accessToken: 'RENEWED',
+          refreshToken: 'ROTATED',
+          expiresAt: new Date(NOW + 2 * DAY).toISOString(),
+        }),
+        revoke: async () => ok({ revokedAtProvider: true }),
+        authorizeUrl: () => ok({}), exchange: async () => ok({}), listAccounts: async () => ok({}),
+      },
+    },
+  });
+  t.after(h.restore);
+
+  await grant(h.store, {
+    provider: 'bluesky', accountId: 'did:plc:old', accountLabel: 'old.bsky.social',
+    accessToken: 'DEAD', refreshToken: 'STILL_GOOD', status: 'connected',
+    expiresAt: new Date(NOW - DAY).toISOString(),
+  });
+
+  // A spy in front of the REAL store: the write still happens, and we keep the
+  // options argument the renewal passed with it.
+  const saves = [];
+  const spied = {
+    ...h.store,
+    saveConnection: async (input, scope, options) => {
+      saves.push({ input, options });
+      return h.store.saveConnection(input, scope, options);
+    },
+  };
+
+  const swept = await h.sweep.runVerifySweep({ scope: SCOPE, nowMs: NOW, store: spied });
+  assert.equal(swept.ok, true);
+  assert.equal(saves.length, 1, `expected the renewal to write once, saw ${saves.length}`);
+  assert.equal(
+    saves[0].options?.bumpUpdatedAt,
+    false,
+    'THE guard: `updated_at` is the active-account selector, so a renewal performed BY THE SWEEP must pass '
+    + '{ bumpUpdatedAt: false } or it re-elects the row it just renewed — and a client with two accounts on '
+    + 'one platform would find their posts moving between them on a timer'
+  );
+  // The renewal itself must still have happened; a guard that works by not
+  // writing would satisfy the assertion above and fix nothing.
+  assert.equal(saves[0].input.accessToken, 'RENEWED');
+  assert.equal((await h.store.getConnection({ provider: 'bluesky', accountId: 'did:plc:old' }, SCOPE)).data.status, 'connected');
+});
+
+/**
+ * The same guard from the outside: does the account that posts actually stay
+ * put when the sweep renews a DIFFERENT, lapsed one?
+ *
+ * Only evidence because `refresh` pauses the way a real provider call does —
+ * see `tick`. Without that the renewal write ties with the live row's on
+ * `updated_at` and this cannot fail. Break-tested by flipping the sweep's
+ * `bumpUpdatedAt` to true and watching it fail, which it did NOT before the
+ * pause existed.
+ */
+test('the sweep does not move a client onto an older account by renewing it', async (t) => {
+  const h = withSweep({
+    adapters: {
+      bluesky: {
+        verify: async () => ok({ valid: true }),
+        refresh: async () => {
+          await tick();
+          return ok({
+            refreshed: true,
+            accessToken: 'RENEWED',
+            refreshToken: 'ROTATED',
+            expiresAt: new Date(NOW + 2 * DAY).toISOString(),
+          });
+        },
+        revoke: async () => ok({ revokedAtProvider: true }),
+        authorizeUrl: () => ok({}), exchange: async () => ok({}), listAccounts: async () => ok({}),
+      },
+    },
+  });
+  t.after(h.restore);
+
+  // The lapsed one FIRST, so it is the older row and the live one is the
+  // client's current choice. Renewing must not overtake that.
+  await grant(h.store, {
+    provider: 'bluesky', accountId: 'did:plc:old', accountLabel: 'old.bsky.social',
+    accessToken: 'DEAD', refreshToken: 'STILL_GOOD', status: 'connected',
+    expiresAt: new Date(NOW - DAY).toISOString(),
+  });
+  await tick();
+  await grant(h.store, {
+    provider: 'bluesky', accountId: 'did:plc:current', accountLabel: 'current.bsky.social',
+    accessToken: 'CHOSEN', status: 'connected',
+  });
+
+  const before = await h.resolver.resolveCredentials('bluesky', SCOPE.projectId);
+  assert.equal(before.data.accountId, 'did:plc:current', 'the fixture does not start where it claims to');
+
+  await h.sweep.runVerifySweep({ scope: SCOPE, nowMs: NOW });
+
+  const after = await h.resolver.resolveCredentials('bluesky', SCOPE.projectId);
+  assert.equal(
+    after.data.accountId,
+    'did:plc:current',
+    'the sweep renewed an older account and re-elected it — the client\'s posts would move accounts on a timer'
+  );
+});
 
 test('a token that now authenticates as a different account is flagged, with both accounts named', async (t) => {
   const h = withSweep({
