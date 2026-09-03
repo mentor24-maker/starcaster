@@ -1019,15 +1019,7 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     description: "A feed of every post carrying the tag in the page's ?tag= URL parameter, with a tag selector above it. Put it on a /tags page and point Tag Cloud or Post Tags links at that page.",
     name: "",
     text: "",
-    settings: {
-      layout: "list",
-      columns: "1",
-      showSearch: "false",
-      showCategoryFilter: "false",
-      showTagFilter: "true",
-      showAuthorFilter: "false",
-      showDateFilter: "false"
-    }
+    settings: { layout: "list", columns: "1", filterMode: "tag", showSearch: "false", showDateFilter: "false" }
   },
   {
     id: "blog-post-list-category-results",
@@ -1038,15 +1030,18 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     description: "A feed of every post in the category named by the page's ?category= URL parameter, with a category selector above it. The same module as Tag Results, set to categories.",
     name: "",
     text: "",
-    settings: {
-      layout: "list",
-      columns: "1",
-      showSearch: "false",
-      showCategoryFilter: "true",
-      showTagFilter: "false",
-      showAuthorFilter: "false",
-      showDateFilter: "false"
-    }
+    settings: { layout: "list", columns: "1", filterMode: "category", showSearch: "false", showDateFilter: "false" }
+  },
+  {
+    id: "blog-post-list-author-results",
+    type: "blog-post-list",
+    group: "blog",
+    label: "Author Results",
+    icon: "✎",
+    description: "A feed of every post by the author named in the page's ?author= URL parameter, with an author selector above it. The same module as Tag Results, set to authors.",
+    name: "",
+    text: "",
+    settings: { layout: "list", columns: "1", filterMode: "author", showSearch: "false", showDateFilter: "false" }
   },
   {
     id: "blog-post-list-list",
