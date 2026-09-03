@@ -3692,6 +3692,16 @@ export function createEmptyModule(
                             postPageUrl: "",
                             cardGap: "24",
                             filterCategory: "",
+                            /*
+                             * "all" = today's three independent checkboxes.
+                             * A single mode ("tag" / "category" / "author")
+                             * narrows the bar to that one control and titles
+                             * the results. It must default to "all": these
+                             * defaults are merged UNDER saved settings, so any
+                             * other value would retitle every Post Feed that
+                             * already exists.
+                             */
+                            filterMode: "all",
                             showSearch: "true",
                             showCategoryFilter: "true",
                             showTagFilter: "true",
