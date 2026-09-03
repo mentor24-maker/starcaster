@@ -837,12 +837,17 @@ const buildTuned = (ids) => ({
     settings: { showTitle: 'true', panelTitle: LONG },
   },
   /*
-   * Both gating toggles are ON deliberately. Three of this panel's fields are
+   * Every gating toggle is ON deliberately. Three of this panel's fields are
    * `visibleWhen`-gated — `panelTitle` behind `showTitle`, and
    * `relateButtonLabel` + `articleStatus` behind `showRelate` — so seeding
    * either toggle off would measure the panel three controls short and still
    * report green. That is exactly how the proximity-effects panel passed
    * while two gated fields went unseen.
+   *
+   * The tag NAMES here are long on purpose, and they are the real ones from
+   * the Delray blog. The first version of this module truncated them with an
+   * ellipsis ("Delray Te…", "advanced…"), which is the defect 86bbue8ux was
+   * filed for — a fixture of short words could not have shown it.
    */
   'admin-blog-links': {
     name: 'Blog Links',
