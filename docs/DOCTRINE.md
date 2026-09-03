@@ -1526,6 +1526,77 @@ The harness pages keep their job — they are how `check:render` and
 regression, not evidence that a feature works where it ships.
 
 
+### 5.23 A condition that narrows a behaviour must be written in the same terms as the symptom
+
+2026-09-02. PR #522 → fixed by #543, three lines apart.
+
+The blog card's featured image bleeds to the card edges by pulling up over the
+card's top padding. That pull-up was unconditional, which meant it slid up
+underneath anything sitting above it. #522 narrowed it:
+
+```js
+topOfCard: firstFilledSlot === "featured_image"   // first IN THE TEMPLATE
+```
+
+The symptom was **visual** — *is anything drawn above the image?* The condition
+written was **structural** — *is the image first in the template's slot list?*
+Those two agree only when every slot renders something.
+
+Both production card templates open with `["categories"]`, and the Delray posts
+carry no categories. So the categories row rendered nothing, remained "first",
+and the image — visibly at the top of the card — got no pull-up. The card's
+1.125rem top padding showed as a gap, plus the flex column's own gap from the
+empty row, which still emitted an element. **The fix for one bug created another
+in the same three lines, and shipped.**
+
+The corrected condition asks the visual question directly, by testing what the
+POST renders (`slotRenders`) rather than what the template holds. It fixes the
+gap without reintroducing the sliding, because it is finally the same question.
+
+**So: when you narrow an unconditional behaviour, write the condition in the
+vocabulary of the symptom.** A structural proxy for a visual question — or a
+schema proxy for a content question — is only ever accidentally right, and it
+is right on exactly the fixture you were looking at when you wrote it. §3.14 is
+the same confusion running the other way: an unpopulated field is not an empty
+answer.
+
+### 5.24 A preset that bundles two properties makes both unreachable — and splitting one safely means deriving from it, not defaulting past it
+
+2026-09-02, task 86bbtvnr5, PR #543. `cardStyle` had three values and set the
+card's border **and** its shadow together:
+
+```js
+cardStyle === "bordered" ? { border: `1px solid ${accent}40`, boxShadow: "none" }
+: cardStyle === "shadow"  ? { border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.10)" }
+: { border: "1px solid #e2e8f0", boxShadow: "none" }
+```
+
+Every production template is `default`, so every tenant card carried that
+hard-coded grey and no control could reach it — while nine image controls were
+added around it in the same panel. Neither property could be exposed without
+dismantling the preset, so neither was.
+
+Splitting it is a data migration wearing a UI change, and the safety is entirely
+in one detail: the new explicit keys are **derived from the old preset when
+ABSENT**, per preset value, so every already-saved template renders identically.
+
+```js
+cardBorderWidth: d.cardBorderWidth === undefined
+  ? presetBorderWidth(d.cardStyle)          // bordered→1, shadow→0, default→1
+  : cardNum(d.cardBorderWidth, 0, 16, …)
+```
+
+**`=== undefined`, never falsiness.** `d.cardBorderWidth || preset()` restores
+the preset's border on every read, so "no border" can never be saved — and it
+fails silently, on the one value an operator is most likely to have chosen
+deliberately. The same trap waits on every numeric or boolean setting where `0`
+or `false` is a real choice.
+
+Verify a split like this against **every** preset value, not the one in use. Two
+of the three cases here would never have been exercised by the fixture in front
+of me.
+
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
