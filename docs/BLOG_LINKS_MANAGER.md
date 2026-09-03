@@ -62,6 +62,49 @@ cannot work. The panel says where tags come from instead. The form that does
 exist is a rename form, and it states before you press it that renaming onto an
 existing tag merges the two.
 
+## The POSTS count opens the posts behind it
+
+Ticket 86bbugbxb, 2026-09-03, operator's words: *"Posts column is very helpful.
+Let's make it even more helpful by making the number of tagged articles
+clickable to spawn a popup window displaying all the posts it is related to,
+each one clickable to that post."*
+
+Clicking the count opens a popup listing that tag's posts. Each row carries the
+**same two controls the Blog Manager's own rows use** — the eye and the pencil
+from `AdminTableIconButton`, in that order. That is deliberate: "open a post"
+already had a convention on the adjacent screen, and a third one would be a
+thing to learn rather than a thing to recognise.
+
+Four decisions worth keeping:
+
+- **A tag with no posts is a plain number, not a button.** A control that opens
+  an empty box is worse than the number it replaced.
+- **It reuses `/api/blog/tags/posts`**, the endpoint the relate picker below
+  already calls. No new endpoint was added for this.
+- **A failed load is its own state, rendered BEFORE the empty case.** If the
+  request drops and the list is simply empty, the popup says "no posts carry
+  this tag" — a confident lie about the data. The error branch is tested ahead
+  of the empty branch, and a test asserts that ordering.
+- **The destinations are settings, defaulted to the scaffold's slugs.** Edit
+  goes to `managerPageUrl` (default `/admin-blog-manager`) with `?id=`, view to
+  `postViewUrl` (default `/blog-post-view`) with `?post=`. Those defaults are
+  what `lib/projectAdminScaffold.js` gives every tenant, so they are a
+  convention rather than a guess — the settings exist for a tenant who renamed
+  the page.
+
+**Escape is bound on the document, not on the dialog.** A `onKeyDown` on the
+dialog element only fires when focus is already inside it, and this popup opens
+from a click on the count, which leaves focus on the button *outside* it —
+Escape would silently do nothing. The media manager's tag modal in the same
+file still has the element-bound form; do not copy it.
+
+**It portals to `<body>` through `BuilderBodyPortal`.** That component's own
+docstring gives one reason (the builder stylesheet is scoped under
+`.builder-react-root`, so a raw portal loses every rule). This module has a
+second: it renders inside arbitrary tenant themes, and one of them has already
+blown a control here out to 1056px. A popup left inside the tenant's container
+inherits whatever that theme does to positioned children.
+
 ## Relations are mutual, and that shapes the storage
 
 Relating A, B and C means each of the three sees the other two. There is no
@@ -169,6 +212,36 @@ categories yet", which is why it went unnoticed.
 
 Each table now names a column it actually has (`PROBE_COLUMN`), pinned by
 `scripts/builder/blogStoreTableProbe.test.js`.
+
+## The public Tag Cloud reads this same list
+
+`blog-tag-cloud` has a **Tags From** setting: **Blog tags (automatic)**, the
+default, reads `GET /api/blog/tags` — the same derived list with post counts
+this manager shows — or **Custom list** for a hand-curated one.
+
+Three things about it are easy to get wrong:
+
+1. **It is NOT `/api/messaging/tags`.** The ticket originally specified that.
+   Messaging Topics and Tags are a different feature with their own table, and
+   pointing a blog widget at them is what put *"No tags found. Add tags in the
+   Messaging section."* on a public tenant page.
+2. **The link value is the tag WORD, not a slug.** The blog listing filters
+   with `post.tags?.includes(tagFilter)`, an exact match against the word on
+   the post — so `?tag=Delray Beach Open` matches and `?tag=delray-beach-open`
+   matches nothing. Slugifying gives every link a filter that silently finds no
+   posts, which reads as working navigation.
+3. **`tagSource` is deliberately absent from the module defaults.** Defaults
+   are merged *under* a module's saved settings, so writing `tagSource: "auto"`
+   there would make every page that ever carried a hand-typed list start
+   ignoring it. `resolveTagCloudSource()` does the migration instead: an
+   explicit choice wins, a non-empty list means `manual`, and only an empty
+   module defaults to `auto`. `check:render` caught the first version of this.
+
+**Placeholder tags are a Builder-canvas affordance and must never render on a
+live site.** The live renderer used to fall back to them whenever the list was
+empty, so delraytennis.starcaster.pro/blog advertised *react / typescript /
+design / tutorial* to visitors (2026-09-03). A published page with no tags now
+renders nothing at all — not even the heading.
 
 ## Deployment
 

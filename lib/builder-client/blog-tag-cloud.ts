@@ -28,8 +28,24 @@ export type CloudTag = { id: string; label: string; slug: string; count?: number
 
 export type TagCloudLayout = "cloud" | "pills" | "list";
 
+/**
+ * Where the tags come from.
+ *
+ * `auto` reads the tenant's real BLOG tags from `GET /api/blog/tags` — the
+ * same derived list the Blog Links manager shows, already carrying a post
+ * count per tag and ordered busiest first.
+ *
+ * It is NOT `/api/messaging/tags`. This ticket originally specified that, and
+ * it is a different feature's table: Messaging Topics and Tags have nothing to
+ * do with the blog. Pointing a blog widget at them is what produced
+ * "No tags found. Add tags in the Messaging section." on a public tenant page
+ * (operator report, 2026-09-03).
+ */
+export type TagCloudSource = "auto" | "manual";
+
 /** Every setting the module offers, resolved once with its fallback applied. */
 export type ResolvedTagCloud = {
+  source: TagCloudSource;
   title: string;
   layout: TagCloudLayout;
   alignment: "left" | "center";
@@ -81,9 +97,26 @@ export function serializeCloudTags(tags: CloudTag[]): string {
   return JSON.stringify(tags);
 }
 
+/**
+ * Which source a module is on, including the migration for pages that predate
+ * the setting.
+ *
+ * A page saved before `tagSource` existed carries a hand-typed `tags` list and
+ * no source. Defaulting those to `auto` would silently replace a curated list
+ * an operator built, on a live site, with no edit — so **an existing non-empty
+ * list means `manual`**. Only a module with nothing typed into it defaults to
+ * `auto`, where it has nothing to lose.
+ */
+export function resolveTagCloudSource(settings: Record<string, string>): TagCloudSource {
+  const declared = (settings.tagSource ?? "").trim();
+  if (declared === "auto" || declared === "manual") return declared;
+  return parseCloudTags(settings).length > 0 ? "manual" : "auto";
+}
+
 export function resolveTagCloudSettings(settings: Record<string, string>): ResolvedTagCloud {
   const layout = settings.layout as TagCloudLayout | undefined;
   return {
+    source: resolveTagCloudSource(settings),
     title: (settings.title ?? "").trim(),
     layout: layout === "pills" || layout === "list" ? layout : FALLBACK.layout,
     alignment: settings.alignment === "center" ? "center" : FALLBACK.alignment,
@@ -148,7 +181,51 @@ export function activeTagSlug(search: string, resolved: Pick<ResolvedTagCloud, "
   }
 }
 
-/** What the canvas card and the empty live module show instead of nothing. */
+/**
+ * A row from `GET /api/blog/tags` turned into a cloud tag.
+ *
+ * THE SLUG IS THE TAG WORD, deliberately and not a slugified version of it.
+ * The blog listing filters with `post.tags?.includes(tagFilter)` — an exact
+ * match against the word stored on the post — so `?tag=Delray Beach Open`
+ * matches and `?tag=delray-beach-open` matches nothing at all. Slugifying here
+ * would give every link in the cloud a filter that silently finds no posts,
+ * which reads as working navigation.
+ */
+export function blogTagToCloudTag(row: { tag?: unknown; postCount?: unknown }): CloudTag | null {
+  const label = String(row?.tag ?? "").trim();
+  if (!label) return null;
+  const count = Number(row?.postCount ?? 0);
+  return {
+    id: `blog:${label}`,
+    label,
+    slug: label,
+    count: Number.isFinite(count) && count > 0 ? count : 1
+  };
+}
+
+/** Every usable tag from an `/api/blog/tags` payload, in the order served. */
+export function blogTagsToCloudTags(rows: unknown): CloudTag[] {
+  if (!Array.isArray(rows)) return [];
+  const out: CloudTag[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const tag = blogTagToCloudTag(row as { tag?: unknown; postCount?: unknown });
+    if (!tag || seen.has(tag.id)) continue;
+    seen.add(tag.id);
+    out.push(tag);
+  }
+  return out;
+}
+
+/**
+ * What the BUILDER CANVAS shows instead of an empty box while designing.
+ *
+ * It must never render on a live tenant page. It used to: the live renderer
+ * fell back to it whenever the list was empty, so a real tenant's blog
+ * advertised "react / typescript / design / tutorial" to visitors
+ * (operator report, 2026-09-03). A published page with no tags renders
+ * nothing at all now.
+ */
 export const PLACEHOLDER_TAGS: CloudTag[] = [
   { id: "p1", label: "react", slug: "react", count: 24 },
   { id: "p2", label: "typescript", slug: "typescript", count: 18 },

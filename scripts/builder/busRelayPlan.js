@@ -19,18 +19,35 @@
  * move — handbackTarget() below is that rule in code.
  */
 
-/** The standing watch list. Ids come in as parameters (they live in env /
- *  constants at the call site) so this table stays a pure description. */
+/**
+ * The standing watch list. Ids come in as parameters (they live in env /
+ * constants at the call site) so this table stays a pure description.
+ *
+ * ORDER IS LOAD-BEARING, AND THE MERGE-CAPABLE LIST GOES FIRST (2026-09-03,
+ * task 86bbugakw). The relay spends one request per open ticket to read its
+ * comments, and ClickUp allows ~100 per minute across the whole company's
+ * token. Agent Response held 92 open tickets and is never drained, so with it
+ * first the allowance was gone before the sweep reached the Loop Queue — the
+ * only list carrying `merge: true`.
+ *
+ * The relay then failed every 10-minute pass for SIXTEEN HOURS: `requests this
+ * pass: 97`, then `100`, then HTTP 429. Merge-on-comment was dead the whole
+ * time (Dane commented `merge` on 86bbjt1b4 at 11:17am and nothing acted on
+ * it), Lane A halted fail-safe on every pass, and with nothing merging the WIP
+ * cap filled and the build loop declined every pass saying "the merge side is
+ * the bottleneck". Open work went 38 -> 63 in seven days with every gate green.
+ *
+ * Reordering does not FIX the budget — the incremental scan (86bbugbay), the
+ * 429 retry (86bbugbym) and the shared budget (86bbugcdb) do that. It makes the
+ * failure land on the list that can afford it: a notify-only sweep that stops
+ * short delays a bus message, where a merge sweep that stops short strands
+ * shipped work behind an unread comment. Those are not the same cost, so when
+ * the budget runs out it should run out on Agent Response.
+ */
 function defaultWatches({ agentResponseList, loopQueueList }) {
+  // Loop Queue FIRST — see the note above. `mergeEnabled` is the property that
+  // matters, not the label: whichever watch can merge must not be last.
   return [
-    {
-      list: agentResponseList,
-      label: 'Agent Response',
-      statuses: ['pending response', 'responding'],
-      // Notify-only, as it has been since PR #340.
-      handback: {},
-      merge: false,
-    },
     {
       list: loopQueueList,
       label: 'Loop Queue',
@@ -44,6 +61,14 @@ function defaultWatches({ agentResponseList, loopQueueList }) {
       // which checks the PR is open, reviewed and green first.
       handback: { 'needs your input': 'Queued' },
       merge: true,
+    },
+    {
+      list: agentResponseList,
+      label: 'Agent Response',
+      statuses: ['pending response', 'responding'],
+      // Notify-only, as it has been since PR #340.
+      handback: {},
+      merge: false,
     },
   ];
 }

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   activeTagSlug,
+  blogTagsToCloudTags,
   maxTagCount,
   parseCloudTags,
   resolveTagCloudSettings,
+  resolveTagCloudSource,
   tagFontSize,
   tagHref
 } from "./blog-tag-cloud";
@@ -101,5 +103,78 @@ describe("parseCloudTags", () => {
     expect(parseCloudTags({})).toEqual([]);
     expect(parseCloudTags({ tags: '[{"id":"a","label":"News","slug":"news"},{"nope":1}]' }))
       .toEqual([{ id: "a", label: "News", slug: "news" }]);
+  });
+});
+
+describe("resolveTagCloudSource — the migration for pages that predate the setting", () => {
+  it("keeps an existing hand-typed list on MANUAL, so no live page silently changes", () => {
+    const settings = { tags: JSON.stringify([{ id: "a", label: "News", slug: "news" }]) };
+    expect(resolveTagCloudSource(settings)).toBe("manual");
+  });
+
+  it("defaults an EMPTY module to auto, where it has nothing to lose", () => {
+    expect(resolveTagCloudSource({})).toBe("auto");
+    expect(resolveTagCloudSource({ tags: "[]" })).toBe("auto");
+    expect(resolveTagCloudSource({ tags: "not json" })).toBe("auto");
+  });
+
+  it("obeys an explicit choice over the migration guess, in both directions", () => {
+    const typed = { tags: JSON.stringify([{ id: "a", label: "News", slug: "news" }]) };
+    expect(resolveTagCloudSource({ ...typed, tagSource: "auto" })).toBe("auto");
+    expect(resolveTagCloudSource({ tagSource: "manual" })).toBe("manual");
+  });
+
+  it("ignores a value that is neither, rather than trusting it", () => {
+    expect(resolveTagCloudSource({ tagSource: "messaging" })).toBe("auto");
+  });
+});
+
+describe("blogTagsToCloudTags", () => {
+  const rows = [
+    { tag: "Delray Beach Open", postCount: 3 },
+    { tag: "Davis Cup", postCount: 2 },
+    { tag: "tennis", postCount: 1 },
+  ];
+
+  it("carries the tag WORD as the slug, because the blog filters on an exact word", () => {
+    const [first] = blogTagsToCloudTags(rows);
+    expect(first.slug).toBe("Delray Beach Open");
+    expect(first.label).toBe("Delray Beach Open");
+    // A slugified value would filter nothing at all.
+    expect(first.slug).not.toBe("delray-beach-open");
+  });
+
+  it("keeps the post count and the order the endpoint served", () => {
+    expect(blogTagsToCloudTags(rows).map((t) => [t.label, t.count])).toEqual([
+      ["Delray Beach Open", 3],
+      ["Davis Cup", 2],
+      ["tennis", 1],
+    ]);
+  });
+
+  it("drops blank tags rather than rendering an empty pill", () => {
+    expect(blogTagsToCloudTags([{ tag: "", postCount: 4 }, { tag: "  " }, { tag: "real" }])
+      .map((t) => t.label)).toEqual(["real"]);
+  });
+
+  it("never counts a tag as zero, so the cloud can size it", () => {
+    const [t] = blogTagsToCloudTags([{ tag: "quiet", postCount: 0 }]);
+    expect(t.count).toBe(1);
+  });
+
+  it("survives a payload that is not an array", () => {
+    expect(blogTagsToCloudTags(null)).toEqual([]);
+    expect(blogTagsToCloudTags(undefined)).toEqual([]);
+    expect(blogTagsToCloudTags({ tags: [] })).toEqual([]);
+  });
+});
+
+describe("a real blog tag survives the round trip into a link", () => {
+  it("builds a filter a multi-word tag actually matches", () => {
+    const [tag] = blogTagsToCloudTags([{ tag: "Delray Beach Open", postCount: 3 }]);
+    const href = tagHref(tag.slug, { filterParam: "tag", targetPageUrl: "" });
+    // What the browser will hand back to the blog list after decoding.
+    const value = new URLSearchParams(href.replace(/^\?/, "")).get("tag");
+    expect(value).toBe("Delray Beach Open");
   });
 });

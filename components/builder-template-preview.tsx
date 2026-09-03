@@ -45,6 +45,7 @@ import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import {
   type CloudTag,
   PLACEHOLDER_TAGS,
+  blogTagsToCloudTags,
   activeTagSlug,
   maxTagCount,
   parseCloudTags,
@@ -2294,7 +2295,7 @@ function BuilderModulePreview({
     return <BlogCategoryFilterPreview settings={module.settings} />;
   }
   if (module.type === "blog-tag-cloud") {
-    return <BlogTagCloudPreview settings={module.settings} />;
+    return <BlogTagCloudPreview settings={module.settings} projectId={projectId} liveSite={liveSite} />;
   }
   if (module.type === "blog-post-tags") {
     return <BlogPostTagsPreview settings={module.settings} />;
@@ -7298,10 +7299,61 @@ function BlogCategoryFilterPreview({ settings }: { settings: Record<string, stri
  * lib/builder-client/blog-tag-cloud.ts now and the canvas card reads the same
  * ones, so the two cannot drift apart again.
  */
-function BlogTagCloudPreview({ settings }: { settings: Record<string, string> }) {
+function BlogTagCloudPreview({
+  settings,
+  projectId: projectIdProp = "",
+  liveSite = false,
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+  liveSite?: boolean;
+}) {
   const resolved = resolveTagCloudSettings(settings);
   const configured = parseCloudTags(settings);
-  const tags = configured.length ? configured : PLACEHOLDER_TAGS;
+
+  /*
+   * In `auto` the cloud shows the tenant's real BLOG tags — the same derived
+   * list the Blog Links manager shows, from `/api/blog/tags`, which already
+   * returns a post count per tag ordered busiest first. Not
+   * `/api/messaging/tags`: that is a different feature's table, and pointing a
+   * blog widget at it is what put "Add tags in the Messaging section" on a
+   * public page.
+   */
+  const headers = useMemo(() => getCrmProjectHeaders(projectIdProp), [projectIdProp]);
+  const [autoTags, setAutoTags] = useState<CloudTag[] | null>(null);
+
+  useEffect(() => {
+    if (resolved.source !== "auto") return;
+    let cancelled = false;
+    const projectId = headers["X-Project-ID"] || "";
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    fetch(`/api/blog/tags${qs}`, { credentials: "include", headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        setAutoTags(blogTagsToCloudTags(d?.tags ?? d?.data ?? []));
+      })
+      .catch(() => { if (!cancelled) setAutoTags([]); });
+    return () => { cancelled = true; };
+  }, [resolved.source, headers]);
+
+  const sourced = resolved.source === "auto" ? autoTags : configured;
+
+  /*
+   * PLACEHOLDERS ARE A BUILDER AFFORDANCE, NOT CONTENT.
+   *
+   * The old line here was `configured.length ? configured : PLACEHOLDER_TAGS`,
+   * so a real tenant's blog advertised "react / typescript / design /
+   * tutorial" to its visitors (operator report, 2026-09-03). They exist so the
+   * module is not an empty box while somebody designs the page; on a live
+   * site, no tags means the module renders nothing.
+   */
+  const tags = sourced && sourced.length ? sourced : liveSite ? [] : PLACEHOLDER_TAGS;
+
+  // `auto` has not answered yet, or answered with nothing. Either way a live
+  // page shows no widget rather than a heading over an empty space.
+  if (liveSite && tags.length === 0) return null;
+
   const maxCount = maxTagCount(tags);
   const currentSlug = activeTagSlug(
     typeof window === "undefined" ? "" : window.location.search,
@@ -11632,6 +11684,14 @@ function AdminBlogLinksPreview({
   const relateLabel    = settings.relateButtonLabel || "Relate Checked";
   const articleStatus  = settings.articleStatus || "all";
   const accent         = settings.accentColor || "#0f4f8f";
+  /*
+   * Where a post in the "posts with this tag" popup opens. The default is the
+   * slug the admin scaffold gives every tenant's Blog Manager
+   * (lib/projectAdminScaffold.js), so it is a convention rather than a guess —
+   * the setting exists for a tenant who renamed that page.
+   */
+  const managerPageUrl = (settings.managerPageUrl || "/admin-blog-manager").trim();
+  const postViewUrl    = (settings.postViewUrl || "/blog-post-view").trim();
 
   const [terms, setTerms]       = useState<BlogLinkTerm[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
@@ -11648,6 +11708,18 @@ function AdminBlogLinksPreview({
   /** The tag being renamed, and the box holding the new name. */
   const [editTag, setEditTag]   = useState<string | null>(null);
   const [tagDraft, setTagDraft] = useState("");
+
+  /*
+   * The "which posts carry this tag?" popup. `postsTag` is the open/closed
+   * state AND the heading, so there is never a modal with no tag behind it.
+   * The error is kept separate from the list because an empty list and a
+   * failed load must not render the same — "this tag has no posts" would be a
+   * lie told by a dropped request.
+   */
+  const [postsTag, setPostsTag] = useState<string | null>(null);
+  const [tagPosts, setTagPosts] = useState<BlogLinkArticle[]>([]);
+  const [tagPostsLoading, setTagPostsLoading] = useState(false);
+  const [tagPostsError, setTagPostsError] = useState("");
 
   /*
    * MEMOISED, and it has to be. getCrmProjectHeaders() builds a fresh object
@@ -11679,6 +11751,53 @@ function AdminBlogLinksPreview({
     if (!r.ok) throw new Error(readApiErrorMessage(d, `Request failed (${r.status})`));
     return d;
   }, [headers, isPreview]);
+
+  /*
+   * Open the popup for one tag and load its posts. The same endpoint the
+   * relate picker below already uses — a tag's posts are a read the server
+   * has always been able to answer.
+   */
+  const openTagPosts = useCallback(async (tag: string) => {
+    setPostsTag(tag);
+    setTagPosts([]);
+    setTagPostsError("");
+    setTagPostsLoading(true);
+    try {
+      const q = projectQuery();
+      const d = await api(`/api/blog/tags/posts?tag=${encodeURIComponent(tag)}${q ? `&${q}` : ""}`);
+      const rows = (d?.posts ?? d?.data ?? []) as Array<Record<string, unknown>>;
+      setTagPosts((Array.isArray(rows) ? rows : []).map((row) => ({
+        id: String(row.id || ""),
+        title: String(row.title || "(untitled)"),
+        slug: String(row.slug || ""),
+        status: String(row.status || ""),
+      })));
+    } catch (e) {
+      // Never fall through to an empty list: that reads as "no posts".
+      setTagPostsError((e as Error).message || "Could not load the posts for this tag.");
+    } finally {
+      setTagPostsLoading(false);
+    }
+  }, [api, projectQuery]);
+
+  const closeTagPosts = useCallback(() => {
+    setPostsTag(null);
+    setTagPosts([]);
+    setTagPostsError("");
+  }, []);
+
+  /*
+   * Escape closes it. This is a document listener rather than onKeyDown on the
+   * dialog: a key handler on the element only fires when focus is already
+   * inside it, and the popup opens from a click on the count, which leaves
+   * focus on the button outside.
+   */
+  useEffect(() => {
+    if (postsTag === null) return undefined;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeTagPosts(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [postsTag, closeTagPosts]);
 
   /** Reload both taxonomies. Called after every write, so counts stay true. */
   const loadTerms = useCallback(async () => {
@@ -11933,7 +12052,25 @@ function AdminBlogLinksPreview({
                   <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c", overflowWrap: "anywhere" }}>
                     {term.label}
                   </span>
-                  <span style={{ fontSize: "0.8125rem", color: "#94a3b8", textAlign: "right" }}>{term.postCount}</span>
+                  {/* The count is the affordance: it opens the list of posts
+                      carrying this tag. A tag with no posts is not a button —
+                      a control that opens an empty box is worse than a number. */}
+                  <span style={{ fontSize: "0.8125rem", textAlign: "right" }}>
+                    {term.postCount > 0 ? (
+                      <button
+                        type="button"
+                        className="admin-blog-links-count-btn"
+                        onClick={() => void openTagPosts(term.label)}
+                        title={`Show the ${term.postCount} post${term.postCount === 1 ? "" : "s"} tagged "${term.label}"`}
+                        style={{
+                          background: "none", border: "none", padding: 0, cursor: "pointer",
+                          font: "inherit", color: accent, textDecoration: "underline",
+                        }}
+                      >{term.postCount}</button>
+                    ) : (
+                      <span style={{ color: "#94a3b8" }}>{term.postCount}</span>
+                    )}
+                  </span>
                   <span style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "flex-end" }}>
                     <button
                       type="button"
@@ -12112,6 +12249,94 @@ function AdminBlogLinksPreview({
             </>
           )}
         </section>
+      )}
+
+      {/*
+        The posts carrying one tag. Portalled to <body> through
+        BuilderBodyPortal for the reason that component documents, and for a
+        second one specific to this module: it renders inside ARBITRARY tenant
+        themes, where a site rule has already blown one of this panel's own
+        controls out to 1056px (docs/BLOG_LINKS_MANAGER.md). A popup left
+        inside the tenant's container inherits whatever that theme does to
+        positioned children.
+      */}
+      {postsTag !== null && (
+        <BuilderBodyPortal>
+          <div
+            className="admin-blog-links-posts-overlay"
+            onClick={closeTagPosts}
+            role="presentation"
+          >
+            <div
+              aria-label={`Posts tagged ${postsTag}`}
+              aria-modal="true"
+              className="admin-blog-links-posts-modal"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+            >
+              <div className="admin-blog-links-posts-header">
+                {/* The tag is the content here too — it wraps, never clips. */}
+                <strong style={{ overflowWrap: "anywhere" }}>Posts tagged “{postsTag}”</strong>
+                <button
+                  type="button"
+                  className="admin-blog-links-posts-close"
+                  onClick={closeTagPosts}
+                  aria-label="Close"
+                >✕</button>
+              </div>
+
+              <div className="admin-blog-links-posts-body">
+                {tagPostsLoading ? (
+                  <p className="admin-blog-links-posts-empty">Loading…</p>
+                ) : tagPostsError ? (
+                  /* An error is NOT an empty list. Saying "no posts" here
+                     would be a lie told by a dropped request. */
+                  <p className="admin-blog-links-posts-error" role="alert">{tagPostsError}</p>
+                ) : tagPosts.length === 0 ? (
+                  <p className="admin-blog-links-posts-empty">No posts carry this tag.</p>
+                ) : (
+                  tagPosts.map((post) => {
+                    const editHref = `${managerPageUrl}${managerPageUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(post.id)}`;
+                    const viewHref = post.slug
+                      ? `${postViewUrl}${postViewUrl.includes("?") ? "&" : "?"}post=${encodeURIComponent(post.slug)}`
+                      : "";
+                    return (
+                      <div className="admin-blog-links-posts-row" key={post.id}>
+                        <span className="admin-blog-links-posts-title" style={{ overflowWrap: "anywhere" }}>
+                          {post.title}
+                          {post.status && post.status !== "published" && (
+                            <span className="admin-blog-links-posts-status">{post.status}</span>
+                          )}
+                        </span>
+                        {/* The same two controls the Blog Manager's own rows
+                            use, in the same order — not a third convention. */}
+                        <span className="admin-blog-links-posts-actions">
+                          <AdminTableIconButton
+                            icon="view"
+                            label="View"
+                            href={viewHref || undefined}
+                            linkTarget="_blank"
+                            disabled={!viewHref}
+                            onClick={!viewHref ? () => {} : undefined}
+                          />
+                          <AdminTableIconButton
+                            icon="edit"
+                            label="Edit"
+                            href={editHref}
+                          />
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="admin-blog-links-posts-footer">
+                <button type="button" className="admin-blog-links-posts-btn" onClick={closeTagPosts}>Close</button>
+              </div>
+            </div>
+          </div>
+        </BuilderBodyPortal>
       )}
     </div>
   );
