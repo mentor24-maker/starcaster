@@ -2431,6 +2431,13 @@ function resolveBlogPostManagerSettings(settings: Record<string, string>): Recor
   return resolved;
 }
 
+/*
+ * The <option> value standing in for "the URL named a category that does not
+ * exist". It cannot be "" (that is All Categories) and it cannot be a category
+ * id, so it is a value no id can collide with.
+ */
+const UNMATCHED_FILTER_VALUE = "__starcaster_unmatched_filter__";
+
 function BlogPostListPreview({ settings }: { settings: Record<string, string> }) {
   const [allPosts, setAllPosts] = useState<BlogPostRecord[]>([]);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
@@ -2440,6 +2447,16 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   // User filter state
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("");
+  /*
+   * A ?category= slug that matches no category is held HERE rather than in
+   * catFilter, which carries a category id. Before task 86bbuk7xz an unknown
+   * slug was dropped on the floor: catFilter stayed "" and the page showed
+   * every post, as though the visitor had asked for no filter at all. An
+   * unknown ?tag= failed the opposite way (nothing at all). One of those two
+   * has to be wrong; this makes both of them say "no posts", and say which
+   * value they mean.
+   */
+  const [missingCatSlug, setMissingCatSlug] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [authorFilter, setAuthorFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -2500,6 +2517,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
         if (urlCatSlug) {
           const match = fetchedCats.find((c) => c.slug === urlCatSlug);
           if (match) setCatFilter(match.id);
+          else setMissingCatSlug(urlCatSlug);
         }
         const urlTag = params.get("tag") ?? "";
         if (urlTag) setTagFilter(urlTag);
@@ -2509,9 +2527,27 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   }, []);
 
   const allTags = useMemo(
-    () => [...new Set(allPosts.flatMap((p) => p.tags || []))].filter(Boolean).sort(),
+    () =>
+      [...new Set(allPosts.flatMap((p) => p.tags || []))]
+        .filter(Boolean)
+        // Plain .sort() is codepoint order, which files every capitalised tag
+        // ("ATP tennis", "US Open") above every lowercase one. A reader looking
+        // for a tag alphabetically does not know its capitalisation.
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
     [allPosts]
   );
+  /*
+   * The tag the URL asked for is always an option, even when no post carries
+   * it. A <select> whose value matches none of its options displays the FIRST
+   * one, so ?tag=junior%20tennis used to read "All Tags" over an empty page —
+   * the control flatly contradicting the filter it was applying.
+   */
+  const tagOptions = useMemo(() => {
+    if (!tagFilter || allTags.includes(tagFilter)) return allTags;
+    return [...allTags, tagFilter].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [allTags, tagFilter]);
   const allAuthors = useMemo(
     () => [...new Set(allPosts.map((p) => p.author).filter((a): a is string => Boolean(a)))].sort(),
     [allPosts]
@@ -2521,6 +2557,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
     const q = search.trim().toLowerCase();
     return allPosts.filter((post) => {
       if (q && !`${post.title} ${post.excerpt || ""}`.toLowerCase().includes(q)) return false;
+      if (missingCatSlug) return false;
       if (catFilter && !post.categoryIds?.includes(catFilter)) return false;
       if (tagFilter && !post.tags?.includes(tagFilter)) return false;
       if (authorFilter && post.author !== authorFilter) return false;
@@ -2528,10 +2565,34 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
       if (dateTo && (!post.published_at || new Date(post.published_at) > new Date(dateTo + "T23:59:59"))) return false;
       return true;
     });
-  }, [allPosts, search, catFilter, tagFilter, authorFilter, dateFrom, dateTo]);
+  }, [allPosts, search, catFilter, missingCatSlug, tagFilter, authorFilter, dateFrom, dateTo]);
 
   const visiblePosts = filteredPosts.slice(0, postsPerPage);
-  const hasActiveFilter = search || catFilter || tagFilter || authorFilter || dateFrom || dateTo;
+  const hasActiveFilter =
+    search || catFilter || missingCatSlug || tagFilter || authorFilter || dateFrom || dateTo;
+
+  function clearFilters() {
+    setSearch("");
+    setCatFilter("");
+    setMissingCatSlug("");
+    setTagFilter("");
+    setAuthorFilter("");
+    setDateFrom("");
+    setDateTo("");
+  }
+
+  const activeCategoryName =
+    missingCatSlug || categories.find((c) => c.id === catFilter)?.name || "";
+  /*
+   * "No posts match your filters" cannot tell a tag that does not exist from a
+   * parameter that did nothing — which is exactly how a working page read as a
+   * broken one on 2026-09-03. Name the value that emptied the page.
+   */
+  const emptyFilteredMessage = tagFilter
+    ? `No posts tagged \u201c${tagFilter}\u201d.`
+    : activeCategoryName
+      ? `No posts in the category \u201c${activeCategoryName}\u201d.`
+      : "No posts match your filters.";
 
   if (loading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
@@ -2576,16 +2637,22 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
               style={{ ...inputStyle, flex: "1 1 180px", minWidth: 140 }}
             />
           ) : null}
-          {showCategoryFilter && categories.length > 0 ? (
-            <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
+          {showCategoryFilter && (categories.length > 0 || missingCatSlug) ? (
+            <select
+              value={missingCatSlug ? UNMATCHED_FILTER_VALUE : catFilter}
+              onChange={(e) => { setMissingCatSlug(""); setCatFilter(e.target.value === UNMATCHED_FILTER_VALUE ? "" : e.target.value); }}
+              style={{ ...inputStyle, cursor: "pointer" }}
+            >
               <option value="">All Categories</option>
+              {/* The slug the URL asked for, when no category answers to it. */}
+              {missingCatSlug ? <option value={UNMATCHED_FILTER_VALUE}>{missingCatSlug}</option> : null}
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           ) : null}
-          {showTagFilter && allTags.length > 0 ? (
+          {showTagFilter && tagOptions.length > 0 ? (
             <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
               <option value="">All Tags</option>
-              {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
+              {tagOptions.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           ) : null}
           {showAuthorFilter && allAuthors.length > 0 ? (
@@ -2604,7 +2671,7 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
           {hasActiveFilter ? (
             <button
               type="button"
-              onClick={() => { setSearch(""); setCatFilter(""); setTagFilter(""); setAuthorFilter(""); setDateFrom(""); setDateTo(""); }}
+              onClick={clearFilters}
               style={{ ...inputStyle, color: "#718096", cursor: "pointer", background: "#fff" }}
             >
               Clear
@@ -2620,9 +2687,22 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
 
       {visiblePosts.length === 0 ? (
         <div style={{ padding: "2rem", textAlign: "center", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
-          {allPosts.length === 0
-            ? "No published posts yet. Use the Create Post module to add your first post."
-            : "No posts match your filters."}
+          {allPosts.length === 0 ? (
+            "No published posts yet. Use the Create Post module to add your first post."
+          ) : (
+            <>
+              <div>{emptyFilteredMessage}</div>
+              {hasActiveFilter ? (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  style={{ ...inputStyle, marginTop: "0.875rem", color: "#4a5568", cursor: "pointer", background: "#fff" }}
+                >
+                  Show all posts
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
       ) : (
         <div style={gridStyle}>
