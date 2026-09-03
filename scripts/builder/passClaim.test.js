@@ -176,25 +176,22 @@ test('the reconcile reuses the sweep\'s destination rule and its note', () => {
 });
 
 test('the skill runs the reconcile FIRST and states the invariant', () => {
+  // Since task 86bbtujen the reconcile is the second gate of the PREFLIGHT
+  // table rather than a prose step — same order (before the pause: repairing
+  // is not claiming), now unreorderable by a summary. The skill keeps two
+  // duties: run the one command, and REPORT a hand-back, because that line is
+  // the only evidence anywhere that a previous pass dropped its ticket.
+  const preflight = require('./preflight.js');
+  const ids = preflight.GATES['loop-build'].map((g) => g.id);
+  assert.ok(ids.indexOf('reconcile') !== -1, 'the build preflight runs the reconcile');
+  assert.ok(ids.indexOf('reconcile') < ids.indexOf('pause'), 'before the pause — repairing is not claiming');
+  const rec = preflight.GATES['loop-build'][ids.indexOf('reconcile')];
+  assert.deepEqual([...rec.npmArgs], ['clickup', '--', 'pass-reconcile'], 'calling the real command');
+
   const skill = read('.claude/skills/loop-build/SKILL.md');
-  assert.match(skill, /npm run clickup -- pass-reconcile/, 'the step exists');
-  assert.match(skill, /claim --task <id> --pass loop-build/, 'and the claim arms the marker');
+  assert.match(skill, /npm run preflight -- loop-build/, 'the step exists as the one command');
+  assert.match(skill, /DROPPED\s+its ticket, put that in your report/, 'and the report duty survives the collapse');
+  assert.match(skill, /claim --task <id> --pass loop-build/, 'the claim still arms the marker');
   assert.match(skill, /A PASS MAY NOT END WITH ITS TICKET STILL IN `Building`/, 'the invariant is stated');
   assert.match(skill, /YOU CANNOT PROMISE TO COME BACK/, 'and the shape that broke it is named');
-  // Before the claim, or it repairs nothing. Anchored on the SECTION, not on
-  // the first mention of the command — the command also appears in the
-  // reference list further down, which satisfied a naive ordering check even
-  // with the step itself deleted. (Break-testing found that; the assertion
-  // could not fail.)
-  const step = skill.indexOf('## Then: did the last pass finish what it started?');
-  const deck = skill.indexOf('## Then: has the operator taken the deck?');
-  assert.ok(step > 0, 'the reconcile has a step of its own, not just a mention');
-  assert.ok(step < deck, 'and it runs before the rest of the pass');
-  assert.match(skill.slice(step, deck), /npm run clickup -- pass-reconcile/,
-    'that step actually runs the command');
-  // All four outcomes are spelled out, or a pass will report a repair as
-  // nothing having happened.
-  for (const code of ['exit 0', 'exit 3', 'exit 2', 'exit 1']) {
-    assert.match(skill.slice(step, deck), new RegExp(`\\*\\*${code}\\*\\*`), `${code} is explained`);
-  }
 });
