@@ -24,6 +24,7 @@ const { stageCampaignVideoForBuffer } = require('../lib/bufferVideoStaging');
 const metaClients = require('../lib/metaClients');
 const metaOAuth = require('../lib/metaOAuth');
 const connectionsRegistry = require('../lib/connections/registry');
+const { storeAccounts } = require('../lib/connections/completeConnection');
 const { verifyOAuthState } = require('../lib/metaOAuthState');
 const projectSocialCredentialsStore = require('../lib/projectSocialCredentialsStore');
 const { getAppPublicOrigin } = require('../lib/appOrigin');
@@ -1545,6 +1546,100 @@ function settingsOAuthReturnUrl(origin, params = {}) {
   return qs ? `${base}&${qs}` : base;
 }
 
+/**
+ * Where the browser lands after a CONNECTIONS-screen sign-in, as opposed to the
+ * operator's own APIs page above. Connections 5 of 7 (86bbpz1gk).
+ *
+ * A different screen because it is a different person doing a different job:
+ * `settingsApisPage` is where Dane pastes platform keys, and a client who
+ * pressed Connect on the Connections screen must come back to the Connections
+ * screen or the round trip visibly loses them.
+ *
+ * The panel re-reads GET /api/connections when it mounts, so a connection that
+ * succeeded is already on the card by the time this lands — nothing has to be
+ * passed through the URL for the happy path. The parameters are carried for a
+ * REFUSAL, which the card cannot know about because nothing was stored: they
+ * are what a follow-up slice renders. Naming them generically
+ * (`connect_*`, never `ig_*`) is deliberate — the next redirect platform
+ * inherits them instead of adding a third set.
+ */
+function connectionsReturnUrl(origin, params = {}) {
+  const base = `${String(origin || '').replace(/\/+$/, '')}/#page=settingsConnectionsPage`;
+  const query = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    const text = safeText(value);
+    if (text) query.set(key, text);
+  });
+  const qs = query.toString();
+  return qs ? `${base}&${qs}` : base;
+}
+
+/**
+ * Finish a Connections-screen sign-in for a provider that is NOT the legacy
+ * Facebook Page flow. Connections 5 of 7 (86bbpz1gk).
+ *
+ * Meta registers ONE redirect_uri for this app — the Facebook callback below —
+ * so Instagram, which is the same Meta grant with two more scopes, comes back
+ * through that same URL. The signed state says which adapter asked
+ * (lib/metaOAuthState.js), and this is what it dispatches to.
+ *
+ * It has to complete the connection here rather than bounce the code back to
+ * the panel, because an OAuth code can be exchanged exactly once: handing it to
+ * the browser to POST at /finish would spend it on the trip and fail with a
+ * Meta error naming none of this.
+ *
+ * The storing itself is lib/connections/completeConnection.js — the same code
+ * path POST /api/connections/:provider/finish uses, not a second copy of it.
+ */
+async function completeConnectionsOAuth({ provider, code, redirectUri, scope, origin, res }) {
+  const entry = connectionsRegistry.getEntry(provider);
+  const adapterRes = connectionsRegistry.getAdapter(provider);
+  const displayName = entry?.displayName || provider;
+  if (!adapterRes.ok) {
+    return sendRedirect(res, connectionsReturnUrl(origin, {
+      connect_oauth: 'error',
+      connect_provider: provider,
+      connect_error: adapterRes.error,
+    }));
+  }
+
+  const exchanged = await adapterRes.data.exchange({ code, redirectUri });
+  if (!exchanged.ok) {
+    // The adapter's own sentence, verbatim. For Instagram this is the whole
+    // point of the slice: a personal account or an unlinked one produces plain
+    // English naming what to change, and passing it through unedited is what
+    // stops it becoming "OAuthException" again by the time it reaches a client.
+    return sendRedirect(res, connectionsReturnUrl(origin, {
+      connect_oauth: 'error',
+      connect_provider: provider,
+      connect_error: exchanged.error || `${displayName} refused the connection`,
+      connect_code: exchanged.code || '',
+    }));
+  }
+
+  const stored = await storeAccounts({
+    provider,
+    displayName,
+    accounts: exchanged.data?.accounts,
+    scope,
+  });
+  if (!stored.ok) {
+    return sendRedirect(res, connectionsReturnUrl(origin, {
+      connect_oauth: 'error',
+      connect_provider: provider,
+      connect_error: stored.error,
+      connect_code: stored.code || '',
+    }));
+  }
+
+  return sendRedirect(res, connectionsReturnUrl(origin, {
+    connect_oauth: 'connected',
+    connect_provider: provider,
+    connect_account: stored.data.activeAccountId,
+    connect_choose: stored.data.needsAccountChoice ? '1' : '',
+  }));
+}
+
 async function markFacebookPageConnectedGates(scope) {
   try {
     await connectionOpsStore.updateGate('facebook', 'saved_credentials', true, scope);
@@ -1991,6 +2086,32 @@ async function handle(req, res, pathname, method) {
         fb_oauth: 'error',
         fb_error: 'Missing OAuth code',
       })), true;
+    }
+
+    /**
+     * WHOSE sign-in is this? Connections 5 of 7 (86bbpz1gk).
+     *
+     * Meta accepts only redirect_uris registered with the app, and this URL is
+     * the one that is — so Instagram, which is the same Meta grant asked for
+     * two more scopes, arrives here too. The signed state is the only thing
+     * that survives the round trip and cannot be tampered with, so it carries
+     * the answer (lib/metaOAuthState.js).
+     *
+     * Everything BELOW this block is the Facebook Page flow exactly as it has
+     * always been: a state with no provider defaults to `facebook_page`, so the
+     * working production path is byte-identical and a client part-way through
+     * connecting when this deploys still lands where they expect.
+     */
+    const statedProvider = safeText(stateRes.data.provider) || 'facebook_page';
+    if (statedProvider !== 'facebook_page') {
+      return await completeConnectionsOAuth({
+        provider: statedProvider,
+        code,
+        redirectUri,
+        scope: { projectId: stateRes.data.projectId, userId: stateRes.data.userId },
+        origin,
+        res,
+      }), true;
     }
 
     const exchange = await callbackAdapter.exchange({ code, redirectUri });

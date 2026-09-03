@@ -189,6 +189,21 @@ asset endpoints a tenant admin may reach and why the line sits there, and seven
 traps — including the one that produced DOCTRINE §5.20 (`/api/assets/:id` takes
 PATCH and DELETE; a PUT falls through unmatched and silently does nothing).
 
+## Blog Links Manager — read `docs/BLOG_LINKS_MANAGER.md` first
+
+The `admin-blog-links` module: blog taxonomy plus hand-picked related
+articles. Read it before touching blog tags or categories, because the three
+words do not map onto three things — categories are a real table, **tags are a
+`text[]` on each post** (so the list is derived and a rename rewrites posts),
+and **topics do not exist in the blog at all**.
+
+It also carries the two traps that only a browser found: this module renders
+inside ARBITRARY tenant themes, where a semantic `<header>` inherits the site's
+header styling and a theme's `input { width: 100% }` blew a checkbox out to
+1056px and starved the title beside it to zero width. And the pre-existing
+join-table probe bug it fixed, which had silently stopped blog post/category
+links persisting in production.
+
 ## Saved sections — read `docs/SAVED_SECTIONS.md` first
 
 `savedSectionId` and `canonical` are two different questions ("where did this

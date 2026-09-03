@@ -27,6 +27,178 @@ becomes a video row rebuilt the overlay from a hand-written list of its parts,
 which meant it quietly dropped the new Blend setting the moment that setting
 existed. A test caught it. It now copies the whole overlay across instead, so
 the next setting added will not hit the same trap.
+## 2026-08-29 — The Tractor Nav settings panel is one rectangle again (#447)
+
+Open the settings for a Tractor Nav module and look down the Placement column.
+The dropdown at the top ran the full width of the column; the three boxes under
+it — Position X, Position Y, Z-Index — stopped about 74 pixels early. The column
+read as a rectangle with a bite out of its right side.
+
+The cause was a width written onto those three boxes by hand, back when someone
+decided nine characters was about right. That is the one thing the panel rules
+forbid outright: widths are supposed to come from the column so that every row
+in it agrees. So the fix was a deletion — take the hand-written width out and
+the shared rule sizes them, the way it already sizes everything around them.
+
+The four slider rows had the same problem a size smaller. A slider is a track
+plus a small number beside it, and the number sized itself to its own text, so
+"80%" and "200ms" in the same column ended three pixels apart. Three pixels is
+small enough to look like nothing and is still the thing the eye reads as
+unfinished. The number now gets a fixed slot and the slider stretches into
+whatever is left, so the rows end on the same line at any panel width.
+
+One thing found on the way that is worth writing down: the automatic panel
+checker could not see this bug, and reported a clean pass on it. It measures the
+slot a control sits in rather than the control itself, and all three short boxes
+sat in correctly sized slots. Measuring the real page instead turned up 25 rows
+across six panels with the same shape of defect; four were this panel and the
+rest belong to later tickets in the same sweep. Teaching the checker to look
+inside the slot would fail those panels today, so it is written down here and on
+the ticket rather than done in this change.
+
+## 2026-09-02 — The alarm that watches the queue could go blind and say nothing (#535)
+
+Two days ago we added a check that asks the one question nothing else asked:
+*is the queue actually getting shorter?* It exists because on 31 August the
+build loop ran every hour, finished cleanly every time, and shipped nothing —
+a cheerful log that read as health. A review of that new check found six ways
+the check itself could go quiet. Four are fixed here.
+
+The worst of them: the check has four possible answers, and one of them is "I
+could not take a reading." That answer went to a log file nobody opens. So if
+the ClickUp password were ever rotated, the alarm would simply be dead —
+forever, silently, while every other job on the board still looked fine. It
+now says so on the party line, with the reason, at most once every six hours,
+and shuts up as soon as it can see again.
+
+It was also making its own trouble worse. It is meant to check once an hour,
+but it only wrote down "I checked" when the check *succeeded*. So the one time
+it most needed to back off — ClickUp saying "too many requests" — it went
+straight back six times an hour instead, keeping itself broken. It now starts
+the clock when it tries.
+
+The other two were wrong sentences rather than silence. It could announce
+"the loops ARE firing, so the problem is elsewhere" on evidence that only
+showed *somebody edited a ticket* — which could be Dane leaving a comment.
+That is exactly the sentence that sends you hunting in the wrong place. And a
+day where everything shipped could be reported as a stall, because a handful
+of tickets finish without a closure date on them and the count could not see
+those. It now says "I am not sure" instead of accusing the pipeline, and only
+when such a ticket was touched in the last day, so the alarm still fires for
+real stalls. Measured against the live queue: the one ticket in that state was
+last touched 36 days ago, so nothing is switched off by this.
+
+Every fix was broken on purpose afterwards and watched to fail, which is the
+only way to know a test for a monitor is a real test.
+
+Review sent this back once, and caught something worth having. The new
+"I could not take a reading" message was being used for two quite different
+situations, and it only described one of them. On the other — the day where a
+ticket finished without a closure date — the reading had actually worked
+perfectly, every number was there, and the fix was one missing field on one
+ticket. The message nevertheless announced that the check had gone blind and
+told the reader to go and find out whether ClickUp was reachable at all. That
+is the same fault this whole ticket is about, arriving through the fix for it:
+a message saying something its own evidence does not support, in the direction
+that wastes the most of the reader's morning. There are two messages now. The
+second one names the ticket to go and fix, and carries the queue numbers with
+it, because a real stall can happen on that day too and used to arrive stripped
+of everything that made it worth acting on.
+
+Review sent it back a second time, on the same theme once more. Having split
+that message in two, we were still using one "already said this recently" note
+for both of them — and the whole point of that note is to stop the same alarm
+repeating every ten minutes for six hours. So the two alarms could gag each
+other. The likelier direction was the bad one: there is a real ticket in the
+Live column that is never going to grow a closure date, so the gentler message
+("one field needs filling in") would tend to fire first, and could then silence
+the serious one ("nothing is watching whether the queue is getting shorter")
+for six hours. Each alarm now keeps its own note. Driven for real: with the
+gentle one just fired, the serious one still gets through — and with the old
+shared note put back, it vanishes, which is what the defect looked like.
+
+Review sent it back a third time, on the same theme a third time — a second
+road to the same silence. Giving each alarm its own note fixed the case where
+both of them fire. It left the case where one of them simply stops applying.
+The note that says *I could not read the queue* was only being torn up at the
+very end of a completely clean run, and the gentle alarm finishes early, before
+that point. So: ClickUp goes down at nine and the serious alarm fires; at ten
+ClickUp answers fine and the gentle alarm fires — which is itself proof the
+queue can be read again; at eleven ClickUp goes down once more and the serious
+alarm is swallowed until three in the afternoon, on the strength of a note that
+ten o'clock should already have torn up. Now the moment the queue is read at
+all, that note goes, before any of the later exits. The reverse is deliberately
+*not* true, and the code says so where somebody would be tempted to tidy it: a
+run that could not read the queue proves nothing about whether some ticket has
+grown a closure date, so it leaves the gentle alarm's note exactly where it is.
+
+Two smaller things. A verdict of "I cannot tell" was being treated as an
+all-clear for the stall alarm on one of its two paths, quietly re-arming an
+alert that had already been sent; it now leaves that alarm exactly as it found
+it, because not being able to tell is not the same as recovering, and the note
+expires on its own after six hours either way. And the command cheat-sheet at
+the top of the repo still said this check "posts if it has STALLED" — the
+prose ten lines below it had been corrected, but not the one line anybody
+skimming for the command actually reads. That line now has a test on it, so it
+cannot drift back.
+## 2026-09-02 — Instagram connects itself, and says why when it cannot (#545)
+
+Instagram is now a real card on the Connections screen rather than a greyed
+"coming soon" one, so a client can hook up their own account without Dane
+pasting a token into Vercel for them. It rides the same Facebook sign-in the
+Facebook Page card already uses — it is one consent screen, asked for two more
+permissions — so the connecting part was the easy half.
+
+The hard half, and most of this work, is the two checks that run before
+anything is saved. Instagram will not let *any* app post to a personal
+account, and every Instagram post an app can make physically travels out
+through a Facebook Page. Break either rule and Meta's own answer is a code
+like `OAuthException` with a number after it, or — far more often — a
+perfectly cheerful "success" that just never mentions Instagram at all. A
+client reading either of those has no idea what went wrong. So both cases now
+stop the connection dead and say, in English, what to change and which screen
+to change it on: "This Instagram account is a personal account. Instagram only
+allows posting to Business or Creator accounts. Change it in the Instagram app
+under Settings, Account type and tools, then try again."
+
+Telling those two apart turned out to hinge on one detail. Facebook reports a
+Page's linked Instagram account under two different names: one that appears
+only for Business and Creator accounts, and one that appears for any account
+at all. Ask for only the first — which is where Meta's own instructions send
+you — and "your account is the wrong type" and "you have not linked anything"
+look exactly the same, so there is no honest way to tell someone which of two
+quite different things to go and fix. Asking for both is the whole trick.
+
+One nicety worth knowing: the card shows the Instagram handle, `@delraytennis`,
+not the name of the Facebook Page the post travels through. Clients recognise
+the first and do not recognise the second.
+
+Review sent this back once, and the catch was a good one. If a client's
+Facebook account covers two Pages and they only gave us posting permission on
+one of them, the second Page came back from Facebook with no key attached —
+and the code built a connection out of it anyway. What the client then saw was
+their good account blocked by their bad one, an error message with the word
+`accessToken` in it, and a card sitting there saying "connected" with nothing
+behind it. That is precisely the failure the whole ticket was written to
+prevent, arriving by a door nobody had checked. Now a Page with no key is
+recognised for what it is and skipped, the good account connects normally, and
+a client whose *only* Page is missing that permission is told exactly that
+rather than being told they do not have a Facebook Page at all. The saving step
+underneath was also changed to check every account before it writes any of
+them, so "all of it or none of it" is now how the code is shaped rather than
+something each new platform has to remember.
+
+Two things nobody was testing are now tested: that Facebook handing us back an
+Instagram sign-in reaches the Instagram code at all — the only route by which a
+real Instagram connection can ever be made — and that a Facebook sign-in still
+goes where it always did, which matters because there are clients on it today.
+
+The existing Facebook connection is untouched — deliberately, byte for byte.
+Facebook only accepts one return address for this app, so Instagram comes back
+through Facebook's, and the signed token that makes the round trip now says
+which of the two asked. A token issued before this went live does not say, and
+is treated as Facebook, so anyone half-way through connecting when it deployed
+still landed where they expected.
 
 ## 2026-09-02 — Gradients can point any direction now, not just diagonally (#540)
 
