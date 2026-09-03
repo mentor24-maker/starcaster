@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { BackgroundSettings } from "@/lib/builder-template";
 import {
   createDefaultTheme,
   resolveRenderTheme,
@@ -14,6 +15,10 @@ import {
   isPlainTextVariant,
   PLAIN_TEXT_VARIANT,
   prepareRichTextHtmlForStorage,
+  builderGradientAngle,
+  builderGradientAngleFromInput,
+  getBuilderBackgroundStyle,
+  normalizeBackgroundSettings,
   normalizeBuilderAssetUrl,
   normalizeBuilderDocument,
   normalizeBuilderModuleSettingsForType,
@@ -786,6 +791,83 @@ describe("finalizeBackgroundSettings", () => {
     });
     expect(cleared.mode).toBe("none");
     expect(cleared.color).toBe("#ffffff");
+  });
+});
+
+describe("gradient angle", () => {
+  const gradient = (extra: Record<string, unknown> = {}) =>
+    getBuilderBackgroundStyle({
+      ...normalizeBackgroundSettings({ mode: "gradient", color: "#ff0000", color2: "#0000ff" }),
+      ...extra
+    } as BackgroundSettings) ?? {};
+
+  it("still paints 135deg when no angle was ever saved", () => {
+    // The whole safety case for this feature: every gradient in the Builder
+    // ran at 135deg as a literal, so a stored background that predates the
+    // setting must render byte-identically.
+    expect(gradient().backgroundImage).toBe(
+      "linear-gradient(135deg, #ff0000 0%, #0000ff 100%)"
+    );
+  });
+
+  it("paints a saved angle instead", () => {
+    expect(gradient({ gradientAngle: 90 }).backgroundImage).toBe(
+      "linear-gradient(90deg, #ff0000 0%, #0000ff 100%)"
+    );
+  });
+
+  it("paints 0deg rather than treating it as absent", () => {
+    // 0 is a legitimate angle (bottom-to-top) and a falsy number. A `||`
+    // fallback anywhere on this path would silently turn it into 135.
+    expect(gradient({ gradientAngle: 0 }).backgroundImage).toBe(
+      "linear-gradient(0deg, #ff0000 0%, #0000ff 100%)"
+    );
+  });
+
+  it("falls back to 135 for every unreadable stored value", () => {
+    // Old rows and emptied panel boxes arrive as "", null and strings.
+    for (const stored of [undefined, null, "", "abc", Number.NaN]) {
+      expect(builderGradientAngle({ gradientAngle: stored })).toBe(135);
+    }
+  });
+
+  it("clamps a stored angle into 0-360", () => {
+    expect(builderGradientAngle({ gradientAngle: -40 })).toBe(0);
+    expect(builderGradientAngle({ gradientAngle: 900 })).toBe(360);
+  });
+
+  it("reads a numeric string, which is what a panel writes", () => {
+    expect(builderGradientAngle({ gradientAngle: "45" })).toBe(45);
+  });
+
+  it("normalizes an absent angle to the default rather than leaving it unset", () => {
+    expect(normalizeBackgroundSettings({ mode: "gradient" }).gradientAngle).toBe(135);
+  });
+
+  it("survives a normalize round trip, which is what Save Page does", () => {
+    const saved = normalizeBackgroundSettings({
+      mode: "gradient",
+      color: "#ff0000",
+      color2: "#0000ff",
+      gradientAngle: 90
+    });
+    expect(normalizeBackgroundSettings(saved).gradientAngle).toBe(90);
+  });
+
+  it("reports a half-typed keystroke as null so the stored angle is left alone", () => {
+    // An <input type="number"> reports "" for everything it cannot parse.
+    // Writing that to the setting is what makes a field eat its own backspace.
+    expect(builderGradientAngleFromInput("")).toBeNull();
+    expect(builderGradientAngleFromInput("  ")).toBeNull();
+    expect(builderGradientAngleFromInput("-")).toBeNull();
+    expect(builderGradientAngleFromInput("abc")).toBeNull();
+  });
+
+  it("reads a typed angle and clamps it", () => {
+    expect(builderGradientAngleFromInput("90")).toBe(90);
+    expect(builderGradientAngleFromInput("0")).toBe(0);
+    expect(builderGradientAngleFromInput("999")).toBe(360);
+    expect(builderGradientAngleFromInput("-5")).toBe(0);
   });
 });
 

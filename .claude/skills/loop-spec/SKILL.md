@@ -191,6 +191,38 @@ not a way around the format.
    `/loop 30m loop-build` — from wherever this session already is; the build
    loop makes its own worktree per task.
 
+## Evidence, or it is a question
+
+A **defect ticket must cite its mechanism**: the file and function (or line)
+of the code it claims is wrong, quoted — not the log line that prompted the
+suspicion. A log line is where a defect is NOTICED; the mechanism is where it
+IS, and the two disagree more often than anyone expects.
+
+WHY THIS IS A RULE AND NOT ADVICE (2026-09-02, task 86bbtujfj). Of five
+defect tickets filed that morning by the session with the most context on the
+system, **four had a materially wrong premise** — every one written from a
+log line before reading the code. One said four slots were dead when it was
+two and named the wrong counting mechanism entirely; one's core ask was
+reversed by reading the module it targeted; one's proposed fix was killed by
+measuring the thing it wanted to alarm on. Each needed a correction comment
+before building. The loops build unattended from exactly this text: a wrong
+premise in a description becomes a wrong build with nobody checking the
+reasoning.
+
+Two requirements, checked by the review loop on the other end:
+
+*   **Quote the mechanism.** An `EVIDENCE:` line (or section) naming
+    `file — function/line` and quoting the behaviour claimed. If you cannot
+    cite it, you have a suspicion, not a defect — **file it as a QUESTION**
+    (a ticket that asks, in its name, rather than asserts) and let the
+    builder's first step be reading the code.
+*   **A threshold or trade-off names its measurement.** "Alarm after N hours"
+    carries what N was measured against — or says plainly *"not measured"*,
+    which hands the measuring to the builder as the first acceptance
+    criterion. The 2026-09-02 recency-alarm ticket died precisely there: 189
+    real closures showed its proposed threshold firing on eleven nights in
+    fourteen.
+
 ## Guardrails
 
 - **Prefer low-risk tasks first** when ordering a new queue, so the loop earns

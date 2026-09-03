@@ -258,11 +258,33 @@ function parseColumn(definition) {
   // The type, plus any (length) or (precision, scale) after it. Multi-word
   // types are matched WHOLE — see matchDeclaredType for what stopping at the
   // first space cost.
-  const type = matchDeclaredType(remaining);
+  let type = matchDeclaredType(remaining);
   remaining = remaining.slice(type.length).trim();
   if (remaining.startsWith('(')) {
     const sized = cutParenClause(remaining, /^/);
     if (sized) remaining = sized.remaining;
+  }
+
+  // An array column ("text[]"). The [] follows the type, and any (length)
+  // it might carry, so it is consumed here rather than in the type match.
+  // The element type is still enforced — an array of anything is exactly the
+  // unchecked column this file exists to stop.
+  let isArray = false;
+  if (remaining.startsWith('[]')) {
+    isArray = true;
+    remaining = remaining.slice(2).trim();
+    const elementCheck = TYPE_CHECKS.get(type);
+    if (!elementCheck) {
+      throw new Error(
+        `sqlSchemaFake: column "${name}" is an array of "${type}", which this fake cannot `
+        + 'check a value against. Add the element type to TYPE_CHECKS.'
+      );
+    }
+    const arrayType = `${type}[]`;
+    if (!TYPE_CHECKS.has(arrayType)) {
+      TYPE_CHECKS.set(arrayType, (value) => Array.isArray(value) && value.every((v) => elementCheck(v)));
+    }
+    type = arrayType;
   }
 
   if (!TYPE_CHECKS.has(type)) {
