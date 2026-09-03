@@ -21,7 +21,7 @@ import { BuilderTemplatePreview } from "./builder-template-preview";
 
 const POSTS = [
   { id: "p1", slug: "levels", title: "What Level Player Are You?", tags: ["beginner tennis", "tennis levels"], categoryIds: ["c1"], status: "published" },
-  { id: "p2", slug: "open",   title: "Delray Beach Open",         tags: ["ATP tennis", "tournament"],          categoryIds: ["c2"], status: "published" },
+  { id: "p2", slug: "open",   title: "Delray Beach Open",         tags: ["ATP tennis", "US Open", "tournament"],          categoryIds: ["c2"], status: "published" },
   { id: "p3", slug: "clinic", title: "Adult Clinics",             tags: ["tennis clinics"],                    categoryIds: [],     status: "published" }
 ];
 const CATEGORIES = [
@@ -138,8 +138,16 @@ describe("Post Feed seeded from the URL", () => {
     const labels = Array.from(selectShowing("All Tags").options)
       .map((o) => o.textContent ?? "")
       .slice(1);
-    // Plain .sort() would put "ATP tennis" above every lowercase tag.
-    expect(labels).toEqual(["ATP tennis", "beginner tennis", "tennis clinics", "tennis levels", "tournament"]);
+    /*
+     * "US Open" is the assertion doing the work: codepoint order files it
+     * above every lowercase tag, alphabetical order files it after "tournament".
+     * "ATP tennis" sorts first BOTH ways, so a fixture of capitalised A-words
+     * cannot fail — the first version of this test could not, and only
+     * break-testing said so.
+     */
+    expect(labels).toEqual([
+      "ATP tennis", "beginner tennis", "tennis clinics", "tennis levels", "tournament", "US Open"
+    ]);
   });
 
   it("shows the category it filtered on, by slug", async () => {
