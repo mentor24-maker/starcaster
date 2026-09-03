@@ -113,6 +113,30 @@ const SCHEMA: BuilderSettingsSchema = {
             fallback: "true",
             rendersVia: RENDERS_VIA
           }
+        ],
+        [
+          /*
+           * Where a post opens from the "posts with this tag" popup. The
+           * defaults are the slugs the admin scaffold gives every tenant
+           * (lib/projectAdminScaffold.js), so these are only touched by a
+           * tenant who renamed those pages.
+           */
+          {
+            key: "managerPageUrl",
+            label: "Blog Manager page",
+            width: "text-md",
+            control: "text",
+            placeholder: "/admin-blog-manager",
+            rendersVia: RENDERS_VIA
+          },
+          {
+            key: "postViewUrl",
+            label: "Post view page",
+            width: "text-md",
+            control: "text",
+            placeholder: "/blog-post-view",
+            rendersVia: RENDERS_VIA
+          }
         ]
       ]
     }

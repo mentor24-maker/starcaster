@@ -62,6 +62,49 @@ cannot work. The panel says where tags come from instead. The form that does
 exist is a rename form, and it states before you press it that renaming onto an
 existing tag merges the two.
 
+## The POSTS count opens the posts behind it
+
+Ticket 86bbugbxb, 2026-09-03, operator's words: *"Posts column is very helpful.
+Let's make it even more helpful by making the number of tagged articles
+clickable to spawn a popup window displaying all the posts it is related to,
+each one clickable to that post."*
+
+Clicking the count opens a popup listing that tag's posts. Each row carries the
+**same two controls the Blog Manager's own rows use** — the eye and the pencil
+from `AdminTableIconButton`, in that order. That is deliberate: "open a post"
+already had a convention on the adjacent screen, and a third one would be a
+thing to learn rather than a thing to recognise.
+
+Four decisions worth keeping:
+
+- **A tag with no posts is a plain number, not a button.** A control that opens
+  an empty box is worse than the number it replaced.
+- **It reuses `/api/blog/tags/posts`**, the endpoint the relate picker below
+  already calls. No new endpoint was added for this.
+- **A failed load is its own state, rendered BEFORE the empty case.** If the
+  request drops and the list is simply empty, the popup says "no posts carry
+  this tag" — a confident lie about the data. The error branch is tested ahead
+  of the empty branch, and a test asserts that ordering.
+- **The destinations are settings, defaulted to the scaffold's slugs.** Edit
+  goes to `managerPageUrl` (default `/admin-blog-manager`) with `?id=`, view to
+  `postViewUrl` (default `/blog-post-view`) with `?post=`. Those defaults are
+  what `lib/projectAdminScaffold.js` gives every tenant, so they are a
+  convention rather than a guess — the settings exist for a tenant who renamed
+  the page.
+
+**Escape is bound on the document, not on the dialog.** A `onKeyDown` on the
+dialog element only fires when focus is already inside it, and this popup opens
+from a click on the count, which leaves focus on the button *outside* it —
+Escape would silently do nothing. The media manager's tag modal in the same
+file still has the element-bound form; do not copy it.
+
+**It portals to `<body>` through `BuilderBodyPortal`.** That component's own
+docstring gives one reason (the builder stylesheet is scoped under
+`.builder-react-root`, so a raw portal loses every rule). This module has a
+second: it renders inside arbitrary tenant themes, and one of them has already
+blown a control here out to 1056px. A popup left inside the tenant's container
+inherits whatever that theme does to positioned children.
+
 ## Relations are mutual, and that shapes the storage
 
 Relating A, B and C means each of the three sees the other two. There is no
