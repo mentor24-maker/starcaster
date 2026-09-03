@@ -28,7 +28,7 @@
  * but Escape does, since that is a deliberate keystroke rather than a slip.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BuilderBodyPortal } from "./builder-body-portal";
 import type { CanonicalOverwriteImpact } from "@/lib/shared-block-usage";
 import {
@@ -66,7 +66,16 @@ type BuilderSectionSaveModalProps = {
    */
   renameNotice?: string | null;
   isSaving: boolean;
-  onOverwrite: () => void;
+  /**
+   * Overwrite the original — and, when `publish` is true, put the pages this
+   * rewrites live as well.
+   *
+   * A checkbox rather than a fourth button: this dialog's question is already
+   * "which of these two saves did you mean?", and publishing is not a third
+   * kind of save — it is a thing either of them can also do. Four buttons
+   * would make the reader compare four options to answer one question.
+   */
+  onOverwrite: (options: { publish: boolean }) => void;
   onSaveAsNew: () => void;
   onCancel: () => void;
 };
@@ -162,6 +171,8 @@ export function BuilderSectionSaveModal({
   }, [onCancel]);
 
   const label = canonicalName || "the saved section";
+  // Off by default. Publishing reaches the live site, so it is opted into.
+  const [publish, setPublish] = useState(false);
 
   return (
     <BuilderBodyPortal>
@@ -232,9 +243,27 @@ export function BuilderSectionSaveModal({
               </div>
             ) : null}
 
+            <label className="builder-choice-dialog-publish">
+              <input
+                checked={publish}
+                disabled={isSaving}
+                onChange={(event) => setPublish(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                Publish the pages this rewrites, so the changes are live — otherwise they change as
+                drafts and you publish them when you are ready.
+              </span>
+            </label>
+
             <div className="builder-choice-dialog-actions">
-              <button className="submit-button" disabled={isSaving} onClick={onOverwrite} type="button">
-                {isSaving ? "Saving..." : `Overwrite “${label}”`}
+              <button
+                className="submit-button"
+                disabled={isSaving}
+                onClick={() => onOverwrite({ publish })}
+                type="button"
+              >
+                {isSaving ? "Saving..." : publish ? `Overwrite “${label}” & Publish` : `Overwrite “${label}”`}
               </button>
               <button className="secondary-button" disabled={isSaving} onClick={onSaveAsNew} type="button">
                 Save as a new section

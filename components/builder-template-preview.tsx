@@ -15,7 +15,7 @@ import {
   type MediaFilters
 } from "@/lib/media-manager-filters";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
-import { relatedIdsFor, type PostRelationPair } from "@/lib/blog-post-relations";
+import { relatedIdsFor, relationChangesForPost, type PostRelationPair } from "@/lib/blog-post-relations";
 import {
   builderBackgroundParallaxActive,
   createDefaultBackgroundSettings,
@@ -429,16 +429,74 @@ function CrmFormFieldControl({
   );
 }
 
+/**
+ * A note addressed to whoever is BUILDING the page — "set a Form ID in module
+ * settings", "add tags in the Messaging section", "add posts in module
+ * settings".
+ *
+ * It renders NOTHING on a live published page. A visitor has no module
+ * settings, no Messaging section and no way to act on any of it, so the note
+ * is at best noise and at worst reads as the site being broken. Dane reported
+ * exactly that on 2026-09-03: "No tags found. Add tags in the Messaging
+ * section." printed under a blog post on delraytennis.starcaster.pro, from a
+ * module that reads the MESSAGING tag list and can never find a blog tag in
+ * it. Six of these were shipping to visitors when he asked.
+ *
+ * Every builder-facing instruction goes through here, and
+ * check_conventions.cjs fails the commit on a new one that does not — this
+ * shape had already been fixed twice in two days (PR #576) and came back.
+ */
+function BuilderOnlyNote({
+  liveSite = false,
+  className,
+  style,
+  children,
+}: {
+  liveSite?: boolean;
+  className?: string;
+  style?: CSSProperties;
+  children: React.ReactNode;
+}) {
+  if (liveSite) return null;
+  /*
+   * A legible default, because this renders inside ARBITRARY tenant themes.
+   * The two Messaging notes were pale grey italic with no background: perfectly
+   * readable on white, and nearly invisible over the photo Delray uses behind
+   * its pages — a note nobody can read is the same as no note (seen 2026-09-03).
+   * A caller may still override any of it.
+   */
+  const base: CSSProperties = {
+    padding: "0.75rem 1rem",
+    border: "1px dashed #d1d5db",
+    borderRadius: 6,
+    background: "#f9fafb",
+    color: "#4b5563",
+    fontSize: "0.8125rem",
+    lineHeight: 1.5,
+  };
+  return (
+    <div
+      className={`builder-only-note${className ? ` ${className}` : ""}`}
+      style={{ ...base, ...style }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function CrmFormPreview({
   settings,
   theme,
   themePalette,
-  projectId = ""
+  projectId = "",
+  liveSite = false
 }: {
   settings: Record<string, string>;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
   projectId?: string;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const crmFormId = settings.crmFormId ?? "";
   const [form, setForm] = useState<CrmFormData | null>(null);
@@ -496,7 +554,11 @@ function CrmFormPreview({
   }
 
   if (!crmFormId) {
-    return <div className="builder-contact-form-stub">No CRM form selected. Set a Form ID in module settings.</div>;
+    return (
+      <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
+        No CRM form selected. Set a Form ID in module settings.
+      </BuilderOnlyNote>
+    );
   }
 
   if (!form) {
@@ -734,11 +796,14 @@ function CrmContactsTablePreview({
   projectId: projectIdProp = "",
   theme,
   themePalette,
+  liveSite = false,
 }: {
   settings: Record<string, string>;
   projectId?: string;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const crmConfigId    = settings.crmConfigId ?? "";
   const tableTitle     = settings.tableTitle || "Contacts";
@@ -933,7 +998,13 @@ function CrmContactsTablePreview({
 
   if (loading)    return <div className="builder-contact-form-stub">Loading contacts…</div>;
   if (loadError)  return <div className="builder-contact-form-stub">{loadError}</div>;
-  if (!config)    return <div className="builder-contact-form-stub">No CRM configured. Set one up in Builder › CRM, or select a config in module settings.</div>;
+  if (!config) {
+    return (
+      <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
+        No CRM configured. Set one up in Builder › CRM, or select a config in module settings.
+      </BuilderOnlyNote>
+    );
+  }
 
   return (
     <div
@@ -2058,7 +2129,9 @@ function BuilderModulePreview({
         {module.settings.label ? (
           <div className="builder-preview-code-label">{module.settings.label}</div>
         ) : null}
-        {module.text ? <BuilderCodeEmbed html={sanitizeEmbedHtml(module.text)} /> : null}
+        {module.text ? (
+          <BuilderCodeEmbed html={sanitizeEmbedHtml(module.text)} activation={module.settings.embedActivation} />
+        ) : null}
       </div>
     );
   }
@@ -2113,7 +2186,7 @@ function BuilderModulePreview({
   }
 
   if (module.type === "crm-form") {
-    return <CrmFormPreview settings={module.settings} theme={theme} themePalette={themePalette} projectId={projectId} />;
+    return <CrmFormPreview settings={module.settings} theme={theme} themePalette={themePalette} projectId={projectId} liveSite={liveSite} />;
   }
 
   if (module.type === "crm-contacts-table") {
@@ -2123,6 +2196,7 @@ function BuilderModulePreview({
         projectId={projectId}
         theme={theme}
         themePalette={themePalette}
+        liveSite={liveSite}
       />
     );
   }
@@ -2286,10 +2360,10 @@ function BuilderModulePreview({
     return <BlogCardManagerPreview />;
   }
   if (module.type === "messaging-topic-list") {
-    return <MessagingTopicListPreview settings={module.settings} />;
+    return <MessagingTopicListPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "messaging-tag-list") {
-    return <MessagingTagListPreview settings={module.settings} />;
+    return <MessagingTagListPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-category-filter") {
     return <BlogCategoryFilterPreview settings={module.settings} />;
@@ -2310,11 +2384,15 @@ function BuilderModulePreview({
         theme={theme}
         themePalette={themePalette}
         projectId={projectId}
+        liveSite={liveSite}
       />
     );
   }
   if (module.type === "blog-related-posts") {
-    return <BlogRelatedPostsPreview settings={module.settings} />;
+    // liveSite decides whether an empty result explains itself or simply is
+    // not there. A visitor gets nothing; the person building the page gets a
+    // reason. See the empty state inside the component.
+    return <BlogRelatedPostsPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-search") {
     return <BlogSearchPreview settings={module.settings} />;
@@ -2431,6 +2509,13 @@ function resolveBlogPostManagerSettings(settings: Record<string, string>): Recor
   return resolved;
 }
 
+/*
+ * The <option> value standing in for "the URL named a category that does not
+ * exist". It cannot be "" (that is All Categories) and it cannot be a category
+ * id, so it is a value no id can collide with.
+ */
+const UNMATCHED_FILTER_VALUE = "__starcaster_unmatched_filter__";
+
 function BlogPostListPreview({ settings }: { settings: Record<string, string> }) {
   const [allPosts, setAllPosts] = useState<BlogPostRecord[]>([]);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
@@ -2440,6 +2525,16 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   // User filter state
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("");
+  /*
+   * A ?category= slug that matches no category is held HERE rather than in
+   * catFilter, which carries a category id. Before task 86bbuk7xz an unknown
+   * slug was dropped on the floor: catFilter stayed "" and the page showed
+   * every post, as though the visitor had asked for no filter at all. An
+   * unknown ?tag= failed the opposite way (nothing at all). One of those two
+   * has to be wrong; this makes both of them say "no posts", and say which
+   * value they mean.
+   */
+  const [missingCatSlug, setMissingCatSlug] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [authorFilter, setAuthorFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -2469,10 +2564,34 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   const cardGap = parseInt(settings.cardGap || "24", 10) || 24;
 
   // Filter bar visibility
+  /*
+   * filterMode says what this feed IS — a tag-results page, a category-results
+   * page, an author-results page — rather than which checkboxes happen to be
+   * ticked. Three independent toggles could already produce a tag-only filter
+   * bar, but nothing in the module KNEW that was the intent, so nothing could
+   * title the results (Dane, 2026-09-03).
+   *
+   * "all" is the default and must stay the default: these settings are merged
+   * UNDER a module's saved values, so any other default would silently retitle
+   * and re-narrow every Post Feed already sitting on a page.
+   */
+  const filterMode = (settings.filterMode || "all").trim().toLowerCase();
+  const singleFilter =
+    filterMode === "tag" || filterMode === "category" || filterMode === "author" ? filterMode : "";
+
   const showSearchBar = (settings.showSearch ?? "true") !== "false";
-  const showCategoryFilter = (settings.showCategoryFilter ?? "true") !== "false";
-  const showTagFilter = (settings.showTagFilter ?? "true") !== "false";
-  const showAuthorFilter = (settings.showAuthorFilter ?? "true") !== "false";
+  // In a single mode the mode wins over the checkboxes. Ticking "Category
+  // Filter" on a tag-results page is a contradiction, and the setting that
+  // names the page's purpose is the stronger statement.
+  const showCategoryFilter = singleFilter
+    ? singleFilter === "category"
+    : (settings.showCategoryFilter ?? "true") !== "false";
+  const showTagFilter = singleFilter
+    ? singleFilter === "tag"
+    : (settings.showTagFilter ?? "true") !== "false";
+  const showAuthorFilter = singleFilter
+    ? singleFilter === "author"
+    : (settings.showAuthorFilter ?? "true") !== "false";
   const showDateFilter = settings.showDateFilter === "true";
   const hasFilterBar = showSearchBar || showCategoryFilter || showTagFilter || showAuthorFilter || showDateFilter;
 
@@ -2500,27 +2619,63 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
         if (urlCatSlug) {
           const match = fetchedCats.find((c) => c.slug === urlCatSlug);
           if (match) setCatFilter(match.id);
+          else setMissingCatSlug(urlCatSlug);
         }
         const urlTag = params.get("tag") ?? "";
         if (urlTag) setTagFilter(urlTag);
+        // ?author= joins ?tag= and ?category= so all three filter modes can be
+        // driven from a link. Added with filterMode: an "Author Results"
+        // preset that only responds to the dropdown would be a promise the
+        // module does not keep.
+        const urlAuthor = params.get("author") ?? "";
+        if (urlAuthor) setAuthorFilter(urlAuthor);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   const allTags = useMemo(
-    () => [...new Set(allPosts.flatMap((p) => p.tags || []))].filter(Boolean).sort(),
+    () =>
+      [...new Set(allPosts.flatMap((p) => p.tags || []))]
+        .filter(Boolean)
+        // Plain .sort() is codepoint order, which files every capitalised tag
+        // ("ATP tennis", "US Open") above every lowercase one. A reader looking
+        // for a tag alphabetically does not know its capitalisation.
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
     [allPosts]
   );
+  /*
+   * The tag the URL asked for is always an option, even when no post carries
+   * it. A <select> whose value matches none of its options displays the FIRST
+   * one, so ?tag=junior%20tennis used to read "All Tags" over an empty page —
+   * the control flatly contradicting the filter it was applying.
+   */
+  const tagOptions = useMemo(() => {
+    if (!tagFilter || allTags.includes(tagFilter)) return allTags;
+    return [...allTags, tagFilter].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [allTags, tagFilter]);
   const allAuthors = useMemo(
-    () => [...new Set(allPosts.map((p) => p.author).filter((a): a is string => Boolean(a)))].sort(),
+    () =>
+      [...new Set(allPosts.map((p) => p.author).filter((a): a is string => Boolean(a)))]
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
     [allPosts]
   );
+  // Same rule as tagOptions: an author the URL named stays visible even when
+  // no post is by them, so the control never contradicts the filter.
+  const authorOptions = useMemo(() => {
+    if (!authorFilter || allAuthors.includes(authorFilter)) return allAuthors;
+    return [...allAuthors, authorFilter].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [allAuthors, authorFilter]);
 
   const filteredPosts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allPosts.filter((post) => {
       if (q && !`${post.title} ${post.excerpt || ""}`.toLowerCase().includes(q)) return false;
+      if (missingCatSlug) return false;
       if (catFilter && !post.categoryIds?.includes(catFilter)) return false;
       if (tagFilter && !post.tags?.includes(tagFilter)) return false;
       if (authorFilter && post.author !== authorFilter) return false;
@@ -2528,10 +2683,51 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
       if (dateTo && (!post.published_at || new Date(post.published_at) > new Date(dateTo + "T23:59:59"))) return false;
       return true;
     });
-  }, [allPosts, search, catFilter, tagFilter, authorFilter, dateFrom, dateTo]);
+  }, [allPosts, search, catFilter, missingCatSlug, tagFilter, authorFilter, dateFrom, dateTo]);
 
   const visiblePosts = filteredPosts.slice(0, postsPerPage);
-  const hasActiveFilter = search || catFilter || tagFilter || authorFilter || dateFrom || dateTo;
+  const hasActiveFilter =
+    search || catFilter || missingCatSlug || tagFilter || authorFilter || dateFrom || dateTo;
+
+  function clearFilters() {
+    setSearch("");
+    setCatFilter("");
+    setMissingCatSlug("");
+    setTagFilter("");
+    setAuthorFilter("");
+    setDateFrom("");
+    setDateTo("");
+  }
+
+  const activeCategoryName =
+    missingCatSlug || categories.find((c) => c.id === catFilter)?.name || "";
+  /*
+   * "No posts match your filters" cannot tell a tag that does not exist from a
+   * parameter that did nothing — which is exactly how a working page read as a
+   * broken one on 2026-09-03. Name the value that emptied the page.
+   */
+  /*
+   * "Blog posts matching the tag \u201cjunior tennis\u201d: 13" — the operator's
+   * wording, 2026-09-03. It renders only when the mode HAS a value: with
+   * nothing selected there is nothing to describe, and "matching the tag
+   * \u201c\u201d: 55" would be noise on a page that is simply showing everything.
+   */
+  const singleFilterValue =
+    singleFilter === "tag" ? tagFilter
+      : singleFilter === "category" ? activeCategoryName
+        : singleFilter === "author" ? authorFilter
+          : "";
+  const resultsLine = singleFilterValue
+    ? `Blog posts matching the ${singleFilter} \u201c${singleFilterValue}\u201d: ${filteredPosts.length}`
+    : "";
+
+  const emptyFilteredMessage = tagFilter
+    ? `No posts tagged \u201c${tagFilter}\u201d.`
+    : activeCategoryName
+      ? `No posts in the category \u201c${activeCategoryName}\u201d.`
+      : authorFilter
+        ? `No posts by \u201c${authorFilter}\u201d.`
+        : "No posts match your filters.";
 
   if (loading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
@@ -2576,22 +2772,28 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
               style={{ ...inputStyle, flex: "1 1 180px", minWidth: 140 }}
             />
           ) : null}
-          {showCategoryFilter && categories.length > 0 ? (
-            <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
+          {showCategoryFilter && (categories.length > 0 || missingCatSlug) ? (
+            <select
+              value={missingCatSlug ? UNMATCHED_FILTER_VALUE : catFilter}
+              onChange={(e) => { setMissingCatSlug(""); setCatFilter(e.target.value === UNMATCHED_FILTER_VALUE ? "" : e.target.value); }}
+              style={{ ...inputStyle, cursor: "pointer" }}
+            >
               <option value="">All Categories</option>
+              {/* The slug the URL asked for, when no category answers to it. */}
+              {missingCatSlug ? <option value={UNMATCHED_FILTER_VALUE}>{missingCatSlug}</option> : null}
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           ) : null}
-          {showTagFilter && allTags.length > 0 ? (
+          {showTagFilter && tagOptions.length > 0 ? (
             <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
               <option value="">All Tags</option>
-              {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
+              {tagOptions.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           ) : null}
-          {showAuthorFilter && allAuthors.length > 0 ? (
+          {showAuthorFilter && authorOptions.length > 0 ? (
             <select value={authorFilter} onChange={(e) => setAuthorFilter(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
               <option value="">All Authors</option>
-              {allAuthors.map((a) => <option key={a} value={a}>{a}</option>)}
+              {authorOptions.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
           ) : null}
           {showDateFilter ? (
@@ -2604,13 +2806,14 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
           {hasActiveFilter ? (
             <button
               type="button"
-              onClick={() => { setSearch(""); setCatFilter(""); setTagFilter(""); setAuthorFilter(""); setDateFrom(""); setDateTo(""); }}
+              onClick={clearFilters}
               style={{ ...inputStyle, color: "#718096", cursor: "pointer", background: "#fff" }}
             >
               Clear
             </button>
           ) : null}
-          {hasActiveFilter && filteredPosts.length !== allPosts.length ? (
+          {/* Not both: the results line below already carries this count. */}
+          {!resultsLine && hasActiveFilter && filteredPosts.length !== allPosts.length ? (
             <span style={{ fontSize: "0.8125rem", color: "#718096", marginLeft: "auto" }}>
               {filteredPosts.length} result{filteredPosts.length !== 1 ? "s" : ""}
             </span>
@@ -2618,11 +2821,33 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
         </div>
       ) : null}
 
+      {resultsLine ? (
+        <div
+          className="builder-blog-post-list-results-line"
+          style={{ margin: "0 0 1.25rem", fontSize: "0.9375rem", fontWeight: 600, color: "#2d3748" }}
+        >
+          {resultsLine}
+        </div>
+      ) : null}
+
       {visiblePosts.length === 0 ? (
         <div style={{ padding: "2rem", textAlign: "center", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
-          {allPosts.length === 0
-            ? "No published posts yet. Use the Create Post module to add your first post."
-            : "No posts match your filters."}
+          {allPosts.length === 0 ? (
+            "No published posts yet. Use the Create Post module to add your first post."
+          ) : (
+            <>
+              <div>{emptyFilteredMessage}</div>
+              {hasActiveFilter ? (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  style={{ ...inputStyle, marginTop: "0.875rem", color: "#4a5568", cursor: "pointer", background: "#fff" }}
+                >
+                  Show all posts
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
       ) : (
         <div style={gridStyle}>
@@ -2780,7 +3005,11 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
   const showAuthorField = settings.showAuthorField === "true";
   const showCategories = (settings.showCategories ?? "true") !== "false";
   const showTags = (settings.showTags ?? "true") !== "false";
+  const showRelatedPosts = (settings.showRelatedPosts ?? "true") !== "false";
   const showSeoFields = settings.showSeoFields === "true";
+  // Categories, Tags and Related Posts share one collapsible container between
+  // Excerpt and Body. It only exists if at least one of them is on.
+  const showPostOptions = showCategories || showTags || showRelatedPosts;
   const submitLabel = settings.submitLabel || "Publish Post";
   const draftLabel = settings.draftLabel || "Save as Draft";
   const successMessage = settings.successMessage || "Post created successfully.";
@@ -2798,6 +3027,26 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
   const [statusMsg, setStatusMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // ── Categories / Tags / Related Posts ────────────────────────────────────
+  // Collapsed by default: the three of them together are longer than the rest
+  // of the form, and most saves do not touch them.
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [relatedIds, setRelatedIds] = useState<string[]>([]);
+  // Whether this post's stored relations have actually been READ. Saving is
+  // guarded on it: a PUT built from an empty list we never loaded would wipe
+  // every relation the post has, and report success doing it.
+  const [relationsLoaded, setRelationsLoaded] = useState(!isEditMode);
+  const [postChoices, setPostChoices] = useState<{ id: string; title: string; status: string }[]>([]);
+  const [choicesState, setChoicesState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerFilter, setPickerFilter] = useState("");
+  const [categoryChoices, setCategoryChoices] = useState<{ id: string; slug: string; name: string }[]>([]);
+  // Same guard as relations, for the same reason: the form holds category
+  // SLUGS and the API takes ids, so without the list the field cannot be
+  // translated — and sending [] would clear the post's categories.
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+  const [loadedCategoryIds, setLoadedCategoryIds] = useState<string[] | null>(isEditMode ? null : []);
 
   useEffect(() => {
     if (!editId) return;
@@ -2821,15 +3070,117 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
             seoTitle: String(post.seoTitle ?? post.seo_title ?? ""),
             seoDescription: String(post.seoDescription ?? post.seo_description ?? ""),
           });
+          // Held as ids until the category list arrives — the field shows
+          // slugs, so it cannot be filled in until both are here.
+          const catIds = post.categoryIds ?? post.category_ids;
+          setLoadedCategoryIds(Array.isArray(catIds) ? catIds.map(String) : []);
         }
       })
       .catch(() => {})
       .finally(() => setLoadingPost(false));
   }, [editId]);
 
+  // This post's existing relations. One request, on mount, so the collapsed
+  // header can say how many there are without opening anything.
+  useEffect(() => {
+    if (!editId || !showRelatedPosts) return;
+    let cancelled = false;
+    fetch(`/api/blog/relations?postId=${encodeURIComponent(editId)}`, {
+      credentials: "include",
+      headers: getCrmProjectHeaders()
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("relations"))))
+      .then((d) => {
+        if (cancelled) return;
+        const ids = Array.isArray(d?.relatedIds) ? d.relatedIds : Array.isArray(d?.data) ? d.data : [];
+        setRelatedIds(ids.map(String).filter(Boolean));
+        setRelationsLoaded(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [editId, showRelatedPosts]);
+
+  // The project's categories, so the slugs typed in the field can be turned
+  // into the ids the API stores (and back again on load).
+  useEffect(() => {
+    if (!showCategories) return;
+    let cancelled = false;
+    fetch("/api/blog/categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("categories"))))
+      .then((d) => {
+        if (cancelled) return;
+        const list = Array.isArray(d?.categories) ? d.categories : Array.isArray(d?.data) ? d.data : [];
+        setCategoryChoices(
+          (list as Record<string, unknown>[]).map((c) => ({
+            id: String(c.id ?? ""),
+            slug: String(c.slug ?? ""),
+            name: String(c.name ?? "")
+          })).filter((c) => c.id)
+        );
+        setCategoriesLoaded(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [showCategories]);
+
+  // Once both halves are in, fill the Categories field with the post's slugs.
+  useEffect(() => {
+    if (!categoriesLoaded || loadedCategoryIds === null) return;
+    const bySlug = loadedCategoryIds
+      .map((id) => categoryChoices.find((c) => c.id === id)?.slug || "")
+      .filter(Boolean);
+    setValues((prev) => (prev.categoryIds === undefined ? { ...prev, categoryIds: bySlug.join(", ") } : prev));
+  }, [categoriesLoaded, loadedCategoryIds, categoryChoices]);
+
+  /** Every post that could be related — the whole project's list, minus this one. */
+  const loadPostChoices = useCallback(() => {
+    if (choicesState === "loading" || choicesState === "ready") return;
+    setChoicesState("loading");
+    fetch("/api/blog/posts?limit=500", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("posts"))))
+      .then((d) => {
+        const list = Array.isArray(d?.posts) ? d.posts : Array.isArray(d?.data) ? d.data : [];
+        setPostChoices(
+          (list as Record<string, unknown>[])
+            .map((post) => ({
+              id: String(post.id ?? ""),
+              title: String(post.title ?? "") || "(untitled)",
+              status: String(post.status ?? "")
+            }))
+            .filter((post) => post.id && post.id !== editId)
+        );
+        setChoicesState("ready");
+      })
+      .catch(() => setChoicesState("error"));
+  }, [choicesState, editId]);
+
   function setField(key: string, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
   }
+
+  function toggleRelated(id: string) {
+    setRelatedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  /** The slugs typed into the Categories field, in order, without blanks. */
+  const typedCategorySlugs = (values.categoryIds || "")
+    .split(",")
+    .map((slug) => slug.trim())
+    .filter(Boolean);
+
+  function matchCategory(slug: string) {
+    const needle = slug.toLowerCase();
+    return categoryChoices.find(
+      (c) => c.slug.toLowerCase() === needle || c.name.toLowerCase() === needle
+    );
+  }
+
+  // Slugs that match no category in this project. They are dropped on save --
+  // the API stores ids -- so the form has to say so rather than appear to have
+  // saved them.
+  const unknownCategorySlugs = categoriesLoaded
+    ? typedCategorySlugs.filter((slug) => !matchCategory(slug))
+    : [];
 
   async function submitPost(status: "published" | "draft") {
     if (!values.title?.trim()) {
@@ -2840,13 +3191,23 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
     setStatusMsg("");
     setSubmitting(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         ...values,
         status,
         tags: values.tags
           ? values.tags.split(",").map((t) => t.trim()).filter(Boolean)
           : []
       };
+      // The field holds slugs; the API takes category ids. Without the list
+      // loaded there is no translation, and sending [] would clear the post's
+      // categories -- so the key is left out entirely and they are untouched.
+      if (showCategories && categoriesLoaded) {
+        payload.categoryIds = typedCategorySlugs
+          .map((slug) => matchCategory(slug)?.id)
+          .filter((id): id is string => Boolean(id));
+      } else {
+        delete payload.categoryIds;
+      }
       const url = isEditMode ? `/api/blog/posts/${encodeURIComponent(editId)}` : "/api/blog/posts";
       const method = isEditMode ? "PUT" : "POST";
       const res = await fetch(url, {
@@ -2863,8 +3224,52 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
             : (data.error as { message?: string } | undefined)?.message || (isEditMode ? "Failed to update post." : "Failed to create post.");
         throw new Error(errMsg);
       }
-      setStatusMsg(isEditMode ? "Post updated successfully." : successMessage);
-      if (!isEditMode) setValues({});
+      // A new post has no id until the server hands one back, which is why the
+      // relations are written after the post rather than with it.
+      const savedRecord = ((data as Record<string, unknown>)?.data
+        ?? (data as Record<string, unknown>)?.post) as Record<string, unknown> | undefined;
+      const savedPostId = isEditMode ? editId : String(savedRecord?.id ?? "");
+
+      let relationsMsg = "";
+      if (showRelatedPosts && savedPostId && relationsLoaded) {
+        const relRes = await fetch("/api/blog/relations", {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+          body: JSON.stringify({ postId: savedPostId, relatedIds })
+        });
+        if (!relRes.ok) {
+          // The post itself IS saved. Saying "saved" flat would be a lie about
+          // the half that failed, so both halves are reported.
+          setStatusMsg("");
+          setErrorMsg("The post was saved, but the related posts were not. Try saving again.");
+          setSubmitting(false);
+          return;
+        }
+        // Read the relations back rather than trusting the response -- the
+        // point of the control is what is STORED.
+        const readBack = await fetch(`/api/blog/relations?postId=${encodeURIComponent(savedPostId)}`, {
+          credentials: "include",
+          headers: getCrmProjectHeaders()
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        const storedIds = Array.isArray(readBack?.relatedIds)
+          ? readBack.relatedIds
+          : Array.isArray(readBack?.data) ? readBack.data : null;
+        if (storedIds) {
+          setRelatedIds(storedIds.map(String).filter(Boolean));
+          relationsMsg = ` ${storedIds.length} related post${storedIds.length === 1 ? "" : "s"} saved.`;
+        }
+      }
+
+      setStatusMsg((isEditMode ? "Post updated successfully." : successMessage) + relationsMsg);
+      if (!isEditMode) {
+        setValues({});
+        setRelatedIds([]);
+        setPickerOpen(false);
+        setPickerFilter("");
+      }
       if (redirectAfterCreate) {
         setTimeout(() => { window.location.href = redirectAfterCreate; }, 1500);
       }
@@ -2895,6 +3300,35 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
     color: "#374151"
   };
   const fieldStyle: CSSProperties = { marginBottom: "1rem" };
+
+  // ── The collapsible container's header ───────────────────────────────────
+  const optionsTitle = [
+    showCategories ? "Categories" : "",
+    showTags ? "Tags" : "",
+    showRelatedPosts ? "Related Posts" : ""
+  ].filter(Boolean).join(" · ");
+
+  const typedTags = (values.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
+  const optionsCounts = [
+    showCategories ? `${typedCategorySlugs.length} categor${typedCategorySlugs.length === 1 ? "y" : "ies"}` : "",
+    showTags ? `${typedTags.length} tag${typedTags.length === 1 ? "" : "s"}` : "",
+    showRelatedPosts ? `${relatedIds.length} related` : ""
+  ].filter(Boolean);
+  const nothingSet =
+    (!showCategories || typedCategorySlugs.length === 0) &&
+    (!showTags || typedTags.length === 0) &&
+    (!showRelatedPosts || relatedIds.length === 0);
+  const optionsSummary = nothingSet ? "none set" : optionsCounts.join(" · ");
+
+  /** A related post's title, falling back to its id until the list arrives. */
+  function relatedTitleFor(id: string): string {
+    return postChoices.find((post) => post.id === id)?.title || id;
+  }
+
+  const pickerNeedle = pickerFilter.trim().toLowerCase();
+  const visiblePostChoices = pickerNeedle
+    ? postChoices.filter((post) => post.title.toLowerCase().includes(pickerNeedle))
+    : postChoices;
 
   return (
     <div
@@ -3035,6 +3469,251 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
         </div>
       ) : null}
 
+      {/* Categories, Tags and Related Posts — one collapsible container,
+          collapsed by default, sitting between Excerpt and Body. The three of
+          them are what a post is FILED under, as opposed to what it says. */}
+      {showPostOptions ? (
+        <div
+          className="builder-blog-post-options"
+          style={{
+            border: "1px solid #e5e7eb",
+            borderRadius: 6,
+            background: "#f9fafb",
+            marginBottom: "1rem"
+          }}
+        >
+          <button
+            type="button"
+            aria-expanded={optionsOpen}
+            onClick={() => {
+              const next = !optionsOpen;
+              setOptionsOpen(next);
+              if (next && showRelatedPosts) loadPostChoices();
+            }}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.625rem 0.875rem",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              textAlign: "left",
+              font: "inherit",
+              boxSizing: "border-box"
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: "inline-block",
+                fontSize: "0.6rem",
+                color: "#6b7280",
+                transform: optionsOpen ? "rotate(90deg)" : "none",
+                transition: "transform 120ms ease"
+              }}
+            >
+              ▶
+            </span>
+            <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#374151" }}>
+              {optionsTitle}
+            </span>
+            {/* A collapsed container must not be a hiding place: the header
+                says what is set inside it without being opened. */}
+            <span style={{ marginLeft: "auto", fontSize: "0.75rem", color: "#6b7280" }}>
+              {optionsSummary}
+            </span>
+          </button>
+
+          {optionsOpen ? (
+            <div style={{ padding: "0 0.875rem 0.875rem" }}>
+              {showCategories ? (
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Categories (slugs, comma-separated)</label>
+                  <input
+                    style={inputStyle}
+                    type="text"
+                    value={values.categoryIds || ""}
+                    onChange={(e) => setField("categoryIds", e.target.value)}
+                    placeholder="news, announcements"
+                  />
+                  {unknownCategorySlugs.length > 0 ? (
+                    <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: "#b45309" }}>
+                      No category in this project matches {unknownCategorySlugs.join(", ")} — those will not be saved.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {showTags ? (
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Tags (comma-separated)</label>
+                  <input
+                    style={inputStyle}
+                    type="text"
+                    value={values.tags || ""}
+                    onChange={(e) => setField("tags", e.target.value)}
+                    placeholder="react, tutorial, design"
+                  />
+                </div>
+              ) : null}
+
+              {showRelatedPosts ? (
+                <div style={{ ...fieldStyle, marginBottom: 0 }}>
+                  <label style={labelStyle}>
+                    Related Posts
+                    <span style={{ fontWeight: 400, color: "#6b7280" }}>
+                      {" "}— what the “You Might Also Like” list shows
+                    </span>
+                  </label>
+
+                  {relatedIds.length > 0 ? (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem", marginBottom: "0.5rem" }}>
+                      {relatedIds.map((id) => (
+                        <span
+                          key={id}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.375rem",
+                            padding: "0.15rem 0.5rem",
+                            background: "#fff",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 999,
+                            fontSize: "0.75rem",
+                            color: "#374151"
+                          }}
+                        >
+                          {relatedTitleFor(id)}
+                          <button
+                            type="button"
+                            aria-label={`Remove ${relatedTitleFor(id)}`}
+                            onClick={() => toggleRelated(id)}
+                            style={{
+                              border: "none",
+                              background: "transparent",
+                              cursor: "pointer",
+                              color: "#9ca3af",
+                              padding: 0,
+                              fontSize: "0.85rem",
+                              lineHeight: 1
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ margin: "0 0 0.5rem", fontSize: "0.75rem", color: "#6b7280" }}>
+                      Nothing related yet. Relations are mutual — each post you check will show this one too.
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !pickerOpen;
+                      setPickerOpen(next);
+                      if (next) loadPostChoices();
+                    }}
+                    style={{
+                      padding: "0.35rem 0.75rem",
+                      border: `1px solid ${accent}`,
+                      borderRadius: 6,
+                      background: "#fff",
+                      color: accent,
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      cursor: "pointer"
+                    }}
+                  >
+                    {pickerOpen ? "Done choosing" : "Choose related posts…"}
+                  </button>
+
+                  {pickerOpen ? (
+                    <div
+                      style={{
+                        marginTop: "0.5rem",
+                        border: "1px solid #d1d5db",
+                        borderRadius: 6,
+                        background: "#fff"
+                      }}
+                    >
+                      <div style={{ padding: "0.5rem", borderBottom: "1px solid #e5e7eb" }}>
+                        <input
+                          style={inputStyle}
+                          type="search"
+                          value={pickerFilter}
+                          onChange={(e) => setPickerFilter(e.target.value)}
+                          placeholder="Filter by title…"
+                        />
+                      </div>
+                      <div style={{ maxHeight: 260, overflowY: "auto", padding: "0.25rem 0" }}>
+                        {choicesState === "loading" ? (
+                          <p style={{ margin: 0, padding: "0.75rem", fontSize: "0.8rem", color: "#6b7280" }}>
+                            Loading posts…
+                          </p>
+                        ) : choicesState === "error" ? (
+                          <p style={{ margin: 0, padding: "0.75rem", fontSize: "0.8rem", color: "#991b1b" }}>
+                            The list of posts could not be loaded, so nothing can be chosen right now.
+                          </p>
+                        ) : visiblePostChoices.length === 0 ? (
+                          <p style={{ margin: 0, padding: "0.75rem", fontSize: "0.8rem", color: "#6b7280" }}>
+                            {postChoices.length === 0
+                              ? "There are no other posts to relate this one to yet."
+                              : "No post matches that filter."}
+                          </p>
+                        ) : (
+                          visiblePostChoices.map((post) => (
+                            <label
+                              key={post.id}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                                padding: "0.3rem 0.75rem",
+                                fontSize: "0.8rem",
+                                color: "#374151",
+                                cursor: "pointer"
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={relatedIds.includes(post.id)}
+                                onChange={() => toggleRelated(post.id)}
+                                // The site stylesheet gives form inputs
+                                // width:100%, which a checkbox obeys: the box
+                                // stretched to 1166px and squeezed the title
+                                // to a one-character column at the far right.
+                                style={{ width: "auto", flex: "0 0 auto", margin: 0 }}
+                              />
+                              <span style={{ flex: 1, minWidth: 0 }}>{post.title}</span>
+                              {post.status && post.status !== "published" ? (
+                                <span style={{ fontSize: "0.7rem", color: "#9ca3af", textTransform: "uppercase" }}>
+                                  {post.status}
+                                </span>
+                              ) : null}
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {!relationsLoaded ? (
+                    <p style={{ margin: "0.5rem 0 0", fontSize: "0.75rem", color: "#b45309" }}>
+                      This post’s existing related posts could not be read, so saving will leave them exactly as they are.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div style={fieldStyle}>
         <label style={labelStyle}>Body</label>
         <BuilderRichTextEditor
@@ -3043,32 +3722,6 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
           placeholder="Post content…"
         />
       </div>
-
-      {showCategories ? (
-        <div style={fieldStyle}>
-          <label style={labelStyle}>Categories (slugs, comma-separated)</label>
-          <input
-            style={inputStyle}
-            type="text"
-            value={values.categoryIds || ""}
-            onChange={(e) => setField("categoryIds", e.target.value)}
-            placeholder="news, announcements"
-          />
-        </div>
-      ) : null}
-
-      {showTags ? (
-        <div style={fieldStyle}>
-          <label style={labelStyle}>Tags (comma-separated)</label>
-          <input
-            style={inputStyle}
-            type="text"
-            value={values.tags || ""}
-            onChange={(e) => setField("tags", e.target.value)}
-            placeholder="react, tutorial, design"
-          />
-        </div>
-      ) : null}
 
       {showSeoFields ? (
         <>
@@ -3663,7 +4316,7 @@ function textToSlug(str: string) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-function MessagingTopicListPreview({ settings }: { settings: Record<string, string> }) {
+function MessagingTopicListPreview({ settings, liveSite = false }: { settings: Record<string, string>; liveSite?: boolean }) {
   const [topics, setTopics] = useState<Array<{ id: number; topic: string }>>([]);
 
   useEffect(() => {
@@ -3709,9 +4362,11 @@ function MessagingTopicListPreview({ settings }: { settings: Record<string, stri
 
   if (items.length === 0) {
     return (
-      <div style={{ padding: "0.75rem", color: "#94a3b8", fontSize: "0.875rem", fontStyle: "italic" }}>
-        No topics found. Add topics in the Messaging section.
-      </div>
+      <BuilderOnlyNote liveSite={liveSite}>
+        No topics found. This module lists <strong>Messaging</strong> topics, which
+        are separate from the blog — add them under Messaging, or use the Blog
+        Tag Cloud module if a blog page is what you meant.
+      </BuilderOnlyNote>
     );
   }
 
@@ -3776,7 +4431,7 @@ function MessagingTopicListPreview({ settings }: { settings: Record<string, stri
   return <div style={wrapperStyle}>{renderContent()}</div>;
 }
 
-function MessagingTagListPreview({ settings }: { settings: Record<string, string> }) {
+function MessagingTagListPreview({ settings, liveSite = false }: { settings: Record<string, string>; liveSite?: boolean }) {
   const [tags, setTags] = useState<Array<{ id: number; tag: string; importance?: number }>>([]);
 
   useEffect(() => {
@@ -3823,9 +4478,11 @@ function MessagingTagListPreview({ settings }: { settings: Record<string, string
 
   if (tags.length === 0) {
     return (
-      <div style={{ padding: "0.75rem", color: "#94a3b8", fontSize: "0.875rem", fontStyle: "italic" }}>
-        No tags found. Add tags in the Messaging section.
-      </div>
+      <BuilderOnlyNote liveSite={liveSite}>
+        No tags found. This module lists <strong>Messaging</strong> tags, which are
+        separate from your blog’s tags — add them under Messaging, or use the
+        Blog Tag Cloud module if a blog page is what you meant.
+      </BuilderOnlyNote>
     );
   }
 
@@ -7221,12 +7878,15 @@ function BlogNewsletterSubscribePreview({
   settings,
   theme,
   themePalette,
-  projectId = ""
+  projectId = "",
+  liveSite = false
 }: {
   settings: Record<string, string>;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
   projectId?: string;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const headline = settings.headline || "Stay in the loop";
   const description = settings.description || "";
@@ -7234,6 +7894,11 @@ function BlogNewsletterSubscribePreview({
   const crmFormId = settings.crmFormId ?? "";
   const showImage = settings.showImage === "true";
   const imageUrl = settings.imageUrl ?? "";
+
+  // No form id means there is no signup to offer. On a live page the block
+  // would be a headline and a coloured box over nothing - worse than absent,
+  // because it looks like a form that failed to load.
+  if (liveSite && !crmFormId) return null;
 
   return (
     <div style={{ background: bgColor, borderRadius: 8, padding: "1.5rem" }}>
@@ -7253,11 +7918,11 @@ function BlogNewsletterSubscribePreview({
             <p style={{ margin: "0 0 1rem", fontSize: "0.875rem", color: "#4a5568" }}>{description}</p>
           ) : null}
           {crmFormId ? (
-            <CrmFormPreview settings={settings} theme={theme} themePalette={themePalette} projectId={projectId} />
+            <CrmFormPreview settings={settings} theme={theme} themePalette={themePalette} projectId={projectId} liveSite={liveSite} />
           ) : (
-            <div className="builder-contact-form-stub">
+            <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
               Paste a CRM Form ID in module settings to activate this newsletter block.
-            </div>
+            </BuilderOnlyNote>
           )}
         </div>
       </div>
@@ -7265,7 +7930,67 @@ function BlogNewsletterSubscribePreview({
   );
 }
 
-function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string> }) {
+/**
+ * Why "match by category / tag" found nothing.
+ *
+ * There are two completely different causes and the fix differs: the post has
+ * nothing to match ON, or it has plenty and no other post shares any of it.
+ * The first is the one that bit Delray — every post on the platform had zero
+ * categories, because the post editor's Categories field never saved
+ * (fixed in #568), so match-by-categories could not work anywhere and said
+ * nothing about it.
+ */
+function matchFailureReason(
+  current: BlogPostRecord,
+  matchBy: string,
+  publishedCount: number
+): string {
+  const cats = current.categoryIds ?? [];
+  const tags = current.tags ?? [];
+  const onlyOne = publishedCount <= 1;
+
+  if (matchBy === "tags") {
+    if (tags.length === 0) return "This post has no tags, so there is nothing to match on. Add tags to it in the editor.";
+    return onlyOne
+      ? "No other post is published yet, so there is nothing to match against."
+      : "No other published post shares a tag with this one.";
+  }
+
+  if (matchBy === "categories") {
+    if (cats.length === 0) {
+      return "This post is not in any category, so there is nothing to match on. Put it in one in the editor, or set Match By to Tags or Hand-picked.";
+    }
+    return onlyOne
+      ? "No other post is published yet, so there is nothing to match against."
+      : "No other published post shares a category with this one.";
+  }
+
+  // Categories OR tags.
+  if (cats.length === 0 && tags.length === 0) {
+    return "This post has no categories and no tags, so there is nothing to match on.";
+  }
+  return onlyOne
+    ? "No other post is published yet, so there is nothing to match against."
+    : "No other published post shares a category or a tag with this one.";
+}
+
+function BlogRelatedPostsPreview({
+  settings,
+  liveSite = false,
+}: {
+  settings: Record<string, string>;
+  /**
+   * True only on a real published tenant page. It decides what an EMPTY
+   * result looks like: a visitor gets nothing at all, and anyone building the
+   * page gets a sentence saying why nothing matched.
+   *
+   * The module used to render `null` on empty in both places. On 2026-09-03
+   * that read as the feature being broken — it flashed "Loading related
+   * posts…" and then the whole section, heading included, disappeared — when
+   * in fact it was set to match by category on a site where no post has one.
+   */
+  liveSite?: boolean;
+}) {
   const matchBy = settings.matchBy ?? "categories";
   const isManual = matchBy === "manual";
   /**
@@ -7304,6 +8029,14 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
   const [relatedPosts, setRelatedPosts] = useState<BlogPostRecord[]>([]);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
   const [loading, setLoading] = useState(!isManual);
+  /**
+   * WHY the result is empty, in the words the person building the page needs.
+   * Set wherever the emptiness is decided, because that is the only place that
+   * still knows the difference between "nothing is picked", "what is picked is
+   * unpublished" and "this post has no categories to match on" — three states
+   * that look identical from the outside and need three different actions.
+   */
+  const [emptyReason, setEmptyReason] = useState("");
 
   useEffect(() => {
     function sync() {
@@ -7356,6 +8089,7 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
 
         if (!current) {
           setRelatedPosts([]);
+          setEmptyReason("That post could not be loaded, so there is nothing to match against.");
           return;
         }
 
@@ -7376,7 +8110,17 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
           );
           // Order follows the article list, not the order they were linked:
           // relations are mutual and unordered, so there is no "first".
-          setRelatedPosts(allPosts.filter((p) => relatedIds.has(p.id)).slice(0, count));
+          const picked = allPosts.filter((p) => relatedIds.has(p.id));
+          setRelatedPosts(picked.slice(0, count));
+          // "None chosen" and "the chosen ones are drafts" are different
+          // problems with different fixes, and they look the same from here.
+          setEmptyReason(
+            picked.length > 0
+              ? ""
+              : relatedIds.size === 0
+                ? "Nothing is related to this post yet. Open the post in the editor and pick its related posts."
+                : `${relatedIds.size} post${relatedIds.size === 1 ? " is" : "s are"} related to this one, but ${relatedIds.size === 1 ? "it is" : "none are"} published — a draft cannot appear here.`
+          );
           return;
         }
 
@@ -7392,8 +8136,12 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
         });
 
         setRelatedPosts(filtered.slice(0, count));
+        setEmptyReason(filtered.length > 0 ? "" : matchFailureReason(current, matchBy, allPosts.length));
       })
-      .catch(() => setRelatedPosts([]))
+      .catch(() => {
+        setRelatedPosts([]);
+        setEmptyReason("The related posts could not be loaded.");
+      })
       .finally(() => setLoading(false));
   }, [postSlug, isManual, isPicked, matchBy, count, showCategories]);
 
@@ -7441,10 +8189,14 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
 
   if (isManual) {
     if (manualPosts.length === 0) {
+      // Nothing at all for a visitor — heading included. Rendering the title
+      // over an empty space is what "flashes and disappears" looks like.
+      if (liveSite) return null;
       return (
-        <div>
+        <div className="builder-related-posts-empty">
           {sectionTitle}
-          <div
+          <BuilderOnlyNote
+            liveSite={liveSite}
             style={{
               padding: "1.5rem",
               border: "1px dashed #d1d5db",
@@ -7455,7 +8207,7 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
             }}
           >
             Add posts in module settings.
-          </div>
+          </BuilderOnlyNote>
         </div>
       );
     }
@@ -7519,8 +8271,14 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
   }
 
   if (!postSlug) {
+    // Same rule as the empty state below: this is a note to whoever is
+    // building the page, so a visitor must not be shown it. It said
+    // "Related posts appear here when viewing a blog post" on any published
+    // page the module sat on off a post — an instruction to a reader who
+    // cannot act on it.
+    if (liveSite) return null;
     return (
-      <div>
+      <div className="builder-related-posts-empty">
         {sectionTitle}
         <div
           style={{
@@ -7539,7 +8297,45 @@ function BlogRelatedPostsPreview({ settings }: { settings: Record<string, string
   }
 
   if (relatedPosts.length === 0) {
-    return null;
+    /*
+     * A VISITOR gets nothing. An empty box on a published page is worse than
+     * no box, and this is the behaviour that was always correct.
+     *
+     * Everyone else — the Builder canvas, the preview — gets the reason. The
+     * old code returned null in both places, so a module that had found no
+     * matches was indistinguishable from one that was broken: it flashed
+     * "Loading related posts…" and then the whole section vanished, heading
+     * and all. That is what a correctly-behaving module looked like on
+     * 2026-09-03 while it was set to match by category on a site where no post
+     * had one, and it read as the feature being broken.
+     */
+    if (liveSite) return null;
+    return (
+      <div className="builder-related-posts-empty">
+        {sectionTitle}
+        <div
+          style={{
+            padding: "1rem 1.25rem",
+            border: "1px dashed #d1d5db",
+            borderRadius: 8,
+            color: "#6b7280",
+            fontSize: "0.8125rem",
+            lineHeight: 1.5,
+            background: "#f9fafb",
+          }}
+        >
+          <strong style={{ display: "block", color: "#374151", marginBottom: 2 }}>
+            Nothing to show here yet.
+          </strong>
+          {emptyReason}
+          {/* Said plainly, because the box itself is the thing that looks
+              wrong: it is not an error, and it is not what a visitor sees. */}
+          <span style={{ display: "block", marginTop: 6, fontStyle: "italic" }}>
+            This note is only visible while building. Visitors see nothing at all.
+          </span>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -11204,6 +12000,12 @@ type BlogLinkTerm = {
   /** Categories list articles by slug; tags list them by the word. */
   slug: string;
   postCount: number;
+  /**
+   * How many of those posts are PUBLISHED — the ones a visitor can actually
+   * reach. `null` means the server did not say, which is not the same as none
+   * and must never render as "0 live".
+   */
+  livePostCount: number | null;
 };
 
 type BlogLinkArticle = {
@@ -11212,6 +12014,39 @@ type BlogLinkArticle = {
   slug: string;
   status: string;
 };
+
+/**
+ * Only a PUBLISHED post is on the website. The manager counts every post
+ * carrying a tag, which is the right number for renaming and removing but not
+ * for "what will a visitor see" — and reading it as the second is what made a
+ * correct public page look broken on 2026-09-03.
+ *
+ * Mirrors isLive() in lib/blogTagsStore.js, and matches the filter the public
+ * post feed applies (`?status=published`). If those three ever disagree, the
+ * manager is lying again.
+ */
+function isLiveArticle(status: string): boolean {
+  return status.trim().toLowerCase() === "published";
+}
+
+/** The short line under a tag's count: how many of them a visitor can reach. */
+function liveCountNote(term: BlogLinkTerm): string {
+  // null is "the server did not say", which must not render as none.
+  if (term.kind !== "tag" || term.livePostCount === null) return "";
+  if (term.postCount === 0) return "";
+  if (term.livePostCount === term.postCount) return "";
+  return term.livePostCount === 0 ? "none live" : `${term.livePostCount} live`;
+}
+
+/** The count button's tooltip, saying the same thing in a full sentence. */
+function liveCountTitle(term: BlogLinkTerm): string {
+  const posts = `${term.postCount} post${term.postCount === 1 ? "" : "s"} tagged \u201c${term.label}\u201d`;
+  if (term.kind !== "tag" || term.livePostCount === null) return `Show the ${posts}`;
+  if (term.livePostCount === term.postCount) return `Show the ${posts} — all published`;
+  return term.livePostCount === 0
+    ? `Show the ${posts}. None are published, so the website shows none of them.`
+    : `Show the ${posts}. ${term.livePostCount} published; the rest are not on the website.`;
+}
 
 /**
  * The tenant's blog links manager: a TAG manager, plus hand-picking related
@@ -11256,6 +12091,14 @@ function AdminBlogLinksPreview({
   const relateLabel    = settings.relateButtonLabel || "Relate Checked";
   const articleStatus  = settings.articleStatus || "all";
   const accent         = settings.accentColor || "#0f4f8f";
+  /*
+   * Where a post in the "posts with this tag" popup opens. The default is the
+   * slug the admin scaffold gives every tenant's Blog Manager
+   * (lib/projectAdminScaffold.js), so it is a convention rather than a guess —
+   * the setting exists for a tenant who renamed that page.
+   */
+  const managerPageUrl = (settings.managerPageUrl || "/admin-blog-manager").trim();
+  const postViewUrl    = (settings.postViewUrl || "/blog-post-view").trim();
 
   const [terms, setTerms]       = useState<BlogLinkTerm[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
@@ -11272,6 +12115,18 @@ function AdminBlogLinksPreview({
   /** The tag being renamed, and the box holding the new name. */
   const [editTag, setEditTag]   = useState<string | null>(null);
   const [tagDraft, setTagDraft] = useState("");
+
+  /*
+   * The "which posts carry this tag?" popup. `postsTag` is the open/closed
+   * state AND the heading, so there is never a modal with no tag behind it.
+   * The error is kept separate from the list because an empty list and a
+   * failed load must not render the same — "this tag has no posts" would be a
+   * lie told by a dropped request.
+   */
+  const [postsTag, setPostsTag] = useState<string | null>(null);
+  const [tagPosts, setTagPosts] = useState<BlogLinkArticle[]>([]);
+  const [tagPostsLoading, setTagPostsLoading] = useState(false);
+  const [tagPostsError, setTagPostsError] = useState("");
 
   /*
    * MEMOISED, and it has to be. getCrmProjectHeaders() builds a fresh object
@@ -11304,6 +12159,53 @@ function AdminBlogLinksPreview({
     return d;
   }, [headers, isPreview]);
 
+  /*
+   * Open the popup for one tag and load its posts. The same endpoint the
+   * relate picker below already uses — a tag's posts are a read the server
+   * has always been able to answer.
+   */
+  const openTagPosts = useCallback(async (tag: string) => {
+    setPostsTag(tag);
+    setTagPosts([]);
+    setTagPostsError("");
+    setTagPostsLoading(true);
+    try {
+      const q = projectQuery();
+      const d = await api(`/api/blog/tags/posts?tag=${encodeURIComponent(tag)}${q ? `&${q}` : ""}`);
+      const rows = (d?.posts ?? d?.data ?? []) as Array<Record<string, unknown>>;
+      setTagPosts((Array.isArray(rows) ? rows : []).map((row) => ({
+        id: String(row.id || ""),
+        title: String(row.title || "(untitled)"),
+        slug: String(row.slug || ""),
+        status: String(row.status || ""),
+      })));
+    } catch (e) {
+      // Never fall through to an empty list: that reads as "no posts".
+      setTagPostsError((e as Error).message || "Could not load the posts for this tag.");
+    } finally {
+      setTagPostsLoading(false);
+    }
+  }, [api, projectQuery]);
+
+  const closeTagPosts = useCallback(() => {
+    setPostsTag(null);
+    setTagPosts([]);
+    setTagPostsError("");
+  }, []);
+
+  /*
+   * Escape closes it. This is a document listener rather than onKeyDown on the
+   * dialog: a key handler on the element only fires when focus is already
+   * inside it, and the popup opens from a click on the count, which leaves
+   * focus on the button outside.
+   */
+  useEffect(() => {
+    if (postsTag === null) return undefined;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeTagPosts(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [postsTag, closeTagPosts]);
+
   /** Reload both taxonomies. Called after every write, so counts stay true. */
   const loadTerms = useCallback(async () => {
     setLoadingTerms(true);
@@ -11319,6 +12221,7 @@ function AdminBlogLinksPreview({
             label: String(row.name || "(untitled)"),
             slug: String(row.slug || ""),
             postCount: 0,
+            livePostCount: null,
           });
         }
       }
@@ -11327,7 +12230,17 @@ function AdminBlogLinksPreview({
       for (const row of Array.isArray(rows) ? rows : []) {
         const tag = String(row.tag || "");
         if (!tag) continue;
-        next.push({ kind: "tag", key: `tag:${tag}`, label: tag, slug: tag, postCount: Number(row.postCount ?? 0) });
+        // An older server that does not send livePostCount leaves it null.
+        // Defaulting it to 0 would tell the operator every tag is dead.
+        const live = row.livePostCount;
+        next.push({
+          kind: "tag",
+          key: `tag:${tag}`,
+          label: tag,
+          slug: tag,
+          postCount: Number(row.postCount ?? 0),
+          livePostCount: live === undefined || live === null ? null : Number(live),
+        });
       }
       setTerms(next);
       setError("");
@@ -11557,7 +12470,45 @@ function AdminBlogLinksPreview({
                   <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c", overflowWrap: "anywhere" }}>
                     {term.label}
                   </span>
-                  <span style={{ fontSize: "0.8125rem", color: "#94a3b8", textAlign: "right" }}>{term.postCount}</span>
+                  {/* The count is the affordance: it opens the list of posts
+                      carrying this tag. A tag with no posts is not a button —
+                      a control that opens an empty box is worse than a number. */}
+                  <span style={{ fontSize: "0.8125rem", textAlign: "right" }}>
+                    {term.postCount > 0 ? (
+                      <button
+                        type="button"
+                        className="admin-blog-links-count-btn"
+                        onClick={() => void openTagPosts(term.label)}
+                        title={liveCountTitle(term)}
+                        style={{
+                          background: "none", border: "none", padding: 0, cursor: "pointer",
+                          font: "inherit", color: accent, textDecoration: "underline",
+                        }}
+                      >{term.postCount}</button>
+                    ) : (
+                      <span style={{ color: "#94a3b8" }}>{term.postCount}</span>
+                    )}
+                    {/* The count alone told the operator "13" for a tag whose
+                        thirteen posts were all drafts, while the public tag
+                        page correctly showed none — and that read as a broken
+                        site (2026-09-03). The number of posts a VISITOR can
+                        reach belongs beside it, not behind a click.
+                        Only shown when it differs from the total, and never
+                        when the server did not say (null ≠ none). */}
+                    {liveCountNote(term) ? (
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "0.6875rem",
+                          lineHeight: 1.3,
+                          marginTop: 1,
+                          color: term.livePostCount === 0 ? "#b45309" : "#64748b",
+                        }}
+                      >
+                        {liveCountNote(term)}
+                      </span>
+                    ) : null}
+                  </span>
                   <span style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "flex-end" }}>
                     <button
                       type="button"
@@ -11736,6 +12687,125 @@ function AdminBlogLinksPreview({
             </>
           )}
         </section>
+      )}
+
+      {/*
+        The posts carrying one tag. Portalled to <body> through
+        BuilderBodyPortal for the reason that component documents, and for a
+        second one specific to this module: it renders inside ARBITRARY tenant
+        themes, where a site rule has already blown one of this panel's own
+        controls out to 1056px (docs/BLOG_LINKS_MANAGER.md). A popup left
+        inside the tenant's container inherits whatever that theme does to
+        positioned children.
+      */}
+      {postsTag !== null && (
+        <BuilderBodyPortal>
+          <div
+            className="admin-blog-links-posts-overlay"
+            onClick={closeTagPosts}
+            role="presentation"
+          >
+            <div
+              aria-label={`Posts tagged ${postsTag}`}
+              aria-modal="true"
+              className="admin-blog-links-posts-modal"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+            >
+              <div className="admin-blog-links-posts-header">
+                {/* The tag is the content here too — it wraps, never clips. */}
+                <strong style={{ overflowWrap: "anywhere" }}>Posts tagged “{postsTag}”</strong>
+                <button
+                  type="button"
+                  className="admin-blog-links-posts-close"
+                  onClick={closeTagPosts}
+                  aria-label="Close"
+                >✕</button>
+              </div>
+
+              {/* The header counts what is IN the box; this line says how much
+                  of it the public site shows. Rendered only once the posts are
+                  actually loaded — a summary written over a pending or failed
+                  request would be a number nobody measured. */}
+              {!tagPostsLoading && !tagPostsError && tagPosts.length > 0 ? (
+                (() => {
+                  const live = tagPosts.filter((post) => isLiveArticle(post.status)).length;
+                  const total = tagPosts.length;
+                  if (live === total) return null;
+                  return (
+                    <p
+                      className="admin-blog-links-posts-live-note"
+                      style={{
+                        margin: "0 0 2px",
+                        padding: "8px 12px",
+                        fontSize: "0.8125rem",
+                        lineHeight: 1.45,
+                        color: "#7c4a05",
+                        background: "#fff7ed",
+                        borderBottom: "1px solid #fed7aa",
+                      }}
+                    >
+                      <strong>{live} of {total} published.</strong>{" "}
+                      {live === 0
+                        ? "None of these are on the website yet — a draft carries the tag but visitors cannot see it, so the public tag page shows nothing."
+                        : "The rest are drafts, which carry the tag but do not appear on the website."}
+                    </p>
+                  );
+                })()
+              ) : null}
+
+              <div className="admin-blog-links-posts-body">
+                {tagPostsLoading ? (
+                  <p className="admin-blog-links-posts-empty">Loading…</p>
+                ) : tagPostsError ? (
+                  /* An error is NOT an empty list. Saying "no posts" here
+                     would be a lie told by a dropped request. */
+                  <p className="admin-blog-links-posts-error" role="alert">{tagPostsError}</p>
+                ) : tagPosts.length === 0 ? (
+                  <p className="admin-blog-links-posts-empty">No posts carry this tag.</p>
+                ) : (
+                  tagPosts.map((post) => {
+                    const editHref = `${managerPageUrl}${managerPageUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(post.id)}`;
+                    const viewHref = post.slug
+                      ? `${postViewUrl}${postViewUrl.includes("?") ? "&" : "?"}post=${encodeURIComponent(post.slug)}`
+                      : "";
+                    return (
+                      <div className="admin-blog-links-posts-row" key={post.id}>
+                        <span className="admin-blog-links-posts-title" style={{ overflowWrap: "anywhere" }}>
+                          {post.title}
+                          {post.status && post.status !== "published" && (
+                            <span className="admin-blog-links-posts-status">{post.status}</span>
+                          )}
+                        </span>
+                        {/* The same two controls the Blog Manager's own rows
+                            use, in the same order — not a third convention. */}
+                        <span className="admin-blog-links-posts-actions">
+                          <AdminTableIconButton
+                            icon="view"
+                            label="View"
+                            href={viewHref || undefined}
+                            linkTarget="_blank"
+                            disabled={!viewHref}
+                            onClick={!viewHref ? () => {} : undefined}
+                          />
+                          <AdminTableIconButton
+                            icon="edit"
+                            label="Edit"
+                            href={editHref}
+                          />
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="admin-blog-links-posts-footer">
+                <button type="button" className="admin-blog-links-posts-btn" onClick={closeTagPosts}>Close</button>
+              </div>
+            </div>
+          </div>
+        </BuilderBodyPortal>
       )}
     </div>
   );

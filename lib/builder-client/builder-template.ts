@@ -3455,7 +3455,12 @@ export function createEmptyModule(
       : type === "code"
       ? {
           label: "",
-          snippetMode: "html"
+          snippetMode: "html",
+          // "auto" shields only the focus-stealing chart widgets the shield
+          // was written for; a map, a video, a Calendly render on first paint
+          // (task 86bbugzep). Absent reads as "auto" too, so pages built
+          // before this key behave the same as new ones.
+          embedActivation: "auto"
         }
       : type === "merch"
       ? {
@@ -3692,6 +3697,16 @@ export function createEmptyModule(
                             postPageUrl: "",
                             cardGap: "24",
                             filterCategory: "",
+                            /*
+                             * "all" = today's three independent checkboxes.
+                             * A single mode ("tag" / "category" / "author")
+                             * narrows the bar to that one control and titles
+                             * the results. It must default to "all": these
+                             * defaults are merged UNDER saved settings, so any
+                             * other value would retitle every Post Feed that
+                             * already exists.
+                             */
+                            filterMode: "all",
                             showSearch: "true",
                             showCategoryFilter: "true",
                             showTagFilter: "true",

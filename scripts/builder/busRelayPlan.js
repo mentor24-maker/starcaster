@@ -19,18 +19,35 @@
  * move — handbackTarget() below is that rule in code.
  */
 
-/** The standing watch list. Ids come in as parameters (they live in env /
- *  constants at the call site) so this table stays a pure description. */
+/**
+ * The standing watch list. Ids come in as parameters (they live in env /
+ * constants at the call site) so this table stays a pure description.
+ *
+ * ORDER IS LOAD-BEARING, AND THE MERGE-CAPABLE LIST GOES FIRST (2026-09-03,
+ * task 86bbugakw). The relay spends one request per open ticket to read its
+ * comments, and ClickUp allows ~100 per minute across the whole company's
+ * token. Agent Response held 92 open tickets and is never drained, so with it
+ * first the allowance was gone before the sweep reached the Loop Queue — the
+ * only list carrying `merge: true`.
+ *
+ * The relay then failed every 10-minute pass for SIXTEEN HOURS: `requests this
+ * pass: 97`, then `100`, then HTTP 429. Merge-on-comment was dead the whole
+ * time (Dane commented `merge` on 86bbjt1b4 at 11:17am and nothing acted on
+ * it), Lane A halted fail-safe on every pass, and with nothing merging the WIP
+ * cap filled and the build loop declined every pass saying "the merge side is
+ * the bottleneck". Open work went 38 -> 63 in seven days with every gate green.
+ *
+ * Reordering does not FIX the budget — the incremental scan (86bbugbay), the
+ * 429 retry (86bbugbym) and the shared budget (86bbugcdb) do that. It makes the
+ * failure land on the list that can afford it: a notify-only sweep that stops
+ * short delays a bus message, where a merge sweep that stops short strands
+ * shipped work behind an unread comment. Those are not the same cost, so when
+ * the budget runs out it should run out on Agent Response.
+ */
 function defaultWatches({ agentResponseList, loopQueueList }) {
+  // Loop Queue FIRST — see the note above. `mergeEnabled` is the property that
+  // matters, not the label: whichever watch can merge must not be last.
   return [
-    {
-      list: agentResponseList,
-      label: 'Agent Response',
-      statuses: ['pending response', 'responding'],
-      // Notify-only, as it has been since PR #340.
-      handback: {},
-      merge: false,
-    },
     {
       list: loopQueueList,
       label: 'Loop Queue',
@@ -45,7 +62,86 @@ function defaultWatches({ agentResponseList, loopQueueList }) {
       handback: { 'needs your input': 'Queued' },
       merge: true,
     },
+    {
+      list: agentResponseList,
+      label: 'Agent Response',
+      statuses: ['pending response', 'responding'],
+      // Notify-only, as it has been since PR #340.
+      handback: {},
+      merge: false,
+    },
   ];
+}
+
+/**
+ * WAS THIS PASS COMPLETE, AND IF NOT, WHICH LIST DID IT NOT FINISH?
+ * (2026-09-03, task 86bbugdv9.)
+ *
+ * The relay already reported what it could not check — but it reported it as
+ * TICKETS, and that is the wrong unit. On 2026-09-03 a pass that had entirely
+ * failed to sweep the merge-capable list printed this:
+ *
+ *     bus-relay: 0 relayed, 0 handed back, 0 merged, ... 3 could not be checked.
+ *     Could not fully verify:
+ *       - 86bbjt1b4 (Panel sweep 8/15...): could not read comments
+ *
+ * Three ticket ids read as three minor gaps. The truth was "the merge lane did
+ * not run", and one of those three ids was carrying Dane's own `merge` command,
+ * described as an unread comment rather than as an unperformed merge. The pass
+ * happened sixteen hours in a row and nobody could tell from its own output.
+ *
+ * The precedent is `npm run throughput`, which gives one of four verdicts and
+ * never two, and says UNKNOWN when it could not take a reading. CLAUDE.md
+ * states the rule it embodies: "alive but useless" never renders as healthy,
+ * and neither does "could not tell". This is that rule at LIST granularity.
+ *
+ * Pure, so a test can reach every branch without a network.
+ *
+ * `sweeps` is one entry per watch: { label, merge, complete, why }.
+ */
+function sweepVerdict(sweeps) {
+  const list = Array.isArray(sweeps) ? sweeps : [];
+  if (!list.length) {
+    // No sweep at all is not a clean pass. It is the absence of evidence, and
+    // the whole point of this function is that those must not look alike.
+    return {
+      complete: false,
+      mergeLaneRan: false,
+      exitCode: 1,
+      line: 'INCOMPLETE — no list was swept at all, so nothing can be concluded about either one.',
+    };
+  }
+  const unfinished = list.filter((s) => !s.complete);
+  const mergeSweep = list.find((s) => s.merge);
+  const mergeLaneRan = Boolean(mergeSweep && mergeSweep.complete);
+
+  if (!unfinished.length) {
+    return {
+      complete: true,
+      mergeLaneRan,
+      exitCode: 0,
+      line: `COMPLETE — swept ${list.length} list(s) in full: ${list.map((s) => s.label).join(', ')}.`,
+    };
+  }
+
+  const named = unfinished
+    .map((s) => `${s.label}${s.merge ? ' (the merge-capable list)' : ''}${s.why ? ` — ${s.why}` : ''}`)
+    .join('; ');
+
+  // The merge-capable list gets its own sentence, in the words that say what it
+  // COSTS rather than what failed. "Could not read comments" is a mechanism; a
+  // merge command going unread is the consequence, and the consequence is the
+  // thing a reader needs at 2am.
+  const mergeWarning = unfinished.some((s) => s.merge)
+    ? ' Merge commands on that list were NOT read this pass, so an authorization may be sitting unacted on.'
+    : '';
+
+  return {
+    complete: false,
+    mergeLaneRan,
+    exitCode: 1,
+    line: `INCOMPLETE — did not finish ${named}.${mergeWarning}`,
+  };
 }
 
 /**
@@ -315,6 +411,7 @@ function busFailureBucket({ delivered, cosmetic } = {}) {
 module.exports = {
   operatorComments,
   defaultWatches,
+  sweepVerdict,
   handbackTarget,
   mergeEnabled,
   BUS_RELAY_MARKER,

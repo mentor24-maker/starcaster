@@ -37,6 +37,30 @@ the fix now makes them refuse forever, in writing, which is the only kind of
 proof worth having. The same mistake had already been fixed a week earlier in
 the twin check next door and left alive in this one, so the shared piece now
 lives in a single file that both of them read.
+## 2026-09-03 — A map on a directions page shows the map (#571)
+
+Open the Delray directions page and you did not get a map. You got a grey
+rectangle with a **Load Chart** button on it, and you had to click that before
+the map appeared — on the one page where the map is the whole reason a person
+went there.
+
+That grey panel was doing a real job, just to the wrong thing. Some embedded
+widgets — the crypto price charts in particular — snatch the page's attention
+the moment they load and scroll you down to themselves mid-read. The panel was
+built to hold those back until you ask for them. But it was put in front of
+*every* embed, and nobody noticed, because inside the Builder the embeds always
+showed straight away. Only visitors to the finished site ever saw the button.
+
+Now the hold-back is only used on the handful of widgets it was built for. A
+Google Map, a YouTube video, a Calendly booking form all appear as the page
+loads, the way anyone would expect. Existing pages carrying a price chart are
+untouched — the panel is still in front of those, and clicking it still works.
+If you ever want to decide for yourself, each Code module has a new **Loading**
+choice in its settings: leave it on Automatic, or say "load right away" or
+"wait for a click" for that one module.
+
+The button also stopped calling everything a chart. When it does appear, it now
+says what it is covering — "Load map", "Load video", "Load embed".
 
 ## 2026-08-29 — One loose row above four tidy panels (#449)
 
