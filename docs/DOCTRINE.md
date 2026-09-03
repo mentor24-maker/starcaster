@@ -1643,6 +1643,149 @@ be broken. §6.13 says a reported conflict is a claim to verify; the same is tru
 of a reported cause, and it costs one query to check.
 
 
+### 5.26 A probe must ask a question the thing can ANSWER — a malformed question's honest error reads as absence
+
+2026-09-03, found while building the blog links manager (86bbu4qh5), fixed in
+PR #555. `lib/blogPostsStore.js` decided whether a Supabase table existed by
+selecting one column from it:
+
+```js
+const probe = await sbQuery({ table, query: 'select=id&limit=1' });
+const ok = probe.ok || !isMissingTable(probe.error);
+```
+
+`blog_post_categories` is a pure join table. Its primary key is
+`(post_id, category_id)` and **it has no `id` column at all**. So Postgres
+answered, correctly and permanently:
+
+```
+column blog_post_categories.id does not exist
+```
+
+`isMissingTable()` matches on `does not exist`, so that reply — a true
+statement about a COLUMN — was read as the TABLE being gone. The store then
+used the local JSON file for every read and every write of that join, and said
+nothing.
+
+That is not cosmetic. Vercel's filesystem is read-only (landmine 6), so the
+fallback write vanishes: **assigning a category to a blog post reported success
+and never persisted, and listing posts by category returned an empty list on a
+blog that had them.** Both symptoms look exactly like "this tenant has no
+categories yet", which is why nobody chased it.
+
+**This is the third sibling of a family already on the books, and it is
+distinct from both:**
+
+| | The failure | The rule |
+|---|---|---|
+| §5.19 | A transient 502 cached forever as "no tenant columns" | Do not remember a **failed question** as an answer |
+| §5.21 | A 409 refusal answered with the caller's own input | Do not fall back when the database **refused** |
+| **§5.26** | A question the table cannot answer, read as absence | Do not ask a question the thing **cannot answer** |
+
+Nothing was flaky and nothing refused. The probe was simply the wrong question,
+and its correct answer was misread. The fix names a column each table actually
+has (`PROBE_COLUMN = { posts: 'id', join: 'post_id' }`), pinned by
+`scripts/builder/blogStoreTableProbe.test.js`.
+
+**The general form:** a feature probe, a capability check, a health check and
+an existence check all turn an error string into a boolean. Before trusting
+that boolean, ask what ELSE could produce that string — and make the probe
+specific enough that only the fact you care about can produce it.
+
+### 5.27 Module defaults merge UNDER saved settings, so defaulting a migration key defeats the migration
+
+2026-09-03, task 86bbu4gdx, caught by `check:render` before it shipped
+(PR #564). The tag cloud gained a `tagSource` setting with a migration rule
+written precisely so no live page would change:
+
+> an explicit choice wins; a **non-empty hand-typed list means `manual`**; only
+> an empty module defaults to `auto`.
+
+The migration function was right. It was defeated one file away, by adding the
+new key to the module's defaults in `builder-template.ts`:
+
+```js
+: type === "blog-tag-cloud"
+  ? { tagSource: "auto", tags: JSON.stringify([]), … }
+```
+
+Those defaults are merged **underneath** a module's saved settings. A page that
+had carried a hand-typed tag list for months therefore gained an explicit
+`tagSource: "auto"` the moment it was normalised — and an explicit choice wins,
+so the curated list was ignored. Every such page would have silently swapped
+its content on a live site, with no edit and no deploy anyone would connect
+to it.
+
+**A default is not neutral.** It writes a value where absence was the signal.
+If a migration reads "this key is missing" as meaningful, then nothing may fill
+that key in — the default has to be the absence itself, and the resolver
+supplies the behaviour. Here `tagSource` is deliberately absent from the
+defaults, and a new cloud still lands on `auto` because
+`resolveTagCloudSource()` reads an empty list that way.
+
+No unit test could have caught it: each half was correct in isolation. The
+differential render check caught it because it builds a module the way the
+Builder does — defaults merged in — and the contracts it ran carried hand-typed
+lists that abruptly stopped rendering.
+
+### 5.28 A module renders inside ARBITRARY tenant themes, so it may not rely on element defaults
+
+2026-09-03, task 86bbue8ux, PR #559. A tenant's published site carries the
+tenant's own stylesheet, and a Builder module renders inside it. Two defects in
+one afternoon, both from assuming browser defaults:
+
+**A semantic element inherits the site's styling for that element.** The blog
+links manager used `<header>` for a module's internal strip. The tenant theme
+styles its own site header, so the strip rendered as a **solid black block**
+with dark text on it. Inside a module, prefer a plain `<div>`; the semantics
+buy nothing here and the inheritance is a live hazard.
+
+**A form control takes the theme's sizing.** The same panel's row checkbox
+computed to **1056px wide**, because the theme carried `input { width: 100% }`.
+The title beside it was starved to zero width, so every row rendered tall and
+apparently empty with its text wrapped to nothing.
+
+`flex: 0 0 auto` does **not** protect against this, and that is the part worth
+remembering: the basis is `auto`, so the flex item takes its `width` property —
+and the theme set that. Size form controls explicitly (`width`/`min-width`/
+`max-width`), and set `background`/`color` explicitly on anything whose element
+name a theme is likely to have opinions about.
+
+Nothing in this repo can catch either one. `check:panels` measures the settings
+EDITOR, which renders in the admin shell. `check:render` drives
+`builder-preview.html`, which carries no tenant theme. Both were green. The
+module was opened in a browser against a real tenant page, which is the only
+place these appear.
+
+### 5.29 A Builder-time affordance must not render at visit time
+
+2026-09-03, operator report with screenshots, fixed in PR #564.
+`delraytennis.starcaster.pro/blog` — a real client's public site — was
+advertising the tags **react, typescript, design, tutorial** to visitors. They
+are `PLACEHOLDER_TAGS`, and the live renderer reached them in one line:
+
+```js
+const tags = configured.length ? configured : PLACEHOLDER_TAGS;
+```
+
+The placeholders are legitimate and worth keeping: without them a tag cloud is
+an empty box on the Builder canvas while somebody designs the page around it.
+The defect is that nothing separated "somebody is designing this" from "a
+visitor is reading this". `liveSite` is that separation, and it was already
+being passed to other modules on the same dispatcher.
+
+**On a live page, nothing to show means show nothing** — not invented content,
+and not an empty-state message written for an administrator. The same sidebar
+also reads *"No tags found. Add tags in the Messaging section."* to visitors
+who have no Messaging section and cannot reach one; the sweep for that and for
+other `x.length ? x : PLACEHOLDER` fallbacks in live renderers is ticket
+86bbugm2h.
+
+The guard is a test that renders the module with `liveSite` and asserts the
+demo strings are absent — `components/builder-template-preview-tag-cloud.test.tsx`,
+"placeholder tags never reach a visitor". Copy that shape for any module
+carrying an affordance.
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
