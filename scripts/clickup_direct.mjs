@@ -1003,6 +1003,40 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     return { outcome: 'refused', reason: why };
   };
 
+  /**
+   * The bookkeeping that follows a merge: mark the authorization spent, post
+   * the record, move the ticket to Live and clear the assignees.
+   *
+   * Extracted (task 86bbup3u1) because there are now TWO ways a merge ends —
+   * this pass running `gh pr merge`, and GitHub's auto-merge landing it
+   * between passes — and both owe the operator the identical trail. Two
+   * copies of this would be two chances for the auto-merge path to quietly
+   * skip the Live move, which is the one part he actually looks at.
+   */
+  const recordMergedTicket = async (record, prRef) => {
+    await markMergeHandled(authorizingComment, task, unchecked, record.marker);
+
+    const recOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: record.body });
+    if (!recOut.res.ok) unchecked.push(`${task.id}: PR #${prRef.number} MERGED, but the record comment failed to post`);
+
+    // Live is a closed status: the ticket leaves the open view here. Assignees
+    // clear in the same write — the handoff rule, same as every other machine
+    // status (loop-build SKILL.md, "Assignment is the handoff signal").
+    const rem = (task.assignees || []).map((a) => a.id);
+    const moveOut = await call('PUT', `/api/v2/task/${task.id}`, { status: 'Live', assignees: { add: [], rem } });
+    if (!moveOut.res.ok) {
+      unchecked.push(`${task.id}: PR #${prRef.number} MERGED but the ticket did NOT move to Live — move it by hand`);
+    } else {
+      const now = moveOut.json.status?.status ?? '?';
+      if (now.toLowerCase() !== 'live') {
+        unchecked.push(`${task.id}: PR #${prRef.number} MERGED but the move to Live did not stick (came back "${now}")`);
+      } else {
+        const leftover = (moveOut.json.assignees || []).map((a) => a.id);
+        if (leftover.length) unchecked.push(`${task.id}: moved to Live but assignees did not clear ([${leftover.join(', ')}])`);
+      }
+    }
+  };
+
   if (decision.act === 'refuse') {
     return refuse(decision.reason, 'This ticket is not in a state a script may merge from.');
   }
@@ -1012,7 +1046,12 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // `reviewDecision` is here so a BLOCKED merge can name the rule that is
   // unmet instead of guessing at one (task 86bbrg9v0). Without it the gate
   // still answers, but it answers CANNOT TELL.
-  const fields = 'number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,title,url,statusCheckRollup';
+  // `autoMergeRequest` is how this pass knows whether GitHub is already
+  // holding the merge for it (task 86bbup3u1). It is read from GITHUB rather
+  // than remembered in a marker of our own on purpose: GitHub is the thing
+  // that will or will not perform the merge, so its answer is the only one
+  // that cannot drift from what actually happens.
+  const fields = 'number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,title,url,statusCheckRollup,autoMergeRequest';
   const view = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
   if (!view.ok) {
     // A read that failed is not a red PR — it is a PR nobody checked. Say so
@@ -1029,12 +1068,53 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     return { outcome: 'waiting', reason: 'unparseable gh output' };
   }
 
+  // THE PR IS ALREADY MERGED AND HIS WORD IS STILL UNSPENT (task 86bbup3u1).
+  // Before auto-merge this only happened when somebody merged by hand, and
+  // githubGate's answer — refuse, "the PR is already merged" — described what
+  // this relay had done accurately enough. Once the relay arms GitHub to
+  // merge on its behalf it becomes the ORDINARY ending, and posting "merge
+  // NOT performed" on a ticket whose PR is merged is simply false. So the
+  // bookkeeping the merge path owes him gets done: record it, move it to
+  // Live. Nothing here can double-merge — the merge has already happened and
+  // the only thing left is saying so.
+  if (String(prJson.state || '').toUpperCase() === 'MERGED') {
+    const wasArmed = Boolean(prJson.autoMergeRequest);
+    if (dryRun) {
+      console.error(`  DRY RUN — PR #${pr.number} is already merged; would record it and set ${label} to Live`);
+      return { outcome: 'would-record-merged', pr: pr.number };
+    }
+    const mergedAt = new Date().toISOString();
+    const record = mergeOnComment.mergedElsewhereNotice({ commentId: authorizingComment, pr, mergedAt, armed: wasArmed });
+    console.error(`  ALREADY MERGED PR #${pr.number} for ${label} — recording it and moving the ticket to Live`);
+    await recordMergedTicket(record, pr);
+    const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGED: ${label} — PR #${pr.number} is merged into main (${wasArmed ? "GitHub's auto-merge, armed by this relay on Dane's word" : 'merged outside this relay'}), ticket set to Live. main auto-deploys.\n\n${pr.url}`);
+    if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${task.id}: PR #${pr.number} recorded as merged and moved to Live, but the bus post failed (${bus.why})` });
+    return { outcome: 'merged', pr: pr.number, url: pr.url, viaAutoMerge: wasArmed };
+  }
+
+  // Is GitHub already holding this one, and has it been holding it too long?
+  // An armed merge that never fires is silent in a way the old treadmill was
+  // not: the pass ends cleanly having handed the PR over, so "handed off"
+  // reads exactly like "done". This is the only thing still watching it.
+  const armedFor = mergeOnComment.autoMergeArmedTooLong({ autoMergeRequest: prJson.autoMergeRequest });
+  if (armedFor.state === 'stale' || armedFor.state === 'cannot-tell') {
+    unchecked.push(`${task.id}: PR #${pr.number} — ${armedFor.reason}`);
+    console.error(`  AUTO-MERGE STALLED on ${label}: ${armedFor.reason}`);
+  }
+
   let gate = githubGate(prJson);
 
   // Behind main: catch the branch up, then stop for this pass. The push
   // restarts CI, so merging on the checks just read would be merging on a
   // result that no longer describes the branch.
   if (gate.action === 'update-branch') {
+    // GitHub is already holding this one, and `allow_update_branch` means it
+    // does the catch-up itself. Pushing our own catch-up on top would restart
+    // CI for nothing and race the thing we just delegated to.
+    if (prJson.autoMergeRequest) {
+      console.error(`  MERGE WAITING on ${label}: behind main, but auto-merge is armed — GitHub catches it up and lands it`);
+      return { outcome: 'waiting', reason: 'behind main; auto-merge armed, GitHub catches it up' };
+    }
     if (dryRun) {
       console.error(`  DRY RUN — would update PR #${pr.number} from main, then wait for CI`);
       return { outcome: 'would-update-branch', pr: pr.number };
@@ -1360,9 +1440,67 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   }
 
   // Not terminal: no marker, no comment, no noise. The next pass looks again.
+  //
+  // EXCEPT that "the next pass looks again" was the whole bug (task
+  // 86bbup3u1). CI here takes ~6 minutes, main absorbs a merge every ~20, and
+  // a pass that defers is starting from behind every time. So instead of
+  // coming back to look, hand the PR to GitHub: armed, it lands the moment
+  // the required checks pass, and catches the branch up on its own.
+  //
+  // This sits BELOW the staleness block on purpose, and the order is the
+  // safety property. GitHub enforces branch protection and nothing else, and
+  // `review-gate` is not a required check on this repo — so arming above the
+  // staleness question would hand a stale review gate to something that
+  // cannot see it. autoMergeDecision refuses to arm on anything but a fresh
+  // (or absent) gate, and DISARMS a PR whose gate has gone stale since.
   if (gate.action === 'wait') {
-    console.error(`  MERGE WAITING on ${label}: ${gate.reason}`);
-    return { outcome: 'waiting', reason: gate.reason };
+    const freshStaleness = reviewGate.reviewGateStaleness({ rollup: prJson.statusCheckRollup, comments });
+    const auto = mergeOnComment.autoMergeDecision({
+      gate,
+      autoMergeRequest: prJson.autoMergeRequest,
+      reviewGateState: freshStaleness.state,
+    });
+
+    if (auto.action === 'arm' || auto.action === 'disarm') {
+      if (dryRun) {
+        console.error(`  DRY RUN — would ${auto.action} auto-merge on PR #${pr.number}: ${auto.reason}`);
+        return { outcome: auto.action === 'arm' ? 'would-arm-auto-merge' : 'would-disarm-auto-merge', pr: pr.number, reason: auto.reason };
+      }
+      const args = auto.action === 'arm'
+        ? ['pr', 'merge', String(pr.number), '--repo', repo, '--auto', '--squash', '--delete-branch']
+        : ['pr', 'merge', String(pr.number), '--repo', repo, '--disable-auto'];
+      const ran = gh(args);
+      if (!ran.ok) {
+        // Not a refusal: arming is an optimisation over waiting, and failing
+        // to arm just leaves the PR where it already was. Say so out loud
+        // rather than reporting a clean pass — a silent failure here puts the
+        // treadmill back with nothing to show it.
+        unchecked.push(`${task.id}: could not ${auto.action} auto-merge on PR #${pr.number} (${ran.stderr.slice(0, 200)}) — the merge falls back to the next pass`);
+        console.error(`  MERGE WAITING on ${label}: could not ${auto.action} auto-merge — ${gate.reason}`);
+        return { outcome: 'waiting', reason: gate.reason };
+      }
+
+      // READ IT BACK. `gh` exiting 0 is not evidence that GitHub is holding
+      // the merge — and "armed" is precisely the state this pass then stops
+      // watching, so an unverified arming is an unwatched PR.
+      const confirm = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', 'autoMergeRequest']);
+      let confirmed = null;
+      if (confirm.ok) {
+        try { confirmed = Boolean(JSON.parse(confirm.stdout).autoMergeRequest); } catch { confirmed = null; }
+      }
+      const wanted = auto.action === 'arm';
+      if (confirmed === null) {
+        unchecked.push(`${task.id}: PR #${pr.number} — auto-merge ${auto.action} reported success but could not be read back, so whether GitHub is holding it is unknown`);
+      } else if (confirmed !== wanted) {
+        unchecked.push(`${task.id}: PR #${pr.number} — auto-merge ${auto.action} reported success but reading it back says otherwise (armed=${confirmed})`);
+      }
+      console.error(`  AUTO-MERGE ${auto.action.toUpperCase()}ED on ${label}: ${auto.reason}`);
+      return { outcome: auto.action === 'arm' ? 'auto-merge-armed' : 'auto-merge-disarmed', pr: pr.number, reason: auto.reason };
+    }
+
+    const why = auto.action === 'already-armed' ? `${gate.reason} — auto-merge is armed, GitHub lands it` : gate.reason;
+    console.error(`  MERGE WAITING on ${label}: ${why}`);
+    return { outcome: 'waiting', reason: why };
   }
 
   if (gate.action === 'refuse') {
@@ -1394,27 +1532,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     lane: lane ? lane.name : undefined,
     files: lane ? lane.files : undefined,
   });
-  await markMergeHandled(authorizingComment, task, unchecked, mergedRecord.marker);
-
-  const recOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: mergedRecord.body });
-  if (!recOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} MERGED, but the record comment failed to post`);
-
-  // Live is a closed status: the ticket leaves the open view here. Assignees
-  // clear in the same write — the handoff rule, same as every other machine
-  // status (loop-build SKILL.md, "Assignment is the handoff signal").
-  const rem = (task.assignees || []).map((a) => a.id);
-  const moveOut = await call('PUT', `/api/v2/task/${task.id}`, { status: 'Live', assignees: { add: [], rem } });
-  if (!moveOut.res.ok) {
-    unchecked.push(`${task.id}: PR #${pr.number} MERGED but the ticket did NOT move to Live — move it by hand`);
-  } else {
-    const now = moveOut.json.status?.status ?? '?';
-    if (now.toLowerCase() !== 'live') {
-      unchecked.push(`${task.id}: PR #${pr.number} MERGED but the move to Live did not stick (came back "${now}")`);
-    } else {
-      const leftover = (moveOut.json.assignees || []).map((a) => a.id);
-      if (leftover.length) unchecked.push(`${task.id}: moved to Live but assignees did not clear ([${leftover.join(', ')}])`);
-    }
-  }
+  await recordMergedTicket(mergedRecord, pr);
 
   const how = lane
     ? `AUTO-MERGED (Lane ${lane.name}, one-hour window elapsed with no objection)`
@@ -3378,7 +3496,7 @@ if (cmd === 'whoami') {
   // cap x budget, which is what keeps a pass from becoming unbounded
   // and stops one stuck PR starving the rest (task 86bbk2fb5).
   const inPassBudget = { used: 0, cap: mergeOnComment.MAX_IN_PASS_WAITS };
-  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0, stalled: 0 };
+  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0, stalled: 0, armed: 0 };
   // Report what could not be checked rather than silently passing over it
   // (DOCTRINE 3.11) — a task this script could not read is a task whose
   // comments might be sitting unrelayed, not a clean zero.
@@ -3586,7 +3704,13 @@ if (cmd === 'whoami') {
         // means "nothing to say", and this is the one thing that most needs
         // saying (task 86bbq0fh8).
         else if (m.outcome === 'handed-off-stalled' || m.outcome === 'would-report-stalled') merges.stalled++;
-        else if (m.outcome === 'waiting' || m.outcome === 'would-update-branch' || m.outcome === 'would-rerun-review-gate') merges.waiting++;
+        // Armed is NOT waiting. Waiting means this pass will look again;
+        // armed means it has handed the merge to GitHub and stopped looking,
+        // which is a different promise and has to read differently in the
+        // summary (task 86bbup3u1).
+        else if (m.outcome === 'auto-merge-armed' || m.outcome === 'would-arm-auto-merge') merges.armed++;
+        else if (m.outcome === 'auto-merge-disarmed' || m.outcome === 'would-disarm-auto-merge') merges.waiting++;
+        else if (m.outcome === 'waiting' || m.outcome === 'would-update-branch' || m.outcome === 'would-rerun-review-gate' || m.outcome === 'would-record-merged') merges.waiting++;
         // A merged ticket is now Live, which is not a status this watch
         // handles — skip the handback check rather than acting on a status
         // this pass itself just changed.
@@ -3909,7 +4033,7 @@ if (cmd === 'whoami') {
     : '';
 
   const mergeLine = mergingAllowed
-    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
+    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.armed} handed to GitHub auto-merge, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
     : pauseState.paused
       ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
       : ', merging disabled (--no-merge)';
