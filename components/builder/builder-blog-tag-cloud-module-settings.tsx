@@ -139,6 +139,20 @@ export function BuilderBlogTagCloudModuleSettings({
               rendersVia: "builder-template.ts blog-tag-cloud renderer"
             }
           ],
+          // Counts sits with the other Content settings rather than after the
+          // manager. Rendered last it came out UNDER the "Add Tag" button,
+          // reading as a control of the tag list instead of a setting of the
+          // module.
+          [
+            {
+              key: "showCounts",
+              label: "Counts",
+              width: "check",
+              control: "checkbox",
+              fallback: "false",
+              rendersVia: "BlogTagCloudPreview"
+            }
+          ],
           [
             {
               key: "tags",
@@ -239,16 +253,6 @@ export function BuilderBlogTagCloudModuleSettings({
                   </button>
                 </>
               )
-            }
-          ],
-          [
-            {
-              key: "showCounts",
-              label: "Counts",
-              width: "check",
-              control: "checkbox",
-              fallback: "false",
-              rendersVia: "BlogTagCloudPreview"
             }
           ]
         ],

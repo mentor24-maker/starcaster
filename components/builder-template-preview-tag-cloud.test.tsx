@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { BuilderTemplatePreview } from "./builder-template-preview";
-import { normalizeBuilderModuleSettingsForType, normalizeLayoutSections } from "@/lib/builder-template";
+import {
+  createDefaultBackgroundSettings,
+  normalizeBuilderModuleSettingsForType,
+  normalizeLayoutSections
+} from "@/lib/builder-template";
 
 const TAGS = JSON.stringify([
   { id: "a", label: "News", slug: "news", count: 20 },
@@ -18,6 +22,7 @@ const TAGS = JSON.stringify([
 function siteHtml(settings: Record<string, string> = {}) {
   return renderToStaticMarkup(
     <BuilderTemplatePreview
+      pageBackground={createDefaultBackgroundSettings()}
       layoutSections={normalizeLayoutSections([
         {
           id: "row-1",
