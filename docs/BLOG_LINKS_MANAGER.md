@@ -92,6 +92,31 @@ Four decisions worth keeping:
   convention rather than a guess — the settings exist for a tenant who renamed
   the page.
 
+### The count says how many are LIVE, and that is the whole point of it
+
+2026-09-03 (86bbume7b, #577), the same day the popup shipped. The operator saw
+*"junior tennis — 13 posts"* here and **no posts at all** on the public tag
+page, and reported the public page as broken. Both were right: all 13 were
+DRAFTS, and the public feed asks for `status=published`.
+
+`GET /api/blog/tags` therefore returns **`livePostCount` beside `postCount`**,
+and the count column carries a short second line — `none live` in amber, or
+`2 live` — shown **only when it differs from the total**, so a healthy tag grows
+no warning. The popup states it in words above the list: *"0 of 13 published.
+None of these are on the website yet…"*.
+
+Three things this must keep doing:
+
+- **Both counts come out of ONE scan** in `listTags`, folded across spellings
+  the same way. Two passes are two answers, and a live count larger than the
+  total beside it is worse than the single misleading number it replaced
+  (`docs/DOCTRINE.md` §5.32).
+- **The popup counts the posts it LOADED**, not the row's stored number. They
+  are two reads at two moments; summarising from the row reports a figure
+  nobody measured against what is on screen.
+- **A missing `livePostCount` renders nothing, never `0`.** An older server
+  mid-deploy is not a server saying every tag is dead.
+
 **Escape is bound on the document, not on the dialog.** A `onKeyDown` on the
 dialog element only fires when focus is already inside it, and this popup opens
 from a click on the count, which leaves focus on the button *outside* it —
@@ -161,13 +186,14 @@ needs a session, so nobody can enumerate the graph by leaving the filter off.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/blog/tags` | Derived list with post counts |
+| GET | `/api/blog/tags` | Derived list; `postCount` **and `livePostCount`** (published only) |
 | GET | `/api/blog/tags/posts?tag=` | Posts carrying a tag |
 | POST | `/api/blog/tags/rename` | `{from, to}` — merges if `to` exists |
 | DELETE | `/api/blog/tags` | `{tag}` — removes it from every post |
 | GET | `/api/blog/relations` | Whole project. Session required. |
 | GET | `/api/blog/relations?postId=` | One post. **Open to visitors.** |
-| POST | `/api/blog/relations` | `{postIds:[…]}` — needs at least two |
+| POST | `/api/blog/relations` | `{postIds:[…]}` — relates a SET to each other; only ever adds |
+| PUT | `/api/blog/relations` | `{postId, relatedIds:[…]}` — replaces ONE post's whole set; the post editor's write |
 | DELETE | `/api/blog/relations` | `{postIdA, postIdB}` — order-independent |
 
 ## Traps this feature already hit
@@ -212,6 +238,34 @@ categories yet", which is why it went unnoticed.
 
 Each table now names a column it actually has (`PROBE_COLUMN`), pinned by
 `scripts/builder/blogStoreTableProbe.test.js`.
+
+## Relating posts from the post EDITOR, not just from here
+
+2026-09-03 (86bbufu83, #568). This manager can only relate articles filed under
+one tag, which is the wrong shape when the question is *"what goes with this
+post?"*. The blog post editor (`blog-post-create`, in both Create and Edit mode)
+now carries a **Related Posts** control inside a collapsible container it shares
+with Categories and Tags, between Excerpt and Body.
+
+It writes through **`PUT /api/blog/relations`**, which is a different operation
+from this manager's `POST` and neither substitutes for the other:
+
+| | `POST` (this manager) | `PUT` (the post editor) |
+|---|---|---|
+| means | relate a checked SET to each other | replace ONE post's whole set |
+| removes | never | yes — unchecking is how you unrelate |
+| touches | every pair the set implies | only pairs involving that post |
+
+`setRelatedPosts` in `lib/blogPostRelationsStore.js` diffs against what is
+stored: pairs added for newly checked posts, removed for unchecked ones, and a
+pair between two OTHER posts left strictly alone — deleting somebody else's
+relation while saving an unrelated article is a loss nobody would ever report.
+
+**`isMissingTable()` in that store used to match the bare word `relation`.** The
+table is called `blog_post_relations`, so every refusal about it read as "the
+table is absent" — landmine 15's exact shape, in the one store where the word is
+guaranteed to appear. It now matches only `does not exist`, `schema cache` and
+`undefined table`.
 
 ## The public Tag Cloud reads this same list
 
