@@ -55,6 +55,21 @@ Newest first. One row per file actually run against production.
 | 2026-08-18 | `docs/SQL/starcaster_readonly_role.sql` (re-run) | **Pending.** PR #334 enabled row security on 65 more tables; the file must be re-run or those 65 copy across empty on the next `db:refresh`. Idempotent — adds the missing policies, changes nothing else. |
 | 2026-08-16 | `docs/SQL/starcaster_readonly_role.sql` | Created the `starcaster_readonly` login and gave it read-only access, so `npm run db:refresh` can copy production down without being able to change it. Adds a login and read policies; touches no existing data. |
 
+## Data repairs
+
+**Not schema.** Rows changed on production by a script, rather than structure
+changed by SQL. Kept here because this is where somebody looks when they ask
+"why is production not what I expected?", and separate from the table above
+because mixing the two would blur what that table means — nothing below alters
+a column, an index or a policy.
+
+The same discipline applies: a repair script is dry-run by default, is run in
+both modes, and reads the rows back afterwards rather than trusting the write.
+
+| Date | Script | What it changed |
+|---|---|---|
+| 2026-09-03 | `scripts/blog_backfill_slugs.cjs --project proj_1786047238296_opepjk --apply` | **Applied.** Gave an address to 5 of Delray's `blog_posts` rows that had a blank `slug`, deriving each from its title. All five were **published** posts written by hand between 2026-08-30 and 2026-09-01, and all five were unreachable the whole time: the public blog addresses a post by its slug, so the row existed, the manager listed it, and every link went nowhere (`docs/DOCTRINE.md` §5.25, ticket 86bbu23n7, PR #549). No other row was touched — the other 50 already matched the rule. Dry-run first, then `--apply`; verified by re-reading all 55 rows (0 blank, 0 non-conforming, 0 duplicate addresses) and by fetching three of the five back through the live public API. Idempotent: a second run finds nothing to do. The store now derives a slug on every write (`lib/slugify.js`), so this cannot recur. |
+
 ## Before this file existed
 
 185 files in `docs/SQL/` predate this record, applied across several months
