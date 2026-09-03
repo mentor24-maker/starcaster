@@ -5,7 +5,8 @@ Read this file plus the `CLAUDE.md` nearest the files you are editing
 Architecture, known issues, and roadmap: `docs/FABLE_OVERHAUL_PLAN.md`.
 **Hard-won rules, each with the incident that produced it: `docs/DOCTRINE.md`.**
 Read it before diagnosing a "it worked yesterday" failure, writing an error
-message, or adding a check that could silently not run.
+message, adding a check that could silently not run, or reporting that
+something is done.
 
 ## IMPORTANT: Coach the operator
 
@@ -227,6 +228,17 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     sources only; a test needing a generated lib goes in the node suite
     (`scripts/builder/*.test.js`, run after the build). Enforced by
     `check_vitest_generated_lib.cjs`; full story in `docs/DOCTRINE.md` §5.18.
+15. **An upsert needs `Prefer: resolution=merge-duplicates`, and a store must
+    not fall back when the database REFUSED.** `on_conflict=<col>` only names
+    the column — PostgREST merges a conflicting row solely when asked, so the
+    first save for a tenant inserts and every save after it returns 409. That
+    alone would be loud; what hides it is a store that catches the failure,
+    writes the local JSON file and returns the merged value, so the API answers
+    **200 with the caller's own input** while the database keeps the old row
+    (and on Vercel the file write vanishes — landmine 6). The blog card template
+    was frozen in production from 2026-06-30 until 2026-09-02 that way, with
+    every save reporting success. A fallback path is for the store being
+    ABSENT, never for it refusing. `docs/DOCTRINE.md` §5.21.
 
 ## Working locally
 
@@ -326,12 +338,14 @@ offline — it is what `doctor:node` reads to say when each owned job last
 actually worked here), and the shared row is pushed **at most once a day**,
 which is the resolution the requirement needs and what keeps the ticket quiet.
 
-**Only `bus-relay` beats today.** The two loop lanes run inside long-lived
-agent sessions with no committed runner to hang an emitter on, `db-refresh` has
-no schedule on purpose, and `pulse-pipelines` lives in another repo. Those
-report **NOT REPORTING with the reason**, every run — never as healthy, because
-a system that is one-fifth instrumented must not read as a green board. Adding
-a role to `lib/nodeRoles.js` without deciding either way fails a test.
+**Two jobs beat today: `bus-relay` and `pipeline-pulse`.** The two loop lanes
+run inside long-lived agent sessions with no committed runner to hang an emitter
+on, `db-refresh` has no schedule on purpose, `pulse-pipelines` lives in another
+repo, and `weekly-report` runs once a week against a 25-hour overdue window, so
+an honest beat from it would read as overdue six days in seven. Those report
+**NOT REPORTING with the reason**, every run — never as healthy, because a
+system that is part-instrumented must not read as a green board. Adding a role
+to `lib/nodeRoles.js` without deciding either way fails a test.
 
 Each machine says who it is in `~/.alphire-node` (one short line:
 `macbook-pro` or `mac-mini`). Without that file it falls back to the hostname,
@@ -340,6 +354,29 @@ name is not recognised does not quietly skip; it refuses out loud**, because
 "another machine is doing it" and "nobody is doing it" look identical
 otherwise, and only one of them is safe.
 
+### The pipeline's own diagnostics run on a schedule
+
+```
+npm run pulse                            read-only: is the pipeline healthy right now?
+npm run pulse:publish                    the scheduled pass — publish the report, post what needs somebody
+npm run pulse:publish -- --dry-run       say exactly what it would write and send, send nothing
+./scripts/install_pipeline_pulse.sh --status    is the hourly schedule installed here, and did it run?
+```
+
+`npm run pulse` shipped in phase 1 and then **never ran once on a schedule**,
+because nobody created one — for weeks, with two live alarms inside it, while
+its own closing line said "if a scheduled run does not print this line, that
+absence IS the alert" (task 86bbqz7rg). It runs **hourly on the Mini** now: the
+tightest threshold it measures is two hours, so a daily pass would report a
+stall a day late, which is a check that looks like it works. The Mini because
+check A1 reads the build loop's own log, which exists only where the loops run.
+
+The full report is rewritten in place on a ClickUp ticket called **Pipeline
+pulse**, and only **alarms and could-not-tells** reach the bus — once each per
+six hours, cleared when they clear. Notices stay on the ticket. That is the
+same shape the roll call uses, and for the same reason: a clean report posted
+daily is 365 messages a year and gets filtered.
+
 ### And a job that runs but ships nothing has to say so too
 
 The heartbeat measures **liveness**. There is a failure it structurally cannot
@@ -347,7 +384,7 @@ see, and it is worse, because it writes a full cheerful log:
 
 ```
 npm run throughput                          is the queue getting shorter?
-npm run throughput -- --check               the same, and post to the bus if it has STALLED
+npm run throughput -- --check               the same, and post to the bus on STALLED or UNKNOWN
 npm run throughput -- --check --dry-run     say what it WOULD post, send nothing
 ```
 
@@ -364,9 +401,16 @@ to close — healthy, and it says why), `STALLED`, or `UNKNOWN` when a reading
 could not be taken. Exit 0 / 0 / 1 / 2. **"Alive but useless" never renders as
 healthy**, and neither does "could not tell".
 
-`--check` posts to the bus only on `STALLED`, once per 6 hours, cleared by the
-next run that is not stalled — the same discipline the failure alert uses, so
-there is no "all is well" ×365. `scripts/run_bus_relay.sh` runs it **before**
+`--check` posts to the bus on `STALLED` **and on `UNKNOWN`**, once per 6 hours
+each, cleared by the next run that is not stalled / that could take a reading —
+the same discipline the failure alert uses, so there is no "all is well"
+×365. The UNKNOWN half was missing until 2026-09-01 (task 86bbr2jpq) and it
+was the quietest hole in the thing: the relay discards this check's exit code
+with `|| true`, so a rotated ClickUp token left the stall detector permanently
+dead while every other job on the board looked fine. A failed read also now
+costs the same hourly throttle a successful one does — it used to stamp the
+clock only on success, so a rate limit made the check retry every ten minutes
+and keep itself broken. `scripts/run_bus_relay.sh` runs it **before**
 the ownership check, for the same reason the heartbeat runs there: the machine
 that does not own the relay is already awake doing nothing, and that idle wake
 is the vantage point that survives the owning machine being dead.
@@ -457,9 +501,13 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
    §6.7).
 6. Build. Every Definition-of-done gate, and break each fix on purpose —
    revert it, watch the named test fail, restore it.
-7. `npm run ship`. **No pause to merge**: merges never collide with the
-   loops, `pause` drains for up to half an hour, and a pause older than two
-   hours nags the bus hourly. `ship` re-runs the gates, pushes, **records the
+7. `npm run ship`. **You never pause the line in order to merge — but every
+   merge still asks the switch** (decision D2, `docs/DOCTRINE.md` §6.17):
+   `ship` runs `npm run pipeline -- check` itself and stops, quoting the
+   switch, if Dane has the deck. It also states the review gate's context
+   before merging (decision D3 — reported, not enforced). No pausing needed:
+   merges never collide with the loops, and `pause` exists for taking the
+   deck, not for this. `ship` re-runs the gates, pushes, **records the
    PR on its ticket**, waits for CI, merges and tidies; if it stops on a
    conflict, resolve by hand and run it again.
    You do not run `clickup pr-opened` by hand here — `ship` writes that trail
@@ -654,8 +702,13 @@ already merged (moves it to Live), and a branch stamped with a task
 (`npm run thread`) that has since closed but is still on the Mac (flags it to
 the bus — `npm run tidy`'s own closed-task cleanup should have caught it).
 Dry-run by default (`npm run reconcile`); `-- --live` performs the repairs.
-Meant to run on a schedule — see the Mac Mini engine-room task for when that
-lands; today it's a command to run by hand.
+**Scheduled since 2026-09-02** (task 86bbtnk3k): `npm run repair` runs it —
+with the loop's dropped-claim backstop before it and a DRY stranded-ticket
+sweep after it — on the relay's ten-minute idle wake, throttled to one fresh
+reading per half hour. Findings reach the bus once per 6h; unmarked stranded
+work is reported with the apply command, never moved unattended, because the
+pass marker is the only machine-readable difference between a dead loop claim
+and a hand session mid-build.
 
 **Dev servers collide on port 3001, and `pkill` is a shared-resource action.**
 Every worktree's `npm run dev` wants the same port, so the first one started

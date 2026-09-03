@@ -5,6 +5,7 @@ import AssociationsPanelHost from './components/associations/associations-panel'
 import YoutubeVideoAcquirePanel from './components/acquire/youtube-video-acquire-panel';
 import AssetRenditionsPanel from './components/assets/asset-renditions-panel';
 import InvitationsPanel from './components/invitations/invitations-panel';
+import ConnectionsPanel from './components/connections/connections-panel';
 import AiSpendPanel from './components/observe/ai-spend-panel';
 import NoWorkspacePanel from './components/invitations/no-workspace-panel';
 
@@ -40,6 +41,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (invitationsHost) {
     createRoot(invitationsHost).render(<InvitationsPanel />);
+  }
+
+  const connectionsHost = document.getElementById('connectionsReactRoot');
+
+  if (connectionsHost) {
+    createRoot(connectionsHost).render(<ConnectionsPanel />);
   }
 
   const noWorkspaceHost = document.getElementById('noWorkspaceReactRoot');

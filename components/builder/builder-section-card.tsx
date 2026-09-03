@@ -5,11 +5,16 @@ import type {
   BuilderPageRecord,
   BuilderProductRecord,
   BuilderTemplateModule,
-  BuilderTemplateSection
+  BuilderTemplateSection,
+  RowOverlayScreenSettings
 } from "@/lib/builder-template";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
-import { getLayoutColumns, getLayoutGridTemplate } from "@/lib/builder-template";
+import {
+  getLayoutColumns,
+  getLayoutGridTemplate,
+  normalizeRowOverlayScreenSettings
+} from "@/lib/builder-template";
 import { describeBlockLineage } from "@/lib/block-lineage";
 import { resolveSharedSectionTitle } from "@/lib/saved-section-name";
 import type { BlockUsage } from "@/lib/shared-block-usage";
@@ -454,6 +459,47 @@ export function BuilderSectionCard({
     }));
   }
 
+  /**
+   * The cell's tint screen. It cannot go through `setCellExtra` above, which
+   * writes strings — this value is an object.
+   *
+   * Both writers normalize the CELL's current screen first, for the same
+   * reason the row panel's do: the map is optional and a column inside it may
+   * be missing entirely, so `updater(undefined.background)` is the crash, and
+   * spreading a bare `{ background }` would drop an opacity the operator had
+   * already set. He picks a strength once and changes the type twice; losing
+   * 60% back to 100% on a type change is exactly the silent edit these panels
+   * exist to prevent.
+   *
+   * It is built here rather than threaded down as another prop because
+   * `onUpdateSection` is already passed by both call sites — the page editor
+   * and the saved-section modal — so the cell overlay reaches both without a
+   * new wire, and cannot be connected in one and forgotten in the other.
+   */
+  function updateCellOverlay(
+    column: string,
+    updater: (overlay: RowOverlayScreenSettings) => RowOverlayScreenSettings
+  ) {
+    onUpdateSection((current) => {
+      const overlay = normalizeRowOverlayScreenSettings(current.cellOverlayScreens?.[column]);
+      return {
+        ...current,
+        cellOverlayScreens: { ...(current.cellOverlayScreens ?? {}), [column]: updater(overlay) }
+      };
+    });
+  }
+
+  function updateCellOverlayBackground(
+    column: string,
+    updater: (background: BackgroundSettings) => BackgroundSettings
+  ) {
+    updateCellOverlay(column, (overlay) => ({ ...overlay, background: updater(overlay.background) }));
+  }
+
+  function updateCellOverlayOpacity(column: string, opacity: number) {
+    updateCellOverlay(column, (overlay) => ({ ...overlay, opacity }));
+  }
+
   return (
     <article className={`builder-section-card${isCanonical ? " builder-section-card-canonical" : ""}`} style={getSectionStyle()}>
       <div aria-expanded={!isCollapsed} className="builder-section-header" ref={sectionHeaderRef}>
@@ -621,6 +667,8 @@ export function BuilderSectionCard({
                         onUpdateCellBorderWidth={onUpdateCellBorderWidth}
                         onUpdateCellBorderColor={onUpdateCellBorderColor}
                         onUpdateCellBorderRadius={onUpdateCellBorderRadius}
+                        onUpdateCellOverlayBackground={updateCellOverlayBackground}
+                        onUpdateCellOverlayOpacity={updateCellOverlayOpacity}
                         onSetCellExtra={setCellExtra}
                         getCellExtra={getCellExtra}
                         themeBackgroundColor={themeBackgroundColor}

@@ -31,6 +31,506 @@ nothing — measuring them showed they already obeyed the rules — so they are
 unchanged to the pixel. The shared row also appears on the two Proximity
 Effect panels, which get the same improvement for free.
 
+## 2026-09-03 — A tint on one column, not the whole row (#557)
+
+You could already lay a coloured screen over a whole band of the page — the
+thing that dims a photograph so the words on top of it stay readable. You could
+not lay one over a single column inside that band. So a two-up row with a
+photograph on each side offered exactly one choice: darken both, or neither.
+
+Now each cell has its own Overlay group, with the same controls the row's has.
+Tint the left column dark blue at 60% and the right one keeps its photograph
+completely untouched.
+
+Three of the checks that were supposed to be watching this could not actually
+see it, and each was fixed and then proven by breaking the code on purpose:
+the panel check was blind to the new group because its opacity control only
+appears once an overlay is set and the test fixture had none — a deliberate
+layout violation still reported a clean 660-panel pass; no browser check could
+place content in a named column at all; and one test compared two positions to
+prove the tint sits behind the text, which quietly passed even with the tint
+element deleted entirely.
+
+What the change does was then measured rather than argued about, by reading
+real pixels out of a real browser: the tinted cell, the untouched one beside
+it, and the words themselves, which come through at full strength.
+
+Review caught the feature quietly re-stacking somebody else's decor, and that
+is now fixed too. A floating image is a module like any paragraph, so the rule
+keeping the tint behind the words reached it as well and pulled it down onto
+the same layer as the text beside it. The image did not move, it just stopped
+being reliably in front — at equal layers the browser falls back to whichever
+came first in the page. Only a column that had just been given a tint was
+affected, so nothing already published changed. A browser check now measures
+that exact arrangement — a floating image and ordinary words in one tinted
+column — and it was watched failing on the old rule before the fix went in.
+
+Review then found the other half of that same problem, one column further
+over. A floating image is often set to hang out past the edge of its column on
+purpose — there is a control for exactly that. Switching on a cell tint had
+been sealing the column off as its own self-contained layer, which sounded
+tidy and meant the image's "sit in front of everything" instruction now only
+applied inside that one column. The moment it crossed into the next column, it
+went behind it. Nothing moved and no number changed; only the answer to which
+thing is in front. That sealing turned out to be unnecessary — the tint sits
+behind the words because it is numbered below them, and that holds whether the
+column is sealed or not — so it is gone, and a floating image reaches over its
+neighbour exactly as it did before this feature existed.
+
+Finding it needed a tool the browser checks did not have: they could read the
+layer numbers on every element and all of them were identical before and
+after. What changed was what a person would actually SEE. So the checker can
+now point at a spot where two things overlap and ask the browser which one is
+on top — and the new check does that where the image crosses into the next
+column, and refuses to pass if the scene has drifted so they no longer overlap
+at all. A check that quietly stops overlapping is a check that passes forever
+while testing nothing, which has already happened three times on this one
+ticket.
+
+One thing on the ticket turned out to be wrong, and it was wrong before this
+work started: its test steps predict the row's own faint haze appearing on top
+of the columns. It does not, and never did — a column sits above the row's
+screen, so any column carrying its own background hides it. Both screens
+paint, on different surfaces. Reported on the ticket rather than changed,
+since touching the row overlay was explicitly out of scope.
+## 2026-09-03 — Connections that look after themselves, and a Disconnect that really disconnects (#556)
+
+When a client hands Starcaster permission to post to their own Facebook Page
+or Bluesky account, that permission used to be filed away and never looked at
+again. Three things change here.
+
+A permission can expire — some platforms hand out ones that last only hours.
+Until now a permission with ten minutes left on it passed every check and then
+died halfway through the post it was fetched for. Now the very last thing that
+happens before Starcaster uses a client's permission is a quiet renewal, if it
+is close to running out. If the renewal fails the post still goes out, because
+the permission is genuinely still good for those last few minutes — the
+connection is just flagged as needing attention, so the client's screen can say
+so. (The amber warning on the card itself is the next slice.)
+
+There is also a health check now: it goes round asking each platform "does this
+still work, and is it still the same account?", and writes the answer down. It
+works through a handful at a time and reports how many are left, rather than
+trying to do everything at once — a server that gets cut off partway through a
+long job leaves half of it done and no record of which half. Nothing runs it on
+a timer yet; that is a deliberate separate step, so it gets watched working by
+hand first.
+
+And Disconnect now actually tells the platform. Before, pressing it made
+Starcaster forget the token while the permission stayed granted at Facebook —
+which the client discovers months later, in their own settings, as an app they
+were certain they had removed. Now the platform is told first and the stored
+credential is deleted second. If the platform cannot be reached, nothing is
+deleted and the client is told why, because trying again is the only thing that
+fixes it and trying again needs the credential we would otherwise have thrown
+away. Bluesky is an honest exception: it offers no way for another app to
+retire an app password, so the answer says exactly that rather than claiming a
+revoke that never happened.
+
+Two problems turned up while building it, both of which would have been very
+hard to notice from outside. The health check, written the obvious way, would
+have silently changed *which* of a client's accounts posts — the same column
+that records "this row changed" is also how the app picks the active account,
+so a routine check would have re-elected whichever account it looked at last,
+on a schedule, with every test still green. And a loading order between five
+files formed a loop, which makes Node hand back a half-built file; the practical
+effect would have been every Bluesky post crashing in production while nothing
+at startup said a word. Both are fixed.
+
+One postscript, because it is the more interesting half. The guard that keeps
+the health check from moving which account posts had a test that could not
+fail: it worked by running a check and then asking "which account posts now?",
+and in the test's stand-in database both writes landed inside the same
+millisecond, so the two rows tied and a tie-break put them back in the original
+order all by itself. Delete the guard and the test still said fine. The review
+pass caught it, measured that the hazard is real, and it is fixed two ways —
+the test now watches the guard being passed at the moment of the write, which
+no clock can undo, and the older test pauses the way a real check of a live
+account does so it has a difference to see. Both were confirmed by deleting the
+guard on purpose and watching them fail. No working code changed; a comment
+that promised more protection than existed was corrected.
+
+## 2026-09-03 — Overlays can tint a photo now, instead of only fogging it (#553)
+
+A section in the Builder can paint a sheet of colour over its own background.
+Until now that sheet could only ever *fog* the photograph underneath: turn the
+strength up and the picture got flatter and greyer, until at full strength it
+disappeared completely under solid colour. If you wanted a photo that was, say,
+orange, you could not have one — you could only have a photo you could barely
+see, or an orange rectangle.
+
+There is now a **Blend** setting beside the overlay's Opacity, offering seven
+choices. The one most people want is **Multiply**: it keeps every dark part of
+the photograph dark and recolours everything else, so the picture stays fully
+visible but reads as though it were taken through a coloured filter. **Screen**
+does the opposite, washing the photo pale toward the overlay colour, and
+**Overlay** pushes the contrast up hard.
+
+Two things were done deliberately to keep this from disturbing any site that is
+already live. The setting defaults to **Normal**, and Normal writes nothing at
+all into the page — so every overlay that already exists renders exactly as it
+did before, which was confirmed by photographing six pages through both the old
+code and the new and finding them identical to the pixel. And the seven choices
+are a fixed list: if a page somehow carries any other value, it is ignored
+rather than passed through to the browser.
+
+One thing was found on the way. The code that switches the tint on when a row
+becomes a video row rebuilt the overlay from a hand-written list of its parts,
+which meant it quietly dropped the new Blend setting the moment that setting
+existed. A test caught it. It now copies the whole overlay across instead, so
+the next setting added will not hit the same trap.
+## 2026-08-29 — The Tractor Nav settings panel is one rectangle again (#447)
+
+Open the settings for a Tractor Nav module and look down the Placement column.
+The dropdown at the top ran the full width of the column; the three boxes under
+it — Position X, Position Y, Z-Index — stopped about 74 pixels early. The column
+read as a rectangle with a bite out of its right side.
+
+The cause was a width written onto those three boxes by hand, back when someone
+decided nine characters was about right. That is the one thing the panel rules
+forbid outright: widths are supposed to come from the column so that every row
+in it agrees. So the fix was a deletion — take the hand-written width out and
+the shared rule sizes them, the way it already sizes everything around them.
+
+The four slider rows had the same problem a size smaller. A slider is a track
+plus a small number beside it, and the number sized itself to its own text, so
+"80%" and "200ms" in the same column ended three pixels apart. Three pixels is
+small enough to look like nothing and is still the thing the eye reads as
+unfinished. The number now gets a fixed slot and the slider stretches into
+whatever is left, so the rows end on the same line at any panel width.
+
+One thing found on the way that is worth writing down: the automatic panel
+checker could not see this bug, and reported a clean pass on it. It measures the
+slot a control sits in rather than the control itself, and all three short boxes
+sat in correctly sized slots. Measuring the real page instead turned up 25 rows
+across six panels with the same shape of defect; four were this panel and the
+rest belong to later tickets in the same sweep. Teaching the checker to look
+inside the slot would fail those panels today, so it is written down here and on
+the ticket rather than done in this change.
+
+## 2026-09-02 — The alarm that watches the queue could go blind and say nothing (#535)
+
+Two days ago we added a check that asks the one question nothing else asked:
+*is the queue actually getting shorter?* It exists because on 31 August the
+build loop ran every hour, finished cleanly every time, and shipped nothing —
+a cheerful log that read as health. A review of that new check found six ways
+the check itself could go quiet. Four are fixed here.
+
+The worst of them: the check has four possible answers, and one of them is "I
+could not take a reading." That answer went to a log file nobody opens. So if
+the ClickUp password were ever rotated, the alarm would simply be dead —
+forever, silently, while every other job on the board still looked fine. It
+now says so on the party line, with the reason, at most once every six hours,
+and shuts up as soon as it can see again.
+
+It was also making its own trouble worse. It is meant to check once an hour,
+but it only wrote down "I checked" when the check *succeeded*. So the one time
+it most needed to back off — ClickUp saying "too many requests" — it went
+straight back six times an hour instead, keeping itself broken. It now starts
+the clock when it tries.
+
+The other two were wrong sentences rather than silence. It could announce
+"the loops ARE firing, so the problem is elsewhere" on evidence that only
+showed *somebody edited a ticket* — which could be Dane leaving a comment.
+That is exactly the sentence that sends you hunting in the wrong place. And a
+day where everything shipped could be reported as a stall, because a handful
+of tickets finish without a closure date on them and the count could not see
+those. It now says "I am not sure" instead of accusing the pipeline, and only
+when such a ticket was touched in the last day, so the alarm still fires for
+real stalls. Measured against the live queue: the one ticket in that state was
+last touched 36 days ago, so nothing is switched off by this.
+
+Every fix was broken on purpose afterwards and watched to fail, which is the
+only way to know a test for a monitor is a real test.
+
+Review sent this back once, and caught something worth having. The new
+"I could not take a reading" message was being used for two quite different
+situations, and it only described one of them. On the other — the day where a
+ticket finished without a closure date — the reading had actually worked
+perfectly, every number was there, and the fix was one missing field on one
+ticket. The message nevertheless announced that the check had gone blind and
+told the reader to go and find out whether ClickUp was reachable at all. That
+is the same fault this whole ticket is about, arriving through the fix for it:
+a message saying something its own evidence does not support, in the direction
+that wastes the most of the reader's morning. There are two messages now. The
+second one names the ticket to go and fix, and carries the queue numbers with
+it, because a real stall can happen on that day too and used to arrive stripped
+of everything that made it worth acting on.
+
+Review sent it back a second time, on the same theme once more. Having split
+that message in two, we were still using one "already said this recently" note
+for both of them — and the whole point of that note is to stop the same alarm
+repeating every ten minutes for six hours. So the two alarms could gag each
+other. The likelier direction was the bad one: there is a real ticket in the
+Live column that is never going to grow a closure date, so the gentler message
+("one field needs filling in") would tend to fire first, and could then silence
+the serious one ("nothing is watching whether the queue is getting shorter")
+for six hours. Each alarm now keeps its own note. Driven for real: with the
+gentle one just fired, the serious one still gets through — and with the old
+shared note put back, it vanishes, which is what the defect looked like.
+
+Review sent it back a third time, on the same theme a third time — a second
+road to the same silence. Giving each alarm its own note fixed the case where
+both of them fire. It left the case where one of them simply stops applying.
+The note that says *I could not read the queue* was only being torn up at the
+very end of a completely clean run, and the gentle alarm finishes early, before
+that point. So: ClickUp goes down at nine and the serious alarm fires; at ten
+ClickUp answers fine and the gentle alarm fires — which is itself proof the
+queue can be read again; at eleven ClickUp goes down once more and the serious
+alarm is swallowed until three in the afternoon, on the strength of a note that
+ten o'clock should already have torn up. Now the moment the queue is read at
+all, that note goes, before any of the later exits. The reverse is deliberately
+*not* true, and the code says so where somebody would be tempted to tidy it: a
+run that could not read the queue proves nothing about whether some ticket has
+grown a closure date, so it leaves the gentle alarm's note exactly where it is.
+
+Two smaller things. A verdict of "I cannot tell" was being treated as an
+all-clear for the stall alarm on one of its two paths, quietly re-arming an
+alert that had already been sent; it now leaves that alarm exactly as it found
+it, because not being able to tell is not the same as recovering, and the note
+expires on its own after six hours either way. And the command cheat-sheet at
+the top of the repo still said this check "posts if it has STALLED" — the
+prose ten lines below it had been corrected, but not the one line anybody
+skimming for the command actually reads. That line now has a test on it, so it
+cannot drift back.
+## 2026-09-02 — Instagram connects itself, and says why when it cannot (#545)
+
+Instagram is now a real card on the Connections screen rather than a greyed
+"coming soon" one, so a client can hook up their own account without Dane
+pasting a token into Vercel for them. It rides the same Facebook sign-in the
+Facebook Page card already uses — it is one consent screen, asked for two more
+permissions — so the connecting part was the easy half.
+
+The hard half, and most of this work, is the two checks that run before
+anything is saved. Instagram will not let *any* app post to a personal
+account, and every Instagram post an app can make physically travels out
+through a Facebook Page. Break either rule and Meta's own answer is a code
+like `OAuthException` with a number after it, or — far more often — a
+perfectly cheerful "success" that just never mentions Instagram at all. A
+client reading either of those has no idea what went wrong. So both cases now
+stop the connection dead and say, in English, what to change and which screen
+to change it on: "This Instagram account is a personal account. Instagram only
+allows posting to Business or Creator accounts. Change it in the Instagram app
+under Settings, Account type and tools, then try again."
+
+Telling those two apart turned out to hinge on one detail. Facebook reports a
+Page's linked Instagram account under two different names: one that appears
+only for Business and Creator accounts, and one that appears for any account
+at all. Ask for only the first — which is where Meta's own instructions send
+you — and "your account is the wrong type" and "you have not linked anything"
+look exactly the same, so there is no honest way to tell someone which of two
+quite different things to go and fix. Asking for both is the whole trick.
+
+One nicety worth knowing: the card shows the Instagram handle, `@delraytennis`,
+not the name of the Facebook Page the post travels through. Clients recognise
+the first and do not recognise the second.
+
+Review sent this back once, and the catch was a good one. If a client's
+Facebook account covers two Pages and they only gave us posting permission on
+one of them, the second Page came back from Facebook with no key attached —
+and the code built a connection out of it anyway. What the client then saw was
+their good account blocked by their bad one, an error message with the word
+`accessToken` in it, and a card sitting there saying "connected" with nothing
+behind it. That is precisely the failure the whole ticket was written to
+prevent, arriving by a door nobody had checked. Now a Page with no key is
+recognised for what it is and skipped, the good account connects normally, and
+a client whose *only* Page is missing that permission is told exactly that
+rather than being told they do not have a Facebook Page at all. The saving step
+underneath was also changed to check every account before it writes any of
+them, so "all of it or none of it" is now how the code is shaped rather than
+something each new platform has to remember.
+
+Two things nobody was testing are now tested: that Facebook handing us back an
+Instagram sign-in reaches the Instagram code at all — the only route by which a
+real Instagram connection can ever be made — and that a Facebook sign-in still
+goes where it always did, which matters because there are clients on it today.
+
+The existing Facebook connection is untouched — deliberately, byte for byte.
+Facebook only accepts one return address for this app, so Instagram comes back
+through Facebook's, and the signed token that makes the round trip now says
+which of the two asked. A token issued before this went live does not say, and
+is treated as Facebook, so anyone half-way through connecting when it deployed
+still landed where they expected.
+
+## 2026-09-02 — Gradients can point any direction now, not just diagonally (#540)
+
+Every gradient background in the Builder ran at exactly one angle — diagonally,
+top-left corner down to bottom-right. That was never a choice anybody made in
+the design; the number was simply written into the code, on a single line that
+happens to draw the gradients for everything at once: row backgrounds, page
+backgrounds, buttons, module backgrounds and the overlay screen. There was no
+way to make one run left-to-right or top-to-bottom.
+
+There is now an **Angle** box sitting beside the two colour pickers, which shows
+up only when the background Type is set to Gradient. Type 90 and the gradient
+runs top to bottom; 0 runs it bottom to top.
+
+The care in this one went into making sure nothing that already exists moved.
+A gradient that was saved before today has no angle written on it, and every one
+of those still paints at exactly the old angle — that is what most of the new
+tests check, and each of them was deliberately broken first and watched failing,
+because a test that cannot fail proves nothing. One of those break tests found a
+real gap: the automated panel check could not see the new box at all, because
+the test page it measures had no gradient anywhere on it, so a clean result was
+not evidence of anything. That page now carries one. Six pages were also
+photographed before and after and came out pixel-for-pixel identical.
+## 2026-09-02 — The screen a client uses to connect their own accounts (#526)
+
+Until now, putting a client's social account onto Starcaster meant you pasting
+their tokens into Vercel by hand. This is the screen that replaces that: the
+client opens Settings › Connections and sees one card per platform — Facebook
+Page, Bluesky, and Instagram and X greyed as "coming soon" — and connects the
+ones they want themselves. Four states, and each card is in exactly one of
+them: not connected, connected (with the account name on it), needs attention
+(with a plain sentence saying what broke), or coming soon with no button at all.
+
+The cards are not written into the screen. They are generated from the list of
+platforms the earlier slices built, so when Instagram is finished next, its card
+turns from grey to a working Connect button with nothing in this screen edited.
+There is a test that proves it by inventing a platform the code has never heard
+of and checking a card appears for it.
+
+Two things turned up while building it that were worth stopping for. The first:
+one Facebook sign-in can cover several Pages, and they all get saved in the same
+instant — so the screen could tell a client "posting to your main Page" while
+the thing that actually posts had picked a different one. Nothing would have
+looked wrong. The screen now reads back which one will really be used instead of
+assuming. The second: none of the buttons on this screen showed anything when
+you tabbed to them with the keyboard, because the admin app has never had a rule
+for that. Measured both ways in a real browser — six controls with no ring
+before, six with one after.
+
+Disconnecting is deliberately honest about its limits: it forgets the account
+here, and says out loud that it has not withdrawn the permission at Facebook or
+Bluesky itself. That comes in a later slice, and until it does, "disconnected"
+must not be read as "revoked".
+
+One thing to confirm before this goes live: storing a connection needs an
+encryption key that has been missing since a rotation was left unfinished in
+July. This session could not read the production settings to check whether it is
+there. If it is not, the Connect button will fail — for the earlier slices as
+much as this one.
+
+Review sent this back once, over the Disconnect button, and it was the right
+catch. A client with three Facebook Pages under one sign-in was asked
+"Disconnect Delray Tennis Center?" — one Page, by name — and pressing yes
+removed all three. Both halves were reasonable on their own: the message
+described the Page currently in use, and the delete cleared the platform. Put
+together they promised one thing and did another, on the one kind of action you
+cannot undo. The dialog now says what it means — "This removes all 3 connected
+accounts", and names them — because that sentence IS the client's consent, and
+consent to something that does not happen is not consent at all. Removing only
+the one named Page was the other option and was rejected for a concrete reason:
+a Page connected the old way is not stored the same way, so a narrower delete
+would have quietly removed nothing and left the card connected. Both old tests
+had seeded a single account, where the two behaviours look identical — the case
+that could tell them apart now has a test in each suite, and both were watched
+failing before the fix went back in.
+
+## 2026-09-02 — The pipeline's own health check finally runs on a timer (#524)
+
+We have a command, `npm run pulse`, that looks the whole build pipeline over and
+says whether anything is stuck: is the build loop still picking up work, has any
+ticket been sitting in one stage too long, does every ticket and its pull
+request point at each other. It was built, checked, and marked finished back in
+July — and it had never once run on its own, because nobody ever set up the
+timer. It even ends with a line saying "if a scheduled run does not print this,
+that absence IS the alert." There were no scheduled runs, so the absence was
+permanent and told nobody anything. Run by hand on 31 August it turned up two
+real problems and a third worth knowing about, none of which anyone had seen.
+
+It now runs every hour on the Mac Mini. Every hour it writes its full report to
+a single ClickUp ticket called "Pipeline pulse", replacing what was there before
+— so there is exactly one of it and it is always today's. Only the things that
+actually need somebody get announced on the party line, once each per six hours,
+and they stop being announced when they clear. A clean report posted daily would
+be 365 messages a year, which is how a channel stops getting read.
+
+Two smaller things came with it. The job now records a heartbeat every time it
+finishes, so if the Mini is ever switched off the missing heartbeat is noticed
+by whichever machine is awake — a watchdog sitting on the machine it watches
+cannot spot that machine going dark, and this closes that. And the whole
+schedule is a committed script rather than something typed into one Mac by
+hand, which is the mistake that lost the failure alert the last time a job moved
+machines.
+
+A review pass sent this back once and found seven things worth fixing, all of
+them the same shape: ways this health check could go quiet without saying so.
+The largest was that it treated "Dane has paused the pipeline" and "I could not
+tell whether the pipeline is paused" as the same event. The first is normal —
+the check looks, finds the line is stopped, and stays quiet. The second means
+the check is blindfolded, and left as it was it would have published nothing,
+every hour, indefinitely, with no alert; the only thing that would eventually
+have noticed is the daily roll call, which would have said the job had stopped
+running when it was running fine and being silenced. Those are now different
+outcomes, and only the second is loud. A paused hour also records its heartbeat
+now, so a day where Dane has the deck no longer reads on the roll call as the
+job having died.
+
+The rest: the rule for forgetting an old alarm is now the one that is actually
+tested rather than a second copy of it living in the script; the report's
+headline is counted from the findings printed underneath it, so it can no longer
+say "nothing to report" above a line saying the queue could not be read; and the
+"is it installed?" command stops printing the number zero twice on a log that is
+empty, which is exactly the state it is in the first time anyone runs it.
+
+A second review pass found that the deadlines went on the three big helpers and
+not on the eight-thousand-odd calls a year this thing makes to ClickUp itself.
+That matters more than it sounds. A request to a website does not always fail
+when something goes wrong at the other end — sometimes the connection simply
+opens and then nothing ever comes back, and the code sits there waiting, with no
+error, for as long as the machine is on. If that happens on an hourly job, the
+Mac will not start the next hour's copy while this one is still going, so the
+check stops running entirely and nothing complains: no output, no failure, no
+alert. The one thing that would eventually notice is the daily roll call, and it
+would report that the job had stopped running — sending whoever read it to look
+at the timer, which is fine, rather than at the stuck call, which is not. Every
+call out now gives up after a set time and says plainly that it timed out, which
+turns a permanent silence into an ordinary noisy failure that retries next hour.
+
+The same pass added a check that the report actually arrived. ClickUp answers
+"saved" to a write that in fact saved nothing, which we have been bitten by
+before, and this report is the only thing the whole job produces — so it is now
+read back afterwards and compared. If it comes back empty or a fraction of its
+size, the run says so loudly instead of finishing cheerfully over a blank
+ticket.
+
+A third review pass found the last shape of the same problem, and it is the one
+that sounds least like a bug: the check could run perfectly, find everything,
+deliver none of it, and report a clean pass. If the message to the party line
+failed to send, the code wrote a line about it in a log nobody reads and then
+carried on to record its heartbeat and finish successfully. So a day where
+ClickUp was refusing messages — it has a daily limit, and the chat has gone down
+before — would have been a full day of real alarms reaching nobody, with every
+surface saying the job was healthy. A run that ships nothing now ends as a
+failure: it raises the ordinary failure alert straight away, and it withholds
+its heartbeat, so the daily roll call notices too if the party line itself is the
+thing that is down. Those two surfaces fail for different reasons, which is why
+it takes both. What has not changed is that a failed message is never marked as
+sent, so the next hour simply tries again and a one-off blip fixes itself.
+
+The same pass fixed a bug that had not happened yet but had a date on it. When
+one program prints something and another reads it, the pipe between them holds
+64 kilobytes, and the printing program was quitting the instant it finished
+writing rather than waiting for the reader to take it — so anything past 64
+kilobytes was thrown away. Today's report is 39 kilobytes, comfortably under.
+But it grows by about 145 bytes for every finished ticket, and there are 195 of
+them; at somewhere around 380 the report would have crossed the line, and from
+that hour on every single run would have failed to be read, posted an alarm
+about a fault that did not exist, and gone blind to the real ones. It now waits
+for its output to be taken before it leaves. Measured rather than reasoned
+about: with the fix a 135-kilobyte report arrives whole, and without it the same
+report arrives cut off at exactly 65,536 bytes and unreadable.
+
+And the third: when the Mini cannot tell which machine it is — a one-line file
+that says so has gone missing — the job correctly refuses to run rather than
+guess. Its own comment said it refuses "out loud." It did not: it stopped one
+step before the part that raises the alert, so the refusal went into a system
+log and nowhere a person looks. Nothing would have surfaced for up to 25 hours,
+and then as "the job has stopped firing," which points whoever reads it at the
+timer rather than at the missing file. It now leaves by the same door as every
+other failure, and a test fails if a future change ever adds a second exit ahead
+of the alert again.
 ## 2026-09-01 — Handing you a command to paste is now something the machine refuses to do (#499)
 
 There is a rule here that CC runs the operational commands itself and tells you

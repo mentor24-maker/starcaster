@@ -142,6 +142,7 @@ export const BUILDER_MODULE_TYPES = [
   "admin-nav-link",
   "admin-site-settings",
   "admin-support-form",
+  "admin-blog-links",
   "bug-report"
 ] as const;
 
@@ -171,6 +172,14 @@ export type BackgroundSettings = {
   mode: "none" | "color" | "gradient" | "image" | "video" | "style";
   color: string;
   color2: string;
+  /**
+   * Gradient direction in degrees, 0-360. Mode "gradient" only.
+   *
+   * Absent means 135, which is the angle every gradient in the Builder ran at
+   * when it was a literal in `getBuilderBackgroundStyle` — so a stored
+   * background that predates this field renders byte-identically.
+   */
+  gradientAngle?: number;
   imageUrl: string;
   /** StarCaster: asset id behind imageUrl so the asset picker can round-trip. */
   imageAssetId?: string;
@@ -234,10 +243,46 @@ export type BackgroundSettings = {
   parallaxSpeed?: number;
 };
 
+/**
+ * The blend modes an overlay screen may use, in the order the picker offers
+ * them. CSS defines sixteen; these are the seven that read differently on a
+ * photograph, and a picker showing all sixteen is unusable because most of the
+ * rest are indistinguishable from one of these.
+ *
+ * It is an ALLOWLIST, not a suggestion. The value reaches CSS, so
+ * `normalizeRowOverlayScreenSettings` falls back to "normal" for anything not
+ * on this list — a document hand-edited to carry `blendMode: "hue-rotate(90)"`
+ * must never put that string into a style attribute.
+ *
+ * One list, shared by the normalizer and the panel's picker, so the two cannot
+ * drift into disagreeing about what is offerable.
+ */
+export const BUILDER_OVERLAY_BLEND_MODES = [
+  { value: "normal", label: "Normal" },
+  { value: "multiply", label: "Multiply" },
+  { value: "screen", label: "Screen" },
+  { value: "overlay", label: "Overlay" },
+  { value: "soft-light", label: "Soft light" },
+  { value: "darken", label: "Darken" },
+  { value: "lighten", label: "Lighten" }
+] as const;
+
+export type BuilderOverlayBlendMode = (typeof BUILDER_OVERLAY_BLEND_MODES)[number]["value"];
+
+const BUILDER_OVERLAY_BLEND_MODE_VALUES: ReadonlySet<string> = new Set(
+  BUILDER_OVERLAY_BLEND_MODES.map((mode) => mode.value)
+);
+
 /** StarCaster: dimmer/tint screen layered over a section's background. */
 export type RowOverlayScreenSettings = {
   background: BackgroundSettings;
   opacity: number;
+  /**
+   * `mix-blend-mode` for the screen. "normal" is the default and emits NO CSS
+   * property at all, so every overlay configured before this setting existed
+   * renders byte-identically.
+   */
+  blendMode?: BuilderOverlayBlendMode;
 };
 
 /**
@@ -581,6 +626,16 @@ export type BuilderTemplateSection = {
   background: BackgroundSettings;
   overlayScreen?: RowOverlayScreenSettings;
   cellBackgrounds: Record<string, BackgroundSettings>;
+  /**
+   * A tint/dimmer screen over ONE cell's background, keyed by column — the
+   * per-cell twin of `overlayScreen` above.
+   *
+   * A cell is not an object in this codebase: every cell setting is a map on
+   * the row, keyed by column, and this is one more of them. Optional because
+   * a row saved before 2026-09-03 carries nothing here, and an absent map has
+   * to read as "no cell has an overlay" rather than crash the renderer.
+   */
+  cellOverlayScreens?: Record<string, RowOverlayScreenSettings>;
   /**
    * Legacy: one number for all four sides of a cell. Kept as the seed for
    * the two axes below, so a row saved before 2026-08-11 renders identically
@@ -1206,6 +1261,51 @@ function clampBackgroundNumber(value: unknown, min: number, max: number, fallbac
   return Math.min(max, Math.max(min, parsed));
 }
 
+export const BUILDER_GRADIENT_ANGLE_MIN = 0;
+export const BUILDER_GRADIENT_ANGLE_MAX = 360;
+/** The angle every Builder gradient ran at before the angle was a setting. */
+export const BUILDER_GRADIENT_ANGLE_DEFAULT = 135;
+
+/**
+ * The gradient angle a surface should actually paint with.
+ *
+ * One definition, read by BOTH the normalizer and the style builder, because
+ * `getBuilderBackgroundStyle` is called with raw, un-normalized settings on
+ * some surfaces and with normalized ones on others. Two clamps would disagree
+ * the first time one of them changed, and the disagreement would be a gradient
+ * that points one way in the editor and another way on the published page.
+ */
+export function builderGradientAngle(background: { gradientAngle?: unknown } | undefined): number {
+  return clampBackgroundNumber(
+    background?.gradientAngle,
+    BUILDER_GRADIENT_ANGLE_MIN,
+    BUILDER_GRADIENT_ANGLE_MAX,
+    BUILDER_GRADIENT_ANGLE_DEFAULT
+  );
+}
+
+/**
+ * The angle a typed keystroke means, or null when it does not mean one yet.
+ *
+ * An `<input type="number">` reports "" for everything it cannot parse, so a
+ * cleared box and the "-" on the way to a negative arrive identically. Writing
+ * either one to the setting is what makes a field eat its own backspace — the
+ * box snaps to the clamped default and the next keystroke lands beside it. Null
+ * means "leave the stored value alone"; the caller keeps the keystroke in a
+ * draft instead.
+ */
+export function builderGradientAngleFromInput(typed: string): number | null {
+  const trimmed = typed.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.min(BUILDER_GRADIENT_ANGLE_MAX, Math.max(BUILDER_GRADIENT_ANGLE_MIN, parsed));
+}
+
 export const BUILDER_VIDEO_SPEED_MIN = 0.25;
 export const BUILDER_VIDEO_SPEED_MAX = 2;
 export const BUILDER_VIDEO_BLUR_MAX = 20;
@@ -1216,6 +1316,7 @@ export function createDefaultBackgroundSettings(): BackgroundSettings {
     mode: "none",
     color: "#ffffff",
     color2: "#eaf4ff",
+    gradientAngle: BUILDER_GRADIENT_ANGLE_DEFAULT,
     imageUrl: "",
     imageAssetId: "",
     styleKey: "",
@@ -1249,6 +1350,7 @@ export function normalizeBackgroundSettings(value: unknown): BackgroundSettings 
     mode: normalizeBackgroundMode(background.mode),
     color: normalizeBuilderHexColor(safeText(background.color, 40), "#ffffff"),
     color2: normalizeBuilderHexColor(safeText(background.color2, 40), "#eaf4ff"),
+    gradientAngle: builderGradientAngle(background),
     imageUrl: normalizeBuilderAssetUrl(background.imageUrl),
     imageAssetId: safeText(background.imageAssetId, 120),
     styleKey: normalizeBackgroundStyleKey(background.styleKey),
@@ -1363,7 +1465,12 @@ export function seedVideoBackgroundOverlayScreen(overlayScreen: unknown): RowOve
     return current;
   }
 
+  // Spread `current` rather than rebuilding the object: seeding must set the
+  // colour and strength and leave every OTHER overlay field alone. Listing the
+  // fields by hand silently drops any that is added later — which is exactly
+  // what happened the day `blendMode` arrived, and the idempotence test caught.
   return {
+    ...current,
     background: {
       ...createDefaultBackgroundSettings(),
       mode: "color",
@@ -1391,8 +1498,15 @@ export function getBuilderRowOverlayScreenStyle(overlayScreen: unknown): CSSProp
     return undefined;
   }
 
+  // "normal" is the CSS initial value, so writing it would be a no-op that
+  // still changes every existing overlay's style attribute. Omit it instead:
+  // an overlay that predates this setting produces exactly the CSS it always
+  // did, which is what makes this change safe to ship to live sites.
+  const blendMode = normalized.blendMode ?? "normal";
+  const blended = blendMode === "normal" ? style : { ...style, mixBlendMode: blendMode };
+
   const opacity = normalized.opacity / 100;
-  return Number.isFinite(opacity) && opacity < 1 ? { ...style, opacity } : style;
+  return Number.isFinite(opacity) && opacity < 1 ? { ...blended, opacity } : blended;
 }
 
 /**
@@ -1457,11 +1571,22 @@ export function getBuilderBackgroundLayerOpacity(background: BackgroundSettings 
   return 1;
 }
 
+/**
+ * The gate between a stored document and CSS. Anything not on the allowlist —
+ * a typo, a mode this build does not offer, or a filter function someone hand
+ * -wrote into the JSON — becomes "normal" rather than being passed through.
+ */
+function readOverlayBlendMode(value: unknown): BuilderOverlayBlendMode {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return BUILDER_OVERLAY_BLEND_MODE_VALUES.has(raw) ? (raw as BuilderOverlayBlendMode) : "normal";
+}
+
 export function normalizeRowOverlayScreenSettings(value: unknown): RowOverlayScreenSettings {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {
       background: createDefaultBackgroundSettings(),
-      opacity: 100
+      opacity: 100,
+      blendMode: "normal"
     };
   }
 
@@ -1471,7 +1596,8 @@ export function normalizeRowOverlayScreenSettings(value: unknown): RowOverlayScr
 
   return {
     background: normalizeBackgroundSettings(overlay.background),
-    opacity
+    opacity,
+    blendMode: readOverlayBlendMode(overlay.blendMode)
   };
 }
 
@@ -1822,7 +1948,7 @@ export function getBuilderBackgroundStyle(background: BackgroundSettings | undef
     const color = applyBuilderColorOpacity(background.color, opacity);
     const color2 = applyBuilderColorOpacity(background.color2, opacity);
     return {
-      backgroundImage: `linear-gradient(135deg, ${color} 0%, ${color2} 100%)`
+      backgroundImage: `linear-gradient(${builderGradientAngle(background)}deg, ${color} 0%, ${color2} 100%)`
     };
   }
 
@@ -1935,6 +2061,35 @@ function normalizeCellBackgrounds(
       const background = normalizeBackgroundSettings(raw[column]);
       return [column, sanitizeCellBackgroundForDrillDown(background)];
     })
+  );
+}
+
+/**
+ * Every cell's tint screen, keyed by column.
+ *
+ * Deliberately NOT `sanitizeCellBackgroundForDrillDown`-ed the way the cell
+ * FILL above is: that sanitiser exists to stop the drill-down surface colour
+ * being mistaken for a fill the operator chose, and a tint is never a surface
+ * default — nothing seeds one, so anything here was set on purpose.
+ *
+ * An unset cell gets a `mode: "none"` screen, which `getBuilderRowOverlayScreenStyle`
+ * reads as "paint nothing". So a row that has never been given a cell overlay
+ * normalizes to a map of no-ops and renders exactly as it did before this
+ * field existed.
+ */
+function normalizeCellOverlayScreens(
+  value: unknown,
+  layout: BuilderTemplateLayout
+): Record<string, RowOverlayScreenSettings> {
+  const columns = getLayoutColumns(layout);
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return Object.fromEntries(columns.map((column) => [column, normalizeRowOverlayScreenSettings(null)]));
+  }
+
+  const raw = value as Record<string, unknown>;
+  return Object.fromEntries(
+    columns.map((column) => [column, normalizeRowOverlayScreenSettings(raw[column])])
   );
 }
 
@@ -2152,6 +2307,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "admin-nav-link" ||
     type === "admin-site-settings" ||
     type === "admin-support-form" ||
+    type === "admin-blog-links" ||
     type === "bug-report"
   ) {
     return type;
@@ -3087,6 +3243,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         background: normalizeBackgroundSettings(normalizedSection.background),
         overlayScreen: normalizeRowOverlayScreenSettings(normalizedSection.overlayScreen),
         cellBackgrounds: normalizeCellBackgrounds(normalizedSection.cellBackgrounds, layout),
+        cellOverlayScreens: normalizeCellOverlayScreens(normalizedSection.cellOverlayScreens, layout),
         cellPadding: cellPadding,
         cellPaddingTop: normalizeCellPaddingSide(
           normalizedSection.cellPaddingTop,
@@ -3200,6 +3357,9 @@ export function createEmptySection(layout: BuilderTemplateLayout = "single"): Bu
     overlayScreen: normalizeRowOverlayScreenSettings(null),
     cellBackgrounds: Object.fromEntries(
       getLayoutColumns(layout).map((column) => [column, createDefaultBackgroundSettings()])
+    ),
+    cellOverlayScreens: Object.fromEntries(
+      getLayoutColumns(layout).map((column) => [column, normalizeRowOverlayScreenSettings(null)])
     ),
     cellPadding: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
     cellPaddingTop: Object.fromEntries(getLayoutColumns(layout).map((column) => [column, "0"])),
@@ -3662,6 +3822,7 @@ export function createEmptyModule(
                           }
                       : type === "blog-tag-cloud"
                         ? {
+                            title: "",
                             tags: JSON.stringify([]),
                             layout: "cloud",
                             showCounts: "false",
@@ -3847,6 +4008,23 @@ export function createEmptyModule(
                         ? {
                             panelTitle: "Site Settings",
                             showTitle: "true"
+                          }
+                      : type === "admin-blog-links"
+                        ? {
+                            panelTitle: "Blog Links",
+                            showTitle: "true",
+                            // Categories and Tags are the two taxonomies the
+                            // blog actually has: categories are a table, tags
+                            // are a text[] on each post. Both on by default -
+                            // a manager showing neither has nothing to manage.
+                            showCategories: "true",
+                            showTags: "true",
+                            // The right-hand article list and its Relate
+                            // Checked button. Turning this off leaves a plain
+                            // taxonomy editor.
+                            showRelate: "true",
+                            relateButtonLabel: "Relate Checked",
+                            articleStatus: "all"
                           }
                       : type === "admin-support-form"
                         ? {

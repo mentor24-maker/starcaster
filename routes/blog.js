@@ -4,6 +4,11 @@ const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const { listCategories, getCategory, getCategoryBySlug, createCategory, updateCategory, deleteCategory } = require('../lib/blogCategoriesStore');
 const { listPosts, getPost, getPostBySlug, createPost, updatePost, deletePost } = require('../lib/blogPostsStore');
 const { getCardTemplate, saveCardTemplate } = require('../lib/blogCardTemplateStore');
+const { listTags, listPostsWithTag, renameTag, removeTag } = require('../lib/blogTagsStore');
+const { listRelations, listRelatedPostIds, relatePosts, unrelatePosts } = require('../lib/blogPostRelationsStore');
+const { listImportCandidates, importPosts, IMPORT_BATCH_SIZE } = require('../lib/blogImportStore');
+const { getPublicProjectById } = require('../lib/projectsStore');
+const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { logActivity } = require('../lib/activityLog');
 
 function requestScope(req) {
@@ -168,6 +173,41 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { deleted: true, id }, { deleted: true }), true;
   }
 
+  // ── Bulk import from discarded pages ────────────────────────────────────────
+  // docs/BLOG_BULK_IMPORT_HANDOFF.md. Both endpoints require a session (they
+  // are not in the public tenant read list) and are scoped to the caller's
+  // project. Candidates is the dry run: nothing is written until the POST,
+  // and the POST takes page ids only — the fields come from the snapshots.
+
+  if (pathname === '/api/blog/import/candidates' && method === 'GET') {
+    if (checkEndpointLimit(req, res, 'blog.import')) return true;
+    const scope = requestScope(req);
+    const result = await listImportCandidates(scope);
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not list import candidates'), true;
+    // Suggested author for posts whose source names none — the site's name,
+    // editable in the picker before anything is written. The store returns an
+    // envelope, so the name is on .data (landmine 12): reading it off the
+    // envelope silently yields undefined and an empty suggestion box.
+    const project = await getPublicProjectById(scope.projectId);
+    return sendOk(res, 200, {
+      candidates: result.data,
+      defaultAuthorSuggestion: String(project?.data?.name || '').trim(),
+      batchSize: IMPORT_BATCH_SIZE,
+    }), true;
+  }
+
+  if (pathname === '/api/blog/import' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'blog.import')) return true;
+    const body = await parseJsonBody(req);
+    const result = await importPosts({
+      pageIds: Array.isArray(body.pageIds) ? body.pageIds : [],
+      defaultAuthor: String(body.defaultAuthor || '').trim(),
+    }, requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Import failed'), true;
+    logActivity({ action: 'blog_post.bulk_imported', entityType: 'blog_post', entityId: '', summary: `Blog bulk import: ${result.data.created} created, ${result.data.skipped} skipped, ${result.data.failed} failed` });
+    return sendOk(res, 200, result.data), true;
+  }
+
   // ── Blog Card Template ──────────────────────────────────────────────────────
 
   if (pathname === '/api/blog/card-template' && method === 'GET') {
@@ -179,6 +219,99 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const saved = await saveCardTemplate(body, requestScope(req));
     return sendOk(res, 200, saved, { template: saved }), true;
+  }
+
+  // ── Blog Tags ───────────────────────────────────────────────────────────────
+  // Tags have no table: they are a text[] on each post, so the list is derived
+  // and every edit rewrites the posts that carry the word. See lib/blogTagsStore.js.
+
+  if (pathname === '/api/blog/tags' && method === 'GET') {
+    const tags = await listTags(requestScope(req));
+    return sendOk(res, 200, tags, { tags }, { total: tags.length }), true;
+  }
+
+  if (pathname === '/api/blog/tags/posts' && method === 'GET') {
+    const tag = String(urlObj.searchParams.get('tag') || '').trim();
+    if (!tag) return sendErr(res, 400, 'tag is required', { code: 'VALIDATION_ERROR' }), true;
+    const posts = await listPostsWithTag(tag, requestScope(req));
+    return sendOk(res, 200, posts, { posts }, { total: posts.length }), true;
+  }
+
+  if (pathname === '/api/blog/tags/rename' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'blog.tags')) return true;
+    const body = await parseJsonBody(req);
+    const from = String(body.from || '').trim();
+    const to   = String(body.to || '').trim();
+    if (!from) return sendErr(res, 400, 'from is required', { code: 'VALIDATION_ERROR' }), true;
+    if (!to)   return sendErr(res, 400, 'to is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await renameTag(from, to, requestScope(req));
+    if (result.error) return sendErr(res, 400, result.error, { code: 'VALIDATION_ERROR' }), true;
+    // A partial rename is reported as a failure with the count that DID land,
+    // never as a success -- the posts left behind still carry the old tag.
+    if (!result.ok) {
+      return sendErr(res, 500, `Renamed ${result.updated} post(s), but ${result.failed.length} could not be saved and still carry "${from}".`, {
+        code: 'PARTIAL_WRITE', details: result,
+      }), true;
+    }
+    logActivity({ action: 'blog_tag.renamed', entityType: 'blog_tag', entityId: from, summary: `Blog tag renamed: "${from}" to "${to}" across ${result.updated} post(s)` });
+    return sendOk(res, 200, result, { result }), true;
+  }
+
+  if (pathname === '/api/blog/tags' && method === 'DELETE') {
+    if (checkEndpointLimit(req, res, 'blog.tags')) return true;
+    const body = await parseJsonBody(req);
+    const tag = String(body.tag || '').trim();
+    if (!tag) return sendErr(res, 400, 'tag is required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await removeTag(tag, requestScope(req));
+    if (result.error) return sendErr(res, 400, result.error, { code: 'VALIDATION_ERROR' }), true;
+    if (!result.ok) {
+      return sendErr(res, 500, `Removed the tag from ${result.updated} post(s), but ${result.failed.length} could not be saved and still carry "${tag}".`, {
+        code: 'PARTIAL_WRITE', details: result,
+      }), true;
+    }
+    logActivity({ action: 'blog_tag.removed', entityType: 'blog_tag', entityId: tag, summary: `Blog tag removed: "${tag}" from ${result.updated} post(s)` });
+    return sendOk(res, 200, result, { result }), true;
+  }
+
+  // ── Blog Post Relations (hand-picked "related articles") ────────────────────
+
+  if (pathname === '/api/blog/relations' && method === 'GET') {
+    const scope = requestScope(req);
+    const postId = String(urlObj.searchParams.get('postId') || '').trim();
+    if (postId) {
+      const relatedIds = await listRelatedPostIds(postId, scope);
+      return sendOk(res, 200, relatedIds, { relatedIds }, { total: relatedIds.length }), true;
+    }
+    const relations = await listRelations(scope);
+    return sendOk(res, 200, relations, { relations }, { total: relations.length }), true;
+  }
+
+  if (pathname === '/api/blog/relations' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'blog.relations')) return true;
+    const body = await parseJsonBody(req);
+    const postIds = Array.isArray(body.postIds) ? body.postIds.map(String) : [];
+    const distinct = [...new Set(postIds.map((id) => id.trim()).filter(Boolean))];
+    if (distinct.length < 2) {
+      return sendErr(res, 400, 'Check at least two articles to relate them to each other.', { code: 'VALIDATION_ERROR' }), true;
+    }
+    const result = await relatePosts(distinct, requestScope(req));
+    // null means the database REFUSED. Falling back to the local file here
+    // would answer 200 with the caller's own input while nothing was stored
+    // (landmine 15), so the store returns null and this says so.
+    if (!result) return sendErr(res, 500, 'Could not save the relations.'), true;
+    logActivity({ action: 'blog_post.related', entityType: 'blog_post', entityId: distinct[0], summary: `Blog articles related: ${distinct.length} articles, ${result.added} new link(s)` });
+    return sendOk(res, 200, result, { result }), true;
+  }
+
+  if (pathname === '/api/blog/relations' && method === 'DELETE') {
+    if (checkEndpointLimit(req, res, 'blog.relations')) return true;
+    const body = await parseJsonBody(req);
+    const postIdA = String(body.postIdA || '').trim();
+    const postIdB = String(body.postIdB || '').trim();
+    if (!postIdA || !postIdB) return sendErr(res, 400, 'postIdA and postIdB are required', { code: 'VALIDATION_ERROR' }), true;
+    const result = await unrelatePosts(postIdA, postIdB, requestScope(req));
+    if (!result) return sendErr(res, 500, 'Could not remove the relation.'), true;
+    return sendOk(res, 200, result, { result }), true;
   }
 
   return false;

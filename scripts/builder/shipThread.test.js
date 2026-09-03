@@ -224,3 +224,45 @@ test('LOOP_ENGINEERING no longer advises the ordering that steals the PR title',
     'ship does not skip work-log commits, which is why the ordering matters'
   );
 });
+
+// ---------------------------------------------------------------------------
+// Decisions D2 and D3 (2026-09-03, task 86bbu2uhq — DOCTRINE §6.17).
+// ---------------------------------------------------------------------------
+
+test('ship asks the pause switch before merging, and quotes it when it stops', () => {
+  // the module-level `code` (line ~35) is the comment-stripped source
+  const ask = code.indexOf("'pipeline', '--', 'check'");
+  const merge = code.indexOf("'pr', 'merge'");
+  assert.ok(ask > 0, 'the ask exists — the audit found ship merging with no read of the switch');
+  assert.ok(ask < merge, 'and it comes BEFORE the merge, or it is decoration');
+  assert.match(code, /In its own words:/, 'a stop quotes the switch rather than paraphrasing it');
+  assert.match(code, /resume --operator-asked/, 'and names whose call the resume is');
+});
+
+test('the review gate is stated before the merge, and never enforced by ship', () => {
+  // the module-level `code` (line ~35) is the comment-stripped source
+  const gate = code.indexOf("'waiting', '--task'");
+  const merge = code.indexOf("'pr', 'merge'");
+  assert.ok(gate > 0 && gate < merge, 'the gate context precedes the merge');
+  // Reported, not enforced (D3, as approved): the gate block may not fail the
+  // ship. Slice from the gate read to the Merging heading and prove no fail().
+  const block = code.slice(gate, code.indexOf("heading('Merging')"));
+  assert.doesNotMatch(block, /fail\(/,
+    'enforcement stays with the one merge gate until a driving incident — ship only states');
+  assert.match(block, /no ticket stamp, so there is nothing to read it from/,
+    'an unstamped branch says so instead of pretending');
+  assert.match(block, /reported here, not enforced/,
+    'an unreadable gate is said out loud and the merge proceeds, as decided');
+});
+
+test('CLAUDE.md no longer answers yes AND no about merges and the switch', () => {
+  const claude = fs.readFileSync(path.join(__dirname, '..', '..', 'CLAUDE.md'), 'utf8');
+  assert.ok(!claude.includes('**No pause to merge**'),
+    'the sentence that contradicted "before merging anything" is repaired (audit C1)');
+  assert.match(claude, /every\s+merge still asks the switch/, 'and says what it always meant');
+  const doctrine = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'DOCTRINE.md'), 'utf8');
+  assert.match(doctrine, /### 6\.17 /, 'the three decisions have one citable home');
+  for (const d of ['D1', 'D2', 'D3', '86bbu2uhq']) {
+    assert.ok(doctrine.includes(d), `§6.17 records ${d}`);
+  }
+});
