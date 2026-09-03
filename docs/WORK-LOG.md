@@ -32,6 +32,35 @@ to describe two different mechanisms as if they were one. All three were
 corrected on the task before a word was written, and the document says what is
 actually true of the code today.
 
+## 2026-09-03 — Overlays can tint a photo now, instead of only fogging it (#553)
+
+A section in the Builder can paint a sheet of colour over its own background.
+Until now that sheet could only ever *fog* the photograph underneath: turn the
+strength up and the picture got flatter and greyer, until at full strength it
+disappeared completely under solid colour. If you wanted a photo that was, say,
+orange, you could not have one — you could only have a photo you could barely
+see, or an orange rectangle.
+
+There is now a **Blend** setting beside the overlay's Opacity, offering seven
+choices. The one most people want is **Multiply**: it keeps every dark part of
+the photograph dark and recolours everything else, so the picture stays fully
+visible but reads as though it were taken through a coloured filter. **Screen**
+does the opposite, washing the photo pale toward the overlay colour, and
+**Overlay** pushes the contrast up hard.
+
+Two things were done deliberately to keep this from disturbing any site that is
+already live. The setting defaults to **Normal**, and Normal writes nothing at
+all into the page — so every overlay that already exists renders exactly as it
+did before, which was confirmed by photographing six pages through both the old
+code and the new and finding them identical to the pixel. And the seven choices
+are a fixed list: if a page somehow carries any other value, it is ignored
+rather than passed through to the browser.
+
+One thing was found on the way. The code that switches the tint on when a row
+becomes a video row rebuilt the overlay from a hand-written list of its parts,
+which meant it quietly dropped the new Blend setting the moment that setting
+existed. A test caught it. It now copies the whole overlay across instead, so
+the next setting added will not hit the same trap.
 ## 2026-08-29 — The Tractor Nav settings panel is one rectangle again (#447)
 
 Open the settings for a Tractor Nav module and look down the Placement column.
