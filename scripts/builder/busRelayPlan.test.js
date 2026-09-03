@@ -3,11 +3,41 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { defaultWatches, handbackTarget } = require('./busRelayPlan.js');
+const { defaultWatches, handbackTarget, mergeEnabled } = require('./busRelayPlan.js');
 
 const watches = defaultWatches({ agentResponseList: 'AR', loopQueueList: 'LQ' });
 const agentResponse = watches.find((w) => w.list === 'AR');
 const loopQueue = watches.find((w) => w.list === 'LQ');
+
+/*
+ * ORDER (2026-09-03, task 86bbugakw). The relay sweeps the watches in order,
+ * spending one request per open ticket against a ~100-per-minute allowance
+ * shared by the whole company's token. With Agent Response first — 92 open
+ * tickets, never drained — the budget was gone before the sweep reached the
+ * only list that can merge, and the merge lane was dead for sixteen hours.
+ *
+ * Asserted on the MERGE CAPABILITY rather than on the label or the list id.
+ * The rule is "the list that can merge must not be starved", so that is the
+ * property worth pinning; a future rename or a third watch should not be able
+ * to satisfy this test while breaking the thing it protects.
+ */
+test('the merge-capable watch is swept FIRST, so a spent budget lands on a notify-only list', () => {
+  const order = defaultWatches({ agentResponseList: 'AR', loopQueueList: 'LQ' });
+  const firstMergeable = order.findIndex(mergeEnabled);
+  assert.notEqual(firstMergeable, -1, 'no watch can merge — the relay could never merge anything');
+  assert.equal(
+    firstMergeable,
+    0,
+    'a merge-capable watch is not first: the budget would run out before reaching it'
+  );
+});
+
+test('every watch after the merge-capable one is notify-only', () => {
+  const order = defaultWatches({ agentResponseList: 'AR', loopQueueList: 'LQ' });
+  const mergeable = order.filter(mergeEnabled);
+  assert.equal(mergeable.length, 1, 'exactly one watch should be able to merge');
+  assert.equal(order.slice(1).some(mergeEnabled), false);
+});
 
 test('both standing watches exist and carry their statuses', () => {
   assert.deepEqual(agentResponse.statuses, ['pending response', 'responding']);
