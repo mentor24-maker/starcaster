@@ -2489,10 +2489,34 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   const cardGap = parseInt(settings.cardGap || "24", 10) || 24;
 
   // Filter bar visibility
+  /*
+   * filterMode says what this feed IS — a tag-results page, a category-results
+   * page, an author-results page — rather than which checkboxes happen to be
+   * ticked. Three independent toggles could already produce a tag-only filter
+   * bar, but nothing in the module KNEW that was the intent, so nothing could
+   * title the results (Dane, 2026-09-03).
+   *
+   * "all" is the default and must stay the default: these settings are merged
+   * UNDER a module's saved values, so any other default would silently retitle
+   * and re-narrow every Post Feed already sitting on a page.
+   */
+  const filterMode = (settings.filterMode || "all").trim().toLowerCase();
+  const singleFilter =
+    filterMode === "tag" || filterMode === "category" || filterMode === "author" ? filterMode : "";
+
   const showSearchBar = (settings.showSearch ?? "true") !== "false";
-  const showCategoryFilter = (settings.showCategoryFilter ?? "true") !== "false";
-  const showTagFilter = (settings.showTagFilter ?? "true") !== "false";
-  const showAuthorFilter = (settings.showAuthorFilter ?? "true") !== "false";
+  // In a single mode the mode wins over the checkboxes. Ticking "Category
+  // Filter" on a tag-results page is a contradiction, and the setting that
+  // names the page's purpose is the stronger statement.
+  const showCategoryFilter = singleFilter
+    ? singleFilter === "category"
+    : (settings.showCategoryFilter ?? "true") !== "false";
+  const showTagFilter = singleFilter
+    ? singleFilter === "tag"
+    : (settings.showTagFilter ?? "true") !== "false";
+  const showAuthorFilter = singleFilter
+    ? singleFilter === "author"
+    : (settings.showAuthorFilter ?? "true") !== "false";
   const showDateFilter = settings.showDateFilter === "true";
   const hasFilterBar = showSearchBar || showCategoryFilter || showTagFilter || showAuthorFilter || showDateFilter;
 
@@ -2524,6 +2548,12 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
         }
         const urlTag = params.get("tag") ?? "";
         if (urlTag) setTagFilter(urlTag);
+        // ?author= joins ?tag= and ?category= so all three filter modes can be
+        // driven from a link. Added with filterMode: an "Author Results"
+        // preset that only responds to the dropdown would be a promise the
+        // module does not keep.
+        const urlAuthor = params.get("author") ?? "";
+        if (urlAuthor) setAuthorFilter(urlAuthor);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -2552,9 +2582,19 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
     );
   }, [allTags, tagFilter]);
   const allAuthors = useMemo(
-    () => [...new Set(allPosts.map((p) => p.author).filter((a): a is string => Boolean(a)))].sort(),
+    () =>
+      [...new Set(allPosts.map((p) => p.author).filter((a): a is string => Boolean(a)))]
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
     [allPosts]
   );
+  // Same rule as tagOptions: an author the URL named stays visible even when
+  // no post is by them, so the control never contradicts the filter.
+  const authorOptions = useMemo(() => {
+    if (!authorFilter || allAuthors.includes(authorFilter)) return allAuthors;
+    return [...allAuthors, authorFilter].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [allAuthors, authorFilter]);
 
   const filteredPosts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -2591,11 +2631,28 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
    * parameter that did nothing — which is exactly how a working page read as a
    * broken one on 2026-09-03. Name the value that emptied the page.
    */
+  /*
+   * "Blog posts matching the tag \u201cjunior tennis\u201d: 13" — the operator's
+   * wording, 2026-09-03. It renders only when the mode HAS a value: with
+   * nothing selected there is nothing to describe, and "matching the tag
+   * \u201c\u201d: 55" would be noise on a page that is simply showing everything.
+   */
+  const singleFilterValue =
+    singleFilter === "tag" ? tagFilter
+      : singleFilter === "category" ? activeCategoryName
+        : singleFilter === "author" ? authorFilter
+          : "";
+  const resultsLine = singleFilterValue
+    ? `Blog posts matching the ${singleFilter} \u201c${singleFilterValue}\u201d: ${filteredPosts.length}`
+    : "";
+
   const emptyFilteredMessage = tagFilter
     ? `No posts tagged \u201c${tagFilter}\u201d.`
     : activeCategoryName
       ? `No posts in the category \u201c${activeCategoryName}\u201d.`
-      : "No posts match your filters.";
+      : authorFilter
+        ? `No posts by \u201c${authorFilter}\u201d.`
+        : "No posts match your filters.";
 
   if (loading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
@@ -2658,10 +2715,10 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
               {tagOptions.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           ) : null}
-          {showAuthorFilter && allAuthors.length > 0 ? (
+          {showAuthorFilter && authorOptions.length > 0 ? (
             <select value={authorFilter} onChange={(e) => setAuthorFilter(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}>
               <option value="">All Authors</option>
-              {allAuthors.map((a) => <option key={a} value={a}>{a}</option>)}
+              {authorOptions.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
           ) : null}
           {showDateFilter ? (
@@ -2680,11 +2737,21 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
               Clear
             </button>
           ) : null}
-          {hasActiveFilter && filteredPosts.length !== allPosts.length ? (
+          {/* Not both: the results line below already carries this count. */}
+          {!resultsLine && hasActiveFilter && filteredPosts.length !== allPosts.length ? (
             <span style={{ fontSize: "0.8125rem", color: "#718096", marginLeft: "auto" }}>
               {filteredPosts.length} result{filteredPosts.length !== 1 ? "s" : ""}
             </span>
           ) : null}
+        </div>
+      ) : null}
+
+      {resultsLine ? (
+        <div
+          className="builder-blog-post-list-results-line"
+          style={{ margin: "0 0 1.25rem", fontSize: "0.9375rem", fontWeight: 600, color: "#2d3748" }}
+        >
+          {resultsLine}
         </div>
       ) : null}
 
