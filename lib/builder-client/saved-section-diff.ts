@@ -138,6 +138,10 @@ const SECTION_FIELD_LABELS: Record<string, string> = {
   equalColumnHeights: "Equal column heights",
   columnGap: "Column gap",
   overlayScreen: "Overlay screen",
+  // Per-column, so it renders as "Cell overlay screen (column b)". The label is
+  // singular because `compareRecords` has already narrowed it to ONE column by
+  // the time it is read; the mechanical humanisation would say "screens".
+  cellOverlayScreens: "Cell overlay screen",
 };
 
 function humanizeKey(key: string): string {

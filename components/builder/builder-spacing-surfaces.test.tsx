@@ -45,6 +45,8 @@ describe("spacing rows outside a module panel (E4b)", () => {
         onUpdateCellBorderWidth={() => {}}
         onUpdateCellBorderColor={() => {}}
         onUpdateCellBorderRadius={() => {}}
+        onUpdateCellOverlayBackground={() => {}}
+        onUpdateCellOverlayOpacity={() => {}}
         onSetCellExtra={() => {}}
         getCellExtra={() => ""}
       />
@@ -65,6 +67,8 @@ describe("spacing rows outside a module panel (E4b)", () => {
         onUpdateCellBorderWidth={() => {}}
         onUpdateCellBorderColor={() => {}}
         onUpdateCellBorderRadius={() => {}}
+        onUpdateCellOverlayBackground={() => {}}
+        onUpdateCellOverlayOpacity={() => {}}
         onSetCellExtra={() => {}}
         getCellExtra={(_column, key) => set[key] ?? ""}
       />
