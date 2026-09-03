@@ -37,6 +37,13 @@ const supabasePath = require.resolve('../../lib/supabase.js');
 const projectScopePath = require.resolve('../../lib/projectScope.js');
 const storePath = require.resolve('../../lib/projectConnectionsStore.js');
 const routePath = require.resolve('../../routes/connections.js');
+// The route stores accounts through this shared module (slice 5, 86bbpz1gk), and
+// it holds its OWN reference to the store — so it has to be re-required with the
+// rest or it keeps talking to whatever store the last test left behind, while
+// the route talks to the fake. That reads as "Connection not found" on a row
+// this test just seeded, which is the least informative shape a stale require
+// can take.
+const completeConnectionPath = require.resolve('../../lib/connections/completeConnection.js');
 const legacyStorePath = require.resolve('../../lib/projectSocialCredentialsStore.js');
 
 const SCOPE = { projectId: 'proj_a', userId: 'user_1' };
@@ -98,6 +105,7 @@ function withRoute({ legacyPage = null } = {}) {
   // table, so all three must be re-required or they answer from the last test.
   delete require.cache[projectScopePath];
   delete require.cache[storePath];
+  delete require.cache[completeConnectionPath];
   delete require.cache[routePath];
 
   const store = require(storePath);
@@ -114,6 +122,7 @@ function withRoute({ legacyPage = null } = {}) {
     else delete require.cache[legacyStorePath];
     delete require.cache[projectScopePath];
     delete require.cache[storePath];
+    delete require.cache[completeConnectionPath];
     delete require.cache[routePath];
     if (hadKey) process.env.CHANNELS_ENCRYPTION_KEY = previousKey;
     else delete process.env.CHANNELS_ENCRYPTION_KEY;
@@ -226,8 +235,15 @@ test('the four card states are decided from what is actually stored', async (t) 
   assert.equal(cards.get('bluesky').reason, '', 'a healthy card carries no reason');
 
   // A platform with no adapter is greyed, whatever else is true of it.
-  assert.equal(cards.get('x').cardState, 'coming_soon');
-  assert.equal(cards.get('instagram').cardState, 'coming_soon');
+  // Read the catalogue for what is STILL unfinished rather than naming a
+  // platform: Instagram became connectable in slice 5 (86bbpz1gk), and a test
+  // that hard-codes the example silently loses its subject each time one ships.
+  const registryNow = require('../../lib/connections/registry.js');
+  const stillComingSoon = registryNow.CATALOGUE.filter((entry) => entry.readiness === 'coming_soon');
+  assert.ok(stillComingSoon.length, 'no coming_soon entry left to prove the greyed state');
+  for (const entry of stillComingSoon) {
+    assert.equal(cards.get(entry.provider).cardState, 'coming_soon');
+  }
 
   // A live grant.
   await grant(h.store, SCOPE, BLUESKY_GRANT);
