@@ -242,10 +242,46 @@ export type BackgroundSettings = {
   parallaxSpeed?: number;
 };
 
+/**
+ * The blend modes an overlay screen may use, in the order the picker offers
+ * them. CSS defines sixteen; these are the seven that read differently on a
+ * photograph, and a picker showing all sixteen is unusable because most of the
+ * rest are indistinguishable from one of these.
+ *
+ * It is an ALLOWLIST, not a suggestion. The value reaches CSS, so
+ * `normalizeRowOverlayScreenSettings` falls back to "normal" for anything not
+ * on this list — a document hand-edited to carry `blendMode: "hue-rotate(90)"`
+ * must never put that string into a style attribute.
+ *
+ * One list, shared by the normalizer and the panel's picker, so the two cannot
+ * drift into disagreeing about what is offerable.
+ */
+export const BUILDER_OVERLAY_BLEND_MODES = [
+  { value: "normal", label: "Normal" },
+  { value: "multiply", label: "Multiply" },
+  { value: "screen", label: "Screen" },
+  { value: "overlay", label: "Overlay" },
+  { value: "soft-light", label: "Soft light" },
+  { value: "darken", label: "Darken" },
+  { value: "lighten", label: "Lighten" }
+] as const;
+
+export type BuilderOverlayBlendMode = (typeof BUILDER_OVERLAY_BLEND_MODES)[number]["value"];
+
+const BUILDER_OVERLAY_BLEND_MODE_VALUES: ReadonlySet<string> = new Set(
+  BUILDER_OVERLAY_BLEND_MODES.map((mode) => mode.value)
+);
+
 /** StarCaster: dimmer/tint screen layered over a section's background. */
 export type RowOverlayScreenSettings = {
   background: BackgroundSettings;
   opacity: number;
+  /**
+   * `mix-blend-mode` for the screen. "normal" is the default and emits NO CSS
+   * property at all, so every overlay configured before this setting existed
+   * renders byte-identically.
+   */
+  blendMode?: BuilderOverlayBlendMode;
 };
 
 /**
@@ -1418,7 +1454,12 @@ export function seedVideoBackgroundOverlayScreen(overlayScreen: unknown): RowOve
     return current;
   }
 
+  // Spread `current` rather than rebuilding the object: seeding must set the
+  // colour and strength and leave every OTHER overlay field alone. Listing the
+  // fields by hand silently drops any that is added later — which is exactly
+  // what happened the day `blendMode` arrived, and the idempotence test caught.
   return {
+    ...current,
     background: {
       ...createDefaultBackgroundSettings(),
       mode: "color",
@@ -1446,8 +1487,15 @@ export function getBuilderRowOverlayScreenStyle(overlayScreen: unknown): CSSProp
     return undefined;
   }
 
+  // "normal" is the CSS initial value, so writing it would be a no-op that
+  // still changes every existing overlay's style attribute. Omit it instead:
+  // an overlay that predates this setting produces exactly the CSS it always
+  // did, which is what makes this change safe to ship to live sites.
+  const blendMode = normalized.blendMode ?? "normal";
+  const blended = blendMode === "normal" ? style : { ...style, mixBlendMode: blendMode };
+
   const opacity = normalized.opacity / 100;
-  return Number.isFinite(opacity) && opacity < 1 ? { ...style, opacity } : style;
+  return Number.isFinite(opacity) && opacity < 1 ? { ...blended, opacity } : blended;
 }
 
 /**
@@ -1512,11 +1560,22 @@ export function getBuilderBackgroundLayerOpacity(background: BackgroundSettings 
   return 1;
 }
 
+/**
+ * The gate between a stored document and CSS. Anything not on the allowlist —
+ * a typo, a mode this build does not offer, or a filter function someone hand
+ * -wrote into the JSON — becomes "normal" rather than being passed through.
+ */
+function readOverlayBlendMode(value: unknown): BuilderOverlayBlendMode {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return BUILDER_OVERLAY_BLEND_MODE_VALUES.has(raw) ? (raw as BuilderOverlayBlendMode) : "normal";
+}
+
 export function normalizeRowOverlayScreenSettings(value: unknown): RowOverlayScreenSettings {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {
       background: createDefaultBackgroundSettings(),
-      opacity: 100
+      opacity: 100,
+      blendMode: "normal"
     };
   }
 
@@ -1526,7 +1585,8 @@ export function normalizeRowOverlayScreenSettings(value: unknown): RowOverlayScr
 
   return {
     background: normalizeBackgroundSettings(overlay.background),
-    opacity
+    opacity,
+    blendMode: readOverlayBlendMode(overlay.blendMode)
   };
 }
 

@@ -1204,4 +1204,59 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+
+  {
+    id: 'row-overlay-blend-mode-reaches-the-browser',
+    why:
+      'Blend is the difference between a sheet over the photo and a photo that has been TINTED, and it ' +
+      'is one CSS property that has to survive the normalizer, the server template bundle and the ' +
+      'renderer to do anything at all. A dropped field here looks exactly like a working setting: the ' +
+      'picker remembers the choice, the page saves, and the overlay just carries on fogging.',
+    section: {
+      layout: 'single',
+      background: { mode: 'image', imageUrl: BANNER },
+      overlayScreen: {
+        background: { mode: 'color', color: '#ff6a00' },
+        opacity: 100,
+        blendMode: 'multiply',
+      },
+      modules: [{ type: 'heading', text: 'Tinted, not fogged', settings: {} }],
+    },
+    selector: '.builder-preview-row-overlay-screen',
+    read: ['mixBlendMode', 'backgroundColor'],
+    expect(sample) {
+      if (sample.styles.mixBlendMode !== 'multiply') {
+        return `the tint screen computed \`mix-blend-mode: ${sample.styles.mixBlendMode}\` — Multiply was ` +
+          'chosen, so the photo underneath is being fogged flat instead of tinted.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'row-overlay-blend-mode-normal-stays-out-of-the-way',
+    why:
+      'Every overlay configured before this setting existed has no blendMode at all, and must keep ' +
+      'rendering byte-identically. "normal" is the CSS initial value, so emitting it would be a no-op ' +
+      'that still rewrote every live tenant section\'s style attribute — this is the contract that ' +
+      'says the default really is a default.',
+    section: {
+      layout: 'single',
+      background: { mode: 'image', imageUrl: BANNER },
+      overlayScreen: {
+        background: { mode: 'color', color: '#ff6a00' },
+        opacity: 100,
+      },
+      modules: [{ type: 'heading', text: 'Fogged, as it always was', settings: {} }],
+    },
+    selector: '.builder-preview-row-overlay-screen',
+    read: ['mixBlendMode'],
+    expect(sample) {
+      if (sample.styles.mixBlendMode !== 'normal') {
+        return `an overlay with no blend mode saved computed \`mix-blend-mode: ${sample.styles.mixBlendMode}\` ` +
+          '— something is writing a blend mode onto sections that never asked for one.';
+      }
+      return null;
+    },
+  },
 ];
