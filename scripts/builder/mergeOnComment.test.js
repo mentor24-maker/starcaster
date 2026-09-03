@@ -988,13 +988,34 @@ test('the relay waits after BOTH catch-up paths, and merges the same way', () =>
   // `waitForChecksInPass(` and a break that left the identifier in place while
   // never calling it passed cleanly. The AWAITED calls are the thing.
   //
-  // THREE since 2026-08-26 (task 86bbmk7pv): the two catch-up paths, plus the
-  // re-run of a stale review gate, which waits for the same reason — a merge
-  // that has to wait three minutes should not wait a whole relay interval.
+  // TWO since 2026-09-03 (task 86bbup3u1), and the one that LEFT is the point.
+  // The GitHub catch-up path no longer waits at all: waiting was the treadmill
+  // — 180s against a ~6 minute CI run, on a branch main invalidates every 20
+  // minutes. It now falls through to the arming path, which hands the PR to
+  // GitHub and returns, so the merge no longer depends on a pass being awake
+  // at the right moment. The two that remain must still wait: the local
+  // false-conflict catch-up, and the stale review-gate re-run, which has to
+  // see a NEW answer appear before anything may act on it.
+  //
+  // What this guard is about is unchanged — neither remaining path may leave a
+  // PR for a whole relay interval for no reason.
   const awaited = (src.match(/await waitForChecksInPass\(/g) || []).length;
-  assert.equal(awaited, 3,
-    `expected exactly 3 awaited calls — two catch-up paths and the stale review-gate re-run — found ${awaited}`);
-  assert.match(src, /branch updated from main —/);
+  assert.equal(awaited, 2,
+    `expected exactly 2 awaited calls — the local false-conflict catch-up and the stale review-gate re-run — found ${awaited}`);
+
+  // And the path that stopped waiting must ARM instead, not simply give up.
+  // BREAK-TEST: delete the fall-through assignment and this fails.
+  assert.match(src, /gate = \{ action: 'wait', reason: 'the branch was caught up with main and its checks are re-running' \}/,
+    'the GitHub catch-up must fall through to the arming path, not return');
+  assert.match(src, /'--auto', '--squash', '--delete-branch'/,
+    'the arming path must actually arm GitHub auto-merge');
+
+  // MEASURED, NOT ASSUMED (PR #583): arming does NOT catch a branch up.
+  // `allow_update_branch` adds the "Update branch" button; it does not make
+  // GitHub push to an armed PR. An armed PR left BEHIND sits forever, which is
+  // a worse livelock than the one this replaced. So the catch-up stays ours.
+  assert.equal(/if \(prJson\.autoMergeRequest\) \{\n\s*console\.error\(`  MERGE WAITING on \$\{label\}: behind main/.test(src), false,
+    'a behind-main PR must be caught up even when auto-merge is already armed');
   assert.match(src, /re-ran the stale review gate/,
     'the stale review-gate re-run must say so on the console, like every other path here');
 
