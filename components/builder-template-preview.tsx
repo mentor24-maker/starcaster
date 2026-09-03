@@ -6829,6 +6829,7 @@ function BlogTagCloudPreview({ settings }: { settings: Record<string, string> })
 
   const heading = resolved.title ? (
     <div
+      className="builder-blog-tag-cloud-title"
       style={{
         fontSize: "1.05rem",
         fontWeight: 600,
@@ -6852,7 +6853,7 @@ function BlogTagCloudPreview({ settings }: { settings: Record<string, string> })
 
   if (resolved.layout === "list") {
     return (
-      <div>
+      <div className="builder-blog-tag-cloud" data-tag-cloud-layout="list">
         {heading}
         <ul
           style={{
@@ -6870,6 +6871,7 @@ function BlogTagCloudPreview({ settings }: { settings: Record<string, string> })
             return (
               <li key={tag.id}>
                 <a
+                  className="builder-blog-tag-cloud-tag"
                   href={tagHref(tag.slug, resolved)}
                   style={{
                     fontSize: resolved.minFontSize,
@@ -6890,7 +6892,7 @@ function BlogTagCloudPreview({ settings }: { settings: Record<string, string> })
   }
 
   return (
-    <div>
+    <div className="builder-blog-tag-cloud" data-tag-cloud-layout={resolved.layout}>
       {heading}
       <div
         style={{
@@ -6907,6 +6909,7 @@ function BlogTagCloudPreview({ settings }: { settings: Record<string, string> })
           return (
             <a
               key={tag.id}
+              className="builder-blog-tag-cloud-tag"
               href={tagHref(tag.slug, resolved)}
               style={{
                 fontSize,

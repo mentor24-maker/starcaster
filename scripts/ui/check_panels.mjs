@@ -294,7 +294,29 @@ function measure(page, nonStretch) {
         ...el.querySelectorAll('.builder-module-field'),
         ...el.querySelectorAll('.builder-setting-row, .builder-setting-row-full'),
         ...el.querySelectorAll('label.field'),
-      ]).filter((el) => !el.closest('.builder-slider-item-grid, .builder-item-grid'));
+      ]).filter((el) => !el.closest('.builder-slider-item-grid, .builder-item-grid'))
+      /*
+       * A DECLARED MANAGER RUNS ITS OWN LATTICE, so its fields do not belong
+       * to the axis column that happens to contain it (L6a). The two older
+       * manager shapes were excluded above by class name; a manager on
+       * `.builder-cards-panel-fields` was not, because until 2026-09-03 every
+       * one of them sat OUTSIDE the schema columns — Carousel and Program List
+       * are each half of a 50/50 editor. The Tag Cloud's tag manager is the
+       * first to live inside an axis (it is a Content-axis field), and its
+       * three short labels were being measured against that axis's own
+       * "URL Param" and "Target Page": 12 failures describing a panel that is
+       * correct, because two lattices were being held to one set of widths.
+       *
+       * The manager is still measured — it is its own group in `managers`
+       * above — which is why the exclusion has to spare the group being
+       * measured. Without that clause a manager would exclude its own fields
+       * and report "declares data-lattice-pairs but rendered no rows", the
+       * silent-pass failure this attribute exists to prevent.
+       */
+      .filter((el) => {
+        const manager = el.closest('[data-lattice-pairs]');
+        return !manager || manager === group;
+      });
       // ITEM MANAGERS ARE OUT OF SCOPE, deliberately and not by accident.
       // A repeating card editor (social links, TOC entries, tag rows) is a
       // titled-column grid governed by L6, not a column of the panel
