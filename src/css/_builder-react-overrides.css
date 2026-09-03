@@ -5706,11 +5706,39 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    title, so an overwrite can move the name every other page shows. Its own
    line, in the body colour rather than the muted one around it: it is the part
    of the sentence somebody would otherwise find out about afterwards. */
-.builder-react-root .builder-choice-dialog-choices dd .builder-choice-dialog-rename {
+.builder-react-root .builder-choice-dialog-choices dd .builder-choice-dialog-rename,
+.builder-react-root .builder-choice-dialog-lead .builder-choice-dialog-rename {
   display: block;
   margin-top: var(--space-1, 4px);
   color: var(--ink, #0b2a4a);
   font-weight: 600;
+}
+
+/* "Publish the pages this rewrites."
+   Opting into reaching the live site, on the dialog that pushes a page's
+   section back over its original. A checkbox rather than a fourth button:
+   that dialog already asks which of two saves you meant, and publishing is
+   something either of them can also do — see builder-section-save-modal.tsx.
+   Boxed and given its own row so it reads as a decision rather than as fine
+   print under the choices it modifies. */
+.builder-react-root .builder-choice-dialog-publish {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-1, 4px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border: 1px solid rgba(11, 42, 74, 0.14);
+  border-radius: 10px;
+  color: var(--ink, #0b2a4a);
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-choice-dialog-publish input {
+  /* Nudged down onto the first line's baseline: `align-items: flex-start`
+     hangs a bare checkbox above the cap height of the text beside it. */
+  margin: 3px 0 0;
+  flex: 0 0 auto;
 }
 
 .builder-react-root .builder-save-conflict-actions,

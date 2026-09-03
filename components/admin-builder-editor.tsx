@@ -67,14 +67,18 @@ import {
   toTemplateReferences
 } from "@/lib/builder-template-frame";
 import {
+  buildSavedModuleUsageIndex,
   buildSavedSectionUsageIndex,
   describeCanonicalOverwrite,
   describePropagationOutcome,
   readPropagationTally,
   describePushImpact,
   driftedFollowingPages,
-  type BlockUsage
+  updatedPageIds,
+  type BlockUsage,
+  type CanonicalOverwriteImpact
 } from "@/lib/shared-block-usage";
+import { publishNamedPages } from "@/lib/publish-pages";
 import { diffSavedSectionOverwrite } from "@/lib/saved-section-diff";
 import {
   applySavedSectionName,
@@ -101,6 +105,10 @@ import { BuilderSectionCard } from "./builder/builder-section-card";
 import { BuilderCenteredModal } from "./builder/builder-centered-modal";
 import { BuilderSaveConflictModal } from "./builder/builder-save-conflict-modal";
 import { BuilderSectionSaveModal } from "./builder/builder-section-save-modal";
+import {
+  BuilderSharedBlockSaveModal,
+  type SharedBlockSaveChoice
+} from "./builder/builder-shared-block-save-modal";
 import { BuilderGalleryModal } from "./builder/builder-gallery-modal";
 import {
   BuilderModulePaletteModal,
@@ -227,6 +235,16 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
    * anything else Save has one meaning and asks nothing.
    */
   const [sectionSaveChoice, setSectionSaveChoice] = useState<{ sectionId: string; savedSectionId: string } | null>(null);
+  // The Save / Save & Publish dialog shown before a shared block is written.
+  // It replaced a `window.confirm`, so it has to answer the same way a confirm
+  // did — inline, to the code that asked. The resolver is what makes the
+  // dialog awaitable: `saveSavedSection` stays ONE chokepoint rather than
+  // splitting into a before-dialog half and an after-dialog half, which is
+  // where a caller ends up skipping the question by taking the wrong half.
+  const [sharedBlockSavePrompt, setSharedBlockSavePrompt] = useState<
+    { blockKind: string; name: string; impact: CanonicalOverwriteImpact; renameNotice: string | null } | null
+  >(null);
+  const sharedBlockSaveResolveRef = useRef<((choice: SharedBlockSaveChoice | null) => void) | null>(null);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isModulePaletteOpen, setIsModulePaletteOpen] = useState(false);
   const [galleryTarget, setGalleryTarget] = useState<GalleryTarget | null>(null);
@@ -270,6 +288,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   // in memory, so the manager can show "used on N pages" and a save can say
   // what it is about to rewrite.
   const savedSectionUsage = useMemo(() => buildSavedSectionUsageIndex(pages), [pages]);
+  const savedModuleUsage = useMemo(() => buildSavedModuleUsageIndex(pages), [pages]);
   // The original behind the section whose Save button is waiting on an answer.
   // Resolved here rather than stored, so a saved section deleted in another tab
   // closes the dialog instead of offering to overwrite something that is gone.
@@ -1024,7 +1043,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
    * original now holds exactly this content, so following it again changes
    * nothing on screen and stops this copy drifting a second time.
    */
-  async function overwriteCanonicalFromSection(sectionId: string, savedSectionId: string) {
+  async function overwriteCanonicalFromSection(sectionId: string, savedSectionId: string, publish = false) {
     const section = draft.layoutSections.find((candidate) => candidate.id === sectionId);
     const master = savedSections.find((candidate) => candidate.id === savedSectionId);
 
@@ -1043,6 +1062,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       // The dialog just listed every page this touches; a second confirm on top
       // of it is the kind of nagging people learn to click through.
       skipImpactConfirm: true,
+      publish,
       note: "This page still needs saving."
     });
 
@@ -1372,6 +1392,26 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   }
 
   async function saveSavedModule(cellModuleId: string, name: string, moduleClass: string, modules: BuilderTemplateModule[], isPrivate: boolean) {
+    // Same question as a saved section, same dialog, same reason: this save
+    // rewrites the module on every page whose copy follows it, in those pages'
+    // drafts only. Until now this path did not even report the fan-out — it
+    // said "Saved module X." whether it had touched one page or forty.
+    const trimmedName = name.trim() || "this module";
+    const usage = savedModuleUsage.get(cellModuleId);
+    let publish = false;
+    if ((usage?.pages ?? 0) > 0) {
+      const choice = await askSharedBlockSave({
+        blockKind: "saved module",
+        name: trimmedName,
+        // No drift check at module level — `propagateCanonicalModule` has none
+        // to report, so no page is listed as skipped for having local changes.
+        impact: describeCanonicalOverwrite(trimmedName, usage, []),
+        renameNotice: null
+      });
+      if (!choice) return;
+      publish = choice === "save-and-publish";
+    }
+
     setIsSaving(true);
     setError(null);
     setMessage(null);
@@ -1391,7 +1431,21 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       setCellModules((current) =>
         current.map((cellModule) => (cellModule.id === data.cellModule!.id ? data.cellModule! : cellModule))
       );
-      setMessage(`Saved module "${data.cellModule.name}".`);
+      // The route has always returned this tally under meta.propagation; this
+      // path threw it away, so a fan-out that half failed reported the same
+      // cheerful "Saved module" a clean one did.
+      // Whenever a tally came back at all — not only when it updated pages.
+      // Asking `updated > 0` would send a push that FAILED on every page down
+      // the plain "Saved module" branch, which is the exact silence this is
+      // here to end.
+      const propagation = readPropagationTally(data);
+      const outcome = propagation
+        ? describePropagationOutcome(data.cellModule.name, propagation)
+        : `Saved module "${data.cellModule.name}".`;
+      const publishNote = publish ? await publishPropagatedPages(updatedPageIds(propagation)) : "";
+      setMessage([outcome, publishNote].filter(Boolean).join(" "));
+      // Those pages hold new content now — refresh so the counts stay true.
+      await loadPages();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save saved module.");
     } finally {
@@ -1480,6 +1534,58 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }
   }
 
+  /**
+   * Ask Save / Save & Publish, and wait for the answer.
+   *
+   * Resolves `null` when the operator cancels — the same "do nothing" a
+   * `window.confirm` returning false used to mean.
+   */
+  function askSharedBlockSave(
+    prompt: { blockKind: string; name: string; impact: CanonicalOverwriteImpact; renameNotice: string | null }
+  ): Promise<SharedBlockSaveChoice | null> {
+    // A second prompt while one is open would strand the first caller waiting
+    // on a resolver nobody holds any more. Release it as a cancel first.
+    sharedBlockSaveResolveRef.current?.(null);
+    setSharedBlockSavePrompt(prompt);
+    return new Promise((resolve) => {
+      sharedBlockSaveResolveRef.current = resolve;
+    });
+  }
+
+  function answerSharedBlockSave(choice: SharedBlockSaveChoice | null) {
+    const resolve = sharedBlockSaveResolveRef.current;
+    sharedBlockSaveResolveRef.current = null;
+    setSharedBlockSavePrompt(null);
+    resolve?.(choice);
+  }
+
+  /**
+   * Put exactly the pages a push rewrote in front of visitors.
+   *
+   * Returns the sentence to append to the save's own outcome — never throws,
+   * and never turns a successful save into a failed one. The save landed; a
+   * publish that did not is a separate, smaller piece of bad news, and saying
+   * "Failed to save" over it would send him looking for a save that is fine.
+   */
+  async function publishPropagatedPages(pageIds: readonly string[]): Promise<string> {
+    if (!pageIds.length) return "Nothing needed publishing.";
+    const result = await publishNamedPages(
+      (body: Record<string, unknown>) =>
+        builderAdminFetch("/api/admin/publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        }),
+      pageIds
+    );
+    if (result.error) {
+      return result.published > 0
+        ? `Published ${result.published} of ${pageIds.length}, then stopped: ${result.error} The save itself is fine — open Publish to finish.`
+        : `The save is fine, but publishing did not run: ${result.error} Open Publish to put these pages live.`;
+    }
+    return result.published === 1 ? "1 page is live now." : `${result.published} pages are live now.`;
+  }
+
   async function saveSavedSection(
     sectionId: string,
     name: string,
@@ -1488,6 +1594,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     options: {
       /** The caller already showed the page list and got an answer. */
       skipImpactConfirm?: boolean;
+      /**
+       * Put the pages this push rewrites live as well.
+       *
+       * Undefined means "ask" — the dialog decides. A caller that already
+       * asked passes it explicitly alongside `skipImpactConfirm`.
+       */
+      publish?: boolean;
       /** Appended to the outcome message — what is still left to do. */
       note?: string;
     } = {}
@@ -1528,10 +1641,24 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     );
     const named = applySavedSectionName(section, trimmedName);
 
+    // Save, or Save and put those pages live? Asked once, here, before the
+    // write — because the publish step used to live on another screen and a
+    // step you have to remember elsewhere is one that gets skipped (operator,
+    // 2026-09-03). `describePushImpact` returning null means nothing follows
+    // this master, so a first save is still never interrupted.
+    let publish = options.publish === true;
     if (!options.skipImpactConfirm) {
-      const impact = describePushImpact(trimmedName, savedSectionUsage.get(sectionId), drift.count);
-      const prompt = impact && renameNotice ? `${impact}\n\n${renameNotice}` : impact;
-      if (prompt && !window.confirm(prompt)) return null;
+      const hasFollowers = describePushImpact(trimmedName, savedSectionUsage.get(sectionId), drift.count) !== null;
+      if (hasFollowers) {
+        const choice = await askSharedBlockSave({
+          blockKind: "saved section",
+          name: trimmedName,
+          impact: describeCanonicalOverwrite(trimmedName, savedSectionUsage.get(sectionId), drift.pageLabels),
+          renameNotice
+        });
+        if (!choice) return null;
+        publish = choice === "save-and-publish";
+      }
     }
 
     setIsSaving(true);
@@ -1578,7 +1705,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
             }
           : null
       );
-      setMessage(options.note ? `${outcome} ${options.note}` : outcome);
+      // Publish BEFORE the message is set, so one sentence carries the whole
+      // outcome. Two toasts in sequence read as two separate events, and the
+      // second one overwrites the first before it has been read.
+      const publishNote = publish ? await publishPropagatedPages(updatedPageIds(data.meta?.propagation)) : "";
+      setMessage([outcome, publishNote, options.note].filter(Boolean).join(" "));
       // Offer the way back, right where the damage is reported. A push that
       // rewrote pages is exactly the moment somebody realises it was wrong.
       const runId = String(data.meta?.propagation?.runId ?? "");
@@ -2835,6 +2966,18 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         />
       ) : null}
 
+      {sharedBlockSavePrompt ? (
+        <BuilderSharedBlockSaveModal
+          blockKind={sharedBlockSavePrompt.blockKind}
+          name={sharedBlockSavePrompt.name}
+          impact={sharedBlockSavePrompt.impact}
+          renameNotice={sharedBlockSavePrompt.renameNotice}
+          isSaving={isSaving}
+          onChoose={(choice) => answerSharedBlockSave(choice)}
+          onCancel={() => answerSharedBlockSave(null)}
+        />
+      ) : null}
+
       {sectionSaveChoiceMaster ? (
         <BuilderSectionSaveModal
           canonicalName={sectionSaveChoiceMaster.name}
@@ -2847,8 +2990,12 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           renameNotice={sectionSaveRename}
           isSaving={isSaving}
           onCancel={() => setSectionSaveChoice(null)}
-          onOverwrite={() =>
-            void overwriteCanonicalFromSection(sectionSaveChoice!.sectionId, sectionSaveChoice!.savedSectionId)
+          onOverwrite={(options) =>
+            void overwriteCanonicalFromSection(
+              sectionSaveChoice!.sectionId,
+              sectionSaveChoice!.savedSectionId,
+              options.publish
+            )
           }
           onSaveAsNew={() => {
             const { sectionId } = sectionSaveChoice!;
