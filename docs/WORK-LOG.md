@@ -47,6 +47,29 @@ second one names the ticket to go and fix, and carries the queue numbers with
 it, because a real stall can happen on that day too and used to arrive stripped
 of everything that made it worth acting on.
 
+Review sent it back a second time, on the same theme once more. Having split
+that message in two, we were still using one "already said this recently" note
+for both of them — and the whole point of that note is to stop the same alarm
+repeating every ten minutes for six hours. So the two alarms could gag each
+other. The likelier direction was the bad one: there is a real ticket in the
+Live column that is never going to grow a closure date, so the gentler message
+("one field needs filling in") would tend to fire first, and could then silence
+the serious one ("nothing is watching whether the queue is getting shorter")
+for six hours. Each alarm now keeps its own note, and a run that can see
+properly clears both. Driven for real: with the gentle one just fired, the
+serious one still gets through — and with the old shared note put back, it
+vanishes, which is what the defect looked like.
+
+Two smaller things. A verdict of "I cannot tell" was being treated as an
+all-clear for the stall alarm on one of its two paths, quietly re-arming an
+alert that had already been sent; it now leaves that alarm exactly as it found
+it, because not being able to tell is not the same as recovering, and the note
+expires on its own after six hours either way. And the command cheat-sheet at
+the top of the repo still said this check "posts if it has STALLED" — the
+prose ten lines below it had been corrected, but not the one line anybody
+skimming for the command actually reads. That line now has a test on it, so it
+cannot drift back.
+
 ## 2026-09-02 — The screen a client uses to connect their own accounts (#526)
 
 Until now, putting a client's social account onto Starcaster meant you pasting

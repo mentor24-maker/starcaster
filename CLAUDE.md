@@ -384,7 +384,7 @@ see, and it is worse, because it writes a full cheerful log:
 
 ```
 npm run throughput                          is the queue getting shorter?
-npm run throughput -- --check               the same, and post to the bus if it has STALLED
+npm run throughput -- --check               the same, and post to the bus on STALLED or UNKNOWN
 npm run throughput -- --check --dry-run     say what it WOULD post, send nothing
 ```
 

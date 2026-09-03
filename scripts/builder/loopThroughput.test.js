@@ -1017,3 +1017,118 @@ test('the relay call site describes what the check now does', () => {
   assert.doesNotMatch(preamble, /only on a STALLED verdict/,
     'and must not still say it posts only on a stall');
 });
+
+/**
+ * ROUND 2, FINDING 1: the two UNKNOWNs shared one suppression stamp, so either
+ * one could silence the other for six hours.
+ *
+ * There was a single `unknown-loop-queue.stamp` and `announceUnknown` checked
+ * it before EITHER message. So: the ClickUp token rotates at 9am, "the stall
+ * detector could not take a reading" posts and stamps; the token is fixed by
+ * 10am, an undated closure turns up, and that second message is swallowed.
+ * Worse in reverse — 86bb4uyvp is a real ticket that will never grow a closure
+ * date, so the undated post is the one likely to fire first, and it could then
+ * suppress "nothing is watching whether the queue is getting shorter", which
+ * is the most serious sentence in the file.
+ *
+ * It is the same argument the code already makes twelve lines above for
+ * keeping the stall stamp separate from the unknown stamp — two findings with
+ * two different repairs must not share one window. "ClickUp is unreachable"
+ * and "one ticket needs a date filled in" are two different repairs.
+ *
+ * BREAK TEST, MEASURED. Reverting `unknownStampFileFor(kind)` to a single
+ * constant path fails this test (1 failed of 56); dropping either kind from
+ * `UNKNOWN_KINDS` fails it too (1 failed of 56).
+ */
+test('each kind of unknown has its own 6h window, and a good reading clears both', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const code = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8');
+
+  assert.match(code, /unknown-\$\{kind\}-loop-queue\.stamp/,
+    'the stamp path varies by kind, or one unknown can swallow the other');
+  assert.match(code, /unknownStampFileFor\(v\.kind/,
+    'and the post consults the stamp for the kind it is actually announcing');
+
+  // Both kinds `verdict` can return have to be in the list that gets cleared,
+  // or a stale stamp outlives the condition that wrote it.
+  const kinds = code.match(/const UNKNOWN_KINDS = \[([^\]]*)\]/);
+  assert.ok(kinds, 'the kinds are enumerated in one place');
+  for (const kind of ['unreadable', 'undated-closure']) {
+    assert.match(kinds[1], new RegExp(`'${kind}'`),
+      `${kind} is a kind verdict() returns, so it needs its own window`);
+  }
+  assert.match(code, /for \(const kind of UNKNOWN_KINDS\)[\s\S]{0,160}rmSync\(unknownStampFileFor\(kind\)/,
+    'and a readable, non-unknown pass clears every kind — it is evidence against all of them');
+
+  // The kinds asserted above are the ones the library actually produces.
+  assert.strictEqual(lt.verdict({ unreadable: 'ClickUp said 429' }).kind, 'unreadable');
+  assert.strictEqual(undatedScene().verdict.kind, 'undated-closure');
+});
+
+/**
+ * ROUND 2, FINDING 2: the UNKNOWN path treated "cannot tell" as a recovery.
+ *
+ * The undated-closure branch called `clearStamp()` — wiping the STALL
+ * suppression — before exiting. The unreadable-queue branch never did, because
+ * it exits earlier. So one verdict state meant two different things about the
+ * stall alarm depending on which cause produced it.
+ *
+ * Clearing is the wrong half to agree on: a real stall posts and stamps, an
+ * edit to an undated `Live` ticket flips the next pass to UNKNOWN and wipes
+ * the stamp, that ticket is then dated or moved, the verdict returns to
+ * STALLED, and the identical alert posts again inside its own six-hour window.
+ * Only a reading that is BOTH complete and not stalled is evidence a stall
+ * ended. No alarm is lost either way — the stamp expires on its own.
+ *
+ * BREAK TEST, MEASURED. Putting `clearStamp();` back at the top of the
+ * `if (v.state === 'UNKNOWN')` branch fails this test (1 failed of 56).
+ */
+test('an unknown reading is not treated as a stall recovery, on either path', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const code = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8');
+
+  // Prose mentions these names; only real calls count.
+  const executable = code.split('\n')
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join('\n');
+
+  const branchAt = executable.indexOf("if (v.state === 'UNKNOWN') {");
+  const clearsUnknownAt = executable.indexOf('clearUnknownStamps();');
+  assert.ok(branchAt > 0 && clearsUnknownAt > branchAt, 'both landmarks still exist, in order');
+
+  const unknownBranch = executable.slice(branchAt, clearsUnknownAt);
+  assert.doesNotMatch(unknownBranch, /(^|[^a-zA-Z])clearStamp\(\)/,
+    'a verdict of "could not tell" must not clear the stall suppression — that is not a recovery');
+
+  // And the recovery that IS one still clears it, or a stall can only ever be
+  // announced once per process lifetime.
+  const recovery = executable.slice(executable.indexOf('if (!v.stalled) {'));
+  assert.match(recovery, /clearStamp\(\)/,
+    'a complete, not-stalled reading is the real recovery and still clears the stamp');
+});
+
+/**
+ * ROUND 2, FINDING 3: round 1's finding 4 again, one file over.
+ *
+ * `run_bus_relay.sh`'s comment got a test after round 1. CLAUDE.md's command
+ * block did not, and it still read "post to the bus if it has STALLED" — while
+ * the prose ten lines below it and the script's own usage header both said
+ * STALLED or UNKNOWN. The repo's main instruction file contradicted the script
+ * it documents, in the one line somebody skimming for the command reads.
+ *
+ * BREAK TEST, MEASURED. Putting "post to the bus if it has STALLED" back into
+ * that block fails this test (1 failed of 56).
+ */
+test('the CLAUDE.md command block describes what the check now does', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const md = fs.readFileSync(path.join(__dirname, '..', '..', 'CLAUDE.md'), 'utf8');
+  const line = md.split('\n').find((l) => l.startsWith('npm run throughput -- --check '));
+  assert.ok(line, 'the cheat-sheet line is still there');
+  assert.match(line, /UNKNOWN/,
+    'the line somebody skims for the command has to name both states it posts on');
+  assert.doesNotMatch(line, /if it has STALLED/,
+    'and must not still say it posts only on a stall');
+});

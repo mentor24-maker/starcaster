@@ -164,8 +164,20 @@ const READ_EVERY_MS = 60 * 60 * 1000;
  * follow each other: the token is rotated on Monday (UNKNOWN), fixed on
  * Tuesday, and the queue turns out to have been stalled the whole time. One
  * stamp would swallow the second announcement inside the first one's window.
+ *
+ * AND WHY THERE IS ONE PER KIND OF UNKNOWN (2026-09-03, review round 2). That
+ * argument does not stop at the stall boundary: the two UNKNOWNs are also
+ * different findings with different repairs — one is "ClickUp is unreachable",
+ * the other is "one ticket in Live needs a closure date filled in" — so a
+ * single shared stamp let either one swallow the other for six hours. The
+ * damaging direction is concrete rather than theoretical: 86bb4uyvp is a real
+ * ticket that is never going to grow a closure date, so the undated post is
+ * the one likely to fire first, and it could then silence "nothing is watching
+ * whether the queue is getting shorter" — the most serious sentence in this
+ * file. Keyed on `v.kind`, which `verdict` already returns.
  */
-const unknownStampFile = `${heartbeat.heartbeatDir()}/unknown-loop-queue.stamp`;
+const UNKNOWN_KINDS = ['unreadable', 'undated-closure'];
+const unknownStampFileFor = (kind) => `${heartbeat.heartbeatDir()}/unknown-${kind}-loop-queue.stamp`;
 
 function readFileOrEmpty(file) {
   try { return fs.readFileSync(file, 'utf8').trim(); } catch { return ''; }
@@ -198,8 +210,14 @@ if (CHECK && !flag('force')
   process.exit(0);
 }
 
-function clearUnknownStamp() {
-  try { fs.rmSync(unknownStampFile, { force: true }); } catch { /* nothing to clear */ }
+// BOTH kinds clear together. The thing that clears an unknown is a pass that
+// took a full, readable, non-unknown reading, and such a pass is evidence
+// against either cause — leaving one behind would suppress an announcement the
+// system is once again able to make.
+function clearUnknownStamps() {
+  for (const kind of UNKNOWN_KINDS) {
+    try { fs.rmSync(unknownStampFileFor(kind), { force: true }); } catch { /* nothing to clear */ }
+  }
 }
 
 /**
@@ -231,17 +249,20 @@ function announceUnknown(v, evidence = null) {
     console.log(text);
     return;
   }
+  // Per KIND, so the other UNKNOWN is never swallowed by this one's window.
+  const stampFileForThis = unknownStampFileFor(v.kind || 'unreadable');
   if (!throughput.dueAgain({
-    lastAt: readFileOrEmpty(unknownStampFile), now: NOW, everyMs: heartbeat.REPOST_EVERY_MS,
+    lastAt: readFileOrEmpty(stampFileForThis), now: NOW, everyMs: heartbeat.REPOST_EVERY_MS,
   })) {
     console.log('');
-    console.log(`Already reported as unknown within the last ${Math.round(heartbeat.REPOST_EVERY_MS / 3600000)}h `
-      + '— not posting again.');
+    console.log(`Already reported as unknown (${v.kind || 'unreadable'}) within the last `
+      + `${Math.round(heartbeat.REPOST_EVERY_MS / 3600000)}h — not posting again. `
+      + '(The other kind of unknown has its own window and is unaffected.)');
     return;
   }
   try {
     clickup.postBusMessage(BUS_CHANNEL, text);
-    const why = writeStamp(unknownStampFile, new Date(NOW).toISOString());
+    const why = writeStamp(stampFileForThis, new Date(NOW).toISOString());
     if (why) console.log(`Posted, but the suppression stamp could not be written (${why}).`);
     console.log('');
     console.log('Posted to the bus.');
@@ -354,10 +375,28 @@ if (!CHECK) process.exit(v.exitCode);
 
 // A READING THAT COULD NOT BE TAKEN IS ITSELF THE ALARM. The queue read
 // succeeded here, so this is the other UNKNOWN: an undated closure inside the
-// window, which means the zero the stall rests on cannot be trusted. It is not
-// a stall, so the stall suppression clears; it is not health either.
+// window, which means the zero the stall rests on cannot be trusted. It is
+// neither a stall nor health, and — see below — it is not a recovery either.
 if (v.state === 'UNKNOWN') {
-  clearStamp();
+  // THE STALL SUPPRESSION IS LEFT EXACTLY AS IT WAS — neither cleared nor
+  // refreshed — and that is the deliberate answer to a disagreement between
+  // these two paths (2026-09-03, review round 2). This branch used to call
+  // `clearStamp()`; the unreadable-queue branch above never has, because it
+  // exits before reaching here. So the same verdict state meant two different
+  // things about the stall alarm depending on which cause produced it.
+  //
+  // "Could not tell" is not a recovery, so clearing is the wrong half to make
+  // them agree on. Clearing let a stall re-announce inside its own six-hour
+  // window: a real stall posts and stamps, an edit to an undated `Live` ticket
+  // flips the next pass to UNKNOWN and wipes the stamp, the ticket is then
+  // given a date or moved, the verdict returns to STALLED, and the identical
+  // alert posts again. Only a reading that is BOTH complete and not stalled is
+  // evidence the stall ended, and that reading clears the stamp further down.
+  //
+  // The cost of this direction is a stall alert deferred to the end of its
+  // original window rather than re-posted — no alarm is lost, because the
+  // stamp expires on its own after six hours.
+  //
   // WITH THE STALL EVIDENCE, because `verdict` returns UNKNOWN before it can
   // reach STALLED — so a genuine stall coinciding with one recently-edited
   // undated closure comes out of THIS branch, and used to arrive with none of
@@ -371,8 +410,9 @@ if (v.state === 'UNKNOWN') {
 }
 
 // A reading WAS taken, so an earlier unknown has cleared — the next one is
-// announced at once rather than being swallowed by that window.
-clearUnknownStamp();
+// announced at once rather than being swallowed by that window. Both kinds,
+// because this pass is evidence against both causes.
+clearUnknownStamps();
 
 if (!v.stalled) {
   // A recovery clears the suppression, so the next stall is announced at once.
