@@ -1,3 +1,34 @@
+## 2026-09-03 — A tint on one column, not the whole row (#557)
+
+You could already lay a coloured screen over a whole band of the page — the
+thing that dims a photograph so the words on top of it stay readable. You could
+not lay one over a single column inside that band. So a two-up row with a
+photograph on each side offered exactly one choice: darken both, or neither.
+
+Now each cell has its own Overlay group, with the same controls the row's has.
+Tint the left column dark blue at 60% and the right one keeps its photograph
+completely untouched.
+
+Three of the checks that were supposed to be watching this could not actually
+see it, and each was fixed and then proven by breaking the code on purpose:
+the panel check was blind to the new group because its opacity control only
+appears once an overlay is set and the test fixture had none — a deliberate
+layout violation still reported a clean 660-panel pass; no browser check could
+place content in a named column at all; and one test compared two positions to
+prove the tint sits behind the text, which quietly passed even with the tint
+element deleted entirely.
+
+What the change does was then measured rather than argued about, by reading
+real pixels out of a real browser: the tinted cell, the untouched one beside
+it, and the words themselves, which come through at full strength.
+
+One thing on the ticket turned out to be wrong, and it was wrong before this
+work started: its test steps predict the row's own faint haze appearing on top
+of the columns. It does not, and never did — a column sits above the row's
+screen, so any column carrying its own background hides it. Both screens
+paint, on different surfaces. Reported on the ticket rather than changed,
+since touching the row overlay was explicitly out of scope.
+
 ## 2026-08-29 — The Tractor Nav settings panel is one rectangle again (#447)
 
 Open the settings for a Tractor Nav module and look down the Placement column.
