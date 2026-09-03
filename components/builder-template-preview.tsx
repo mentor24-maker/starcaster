@@ -3457,6 +3457,11 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
                                 type="checkbox"
                                 checked={relatedIds.includes(post.id)}
                                 onChange={() => toggleRelated(post.id)}
+                                // The site stylesheet gives form inputs
+                                // width:100%, which a checkbox obeys: the box
+                                // stretched to 1166px and squeezed the title
+                                // to a one-character column at the far right.
+                                style={{ width: "auto", flex: "0 0 auto", margin: 0 }}
                               />
                               <span style={{ flex: 1, minWidth: 0 }}>{post.title}</span>
                               {post.status && post.status !== "published" ? (

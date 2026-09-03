@@ -505,7 +505,7 @@ const buildTuned = (ids) => ({
       fieldsHeader: 'Fields on the form',
       showSlug: 'true', showFeaturedImage: 'true', showExcerpt: 'true',
       showAuthorField: 'true', showCategories: 'true', showTags: 'true',
-      showSeoFields: 'true',
+      showRelatedPosts: 'true', showSeoFields: 'true',
     },
   },
 

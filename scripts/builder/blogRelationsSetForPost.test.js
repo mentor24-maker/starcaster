@@ -106,10 +106,6 @@ test('the rows carry BOTH tenant columns', async () => {
 test('a database REFUSAL is reported, never absorbed', async () => {
   // Landmine 15: answering the caller with its own input while the database
   // kept the old rows is how the card template stayed frozen for two months.
-  //
-  // Note the message: it contains the word "relation", because the table is
-  // CALLED blog_post_relations. isMissingTable() used to match that bare word
-  // and read every refusal about this table as the table being absent.
   const { store, rows } = loadStoreWithFakeTable([], { refuseWrites: true });
   assert.equal(await store.setRelatedPosts('b', ['a'], scope), null);
   assert.deepEqual(rows, [], 'nothing may be written when the database refused');
@@ -129,4 +125,28 @@ test('the store is the one the route calls', () => {
   assert.match(routeSource, /setRelatedPosts.*require\('\.\.\/lib\/blogPostRelationsStore'\)|setRelatedPosts/);
   assert.match(routeSource, /'\/api\/blog\/relations' && method === 'PUT'/);
   assert.match(routeSource, /await setRelatedPosts\(/);
+});
+
+test('a refusal is not mistaken for the table being absent', () => {
+  // The two are handled completely differently -- absent means fall back to
+  // the local file, REFUSED means report -- so the test that tells them apart
+  // is the one that matters. It has to read the source: with Supabase
+  // configured, mayUseLocalFile() blocks the fallback anyway, so BOTH answers
+  // come out as null from setRelatedPosts and a behavioural test here cannot
+  // fail. What it can no longer do is silently serve the local file's contents
+  // for a REFUSED read in listRelations(), which is what the bare word did.
+  //
+  // The word matters more here than anywhere else: the table is CALLED
+  // blog_post_relations, so every error message about it contains "relation".
+  const source = require('node:fs').readFileSync(
+    path.join(__dirname, '..', '..', 'lib', 'blogPostRelationsStore.js'), 'utf8'
+  );
+  const body = source.split('function isMissingTable(')[1].split('}')[0];
+  assert.doesNotMatch(
+    body,
+    /includes\('relation'\)/,
+    'matching the bare word "relation" reads every refusal about this table as "table missing"'
+  );
+  assert.match(body, /includes\('does not exist'\)/, 'Postgres says: relation "x" does not exist');
+  assert.match(body, /includes\('schema cache'\)/, 'PostgREST says: not found in the schema cache');
 });
