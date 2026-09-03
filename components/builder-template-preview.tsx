@@ -11842,6 +11842,12 @@ type BlogLinkTerm = {
   /** Categories list articles by slug; tags list them by the word. */
   slug: string;
   postCount: number;
+  /**
+   * How many of those posts are PUBLISHED — the ones a visitor can actually
+   * reach. `null` means the server did not say, which is not the same as none
+   * and must never render as "0 live".
+   */
+  livePostCount: number | null;
 };
 
 type BlogLinkArticle = {
@@ -11850,6 +11856,39 @@ type BlogLinkArticle = {
   slug: string;
   status: string;
 };
+
+/**
+ * Only a PUBLISHED post is on the website. The manager counts every post
+ * carrying a tag, which is the right number for renaming and removing but not
+ * for "what will a visitor see" — and reading it as the second is what made a
+ * correct public page look broken on 2026-09-03.
+ *
+ * Mirrors isLive() in lib/blogTagsStore.js, and matches the filter the public
+ * post feed applies (`?status=published`). If those three ever disagree, the
+ * manager is lying again.
+ */
+function isLiveArticle(status: string): boolean {
+  return status.trim().toLowerCase() === "published";
+}
+
+/** The short line under a tag's count: how many of them a visitor can reach. */
+function liveCountNote(term: BlogLinkTerm): string {
+  // null is "the server did not say", which must not render as none.
+  if (term.kind !== "tag" || term.livePostCount === null) return "";
+  if (term.postCount === 0) return "";
+  if (term.livePostCount === term.postCount) return "";
+  return term.livePostCount === 0 ? "none live" : `${term.livePostCount} live`;
+}
+
+/** The count button's tooltip, saying the same thing in a full sentence. */
+function liveCountTitle(term: BlogLinkTerm): string {
+  const posts = `${term.postCount} post${term.postCount === 1 ? "" : "s"} tagged \u201c${term.label}\u201d`;
+  if (term.kind !== "tag" || term.livePostCount === null) return `Show the ${posts}`;
+  if (term.livePostCount === term.postCount) return `Show the ${posts} — all published`;
+  return term.livePostCount === 0
+    ? `Show the ${posts}. None are published, so the website shows none of them.`
+    : `Show the ${posts}. ${term.livePostCount} published; the rest are not on the website.`;
+}
 
 /**
  * The tenant's blog links manager: a TAG manager, plus hand-picking related
@@ -12024,6 +12063,7 @@ function AdminBlogLinksPreview({
             label: String(row.name || "(untitled)"),
             slug: String(row.slug || ""),
             postCount: 0,
+            livePostCount: null,
           });
         }
       }
@@ -12032,7 +12072,17 @@ function AdminBlogLinksPreview({
       for (const row of Array.isArray(rows) ? rows : []) {
         const tag = String(row.tag || "");
         if (!tag) continue;
-        next.push({ kind: "tag", key: `tag:${tag}`, label: tag, slug: tag, postCount: Number(row.postCount ?? 0) });
+        // An older server that does not send livePostCount leaves it null.
+        // Defaulting it to 0 would tell the operator every tag is dead.
+        const live = row.livePostCount;
+        next.push({
+          kind: "tag",
+          key: `tag:${tag}`,
+          label: tag,
+          slug: tag,
+          postCount: Number(row.postCount ?? 0),
+          livePostCount: live === undefined || live === null ? null : Number(live),
+        });
       }
       setTerms(next);
       setError("");
@@ -12271,7 +12321,7 @@ function AdminBlogLinksPreview({
                         type="button"
                         className="admin-blog-links-count-btn"
                         onClick={() => void openTagPosts(term.label)}
-                        title={`Show the ${term.postCount} post${term.postCount === 1 ? "" : "s"} tagged "${term.label}"`}
+                        title={liveCountTitle(term)}
                         style={{
                           background: "none", border: "none", padding: 0, cursor: "pointer",
                           font: "inherit", color: accent, textDecoration: "underline",
@@ -12280,6 +12330,26 @@ function AdminBlogLinksPreview({
                     ) : (
                       <span style={{ color: "#94a3b8" }}>{term.postCount}</span>
                     )}
+                    {/* The count alone told the operator "13" for a tag whose
+                        thirteen posts were all drafts, while the public tag
+                        page correctly showed none — and that read as a broken
+                        site (2026-09-03). The number of posts a VISITOR can
+                        reach belongs beside it, not behind a click.
+                        Only shown when it differs from the total, and never
+                        when the server did not say (null ≠ none). */}
+                    {liveCountNote(term) ? (
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "0.6875rem",
+                          lineHeight: 1.3,
+                          marginTop: 1,
+                          color: term.livePostCount === 0 ? "#b45309" : "#64748b",
+                        }}
+                      >
+                        {liveCountNote(term)}
+                      </span>
+                    ) : null}
                   </span>
                   <span style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "flex-end" }}>
                     <button
@@ -12494,6 +12564,37 @@ function AdminBlogLinksPreview({
                   aria-label="Close"
                 >✕</button>
               </div>
+
+              {/* The header counts what is IN the box; this line says how much
+                  of it the public site shows. Rendered only once the posts are
+                  actually loaded — a summary written over a pending or failed
+                  request would be a number nobody measured. */}
+              {!tagPostsLoading && !tagPostsError && tagPosts.length > 0 ? (
+                (() => {
+                  const live = tagPosts.filter((post) => isLiveArticle(post.status)).length;
+                  const total = tagPosts.length;
+                  if (live === total) return null;
+                  return (
+                    <p
+                      className="admin-blog-links-posts-live-note"
+                      style={{
+                        margin: "0 0 2px",
+                        padding: "8px 12px",
+                        fontSize: "0.8125rem",
+                        lineHeight: 1.45,
+                        color: "#7c4a05",
+                        background: "#fff7ed",
+                        borderBottom: "1px solid #fed7aa",
+                      }}
+                    >
+                      <strong>{live} of {total} published.</strong>{" "}
+                      {live === 0
+                        ? "None of these are on the website yet — a draft carries the tag but visitors cannot see it, so the public tag page shows nothing."
+                        : "The rest are drafts, which carry the tag but do not appear on the website."}
+                    </p>
+                  );
+                })()
+              ) : null}
 
               <div className="admin-blog-links-posts-body">
                 {tagPostsLoading ? (
