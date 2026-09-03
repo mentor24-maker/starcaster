@@ -414,6 +414,74 @@ test('round trip: an exchanged grant lands with its expiry, and refreshDue says 
 });
 
 /**
+ * The same round trip, on the one second in every sixty that used to fail.
+ *
+ * The test above stamps its token with the wall clock, so it exercises whatever
+ * second the suite happens to run in — and there is one it could not survive.
+ * `new Date().toISOString()` always emits milliseconds, and the shared timestamp
+ * validator read `59.096` as a second greater than 59 and refused it as a time
+ * "which does not exist" (lib/storeInput.js `calendarError`). `saveConnection`
+ * returns that refusal rather than warning past it, so the WHOLE grant was
+ * rejected.
+ *
+ * That is not a test-only defect and it is this slice that exposed it: before
+ * `expiresAt` was carried into the vault, X wrote no timestamp here at all, so
+ * nothing on this path ever met the validator. Now every connect writes one, and
+ * a client pressing Connect during the 59th second of any minute would have been
+ * told their X account could not be saved because of a second that does not
+ * exist. It reached CI first, as a 1-in-60 flake in resolveCredentials.
+ *
+ * So the second is PINNED here rather than left to the clock — a regression
+ * test that only fails one run in sixty is not a regression test.
+ */
+test('a grant issued on the 59th second of a minute still saves — the second exists', async (t) => {
+  const h = withStore();
+  t.after(h.restore);
+
+  await withEnv({ ...APP_ENV, CHANNELS_ENCRYPTION_KEY: TEST_ENCRYPTION_KEY }, async () => {
+    const state = new URL(x.authorizeUrl({ projectId: 'p', userId: 'u' }).data.url).searchParams.get('state');
+
+    // Three hours ago as before, then snapped onto second 59 with a fraction.
+    // Adding X's whole-numbered two-hour lifetime preserves both, so the expiry
+    // the store is asked to keep is exactly the shape that was refused.
+    const issued = new Date(Date.now() - 3 * 3600_000);
+    issued.setUTCSeconds(59, 96);
+    const issuedAt = issued.getTime();
+
+    const expectedExpiry = new Date(issuedAt + 7200_000).toISOString();
+    assert.match(
+      expectedExpiry,
+      /:59\.\d{3}Z$/,
+      'this test is not exercising what it claims to — the expiry must land on a fractional 59th second'
+    );
+
+    const exchanged = await withFetch(
+      [{ status: 200, body: TOKENS }, { status: 200, body: ME }],
+      () => x.exchange({ code: 'c', state, nowMs: issuedAt })
+    );
+    assert.equal(exchanged.ok, true, exchanged.error);
+
+    const stored = await h.completeConnection.storeAccounts({
+      provider: 'x',
+      displayName: 'X',
+      accounts: exchanged.data.accounts,
+      scope: STORE_SCOPE,
+    });
+    assert.equal(
+      stored.ok,
+      true,
+      `the grant was refused on the 59th second: ${stored.error || ''} — a client who pressed `
+      + 'Connect one second before a minute rolled over could not connect X at all'
+    );
+
+    const row = await h.store.getConnection({ provider: 'x', accountId: '4455' }, STORE_SCOPE);
+    assert.equal(row.ok, true, row.error);
+    assert.equal(row.data.expiresAt, expectedExpiry, 'the stored expiry is not the one X issued');
+    assert.equal(verifySweep.refreshDue(row.data, Date.now()).due, true);
+  });
+});
+
+/**
  * The same join, from the other end: a platform whose tokens do NOT expire must
  * still come out saying so, rather than inheriting a deadline from nowhere.
  *

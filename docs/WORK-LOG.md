@@ -48,6 +48,23 @@ values and be told the address to send clients back to. Until that is done the
 Connect button says so in plain English, and says which two values it means —
 they are easy to confuse with the ones already saved.
 
+One last thing came out of storing that deadline, and it was hiding in a shared
+piece of plumbing rather than in anything to do with X. Every stored date passes
+a check that refuses impossible times — hour 25, minute 61, the 30th of
+February. That check was reading the seconds wrongly. Clocks in this system
+record time down to the millisecond, so the seconds arrive as something like
+"59.096", and the check compared that against 59 and decided a second which does
+not exist had been supplied. It was right about 60. It was wrong about every
+fraction of the 59th, which is one ordinary second in every sixty.
+
+Nothing had met it before, because no part of the connection code stored a real
+deadline until this work. Now every X connection stores one — so a client who
+happened to press Connect in the last second of a minute would have been told
+their account could not be saved, with a reason nobody could act on, roughly one
+attempt in sixty. It also explains a test that had been failing at random. The
+check now reads the whole seconds and ignores the fraction, so 60 is still
+refused and 59.999 is correctly a real time.
+
 ## 2026-08-29 — One loose row above four tidy panels (#449)
 
 Open the settings for a Confetti or Speech Bubble module and the controls sit
