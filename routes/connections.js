@@ -9,7 +9,8 @@
  *   POST   /api/connections/:provider/start       begin a connection
  *   POST   /api/connections/:provider/finish      complete one
  *   POST   /api/connections/:provider/account     pick which account is the active one
- *   DELETE /api/connections/:provider             forget the grant
+ *   POST   /api/connections/verify                check ONE BATCH of them (slice 6a)
+ *   DELETE /api/connections/:provider             revoke at the platform, then forget
  *
  * ── Why this is a new file and not more of routes/engage.js ────────────────
  *
@@ -43,6 +44,7 @@ const registry = require('../lib/connections/registry');
 const projectConnectionsStore = require('../lib/projectConnectionsStore');
 const projectSocialCredentialsStore = require('../lib/projectSocialCredentialsStore');
 const { makeActive, storeAccounts } = require('../lib/connections/completeConnection');
+const verifySweep = require('../lib/connections/verifySweep');
 
 const PREFIX = '/api/connections';
 
@@ -318,6 +320,32 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, connections, { connections }, { total: connections.length }), true;
   }
 
+  /**
+   * ── The health sweep ────────────────────────────────────────────────────
+   *
+   * Placed here on purpose: `routeParts` below would read "verify" as a
+   * PROVIDER name and answer `Unknown connection provider "verify"`, which is
+   * a 404 that sends whoever hit it looking for a typo in the catalogue.
+   *
+   * ONE BATCH per call, with what remains in the answer — never a loop over
+   * everything, because a serverless invocation that is frozen mid-loop leaves
+   * half the work done and nothing recording which half. The caller repeats
+   * while `remaining` is above zero.
+   *
+   * Nothing schedules this. Wiring it to a timer is a separate operator step
+   * (`scripts/connections_verify_sweep.mjs` is the same pass on the command
+   * line), and it is deliberately not in this ticket: a cron added in the same
+   * change as the thing it runs is a cron nobody has watched run by hand first.
+   */
+  if (normalizedPath === `${PREFIX}/verify` && method === 'POST') {
+    const body = await parseJsonBody(req);
+    const swept = await verifySweep.runVerifySweep({ scope, limit: body?.limit });
+    if (!swept.ok) {
+      return sendErr(res, swept.status || 500, swept.error, { code: 'VERIFY_SWEEP_FAILED' }), true;
+    }
+    return sendOk(res, 200, swept.data, swept.data), true;
+  }
+
   const { provider, action } = routeParts(normalizedPath);
   if (!provider) return false;
 
@@ -423,8 +451,28 @@ async function handle(req, res, pathname, method) {
   }
 
   // ── Disconnect ──────────────────────────────────────────────────────────
+  /**
+   * REVOKE FIRST, THEN FORGET. Slice 6a (86bbpz1gv).
+   *
+   * The order is the whole of it. Deleting the row first and telling the
+   * platform after means any failure leaves a live grant at Meta or Bluesky
+   * that this app can no longer see, no longer holds a token for, and can
+   * never retire — and the client finds it months later in their own Facebook
+   * settings, as an app they are certain they removed.
+   *
+   * So a HARD failure to revoke keeps the row and answers with an error: the
+   * only thing that can fix it is trying again, and trying again needs the
+   * credential. `?force=1` overrides that for a client who would rather be rid
+   * of it, and says plainly that the grant may survive.
+   *
+   * A platform that simply CANNOT be revoked from here is a different answer
+   * and must not read as a failure — Bluesky has no such endpoint, and
+   * `lib/connections/verifySweep.js` sorts the three cases apart.
+   */
   if (!action && method === 'DELETE') {
-    const requestedAccountId = safeText(getUrlObj(req).searchParams.get('accountId'));
+    const params = getUrlObj(req).searchParams;
+    const requestedAccountId = safeText(params.get('accountId'));
+    const force = ['1', 'true', 'yes'].includes(safeText(params.get('force')).toLowerCase());
 
     const listed = await projectConnectionsStore.listConnections(200, scope);
     if (!listed.ok) return sendErr(res, listed.status || 500, listed.error), true;
@@ -433,11 +481,27 @@ async function handle(req, res, pathname, method) {
       .filter((row) => !requestedAccountId || safeText(row.accountId) === requestedAccountId);
 
     let removed = 0;
+    let revokedCount = 0;
+    const notRevoked = [];
     for (const row of mine) {
-      const gone = await projectConnectionsStore.deleteConnection(
-        { provider, accountId: safeText(row.accountId) },
-        scope
-      );
+      const accountId = safeText(row.accountId);
+      const handedBack = await verifySweep.revokeConnection({ provider, accountId, scope, force });
+      if (!handedBack.mayDelete) {
+        // Nothing has been deleted for this account, and anything deleted
+        // before it in this loop is reported so the answer is not silent about
+        // a half-finished disconnect.
+        return sendErr(res, handedBack.status || 502, handedBack.reason, {
+          code: 'REVOKE_FAILED',
+          provider,
+          accountId,
+          removed,
+          revokedAtProvider: false,
+        }), true;
+      }
+      if (handedBack.revokedAtProvider) revokedCount += 1;
+      else notRevoked.push({ accountId, reason: handedBack.reason });
+
+      const gone = await projectConnectionsStore.deleteConnection({ provider, accountId }, scope);
       if (!gone.ok) {
         return sendErr(res, gone.status || 500, gone.error || 'Could not disconnect', { code: 'DELETE_FAILED' }), true;
       }
@@ -461,19 +525,34 @@ async function handle(req, res, pathname, method) {
           }), true;
         }
         removed += 1;
+        // Counted as NOT revoked, deliberately. It came out of the older table,
+        // this route never held an adapter account for it, and nothing was said
+        // to Meta — so letting it satisfy `revokedAtProvider` below would make
+        // the answer claim a revoke that did not happen, on the one path where
+        // it is easiest to miss.
+        notRevoked.push({
+          accountId: safeText(legacy.accountId),
+          reason: 'This Page was connected through the older path, so Starcaster had no credential to '
+            + "withdraw the permission with. Remove Starcaster under Facebook Settings > Business Integrations.",
+        });
       }
     }
 
     /**
-     * Note what has NOT happened: the platform has not been told.
-     *
-     * Revoking at the provider's end is slice 6 (86bbpz1gv), and
-     * projectConnectionsStore.deleteConnection says the same thing at its own
-     * end. Until then Starcaster forgets the token while the permission stays
-     * granted at Meta or Bluesky, so the answer says `revokedAtProvider: false`
-     * rather than letting a caller read "disconnected" as "revoked".
+     * `revokedAtProvider` is measured now, not hard-coded false — but it is
+     * true ONLY when something was actually handed back and nothing was left
+     * behind. A partial revoke reads as false, with `notRevoked` naming which
+     * accounts and why: "disconnected" and "revoked" are different claims, and
+     * the client acts on the second one.
      */
-    const payload = { provider, disconnected: true, removed, revokedAtProvider: false };
+    const payload = {
+      provider,
+      disconnected: true,
+      removed,
+      revokedAtProvider: revokedCount > 0 && notRevoked.length === 0,
+      ...(notRevoked.length ? { notRevoked } : {}),
+      ...(force ? { forced: true } : {}),
+    };
     return sendOk(res, 200, payload, payload), true;
   }
 
