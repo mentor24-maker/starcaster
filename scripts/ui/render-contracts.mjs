@@ -1327,10 +1327,16 @@ export const RENDER_CONTRACTS = [
   {
     id: 'row-overlay-blend-mode-normal-stays-out-of-the-way',
     why:
-      'Every overlay configured before this setting existed has no blendMode at all, and must keep ' +
-      'rendering byte-identically. "normal" is the CSS initial value, so emitting it would be a no-op ' +
-      'that still rewrote every live tenant section\'s style attribute — this is the contract that ' +
-      'says the default really is a default.',
+      'Every overlay configured before this setting existed has no blendMode at all, and this proves ' +
+      'nothing writes a REAL blend mode onto those rows — a normalizer that fell back to "multiply", ' +
+      'or a picker default that leaked into storage, would recolour every live tenant section that ' +
+      'has an overlay, and would look deliberate. ' +
+      'WHAT IT CANNOT CHECK, and do not read it as though it can: this reads the COMPUTED ' +
+      '`mix-blend-mode`, which is "normal" whether the property is omitted or written out longhand, ' +
+      'so it can never tell you the style object stayed byte-identical. That guard is the unit test ' +
+      'at lib/builder-client/builder-row-overlay-screen.test.ts — `expect("mixBlendMode" in style)' +
+      '.toBe(false)` — and it is the only thing standing behind the ticket\'s "Normal emits no ' +
+      'property at all" criterion.',
     section: {
       layout: 'single',
       background: { mode: 'image', imageUrl: BANNER },
