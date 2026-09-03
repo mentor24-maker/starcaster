@@ -1,8 +1,14 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import type { BackgroundSettings, BuilderTemplateLayout, BuilderTemplateSection } from "@/lib/builder-template";
+import type {
+  BackgroundSettings,
+  BuilderOverlayBlendMode,
+  BuilderTemplateLayout,
+  BuilderTemplateSection
+} from "@/lib/builder-template";
 import {
+  BUILDER_OVERLAY_BLEND_MODES,
   getLayoutColumnPercents,
   getLayoutColumns,
   normalizeRowOverlayScreenSettings,
@@ -67,6 +73,17 @@ function updateSectionOverlayOpacity(
   onUpdateSection((current) => {
     const overlay = normalizeRowOverlayScreenSettings(current.overlayScreen);
     return { ...current, overlayScreen: { ...overlay, opacity } };
+  });
+}
+
+/** How that screen combines with the photo under it. Same reason as above. */
+function updateSectionOverlayBlendMode(
+  onUpdateSection: BuilderSectionControlsProps["onUpdateSection"],
+  blendMode: BuilderOverlayBlendMode
+) {
+  onUpdateSection((current) => {
+    const overlay = normalizeRowOverlayScreenSettings(current.overlayScreen);
+    return { ...current, overlayScreen: { ...overlay, blendMode } };
   });
 }
 
@@ -499,15 +516,41 @@ export function BuilderSectionControls({
             themePrimaryColor={themePrimaryColor}
           />
           {overlayScreen.background.mode !== "none" ? (
-            <BuilderSettingRow label="Opacity">
-              <BuilderNumberSelectControl
-                value={String(overlayScreen.opacity)}
-                min={0}
-                max={100}
-                fallback="100"
-                onChange={(value) => updateSectionOverlayOpacity(onUpdateSection, Number(value))}
-              />
-            </BuilderSettingRow>
+            <>
+              <BuilderSettingRow label="Opacity">
+                <BuilderNumberSelectControl
+                  value={String(overlayScreen.opacity)}
+                  min={0}
+                  max={100}
+                  fallback="100"
+                  onChange={(value) => updateSectionOverlayOpacity(onUpdateSection, Number(value))}
+                />
+              </BuilderSettingRow>
+              {/*
+               * Blend is the difference between a sheet over the photo and a
+               * photo that has been tinted: at full opacity Normal hides the
+               * picture completely, while Multiply keeps every dark part dark
+               * and recolours the rest. Options come from the shared allowlist
+               * so this picker cannot offer a mode the normalizer would reject.
+               */}
+              <BuilderSettingRow label="Blend">
+                <select
+                  value={overlayScreen.blendMode ?? "normal"}
+                  onChange={(event) =>
+                    updateSectionOverlayBlendMode(
+                      onUpdateSection,
+                      event.target.value as BuilderOverlayBlendMode
+                    )
+                  }
+                >
+                  {BUILDER_OVERLAY_BLEND_MODES.map((mode) => (
+                    <option key={mode.value} value={mode.value}>
+                      {mode.label}
+                    </option>
+                  ))}
+                </select>
+              </BuilderSettingRow>
+            </>
           ) : null}
         </div>
         <div className="builder-schema-panel-column">

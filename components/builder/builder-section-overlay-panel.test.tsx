@@ -131,6 +131,107 @@ describe("the opacity control", () => {
   });
 });
 
+describe("the Blend control", () => {
+  /*
+   * `updateSectionOverlayBlendMode` is the only code that turns an operator's
+   * Blend choice into stored state, and until review round 1 of #553 nothing
+   * covered it at any level — break it to write at the wrong level, or to drop
+   * `opacity` on the way past, and every other gate in that PR still passed.
+   * These mirror the opacity tests above, which exist for the same reason.
+   */
+  it("is hidden while the type is None — there is nothing to blend with", () => {
+    expect(mount(createEmptySection()).select("Blend")).toBeUndefined();
+  });
+
+  it("appears once a type is chosen, showing the stored mode", () => {
+    const panel = mount(
+      sectionWithOverlay({
+        background: { mode: "color", color: "#123456" },
+        opacity: 40,
+        blendMode: "screen"
+      })
+    );
+
+    expect(panel.select("Blend")?.value).toBe("screen");
+  });
+
+  it("offers exactly the seven modes the ticket named, and no more", () => {
+    // Written out longhand ON PURPOSE. Comparing the picker to
+    // BUILDER_OVERLAY_BLEND_MODES compares the setting to itself: adding an
+    // eighth mode to that list passes such a test while breaking the rule the
+    // ticket set, which is that most of CSS's sixteen modes are
+    // indistinguishable on a photo and an unusable picker is the failure.
+    const blend = mount(
+      sectionWithOverlay({ background: { mode: "color", color: "#123456" }, opacity: 40 })
+    ).select("Blend");
+
+    expect([...blend!.options].map((o) => o.value)).toEqual([
+      "normal",
+      "multiply",
+      "screen",
+      "overlay",
+      "soft-light",
+      "darken",
+      "lighten"
+    ]);
+    expect([...blend!.options].map((o) => o.textContent)).toEqual([
+      "Normal",
+      "Multiply",
+      "Screen",
+      "Overlay",
+      "Soft light",
+      "Darken",
+      "Lighten"
+    ]);
+  });
+
+  it("writes the chosen mode without disturbing the overlay's background or strength", () => {
+    const panel = mount(
+      sectionWithOverlay({ background: { mode: "color", color: "#123456" }, opacity: 40 })
+    );
+    const next = panel.choose("Blend", "multiply");
+
+    expect(next.overlayScreen?.blendMode).toBe("multiply");
+    expect(next.overlayScreen?.background.color).toBe("#123456");
+    expect(next.overlayScreen?.background.mode).toBe("color");
+    expect(next.overlayScreen?.opacity).toBe(40);
+  });
+
+  it("writes to overlayScreen, NOT to the row's own background layer", () => {
+    const panel = mount(
+      sectionWithOverlay({ background: { mode: "color", color: "#123456" }, opacity: 40 })
+    );
+    const next = panel.choose("Blend", "overlay") as unknown as Record<string, unknown>;
+
+    expect((next.overlayScreen as { blendMode?: string }).blendMode).toBe("overlay");
+    expect(next).not.toHaveProperty("blendMode");
+    expect(next.background).not.toHaveProperty("blendMode");
+  });
+
+  it("opens a row saved before this setting existed, reading as Normal", () => {
+    // Every live overlay in production predates blendMode, so the absent-field
+    // case is the COMMON one, not an edge.
+    const panel = mount(
+      sectionWithOverlay({ background: { mode: "color", color: "#123456" }, opacity: 40 })
+    );
+
+    expect(panel.select("Blend")?.value).toBe("normal");
+    expect(panel.choose("Blend", "darken").overlayScreen?.blendMode).toBe("darken");
+  });
+
+  it("keeps a blend mode the operator already set when the type changes", () => {
+    const panel = mount(
+      sectionWithOverlay({
+        background: { mode: "color", color: "#123456" },
+        opacity: 40,
+        blendMode: "multiply"
+      })
+    );
+
+    expect(panel.choose("Overlay Type", "gradient").overlayScreen?.blendMode).toBe("multiply");
+  });
+});
+
 describe("what the picker writes to", () => {
   it("puts the chosen type on overlayScreen.background, NOT the row background", () => {
     const next = mount(createEmptySection()).choose("Overlay Type", "image");
