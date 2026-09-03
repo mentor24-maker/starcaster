@@ -20,11 +20,28 @@ that mixture impossible to build rather than merely unlikely.
 
 One small thing that turns out to matter a lot: an X permission expires after
 about two hours. The renewal machinery built last week could never actually
-renew one, because the value it needed to renew *with* had nowhere to travel.
-Facebook and Instagram never noticed, since their permissions do not expire.
-That gap is closed here, and a permission that arrives without the means to
-renew itself is now refused outright rather than saved — otherwise it would
-work beautifully for one afternoon and then quietly stop.
+renew one, and it needed two separate things to be able to: the value it
+renews *with*, and the deadline that tells it when to bother. Neither had
+anywhere to travel. Facebook and Instagram never noticed, since their
+permissions do not expire.
+
+Both are carried now. The first was fixed in the original round of this work;
+the second was caught in review, and it was the one that mattered more,
+because it failed *silently*. Everything looked right — the permission saved,
+the card went green, the renewal check ran on schedule and reported success —
+and it renewed nothing, because it had never been told when the permission
+runs out and read that silence as "this one lasts forever". A client's posts
+would have started failing an afternoon later with nothing anywhere saying
+why. A permission that arrives without the means to renew itself is also now
+refused outright rather than saved, for the same reason.
+
+Two smaller things were corrected alongside it. When X refuses a client's post
+for want of permission, the message used to send whoever was reading it off to
+Starcaster's own developer settings to change a key that has nothing to do
+with that client — it now names the connection that actually needs redoing.
+And image posting is flagged, in the code, as unproven: it goes through an
+address X has announced it is retiring, nothing here can test it without a
+live X account, and it was carrying a comment that claimed otherwise.
 
 Before any of this can be switched on, X's developer site has to issue two new
 values and be told the address to send clients back to. Until that is done the
