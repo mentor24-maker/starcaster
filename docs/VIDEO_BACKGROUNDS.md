@@ -256,6 +256,21 @@ the row has none — operator's call, 2026-08-31: *"Default overlay tint ON"* �
 and it **seeds, it never owns**: an overlay already configured is untouched,
 and switching away from Video does not tear it back out.
 
+**The editor landed in #482, and the tint is now the operator's to change.**
+When the above was written there was still no way to touch an overlay from the
+React panel, so the seeded tint was effectively fixed — the second round of the
+same failure this section describes, with the data and the renderer both
+correct and no way in. Section Settings now carries an **Overlay** group:
+recolour the tint, restrength it, or set its type to None to switch it off
+entirely. Nothing puts it back.
+
+Overlay screens are their own feature now rather than a video-tint
+implementation detail, and they have their own document —
+**`docs/OVERLAY_SCREENS.md`** — covering the shared-`BackgroundSettings` idea
+the feature rests on, the two separate opacities (this section's tint has both),
+and what is live versus merely built. Read it before changing anything under
+Overlay; this section stays because it is where the story started.
+
 ---
 
 ## Traps this work walked into
