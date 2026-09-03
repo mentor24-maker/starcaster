@@ -31,6 +31,13 @@ test('runs collapse and the ends are trimmed', () => {
   assert.equal(slugify('a...b'), 'a-b');
 });
 
+test('apostrophes close up instead of splitting the word', () => {
+  // "player-s-guide" reads as a typo; WordPress drops the apostrophe too.
+  assert.equal(slugify("The Tennis Player's Guide"), 'the-tennis-players-guide');
+  assert.equal(slugify('The Tennis Player\u2019s Guide'), 'the-tennis-players-guide');
+  assert.equal(slugify("don't stop"), 'dont-stop');
+});
+
 test('accents fold to their base letter rather than vanishing', () => {
   // Dropping the letter loses the word: "Café" would be "caf".
   assert.equal(slugify('Café Münster'), 'cafe-munster');
