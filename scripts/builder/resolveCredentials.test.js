@@ -669,19 +669,28 @@ test('Buffer: the project\'s own key is used, and the shared channel id survives
 });
 
 /**
- * Review round 1's defect, pinned.
+ * Review round 1's defect, still pinned — through its SUCCESSOR guarantee.
+ * Connections 7 of 7 (86bbpz1hu).
  *
- * The old test here was called "the project's token pair is used" and asserted
+ * The history, because the assertion below only makes sense with it. The
+ * original test here was called "the project's token pair is used" and asserted
  * `accessToken`, `accountName`, `apiKey` and `apiSecret` — everything EXCEPT
  * `accessTokenSecret`, which was the one value that was wrong. It passed while
  * the resolver handed back a client's access token paired with Alphire's token
- * secret, and its name told the next reader the pair was covered.
+ * secret, and its name told the next reader the pair was covered. Round 1
+ * replaced it with a refusal: an OAuth 1.0a credential is a PAIR, a connection
+ * carries one secret, so the pair could not be completed from storage.
  *
- * An X credential is a PAIR and a connection can carry one secret, so the pair
- * cannot be completed from storage. The resolver now refuses. The assertion
- * that matters is the negative one: our secret must not travel.
+ * Slice 7 does not weaken that. It removes the pair: a client connects over
+ * OAuth 2.0 with PKCE, whose credential is a single bearer token, so there is
+ * no second half to borrow. The refusal is lifted and the DANGER it guarded is
+ * closed a different way — the resolver deletes `access_token_secret` from the
+ * connection path's answer, so the 1.0a scheme cannot be assembled at all.
+ *
+ * The assertion that matters is unchanged and is still the negative one:
+ * OUR SECRET MUST NOT TRAVEL WITH A CLIENT'S TOKEN.
  */
-test('X: a connection is REFUSED rather than paired with the platform\'s own token secret', async () => {
+test("X: a client's connection resolves to a bearer token, and our own token secret does NOT travel with it", async () => {
   const h = withResolver();
   try {
     await grant(h.store, SCOPE_A, {
@@ -689,23 +698,27 @@ test('X: a connection is REFUSED rather than paired with the platform\'s own tok
       status: 'connected', accessToken: 'CLIENT_X_TOKEN',
     });
     const res = await h.publishers.x.resolveXCredentials({ projectId: SCOPE_A.projectId });
-    assert.equal(res.ok, false, 'an X connection resolved to a usable credential, which it cannot be');
-    assert.equal(res.code, 'CONNECTION_INCOMPLETE');
-    assert.equal(res.status, 501, 'a permanent gap must not be dressed as a retryable 503');
-    // The whole point: nothing of ours leaks into the answer, and the message
-    // says which part is missing rather than "credentials are invalid".
-    assert.doesNotMatch(res.error, /ENV_X_SECRET_dane/);
-    assert.doesNotMatch(res.error, /CLIENT_X_TOKEN/);
-    assert.match(res.error, /access_token_secret/);
+    assert.equal(res.ok, true, res.error);
+    assert.equal(res.creds.source, 'connection');
+    assert.equal(res.creds.accessToken, 'CLIENT_X_TOKEN');
+    assert.equal(res.creds.authMode, 'oauth2', 'a client connection must state its scheme, never be inferred');
+
+    // THE assertion. Alphire's OAuth 1.0a token secret is in the environment
+    // underneath this overlay; if it showed through, xClient would have all
+    // four values it needs to build a 1.0a signature out of a token that is not
+    // a 1.0a token — a signature belonging to nobody, which is the exact
+    // failure round 1's refusal existed to prevent.
+    assert.equal(res.creds.accessTokenSecret, '', "Alphire's OAuth 1.0a token secret travelled with a client's token");
+    assert.notEqual(res.creds.accessTokenSecret, 'ENV_X_SECRET_dane');
   } finally { h.restore(); }
 });
 
 /**
- * The same defect at the resolver's own door, asserting on the VALUES map
+ * The same guarantee at the resolver's own door, asserting on the VALUES map
  * rather than through a publisher — because a publisher could hide it by
  * dropping the field on the way through.
  */
-test('X: the refusal carries no values at all, so nothing can be posted with half a pair', async () => {
+test('X: the connection path hands back no access_token_secret at all, so the wrong scheme cannot be built', async () => {
   const h = withResolver();
   try {
     await grant(h.store, SCOPE_A, {
@@ -713,14 +726,27 @@ test('X: the refusal carries no values at all, so nothing can be posted with hal
       status: 'connected', accessToken: 'CLIENT_X_TOKEN',
     });
     const res = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
-    assert.equal(res.ok, false);
-    assert.equal(res.data, null, 'a refusal handed back values a caller could post with');
+    assert.equal(res.ok, true, res.error);
+    assert.equal(res.data.source, 'connection');
+    assert.equal(res.data.values.access_token, 'CLIENT_X_TOKEN');
+    assert.equal(res.data.values.auth_mode, 'oauth2');
 
-    // resolveValues throws rather than quietly returning the environment.
-    await assert.rejects(
-      () => h.resolver.resolveValues('x', SCOPE_A.projectId),
-      (err) => err.code === 'CONNECTION_INCOMPLETE'
+    // Absent, not empty. An empty string would still let a caller that only
+    // checks for presence go down the 1.0a path.
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(res.data.values, 'access_token_secret'),
+      false,
+      "the platform's own OAuth 1.0a token secret is still in the values a client post would be built from"
     );
+
+    // The app identity underneath IS still inherited — it has to be, it is the
+    // same X app — and that is the difference between an overlay and a
+    // replacement.
+    assert.equal(res.data.values.api_key, 'ALPHIRE_X_API_KEY');
+
+    const values = await h.resolver.resolveValues('x', SCOPE_A.projectId);
+    assert.equal(values.access_token, 'CLIENT_X_TOKEN');
+    assert.equal(values.access_token_secret, undefined);
   } finally { h.restore(); }
 });
 
@@ -729,14 +755,23 @@ test('X: the refusal carries no values at all, so nothing can be posted with hal
  * unaffected, and so is X itself when the project has no connection — which is
  * Dane's own posting, and the path this slice must not disturb.
  */
+/**
+ * The other half, and the one that must never move: this is Dane's own live
+ * posting. A project with no X connection gets the environment pair WHOLE, with
+ * no auth_mode on it, so `xClient` signs OAuth 1.0a exactly as it always has.
+ */
 test('X: with no connection stored, the environment pair is returned whole', async () => {
   const h = withResolver();
   try {
     const res = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
-    assert.equal(res.ok, true, 'the parts refusal fired with no connection to refuse');
+    assert.equal(res.ok, true);
     assert.equal(res.data.source, 'environment');
     assert.equal(res.data.values.access_token, 'ENV_X_TOKEN_dane');
+    // The deletion is scoped to the CONNECTION path. Stripping it here would
+    // take Starcaster's own X posting off the air.
     assert.equal(res.data.values.access_token_secret, 'ENV_X_SECRET_dane');
+    assert.equal(res.data.values.auth_mode, undefined, 'the environment path must not claim to be OAuth 2.0');
+    assert.equal(h.publishers.x.getXCredentials().authMode, 'oauth1');
   } finally { h.restore(); }
 });
 

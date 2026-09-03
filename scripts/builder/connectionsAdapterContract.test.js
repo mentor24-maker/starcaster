@@ -20,6 +20,7 @@ const assert = require('node:assert/strict');
 
 const contract = require('../../lib/connections/contract.js');
 const registry = require('../../lib/connections/registry.js');
+const xAdapter = require('../../lib/connections/adapters/x.js');
 
 const ORIGIN_VARS = [
   'CONNECTIONS_OAUTH_ORIGIN', 'PUBLIC_APP_ORIGIN', 'APP_PUBLIC_ORIGIN', 'PUBLIC_BASE_URL', 'VERCEL_URL',
@@ -78,7 +79,13 @@ function withFetch(replies, fn) {
     return {
       ok: next.status >= 200 && next.status < 300,
       status: next.status,
+      statusText: next.statusText || '',
       text: async () => body,
+      // An adapter is free to read the body either way, and X reads `json`
+      // (its endpoints are JSON-only). Answering only `text` made a JSON-reading
+      // adapter see a null body under a 200 — a refusal that reads as the
+      // provider having returned nothing.
+      json: async () => (typeof next.body === 'string' ? JSON.parse(next.body) : (next.body ?? {})),
     };
   };
   const done = (result) => { global.fetch = realFetch; return result; };
@@ -171,6 +178,35 @@ const ROUND_TRIP_FIXTURES = {
       revoke: [{ status: 200, body: { success: true } }],
     },
   },
+  /**
+   * X is the first adapter here that is not an OAuth-code-for-token exchange
+   * and nothing else: it is PKCE, so `exchange` needs the signed state its
+   * sign-in began with. `connect` is therefore built rather than written down —
+   * `authorizeUrl` is run under this env, and the state is taken out of the URL
+   * exactly as X hands it back. Connections 7 of 7 (86bbpz1hu).
+   */
+  x: {
+    env: {
+      X_CLIENT_ID: 'x-client-id',
+      X_CLIENT_SECRET: 'x-client-secret',
+      META_OAUTH_STATE_SECRET: 'state-secret-for-tests',
+      CONNECTIONS_OAUTH_ORIGIN: 'https://starcaster.pro',
+    },
+    connect: () => {
+      const started = xAdapter.authorizeUrl({ projectId: 'proj-a', userId: 'user-1' });
+      return { code: 'the-code', state: new URL(started.data.url).searchParams.get('state') };
+    },
+    replies: {
+      exchange: [
+        { status: 200, body: { access_token: 'user-bearer', refresh_token: 'user-refresh', expires_in: 7200 } },
+        { status: 200, body: { data: { id: '4455', username: 'delraytennis', name: 'Delray Tennis' } } },
+      ],
+      verify: [{ status: 200, body: { data: { id: '4455', username: 'delraytennis' } } }],
+      listAccounts: [{ status: 200, body: { data: { id: '4455', username: 'delraytennis' } } }],
+      refresh: [{ status: 200, body: { access_token: 'renewed', refresh_token: 'renewed-refresh', expires_in: 7200 } }],
+      revoke: [{ status: 200, body: { revoked: true } }],
+    },
+  },
 };
 
 /** The four that are called WITH an account `exchange` handed back. */
@@ -199,7 +235,12 @@ test('a connected account round-trips: every adapter accepts the account it just
 
     await withEnv(fixture.env || {}, async () => {
       const account = await withFetch(fixture.replies.exchange, async () => {
-        const res = await entry.adapter.exchange(fixture.connect);
+        // A function when the input has to be BUILT rather than written down —
+        // X's exchange needs a signed state carrying the nonce its PKCE
+        // verifier is derived from, which only exists once `authorizeUrl` has
+        // run under this fixture's env.
+        const connect = typeof fixture.connect === 'function' ? fixture.connect() : fixture.connect;
+        const res = await entry.adapter.exchange(connect);
         assert.equal(res.ok, true, `${entry.provider}.exchange refused its own fixture: ${res.error}`);
         const accounts = res.data?.accounts;
         assert.ok(Array.isArray(accounts) && accounts.length, `${entry.provider}.exchange returned no accounts`);
@@ -254,15 +295,15 @@ test('accountRef reads an account whichever vocabulary it arrives in', () => {
   // older stored shape still resolves, so the fix cannot be undone by a caller
   // that hands over something it read from somewhere else.
   assert.deepEqual(contract.accountRef({ id: '55', label: 'Delray', avatarUrl: '/a.png', accessToken: 't' }), {
-    accountId: '55', accountLabel: 'Delray', accountAvatarUrl: '/a.png', accessToken: 't', raw: null,
+    accountId: '55', accountLabel: 'Delray', accountAvatarUrl: '/a.png', accessToken: 't', refreshToken: '', raw: null,
   });
   assert.deepEqual(contract.accountRef({ accountId: '55', accountLabel: 'Delray', accessToken: 't' }), {
-    accountId: '55', accountLabel: 'Delray', accountAvatarUrl: '', accessToken: 't', raw: null,
+    accountId: '55', accountLabel: 'Delray', accountAvatarUrl: '', accessToken: 't', refreshToken: '', raw: null,
   });
   // The canonical name wins when both are somehow present.
   assert.equal(contract.accountRef({ accountId: 'right', id: 'wrong' }).accountId, 'right');
   assert.deepEqual(contract.accountRef(), {
-    accountId: '', accountLabel: '', accountAvatarUrl: '', accessToken: '', raw: null,
+    accountId: '', accountLabel: '', accountAvatarUrl: '', accessToken: '', refreshToken: '', raw: null,
   });
 });
 
@@ -437,6 +478,11 @@ test('facebookPage.exchange returns the same Page rows the route already stores'
       accountLabel: 'Delray Tennis',
       accountAvatarUrl: '',
       accessToken: 'page-token',
+      // Meta issues no refresh token — a Page token from a long-lived user
+      // token does not expire. The field is in the account shape for every
+      // platform since Connections 7 of 7 (86bbpz1hu); empty here is the
+      // correct answer, not a gap.
+      refreshToken: '',
       raw: { id: '55', name: 'Delray Tennis', access_token: 'page-token' },
     }]);
     assert.ok(calls[0].url.includes('/oauth/access_token'), 'the code is exchanged first');
@@ -525,6 +571,8 @@ test('bluesky connects, lists, verifies and revokes through the same contract', 
       accountAvatarUrl: '',
       // The app password, not the two-hour session token — see the adapter.
       accessToken: 'abcd-efgh-ijkl-mnop',
+      // An app password has nothing to refresh; empty is the right answer.
+      refreshToken: '',
       raw: { did: 'did:plc:xyz', handle: 'delray.bsky.social', serviceUrl: 'https://bsky.social' },
     }]);
     const sent = JSON.parse(calls[0].options.body);
@@ -637,17 +685,34 @@ test('an unknown provider and an unfinished one are different answers', () => {
   assert.equal(unknown.status, 404);
   assert.equal(unknown.code, 'UNKNOWN_PROVIDER');
 
-  // `x` rather than `instagram`: Instagram became connectable in slice 5
-  // (86bbpz1gk), so this reads the catalogue for whatever is STILL unfinished
-  // instead of naming a platform that has since shipped — otherwise the last
-  // coming-soon entry to ship silently deletes this assertion's subject.
-  const comingSoon = registry.CATALOGUE.find((entry) => entry.readiness === 'coming_soon');
-  assert.ok(comingSoon, 'no coming_soon entry left to prove the two answers differ');
-  const soon = registry.getAdapter(comingSoon.provider);
+  /**
+   * The catalogue no longer HAS a coming_soon entry — X was the last one and it
+   * connects as of Connections 7 of 7 (86bbpz1hu), which is the epic finishing
+   * rather than anything going wrong. The previous version of this test read
+   * the catalogue for whatever was still unfinished and asserted it found one,
+   * precisely so that this moment would fail loudly instead of the assertion
+   * quietly ceasing to test anything.
+   *
+   * So the branch is exercised directly. `getAdapter` is a lookup plus
+   * `adapterAnswer`, and it is `adapterAnswer` that decides between the two
+   * sentences — the part worth pinning. The unknown-provider half above still
+   * goes through the real registry, and the entry below is the exact shape the
+   * catalogue held for X yesterday.
+   */
+  const soon = registry.adapterAnswer(
+    { provider: 'someday', displayName: 'Someday', readiness: 'coming_soon', adapter: null },
+    'someday'
+  );
   assert.equal(soon.ok, false);
   assert.equal(soon.status, 400);
   assert.equal(soon.code, 'COMING_SOON');
   assert.match(soon.error, /not connectable yet/);
+  assert.match(soon.error, /Someday/, 'the sentence must name the platform the client clicked');
+
+  // And the two answers must not have converged: a typo and a roadmap question
+  // are different problems with different next steps.
+  assert.notEqual(soon.code, unknown.code);
+  assert.notEqual(soon.status, unknown.status);
 
   const ready = registry.getAdapter('facebook_page');
   assert.equal(ready.ok, true);
