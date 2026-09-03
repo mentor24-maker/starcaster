@@ -3823,6 +3823,19 @@ export function createEmptyModule(
                       : type === "blog-tag-cloud"
                         ? {
                             title: "",
+                            /*
+                             * `tagSource` is deliberately NOT defaulted here.
+                             *
+                             * A new cloud still gets "Blog tags", because
+                             * resolveTagCloudSource() reads an EMPTY list as
+                             * auto. Writing the value explicitly instead
+                             * defeats the migration: these defaults are merged
+                             * under a module's saved settings, so every page
+                             * that ever carried a hand-typed list would gain
+                             * `tagSource: "auto"` and start ignoring it — the
+                             * exact silent change to a live page this ticket
+                             * says not to make. check:render caught it.
+                             */
                             tags: JSON.stringify([]),
                             layout: "cloud",
                             showCounts: "false",

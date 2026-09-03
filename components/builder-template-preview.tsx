@@ -45,6 +45,7 @@ import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import {
   type CloudTag,
   PLACEHOLDER_TAGS,
+  blogTagsToCloudTags,
   activeTagSlug,
   maxTagCount,
   parseCloudTags,
@@ -2294,7 +2295,7 @@ function BuilderModulePreview({
     return <BlogCategoryFilterPreview settings={module.settings} />;
   }
   if (module.type === "blog-tag-cloud") {
-    return <BlogTagCloudPreview settings={module.settings} />;
+    return <BlogTagCloudPreview settings={module.settings} projectId={projectId} liveSite={liveSite} />;
   }
   if (module.type === "blog-post-tags") {
     return <BlogPostTagsPreview settings={module.settings} />;
@@ -6870,10 +6871,61 @@ function BlogCategoryFilterPreview({ settings }: { settings: Record<string, stri
  * lib/builder-client/blog-tag-cloud.ts now and the canvas card reads the same
  * ones, so the two cannot drift apart again.
  */
-function BlogTagCloudPreview({ settings }: { settings: Record<string, string> }) {
+function BlogTagCloudPreview({
+  settings,
+  projectId: projectIdProp = "",
+  liveSite = false,
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+  liveSite?: boolean;
+}) {
   const resolved = resolveTagCloudSettings(settings);
   const configured = parseCloudTags(settings);
-  const tags = configured.length ? configured : PLACEHOLDER_TAGS;
+
+  /*
+   * In `auto` the cloud shows the tenant's real BLOG tags — the same derived
+   * list the Blog Links manager shows, from `/api/blog/tags`, which already
+   * returns a post count per tag ordered busiest first. Not
+   * `/api/messaging/tags`: that is a different feature's table, and pointing a
+   * blog widget at it is what put "Add tags in the Messaging section" on a
+   * public page.
+   */
+  const headers = useMemo(() => getCrmProjectHeaders(projectIdProp), [projectIdProp]);
+  const [autoTags, setAutoTags] = useState<CloudTag[] | null>(null);
+
+  useEffect(() => {
+    if (resolved.source !== "auto") return;
+    let cancelled = false;
+    const projectId = headers["X-Project-ID"] || "";
+    const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : "";
+    fetch(`/api/blog/tags${qs}`, { credentials: "include", headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        setAutoTags(blogTagsToCloudTags(d?.tags ?? d?.data ?? []));
+      })
+      .catch(() => { if (!cancelled) setAutoTags([]); });
+    return () => { cancelled = true; };
+  }, [resolved.source, headers]);
+
+  const sourced = resolved.source === "auto" ? autoTags : configured;
+
+  /*
+   * PLACEHOLDERS ARE A BUILDER AFFORDANCE, NOT CONTENT.
+   *
+   * The old line here was `configured.length ? configured : PLACEHOLDER_TAGS`,
+   * so a real tenant's blog advertised "react / typescript / design /
+   * tutorial" to its visitors (operator report, 2026-09-03). They exist so the
+   * module is not an empty box while somebody designs the page; on a live
+   * site, no tags means the module renders nothing.
+   */
+  const tags = sourced && sourced.length ? sourced : liveSite ? [] : PLACEHOLDER_TAGS;
+
+  // `auto` has not answered yet, or answered with nothing. Either way a live
+  // page shows no widget rather than a heading over an empty space.
+  if (liveSite && tags.length === 0) return null;
+
   const maxCount = maxTagCount(tags);
   const currentSlug = activeTagSlug(
     typeof window === "undefined" ? "" : window.location.search,

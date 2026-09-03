@@ -105,3 +105,87 @@ describe("the Tag Cloud a visitor actually sees", () => {
     expect(siteHtml({ showCounts: "true" })).toContain("(20)");
   });
 });
+
+/**
+ * The same page, rendered the way a PUBLISHED tenant site renders it.
+ * `liveSite` is what BuilderPublicSitePage passes, and it is the only thing
+ * separating "a visitor is looking at this" from "somebody is designing it".
+ */
+function liveHtml(settings: Record<string, string> = {}) {
+  return renderToStaticMarkup(
+    <BuilderTemplatePreview
+      liveSite
+      pageBackground={createDefaultBackgroundSettings()}
+      layoutSections={normalizeLayoutSections([
+        {
+          id: "row-1",
+          title: "Tags",
+          layout: "single",
+          modules: [
+            {
+              id: "cloud-1",
+              type: "blog-tag-cloud",
+              column: "main",
+              text: "",
+              settings: normalizeBuilderModuleSettingsForType("blog-tag-cloud", settings)
+            }
+          ]
+        }
+      ])}
+    />
+  );
+}
+
+describe("placeholder tags never reach a visitor", () => {
+  /**
+   * The operator report, 2026-09-03: delraytennis.starcaster.pro/blog was
+   * advertising "react / typescript / design / tutorial" — PLACEHOLDER_TAGS —
+   * to real visitors, because the live renderer did
+   * `configured.length ? configured : PLACEHOLDER_TAGS`.
+   *
+   * They exist so the module is not an empty box on the Builder canvas. On a
+   * live page, no tags means no module.
+   */
+  it("renders NOTHING on a live page with no tags, rather than a demo list", () => {
+    const html = liveHtml({ tagSource: "manual", tags: "[]", title: "Browse by tag" });
+    for (const demo of ["react", "typescript", "design", "tutorial"]) {
+      expect(html).not.toContain(`?tag=${demo}`);
+    }
+    // Not even the heading: a title over an empty space is still a widget.
+    expect(html).not.toContain("Browse by tag");
+  });
+
+  it("renders nothing on a live page while the automatic list is still loading", () => {
+    // `auto` has not answered on the first render. A visitor must not see four
+    // invented tags in the gap before the real ones arrive.
+    const html = liveHtml({ tagSource: "auto", tags: "[]" });
+    expect(html).not.toContain("?tag=react");
+  });
+
+  it("still shows the demo list OFF a live page, so the canvas is not an empty box", () => {
+    const html = siteHtml({ tags: "[]" });
+    expect(html).toContain("?tag=react");
+  });
+
+  it("shows a manual list on a live page exactly as typed", () => {
+    const html = liveHtml({
+      tagSource: "manual",
+      tags: JSON.stringify([{ id: "x", label: "Curated", slug: "Curated", count: 2 }])
+    });
+    expect(html).toContain("Curated");
+    expect(html).not.toContain("?tag=react");
+  });
+});
+
+describe("an existing hand-typed page does not silently change", () => {
+  /**
+   * Pages saved before `tagSource` existed carry a list and no source.
+   * Defaulting those to auto would replace a curated list on a live site with
+   * no edit, so a non-empty list is read as `manual`.
+   */
+  it("keeps rendering the typed list when no tagSource was ever saved", () => {
+    const html = liveHtml({ tags: TAGS });
+    expect(html).toContain("?tag=news");
+    expect(html).toContain("?tag=tutorial");
+  });
+});

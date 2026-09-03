@@ -170,6 +170,36 @@ categories yet", which is why it went unnoticed.
 Each table now names a column it actually has (`PROBE_COLUMN`), pinned by
 `scripts/builder/blogStoreTableProbe.test.js`.
 
+## The public Tag Cloud reads this same list
+
+`blog-tag-cloud` has a **Tags From** setting: **Blog tags (automatic)**, the
+default, reads `GET /api/blog/tags` — the same derived list with post counts
+this manager shows — or **Custom list** for a hand-curated one.
+
+Three things about it are easy to get wrong:
+
+1. **It is NOT `/api/messaging/tags`.** The ticket originally specified that.
+   Messaging Topics and Tags are a different feature with their own table, and
+   pointing a blog widget at them is what put *"No tags found. Add tags in the
+   Messaging section."* on a public tenant page.
+2. **The link value is the tag WORD, not a slug.** The blog listing filters
+   with `post.tags?.includes(tagFilter)`, an exact match against the word on
+   the post — so `?tag=Delray Beach Open` matches and `?tag=delray-beach-open`
+   matches nothing. Slugifying gives every link a filter that silently finds no
+   posts, which reads as working navigation.
+3. **`tagSource` is deliberately absent from the module defaults.** Defaults
+   are merged *under* a module's saved settings, so writing `tagSource: "auto"`
+   there would make every page that ever carried a hand-typed list start
+   ignoring it. `resolveTagCloudSource()` does the migration instead: an
+   explicit choice wins, a non-empty list means `manual`, and only an empty
+   module defaults to `auto`. `check:render` caught the first version of this.
+
+**Placeholder tags are a Builder-canvas affordance and must never render on a
+live site.** The live renderer used to fall back to them whenever the list was
+empty, so delraytennis.starcaster.pro/blog advertised *react / typescript /
+design / tutorial* to visitors (2026-09-03). A published page with no tags now
+renders nothing at all — not even the heading.
+
 ## Deployment
 
 `docs/SQL/blog_post_relations_setup.sql` must be run before the feature works
