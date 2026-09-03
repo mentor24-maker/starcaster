@@ -1,12 +1,40 @@
 # Blog Links Manager (`admin-blog-links`)
 
-One page a tenant admin uses to tidy the blog's taxonomy and to hand-pick
-related articles. Ticket 86bbu4qh5, 2026-09-03.
+A **tag manager** for the blog, plus hand-picking related articles. Tickets
+86bbu4qh5 and 86bbue8ux, 2026-09-03.
 
-Left pane: **Categories** and **Tags**, each term with its post count.
-Right pane: the articles filed under whichever term is selected, each with a
-checkbox, and a **Relate Checked** button above them that links the ticked
-articles to each other.
+Top: a table of every tag with its post count, a pencil to rename it across
+every post that carries it, and a cross to remove it from all of them.
+Below: pick a category or tag, and the articles filed under it appear with
+checkboxes and a **Relate Checked** button that links the ticked ones to each
+other.
+
+## It does NOT manage categories, and that is deliberate
+
+There is already a `blog-category-manager` module, and it does the job
+properly — slug, description, colour, sort order. The first version of this
+module shipped a second, worse category list beside it on the same tenant page
+and the operator spotted it immediately (2026-09-03):
+
+> we already have a Category manager. What we need is the Tag manager that
+> follows the same basic format.
+
+So categories appear here only as a way to CHOOSE which articles to relate.
+Creating, renaming and deleting them belongs to the Category manager.
+
+**Tags are the half that never had a manager**, because they are not a table —
+see below.
+
+## Nothing truncates
+
+The first version put the taxonomy in a 320px sidebar with
+`text-overflow: ellipsis`, and on the live Delray page that rendered
+"Tennis Cha…", "Delray Te…", "advanced…", "clay court…". The tag IS the
+content; clipping it makes the panel useless. The table now gives the name a
+`1fr` column and wraps with `overflow-wrap: anywhere` rather than clipping,
+and the article picker is a full-width `<select>` rather than a narrow list.
+
+If you add a column here, do not buy its width from the name.
 
 ## What the blog actually has (read this before extending it)
 
@@ -20,6 +48,87 @@ The three nouns people use for blog taxonomy do not map onto three things:
 
 The module was asked for with "tags, topics, categories". Topics were left out
 deliberately rather than invented — the operator's call, 2026-09-03.
+
+## The table matches the Category manager on purpose
+
+Same bordered container, same uppercase header row, same pencil and cross.
+It has **three** columns rather than four — NAME, POSTS, ACTIONS — because a
+tag genuinely has no slug, description, colour or sort order. Inventing columns
+to match a shape would be decoration.
+
+There is also **no "New Tag" form**, and that is not an omission: a tag cannot
+exist without a post carrying it, so a create box would be a control that
+cannot work. The panel says where tags come from instead. The form that does
+exist is a rename form, and it states before you press it that renaming onto an
+existing tag merges the two.
+
+## The POSTS count opens the posts behind it
+
+Ticket 86bbugbxb, 2026-09-03, operator's words: *"Posts column is very helpful.
+Let's make it even more helpful by making the number of tagged articles
+clickable to spawn a popup window displaying all the posts it is related to,
+each one clickable to that post."*
+
+Clicking the count opens a popup listing that tag's posts. Each row carries the
+**same two controls the Blog Manager's own rows use** — the eye and the pencil
+from `AdminTableIconButton`, in that order. That is deliberate: "open a post"
+already had a convention on the adjacent screen, and a third one would be a
+thing to learn rather than a thing to recognise.
+
+Four decisions worth keeping:
+
+- **A tag with no posts is a plain number, not a button.** A control that opens
+  an empty box is worse than the number it replaced.
+- **It reuses `/api/blog/tags/posts`**, the endpoint the relate picker below
+  already calls. No new endpoint was added for this.
+- **A failed load is its own state, rendered BEFORE the empty case.** If the
+  request drops and the list is simply empty, the popup says "no posts carry
+  this tag" — a confident lie about the data. The error branch is tested ahead
+  of the empty branch, and a test asserts that ordering.
+- **The destinations are settings, defaulted to the scaffold's slugs.** Edit
+  goes to `managerPageUrl` (default `/admin-blog-manager`) with `?id=`, view to
+  `postViewUrl` (default `/blog-post-view`) with `?post=`. Those defaults are
+  what `lib/projectAdminScaffold.js` gives every tenant, so they are a
+  convention rather than a guess — the settings exist for a tenant who renamed
+  the page.
+
+### The count says how many are LIVE, and that is the whole point of it
+
+2026-09-03 (86bbume7b, #577), the same day the popup shipped. The operator saw
+*"junior tennis — 13 posts"* here and **no posts at all** on the public tag
+page, and reported the public page as broken. Both were right: all 13 were
+DRAFTS, and the public feed asks for `status=published`.
+
+`GET /api/blog/tags` therefore returns **`livePostCount` beside `postCount`**,
+and the count column carries a short second line — `none live` in amber, or
+`2 live` — shown **only when it differs from the total**, so a healthy tag grows
+no warning. The popup states it in words above the list: *"0 of 13 published.
+None of these are on the website yet…"*.
+
+Three things this must keep doing:
+
+- **Both counts come out of ONE scan** in `listTags`, folded across spellings
+  the same way. Two passes are two answers, and a live count larger than the
+  total beside it is worse than the single misleading number it replaced
+  (`docs/DOCTRINE.md` §5.32).
+- **The popup counts the posts it LOADED**, not the row's stored number. They
+  are two reads at two moments; summarising from the row reports a figure
+  nobody measured against what is on screen.
+- **A missing `livePostCount` renders nothing, never `0`.** An older server
+  mid-deploy is not a server saying every tag is dead.
+
+**Escape is bound on the document, not on the dialog.** A `onKeyDown` on the
+dialog element only fires when focus is already inside it, and this popup opens
+from a click on the count, which leaves focus on the button *outside* it —
+Escape would silently do nothing. The media manager's tag modal in the same
+file still has the element-bound form; do not copy it.
+
+**It portals to `<body>` through `BuilderBodyPortal`.** That component's own
+docstring gives one reason (the builder stylesheet is scoped under
+`.builder-react-root`, so a raw portal loses every rule). This module has a
+second: it renders inside arbitrary tenant themes, and one of them has already
+blown a control here out to 1056px. A popup left inside the tenant's container
+inherits whatever that theme does to positioned children.
 
 ## Relations are mutual, and that shapes the storage
 
@@ -77,13 +186,14 @@ needs a session, so nobody can enumerate the graph by leaving the filter off.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/blog/tags` | Derived list with post counts |
+| GET | `/api/blog/tags` | Derived list; `postCount` **and `livePostCount`** (published only) |
 | GET | `/api/blog/tags/posts?tag=` | Posts carrying a tag |
 | POST | `/api/blog/tags/rename` | `{from, to}` — merges if `to` exists |
 | DELETE | `/api/blog/tags` | `{tag}` — removes it from every post |
 | GET | `/api/blog/relations` | Whole project. Session required. |
 | GET | `/api/blog/relations?postId=` | One post. **Open to visitors.** |
-| POST | `/api/blog/relations` | `{postIds:[…]}` — needs at least two |
+| POST | `/api/blog/relations` | `{postIds:[…]}` — relates a SET to each other; only ever adds |
+| PUT | `/api/blog/relations` | `{postId, relatedIds:[…]}` — replaces ONE post's whole set; the post editor's write |
 | DELETE | `/api/blog/relations` | `{postIdA, postIdB}` — order-independent |
 
 ## Traps this feature already hit
@@ -92,6 +202,8 @@ Every one of these passed typecheck, both test suites, `check_conventions`,
 `check:panels`, `check:render` and `check:shots`. They were found by opening
 the thing in a browser.
 
+0. **A 320px sidebar with an ellipsis.** See "Nothing truncates" above — the
+   defect that produced the second ticket. Every gate was green on it.
 1. **`getCrmProjectHeaders()` returns a fresh object per render.** Feeding it
    to a `useCallback` dependency list makes every callback new, which refires
    the load effect, which sets state, which renders again — an unbounded
@@ -126,6 +238,64 @@ categories yet", which is why it went unnoticed.
 
 Each table now names a column it actually has (`PROBE_COLUMN`), pinned by
 `scripts/builder/blogStoreTableProbe.test.js`.
+
+## Relating posts from the post EDITOR, not just from here
+
+2026-09-03 (86bbufu83, #568). This manager can only relate articles filed under
+one tag, which is the wrong shape when the question is *"what goes with this
+post?"*. The blog post editor (`blog-post-create`, in both Create and Edit mode)
+now carries a **Related Posts** control inside a collapsible container it shares
+with Categories and Tags, between Excerpt and Body.
+
+It writes through **`PUT /api/blog/relations`**, which is a different operation
+from this manager's `POST` and neither substitutes for the other:
+
+| | `POST` (this manager) | `PUT` (the post editor) |
+|---|---|---|
+| means | relate a checked SET to each other | replace ONE post's whole set |
+| removes | never | yes — unchecking is how you unrelate |
+| touches | every pair the set implies | only pairs involving that post |
+
+`setRelatedPosts` in `lib/blogPostRelationsStore.js` diffs against what is
+stored: pairs added for newly checked posts, removed for unchecked ones, and a
+pair between two OTHER posts left strictly alone — deleting somebody else's
+relation while saving an unrelated article is a loss nobody would ever report.
+
+**`isMissingTable()` in that store used to match the bare word `relation`.** The
+table is called `blog_post_relations`, so every refusal about it read as "the
+table is absent" — landmine 15's exact shape, in the one store where the word is
+guaranteed to appear. It now matches only `does not exist`, `schema cache` and
+`undefined table`.
+
+## The public Tag Cloud reads this same list
+
+`blog-tag-cloud` has a **Tags From** setting: **Blog tags (automatic)**, the
+default, reads `GET /api/blog/tags` — the same derived list with post counts
+this manager shows — or **Custom list** for a hand-curated one.
+
+Three things about it are easy to get wrong:
+
+1. **It is NOT `/api/messaging/tags`.** The ticket originally specified that.
+   Messaging Topics and Tags are a different feature with their own table, and
+   pointing a blog widget at them is what put *"No tags found. Add tags in the
+   Messaging section."* on a public tenant page.
+2. **The link value is the tag WORD, not a slug.** The blog listing filters
+   with `post.tags?.includes(tagFilter)`, an exact match against the word on
+   the post — so `?tag=Delray Beach Open` matches and `?tag=delray-beach-open`
+   matches nothing. Slugifying gives every link a filter that silently finds no
+   posts, which reads as working navigation.
+3. **`tagSource` is deliberately absent from the module defaults.** Defaults
+   are merged *under* a module's saved settings, so writing `tagSource: "auto"`
+   there would make every page that ever carried a hand-typed list start
+   ignoring it. `resolveTagCloudSource()` does the migration instead: an
+   explicit choice wins, a non-empty list means `manual`, and only an empty
+   module defaults to `auto`. `check:render` caught the first version of this.
+
+**Placeholder tags are a Builder-canvas affordance and must never render on a
+live site.** The live renderer used to fall back to them whenever the list was
+empty, so delraytennis.starcaster.pro/blog advertised *react / typescript /
+design / tutorial* to visitors (2026-09-03). A published page with no tags now
+renders nothing at all — not even the heading.
 
 ## Deployment
 

@@ -239,6 +239,54 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     was frozen in production from 2026-06-30 until 2026-09-02 that way, with
     every save reporting success. A fallback path is for the store being
     ABSENT, never for it refusing. `docs/DOCTRINE.md` §5.21.
+16. **`POST /api/builder/publish` publishes EVERYTHING pending unless you name
+    the pages**, newest draft first. Any caller that means "put *these* pages
+    live" must send `pageIds`, or a routine edit puts every unrelated
+    half-finished draft in the project in front of visitors. An **empty**
+    `pageIds` means nothing, not everything — `if (pageIds.length)` reads it as
+    "no filter" and publishes the site; the rule is one tested function
+    (`selectPagesToPublish`). And reach the route through `builderAdminFetch`
+    (`/api/admin/publish`): an unmapped path falls through to a plain `fetch`
+    with neither the prefix nor the project-scope headers, and that 404 reads
+    as a missing feature. `docs/SAVED_SECTIONS.md` §2a.
+17. **A verdict evaluated per COPY must not be reported per PAGE.** A page can
+    hold several copies of one saved section, so `.some(drifted)` and
+    `.every(drifted)` are different questions and neither is what "drifted
+    pages" means on its own. Two 2026-09-03 bugs were that one slip: a dialog
+    named a page as left alone and then published it, and a save reported an
+    edit as overwritten while it sat untouched. No test could catch either —
+    every fixture gave each page one copy. `docs/DOCTRINE.md` §5.30.
+
+16. **A module's empty-state text renders on the CLIENT'S LIVE SITE.** "Set a
+    Form ID in module settings", "Add tags in the Messaging section", "Add posts
+    in module settings" — all written for whoever is building the page, all
+    shipping to visitors who have no module settings and nothing to act on. Six
+    were live on a client's blog on 2026-09-03, and two of those had been fixed
+    hours earlier the same day and came straight back.
+    Any builder-facing note goes inside `<BuilderOnlyNote liveSite={liveSite}>`,
+    which renders null on a published page; **`npm run check:builder-notes`**
+    blocks the commit and the build otherwise. And where the note is ALL the
+    module would render, return `null` on a live site — a lone heading over
+    empty space is the same defect, and is what "it flashes and disappears"
+    looks like. `docs/DOCTRINE.md` §5.29.
+
+17. **An empty screen that does not say WHY reads as a broken one.** Three
+    "bugs" reported in one day were correct code with an unexplained empty
+    state: a tag page whose 13 posts were all drafts, a related-posts module
+    matching on categories no post has, a filter naming a tag nothing carries.
+    The operator cannot read the database, so *empty* and *broken* are the same
+    picture. Name the value and the cause — "No posts tagged 'junior tennis'",
+    "this post is not in any category" — and where two screens count the same
+    thing differently, each says what it counts. `docs/DOCTRINE.md` §5.31.
+
+18. **No blog post anywhere has a category** (true as of 2026-09-03).
+    `blog_post_categories` holds 0 rows across every project, because the post
+    editor's Categories field never saved — it holds slugs, the API takes ids,
+    and the payload sent a string where `Array.isArray` was required. Fixed
+    going forward in #568; no historic post has one. So anything matching posts
+    BY CATEGORY finds nothing on every site — which is what made the
+    "You Might Also Like" module, whose default `matchBy` is `categories`,
+    render nothing everywhere. Match by **tags** works.
 
 ## Working locally
 
@@ -745,11 +793,15 @@ Before reporting a task complete, run and state the results of:
 3. The rebuild command for every generated artifact your change affects
 4. `node scripts/check_conventions.cjs` (also runs at pre-commit;
    `SKIP_CONVENTIONS=1` bypasses — if you bypass, say so and why)
-5. `npm run check:syntax` if you touched `public/js/`, `public/shared/`,
+5. `npm run check:builder-notes` if you touched a module's empty state or any
+   text a module renders — it blocks in CI and pre-commit, but run it directly
+   when you are working on one, because the failure it catches ships to a
+   client's public site (landmine 16).
+6. `npm run check:syntax` if you touched `public/js/`, `public/shared/`,
    `scripts/` or `lib/` — a parse gate over every hand-written
    `.js`/`.mjs`/`.cjs` in those trees (also runs at pre-commit and gates CI).
    Run it after resolving ANY merge conflict by keeping both sides.
-6. **`npm run check:panels` if you touched ANY settings panel or its CSS**,
+7. **`npm run check:panels` if you touched ANY settings panel or its CSS**,
    and it is not optional because CI cannot run it — CI has no browser, so
    this check only ever runs if a person runs it. A staggered panel reached
    the operator on 2026-08-12 and again on 2026-08-13; both times the code
@@ -763,7 +815,7 @@ Before reporting a task complete, run and state the results of:
    outright rather than passing silently, which is the specific hole that
    let both of those panels through.
 
-7. **`npm run check:render` if you changed what a module RENDERS** — its
+8. **`npm run check:render` if you changed what a module RENDERS** — its
    markup, its animation, or the CSS behind either. It drives a real browser
    over `builder-preview.html` and needs **no database, no login and no
    fixture**, so it costs about 30 seconds:
@@ -779,7 +831,7 @@ Before reporting a task complete, run and state the results of:
    two assertions that could not fail, including one where the check was
    comparing a setting to itself.
 
-8. **`npm run check:shots` on every task, not only the visual-looking ones.**
+9. **`npm run check:shots` on every task, not only the visual-looking ones.**
    It builds `main`'s code and this branch's code, photographs six pages
    through both, and attaches every pair that differs to the ClickUp ticket —
    so a change to what a page renders reaches the operator as pictures rather
@@ -803,7 +855,7 @@ What it and `check:render` do **and do not** cover is `docs/DOCTRINE.md`
 §5.14 — read that before treating a green run as proof a page looks right.
 Neither of them can tell a bounce from a wobble.
 
-9. **Say where you looked at it.** Not a command — a sentence naming the
+10. **Say where you looked at it.** Not a command — a sentence naming the
    screen you opened and what you saw. Every gate above can pass on a change
    that is visibly broken: nothing here tests CSS, and the panel bugs of
    2026-08-12, 08-13 and 08-16 all reached the operator green. The local app

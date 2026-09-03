@@ -8,7 +8,7 @@ import {
 } from "./builder-settings-schema";
 import { BuilderModuleField } from "./builder-module-field";
 import type { BuilderThemePalette } from "./builder-theme-color-field";
-import { parseCloudTags, serializeCloudTags, type CloudTag } from "@/lib/blog-tag-cloud";
+import { parseCloudTags, resolveTagCloudSource, serializeCloudTags, type CloudTag } from "@/lib/blog-tag-cloud";
 
 /**
  * Re-exported so the Builder canvas card keeps its existing import. The
@@ -109,6 +109,32 @@ export function BuilderBlogTagCloudModuleSettings({
               rendersVia: "BlogTagCloudPreview"
             }
           ],
+          /*
+           * D9 rung 1, and it outranks the destination below: this decides
+           * where the module's content COMES FROM, which is the largest blast
+           * radius on the panel.
+           *
+           * "Blog tags" reads the tenant's real tags from `/api/blog/tags` —
+           * the derived list the Blog Links manager shows, with post counts.
+           * Deliberately NOT `/api/messaging/tags`: Messaging Topics and Tags
+           * are a different feature, and pointing a blog widget at them is
+           * what put "No tags found. Add tags in the Messaging section." on a
+           * public tenant page.
+           */
+          [
+            {
+              key: "tagSource",
+              label: "Tags From",
+              width: "select-md",
+              control: "select",
+              options: [
+                { value: "auto", label: "Blog tags (automatic)" },
+                { value: "manual", label: "Custom list" }
+              ],
+              fallback: "auto",
+              rendersVia: "BlogTagCloudPreview"
+            }
+          ],
           // D9 rung 1: a destination changes what the whole module does, so it
           // leads the Content axis — ahead of the labels it decorates.
           [
@@ -161,6 +187,12 @@ export function BuilderBlogTagCloudModuleSettings({
               control: "custom",
               bare: true,
               rendersVia: "BlogTagCloudPreview",
+              /*
+               * Hidden under "Blog tags", never cleared. The typed list stays
+               * in `settings.tags` exactly as it was, so switching to Blog
+               * tags and back loses nothing an operator curated.
+               */
+              visibleWhen: (settings) => resolveTagCloudSource(settings) === "manual",
               render: () => (
                 /* L6a item manager on its own lattice. It was
                    `.builder-slider-item-card` holding `label.field` boxes —

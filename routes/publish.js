@@ -57,11 +57,19 @@ async function handle(req, res, pathname, method) {
   }
 
   // POST /api/builder/publish — build one batch, report what remains.
+  //
+  // `pageIds`, when given, narrows the run to those pages. That is what a
+  // "Save & Publish" on a saved section sends: the pages its fan-out actually
+  // rewrote. Omitting it publishes everything pending, which is what the
+  // Publish panel wants and what every other caller must NOT get by accident.
+  // An empty array is honoured as "nothing" rather than falling back to all —
+  // see publishPages.
   if (pathname === '/api/builder/publish' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const result = await publishPages(projectId, {
       buildId: body?.buildId,
       limit: body?.limit,
+      pageIds: Array.isArray(body?.pageIds) ? body.pageIds : undefined,
     });
     if (!result.ok) {
       return sendErr(res, result.status || 500, result.error || 'Could not publish', {

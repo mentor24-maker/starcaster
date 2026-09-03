@@ -1296,6 +1296,277 @@ export const RENDER_CONTRACTS = [
     },
   },
 
+  /*
+   * THE CELL'S OWN TINT SCREEN — two contracts, because it has two ways to be
+   * wrong and only one of them is visible in the markup.
+   *
+   * The React tests beside this prove the layer MOUNTS. They cannot prove it
+   * paints, and they cannot prove it paints in the right ORDER, because a
+   * vitest render has no stylesheet at all: every rule the arrangement rests
+   * on lives in `_builder-react-overrides.css` and is invisible to them. That
+   * is the Tumbleweed shape exactly — a class name is not a rendering — so the
+   * order is asserted here, in a real browser, against the built stylesheet.
+   */
+  {
+    id: 'cell-overlay-tint-actually-paints',
+    why:
+      'A row could be tinted; ONE COLUMN of it could not, so a two-column band with a photo in each ' +
+      'column had no way to darken only one of them. This is the contract that the new per-cell screen ' +
+      'reaches the page as a real painted layer rather than a class nothing styles.',
+    section: {
+      layout: 'two-column',
+      cellBackgrounds: {
+        left: { mode: 'color', color: '#8899aa' },
+        right: { mode: 'color', color: '#8899aa' },
+      },
+      cellOverlayScreens: {
+        left: { background: { mode: 'color', color: '#101820' }, opacity: 50 },
+      },
+      modules: [
+        { type: 'text', column: 'left', text: '<p>Readable</p>', settings: {} },
+        { type: 'text', column: 'right', text: '<p>Untouched</p>', settings: {} },
+      ],
+    },
+    selector: '.builder-preview-cell-overlay-screen',
+    read: ['position', 'opacity', 'backgroundColor'],
+    expect(sample) {
+      if (sample.styles.position !== 'absolute') {
+        return `the cell tint is \`position: ${sample.styles.position}\` — it is sitting in the flow ` +
+          'as a coloured block above the content instead of covering the cell.';
+      }
+      const opacity = Number(sample.styles.opacity);
+      if (!Number.isFinite(opacity) || opacity >= 1) {
+        return `the cell tint rendered at opacity ${sample.styles.opacity} — a fully opaque screen hides ` +
+          'the very photograph it exists to make text readable over.';
+      }
+      if (opacity <= 0) {
+        return 'the cell tint rendered at opacity 0 — it is in the DOM and paints nothing, which is ' +
+          'indistinguishable from the setting not working at all.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-overlay-stays-behind-the-words',
+    why:
+      'The one outcome this setting must never produce is a tint OVER the text. The reason to dim a ' +
+      'photograph is to make the words on it readable, so a screen that covers them inverts the whole ' +
+      'feature — and it would look completely fine in the markup, because the ordering lives entirely ' +
+      'in three CSS rules. Read from the browser, against the built stylesheet, for that reason.',
+    section: {
+      layout: 'two-column',
+      cellBackgrounds: {
+        left: { mode: 'color', color: '#8899aa' },
+        right: { mode: 'color', color: '#8899aa' },
+      },
+      cellOverlayScreens: {
+        left: { background: { mode: 'color', color: '#101820' }, opacity: 50 },
+      },
+      modules: [
+        { type: 'text', column: 'left', text: '<p>Readable</p>', settings: {} },
+        { type: 'text', column: 'right', text: '<p>Untouched</p>', settings: {} },
+      ],
+    },
+    selector: '.builder-preview-column-layered',
+    read: ['position'],
+    /*
+     * `series` is the harness's only multi-selector reader, and the question
+     * here IS a comparison between several elements in one frame — so one
+     * frame is taken and judged. Nothing about this behaviour changes over
+     * time.
+     */
+    series: {
+      selectors: {
+        screen: '.builder-preview-column-layered > .builder-preview-cell-overlay-screen',
+        words: '.builder-preview-column-layered > .builder-preview-module',
+        plainScreen: '.builder-preview-column:not(.builder-preview-column-layered) > .builder-preview-cell-overlay-screen',
+        plainWords: '.builder-preview-column:not(.builder-preview-column-layered) > .builder-preview-module',
+      },
+      read: ['zIndex'],
+      count: 1,
+      everyMs: 0,
+    },
+    expect(sample) {
+      /*
+       * THIS CONTRACT DELIBERATELY DOES NOT ASSERT `isolation: isolate`, AND
+       * THAT IS A CORRECTION RATHER THAN A GAP.
+       *
+       * It used to, on the argument that a cell with no stacking context of
+       * its own would have its rungs "numbered against some ancestor instead
+       * of against each other". Half of that is true and none of it is
+       * load-bearing: the screen and the modules land in the SAME ancestor
+       * whichever one it is, so 0-below-1 holds unconditionally. Meanwhile
+       * isolating cost a real regression — a floating image is supposed to
+       * hang out of its column, and a stacking context on the cell clamped it
+       * so the next column painted over the overhang (round 2 of 86bbqb0ac,
+       * measured with `elementFromPoint`; every z-index in the scene was
+       * unchanged, which is exactly why no contract here could see it).
+       *
+       * The lesson is the assertion shape, not the property: assert the
+       * OUTCOME the operator can see, and let the implementation pick its own
+       * mechanism. The outcomes are below, and the decor half of them belongs
+       * to `cell-overlay-leaves-overhanging-decor-over-the-next-column`.
+       */
+      const frame = sample.series?.[0];
+      if (!frame) {
+        return 'no frame was sampled — the contract measured nothing, which cannot verify anything.';
+      }
+      if (!frame.screen) {
+        return 'the tint layer is not a direct child of the tinted cell — the stylesheet rungs are ' +
+          'written as direct-child selectors, so they no longer reach it.';
+      }
+      if (!frame.words) {
+        return 'no module rendered inside the tinted cell, so the thing this contract exists to ' +
+          'protect — the operator\'s text — was never on the page to be measured.';
+      }
+
+      const screenZ = Number(frame.screen.zIndex);
+      const wordsZ = Number(frame.words.zIndex);
+      /*
+       * Both read as NUMBERS before they are compared. `auto` is what an
+       * unnumbered element reports, and `Number('auto')` is NaN — every
+       * comparison against NaN is false, so a missing rule would have slipped
+       * through whichever direction the assertion was written in.
+       */
+      if (!Number.isFinite(screenZ) || !Number.isFinite(wordsZ)) {
+        return `the stacking rungs are not both set — the screen reads z-index ` +
+          `\`${frame.screen.zIndex}\` and the text reads \`${frame.words.zIndex}\`. An unnumbered ` +
+          'in-flow sibling paints UNDER a positioned z-index: 1, which puts the tint over the words.';
+      }
+      if (!(screenZ < wordsZ)) {
+        return `the tint is at z-index ${screenZ} and the text at ${wordsZ} — the screen is painting ` +
+          'ON TOP of the operator\'s words. The reason to dim a photograph is to make the text on it ' +
+          'readable; this does the opposite.';
+      }
+
+      /*
+       * And the cell BESIDE it is untouched. This is the ticket in one line —
+       * before it, tinting one column of a row was impossible — and it is
+       * asserted as TWO absences, so a rule that leaked onto every cell is
+       * caught rather than read as success.
+       *
+       * Both halves are needed. A screen mounted on the untinted cell would be
+       * a visible tint the operator never asked for; a content rung applied
+       * there would be invisible today and would re-stack that cell's decor
+       * tomorrow, which is precisely the defect this feature already shipped
+       * twice.
+       */
+      if (frame.plainScreen) {
+        return 'the cell with NO overlay has a tint screen mounted in it too — the layer is being ' +
+          'painted on every cell instead of only the one the operator tinted, which is the opposite ' +
+          'of what this whole ticket is for.';
+      }
+      if (frame.plainWords && frame.plainWords.zIndex !== 'auto') {
+        return `a module in the UNTINTED cell reads z-index \`${frame.plainWords.zIndex}\` — the ` +
+          'content rung is leaking past its `.builder-preview-column-layered` scope onto every cell. ' +
+          'Nothing looks wrong today; it re-stacks floating decor on pages that have no overlay at ' +
+          'all, which is the same defect this feature shipped with twice.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-overlay-leaves-floating-decor-on-its-own-rung',
+    why:
+      'The rung that keeps the tint behind the words is written as `every direct module child of a ' +
+      'tinted cell`, and a floating image IS a direct module child. It is not content, though — it is ' +
+      'decor that rides at z-index 40, ABOVE the words, and it takes that number from the stylesheet ' +
+      'rather than an inline style whenever its trigger is not `button`. So a selector written for ' +
+      'text quietly re-numbers somebody\'s floating image down to the same rung as the paragraph ' +
+      'beside it, where paint order falls back to DOM order. Nothing errors and the image does not ' +
+      'move; it just stops being reliably in front. The column here is MIXED on purpose — the ' +
+      'renderer skips its cell-tint work entirely for a column that is ALL decor, so an all-decor ' +
+      'scene would pass this while the real case failed.',
+    section: {
+      layout: 'two-column',
+      cellBackgrounds: {
+        left: { mode: 'color', color: '#8899aa' },
+      },
+      cellOverlayScreens: {
+        left: { background: { mode: 'color', color: '#101820' }, opacity: 50 },
+      },
+      modules: [
+        {
+          type: 'floating-image',
+          column: 'left',
+          settings: { ...PICTURE, trigger: 'on-load' },
+        },
+        { type: 'text', column: 'left', text: '<p>Readable</p>', settings: {} },
+      ],
+    },
+    selector: '.builder-preview-column-layered',
+    // `position`, not `isolation`: the cell deliberately forms no stacking
+    // context (see the sibling contract's note), and reading a property no
+    // assertion here uses would imply it still mattered.
+    read: ['position'],
+    series: {
+      selectors: {
+        screen: '.builder-preview-column-layered > .builder-preview-cell-overlay-screen',
+        words: '.builder-preview-column-layered > .builder-preview-module:not(.builder-preview-module-overlay-flow):not(.builder-preview-module-overlay-slot)',
+        decor: '.builder-preview-column-layered > .builder-preview-module-overlay-flow',
+      },
+      read: ['zIndex'],
+      count: 1,
+      everyMs: 0,
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame) {
+        return 'no frame was sampled — the contract measured nothing, which cannot verify anything.';
+      }
+      if (!frame.decor) {
+        return 'no floating-image module rendered inside the tinted cell, so the element this contract ' +
+          'exists to protect was never on the page. A `floating-image` whose trigger is not `button` ' +
+          'carries the `builder-preview-module-overlay-flow` class; if that stopped being true, this ' +
+          'contract is measuring the wrong element and cannot fail for the right reason.';
+      }
+      if (!frame.words) {
+        return 'no ordinary module rendered beside the decor, so the column is not MIXED — and the ' +
+          'renderer skips the cell tint entirely on an all-decor column, which is why this contract ' +
+          'would then pass without testing anything.';
+      }
+      if (!frame.screen) {
+        return 'the tint layer is not a direct child of the tinted cell, so the cell overlay is not ' +
+          'actually on this scene and nothing here is being exercised.';
+      }
+
+      const decorZ = Number(frame.decor.zIndex);
+      const wordsZ = Number(frame.words.zIndex);
+      const screenZ = Number(frame.screen.zIndex);
+
+      /*
+       * Read as NUMBERS before comparing, for the same reason the contract
+       * above says so at length: `auto` is what an unnumbered element reports,
+       * `Number('auto')` is NaN, and every comparison against NaN is false —
+       * so a missing rule slips through whichever way the assertion is written.
+       */
+      if (!Number.isFinite(decorZ)) {
+        return `the floating image reads z-index \`${frame.decor.zIndex}\` — it is unnumbered, so it ` +
+          'paints in DOM order against the words instead of above them.';
+      }
+      if (!Number.isFinite(wordsZ) || !Number.isFinite(screenZ)) {
+        return `the cell's own rungs are not both set — the tint reads \`${frame.screen.zIndex}\` and ` +
+          `the text reads \`${frame.words.zIndex}\`, so this scene cannot say where the decor sits ` +
+          'relative to them.';
+      }
+
+      if (!(decorZ > wordsZ)) {
+        return `the floating image is at z-index ${decorZ} and the ordinary text beside it at ` +
+          `${wordsZ} — setting a tint on this cell pulled the decor DOWN onto the content rung. It ` +
+          'still paints (its position is an inline style), but it is no longer reliably in front: at ' +
+          'equal rungs the browser falls back to DOM order, so whether the operator\'s floating image ' +
+          'is visible now depends on where it happens to sit in the module list.';
+      }
+      if (!(decorZ > screenZ)) {
+        return `the floating image is at z-index ${decorZ} and the cell tint at ${screenZ} — the tint ` +
+          'is painting over decor that is supposed to float above the whole cell.';
+      }
+      return null;
+    },
+  },
+
   {
     id: 'row-overlay-blend-mode-reaches-the-browser',
     why:
@@ -1352,6 +1623,112 @@ export const RENDER_CONTRACTS = [
       if (sample.styles.mixBlendMode !== 'normal') {
         return `an overlay with no blend mode saved computed \`mix-blend-mode: ${sample.styles.mixBlendMode}\` ` +
           '— something is writing a blend mode onto sections that never asked for one.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-overlay-leaves-overhanging-decor-over-the-next-column',
+    why:
+      'A floating image is MEANT to hang out of its column — `horizontalOffset` is the control that ' +
+      'pushes it there — and until the cell overlay existed its `z-index: 40` was resolved in the ' +
+      'SECTION\'s stacking context, where it beat the column next door. Giving the cell a stacking ' +
+      'context of its own resolved that 40 INSIDE the cell instead, and the cell is `z-index: auto`, ' +
+      'so the neighbouring column painted straight over the overhang: switching on a tint quietly put ' +
+      'somebody\'s decor behind the next column. ' +
+      'THIS IS THE CONTRACT NO Z-INDEX READING COULD HAVE REPLACED, and that is the point of it. In ' +
+      'the run that found this, every z-index in the scene was identical before and after, and the ' +
+      'image\'s rect was identical too — only the answer to "what is on top" moved. The sibling ' +
+      'contract `cell-overlay-leaves-floating-decor-on-its-own-rung` is honest and it cannot see this, ' +
+      'because both its selectors are scoped INSIDE the tinted cell. This one probes across the ' +
+      'boundary.',
+    section: {
+      layout: 'two-column',
+      /*
+       * A fill on the RIGHT cell, and none on the left. The right fill is what
+       * gives the probe something solid to hit when the decor loses; a bare
+       * column would still answer, but a coloured one makes the same failure
+       * visible to a person in a screenshot rather than only to this script.
+       */
+      cellBackgrounds: {
+        right: { mode: 'color', color: '#cc0000' },
+      },
+      cellOverlayScreens: {
+        left: { background: { mode: 'color', color: '#101820' }, opacity: 50 },
+      },
+      modules: [
+        /*
+         * `horizontalOffset: 200` is not a round number for looks — it is what
+         * pushes the image far enough right to CROSS the gutter at this
+         * harness's 1440px viewport. At the default 0 it sits wholly inside
+         * its own column, the two boxes never overlap, and the assertion below
+         * has nothing to measure. `expect` rejects a non-positive overlap for
+         * exactly that reason: a scene that stopped overlapping would
+         * otherwise pass forever while testing nothing.
+         *
+         * The trigger is `on-load` on purpose, matching the sibling contract:
+         * a `button`-trigger floating image carries `zIndex: 40` as an INLINE
+         * style and is immune to every stylesheet rung, so a scene built on it
+         * could not fail.
+         */
+        {
+          type: 'floating-image',
+          column: 'left',
+          settings: { ...PICTURE, size: '60', trigger: 'on-load', horizontalOffset: '200' },
+        },
+        { type: 'text', column: 'left', text: '<p>Readable</p>', settings: {} },
+        { type: 'text', column: 'right', text: '<p>Untouched</p>', settings: {} },
+      ],
+    },
+    selector: '.builder-preview-column-layered',
+    read: ['position'],
+    probes: {
+      overhang: {
+        subject: '.builder-preview-module-overlay-flow .builder-preview-image-shell',
+        against: '.builder-preview-column:not(.builder-preview-column-layered)',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.overhang;
+      if (!probe) {
+        return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      }
+      if (probe.missing) {
+        return `the probe could not find \`${probe.missing}\` on the page, so the elements this ` +
+          'contract compares were never both rendered. A `floating-image` whose trigger is not ' +
+          '`button` mounts inside `.builder-preview-module-overlay-flow`; if that stopped being true, ' +
+          'this contract is aiming at the wrong element and can no longer fail for the right reason.';
+      }
+      /*
+       * THE UNFALSIFIABILITY GUARD, and it is the first thing checked rather
+       * than the last. If the image no longer crosses into the next column —
+       * a changed viewport, a changed default size, a changed gutter — then
+       * the probe point lands where neither element is, whatever it hits is
+       * meaningless, and a green run here would mean nothing at all. Three of
+       * the assertions on this ticket turned out to be unfalsifiable; this is
+       * the shape they all had.
+       */
+      if (!(probe.overlap > 0)) {
+        return 'the floating image does not overhang into the next column at all in this scene ' +
+          `(image ${probe.subjectBox.left}-${probe.subjectBox.right}, next column starts at ` +
+          `${probe.againstBox.left}), so there is no overlap to probe and this contract cannot say ` +
+          'anything. Push `horizontalOffset` until it crosses the gutter again — a scene that does ' +
+          'not overlap passes forever while testing nothing.';
+      }
+      if (probe.onAgainst && !probe.onSubject) {
+        return `where the floating image hangs into the next column, the browser reports \`` +
+          `${probe.hit}\` on top at ${probe.point.x},${probe.point.y} — the NEXT COLUMN is painting ` +
+          'over the decor. The image has not moved and its z-index has not changed; setting a tint on ' +
+          'this cell shut the decor inside the cell\'s stacking context, where its 40 no longer ' +
+          'outranks the column beside it. A floating image is supposed to hang out of its column — ' +
+          'that is what `horizontalOffset` is for — so this makes the overlay setting silently ' +
+          're-stack decor the operator arranged before it existed.';
+      }
+      if (!probe.onSubject) {
+        return `neither the floating image nor the next column is on top at ` +
+          `${probe.point.x},${probe.point.y} — the browser reports \`${probe.hit}\`. Something ` +
+          'else is covering the overlap, so this scene is not measuring the thing it was built for.';
       }
       return null;
     },

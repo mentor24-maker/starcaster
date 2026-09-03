@@ -63,6 +63,7 @@ import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-fi
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { MerchModuleEditor } from "./builder-merch-module-editor";
 import { BuilderCodeEmbed } from "./builder-code-embed";
+import { normalizeEmbedActivationMode } from "@/lib/builder-code-embed-activation";
 import { BuilderFloatingImageModuleSettings } from "./builder-floating-image-module-settings";
 import { BuilderSpeechBubbleModuleSettings } from "./builder-speech-bubble-module-settings";
 import { BuilderReminderModuleSettings } from "./builder-reminder-module-settings";
@@ -2333,56 +2334,48 @@ function renderModulePreview(module: BuilderTemplateModule) {
   }
 
   if (module.type === "admin-blog-links") {
-    const showTitle    = module.settings.showTitle !== "false";
-    const title        = module.settings.panelTitle || "Blog Links";
-    const showRelate   = module.settings.showRelate !== "false";
-    const relateLabel  = module.settings.relateButtonLabel || "Relate Checked";
-    const showCats     = module.settings.showCategories !== "false";
-    const showTags     = module.settings.showTags !== "false";
-    const termRow = (label: string, count: string, active = false) => (
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 7px", borderRadius: 5, fontSize: 11, background: active ? "#e7f1fa" : "transparent", color: active ? "#0f4f8f" : "#4d6a83", fontWeight: active ? 700 : 500 }}>
-        <span>{label}</span>
-        <span style={{ fontSize: 10, color: "#8ba9be" }}>{count}</span>
-      </div>
-    );
-    const articleRow = (label: string, checked: boolean) => (
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0", fontSize: 11, color: "#4d6a83" }}>
-        <span style={{ width: 11, height: 11, flex: "0 0 auto", borderRadius: 3, border: "1px solid #9dbdd4", background: checked ? "#0f4f8f" : "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 8, lineHeight: 1 }}>{checked ? "✓" : ""}</span>
-        <span>{label}</span>
+    const showTitle   = module.settings.showTitle !== "false";
+    const title       = module.settings.panelTitle || "Blog Links";
+    const showRelate  = module.settings.showRelate !== "false";
+    const relateLabel = module.settings.relateButtonLabel || "Relate Checked";
+    const showTags    = module.settings.showTags !== "false";
+    const headCell: React.CSSProperties = { fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#8ba9be" };
+    const tagRow = (name: string, count: string, last = false) => (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 40px 44px", gap: "0 10px", alignItems: "center", padding: "5px 9px", borderBottom: last ? undefined : "1px solid #f0f4f8", fontSize: 11 }}>
+        <span style={{ fontWeight: 600, color: "#18324a" }}>{name}</span>
+        <span style={{ color: "#94a3b8", textAlign: "right" }}>{count}</span>
+        <span style={{ textAlign: "right", color: "#0f4f8f", letterSpacing: 3 }}>✎✕</span>
       </div>
     );
     return (
       <div className="builder-module-preview-copy">
         {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
-        <div style={{ display: "flex", gap: 10, alignItems: "stretch", border: "1px solid #c9dcea", borderRadius: 7, background: "#fff", padding: 10 }}>
-          <div style={{ flex: "0 0 40%", minWidth: 0, borderRight: "1px solid #e3eef6", paddingRight: 10 }}>
-            {showCats && (
-              <>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#8ba9be", marginBottom: 3 }}>Categories</div>
-                {termRow("Immigration", "4", true)}
-                {termRow("Criminal Law", "7")}
-              </>
-            )}
-            {showTags && (
-              <>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#8ba9be", margin: "7px 0 3px" }}>Tags</div>
-                {termRow("visas", "3")}
-                {termRow("asylum", "2")}
-              </>
-            )}
-            {!showCats && !showTags && (
-              <div style={{ fontSize: 11, color: "#8ba9be", fontStyle: "italic" }}>No taxonomies shown</div>
-            )}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {showRelate && (
-              <div style={{ display: "inline-block", padding: "4px 10px", background: "#0f4f8f", color: "#fff", borderRadius: 5, fontSize: 11, fontWeight: 700, marginBottom: 6, cursor: "default" }}>{relateLabel}</div>
-            )}
-            {articleRow("Applying for asylum in 2026", true)}
-            {articleRow("What a U-visa actually covers", true)}
-            {articleRow("Family petitions, step by step", false)}
-          </div>
-        </div>
+        {showTags && (
+          <>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#18324a", marginBottom: 4 }}>Tags</div>
+            <div style={{ border: "1px solid #c9dcea", borderRadius: 7, overflow: "hidden", background: "#fff", marginBottom: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 40px 44px", gap: "0 10px", padding: "5px 9px", background: "#f8fafc", borderBottom: "1px solid #e4ecf2" }}>
+                <span style={headCell}>Name</span>
+                <span style={{ ...headCell, textAlign: "right" }}>Posts</span>
+                <span style={{ ...headCell, textAlign: "right" }}>Actions</span>
+              </div>
+              {tagRow("Delray Beach Open", "3")}
+              {tagRow("advanced tennis tips", "2")}
+              {tagRow("clay court strategy", "1", true)}
+            </div>
+          </>
+        )}
+        {showRelate && (
+          <>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#18324a", marginBottom: 4 }}>Related Articles</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ flex: "1 1 auto", minWidth: 0, padding: "4px 8px", border: "1px solid #c9dcea", borderRadius: 5, background: "#fff", fontSize: 11, color: "#8ba9be" }}>
+                Choose a category or tag…
+              </div>
+              <div style={{ flex: "0 0 auto", padding: "4px 10px", background: "#0f4f8f", color: "#fff", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "default" }}>{relateLabel}</div>
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -4099,6 +4092,22 @@ export function BuilderModuleCard({
                   }
                   placeholder="Optional internal label"
                 />
+              </label>
+              <label className="field">
+                <span>Loading</span>
+                <select
+                  value={normalizeEmbedActivationMode(module.settings.embedActivation)}
+                  onChange={(event) =>
+                    onUpdateModule((current) => ({
+                      ...current,
+                      settings: { ...current.settings, embedActivation: event.target.value }
+                    }))
+                  }
+                >
+                  <option value="auto">Automatic — charts wait for a click, everything else loads</option>
+                  <option value="immediate">Load right away</option>
+                  <option value="click">Wait for a click before loading</option>
+                </select>
               </label>
               <label className="field builder-code-editor-field">
                 <span>Embed code / snippet</span>

@@ -12,12 +12,24 @@ import {
 import { appendRichTextImageToHtml } from "@/lib/rich-text-image";
 import { appApi } from "@/lib/adapters/starcaster-app";
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
-import { loadSavedSectionUsage, type BlockUsage } from "@/lib/shared-block-usage";
+import {
+  describeCanonicalOverwrite,
+  loadSavedSectionUsage,
+  readPropagationTally,
+  updatedPageIds,
+  type BlockUsage,
+  type CanonicalOverwriteImpact
+} from "@/lib/shared-block-usage";
+import { publishNamedPages } from "@/lib/publish-pages";
 import { applySavedSectionName } from "@/lib/saved-section-name";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import type { GalleryTarget, ModulePaletteGroup, ModulePaletteItem } from "./builder-types";
 import { buildBuilderThemePaletteColors } from "./builder-utils";
 import { BuilderBodyPortal } from "./builder-body-portal";
+import {
+  BuilderSharedBlockSaveModal,
+  type SharedBlockSaveChoice
+} from "./builder-shared-block-save-modal";
 import { BuilderFloatingSaveRail } from "./builder-floating-save-rail";
 import { BuilderSectionCard } from "./builder-section-card";
 import { BuilderGalleryModal } from "./builder-gallery-modal";
@@ -58,6 +70,16 @@ export function SavedSectionEditorModal({
   const [error, setError] = useState<string | null>(null);
   const [builderThemes, setBuilderThemes] = useState<BuilderThemeSummary[]>([]);
   const [usage, setUsage] = useState<BlockUsage | null>(null);
+  // The Save / Save & Publish question, held open while `handleSave` awaits it.
+  const [savePrompt, setSavePrompt] = useState<
+    { resolve: (choice: SharedBlockSaveChoice | null) => void; impact: CanonicalOverwriteImpact } | null
+  >(null);
+
+  function answerSavePrompt(choice: SharedBlockSaveChoice | null) {
+    const pending = savePrompt;
+    setSavePrompt(null);
+    pending?.resolve(choice);
+  }
 
   // A saved section isn't bound to a page, so there's no linked theme to read
   // the palette from. Prefer the first theme that actually has colors set — a
@@ -382,7 +404,31 @@ export function SavedSectionEditorModal({
 
   // --- Save ---
 
+  /**
+   * Save, or Save and put the pages this rewrites live?
+   *
+   * Asked here as well as in the React builder's own saved-section manager,
+   * because this modal is the surface the vanilla Modules manager opens and
+   * the operator does not think of them as two different screens. A saved
+   * section reached from either place must offer the same two saves.
+   *
+   * `usage` is null when the page list could not be read (see loadUsage). That
+   * is NOT zero: skipping the question there would quietly save a master that
+   * dozens of pages follow with no dialog at all. So a failed count asks
+   * anyway, with `describeCanonicalOverwrite`'s honest "no other page follows
+   * it yet" replaced by nothing — we only skip on a COUNTED zero.
+   */
   async function handleSave() {
+    const name = localName || savedSectionName;
+    let publish = false;
+    if (usage === null || usage.pages > 0) {
+      const choice = await new Promise<SharedBlockSaveChoice | null>((resolve) => {
+        setSavePrompt({ resolve, impact: describeCanonicalOverwrite(name, usage, []) });
+      });
+      if (!choice) return;
+      publish = choice === "save-and-publish";
+    }
+
     setIsSaving(true);
     setError(null);
     try {
@@ -390,7 +436,6 @@ export function SavedSectionEditorModal({
       // the fan-out this triggers pushes the old title straight back over
       // every following page and undoes the rename it just made. See
       // @/lib/saved-section-name.
-      const name = localName || savedSectionName;
       const result = await appApi(`/api/builder/saved-sections/${savedSectionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -409,6 +454,24 @@ export function SavedSectionEditorModal({
         onSaved();
         return;
       }
+      if (publish) {
+        // The save landed. A publish that does not is smaller, separate news —
+        // it must not close the dialog looking like the save failed.
+        const outcome = await publishNamedPages(
+          (body) =>
+            builderAdminFetch("/api/admin/publish", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body)
+            }),
+          updatedPageIds(readPropagationTally(result))
+        );
+        if (outcome.error) {
+          setError(`Saved. Publishing did not finish: ${outcome.error} Open Publish to put these pages live.`);
+          onSaved();
+          return;
+        }
+      }
       onSaved();
       onClose();
     } catch (e) {
@@ -420,6 +483,16 @@ export function SavedSectionEditorModal({
 
   return (
     <BuilderBodyPortal>
+      {savePrompt ? (
+        <BuilderSharedBlockSaveModal
+          blockKind="saved section"
+          name={localName || savedSectionName}
+          impact={savePrompt.impact}
+          isSaving={isSaving}
+          onChoose={(choice) => answerSavePrompt(choice)}
+          onCancel={() => answerSavePrompt(null)}
+        />
+      ) : null}
       <div className="saved-section-editor-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
         <div className="saved-section-editor-dialog">
           <div className="saved-section-editor-header">

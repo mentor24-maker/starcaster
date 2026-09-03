@@ -188,6 +188,38 @@ describe('drift: a following copy edited on its own page', () => {
     expect(driftedFollowingPages(pages, FOOTER, master)).toEqual({ count: 1, pageLabels: ['Rates'] });
   });
 
+  it('a page holding a drifted copy AND an untouched one is NOT left alone', () => {
+    // The shape the UI fixture's own "Block States" page has, and the one that
+    // made "Save & Publish" name a page it went on to publish anyway: the
+    // untouched copy takes the update, so the page IS rewritten. Drift is per
+    // COPY; being left alone is per PAGE.
+    const edited = { id: 'm1', type: 'text', column: 'main', name: '', text: 'EDITED', settings: {} };
+    const pages = [{
+      id: '1',
+      name: 'Block States',
+      slug: 'block-states',
+      layoutSections: [
+        { savedSectionId: FOOTER, canonical: true, title: 'Footer', modules: master.modules },
+        { savedSectionId: FOOTER, canonical: true, title: 'Footer', modules: [edited] },
+      ],
+    }];
+    expect(driftedFollowingPages(pages, FOOTER, master)).toEqual({ count: 0, pageLabels: [] });
+  });
+
+  it('a page whose every following copy has drifted IS left alone', () => {
+    const edited = (text: string) => ({ id: 'm1', type: 'text', column: 'main', name: '', text, settings: {} });
+    const pages = [{
+      id: '1',
+      name: 'Rates',
+      slug: 'rates',
+      layoutSections: [
+        { savedSectionId: FOOTER, canonical: true, title: 'Footer', modules: [edited('ONE')] },
+        { savedSectionId: FOOTER, canonical: true, title: 'Footer', modules: [edited('TWO')] },
+      ],
+    }];
+    expect(driftedFollowingPages(pages, FOOTER, master)).toEqual({ count: 1, pageLabels: ['Rates'] });
+  });
+
   it('an unfollowed (independent) copy is never counted as drifted — it opted out on purpose', () => {
     const pages = [pageWithContent('Rates', { canonical: false, modules: [{ id: 'm1', type: 'text', column: 'main', name: '', text: 'EDITED', settings: {} }] })];
     expect(driftedFollowingPages(pages, FOOTER, master).count).toBe(0);

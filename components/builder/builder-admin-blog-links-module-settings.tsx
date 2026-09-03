@@ -16,11 +16,15 @@ type Props = {
  * `showTitle` gates `panelTitle`, and `showRelate` gates `relateButtonLabel`.
  * Neither is split across strips or axes.
  *
- * WHICH AXIS: `showCategories` and `showTags` choose which taxonomies the left
- * pane offers, so they are Structure - they change what the page is made of,
- * not the words on it. `articleStatus` filters which articles the right-hand
- * list shows, which is content selection, so it sits on Content beside the
- * Relate pair it qualifies.
+ * WHICH AXIS: `showTags` (the tag manager table) and `showCategories` (whether
+ * categories are offered in the article picker) change what the page is made
+ * of, so they are Structure. `articleStatus` filters which articles the picker
+ * lists, which is content selection, so it sits on Content beside the Relate
+ * pair it qualifies.
+ *
+ * The two keys kept their original names on purpose. They were saved onto live
+ * tenant pages by the first version of this module, and renaming a settings key
+ * silently resets it to its fallback on every page already carrying it.
  *
  * A1 SORT: no theme overrides here at all - no colour, border, radius, shadow
  * or font-family control - so no axis gets an Advanced section, and there is
@@ -94,19 +98,43 @@ const SCHEMA: BuilderSettingsSchema = {
       strips: [
         [
           {
-            key: "showCategories",
-            label: "Categories",
+            key: "showTags",
+            label: "Tag manager",
             width: "check",
             control: "checkbox",
             fallback: "true",
             rendersVia: RENDERS_VIA
           },
           {
-            key: "showTags",
-            label: "Tags",
+            key: "showCategories",
+            label: "Categories in picker",
             width: "check",
             control: "checkbox",
             fallback: "true",
+            rendersVia: RENDERS_VIA
+          }
+        ],
+        [
+          /*
+           * Where a post opens from the "posts with this tag" popup. The
+           * defaults are the slugs the admin scaffold gives every tenant
+           * (lib/projectAdminScaffold.js), so these are only touched by a
+           * tenant who renamed those pages.
+           */
+          {
+            key: "managerPageUrl",
+            label: "Blog Manager page",
+            width: "text-md",
+            control: "text",
+            placeholder: "/admin-blog-manager",
+            rendersVia: RENDERS_VIA
+          },
+          {
+            key: "postViewUrl",
+            label: "Post view page",
+            width: "text-md",
+            control: "text",
+            placeholder: "/blog-post-view",
             rendersVia: RENDERS_VIA
           }
         ]

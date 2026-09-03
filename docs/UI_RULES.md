@@ -146,6 +146,32 @@ as a rule first, then gets a checker where one is possible.
   cards, because an empty manager measures nothing and passes.
   — **[browser-check]** `npm run check:panels`
 
+  **The declaration is not only for item managers — any block the check
+  cannot otherwise see wears it.** The trigger block
+  (`.builder-module-trigger-settings`: "Trigger", and "Button Label" on
+  Confetti) sits above the axis columns on Speech Bubble, Confetti and the two
+  Proximity Effect panels. `check_panels` reads axis columns, the chrome's own
+  strip, and groups carrying `data-lattice-pairs` — and that block is none of
+  the three, so for as long as it had existed its rows were skipped in
+  silence. Underneath, its rows were `BuilderSettingRow fullWidth`, whose base
+  rule sizes tracks PROPORTIONALLY (`minmax(0,1fr) minmax(0,2fr)`) against the
+  whole panel rather than against their own content: at 1440 the word
+  "Trigger" held a 414px label track while the control, correctly capped at
+  `--builder-field-long-max`, ended 268px short of the block's right edge.
+  A notch (L8) on four panels, passing green because nothing measured it.
+  Fixed 2026-08-29 by giving the block the same two `max-content` tracks every
+  lattice group uses, so the pair sizes itself to its own content instead of
+  taking a proportional share — **bounding the block rather than widening the
+  control**, which is what W9 and L8 ask for when they disagree — and by
+  declaring `data-lattice-pairs="1"` so it can never go unmeasured again.
+  Two things the fix had to get right, both found by looking at the panel
+  rather than at the check: the block's BOX stays full width (sizing it to
+  `max-content` too squeezed the game-trigger note from one line into a
+  five-line column, L7), and the pairs are pinned to the first two tracks
+  (a trailing filler track makes the note spannable, but auto-placement then
+  scattered Confetti's two rows across three columns).
+  *Panel sweep 8/15, ticket 86bbjt1b4.*
+
   **The OTHER shape is a titled-column grid, and it declares
   `data-lattice-columns="<n>"`.** L6a offers two shapes and the paragraphs
   above only describe one of them. A genuinely tabular manager — the
@@ -348,6 +374,11 @@ layout would avoid.*
 *Umbrella: a control is as wide as its content needs — never as wide as the
 screen allows. Within one panel, though, "as wide as it needs" is settled
 ONCE for the whole panel (W0), not re-decided field by field.*
+
+**Width is never bought from the content.** Narrowing a column until its text
+clips is not a width decision, it is a decision to hide the data — see **T-1**.
+A rendered module has the same obligation as a panel: on a real tenant page a
+320px cap with `text-overflow: ellipsis` turned every tag name into a stub.
 
 - **W0. THE LATTICE RULE — one label width, one field width, per column,
   each sized to the longest string in that column plus 40px.**
@@ -721,6 +752,28 @@ Advanced — is the follow-on pass the operator sequenced after this.
 
 *Umbrella: any list the operator will ever scroll is navigable — and no CRUD
 is ever wider than the screen.*
+
+- **T-1. A NAME IS NEVER TRUNCATED.** The name column is what the row is
+  *for*; clipping it takes away the only thing the row is read for. Give it
+  `1fr` and let it wrap (`overflow-wrap: anywhere`). An ellipsis on a name is
+  a defect, not a density choice — buy the space from a fixed-width column, or
+  from the container, never from the name. *(9/3, live tenant page, verbatim:
+  "Notice in the Tag manager side that the columns are unnecessarily narrow,
+  cutting off the words. **Don't do that.**" It had rendered "Tennis Cha…",
+  "Delray Te…", "advanced…", "clay court…".)* Applies to any user-authored
+  string that identifies a row — a tag, a title, a slug, a person's name.
+
+- **T-2. When a manager for a sibling concept already exists, the new one
+  takes its SHAPE.** Same table treatment, same header row, same action
+  affordances, same form panel below. Two managers for two taxonomies on one
+  page must not be two idioms; the operator learns the surface once.
+  Deviate only where the data genuinely differs, and **say why in a comment**
+  — the tag table carries three columns rather than the category table's four
+  because a tag has no slug, description or colour, and inventing columns to
+  match a shape is decoration. *(9/3, verbatim: "we already have a Category
+  manager. What we need is the Tag manager that follows the same basic
+  format." The first version had shipped a second, worse category list beside
+  the real one on the same page.)*
 
 - **T0. A CRUD never extends beyond the width of the screen.** The master
   rule of this section: it outranks every other width preference here, and

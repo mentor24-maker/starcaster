@@ -1001,6 +1001,48 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     text: "",
     settings: { layout: "grid", columns: "3" }
   },
+  /*
+   * Tag Results and Category Results are the same blog-post-list module with
+   * its filter bar narrowed to one control. They exist as separate palette
+   * entries because the operator searching the library for "tag" found seven
+   * modules that LINK to a tag page and none that IS one (2026-09-03) - the
+   * feed does read ?tag= and ?category= from the URL, but nothing in its name
+   * or description said so. Presets of one type are established here:
+   * blog-post-list-grid and blog-post-list-list are already two of them.
+   */
+  {
+    id: "blog-post-list-tag-results",
+    type: "blog-post-list",
+    group: "blog",
+    label: "Tag Results",
+    icon: "#",
+    description: "A feed of every post carrying the tag in the page's ?tag= URL parameter, with a tag selector above it. Put it on a /tags page and point Tag Cloud or Post Tags links at that page.",
+    name: "",
+    text: "",
+    settings: { layout: "list", columns: "1", filterMode: "tag", showSearch: "false", showDateFilter: "false" }
+  },
+  {
+    id: "blog-post-list-category-results",
+    type: "blog-post-list",
+    group: "blog",
+    label: "Category Results",
+    icon: "☷",
+    description: "A feed of every post in the category named by the page's ?category= URL parameter, with a category selector above it. The same module as Tag Results, set to categories.",
+    name: "",
+    text: "",
+    settings: { layout: "list", columns: "1", filterMode: "category", showSearch: "false", showDateFilter: "false" }
+  },
+  {
+    id: "blog-post-list-author-results",
+    type: "blog-post-list",
+    group: "blog",
+    label: "Author Results",
+    icon: "✎",
+    description: "A feed of every post by the author named in the page's ?author= URL parameter, with an author selector above it. The same module as Tag Results, set to authors.",
+    name: "",
+    text: "",
+    settings: { layout: "list", columns: "1", filterMode: "author", showSearch: "false", showDateFilter: "false" }
+  },
   {
     id: "blog-post-list-list",
     type: "blog-post-list",
@@ -1187,9 +1229,9 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     id: "admin-blog-links",
     type: "admin-blog-links",
     group: "admin",
-    label: "Blog Links Manager",
+    label: "Blog Tags & Links",
     icon: "🔗",
-    description: "One page for the blog's taxonomy and its hand-picked related articles. Rename or merge tags across every post that carries them, edit categories, then pick a term, tick the articles that belong together and press Relate Checked - those become the related articles the Related Posts module shows in its hand-picked mode.",
+    description: "A manager for blog TAGS, plus hand-picked related articles. Lists every tag with its post count; rename one across every post that carries it (renaming onto an existing tag merges them) or remove it everywhere. Then pick a category or tag, tick the articles that belong together and press Relate Checked - those become the related articles the Related Posts module shows in its hand-picked mode. Categories are managed by the Blog Category Manager module, not here.",
     name: "",
     text: "",
     settings: {}

@@ -207,6 +207,7 @@ export function BuilderBlogPostCreateModuleSettings({
         },
         { key: "showCategories", label: "Categories", width: "check", control: "checkbox", fallback: "true" },
         { key: "showTags", label: "Tags", width: "check", control: "checkbox", fallback: "true" },
+        { key: "showRelatedPosts", label: "Related Posts", width: "check", control: "checkbox", fallback: "true" },
         { key: "showSeoFields", label: "SEO Fields", width: "check", control: "checkbox", fallback: "false" }
       ]
         ]
