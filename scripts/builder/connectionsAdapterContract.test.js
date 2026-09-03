@@ -102,6 +102,19 @@ const EMPTY_INPUT = {};
 const BSKY_SESSION = { status: 200, body: { accessJwt: 'jwt-abc', did: 'did:plc:xyz', handle: 'delray.bsky.social' } };
 const BSKY_CREDS = { identifier: '@delray.bsky.social', appPassword: 'abcd-efgh-ijkl-mnop' };
 
+/** One Page with a healthy Business Instagram account behind it. */
+const IG_PAGE = {
+  id: '55',
+  name: 'Delray Tennis',
+  access_token: 'page-token',
+  instagram_business_account: {
+    id: '17841400000000000',
+    username: 'delraytennis',
+    name: 'Delray Beach Tennis Center',
+    profile_picture_url: 'https://example.test/avatar.jpg',
+  },
+};
+
 /**
  * How to connect each provider without a network: what `exchange` is called
  * with, and the canned replies each of the six gets.
@@ -138,6 +151,24 @@ const ROUND_TRIP_FIXTURES = {
       listAccounts: [BSKY_SESSION],
       refresh: [BSKY_SESSION],
       revoke: [BSKY_SESSION],
+    },
+  },
+  // Instagram is the same Meta grant as facebook_page, so its exchange makes
+  // the same three calls — the third one asking /me/accounts for the Instagram
+  // fields as well. Connections 5 of 7 (86bbpz1gk).
+  instagram: {
+    env: { FACEBOOK_APP_ID: 'app-123', FACEBOOK_APP_SECRET: 'secret-123' },
+    connect: { code: 'the-code' },
+    replies: {
+      exchange: [
+        { status: 200, body: { access_token: 'short-lived' } },
+        { status: 200, body: { access_token: 'long-lived' } },
+        { status: 200, body: { data: [IG_PAGE] } },
+      ],
+      verify: [{ status: 200, body: { id: '17841400000000000', username: 'delraytennis' } }],
+      listAccounts: [{ status: 200, body: { data: [IG_PAGE] } }],
+      refresh: [{ status: 200, body: {} }],
+      revoke: [{ status: 200, body: { success: true } }],
     },
   },
 };
@@ -606,7 +637,13 @@ test('an unknown provider and an unfinished one are different answers', () => {
   assert.equal(unknown.status, 404);
   assert.equal(unknown.code, 'UNKNOWN_PROVIDER');
 
-  const soon = registry.getAdapter('instagram');
+  // `x` rather than `instagram`: Instagram became connectable in slice 5
+  // (86bbpz1gk), so this reads the catalogue for whatever is STILL unfinished
+  // instead of naming a platform that has since shipped — otherwise the last
+  // coming-soon entry to ship silently deletes this assertion's subject.
+  const comingSoon = registry.CATALOGUE.find((entry) => entry.readiness === 'coming_soon');
+  assert.ok(comingSoon, 'no coming_soon entry left to prove the two answers differ');
+  const soon = registry.getAdapter(comingSoon.provider);
   assert.equal(soon.ok, false);
   assert.equal(soon.status, 400);
   assert.equal(soon.code, 'COMING_SOON');
