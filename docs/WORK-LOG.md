@@ -1,3 +1,43 @@
+## 2026-09-03 — A safety brake that had never once been applied (#567)
+
+When an agent finishes a turn, a check looks at whether the work added a
+database script you have to run by hand, and refuses to end the turn until the
+reply hands that script over as a clickable link. Because a check like that
+could in principle argue with an agent forever, it was given a brake: after
+three refusals in one session, give up and let the turn end.
+
+The brake has never worked. Not once, since it was written.
+
+It counted the refusals in a small file tucked inside the repo's hidden `.git`
+folder. That works in the main copy of the project, where `.git` really is a
+folder. But every piece of work here happens in a separate side folder, and
+there `.git` is not a folder at all — it is a one-line text file pointing at
+the real one. Writing a file inside a file is impossible, so the count was
+never saved. The failure was caught and thrown away without a word, under a
+comment reassuring the reader that losing the count cost "at worst one extra
+prompt."
+
+It did not cost one extra prompt. It cost the whole brake: with nothing ever
+counted, the tally read zero forever, so the third refusal never arrived. The
+same missing file also meant a script that *had* been handed over properly was
+demanded all over again on the next turn, and the next.
+
+Worth saying plainly: nothing bad has actually happened because of this. Going
+back through every session on this machine, the check has genuinely fired five
+times, each in a side folder, and each of those sessions complied on its very
+next turn — so no session ever reached even a second refusal, let alone needed
+the brake. The repair is a precaution, not a rescue.
+
+The fix is to ask git where the real folder is instead of guessing. The more
+interesting part is why this survived: the test covering the brake built its
+practice repo in the one shape where the bug cannot appear, so it passed
+cheerfully the entire time. The new tests build a genuine side folder and check
+that the file `.git` really is a file before asserting anything — and reverting
+the fix now makes them refuse forever, in writing, which is the only kind of
+proof worth having. The same mistake had already been fixed a week earlier in
+the twin check next door and left alive in this one, so the shared piece now
+lives in a single file that both of them read.
+
 ## 2026-08-29 — One loose row above four tidy panels (#449)
 
 Open the settings for a Confetti or Speech Bubble module and the controls sit
