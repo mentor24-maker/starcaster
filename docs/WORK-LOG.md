@@ -109,6 +109,84 @@ a sentence sitting beside a check that no longer matched it, so rather than
 just correcting the sentence we made it fail on its own: a test now reads the
 note and the code together, and complains if the note names anything the code
 will not take.
+## 2026-09-04 — A repair on a timer was taking tickets away from builds that were still running (#595)
+
+When a build loop starts a job, it moves that job's ticket to **Building** and
+leaves a small note on disk saying "I have this one". If the loop dies partway,
+that ticket would sit in Building forever, because nothing ever picks work up
+from there — so a repair step exists to find the abandoned note and put the
+ticket back in the queue.
+
+That step decided a build was dead from one fact: the ticket is in Building.
+Which is a fair guess in the one place it was written for — it runs as the very
+first thing a new build pass does, and a new pass starting really does mean the
+old one has finished.
+
+Then the same repair was put on a timer, running every ten minutes. A clock
+going off tells you nothing about whether a build is still running. So any job
+taking longer than half an hour had its ticket pulled out from under it and put
+back in the queue while it was still being built — it happened twice in one
+morning. For that stretch the ticket was sitting there available with a live
+build already on it, so a second loop could have started building the very same
+thing on a second branch. Two loops doing one job is the exact problem the
+claim system was built to prevent, and it was arriving through the machinery
+meant to guard against the opposite. Neither side got a warning: the build
+carried on unaware, and the hand-back note read like ordinary tidying.
+
+The repair now says which seat it is sitting in. Called by a new build pass, it
+behaves exactly as before. Called by the timer, it looks at how old the claim
+is instead — under ninety minutes it leaves the ticket alone and says why, over
+that it hands it back as it always did. A claim whose timestamp cannot be read
+is left alone too, and says so out loud rather than quietly picking a side.
+The ninety minutes is not a new number; it is the same one the stranded-ticket
+sweep already uses, borrowed rather than copied so the two cannot drift apart.
+
+The ticket that reported this suggested checking whether the recorded process
+id was still alive. That turned out not to work: the id belongs to the tiny
+command that writes the claim note, not to the build itself, and it is gone
+within seconds. Checking it would have called every claim dead — the same bug
+wearing new clothes — and process ids get recycled, so it would occasionally
+have done the reverse and left a ticket stranded for good. That correction went
+on the ticket before anything was built.
+
+The cost, stated plainly: a build that dies five minutes in now waits up to
+ninety minutes for the *timer* to clean up after it. It does not wait for the
+ordinary repair, which still happens the moment the next build pass starts. A
+ticket repaired late is visible sitting in the queue; a ticket built twice is
+silent and expensive.
+
+Review found three things wrong with that first version, all now fixed.
+
+The "I cannot tell how old this claim is" case could never actually happen.
+Reading the note off disk was quietly filling in a missing timestamp with the
+current time, so a note with no date read as "claimed just now" — and because
+every timer run is a fresh start, it read that way again on the next run, and
+the one after, for as long as you like. The ticket would never have been handed
+back and the honest "I cannot tell" answer could never have been given. The
+clock now belongs to the moment the claim is made and to nowhere else; reading
+a note never changes what it says.
+
+The tidy-up note the repair leaves on a ticket was crediting the wrong thing.
+It said the next build pass had returned the ticket, when on a timer no build
+pass ran at all — the scheduled repair did — and it printed a command to
+reproduce it that was missing the very flag that makes it the scheduled
+version. Anyone re-running the line as written would have got a different
+program. The note now names whichever one actually ran, and prints the command
+that matches.
+
+And the ninety minutes is now measured the same way in both places that use it.
+It was the same number but a different starting line: the stranded-ticket sweep
+counts ninety minutes since anything last happened on the ticket, while this
+counted ninety minutes since the claim was made and never looked again. So a
+build that had visibly done something ten minutes ago could still be declared
+dead, and the two halves of one repair run could disagree about the same
+ticket. It now counts from whichever is more recent — the claim, or the last
+sign of life on the ticket.
+
+Worth recording, because it happened while this very fix was being written: the
+timer took this ticket away from the build working on it, at 10:28, and left
+the note crediting a build pass that never ran. Both defects, live, on their own
+ticket.
 ## 2026-09-03 — Three watchdogs saw a stuck ticket and none of them reached you (#586)
 
 A ticket you had already said `merge` on sat in "Ready to launch" for twelve
