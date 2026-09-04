@@ -29,6 +29,27 @@ the part that remembers the count between tries sat behind a trap that would
 have made it forget every time, silently, with every test still passing. That
 trap is closed here, and the test that would have caught it is in place.
 
+A review pass then caught a third version of the same problem, and it is worth
+knowing because it is the sort of thing that only shows up against real data.
+The job decided "this is still the same block I was counting" by comparing the
+sentence GitHub gave it — and GitHub has two different ways of saying it cannot
+tell, and swaps between them. Every swap looked like a brand new problem, so
+the clock went back to zero and ninety minutes was never reached. Replayed
+against the job's own log from that day, it would have spoken up about one of
+the three genuinely stuck merges and stayed silent on the other two, including
+the very one this work was written about.
+
+It now recognises a stuck merge by which pull request and which version of the
+code it is stuck on, rather than by the words GitHub happens to choose. The
+message still quotes what GitHub said most recently, and says how many times it
+changed its mind. The same review turned up two smaller gaps, both closed here:
+merges the system approves on its own were not being counted at all, and a
+ticket with no pending merge instruction was being read as "the problem went
+away". The proof is a test that replays all four of the stuck merges from that
+day, pass by pass, at the real ten-minute spacing — the three that needed a
+person get exactly one message each, and the one that sorted itself out in
+under an hour stays quiet.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
