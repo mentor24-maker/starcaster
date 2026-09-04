@@ -82,6 +82,7 @@ import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled, operatorComments,
+  ticketsToRead, markAfterPass, DEFAULT_OVERLAP_MS,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
   SIMULATED_BUS_WHY, simulationGuard, simulationLine, sweepVerdict,
 } = busRelayPlan;
@@ -3548,6 +3549,28 @@ if (cmd === 'whoami') {
   // the LIST and not the ticket.
   const sweeps = [];
 
+  // ── The high-water mark, per list (task 86bbugbay) ────────────────────────
+  // Why this exists: the per-ticket comment read is the relay's entire cost,
+  // and a ticket untouched since the last completed pass cannot carry a new
+  // comment. See busRelayPlan.ticketsToRead for what is filtered and — just
+  // as important — what deliberately is NOT.
+  //
+  // The stamp is taken NOW, before a single list is read, so a comment landing
+  // mid-pass is never behind the mark that pass writes.
+  const passStartedAt = Date.now();
+  const marksFile = arg('marks-file')
+    || process.env.BUS_RELAY_MARKS
+    || path.join(os.homedir(), 'loop-logs', 'bus-relay.marks.json');
+  let marks = {};
+  try {
+    if (existsSync(marksFile)) marks = JSON.parse(readFileSync(marksFile, 'utf8')) || {};
+  } catch {
+    // Unreadable marks cost requests, never correctness: every watch falls
+    // back to the cold-start branch and reads everything. Say so.
+    console.error(`  (the relay's high-water marks at ${marksFile} are unreadable — this pass reads every ticket)`);
+    marks = {};
+  }
+
   for (const watch of watches) {
     // fatal:false so a list this pass could not READ becomes an INCOMPLETE
     // verdict rather than process.exit(1) three lines in. Dying here is how a
@@ -3563,10 +3586,20 @@ if (cmd === 'whoami') {
       console.error(`${watch.label}: COULD NOT READ THE LIST (${why}) — skipping it, and this pass is INCOMPLETE`);
       continue;
     }
-    const open = tasks
+    const inStatus = tasks
       .filter((t) => watch.statuses.includes((t.status?.status ?? '').toLowerCase()))
       .filter((t) => !onlyTask || String(t.id) === String(onlyTask));
+    // The FULL in-status set is what Lane A and the kill switch are gathered
+    // from below; only the expensive comment read is narrowed.
+    const picked = ticketsToRead({
+      watch,
+      tasks: inStatus,
+      mark: Number(marks[watch.list]),
+      overlapMs: DEFAULT_OVERLAP_MS,
+    });
+    const open = picked.read;
     console.error(`${watch.label}: ${open.length} open task(s) of ${tasks.length} total in list ${watch.list} (statuses: ${watch.statuses.join(', ')})`);
+    console.error(`  reading comments on ${open.length} of ${inStatus.length} in-status ticket(s) — ${picked.reason}${picked.skipped ? `; ${picked.skipped} unchanged since the last completed pass` : ''}`);
 
     for (const t of open) {
       const commentsOut = await call('GET', `/api/v2/task/${t.id}/comment`);
@@ -3768,12 +3801,30 @@ if (cmd === 'whoami') {
     // swept, and saying so at the list level is the whole point of this
     // verdict (see busRelayPlan.sweepVerdict).
     const missed = unchecked.length - uncheckedBefore;
+    const complete = missed === 0;
     sweeps.push({
       label: watch.label,
       merge: mergeEnabled(watch),
-      complete: missed === 0,
+      complete,
       why: missed ? `${missed} ticket(s) on it could not be read` : '',
     });
+    // A partial list must not advance its mark, or the tickets it never
+    // reached fall behind the cutoff and are skipped forever.
+    const nextMark = markAfterPass({ complete, startedAt: passStartedAt, previous: Number(marks[watch.list]) || null });
+    if (nextMark.advanced) marks[watch.list] = nextMark.mark;
+    else console.error(`  ${watch.label}: high-water mark NOT advanced — ${nextMark.why}`);
+  }
+
+  // Written once, after every watch, and never in a dry run: a dry run that
+  // moved the mark would make the next real pass skip the very comments it
+  // was rehearsing on.
+  if (!dryRun) {
+    try {
+      mkdirSync(path.dirname(marksFile), { recursive: true });
+      writeFileSync(marksFile, `${JSON.stringify(marks, null, 2)}\n`);
+    } catch (err) {
+      console.error(`  (could not save the relay's high-water marks to ${marksFile}: ${err.message} — the next pass will read every ticket)`);
+    }
   }
 
   // ── Lane A: announce, wait one hour, merge ─────────────────────────────────

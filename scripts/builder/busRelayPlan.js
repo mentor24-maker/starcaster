@@ -181,6 +181,89 @@ function handbackTarget(watch, taskStatus, freshRelayed) {
 /** May this watch act on a merge command? Ad-hoc `--list` runs are
  *  notify-only by construction (see clickup_direct.mjs), so a hand-typed
  *  list id can never merge anything — same reasoning as handback. */
+/** One relay interval. The overlap must be at least as long as the gap
+ *  between passes, or a comment can land in the blind spot between them. */
+const DEFAULT_OVERLAP_MS = 600 * 1000;
+
+/**
+ * WHICH TICKETS COST A COMMENT READ THIS PASS (2026-09-03, task 86bbugbay).
+ *
+ * The relay's cost is not the list fetch — that is one request per 100
+ * tickets. It is the per-ticket comment read, and the reply read behind each
+ * operator comment. With 104 open tickets on Agent Response a pass spent
+ * 114-115 requests against ClickUp's ~100-per-minute allowance, so every pass
+ * was rate-limited partway through and finished INCOMPLETE. An incomplete
+ * pass cannot run Lane A (standing condition 4), so the auto-merge lane
+ * halted 271 passes in a row and had never once merged. The starvation was
+ * the cause; the refusal was correct.
+ *
+ * So: a ticket nobody has touched since the last completed pass cannot have a
+ * new comment on it. Measured 2026-09-03 on task 86bbqpwfa — a task's
+ * `date_updated` equals its newest comment's timestamp to the millisecond, so
+ * recency is a sound proxy for "might have something to say".
+ *
+ * THE NON-GOAL THE TICKET ASKED US TO DECIDE, decided here and deliberately
+ * NOT applied to every watch: a MERGE-CAPABLE watch reads every ticket in its
+ * statuses regardless of recency. Three things there are re-decided from
+ * scratch on every pass and would break if a quiet ticket went unread:
+ *
+ *   1. A refused merge command is re-decided every pass (task 86bbjt18r) — a
+ *      refusal is a snapshot of a moment, not a verdict. PR #558 sat refused
+ *      for exactly this reason on 2026-09-03: CI had not finished inside the
+ *      merge step's wait. The ticket then goes quiet, and a recency filter
+ *      would mean the retry that was promised never happens.
+ *   2. Lane A's candidates are Ready-to-launch tickets that must be announced,
+ *      left an hour and then merged. Going quiet for an hour is the NORMAL
+ *      path through that lane, not a reason to stop looking at it.
+ *   3. The auto-merge kill switch may have been set on any ticket.
+ *
+ * That watch is small — the Loop Queue at 'needs your input' and 'ready to
+ * launch' held one open ticket on the day this was written, against Agent
+ * Response's 104. The saving comes from the big notify-only list, and the
+ * correctness comes from not touching the small merge-capable one.
+ */
+function ticketsToRead({ watch, tasks, mark, overlapMs = DEFAULT_OVERLAP_MS }) {
+  const all = Array.isArray(tasks) ? tasks : [];
+  // A merge-capable watch is never filtered — see 1-3 above.
+  if (mergeEnabled(watch)) {
+    return { read: all, skipped: 0, reason: 'merge-capable watch — every ticket read regardless of recency' };
+  }
+  // Cold start: no mark, so nothing is known to be unchanged. Read everything
+  // and SAY so, rather than relaying nothing and looking healthy.
+  if (!Number.isFinite(mark) || mark <= 0) {
+    return { read: all, skipped: 0, reason: 'no stored high-water mark (cold start) — reading every ticket' };
+  }
+  // The overlap is a correctness requirement, not a safety margin. A comment
+  // posted WHILE a pass is running, on a ticket that pass had already read,
+  // is older than the mark the pass goes on to write — so a cutoff of exactly
+  // `mark` would skip it forever. One pass interval back covers it.
+  const cutoff = mark - overlapMs;
+  const read = all.filter((t) => Number(t.date_updated) > cutoff);
+  return {
+    read,
+    skipped: all.length - read.length,
+    reason: `updated since ${new Date(cutoff).toISOString()} (mark minus a ${Math.round(overlapMs / 1000)}s overlap)`,
+  };
+}
+
+/**
+ * The mark to store for a list after a pass, or null to leave the old one.
+ *
+ * A partial pass must NOT advance the mark: the tickets it never reached
+ * would fall behind the cutoff and their comments would be skipped forever.
+ * That is the same "silently relaying nothing" failure the cold-start branch
+ * above guards, arrived at from the other direction.
+ *
+ * The stamp is the time the pass STARTED, never the time it finished. A pass
+ * takes tens of seconds; a comment posted during it would sit before a
+ * finish-time mark and be missed on the next pass — the overlap would have to
+ * absorb it, and an overlap doing two jobs hides when one of them is wrong.
+ */
+function markAfterPass({ complete, startedAt, previous }) {
+  if (!complete) return { mark: previous ?? null, advanced: false, why: 'the pass did not complete this list — the mark stays where it was so the next pass re-reads the window' };
+  return { mark: startedAt, advanced: true, why: 'the list was read in full' };
+}
+
 function mergeEnabled(watch) {
   return Boolean(watch && watch.merge);
 }
@@ -414,6 +497,9 @@ module.exports = {
   sweepVerdict,
   handbackTarget,
   mergeEnabled,
+  ticketsToRead,
+  markAfterPass,
+  DEFAULT_OVERLAP_MS,
   BUS_RELAY_MARKER,
   RECEIPT_FINGERPRINT,
   receiptSignature,
