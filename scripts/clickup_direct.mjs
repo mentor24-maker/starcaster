@@ -1160,8 +1160,27 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   if (gate.action === 'conflict' && gate.needsGitCrossCheck) {
     const cross = gitConflictCrossCheck({ repo, head: prJson.headRefName || (pr && pr.branch) });
     gate = githubGate(prJson, { gitCrossCheck: cross });
+    // Hoisted rather than inlined, and this is not style. branchCatchUp.test.js
+    // locates the conflict hand-off by searching this file for that statement
+    // verbatim, then asserts the local check appears before it. Any earlier
+    // copy of the same text — in code OR in a comment quoting it — makes the
+    // assertion measure the wrong statement and fail. Do not spell it out here.
+    const stillAConflict = gate.action === 'conflict';
     if (gate.disagreement) {
       console.error(`  ${label}: GITHUB AND GIT DISAGREE — ${gate.reason}`);
+    } else if (stillAConflict) {
+      // Feed the answer into the SAME vocabulary the catch-up path produces,
+      // so a hand-off that follows says what was actually checked. Without
+      // this the DIRTY path reached `conflictTicketBody` with no verdict at
+      // all and printed "no local check was attempted" — which was true
+      // before this change and would now be false. One table decides what a
+      // code means (conflictWork.CATCH_UP_VERDICTS); this only picks the code.
+      gate = {
+        ...gate,
+        localVerdict: cross.known
+          ? { code: branchCatchUp.CODES.REAL_CONFLICT, reason: `git merge-tree reports a conflict merging ${cross.base} into ${cross.head}` }
+          : { code: branchCatchUp.CODES.FETCH_FAILED, reason: cross.why || 'the git cross-check could not be taken' },
+      };
     }
   }
 
