@@ -336,6 +336,51 @@ function readBulkSetTemplateRequest(body) {
   return { ok: true, pageIds, pageTemplateId, snapshotId };
 }
 
+/**
+ * The archive lookup failed. WHICH failure was it?
+ *
+ * "There is no such archive" and "I could not find out whether there is such
+ * an archive" are different answers, and only the first one means the operator
+ * did something wrong. The first version of this route rendered both — plus a
+ * 500 from the snapshots table, a timeout and an RLS refusal — as the single
+ * string `No archive with id "X" — take an archive first`, which sends the
+ * operator off to create an archive that already exists and hides the real
+ * cause. That is a "could not tell" rendered as a definite answer, which is
+ * the one thing this repo's diagnostics are not allowed to do.
+ *
+ * Nothing was written in any of these cases; only the sentence differs.
+ */
+function describeArchiveCheckFailure(snapshotId, lookup) {
+  const id = String(snapshotId ?? '').trim();
+  const result = lookup && typeof lookup === 'object' ? lookup : {};
+  const status = Number(result.status) || 0;
+  const detail = String(result.error || '').trim();
+
+  // Definite: the archive is not there.
+  if (status === 404) {
+    return {
+      status: 400,
+      error: `No archive with id "${id}" — nothing was changed. Take an archive first.`,
+    };
+  }
+
+  // Definite: what was sent is not an archive id at all (getPageSnapshot
+  // answers 400 for anything that is not a number).
+  if (status === 400) {
+    return {
+      status: 400,
+      error: `"${id}" is not an archive id — nothing was changed. Take an archive first.`,
+    };
+  }
+
+  // Everything else is a failure to LOOK, not a finding. Name what came back,
+  // and say plainly that this is not the same as having no archive.
+  return {
+    status: status || 500,
+    error: `Could not check whether archive "${id}" exists, so nothing was changed. The archive lookup answered ${status || 'no status'}${detail ? `: ${detail}` : ''}. This is not the same as having no archive — try again.`,
+  };
+}
+
 async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
   const scope = requestProjectScope(req);
@@ -478,11 +523,8 @@ async function handle(req, res, pathname, method) {
     const { pageIds, pageTemplateId, snapshotId } = request;
     const snapshot = await getPageSnapshot(snapshotId, scope);
     if (!snapshot.ok) {
-      return sendErr(
-        res,
-        snapshot.status === 404 ? 400 : (snapshot.status || 500),
-        `No archive with id "${snapshotId}" — nothing was changed. Take an archive first.`,
-      ), true;
+      const refusal = describeArchiveCheckFailure(snapshotId, snapshot);
+      return sendErr(res, refusal.status, refusal.error), true;
     }
     const result = await bulkSetPageTemplate(pageIds, pageTemplateId, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not change the template'), true;
@@ -2309,4 +2351,5 @@ module.exports = {
   // rule is the only undo a bulk re-pour has, so it is tested directly rather
   // than inferred from a request that has to be stood up first.
   readBulkSetTemplateRequest,
+  describeArchiveCheckFailure,
 };

@@ -4288,6 +4288,23 @@ App.builder = (function () {
       }));
   }
 
+  // Is this page being served to visitors RIGHT NOW? Published and not
+  // private is the whole test: a page with no published snapshot falls back to
+  // its draft on the public site, so a re-poured draft is live immediately.
+  function pageIsLiveOnPublicSite(item) {
+    if (!item || typeof item !== 'object') return false;
+    return pageIsPublished(item) && pageVisibilityState(item) !== 'private';
+  }
+
+  function countLiveSelectedPages() {
+    let live = 0;
+    selectedPageIds.forEach((id) => {
+      const item = savedPages.find((page) => safeText(page && page.id) === safeText(id));
+      if (pageIsLiveOnPublicSite(item)) live += 1;
+    });
+    return live;
+  }
+
   function openBulkChangeTemplateDialog() {
     const dialog = byId('builderPagesChangeTemplateDialog');
     const select = byId('builderPagesChangeTemplateSelect');
@@ -4307,7 +4324,16 @@ App.builder = (function () {
       warningEl.textContent = 'This project has no saved page templates yet, so there is nothing to move these pages onto. Save a page as a template first.';
       if (confirmBtn) confirmBtn.disabled = true;
     } else {
-      warningEl.textContent = 'The sections on these pages will be REPLACED with the chosen template’s layout. Each page keeps its own background and theme. An archive of all your pages is saved first, and Restore All on that archive undoes this — along with any other page edits made after it was taken.';
+      // WHERE the pages are, named with the count rather than implied. A page
+      // with no published snapshot is served straight from its draft
+      // (routes/publicSite.js), so on a project that has never published the
+      // re-pour is on the tenant's public domain the moment this finishes —
+      // there is no publish step between here and the visitor.
+      const live = countLiveSelectedPages();
+      const liveNote = live
+        ? ` ${live} of these ${live === 1 ? 'pages is' : 'pages are'} live on the public site, so a visitor sees the new layout as soon as this finishes — there is no separate publish step.`
+        : '';
+      warningEl.textContent = `The sections on these pages will be REPLACED with the chosen template’s layout. Each page keeps its own background and theme.${liveNote} An archive of all your pages is saved first, and Restore All on that archive undoes this — along with any other page edits made after it was taken.`;
       if (confirmBtn) confirmBtn.disabled = false;
     }
     if (confirmBtn) confirmBtn.textContent = 'Change Template';
@@ -4354,31 +4380,70 @@ App.builder = (function () {
     }
 
     if (confirmBtn) confirmBtn.textContent = 'Changing…';
+    // Read WHERE the pages are before the reload, off the rows the operator was
+    // actually looking at. Changing a template does not touch a publish flag,
+    // so this is the same answer either side of the refresh — but taking it
+    // here means the report still knows it when the reload is the thing that
+    // fell over.
+    const liveIds = new Set();
+    ids.forEach((id) => {
+      const item = savedPages.find((page) => safeText(page && page.id) === safeText(id));
+      if (pageIsLiveOnPublicSite(item)) liveIds.add(safeText(id));
+    });
+
     try {
       const result = await api('/api/builder/landing-pages/bulk-set-template', {
         method: 'POST',
         body: JSON.stringify({ pageIds: ids, pageTemplateId, snapshotId }),
       });
-      const rows = Array.isArray(result.results) ? result.results : [];
-      const failedRows = rows.filter((row) => !row.ok);
-      const unverified = rows.filter((row) => row.ok && !row.verified);
+      const rows = (Array.isArray(result.results) ? result.results : []).map((row) => ({
+        ...(row && typeof row === 'object' ? row : {}),
+        isLive: liveIds.has(safeText(row && row.id)),
+      }));
       if (dialog) dialog.close();
+      await refreshPagesTableAfterBulkChange();
+
+      // The three verdicts are counted and worded in public/shared/, where a
+      // test can reach them. Branching over them here is what produced "41 of
+      // 43 moved; 2 failed" on a run that ALSO had two unconfirmed pages —
+      // the read-back warning vanished and those two were counted as moved.
+      const outcome = App.bulkTemplateOutcome.describeBulkTemplateOutcome({ rows, templateName });
+      notify(outcome.message, outcome.isError);
+    } catch (err) {
+      // The request died part-way. Some pages may already be re-poured, so the
+      // table on screen is not evidence of anything — reload it before saying
+      // a word, or the operator reads the OLD template values as proof nothing
+      // moved. (The success path reloads; this one used only to re-enable the
+      // button.)
+      if (dialog) dialog.close();
+      await refreshPagesTableAfterBulkChange();
+      // This is the one path where the message must survive anything, because
+      // it is the only signal that pages may have moved. If the shared module
+      // did not load, say the short version rather than nothing at all — a
+      // thrown TypeError here would leave the operator with silence.
+      let message = `${(err && err.message) || 'The request failed'}. Some pages may already have been changed; the list has been reloaded. Restore All from Archives if this is not what you wanted.`;
+      if (App.bulkTemplateOutcome) {
+        message = App.bulkTemplateOutcome.describeBulkTemplateInterruption({
+          error: err && err.message,
+          liveCount: liveIds.size,
+        }).message;
+      }
+      notify(message, true);
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Change Template'; }
+    }
+  }
+
+  // Reloading is itself a call that can fail, and it runs on the path where
+  // something has ALREADY gone wrong. A throw here would replace the
+  // "some pages may have changed" message with a load error, which is the
+  // quieter of the two and not the one the operator needs.
+  async function refreshPagesTableAfterBulkChange() {
+    try {
       await loadSavedPages();
       renderPagesTable();
       syncLandingPageTableControls();
-
-      // Three different outcomes, three different sentences. "Saved but could
-      // not be confirmed" is its own answer, not a success and not a failure.
-      if (failedRows.length) {
-        notify(`${rows.length - failedRows.length} of ${rows.length} pages moved to ${templateName}; ${failedRows.length} failed: ${safeText(failedRows[0].error) || 'unknown error'}`, true);
-      } else if (unverified.length) {
-        notify(`${rows.length} pages written to ${templateName}, but ${unverified.length} could not be read back to confirm. Check them before publishing.`, true);
-      } else {
-        notify(`${rows.length} page${rows.length === 1 ? '' : 's'} moved to ${templateName}, all confirmed. Undo from Archives.`);
-      }
-    } catch (err) {
-      notify(err.message || 'Could not change the template', true);
-      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Change Template'; }
+    } catch (_) {
+      // Left deliberately silent: the caller says what happened.
     }
   }
 

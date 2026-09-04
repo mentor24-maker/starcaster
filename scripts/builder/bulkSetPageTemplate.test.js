@@ -146,3 +146,65 @@ test('a missing or non-object body is refused rather than throwing', () => {
     assert.equal(readBulkSetTemplateRequest(body).ok, false);
   }
 });
+
+/**
+ * "There is no archive" against "I could not find out whether there is one".
+ *
+ * The route used to render every archive-lookup failure as one string — a 500
+ * from the snapshots table, a timeout and an RLS refusal all told the operator
+ * `No archive with id "X" — take an archive first`, sending them off to create
+ * an archive that already exists and hiding the real cause. A "could not tell"
+ * rendered as a definite answer is the one thing this repo's diagnostics are
+ * not allowed to do. Nothing is written in any of these cases; only the
+ * sentence differs, and the sentence is the whole point.
+ */
+const { describeArchiveCheckFailure } = require('../../routes/builder');
+
+test('a 404 is the ONLY answer that says the archive is absent', () => {
+  const refusal = describeArchiveCheckFailure('9', { ok: false, status: 404, error: 'Snapshot not found' });
+  assert.equal(refusal.status, 400);
+  assert.match(refusal.error, /No archive with id "9"/);
+  assert.match(refusal.error, /Take an archive first/);
+  assert.match(refusal.error, /nothing was changed/);
+});
+
+test('a 400 says the id itself is not an archive id — also a definite answer', () => {
+  // getPageSnapshot answers 400 for anything that is not a number, so this is
+  // "what you sent is not an id", not "the lookup broke".
+  const refusal = describeArchiveCheckFailure('not-a-number', { ok: false, status: 400, error: 'id is required' });
+  assert.equal(refusal.status, 400);
+  assert.match(refusal.error, /"not-a-number" is not an archive id/);
+});
+
+test('a 500 says the archive could not be CHECKED, and names what came back', () => {
+  const refusal = describeArchiveCheckFailure('9', { ok: false, status: 500, error: 'permission denied for relation builder_page_snapshots' });
+  // The real status is passed through rather than flattened to 400 — a
+  // server-side fault is not the operator's input being wrong.
+  assert.equal(refusal.status, 500);
+  assert.match(refusal.error, /Could not check whether archive "9" exists/);
+  assert.match(refusal.error, /permission denied for relation builder_page_snapshots/);
+  // And it says the two are not the same thing, because that is the mistake
+  // the old single string caused.
+  assert.match(refusal.error, /not the same as having no archive/);
+  assert.doesNotMatch(refusal.error, /Take an archive first/);
+});
+
+test('an RLS refusal and a timeout are told apart from an absent archive', () => {
+  for (const status of [401, 403, 408, 502, 503]) {
+    const refusal = describeArchiveCheckFailure('9', { ok: false, status, error: 'nope' });
+    assert.equal(refusal.status, status, `status ${status} should pass through`);
+    assert.match(refusal.error, /Could not check/);
+    assert.doesNotMatch(refusal.error, /No archive with id/);
+  }
+});
+
+test('a failure with no status at all is a could-not-check, never an absent archive', () => {
+  // A thrown fetch or a store returning a bare object: the least information
+  // there is, and the most tempting to guess about.
+  for (const lookup of [{ ok: false }, {}, null, undefined, { ok: false, status: 0 }]) {
+    const refusal = describeArchiveCheckFailure('9', lookup);
+    assert.equal(refusal.status, 500);
+    assert.match(refusal.error, /Could not check whether archive "9" exists/);
+    assert.doesNotMatch(refusal.error, /undefined|NaN/);
+  }
+});

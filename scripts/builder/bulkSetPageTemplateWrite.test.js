@@ -261,3 +261,50 @@ test('a page that cannot be read back at all is unverified — never verified by
   assert.equal(res.verifiedCount, 0);
   assert.match(res.data[0].error, /could not be read back/);
 });
+
+/**
+ * A run where pages fail AND pages silently do not stick, at the same time.
+ *
+ * Every fixture above this one sets `failPageIds` OR `silentlyDropPageIds`.
+ * That is why the mixed run reached production: the report layer branched over
+ * the two — `if (failed) … else if (unverified) …` — so the run with both
+ * dropped the read-back warning entirely and counted the unconfirmed pages as
+ * moved. The store was always right; nothing asked it this question.
+ *
+ * The sentence built from these numbers is asserted in
+ * bulkTemplateOutcome.test.js. This test's job is to prove the store really
+ * does hand back three distinguishable verdicts in one response.
+ */
+test('failures and silent drops in ONE run stay three separate verdicts', async () => {
+  const { store, rows } = makeStore({
+    pages: [pageRow(1, 'Home'), pageRow(2, 'About'), pageRow(3, 'Contact'), pageRow(4, 'Blog')],
+    templates: [NEW_TEMPLATE],
+    failPageIds: [2],
+    silentlyDropPageIds: [3],
+  });
+
+  const res = await store.bulkSetPageTemplate([1, 2, 3, 4], '47');
+  assert.equal(res.ok, true);
+
+  const confirmed = res.data.filter((row) => row.ok && row.verified);
+  const failed = res.data.filter((row) => !row.ok);
+  const unconfirmed = res.data.filter((row) => row.ok && !row.verified);
+
+  assert.equal(confirmed.length, 2, 'Home and Blog');
+  assert.equal(failed.length, 1, 'About');
+  assert.equal(unconfirmed.length, 1, 'Contact');
+  // The three add up to the whole selection: no page is in two buckets and
+  // none is missing.
+  assert.equal(confirmed.length + failed.length + unconfirmed.length, 4);
+  // verifiedCount counts ONLY the confirmed ones — not "everything that did
+  // not error", which is the number the old report showed.
+  assert.equal(res.verifiedCount, 2);
+  assert.notEqual(res.verifiedCount, res.data.length - failed.length);
+
+  assert.equal(failed[0].name, 'About');
+  assert.equal(unconfirmed[0].name, 'Contact');
+  // The silently-dropped page really did keep its old template — this is the
+  // 2026-08-16 shape, and the read-back is the only thing that sees it.
+  assert.equal(rows.find((r) => r.id === 3).page_template_id, '27');
+  assert.equal(rows.find((r) => r.id === 1).page_template_id, '47');
+});

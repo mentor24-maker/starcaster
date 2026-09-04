@@ -26,6 +26,23 @@ at all, the "starter" templates whose layouts only exist inside the browser,
 and your email templates, which are not page layouts. The picker offers your
 real, saved page templates and nothing else, and if a project has none it says
 so instead of showing you an empty box.
+
+Review sent this back once, and it was right to. The dangerous half — the
+archive, the re-pour, the read-back — was sound, but the layer that *tells you
+what happened* was not, in four ways. If the request died half way through, the
+table kept showing the old template names while the pages underneath had
+already been rewritten; it now reloads the list and says plainly that some
+pages may have moved and some may not. If some pages failed *and* some could
+not be confirmed in the same run, the "could not be confirmed" warning vanished
+entirely and those pages were counted as moved; all three numbers are now
+always reported. The warning told you to check the pages "before publishing",
+which invents a step that does not exist — a page with no published copy is
+served straight to visitors, so the dialog now names how many of the pages you
+have selected are live on the public site right now (38 of 43, in the Delray
+project). And an archive lookup that merely *failed* used to tell you that you
+had not taken an archive at all, sending you off to make one that already
+existed; only a genuine "not found" says that now.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
