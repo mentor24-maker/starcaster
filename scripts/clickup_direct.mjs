@@ -57,6 +57,8 @@ import os from 'node:os';
 import loopNoteLib from './builder/loopNote.js';
 const { loopNote, heartbeatNote } = loopNoteLib;
 import { spawnSync } from 'node:child_process';
+import clickupLib from './lib/clickup.cjs';
+const { clickupFetch } = clickupLib;
 import busRelayPlan from './builder/busRelayPlan.js';
 import clickupRetry from './builder/clickupRetry.js';
 import mergeOnComment from './builder/mergeOnComment.js';
@@ -204,13 +206,16 @@ function readBody(spec) {
  * trustworthy about this (it says "NaN minutes" on the chat endpoints).
  */
 function reportLimits(res) {
-  const limit = res.headers.get('x-ratelimit-limit');
-  const remaining = res.headers.get('x-ratelimit-remaining');
-  const reset = res.headers.get('x-ratelimit-reset');
-  if (!limit && !remaining) return;
-  const secs = reset ? Number(reset) - Math.floor(Date.now() / 1000) : NaN;
-  const resetTxt = Number.isFinite(secs) ? ` (resets in ${Math.max(0, secs)}s)` : '';
-  console.error(`  ClickUp's own limit: ${remaining ?? '?'} of ${limit ?? '?'} left this minute${resetTxt}`);
+  // The numbers come from the shared client, which records them off every
+  // response (task 86bbugcdb). They used to be parsed here, printed, and then
+  // thrown away — which is why nothing in the system could answer "how much
+  // budget is left?" while the relay was spending 114 of ~100 a minute.
+  // `res` is still accepted so every call site stays untouched; it is the
+  // signal that a response just arrived, not the source of the numbers.
+  const b = clickupLib.getBudget();
+  if (b.limit == null && b.remaining == null) return;
+  const resetTxt = b.resetsInSeconds === null ? '' : ` (resets in ${b.resetsInSeconds}s)`;
+  console.error(`  ClickUp's own limit: ${b.remaining ?? '?'} of ${b.limit ?? '?'} left this minute${resetTxt}`);
 }
 
 /**
@@ -231,7 +236,10 @@ function reportLimits(res) {
  * fails to connect still spent whatever the attempt costs, and for a budget
  * you would rather over-count than under-count.
  */
-let requestCount = 0;
+// The counter lives in the shared client now, so the multipart upload and the
+// JSON path cannot drift apart, and a future caller inherits the counting
+// instead of having to remember it.
+function requestCount() { return clickupLib.getBudget().requests; }
 
 /** Plain sleep. Only the retry loop uses it. */
 function sleep(ms) {
@@ -295,7 +303,6 @@ async function call(method, path, body) {
 
 /** One HTTP attempt. Everything that was `call` before the retry loop. */
 async function callOnce(method, path, body) {
-  requestCount += 1;
   // THE ONE PLACE A MACHINE COMMENT IS MARKED (task 86bbqx2xe). The loops post
   // under Dane's own token, so nothing downstream can tell their writing from
   // his; the relay read an `ask` card as his answer and released the
@@ -306,23 +313,17 @@ async function callOnce(method, path, body) {
   const sendBody = (method === 'POST' && isCommentPostPath(path))
     ? stampCommentBody(body)
     : body;
-  let res;
-  try {
-    res = await fetch(`https://api.clickup.com${path}`, {
-      method,
-      headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
-      body: sendBody ? JSON.stringify(sendBody) : undefined,
-    });
-  } catch (err) {
-    return unreachable(err);
-  }
-  let text;
-  // The body can fail mid-stream after a perfectly good set of headers — a
-  // dropped connection reads as a rejection here, not at the line above.
-  try { text = await res.text(); } catch (err) { return unreachable(err); }
-  let json = null;
-  try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
-  return { res, json, text };
+  // Through the one door (task 86bbugcdb). It counts the attempt and records
+  // the rate-limit headers; it never throws, which is the contract this file
+  // has always had and must keep — see `unreachable` above for what a thrown
+  // transport failure once cost.
+  const out = await clickupFetch(`https://api.clickup.com${path}`, {
+    method,
+    headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
+    body: sendBody ? JSON.stringify(sendBody) : undefined,
+  });
+  if (out.transportError) return unreachable(out.transportError);
+  return { res: out.res, json: out.json, text: out.text };
 }
 
 function die(label, { res, json, text }) {
@@ -2821,17 +2822,19 @@ if (cmd === 'whoami') {
     const bytes = readFileSync(file);
     const form = new FormData();
     form.append('attachment', new Blob([bytes]), basename(file));
-    // Not routed through `call` (multipart), so count it here or the pass
-    // total under-reports — see the note beside `requestCount`.
-    requestCount += 1;
-    const res = await fetch(`https://api.clickup.com/api/v2/task/${task}/attachment`, {
+    // Multipart, so it cannot share the JSON `call` path — but it goes through
+    // the same door, which is what keeps it counted. It used to increment the
+    // counter by hand beside its own `fetch`, and the note there warned that a
+    // third caller would have to remember to do the same. Now nobody has to.
+    const up = await clickupFetch(`https://api.clickup.com/api/v2/task/${task}/attachment`, {
       method: 'POST',
       headers: { Authorization: TOKEN },
       body: form,
     });
-    const text = await res.text();
-    let json = null;
-    try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
+    if (up.transportError) die(`attach ${basename(file)}`, unreachable(up.transportError));
+    const res = up.res;
+    const text = up.text;
+    const json = up.json;
     if (!res.ok) die(`attach ${basename(file)}`, { res, json, text });
     uploaded.push({ name: basename(file), id: json?.id ?? '(no id)', bytes: bytes.length });
     reportLimits(res);
@@ -4240,7 +4243,7 @@ if (cmd === 'whoami') {
   // the headroom to watch is per-pass, not per-hour. If this creeps toward
   // 100 the answer is a cheaper pass, not a longer interval — the relay is
   // the pipeline's consumer and slowing it down is what the ticket undid.
-  console.error(`  requests this pass: ${requestCount} (ClickUp allows ~100/minute)`);
+  console.error(`  requests this pass: ${requestCount()} (ClickUp allows ~100/minute)`);
   if (lastRes) reportLimits(lastRes);
 
   // THE VERDICT, at LIST granularity (task 86bbugdv9). Everything above says
