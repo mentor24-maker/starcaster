@@ -57,6 +57,8 @@ import os from 'node:os';
 import loopNoteLib from './builder/loopNote.js';
 const { loopNote, heartbeatNote } = loopNoteLib;
 import { spawnSync } from 'node:child_process';
+import clickupLib from './lib/clickup.cjs';
+const { clickupFetch } = clickupLib;
 import busRelayPlan from './builder/busRelayPlan.js';
 import clickupRetry from './builder/clickupRetry.js';
 import mergeOnComment from './builder/mergeOnComment.js';
@@ -204,13 +206,16 @@ function readBody(spec) {
  * trustworthy about this (it says "NaN minutes" on the chat endpoints).
  */
 function reportLimits(res) {
-  const limit = res.headers.get('x-ratelimit-limit');
-  const remaining = res.headers.get('x-ratelimit-remaining');
-  const reset = res.headers.get('x-ratelimit-reset');
-  if (!limit && !remaining) return;
-  const secs = reset ? Number(reset) - Math.floor(Date.now() / 1000) : NaN;
-  const resetTxt = Number.isFinite(secs) ? ` (resets in ${Math.max(0, secs)}s)` : '';
-  console.error(`  ClickUp's own limit: ${remaining ?? '?'} of ${limit ?? '?'} left this minute${resetTxt}`);
+  // The numbers come from the shared client, which records them off every
+  // response (task 86bbugcdb). They used to be parsed here, printed, and then
+  // thrown away — which is why nothing in the system could answer "how much
+  // budget is left?" while the relay was spending 114 of ~100 a minute.
+  // `res` is still accepted so every call site stays untouched; it is the
+  // signal that a response just arrived, not the source of the numbers.
+  const b = clickupLib.getBudget();
+  if (b.limit == null && b.remaining == null) return;
+  const resetTxt = b.resetsInSeconds === null ? '' : ` (resets in ${b.resetsInSeconds}s)`;
+  console.error(`  ClickUp's own limit: ${b.remaining ?? '?'} of ${b.limit ?? '?'} left this minute${resetTxt}`);
 }
 
 /**
@@ -231,7 +236,10 @@ function reportLimits(res) {
  * fails to connect still spent whatever the attempt costs, and for a budget
  * you would rather over-count than under-count.
  */
-let requestCount = 0;
+// The counter lives in the shared client now, so the multipart upload and the
+// JSON path cannot drift apart, and a future caller inherits the counting
+// instead of having to remember it.
+function requestCount() { return clickupLib.getBudget().requests; }
 
 /** Plain sleep. Only the retry loop uses it. */
 function sleep(ms) {
@@ -295,7 +303,6 @@ async function call(method, path, body) {
 
 /** One HTTP attempt. Everything that was `call` before the retry loop. */
 async function callOnce(method, path, body) {
-  requestCount += 1;
   // THE ONE PLACE A MACHINE COMMENT IS MARKED (task 86bbqx2xe). The loops post
   // under Dane's own token, so nothing downstream can tell their writing from
   // his; the relay read an `ask` card as his answer and released the
@@ -306,23 +313,17 @@ async function callOnce(method, path, body) {
   const sendBody = (method === 'POST' && isCommentPostPath(path))
     ? stampCommentBody(body)
     : body;
-  let res;
-  try {
-    res = await fetch(`https://api.clickup.com${path}`, {
-      method,
-      headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
-      body: sendBody ? JSON.stringify(sendBody) : undefined,
-    });
-  } catch (err) {
-    return unreachable(err);
-  }
-  let text;
-  // The body can fail mid-stream after a perfectly good set of headers — a
-  // dropped connection reads as a rejection here, not at the line above.
-  try { text = await res.text(); } catch (err) { return unreachable(err); }
-  let json = null;
-  try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
-  return { res, json, text };
+  // Through the one door (task 86bbugcdb). It counts the attempt and records
+  // the rate-limit headers; it never throws, which is the contract this file
+  // has always had and must keep — see `unreachable` above for what a thrown
+  // transport failure once cost.
+  const out = await clickupFetch(`https://api.clickup.com${path}`, {
+    method,
+    headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
+    body: sendBody ? JSON.stringify(sendBody) : undefined,
+  });
+  if (out.transportError) return unreachable(out.transportError);
+  return { res: out.res, json: out.json, text: out.text };
 }
 
 function die(label, { res, json, text }) {
@@ -803,6 +804,41 @@ function latchItemLines(d) {
   const more = dropped ? `\n  ...and ${dropped} more (the stored list is capped)` : '';
   return `\n\nWhat it could not verify:\n${items.map((x) => `  - ${x}`).join('\n')}${more}`;
 }
+/**
+ * A SECOND OPINION ON "DOES THIS BRANCH CONFLICT?" (2026-09-03, task 86bbupfgn).
+ *
+ * GitHub's mergeability is computed in the background and, on 2026-09-03, was
+ * wrong: PR #567 read CONFLICTING/DIRTY from two endpoints five minutes apart
+ * while git merged the same two commits with zero conflicts. `git merge-tree
+ * --write-tree` answers the same question locally and synchronously — exit 0
+ * clean, exit 1 conflicts — without writing anything to the index, the working
+ * tree or a branch.
+ *
+ * Every failure here is CANNOT TELL, never "clean". A cross-check that cannot
+ * be taken must not turn an unverified conflict into a merge, so `known:false`
+ * leaves the hand-off exactly as it was.
+ */
+function gitConflictCrossCheck({ repo, base = 'origin/main', head }) {
+  if (!head) return { known: false, why: 'no head ref to check' };
+  // The head commit has to be present locally. A relay pass runs in the main
+  // checkout, which tracks origin but need not have this branch yet.
+  const fetched = spawnSync('git', ['fetch', '--quiet', 'origin', String(head)], { encoding: 'utf8' });
+  if (fetched.status !== 0) {
+    return { known: false, why: `could not fetch ${head} (${String(fetched.stderr || '').trim().slice(0, 120)})` };
+  }
+  const baseRef = spawnSync('git', ['rev-parse', '--verify', `${base}^{commit}`], { encoding: 'utf8' });
+  if (baseRef.status !== 0) return { known: false, why: `could not resolve ${base}` };
+  const headSha = String(spawnSync('git', ['rev-parse', 'FETCH_HEAD'], { encoding: 'utf8' }).stdout || '').trim();
+  if (!headSha) return { known: false, why: `could not resolve ${head} after fetching it` };
+  const out = spawnSync('git', ['merge-tree', '--write-tree', String(baseRef.stdout).trim(), headSha], { encoding: 'utf8' });
+  // 0 = merges cleanly, 1 = conflicts. Anything else is git failing to answer
+  // (a bad object, an unsupported git), which is CANNOT TELL and not a clean
+  // merge — the distinction this whole ticket is about.
+  if (out.status === 0) return { known: true, conflicts: false, base, head: headSha.slice(0, 8) };
+  if (out.status === 1) return { known: true, conflicts: true, base, head: headSha.slice(0, 8) };
+  return { known: false, why: `git merge-tree exited ${out.status} (${String(out.stderr || '').trim().slice(0, 120)})` };
+}
+
 function reportBusFailure({ delivered, cosmetic, unchecked, busSkipped, line }) {
   if (busFailureBucket({ delivered, cosmetic }) === 'skipped') busSkipped.push(line);
   else unchecked.push(line);
@@ -1163,6 +1199,38 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   }
 
   let gate = githubGate(prJson);
+
+  // GitHub said the branch conflicts. Ask git before believing it — one
+  // asynchronous reading is not a settled fact (task 86bbupfgn), and the
+  // hand-off it triggers goes to an agent session that may well not be
+  // watching. The check only runs on this branch of the gate, so an ordinary
+  // green PR pays nothing for it.
+  if (gate.action === 'conflict' && gate.needsGitCrossCheck) {
+    const cross = gitConflictCrossCheck({ repo, head: prJson.headRefName || (pr && pr.branch) });
+    gate = githubGate(prJson, { gitCrossCheck: cross });
+    // Hoisted rather than inlined, and this is not style. branchCatchUp.test.js
+    // locates the conflict hand-off by searching this file for that statement
+    // verbatim, then asserts the local check appears before it. Any earlier
+    // copy of the same text — in code OR in a comment quoting it — makes the
+    // assertion measure the wrong statement and fail. Do not spell it out here.
+    const stillAConflict = gate.action === 'conflict';
+    if (gate.disagreement) {
+      console.error(`  ${label}: GITHUB AND GIT DISAGREE — ${gate.reason}`);
+    } else if (stillAConflict) {
+      // Feed the answer into the SAME vocabulary the catch-up path produces,
+      // so a hand-off that follows says what was actually checked. Without
+      // this the DIRTY path reached `conflictTicketBody` with no verdict at
+      // all and printed "no local check was attempted" — which was true
+      // before this change and would now be false. One table decides what a
+      // code means (conflictWork.CATCH_UP_VERDICTS); this only picks the code.
+      gate = {
+        ...gate,
+        localVerdict: cross.known
+          ? { code: branchCatchUp.CODES.REAL_CONFLICT, reason: `git merge-tree reports a conflict merging ${cross.base} into ${cross.head}` }
+          : { code: branchCatchUp.CODES.FETCH_FAILED, reason: cross.why || 'the git cross-check could not be taken' },
+      };
+    }
+  }
 
   // Behind main: catch the branch up, then stop for this pass. The push
   // restarts CI, so merging on the checks just read would be merging on a
@@ -2831,17 +2899,19 @@ if (cmd === 'whoami') {
     const bytes = readFileSync(file);
     const form = new FormData();
     form.append('attachment', new Blob([bytes]), basename(file));
-    // Not routed through `call` (multipart), so count it here or the pass
-    // total under-reports — see the note beside `requestCount`.
-    requestCount += 1;
-    const res = await fetch(`https://api.clickup.com/api/v2/task/${task}/attachment`, {
+    // Multipart, so it cannot share the JSON `call` path — but it goes through
+    // the same door, which is what keeps it counted. It used to increment the
+    // counter by hand beside its own `fetch`, and the note there warned that a
+    // third caller would have to remember to do the same. Now nobody has to.
+    const up = await clickupFetch(`https://api.clickup.com/api/v2/task/${task}/attachment`, {
       method: 'POST',
       headers: { Authorization: TOKEN },
       body: form,
     });
-    const text = await res.text();
-    let json = null;
-    try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
+    if (up.transportError) die(`attach ${basename(file)}`, unreachable(up.transportError));
+    const res = up.res;
+    const text = up.text;
+    const json = up.json;
     if (!res.ok) die(`attach ${basename(file)}`, { res, json, text });
     uploaded.push({ name: basename(file), id: json?.id ?? '(no id)', bytes: bytes.length });
     reportLimits(res);
@@ -4282,7 +4352,7 @@ if (cmd === 'whoami') {
   // the headroom to watch is per-pass, not per-hour. If this creeps toward
   // 100 the answer is a cheaper pass, not a longer interval — the relay is
   // the pipeline's consumer and slowing it down is what the ticket undid.
-  console.error(`  requests this pass: ${requestCount} (ClickUp allows ~100/minute)`);
+  console.error(`  requests this pass: ${requestCount()} (ClickUp allows ~100/minute)`);
   if (lastRes) reportLimits(lastRes);
 
   // THE VERDICT, at LIST granularity (task 86bbugdv9). Everything above says
