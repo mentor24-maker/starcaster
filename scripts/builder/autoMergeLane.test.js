@@ -39,6 +39,8 @@ const {
   ledgerAfterDigest,
   switchSignalsFromLedger,
   mergesSince,
+  laneEligibility,
+  laneForFile,
 } = require('./autoMergeLane');
 
 /**
@@ -112,7 +114,7 @@ test('ONE file outside the set disqualifies the whole PR — no partial credit',
     const r = laneAEligibility([...DOCS_ONLY, intruder]);
     assert.equal(r.eligible, false, `${intruder} should have disqualified the PR`);
     assert.equal(r.blockedBy, intruder);
-    assert.match(r.reason, /not a test or a document/);
+    assert.match(r.reason, /not a test, a document or pipeline tooling/);
   }
 });
 
@@ -231,8 +233,12 @@ test('a failed announcement starts no clock and merges nothing', () => {
 // ── The record on the ticket ─────────────────────────────────────────────────
 
 test('markers round-trip, and the newest one decides', () => {
-  assert.deepEqual(parseAutoMergeMarker(markerLine('armed', 7, 'x')), { kind: 'armed', pr: 7 });
-  assert.deepEqual(parseAutoMergeMarker(markerLine('cancelled', 7, 'x')), { kind: 'cancelled', pr: 7 });
+  assert.deepEqual(parseAutoMergeMarker(markerLine('armed', 7, 'x')), { kind: 'armed', pr: 7, lane: 'A' });
+  assert.deepEqual(parseAutoMergeMarker(markerLine('cancelled', 7, 'x')), { kind: 'cancelled', pr: 7, lane: 'A' });
+  // Lane B round-trips too, and a marker written before Lane B existed — with
+  // no lane letter at all — still parses as the lane it was: A.
+  assert.deepEqual(parseAutoMergeMarker(markerLine('armed', 7, 'x', 'B')), { kind: 'armed', pr: 7, lane: 'B' });
+  assert.deepEqual(parseAutoMergeMarker('[auto-merge] armed PR #7'), { kind: 'armed', pr: 7, lane: 'A' });
   assert.equal(parseAutoMergeMarker('no marker here'), null);
   // Prose ABOUT a marker is not a marker: it must start the line.
   assert.equal(parseAutoMergeMarker('as I said, [auto-merge] armed PR #7'), null);
@@ -564,7 +570,7 @@ test('a PR that gains a runtime file DURING the window does not merge', () => {
     files: [...DOCS_ONLY, 'lib/projectScope.js'],
   });
   assert.equal(d.act, 'cancel');
-  assert.match(d.reason, /no longer a Lane A change/);
+  assert.match(d.reason, /no longer eligible for any auto-merge lane/);
   assert.match(d.reason, /lib\/projectScope\.js/);
 });
 
@@ -593,8 +599,8 @@ test('the announcement names the deadline, the files, and how to stop it', () =>
   for (const f of DOCS_ONLY) assert.ok(n.body.includes(f), `${f} must be listed`);
   // The body carries its own marker, so what a later pass reads and what he
   // was told are the same comment by construction.
-  assert.deepEqual(parseAutoMergeMarker(n.body), { kind: 'armed', pr: 42 });
-  assert.deepEqual(parseAutoMergeMarker(n.marker), { kind: 'armed', pr: 42 });
+  assert.deepEqual(parseAutoMergeMarker(n.body), { kind: 'armed', pr: 42, lane: 'A' });
+  assert.deepEqual(parseAutoMergeMarker(n.marker), { kind: 'armed', pr: 42, lane: 'A' });
 });
 
 test('a cancellation says nothing merged, and promises no second announcement', () => {
@@ -606,7 +612,7 @@ test('a cancellation says nothing merged, and promises no second announcement', 
   assert.match(n.body, /Nothing was merged/i);
   assert.match(n.body, /still Ready to launch/);
   assert.match(n.body, /fresh review/);
-  assert.deepEqual(parseAutoMergeMarker(n.body), { kind: 'cancelled', pr: 42 });
+  assert.deepEqual(parseAutoMergeMarker(n.body), { kind: 'cancelled', pr: 42, lane: 'A' });
 });
 
 test('every notice pairs its promise with the marker it writes', () => {
@@ -710,7 +716,7 @@ test('the relay merges through the SAME gate, not a second one', () => {
   // does — same gate, same marker, same Live transition". A second merge
   // implementation would be a second set of preconditions to keep in step,
   // and the one that drifted would be the one nobody was watching.
-  assert.match(RELAY, /lane: \{ name: 'A', decision, files: decision\.eligibility\.files \}/,
+  assert.match(RELAY, /lane: \{ name: decision\.lane \|\| 'A', decision, files: decision\.eligibility\.files \}/,
     'the lane must reach the merge through runMergeStep');
   // COUNT WHAT PERFORMS A MERGE, NOT WHAT SHARES ITS VERB. `gh pr merge
   // --auto` and `gh pr merge --disable-auto` arm and disarm GitHub's own
@@ -827,13 +833,223 @@ test('a truncated file list is refused rather than judged', () => {
 test('a dry run announces nothing, cancels nothing and merges nothing', () => {
   const laneSection = RELAY.slice(RELAY.indexOf('Lane A: announce, wait one hour, merge'));
   for (const phrase of [
-    'DRY RUN — would announce Lane A',
-    'DRY RUN — would cancel Lane A',
+    'DRY RUN — would announce Lane ${laneName}',
+    'DRY RUN — would cancel Lane ${cancelLane}',
     'DRY RUN — would auto-merge PR',
     'DRY RUN — would post to the bus',
   ]) {
     assert.ok(laneSection.includes(phrase), `dry run must cover: ${phrase}`);
   }
+});
+
+// ── Lane B: the pipeline's own tooling (task 86bbuzyra) ─────────────────────
+//
+// Overnight 2026-09-03 nine pull requests merged and Lane A merged none,
+// because the pipeline had spent the night building on ITSELF. Dane ruled the
+// boundary on 2026-09-04: "A — scripts/, docs/ and test files only", with lib/
+// explicitly excluded because server.js requires it directly.
+
+test('a PR that is all pipeline tooling is eligible, and it is Lane B', () => {
+  const r = laneEligibility([
+    'scripts/builder/loopNote.js',
+    'scripts/builder/loopNote.test.js',
+    'scripts/weekly_report.mjs',
+  ]);
+  assert.equal(r.eligible, true, 'scripts/ is what Lane B exists to carry');
+  assert.equal(r.lane, 'B');
+  assert.match(r.reason, /pipeline's own tooling/);
+});
+
+test('tests and docs are still Lane A, not dragged into B', () => {
+  // A test file inside scripts/ is one of hundreds. If it read as Lane B the
+  // narrower lane would effectively stop existing, and the digest would stop
+  // being able to say which risk was actually taken.
+  const r = laneEligibility(['scripts/builder/loopNote.test.js', 'docs/WORK-LOG.md']);
+  assert.equal(r.eligible, true);
+  assert.equal(r.lane, 'A');
+});
+
+test('the widest lane any single file needs is the lane the whole PR runs in', () => {
+  const r = laneEligibility(['docs/WORK-LOG.md', 'scripts/weekly_report.mjs']);
+  assert.equal(r.lane, 'B', 'one tooling file makes the whole PR a Lane B merge');
+});
+
+test('every tenant-facing tree is refused, and the refusal names the file', () => {
+  // Acceptance criterion 2: a test per excluded directory. These are the trees
+  // a client's browser can reach, or that the live server loads.
+  const excluded = [
+    'lib/projectScope.js',
+    'lib/builder-client/builder-template.ts',
+    'lib/builder/template.js',
+    'lib/authStore.js',
+    'components/builder/SettingsPanel.tsx',
+    'public/js/core.js',
+    'src/css/main.css',
+    'routes/index.js',
+    'api/[...slug].js',
+    'package.json',
+    'vercel.json',
+  ];
+  for (const f of excluded) {
+    const r = laneEligibility(['scripts/builder/loopNote.js', f]);
+    assert.equal(r.eligible, false, `${f} must not be auto-mergeable`);
+    assert.equal(r.blockedBy, f, `the refusal must name ${f}`);
+    assert.equal(r.lane, null);
+  }
+});
+
+test('lib/ is refused even though the doctrine table lists it under Lane B', () => {
+  // The doctrine's Lane B row reads "lib/, scripts/, tooling". Dane REMOVED
+  // lib/ when he chose the boundary, because server.js requires it directly
+  // (lib/config, lib/environmentBanner, lib/publicSiteHosts, lib/devTeamStore)
+  // and lib/builder-client bundles into a client's page. This test is here so
+  // a future reader who finds the doctrine table and "fixes" the code to match
+  // it fails instead.
+  for (const f of ['lib/config.js', 'lib/environmentBanner.js', 'lib/publicSiteHosts.js', 'lib/devTeamStore.js']) {
+    assert.equal(laneEligibility([f]).eligible, false, `${f} is loaded by server.js`);
+  }
+});
+
+test('governance still blocks FIRST, and one governance file refuses the whole PR', () => {
+  // Acceptance criterion 3. The order matters: a governance file that is also
+  // allowed by the lane must be refused for being governance, with that reason.
+  const r = laneEligibility(['scripts/builder/loopNote.js', 'scripts/builder/mergeOnComment.js']);
+  assert.equal(r.eligible, false);
+  assert.equal(r.blockedBy, 'scripts/builder/mergeOnComment.js');
+  assert.match(r.reason, /machinery that governs merging/);
+});
+
+test('the merge machinery is governance as SOURCE, not only as tests', () => {
+  // THE HOLE LANE B WOULD HAVE OPENED. Before this, only `<stem>.test.js` was
+  // listed — the sources needed no rule because Lane A refused anything that
+  // was not a test or a doc. Lane B makes scripts/ eligible, so the accident
+  // that protected them is gone. Doctrine criterion 4: "a machine may never
+  // auto-merge a change to the machinery that governs machines ... THE MERGE
+  // STEP ITSELF".
+  for (const f of [
+    'scripts/builder/mergeOnComment.js',
+    'scripts/builder/autoMergeLane.js',
+    'scripts/builder/autoMergeLedgerFile.js',
+    'scripts/builder/passClaim.js',
+    'scripts/builder/wipCap.js',
+    'scripts/builder/reviewGate.js',
+    'scripts/builder/preflight.js',
+    'scripts/builder/pipelinePause.js',
+    'scripts/clickup_direct.mjs',
+    'scripts/review_gate.mjs',
+    'scripts/pipeline.mjs',
+    'scripts/lib/clickup.cjs',
+  ]) {
+    assert.ok(governanceReason(f), `${f} is machinery that governs machines`);
+    assert.equal(laneEligibility([f]).eligible, false, `${f} must never auto-merge`);
+  }
+});
+
+test('git hooks and shell runners are governance, though neither is a .js file', () => {
+  // Doctrine criterion 4 names GIT HOOKS outright, and they live under
+  // scripts/git-hooks/ with no extension at all — so no stem rule would ever
+  // have matched them. Every .sh under scripts/ is a runner, an installer or a
+  // schedule: what decides WHEN the automation fires, and on which machine.
+  for (const f of [
+    'scripts/git-hooks/pre-commit',
+    'scripts/git-hooks/pre-push',
+    'scripts/loop_runner.sh',
+    'scripts/run_bus_relay.sh',
+    'scripts/install_pipeline_pulse.sh',
+    'scripts/provision_node.sh',
+  ]) {
+    assert.ok(governanceReason(f), `${f} governs when or whether the machines run`);
+    assert.equal(laneEligibility([f]).eligible, false);
+  }
+});
+
+test('the gates themselves are governance — every scripts/check_* file', () => {
+  const names = fs.readdirSync(path.join(__dirname, '..')).filter((n) => n.startsWith('check_'));
+  assert.ok(names.length >= 10, 'expected the check_* family to exist');
+  for (const n of names) {
+    assert.ok(governanceReason(`scripts/${n}`), `scripts/${n} is a gate and must not auto-merge`);
+  }
+});
+
+test('Lane B carries only known script extensions, never anything else', () => {
+  // `^scripts/` on its own carried scripts/git-hooks/pre-commit, every .sh
+  // runner, and would carry a .sql migration the day somebody adds one —
+  // which doctrine criterion 1 calls out as NOT reversible by a single revert.
+  for (const f of ['scripts/x.test.js.bak', 'scripts/migrate.sql', 'scripts/notes.txt', 'scripts/a.yml']) {
+    assert.equal(laneForFile(f), null, `${f} must not be carried by any lane`);
+    assert.equal(laneEligibility([f]).eligible, false);
+  }
+  for (const f of ['scripts/a.js', 'scripts/a.mjs', 'scripts/a.cjs', 'scripts/fixtures/a.json']) {
+    assert.equal(laneForFile(f), 'B', `${f} is ordinary pipeline tooling`);
+  }
+});
+
+test('the empty file list is still refused, and still names no lane', () => {
+  // Acceptance criterion 4: the vacuous-truth guard survives the widening.
+  assert.equal(laneEligibility([]).eligible, false);
+  assert.equal(laneEligibility([]).lane, null);
+  assert.match(laneEligibility([]).reason, /no changed files/);
+});
+
+test('BREAK TEST — the lane can actually PASS, on a real PR shape', () => {
+  // The ticket's own warning: "a widened lane whose allowlist is subtly wrong
+  // refuses everything and looks exactly like the current situation, which is
+  // the failure being fixed." A lane that only ever refuses is the bug.
+  //
+  // These are the files of PR #562 (Backfill the missing tags onto the three
+  // imported Delray blog posts), which merged on a human's word and which this
+  // lane would have carried.
+  const r = laneEligibility([
+    'scripts/blog_backfill_import_tags.cjs',
+    'scripts/builder/blogBackfillImportTags.js',
+    'scripts/builder/blogBackfillImportTags.test.js',
+  ]);
+  assert.equal(r.eligible, true, 'a lane that refuses everything is the bug being fixed');
+  assert.equal(r.lane, 'B');
+});
+
+test('the announcement says WHICH lane, and what that lane means', () => {
+  const b = announcementNotice({
+    pr: { number: 9, url: 'https://github.com/o/r/pull/9' },
+    files: ['scripts/weekly_report.mjs'],
+    deadlineLabel: '9:15pm EDT',
+    at: '2026-09-04T20:15:00.000Z',
+    lane: 'B',
+  });
+  assert.match(b.body, /Lane B/);
+  assert.match(b.body, /pipeline's own tooling/);
+  assert.match(b.body, /no file\nthe live server loads/);
+  assert.deepEqual(parseAutoMergeMarker(b.body), { kind: 'armed', pr: 9, lane: 'B' });
+  // And Lane A's wording is untouched — he has read it before and it should
+  // not change meaning under him.
+  const a = announcementNotice({
+    pr: { number: 9, url: 'https://github.com/o/r/pull/9' },
+    files: ['docs/a.md'],
+    deadlineLabel: '9:15pm EDT',
+    at: '2026-09-04T20:15:00.000Z',
+  });
+  assert.match(a.body, /nothing but tests and documentation/);
+  assert.match(a.body, /Lane A/);
+});
+
+test('auto-merge-status reports Lane B as plainly as Lane A', () => {
+  // Acceptance criterion 6.
+  const status = RELAY.slice(RELAY.indexOf("console.log(`LANE A:"));
+  assert.match(status, /LANE B:/, 'the new lane must appear in auto-merge-status');
+  assert.match(status, /carries:/, 'each lane must say what it carries');
+  assert.match(status, /check:automerge-reach/, 'the boundary guard must be named');
+});
+
+test("Dane's condition 1 shipped: the boundary cannot silently expire", () => {
+  // He attached this to choosing the boundary, in these words: "the build
+  // should include a check that fails if an auto-mergeable folder becomes
+  // reachable from the server. Otherwise this decision silently expires."
+  const check = path.join(__dirname, '../check_automerge_reach.cjs');
+  assert.ok(fs.existsSync(check), 'scripts/check_automerge_reach.cjs must exist');
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
+  assert.equal(pkg.scripts['check:automerge-reach'], 'node scripts/check_automerge_reach.cjs');
+  const ci = fs.readFileSync(path.join(__dirname, '../../.github/workflows/ci.yml'), 'utf8');
+  assert.match(ci, /npm run check:automerge-reach/, 'the guard must run in CI, not only by hand');
 });
 
 test('this very change could not have auto-merged itself', () => {

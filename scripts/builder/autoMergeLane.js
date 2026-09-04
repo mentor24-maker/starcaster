@@ -63,6 +63,49 @@ const LANE_A_ALLOWED = [
 ];
 
 /**
+ * Lane B — the pipeline's own tooling (2026-09-04, task 86bbuzyra).
+ *
+ * WHY IT EXISTS. Overnight 2026-09-03 nine pull requests merged and Lane A
+ * merged none of them, because the pipeline had spent the night building on
+ * ITSELF — `scripts/`, not tests and not documents. Seven hours of a ten-hour
+ * night had no merge at all, and the gaps lined up exactly with when Dane was
+ * asleep. `wipCap.js` already states the identity: throughput is
+ * min(build, review, merge), and merge is the slowest. Overnight it was zero.
+ *
+ * WHY ONLY `scripts/`. The doctrine's Lane B row reads "internal runtime with
+ * real coverage — `lib/`, `scripts/`, tooling", and the ticket proposed exactly
+ * that. `lib/` was then measured and REMOVED, by Dane, on the record:
+ *
+ *   `server.js` requires it directly (`lib/config`, `lib/environmentBanner`,
+ *   `lib/publicSiteHosts`, `lib/devTeamStore`), it holds the stores and
+ *   `projectScope.js` that serve tenant sites, and `lib/builder-client/**`
+ *   bundles into `public/builder-bundle.js` and into `lib/builder/template.js`
+ *   — the code that renders a client's published pages. A bad merge there
+ *   reaches a client's site with no human in the path.
+ *
+ * So the line is `scripts/`, which no served route reaches. That boundary is
+ * not self-enforcing — `lib/loopThroughput.js` already imports
+ * `scripts/builder/wipCap.js`, so the trees are not cleanly separated — which
+ * is why Dane attached a condition to picking it: a check that fails if an
+ * auto-mergeable folder becomes reachable from the server, so the decision
+ * cannot silently expire. That is `npm run check:automerge-reach`.
+ *
+ * Dane's ruling, 2026-09-04, in full: "A — scripts/, docs/ and test files
+ * only." Everything guarding Lane A guards this identically: a review PASS,
+ * the announce-and-wait window, cancel-by-commenting, the caps, the kill
+ * switch, the self-disable latch, and `governanceReason()` below.
+ */
+const LANE_B_ALLOWED = [
+  // The extension list is not decoration. `^scripts/` on its own carried
+  // `scripts/git-hooks/pre-commit` (extensionless) and every `.sh` runner, and
+  // it would carry a `.sql` migration the day somebody adds one — which
+  // doctrine criterion 1 calls out by name as NOT reversible by a single
+  // revert. Measured against the tree on 2026-09-04: 413 files, all of them
+  // .js/.mjs/.cjs/.sh/.json/.txt plus four extensionless git hooks.
+  { label: 'a script under scripts/', re: /^scripts\/(?:[^/]+\/)*[^/]+\.(?:js|mjs|cjs|ts|json)$/ },
+];
+
+/**
  * Criterion 4, self-amendment: a machine may never auto-merge a change to the
  * machinery that governs machines. Not because such changes are usually bad —
  * most in August were excellent — but because a system that can widen its own
@@ -82,32 +125,107 @@ const GOVERNANCE_PATHS = [
 const GOVERNANCE_BASENAMES = ['CLAUDE.md'];
 
 /**
- * A test that governs merging IS governance, even though it is a test file and
- * would otherwise sail through the allow list above.
+ * The machinery that governs machines, blocked whether the change is to the
+ * SOURCE or to its test.
  *
- * The ticket named four (mergeOnComment, branchCatchUp, wipCap, busRelayPlan).
- * Two more are here deliberately:
+ * ORIGINALLY THIS LIST WAS TESTS ONLY, and that was correct while Lane A
+ * existed on its own: a test that governs merging IS governance even though it
+ * is a test file and would otherwise sail through the allow list. The sources
+ * needed no rule, because `mergeOnComment.js` is neither a test nor a document
+ * and Lane A refused it without being asked to.
  *
- *   autoMergeLane — the rules of THIS lane. A lane that can auto-merge changes
- *   to its own eligibility rules is precisely the unbounded system criterion 4
- *   exists to prevent, and leaving it out would be a hole in the rule rather
- *   than a faithful reading of it.
+ * LANE B REMOVES THAT ACCIDENT (2026-09-04, task 86bbuzyra). `scripts/` is now
+ * eligible, and the merge step lives in `scripts/`. Dane was told, in the card
+ * that asked him to choose the boundary, that "everything already guarding
+ * Lane A stays … governanceReason() still blocks agent config outright" — which
+ * reads as a promise that the merge step is still protected. It was not, and
+ * without this change the very first thing the widened lane would have done is
+ * auto-merge PR #593, which edits `scripts/builder/mergeOnComment.js`.
  *
- *   reviewGate — the check that decides whether a ticket may reach Ready to
- *   launch at all. Lane A's whole safety rests on a review PASS being real, so
- *   the gate that defines "real" is the referee.
+ * Ratified doctrine, criterion 4, names it exactly: "A machine may never
+ * auto-merge a change to the machinery that governs machines … CI workflows,
+ * git hooks, check_conventions, nodeRoles, .gitattributes, THE MERGE STEP
+ * ITSELF, or this document." A system that can widen its own permissions has no
+ * ceiling, and the failure is undetectable from inside.
  *
- * Being STRICTER than the ticket is the safe direction here: the cost is that
- * two more PRs need Dane's word, which is the status quo.
+ * Being STRICTER is the safe direction, and stays the safe direction: the cost
+ * of a wrong entry here is that one more PR needs Dane's word, which is the
+ * status quo. The cost of a missing one is a lane that can rewrite its own
+ * rules unobserved.
  */
-const GOVERNANCE_TEST_STEMS = [
+const GOVERNANCE_STEMS = [
+  // The merge step and the rules of the lanes themselves.
   'mergeOnComment',
-  'branchCatchUp',
-  'wipCap',
-  'busRelayPlan',
   'autoMergeLane',
+  'autoMergeLedgerFile',
+  'branchCatchUp',
+  'waitForChecks',
+  'shipPrTrail',
+  // Who may claim a ticket, and whether a pass may run at all.
+  'passClaim',
+  'preflight',
+  'wipCap',
+  'loopRunnerGuard',
+  'mainGuard',
+  'pipelinePause',
+  'pipelinePauseStore',
+  'loopStatuses',
+  'taskRepo',
+  // The referee: what counts as a review PASS, and what a send-back is.
   'reviewGate',
+  'review_gate',
+  'sendBackRounds',
+  // The relay that drives every one of the above, and the repair pass that
+  // can move a ticket between statuses on its own.
+  'busRelayPlan',
+  'clickup_direct',
+  'pipeline',
+  'repair',
 ];
+
+/**
+ * Kept as the old name because a test iterates it, and because the ORIGINAL
+ * reading — "a test that governs merging is governance" — is still true and is
+ * still the more surprising half of the rule.
+ */
+const GOVERNANCE_TEST_STEMS = GOVERNANCE_STEMS;
+
+/**
+ * Whole paths that govern, and whose stems are too generic to match on.
+ *
+ * `scripts/lib/clickup.cjs` is the one door every machine write to ClickUp now
+ * goes through, including the budget it counts against; a change there changes
+ * every automated write at once.
+ */
+const GOVERNANCE_FILES = [
+  'scripts/lib/clickup.cjs',
+  'server.js',
+];
+
+/**
+ * Prefix rules for whole families of gate.
+ *
+ * `scripts/check_*` ARE the gates — `check_conventions` is named in the
+ * doctrine by hand, and every sibling is the same kind of thing. `install_*`
+ * writes the launchd schedules that decide when any of this runs at all.
+ */
+const GOVERNANCE_FILE_PREFIXES = [
+  'scripts/check_',
+  'scripts/install_',
+  // Doctrine criterion 4 names GIT HOOKS outright. They live here with no
+  // extension at all, so nothing else in this file would have matched them.
+  'scripts/git-hooks/',
+];
+
+/**
+ * Every shell script under `scripts/` is a runner, an installer or a schedule
+ * — `loop_runner.sh`, `run_bus_relay.sh`, `install_pipeline_pulse.sh`,
+ * `provision_node.sh`. All ten of them decide WHEN the automation fires or on
+ * what machine, which is the machinery that governs machines however short the
+ * file is. Blocked as a class rather than by name so a new one is blocked the
+ * day it lands, not the day somebody remembers to list it.
+ */
+const GOVERNANCE_SHELL_RE = /^scripts\/(?:[^/]+\/)*[^/]+\.sh$/;
 
 /**
  * `.github/` is CI machinery, and it contains Markdown (issue and PR
@@ -150,18 +268,56 @@ function governanceReason(file) {
   if (GOVERNANCE_PREFIXES.some((p) => path.startsWith(p))) {
     return `${path} is agent configuration — a machine does not auto-merge the instructions it runs on`;
   }
-  const m = /(^|\/)([^/]+)\.test\.(js|ts|tsx|mjs)$/.exec(path);
-  if (m && GOVERNANCE_TEST_STEMS.includes(m[2])) {
+  if (GOVERNANCE_FILES.includes(path)) {
+    return `${path} is machinery every automated write runs through — a machine does not auto-merge it`;
+  }
+  if (GOVERNANCE_FILE_PREFIXES.some((p) => path.startsWith(p))) {
+    return `${path} is one of the gates the pipeline is judged by — a machine does not auto-merge its own checks`;
+  }
+  if (GOVERNANCE_SHELL_RE.test(path)) {
+    return `${path} is a runner or a schedule — a machine does not auto-merge what decides when it runs`;
+  }
+
+  // The stem, whether this is the source or the test that covers it. Both
+  // halves matter and they fail differently: editing the source changes what
+  // the machine DOES, editing the test changes what would have caught it.
+  const t = /(^|\/)([^/]+)\.test\.(js|ts|tsx|mjs)$/.exec(path);
+  if (t && GOVERNANCE_STEMS.includes(t[2])) {
     return `${path} tests the merge step itself — a test that governs merging is governance`;
+  }
+  const src = /(^|\/)([^/]+)\.(js|mjs|cjs|ts)$/.exec(path);
+  if (src && GOVERNANCE_STEMS.includes(src[2])) {
+    return `${path} IS the machinery that governs merging and claiming — a machine does not auto-merge the rules it runs on`;
   }
   return null;
 }
 
-/** Does this path match the allow list at all? */
+/** Does this path match Lane A's allow list (tests and documents)? */
 function allowedReason(file) {
   const path = String(file || '').trim();
   const hit = LANE_A_ALLOWED.find((rule) => rule.re.test(path));
   return hit ? hit.label : null;
+}
+
+/** Does this path match Lane B's allow list (the pipeline's own tooling)? */
+function laneBAllowedReason(file) {
+  const path = String(file || '').trim();
+  const hit = LANE_B_ALLOWED.find((rule) => rule.re.test(path));
+  return hit ? hit.label : null;
+}
+
+/**
+ * Which lane does ONE file need? 'A' for a test or a document, 'B' for
+ * pipeline tooling, null for a file no lane may carry.
+ *
+ * Lane A is checked first so a test file inside `scripts/` — of which there are
+ * hundreds — still reads as Lane A rather than dragging a whole PR into the
+ * wider lane. The lane a PR runs in is the widest lane any of its files needs.
+ */
+function laneForFile(file) {
+  if (allowedReason(file)) return 'A';
+  if (laneBAllowedReason(file)) return 'B';
+  return null;
 }
 
 /**
@@ -172,7 +328,7 @@ function allowedReason(file) {
  *   would give).
  * @returns {{eligible: boolean, reason: string, files: string[], blockedBy?: string}}
  */
-function laneAEligibility(files) {
+function laneEligibility(files) {
   const list = (Array.isArray(files) ? files : [])
     .map((f) => String(f && f.path ? f.path : f || '').trim())
     .filter(Boolean);
@@ -181,29 +337,45 @@ function laneAEligibility(files) {
   // empty list as "every file matched" is the classic vacuous-truth bug, and
   // here it would auto-merge a PR nobody could describe.
   if (!list.length) {
-    return { eligible: false, reason: 'the PR reports no changed files — nothing to judge', files: [] };
+    return { eligible: false, lane: null, reason: 'the PR reports no changed files — nothing to judge', files: [] };
   }
 
   for (const file of list) {
     const gov = governanceReason(file);
     if (gov) return { eligible: false, reason: gov, files: list, blockedBy: file };
   }
+  let lane = 'A';
   for (const file of list) {
-    if (!allowedReason(file)) {
+    const need = laneForFile(file);
+    if (!need) {
       return {
         eligible: false,
-        reason: `${file} is not a test or a document, so this is not a Lane A change`,
+        lane: null,
+        reason: `${file} is not a test, a document or pipeline tooling, so no auto-merge lane may carry it`,
         files: list,
         blockedBy: file,
       };
     }
+    // The widest lane any single file needs is the lane the whole PR runs in —
+    // the same "no partial credit" reading the allow list has always had.
+    if (need === 'B') lane = 'B';
   }
   return {
     eligible: true,
-    reason: `all ${list.length} changed file(s) are tests or documentation`,
+    lane,
+    reason: lane === 'A'
+      ? `all ${list.length} changed file(s) are tests or documentation`
+      : `all ${list.length} changed file(s) are the pipeline's own tooling, tests or documentation`,
     files: list,
   };
 }
+
+/**
+ * The old name, kept because it reads correctly at every call site that only
+ * cares whether a PR may auto-merge at all. It is the SAME function: the lane
+ * it picks is on the result.
+ */
+const laneAEligibility = laneEligibility;
 
 // ── The window ───────────────────────────────────────────────────────────────
 
@@ -269,17 +441,24 @@ function windowState({ announcedAt, now, windowMs = WINDOW_MS, staleMs = STALE_M
  */
 const AUTO_MERGE_MARKER = '[auto-merge]';
 
-const AUTO_MERGE_MARKER_RE = /^\s*\[auto-merge\]\s+(armed|cancelled)\s+PR #(\d+)\b/im;
+const AUTO_MERGE_MARKER_RE = /^\s*\[auto-merge\]\s+(armed|cancelled)\s+PR #(\d+)(?:\s+lane ([AB]))?\b/im;
 
-/** The marker line a notice carries, built where the notice is built. */
-function markerLine(kind, prNumber, at) {
-  return `${AUTO_MERGE_MARKER} ${kind} PR #${prNumber} lane A — ${at}`;
+/**
+ * The marker line a notice carries, built where the notice is built.
+ *
+ * The lane letter is OPTIONAL in the regex above on purpose: markers written
+ * before Lane B existed say "lane A" and must keep parsing, and a marker whose
+ * lane cannot be read is still a marker — losing the lane letter would be a
+ * cosmetic gap, losing the armed/cancelled state would strand a live window.
+ */
+function markerLine(kind, prNumber, at, lane = 'A') {
+  return `${AUTO_MERGE_MARKER} ${kind} PR #${prNumber} lane ${lane} — ${at}`;
 }
 
 function parseAutoMergeMarker(text) {
   const m = AUTO_MERGE_MARKER_RE.exec(String(text || ''));
   if (!m) return null;
-  return { kind: m[1].toLowerCase(), pr: Number(m[2]) };
+  return { kind: m[1].toLowerCase(), pr: Number(m[2]), lane: m[3] || 'A' };
 }
 
 function commentDate(c) {
@@ -592,6 +771,7 @@ function laneADecision({
         announcedAt: marker.at,
         reason: `the announcement is ${Math.round(win.elapsedMs / HOUR_MS)} hours old — its window closed long ago, so it is stale rather than due`,
         stale: true,
+        lane: marker.lane,
       };
     }
 
@@ -610,6 +790,7 @@ function laneADecision({
         announcedAt: marker.at,
         reason: 'you commented on this ticket while the window was open',
         objectionId: String(objection.id),
+        lane: marker.lane,
       };
     }
 
@@ -622,8 +803,9 @@ function laneADecision({
         pr,
         announcementId: marker.commentId,
         announcedAt: marker.at,
-        reason: `the PR changed during the window and is no longer a Lane A change — ${still.reason}`,
+        reason: `the PR changed during the window and is no longer eligible for any auto-merge lane — ${still.reason}`,
         eligibility: still,
+        lane: marker.lane,
       };
     }
 
@@ -644,6 +826,11 @@ function laneADecision({
       announcementId: marker.commentId,
       announcedAt: marker.at,
       eligibility: still,
+      // The lane the PR qualifies for NOW, not the lane it was armed under. A
+      // branch that gained a `scripts/` commit during the window is a Lane B
+      // merge even though the announcement said A, and the record must say
+      // what actually happened rather than what was predicted.
+      lane: still.lane,
       reason: `announced ${Math.round(win.elapsedMs / 60000)} minute(s) ago with no objection`,
     };
   }
@@ -667,10 +854,10 @@ function laneADecision({
 
   const eligibility = laneAEligibility(files);
   if (!eligibility.eligible) {
-    return { act: 'ignore', pr, eligibility, reason: eligibility.reason };
+    return { act: 'ignore', pr, eligibility, lane: eligibility.lane, reason: eligibility.reason };
   }
 
-  return { act: 'announce', pr, eligibility, reason: eligibility.reason };
+  return { act: 'announce', pr, eligibility, lane: eligibility.lane, reason: eligibility.reason };
 }
 
 // ── What gets said ───────────────────────────────────────────────────────────
@@ -694,16 +881,22 @@ function laneADecision({
  * never earlier than the announced one. He can be merged on late; he can never
  * be merged on early, which is the direction that matters.
  */
-function announcementNotice({ pr, files, deadlineLabel, at }) {
+function announcementNotice({ pr, files, deadlineLabel, at, lane = 'A' }) {
   const list = files.map((f) => `- \`${f}\``).join('\n');
+  const what = lane === 'B'
+    ? "This change touches nothing but the pipeline's own tooling under `scripts/` — no file"
+      + '\nthe live server loads, and nothing a client\'s browser can reach. A review pass has'
+      + '\nalready passed it, and its checks are green — so rather than wait for you to say'
+      + '\n"merge", this is announcing itself and giving you an hour to stop it.'
+    : 'This change touches nothing but tests and documentation, a review pass has already'
+      + '\npassed it, and its checks are green — so rather than wait for you to say "merge",'
+      + '\nthis is announcing itself and giving you an hour to stop it.';
   return {
-    marker: markerLine('armed', pr.number, at),
+    marker: markerLine('armed', pr.number, at, lane),
     body: [
       `**Merging PR #${pr.number} at ${deadlineLabel} unless you say otherwise.**`,
       '',
-      'This change touches nothing but tests and documentation, a review pass has already',
-      'passed it, and its checks are green — so rather than wait for you to say "merge",',
-      'this is announcing itself and giving you an hour to stop it.',
+      what,
       '',
       `**To stop it, just comment on this ticket.** Anything at all — a word, a question,`,
       '"hold on". If you are talking about it, nothing merges, and it will not announce',
@@ -715,17 +908,17 @@ function announcementNotice({ pr, files, deadlineLabel, at }) {
       '',
       `${pr.url}`,
       '',
-      `(Automatic — Lane A, vault doctrine AUTO-MERGE-LANES. The one-hour clock starts when this comment posted. — bus-relay auto-merge)`,
+      `(Automatic — Lane ${lane}, vault doctrine AUTO-MERGE-LANES. The one-hour clock starts when this comment posted. — bus-relay auto-merge)`,
       '',
-      markerLine('armed', pr.number, at),
+      markerLine('armed', pr.number, at, lane),
     ].join('\n'),
   };
 }
 
 /** He objected, or the PR stopped being eligible. Terminal for this announcement. */
-function cancellationNotice({ pr, why, at }) {
+function cancellationNotice({ pr, why, at, lane = 'A' }) {
   return {
-    marker: markerLine('cancelled', pr.number, at),
+    marker: markerLine('cancelled', pr.number, at, lane),
     body: [
       `**Auto-merge stopped. Nothing was merged.**`,
       '',
@@ -737,9 +930,9 @@ function cancellationNotice({ pr, why, at }) {
       '',
       `${pr.url}`,
       '',
-      '(Automatic — Lane A. — bus-relay auto-merge)',
+      `(Automatic — Lane ${lane}. — bus-relay auto-merge)`,
       '',
-      markerLine('cancelled', pr.number, at),
+      markerLine('cancelled', pr.number, at, lane),
     ].join('\n'),
   };
 }
@@ -968,12 +1161,20 @@ function mergesSince(ledger, since) {
 module.exports = {
   // eligibility
   LANE_A_ALLOWED,
+  LANE_B_ALLOWED,
   GOVERNANCE_PATHS,
   GOVERNANCE_BASENAMES,
+  GOVERNANCE_STEMS,
   GOVERNANCE_TEST_STEMS,
   GOVERNANCE_PREFIXES,
+  GOVERNANCE_FILES,
+  GOVERNANCE_FILE_PREFIXES,
+  GOVERNANCE_SHELL_RE,
   governanceReason,
   allowedReason,
+  laneBAllowedReason,
+  laneForFile,
+  laneEligibility,
   laneAEligibility,
   // window
   WINDOW_MS,

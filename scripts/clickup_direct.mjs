@@ -494,13 +494,14 @@ function usage(code = 2) {
   console.error('                                             --only-task <id> confines the whole pass to one ticket.');
   console.error('                                             ONE machine relays (lib/nodeRoles.js); on any other it');
   console.error('                                             says so and exits 0. npm run node:whoami names this one');
-  console.error('                                             LANE A: a Ready-to-launch ticket whose PR touches nothing but');
-  console.error(`                                             tests and documentation is announced, left ${autoMergeLane.WINDOW_MS / 3600000} hour, then`);
+  console.error('                                             LANES A and B: a Ready-to-launch ticket whose PR touches nothing');
+  console.error('                                             but tests and documentation (A) or the pipeline\'s own tooling');
+  console.error(`                                             under scripts/ (B) is announced, left ${autoMergeLane.WINDOW_MS / 3600000} hour, then`);
   console.error('                                             merged unless he comments. --no-merge turns it off with the');
   console.error(`                                             rest; so does "${autoMergeLane.SWITCH_STOP}" on the bus or any`);
   console.error(`                                             ticket ("${autoMergeLane.SWITCH_RESUME}" to undo). Cap`);
   console.error(`                                             ${autoMergeLane.CAP_PER_HOUR}/hour and ${autoMergeLane.CAP_PER_DAY}/day; one digest a day, "none" included.`);
-  console.error('  auto-merge-status                          what Lane A would do right now, reading only — the switch,');
+  console.error('  auto-merge-status                          what Lanes A and B would do right now, reading only — the switch,');
   console.error('                                             the cap, the self-disable flag and the recent auto-merges');
   console.error('  task-open --task <id>                      exit 0 if the task is still open (status.type), 1 if closed/done');
   console.error('                                             or gone — used by `npm run thread`/`tidy` (Task-closes-thread)');
@@ -4129,7 +4130,7 @@ if (cmd === 'whoami') {
 
     if (!gate.allowed) {
       lane.halted = gate.why;
-      console.error(`  Lane A is not running this pass: ${gate.why}`);
+      console.error(`  The auto-merge lanes are not running this pass: ${gate.why}`);
     } else {
       for (const cand of laneCandidates) {
         const t = cand.task;
@@ -4139,7 +4140,7 @@ if (cmd === 'whoami') {
         // the hourly cap is spent, and a cap read before the first one would
         // let the fourth through.
         const cap = rateCapState(ledger.merges, Date.now());
-        if (!cap.allowed) { lane.halted = cap.why; console.error(`  Lane A stopping: ${cap.why}`); break; }
+        if (!cap.allowed) { lane.halted = cap.why; console.error(`  Auto-merge stopping: ${cap.why}`); break; }
 
         let decision = laneADecision({
           status: t.status?.status,
@@ -4155,7 +4156,7 @@ if (cmd === 'whoami') {
           const repo = `${decision.pr.owner}/${decision.pr.repo}`;
           const got = prChangedFiles(decision.pr.number, repo);
           if (!got.ok) {
-            unchecked.push(`${t.id}: could not read PR #${decision.pr.number}'s changed files (${got.why}) — Lane A did not judge it`);
+            unchecked.push(`${t.id}: could not read PR #${decision.pr.number}'s changed files (${got.why}) — the auto-merge lanes did not judge it`);
             continue;
           }
           decision = laneADecision({
@@ -4179,9 +4180,10 @@ if (cmd === 'whoami') {
         if (decision.act === 'announce') {
           const at = new Date().toISOString();
           const deadlineLabel = clockAt(Date.now() + WINDOW_MS);
-          const notice = announcementNotice({ pr, files: decision.eligibility.files, deadlineLabel, at });
+          const laneName = decision.lane || 'A';
+          const notice = announcementNotice({ pr, files: decision.eligibility.files, deadlineLabel, at, lane: laneName });
           if (dryRun) {
-            console.error(`  DRY RUN — would announce Lane A on ${label}: PR #${pr.number} merging at ${deadlineLabel}`);
+            console.error(`  DRY RUN — would announce Lane ${laneName} on ${label}: PR #${pr.number} merging at ${deadlineLabel}`);
             lane.announced++;
             continue;
           }
@@ -4189,30 +4191,34 @@ if (cmd === 'whoami') {
           if (!posted.ok) {
             // An announcement that failed to post is not a window. Nothing is
             // armed, no clock runs, and the next pass starts over.
-            unchecked.push(`${t.id}: the Lane A announcement failed (${posted.why}) — nothing is armed and nothing will merge`);
+            unchecked.push(`${t.id}: the Lane ${laneName} announcement failed (${posted.why}) — nothing is armed and nothing will merge`);
             continue;
           }
           // The BINDING deadline is ClickUp's confirmed post time plus an
           // hour, which is never earlier than the time announced above. He
           // can be merged on late; he cannot be merged on early.
           await stampLoopNoteSoftly(t.id, loopNote('auto-merge-armed', { deadline: clockAt(posted.at + WINDOW_MS) }), unchecked);
-          const bus = await postToBus(channel, `[CC-starcaster bus-relay] Lane A armed on ${label} (${t.url}): PR #${pr.number} is tests and documentation only and has a review PASS, so it merges at ${clockAt(posted.at + WINDOW_MS)} unless Dane comments on the ticket.\n\n${pr.url}`);
-          if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${t.id}: Lane A announced on the ticket but the bus post failed (${bus.why})` });
-          console.error(`  LANE A ARMED on ${label}: PR #${pr.number}, merging at ${clockAt(posted.at + WINDOW_MS)}`);
+          const whatItIs = laneName === 'B'
+            ? "is the pipeline's own tooling under scripts/ only"
+            : 'is tests and documentation only';
+          const bus = await postToBus(channel, `[CC-starcaster bus-relay] Lane ${laneName} armed on ${label} (${t.url}): PR #${pr.number} ${whatItIs} and has a review PASS, so it merges at ${clockAt(posted.at + WINDOW_MS)} unless Dane comments on the ticket.\n\n${pr.url}`);
+          if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${t.id}: Lane ${laneName} announced on the ticket but the bus post failed (${bus.why})` });
+          console.error(`  LANE ${laneName} ARMED on ${label}: PR #${pr.number}, merging at ${clockAt(posted.at + WINDOW_MS)}`);
           lane.announced++;
           continue;
         }
 
         if (decision.act === 'cancel') {
-          const notice = cancellationNotice({ pr, why: decision.reason, at: new Date().toISOString() });
-          if (dryRun) { console.error(`  DRY RUN — would cancel Lane A on ${label}: ${decision.reason}`); lane.cancelled++; continue; }
+          const cancelLane = decision.lane || 'A';
+          const notice = cancellationNotice({ pr, why: decision.reason, at: new Date().toISOString(), lane: cancelLane });
+          if (dryRun) { console.error(`  DRY RUN — would cancel Lane ${cancelLane} on ${label}: ${decision.reason}`); lane.cancelled++; continue; }
           const out = await call('POST', `/api/v2/task/${t.id}/comment`, { comment_text: notice.body });
           if (!out.res.ok) {
-            unchecked.push(`${t.id}: Lane A was cancelled (${decision.reason}) but the notice FAILED to post — he has not been told, and the announcement is still armed`);
+            unchecked.push(`${t.id}: Lane ${cancelLane} was cancelled (${decision.reason}) but the notice FAILED to post — he has not been told, and the announcement is still armed`);
             continue;
           }
           await stampLoopNoteSoftly(t.id, loopNote('auto-merge-cancelled', { at: clockAt(Date.now()) }), unchecked);
-          console.error(`  LANE A CANCELLED on ${label}: ${decision.reason}`);
+          console.error(`  LANE ${cancelLane} CANCELLED on ${label}: ${decision.reason}`);
           lane.cancelled++;
           continue;
         }
@@ -4235,18 +4241,18 @@ if (cmd === 'whoami') {
               busSkipped,
               stalledHandOffs,
               inPassBudget,
-              lane: { name: 'A', decision, files: decision.eligibility.files },
+              lane: { name: decision.lane || 'A', decision, files: decision.eligibility.files },
             });
           } catch (err) {
-            unchecked.push(`${t.id}: Lane A reached the merge and the merge step THREW (${err && err.message ? err.message : err}) — PR #${pr.number} was NOT merged, nothing was posted on the ticket, and the announcement is still armed. That is a defect in the merge step; it needs an agent session.`);
-            console.error(`  MERGE STEP THREW in Lane A on ${label}: ${err && err.stack ? err.stack : err}`);
+            unchecked.push(`${t.id}: Lane ${decision.lane || 'A'} reached the merge and the merge step THREW (${err && err.message ? err.message : err}) — PR #${pr.number} was NOT merged, nothing was posted on the ticket, and the announcement is still armed. That is a defect in the merge step; it needs an agent session.`);
+            console.error(`  MERGE STEP THREW in Lane ${decision.lane || 'A'} on ${label}: ${err && err.stack ? err.stack : err}`);
             merges.threw++;
             continue;
           }
           if (m.outcome === 'merged') {
             lane.merged++;
             ledger = ledgerAfterMerge(ledger, {
-              at: Date.now(), lane: 'A', pr: pr.number, url: pr.url, task: t.id, repo, files: decision.eligibility.files,
+              at: Date.now(), lane: decision.lane || 'A', pr: pr.number, url: pr.url, task: t.id, repo, files: decision.eligibility.files,
             }, Date.now());
             const saved = saveLedgerIfReadable(led, ledger);
             // The ledger IS the rate cap. If it cannot be written, the next
@@ -4257,11 +4263,12 @@ if (cmd === 'whoami') {
             // The gate said no after the window had already run: checks went
             // red, the branch conflicts, something changed. He is told, and it
             // needs a fresh review PASS before it can announce itself again.
-            const notice = cancellationNotice({ pr, why: m.reason, at: new Date().toISOString() });
+            const atMergeLane = decision.lane || 'A';
+            const notice = cancellationNotice({ pr, why: m.reason, at: new Date().toISOString(), lane: atMergeLane });
             const out = await call('POST', `/api/v2/task/${t.id}/comment`, { comment_text: notice.body });
-            if (!out.res.ok) unchecked.push(`${t.id}: Lane A was cancelled at merge time (${m.reason}) but the notice FAILED to post`);
+            if (!out.res.ok) unchecked.push(`${t.id}: Lane ${atMergeLane} was cancelled at merge time (${m.reason}) but the notice FAILED to post`);
             else await stampLoopNoteSoftly(t.id, loopNote('auto-merge-cancelled', { at: clockAt(Date.now()) }), unchecked);
-            console.error(`  LANE A CANCELLED at merge time on ${label}: ${m.reason}`);
+            console.error(`  LANE ${atMergeLane} CANCELLED at merge time on ${label}: ${m.reason}`);
             lane.cancelled++;
           } else {
             // 'waiting' — CI is still running. The announcement stays armed
@@ -4488,11 +4495,22 @@ if (cmd === 'whoami') {
   // read as a healthy lane that had never merged a single pull request
   // (task 86bbugeda).
   const history = laneAMergeHistory({ ledger: led.ledger, fresh: led.fresh, readable: led.ok });
-  console.log(`LANE A:  ${gate.allowed ? 'RUNNING' : `NOT RUNNING — ${gate.why}`}`);
+  // Both lanes share ONE gate — the switch, the cap and the latch apply to
+  // every automated lane (doctrine, "Conditions that apply to every automated
+  // lane"), so printing them per lane would invite the reading that they are
+  // separately switchable. What differs is which files each lane carries, so
+  // that is what each line says.
+  const state = gate.allowed ? 'RUNNING' : `NOT RUNNING — ${gate.why}`;
+  console.log(`LANE A:  ${state}`);
+  console.log('         carries: test files, docs/, *.md');
+  console.log(`LANE B:  ${state}`);
+  console.log("         carries: scripts/ — the pipeline's own tooling. NOT lib/ (the live");
+  console.log('         server loads it), and not the merge machinery itself.');
+  console.log(`         guard:   npm run check:automerge-reach`);
   console.log(`history: ${history.verdict === 'never' ? 'NEVER MERGED — ' : (history.verdict === 'unknown' ? 'CANNOT TELL — ' : '')}${history.why}`);
   if (gate.allowed && history.verdict === 'never') {
-    console.log('         RUNNING here means the gate is open, NOT that this lane works —');
-    console.log('         nothing has ever come out of it.');
+    console.log('         RUNNING here means the gate is open, NOT that these lanes work —');
+    console.log('         nothing has ever come out of them.');
   }
   const recent = mergesSince(led.ledger, digestSince(led.ledger, now));
   console.log(`recent:  ${recent.length} auto-merge(s) since the last digest (or the last 24 hours if none has posted)`);

@@ -36,6 +36,15 @@ jobs:
       - name: Syntax check (browser JS)
         run: npm run check:syntax
 
+      # Lane B (task 86bbuzyra) lets `scripts/` auto-merge without Dane's word,
+      # and the whole safety argument is that no served route reaches it. He
+      # attached this check as a condition of choosing that boundary: "a check
+      # that fails if an auto-mergeable folder becomes reachable from the
+      # server. Otherwise this decision silently expires." Milliseconds, no
+      # browser, no database.
+      - name: Auto-merge boundary (nothing auto-mergeable on a served path)
+        run: npm run check:automerge-reach
+
       # THE FIRST BROWSER IN CI, and the reason it is worth the ~30s cold
       # install: nothing in this repo tests CSS (DOCTRINE §5.14), and the one
       # check that did measure a browser — check:panels — reached the operator
