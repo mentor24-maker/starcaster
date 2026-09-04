@@ -234,15 +234,38 @@ test('the four card states are decided from what is actually stored', async (t) 
   assert.equal(cards.get('bluesky').account, null);
   assert.equal(cards.get('bluesky').reason, '', 'a healthy card carries no reason');
 
-  // A platform with no adapter is greyed, whatever else is true of it.
-  // Read the catalogue for what is STILL unfinished rather than naming a
-  // platform: Instagram became connectable in slice 5 (86bbpz1gk), and a test
-  // that hard-codes the example silently loses its subject each time one ships.
-  const registryNow = require('../../lib/connections/registry.js');
-  const stillComingSoon = registryNow.CATALOGUE.filter((entry) => entry.readiness === 'coming_soon');
-  assert.ok(stillComingSoon.length, 'no coming_soon entry left to prove the greyed state');
-  for (const entry of stillComingSoon) {
-    assert.equal(cards.get(entry.provider).cardState, 'coming_soon');
+  /**
+   * A platform with no adapter is greyed, whatever else is true of it.
+   *
+   * There is no such platform any more — X was the last one and it connects as
+   * of Connections 7 of 7 (86bbpz1hu), which is the epic finishing. This used
+   * to read the catalogue for whatever was still unfinished and assert it found
+   * one, precisely so that this moment would fail loudly rather than the
+   * assertion quietly ceasing to test anything.
+   *
+   * So the state is pinned at its decision point instead. `cardStateFor` is
+   * exported for exactly this, and the greyed card is the ONE state that is
+   * decided before any row is read — which is why it must keep a test even with
+   * nothing in the catalogue to point at: the next platform added as
+   * `coming_soon` would otherwise be the first thing ever to exercise it.
+   */
+  assert.equal(
+    h.route.cardStateFor({ provider: 'someday', readiness: 'coming_soon' }, []).cardState,
+    'coming_soon'
+  );
+  // Greyed beats everything: a stored row must not un-grey a platform whose
+  // adapter does not exist, or the card offers a button that cannot work.
+  assert.equal(
+    h.route.cardStateFor(
+      { provider: 'someday', readiness: 'coming_soon' },
+      [{ status: 'connected', hasAccessToken: true, accountId: '1', accountLabel: 'x' }]
+    ).cardState,
+    'coming_soon'
+  );
+  // And every catalogue entry today is connectable, which is the fact that
+  // retired the loop above.
+  for (const card of cards.values()) {
+    assert.notEqual(card.cardState, 'coming_soon');
   }
 
   // A live grant.
@@ -330,15 +353,39 @@ test('starting a connection asks the adapter, and never invents a credential fie
     assert.ok(field.help, 'and a line saying where to get it');
   }
 
-  // A platform with no adapter refuses with the registry's own sentence, and
-  // the two refusals are different facts: not finished, versus no such thing.
-  const comingSoon = await call(h.route, { method: 'POST', path: '/api/connections/x/start' });
+  /**
+   * The two refusals are different facts: not finished, versus no such thing.
+   *
+   * `x` used to be the "not finished" example and is now connectable
+   * (86bbpz1hu), and no catalogue entry is `coming_soon` any more — so that
+   * half is pinned against the registry's own branch, which is where the
+   * sentence is actually chosen. `adapterAnswer` is what `getAdapter` calls,
+   * and `getAdapter` is what this route hands its refusal to verbatim.
+   */
+  const registryNow = require('../../lib/connections/registry.js');
+  const comingSoon = registryNow.adapterAnswer(
+    { provider: 'someday', displayName: 'Someday', readiness: 'coming_soon', adapter: null },
+    'someday'
+  );
   assert.equal(comingSoon.status, 400);
-  assert.match(comingSoon.payload.error.message, /not connectable yet/i);
+  assert.equal(comingSoon.code, 'COMING_SOON');
+  assert.match(comingSoon.error, /not connectable yet/i);
 
   const unknown = await call(h.route, { method: 'POST', path: '/api/connections/friendster/start' });
   assert.equal(unknown.status, 404);
   assert.match(unknown.payload.error.message, /unknown/i);
+
+  /**
+   * X now starts a real sign-in, and its refusal when the app is not set up
+   * must be a THIRD thing again — not "unknown platform" and not "not
+   * connectable yet", both of which would send whoever hit it looking in the
+   * wrong place. This asserts the route passes the adapter's own sentence
+   * through rather than substituting one of its own.
+   */
+  const xStart = await call(h.route, { method: 'POST', path: '/api/connections/x/start' });
+  assert.equal(xStart.status, 400);
+  assert.match(xStart.payload.error.message, /OAuth 2\.0 Client ID/);
+  assert.doesNotMatch(xStart.payload.error.message, /not connectable yet/i);
 });
 
 test('picking an account makes it the one that will actually post', async (t) => {
@@ -520,6 +567,76 @@ test('every endpoint refuses before it acts when no workspace is chosen', async 
     assert.equal(res.status, 400, `${method} ${urlPath}`);
     assert.equal(res.payload.error.code, 'PROJECT_REQUIRED', `${method} ${urlPath}`);
   }
+});
+
+/**
+ * Review round 2 of 86bbpz1hu — a route that looked like it worked and could not.
+ *
+ * `EXCHANGE_FIELDS` is an allow-list: only the fields named there reach an
+ * adapter's `exchange`. `state` and `nonce` were not on it, and the X adapter
+ * derives its PKCE code verifier from the nonce — so every X sign-in driven
+ * through THIS route refused with "the PKCE verifier it was begun with cannot
+ * be reproduced", no matter what was posted to it.
+ *
+ * Nothing visible was broken: the live screen goes through the
+ * `routes/engage.js` callback, which passes both. But the next reader would
+ * have believed this route, so the gap is pinned rather than documented.
+ *
+ * The assertion is that the refusal has MOVED PAST the verifier — it is now the
+ * app-not-configured one, which the adapter reaches only after reproducing the
+ * verifier successfully. Deliberately with no X client credentials in the
+ * environment, so the adapter refuses before it would call X: a unit test must
+ * not make a live HTTP request.
+ */
+test('a PKCE sign-in through the finish route gets its state and nonce', async (t) => {
+  const h = withRoute();
+  t.after(h.restore);
+
+  const previous = {};
+  for (const key of ['META_OAUTH_STATE_SECRET', 'X_CLIENT_ID', 'X_CLIENT_SECRET',
+    'X_OAUTH_CLIENT_ID', 'X_OAUTH_CLIENT_SECRET']) {
+    previous[key] = process.env[key];
+    delete process.env[key];
+  }
+  process.env.META_OAUTH_STATE_SECRET = 'state-secret-for-tests';
+  // Set only long enough to MINT the state — `authorizeUrl` needs them — then
+  // removed again before the route call, so the adapter stops at the
+  // credentials check rather than making a live request to X.
+  process.env.X_CLIENT_ID = 'x-client-id';
+  process.env.X_CLIENT_SECRET = 'x-client-secret';
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  // A REAL state, minted by the adapter that will read it back — so this fails
+  // if the route drops the field, and not because the fixture is malformed.
+  const x = require('../../lib/connections/adapters/x.js');
+  const started = x.authorizeUrl({ projectId: SCOPE.projectId, userId: SCOPE.userId });
+  assert.equal(started.ok, true, started.error);
+  const state = new URL(started.data.url).searchParams.get('state');
+  assert.ok(state, 'the adapter minted no state, so this test proves nothing');
+  delete process.env.X_CLIENT_ID;
+  delete process.env.X_CLIENT_SECRET;
+
+  const res = await call(h.route, {
+    method: 'POST',
+    path: '/api/connections/x/finish',
+    body: { code: 'an-authorization-code', state },
+  });
+
+  const message = String(res.payload?.error?.message || '');
+  assert.doesNotMatch(
+    message,
+    /PKCE verifier/,
+    'the route dropped `state` on the way to the adapter, so an X sign-in through it can never complete: '
+    + `${message}`
+  );
+  // Where it gets to instead: past the verifier, and stopped by the missing
+  // app credentials this test deliberately did not set.
+  assert.match(message, /X_CLIENT_ID|not configured|developer\.x\.com/i, message);
 });
 
 test('the route ignores paths that are not its own', async (t) => {

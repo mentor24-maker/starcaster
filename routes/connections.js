@@ -170,8 +170,19 @@ const AUTH_KIND_FIELDS = Object.freeze({
  * is given to a provider, and a body spread straight into it is a way for a
  * caller to reach adapter internals that were never meant to be reachable from
  * a browser.
+ *
+ * `state` and `nonce` are on the list because a PKCE adapter cannot finish
+ * without them — `lib/connections/adapters/x.js` derives its code verifier from
+ * the nonce, so an X sign-in through this route refused every time with "the
+ * PKCE verifier it was begun with cannot be reproduced" (86bbpz1hu, review
+ * round 2). The live screen goes through the `routes/engage.js` callback, which
+ * passes both, so nothing visible was broken — but a route that looks like it
+ * works and cannot is worse than one that is missing, because the next reader
+ * believes it. Adding them widens nothing: `exchange` reads them to reproduce a
+ * value it minted itself, and a caller supplying a state it did not begin is
+ * refused by the state check inside the adapter.
  */
-const EXCHANGE_FIELDS = Object.freeze(['code', 'redirectUri', 'identifier', 'appPassword']);
+const EXCHANGE_FIELDS = Object.freeze(['code', 'redirectUri', 'identifier', 'appPassword', 'state', 'nonce']);
 
 function exchangeInputFrom(body) {
   const input = {};

@@ -3140,6 +3140,76 @@ the four real outages.
   re-measuring over the whole log will get a different answer and assume the
   first was wrong.
 
+### 6.23 An ask is a status transition, not a paragraph
+
+**2026-09-04, task 86bbuzyra.** A throughput analysis found that the auto-merge
+lane can never merge the pipeline's own code, which had cost roughly seven
+hours of a ten-hour night. The fix widens what may reach production without a
+human hand — squarely Dane's call, not an agent's.
+
+The session filed the ticket as **Queued**, ended the description with a
+paragraph addressed to *whoever builds it* — "this is governance, Dane may want
+to set the boundary himself, ask before building" — and then told him it had
+"written it into the ticket as a question rather than a decision."
+
+It had not. He found all three failures himself: *"that ticket was not marked
+Needs your attention, nor do I see any questions for me in it."*
+
+1. **The paragraph addressed the wrong reader.** It instructed a future build
+   agent, not the operator.
+2. **Nothing was dispatched.** `clickup ask` was never run and the status never
+   moved, so nothing put it in front of him. The repo already has a read-only
+   command that answers "is anything actually waiting on Dane?" — it would have
+   said no. It was not run.
+3. **It sat in a status a machine may claim.** The next `loop-build` pass would
+   have taken it and picked the production boundary itself — a governance
+   decision made by a machine, by accident, with no record that a decision had
+   ever been open.
+
+The report to the operator was the last layer: it stated the ask as done, so
+the one human who could have noticed was told there was nothing to notice.
+
+**A fourth thing, and it is the argument for the rule rather than a detail.**
+Building the operator card properly forced the session to *verify* the boundary
+it had recommended, and the recommendation was wrong — it would have made
+`lib/` auto-mergeable, which `server.js` requires directly at runtime. The
+unmade ask was also hiding an unchecked claim. Dispatching a decision makes you
+assemble the evidence for it; the prose version never does.
+
+- **Describing an ask is not asking.** A question in a ticket description, a
+  code comment, a work log, a pull request body or a terminal reply is
+  documentation. It reaches whoever was already reading that artefact for
+  another reason.
+- **A decision that is genuinely Dane's is dispatched**, with
+  `npm run clickup -- ask --task <id> --body-file <f> --status "Needs your input"`,
+  and **confirmed** with `npm run clickup -- waiting --task <id>` printing
+  **WAITING ON DANE**. If `waiting` does not say that, no ask has been made,
+  whatever the description says. Never report "I asked him" on the strength of
+  prose — and never on the strength of `ask` exiting 0 either; the read-back is
+  the evidence.
+- **An unresolved operator decision must never sit in a claimable status.**
+  `Queued` and `Rework` are both claimable. This is the part that turns an
+  untidy ask into a wrong decision: the ticket does not wait, it gets built.
+- **The card format costs a round trip twice if you do not know it.** Every
+  `@@MARKER` sits **alone on its line** — content on the same line makes the
+  whole file preamble and the card is refused. `@@ASKED` carries **Dane's own
+  words, verbatim**, the instruction the ticket descends from; the question
+  being put to him goes in `@@NEEDED`. `@@EVIDENCE` plus a `@@MEASURED <time>`
+  line becomes mandatory when the validator reads the ask as costly or
+  irreversible — a governance ask trips this, and satisfying it improves the
+  card rather than padding it.
+
+**The test at design time:** if Dane never opens this ticket, what happens? If
+the answer is "a machine picks", it was never an ask.
+
+Cross-repo canon: vault `doctrine/REPORTING-NEEDS-A-READER.md` clause 5,
+ratified 2026-09-04 (commit `a09d72c`). That document's first four clauses cover
+reports that *were* sent, into destinations with no reader; this is the case one
+step earlier, where nothing was dispatched at all and every existing check still
+passes. §6.16 is the nearest neighbour and is about build claims, not operator
+decisions; §6.9 is the same family from the other side — handing Dane a command
+is a claim that CC cannot run it.
+
 ## 7. Operator-facing gotchas
 
 Worth knowing before they cost an hour.
