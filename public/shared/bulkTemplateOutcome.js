@@ -54,6 +54,15 @@
     return n === 1 ? one : many;
   }
 
+  // The server's own sentences already end in a full stop; the ones assembled
+  // here do not. Appending blindly produced `Take an archive first..` in the
+  // one message the operator reads after a refusal.
+  function endSentence(value) {
+    const body = text(value);
+    if (!body) return '';
+    return /[.!?]$/.test(body) ? body : `${body}.`;
+  }
+
   /**
    * Split the per-page results into the three verdicts.
    *
@@ -118,8 +127,16 @@
       // The dangerous count. It is never folded into the moved figure and it
       // never says "before publishing" — see the header.
       const live = unconfirmed.filter((row) => row.isLive === true).length;
+      // The pronoun and the verb both come from the LIVE count, never one from
+      // each. `live === unconfirmed.length` picked the pronoun while
+      // `plural(live, ...)` picked the verb, so a single unconfirmed live page
+      // read "they is live on the public site" — the one sentence the whole
+      // read-back exists to produce, ungrammatical at the moment it matters
+      // most. Every fixture gave the unconfirmed set two or more members, so
+      // nothing caught it.
+      const subject = live === unconfirmed.length ? plural(live, 'it', 'they') : `${live} of them`;
       const whereTheyAre = live
-        ? `${live === unconfirmed.length ? 'they' : `${live} of them`} ${plural(live, 'is', 'are')} live on the public site right now, so check ${plural(live, 'it', 'them')} now or Restore All from Archives`
+        ? `${subject} ${plural(live, 'is', 'are')} live on the public site right now, so check ${plural(live, 'it', 'them')} now or Restore All from Archives`
         : 'check those before trusting them, or Restore All from Archives';
       parts.push(`${unconfirmed.length} ${plural(unconfirmed.length, 'was', 'were')} written but could not be read back — ${whereTheyAre}`);
     }
@@ -155,8 +172,74 @@
       ? ` ${liveCount} of the selected ${plural(liveCount, 'page is', 'pages are')} live on the public site.`
       : '';
     return {
-      message: `${reason}. The request failed part-way, so some pages may already have been changed and some may not — the list has been reloaded.${live} Check the pages, or Restore All from Archives if this is not what you wanted.`,
+      message: `${endSentence(reason)} The request failed part-way, so some pages may already have been changed and some may not — the list has been reloaded.${live} Check the pages, or Restore All from Archives if this is not what you wanted.`,
       isError: true,
+      definite: false,
+    };
+  }
+
+  /**
+   * WHICH failure was it? This is the fork the caller must not make by hand.
+   *
+   * A rejection from App.api is one of two completely different events, and
+   * the browser cannot tell them apart by looking at the message:
+   *
+   *   - The SERVER REFUSED. It answered a structured JSON error with an HTTP
+   *     status, which App.api attaches to the thrown Error. Every refusal this
+   *     route raises — a missing archive, an id that is not an archive id, an
+   *     email template, a template with no sections — happens BEFORE a single
+   *     page is written, and the store itself only answers `ok:false` when
+   *     zero pages were written. So the answer is definite: nothing changed.
+   *
+   *   - The REQUEST DIED. A serverless timeout, a dropped connection, a
+   *     non-JSON body: no status, and pages may well have been re-poured
+   *     already. That is the case describeBulkTemplateInterruption was
+   *     written for.
+   *
+   * The first version ran every rejection through the interruption sentence,
+   * so a flat refusal read as:
+   *
+   *     No archive with id "999999" — nothing was changed. Take an archive
+   *     first.. The request failed part-way, so some pages may already have
+   *     been changed and some may not … or Restore All from Archives if this
+   *     is not what you wanted.
+   *
+   * — a definite answer rendered as a could-not-tell, contradicting itself in
+   * one breath and then recommending Restore All, which rolls every page in
+   * the project back to the archive point and takes any unrelated edit made
+   * since with it. A destructive action recommended in response to a no-op.
+   *
+   * When the server refused, say what it said and NOTHING else — except, when
+   * an archive was already taken, that the archive is there. Otherwise the
+   * Archives list grows an entry the operator cannot account for.
+   */
+  function describeBulkTemplateFailure(options) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const status = Number(opts.status);
+    const serverRefused = Number.isFinite(status) && status >= 400;
+    // The caller may KNOW this particular request could not have changed a
+    // page whatever happened to it — the pre-flight check writes nothing even
+    // when it dies half way. That is the one other way to be certain.
+    const wroteNothing = opts.wroteNothing === true;
+
+    if (!serverRefused && !wroteNothing) {
+      return describeBulkTemplateInterruption({
+        error: opts.error,
+        liveCount: opts.liveCount,
+      });
+    }
+
+    const reason = endSentence(text(opts.error) || `The request was refused${Number.isFinite(status) ? ` (${status})` : ''}`);
+    // The server's own refusals already say "nothing was changed"; a request
+    // that died on the pre-flight check has said nothing at all.
+    const nothingChanged = wroteNothing && !serverRefused ? ' Nothing was changed.' : '';
+    const archiveNote = opts.archiveTaken
+      ? ' An archive was saved just before this, so Archives has a new entry that undoes nothing.'
+      : '';
+    return {
+      message: `${reason}${nothingChanged}${archiveNote}`,
+      isError: true,
+      definite: true,
     };
   }
 
@@ -164,5 +247,6 @@
     tallyBulkTemplateRows,
     describeBulkTemplateOutcome,
     describeBulkTemplateInterruption,
+    describeBulkTemplateFailure,
   };
 });

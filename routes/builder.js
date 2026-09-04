@@ -126,6 +126,7 @@ const {
   propagateCanonicalSection,
   bulkSetPublished,
   bulkSetPageTemplate,
+  checkBulkSetPageTemplate,
 } = require('../lib/builderPagesStore');
 // Sections and modules share ONE propagation engine since Sync 7/7. The
 // section entry point is re-exported by the pages store above for the callers
@@ -364,9 +365,14 @@ function describeArchiveCheckFailure(snapshotId, lookup) {
     };
   }
 
-  // Definite: what was sent is not an archive id at all (getPageSnapshot
-  // answers 400 for anything that is not a number).
-  if (status === 400) {
+  // Definite: what was sent is not an archive id at all — and the CODE is what
+  // says so, not the status. getPageSnapshot tags its own refusal
+  // `INVALID_SNAPSHOT_ID`; every other 400 reaching here came back raw from
+  // PostgREST, which answers 400 for a malformed scope filter or a column that
+  // moved. Reading the bare status turned all of those into this definite,
+  // actionable, wrong sentence — the exact defect this function documents
+  // itself as fixing, one layer down.
+  if (status === 400 && String(result.code || '') === 'INVALID_SNAPSHOT_ID') {
     return {
       status: 400,
       error: `"${id}" is not an archive id — nothing was changed. Take an archive first.`,
@@ -516,6 +522,22 @@ async function handle(req, res, pathname, method) {
   // where it emptied 35 sections off a live page — and a guard that lives only
   // in the browser is not a guard: a stale bundle, a retried request or a
   // direct API call all reach this route with no archive behind them.
+  // WOULD this change be refused? Asked before the browser takes an archive.
+  //
+  // A separate path rather than a flag on the route below, deliberately: a
+  // `validateOnly` flag on the write endpoint is one misread boolean away from
+  // skipping the archive-first guard, which is the only undo this operation
+  // has. This path cannot write no matter what it is sent, and the path below
+  // still demands a snapshotId from everybody.
+  if (pathname === '/api/builder/landing-pages/bulk-set-template/check' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const pageIds = Array.isArray(body?.pageIds) ? body.pageIds : [];
+    const pageTemplateId = String(body?.pageTemplateId ?? body?.page_template_id ?? '').trim();
+    const check = await checkBulkSetPageTemplate(pageIds, pageTemplateId, scope);
+    if (!check.ok) return sendErr(res, check.status || 500, check.error || 'Could not check the template change'), true;
+    return sendOk(res, 200, check.data, check.data), true;
+  }
+
   if (pathname === '/api/builder/landing-pages/bulk-set-template' && requestMethod === 'POST') {
     const body = await parseJsonBody(req).catch(() => ({}));
     const request = readBulkSetTemplateRequest(body);

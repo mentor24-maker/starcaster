@@ -168,12 +168,32 @@ test('a 404 is the ONLY answer that says the archive is absent', () => {
   assert.match(refusal.error, /nothing was changed/);
 });
 
-test('a 400 says the id itself is not an archive id — also a definite answer', () => {
-  // getPageSnapshot answers 400 for anything that is not a number, so this is
-  // "what you sent is not an id", not "the lookup broke".
-  const refusal = describeArchiveCheckFailure('not-a-number', { ok: false, status: 400, error: 'id is required' });
+test('a 400 THE STORE ITSELF RAISED says the id is not an archive id — a definite answer', () => {
+  // getPageSnapshot answers 400 for anything that is not a number, and tags it
+  // INVALID_SNAPSHOT_ID. The code is what makes this definite, not the status.
+  const refusal = describeArchiveCheckFailure('not-a-number', {
+    ok: false, status: 400, code: 'INVALID_SNAPSHOT_ID', error: 'id is required',
+  });
   assert.equal(refusal.status, 400);
   assert.match(refusal.error, /"not-a-number" is not an archive id/);
+});
+
+test('a 400 from POSTGREST is a could-not-check, not "that is not an archive id"', () => {
+  // getPageSnapshot returns sbQuery's envelope RAW on failure, and PostgREST
+  // answers 400 for reasons that have nothing to do with the id — a malformed
+  // scope filter, a column that moved. Reading the bare status reported every
+  // one of those as a definite, wrong, actionable answer: go and take an
+  // archive, when the archive is sitting right there.
+  const refusal = describeArchiveCheckFailure('37', {
+    ok: false,
+    status: 400,
+    error: 'column builder_page_snapshots.project_id does not exist',
+  });
+  assert.match(refusal.error, /Could not check whether archive "37" exists/);
+  assert.match(refusal.error, /column builder_page_snapshots\.project_id does not exist/);
+  assert.match(refusal.error, /not the same as having no archive/);
+  assert.doesNotMatch(refusal.error, /is not an archive id/);
+  assert.doesNotMatch(refusal.error, /Take an archive first/);
 });
 
 test('a 500 says the archive could not be CHECKED, and names what came back', () => {
@@ -207,4 +227,28 @@ test('a failure with no status at all is a could-not-check, never an absent arch
     assert.match(refusal.error, /Could not check whether archive "9" exists/);
     assert.doesNotMatch(refusal.error, /undefined|NaN/);
   }
+});
+
+/**
+ * The two halves of item 4 have to be tested together.
+ *
+ * The route decides "not an archive id" on a CODE the store attaches. Testing
+ * the route against a hand-written envelope proves the route reads the code;
+ * it cannot prove the store still writes it. Delete that one property and the
+ * definite branch goes dead — every bad id becomes a could-not-check, which is
+ * the safe direction, but nothing would say so.
+ */
+const { getPageSnapshot } = require('../../lib/builderPageSnapshotsStore');
+
+test('getPageSnapshot tags ITS OWN 400, which is what the route reads', async () => {
+  // Returns before it ever reaches Supabase, so this needs no database.
+  const res = await getPageSnapshot('not-a-number');
+  assert.equal(res.ok, false);
+  assert.equal(res.status, 400);
+  assert.equal(res.code, 'INVALID_SNAPSHOT_ID');
+
+  // And end to end: the route turns that, and only that, into the definite
+  // sentence.
+  const refusal = describeArchiveCheckFailure('not-a-number', res);
+  assert.match(refusal.error, /is not an archive id/);
 });

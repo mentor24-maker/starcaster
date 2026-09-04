@@ -509,6 +509,12 @@ App.builder = (function () {
   let savedModuleClasses = [];
   let savedPages = [];
   let savedPageTemplates = [];
+  // WHY the list is empty. `loadSavedPageTemplates` swallows every failure into
+  // an empty array, so "this project has no page templates" and "the request to
+  // fetch them fell over" were the same picture — and the dialog stated the
+  // first as fact, sending the operator off to create templates he already has
+  // (landmine 17). Empty string means the last load succeeded.
+  let savedPageTemplatesError = '';
   let savedThemes = [];
   let modularPageTemplateDraft = null;
   let draggedNewPageSectionLayout = '';
@@ -4321,7 +4327,13 @@ App.builder = (function () {
     // An empty list is a state, not a failure, and it has to say which — a
     // dialog with an empty dropdown and no explanation reads as broken.
     if (!options.length) {
-      warningEl.textContent = 'This project has no saved page templates yet, so there is nothing to move these pages onto. Save a page as a template first.';
+      // An empty list is a state, and WHICH state matters: "you have none" is
+      // an instruction, "I could not fetch them" is a retry. Telling a project
+      // with thirty templates that it has none is the same defect as item 4 —
+      // a could-not-tell rendered as a definite answer.
+      warningEl.textContent = savedPageTemplatesError
+        ? `Could not load this project's page templates, so this list is empty for a reason that is not "you have none" — the request said: ${savedPageTemplatesError}. Close this and try again.`
+        : 'This project has no saved page templates yet, so there is nothing to move these pages onto. Save a page as a template first.';
       if (confirmBtn) confirmBtn.disabled = true;
     } else {
       // WHERE the pages are, named with the count rather than implied. A page
@@ -4359,7 +4371,34 @@ App.builder = (function () {
     if (!pageTemplateId) { notify('Choose a template first', true); return; }
 
     const templateName = getPagesTableTemplateLabel(pageTemplateId);
-    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Archiving…'; }
+
+    // ASK FIRST, ARCHIVE SECOND. The archive is a complete copy of every page
+    // in the project, and the server can still refuse this change after it is
+    // taken — the template may be an email template, have no sections, or have
+    // been deleted since the dropdown was filled. Archiving first left one of
+    // those refusals with a full archive behind it that undid nothing, on a
+    // list the operator is told to restore from; two refusals in a row push
+    // the real archives off the end of it.
+    //
+    // This endpoint writes nothing, whatever happens to it.
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Checking…'; }
+    try {
+      await api('/api/builder/landing-pages/bulk-set-template/check', {
+        method: 'POST',
+        body: JSON.stringify({ pageIds: ids, pageTemplateId }),
+      });
+    } catch (err) {
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Change Template'; }
+      notify(App.bulkTemplateOutcome.describeBulkTemplateFailure({
+        error: err && err.message,
+        status: err && err.status,
+        wroteNothing: true,
+        archiveTaken: false,
+      }).message, true);
+      return;
+    }
+
+    if (confirmBtn) confirmBtn.textContent = 'Archiving…';
 
     let snapshotId = '';
     try {
@@ -4410,11 +4449,19 @@ App.builder = (function () {
       const outcome = App.bulkTemplateOutcome.describeBulkTemplateOutcome({ rows, templateName });
       notify(outcome.message, outcome.isError);
     } catch (err) {
-      // The request died part-way. Some pages may already be re-poured, so the
-      // table on screen is not evidence of anything — reload it before saying
-      // a word, or the operator reads the OLD template values as proof nothing
-      // moved. (The success path reloads; this one used only to re-enable the
-      // button.)
+      // TWO COMPLETELY DIFFERENT EVENTS ARRIVE HERE, and the fork between them
+      // is made in public/shared/ where a test can reach it. A structured
+      // refusal carries an HTTP status (App.api attaches it) and means the
+      // route decided before writing a page; anything else means the request
+      // died and pages may already be re-poured. Running both through the
+      // interruption sentence told the operator "nothing was changed" and "some
+      // pages may already have been changed" in one breath, then pointed him at
+      // Restore All — which rolls the whole project back — in response to a
+      // no-op.
+      //
+      // The table is reloaded either way: on the death path it is the only way
+      // the screen stops being a lie, and on the refusal path it costs a read
+      // and shows the same values.
       if (dialog) dialog.close();
       await refreshPagesTableAfterBulkChange();
       // This is the one path where the message must survive anything, because
@@ -4423,9 +4470,11 @@ App.builder = (function () {
       // thrown TypeError here would leave the operator with silence.
       let message = `${(err && err.message) || 'The request failed'}. Some pages may already have been changed; the list has been reloaded. Restore All from Archives if this is not what you wanted.`;
       if (App.bulkTemplateOutcome) {
-        message = App.bulkTemplateOutcome.describeBulkTemplateInterruption({
+        message = App.bulkTemplateOutcome.describeBulkTemplateFailure({
           error: err && err.message,
+          status: err && err.status,
           liveCount: liveIds.size,
+          archiveTaken: true,
         }).message;
       }
       notify(message, true);
@@ -4451,8 +4500,10 @@ App.builder = (function () {
     try {
       const result = await api('/api/builder/page-templates');
       savedPageTemplates = Array.isArray(result.pageTemplates) ? result.pageTemplates : [];
-    } catch (_) {
+      savedPageTemplatesError = '';
+    } catch (err) {
       savedPageTemplates = [];
+      savedPageTemplatesError = safeText(err && err.message) || 'the request failed';
     }
   }
 

@@ -33,6 +33,11 @@ function makeStore({ pages, templates, failPageIds = [], silentlyDropPageIds = [
   const supabase = require(supabasePath);
   const rows = pages.map((r) => ({ ...r }));
   const written = new Set();
+  // Every call the store makes, in order. What a write path COSTS is part of
+  // its behaviour here: this runs on a serverless function that has already
+  // truncated a 50-page canonical propagation at 30, so an avoidable read per
+  // page is a page that does not get changed at the top of the range.
+  const calls = [];
 
   supabase.isConfigured = () => true;
   supabase.tableConfig = () => ({
@@ -46,6 +51,7 @@ function makeStore({ pages, templates, failPageIds = [], silentlyDropPageIds = [
     if (method === 'GET' && /select=project_id/.test(query)) {
       return { ok: false, status: 400, error: 'column does not exist' };
     }
+    calls.push({ method, table, query });
     if (table === 'builder_page_revisions') return { ok: true, data: [] };
     if (table === 'builder_page_templates') {
       return { ok: true, data: templates.map((t) => ({ ...t })) };
@@ -81,7 +87,7 @@ function makeStore({ pages, templates, failPageIds = [], silentlyDropPageIds = [
     return { ok: false, status: 500, error: `unexpected ${method} on ${table}` };
   };
 
-  return { store: require(storePath), rows };
+  return { store: require(storePath), rows, calls };
 }
 
 // layout_sections is a jsonb column: it is read back as an object, and the
@@ -307,4 +313,117 @@ test('failures and silent drops in ONE run stay three separate verdicts', async 
   // 2026-08-16 shape, and the read-back is the only thing that sees it.
   assert.equal(rows.find((r) => r.id === 3).page_template_id, '27');
   assert.equal(rows.find((r) => r.id === 1).page_template_id, '47');
+});
+
+// ── Round 3, item 2: the check that runs BEFORE the archive ─────────────────
+
+/**
+ * The archive is a complete copy of every page in the project, and it used to
+ * be taken before the server had validated anything — so a refused change left
+ * a full archive behind that undid nothing, on the very list the operator is
+ * told to restore from. Snapshot 37 in the review run was one: 138 pages
+ * archived for a change that touched zero.
+ *
+ * checkBulkSetPageTemplate answers the same question with no write behind it,
+ * and the write path calls the same resolver, so the two cannot drift into
+ * "the check said yes and the write said no".
+ */
+const EMAIL_TEMPLATE = {
+  id: '61',
+  name: 'Monthly Newsletter',
+  template_kind: 'email',
+  layout_sections: JSON.stringify({ sections: [{ id: 'e-1', type: 'text' }] }),
+};
+
+const EMPTY_TEMPLATE = {
+  id: '62',
+  name: 'Blank Starter',
+  template_kind: 'modular',
+  layout_sections: JSON.stringify({ sections: [] }),
+};
+
+test('the check says yes without touching a single page', async () => {
+  const { store, rows, calls } = makeStore({
+    pages: [pageRow(1, 'Home'), pageRow(2, 'About')],
+    templates: [NEW_TEMPLATE],
+  });
+
+  const res = await store.checkBulkSetPageTemplate([1, 2], '47');
+  assert.equal(res.ok, true);
+  assert.equal(res.data.pageCount, 2);
+  assert.equal(res.data.templateName, 'Blog Home Template');
+  assert.equal(res.data.sectionCount, 2);
+
+  // Nothing was written, and the pages still hold what they held.
+  assert.equal(calls.filter((c) => c.method === 'PATCH').length, 0);
+  assert.ok(rows.every((r) => r.page_template_id === '27'));
+});
+
+test('every refusal the write path can raise, the check raises first', async () => {
+  const cases = [
+    { ids: [1], templateId: '999', match: /No saved page template with id/ },
+    { ids: [1], templateId: '61', match: /is an email template/ },
+    { ids: [1], templateId: '62', match: /has no sections/ },
+    { ids: [], templateId: '47', match: /pageIds is required/ },
+    { ids: [1], templateId: '', match: /pageTemplateId is required/ },
+  ];
+  for (const c of cases) {
+    // eslint-disable-next-line no-await-in-loop
+    const { store, rows, calls } = makeStore({
+      pages: [pageRow(1, 'Home')],
+      templates: [NEW_TEMPLATE, EMAIL_TEMPLATE, EMPTY_TEMPLATE],
+    });
+    // eslint-disable-next-line no-await-in-loop
+    const checked = await store.checkBulkSetPageTemplate(c.ids, c.templateId);
+    assert.equal(checked.ok, false, `${c.templateId} should be refused`);
+    assert.match(checked.error, c.match);
+    // The browser archives only after this answers yes, so a refusal here is a
+    // refusal with no archive behind it.
+    assert.equal(calls.filter((call) => call.method === 'PATCH').length, 0);
+    assert.equal(rows[0].page_template_id, '27');
+
+    // And the write path refuses the same thing with the same sentence — one
+    // resolver, so they cannot disagree.
+    // eslint-disable-next-line no-await-in-loop
+    const written = await store.bulkSetPageTemplate(c.ids, c.templateId);
+    assert.equal(written.ok, false);
+    assert.equal(written.error, checked.error);
+    assert.equal(written.status, checked.status);
+  }
+});
+
+// ── Round 3, item 6: what one page costs ────────────────────────────────────
+
+test('one page costs one read, one write and one read-back — not three reads', async () => {
+  const { store, calls } = makeStore({
+    pages: [pageRow(1, 'Home')],
+    templates: [NEW_TEMPLATE],
+  });
+
+  const res = await store.bulkSetPageTemplate([1], '47');
+  assert.equal(res.ok, true);
+  assert.equal(res.data[0].verified, true);
+
+  const pageReads = calls.filter((c) => c.table === 'builder_landing_page' && c.method === 'GET');
+  const pageWrites = calls.filter((c) => c.table === 'builder_landing_page' && c.method === 'PATCH');
+  // Two reads: the one the write needs, and the read-back that catches the
+  // 2026-08-16 shape. The third was updatePage re-reading the same row to bank
+  // a revision, because the page it had already been handed was not passed
+  // through — 43 avoidable round trips on a select-all.
+  assert.equal(pageReads.length, 2, `expected 2 reads, got ${pageReads.length}`);
+  assert.equal(pageWrites.length, 1);
+});
+
+test('the revision is still banked, and off the page as it was BEFORE the change', async () => {
+  // Passing `previous` skips a read, not the revision — losing the revision
+  // would remove Page History's copy of the layout this change replaces.
+  const { store, calls } = makeStore({
+    pages: [pageRow(1, 'Home')],
+    templates: [NEW_TEMPLATE],
+  });
+
+  await store.bulkSetPageTemplate([1], '47');
+
+  const revisionWrites = calls.filter((c) => c.table === 'builder_page_revisions' && c.method === 'POST');
+  assert.equal(revisionWrites.length, 1);
 });

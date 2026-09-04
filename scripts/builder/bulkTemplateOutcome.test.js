@@ -7,6 +7,7 @@ const {
   tallyBulkTemplateRows,
   describeBulkTemplateOutcome,
   describeBulkTemplateInterruption,
+  describeBulkTemplateFailure,
 } = require('../../public/shared/bulkTemplateOutcome');
 
 /**
@@ -221,5 +222,139 @@ test('an interruption with no message still reads as a sentence', () => {
     const out = describeBulkTemplateInterruption(opts);
     assert.match(out.message, /^the request failed\./i);
     assert.doesNotMatch(out.message, /undefined|NaN/);
+  }
+});
+
+// ── Round 3, item 3: the sentence that matters most, at n = 1 ───────────────
+
+/**
+ * ONE unconfirmed page, and it is live.
+ *
+ * The pronoun came from `live === unconfirmed.length` and the verb from
+ * `plural(live, ...)`, so at n=1 they disagreed: "they is live on the public
+ * site". Every fixture above gives the unconfirmed set two or more members,
+ * which is exactly why nothing caught it — and this is the one line the whole
+ * read-back exists to produce, the 2026-08-16 warning, reading as broken
+ * software at the moment it is most needed.
+ */
+test('a single unconfirmed live page reads as English, not "they is live"', () => {
+  const out = describeBulkTemplateOutcome({
+    rows: [row({ verified: false, isLive: true })],
+    templateName: 'Blog Home',
+  });
+  assert.match(out.message, /it is live on the public site right now/);
+  assert.doesNotMatch(out.message, /they is/);
+  assert.doesNotMatch(out.message, /it are/);
+  // And it still says the dangerous thing.
+  assert.match(out.message, /could not be read back/);
+});
+
+test('two unconfirmed live pages still read as "they are"', () => {
+  const out = describeBulkTemplateOutcome({
+    rows: [row({ id: '1', verified: false, isLive: true }), row({ id: '2', verified: false, isLive: true })],
+  });
+  assert.match(out.message, /they are live on the public site/);
+  assert.doesNotMatch(out.message, /they is/);
+});
+
+test('one live out of several unconfirmed says how many, and agrees with itself', () => {
+  const out = describeBulkTemplateOutcome({
+    rows: [
+      row({ id: '1', verified: false, isLive: true }),
+      row({ id: '2', verified: false, isLive: false }),
+      row({ id: '3', verified: false, isLive: false }),
+    ],
+  });
+  assert.match(out.message, /1 of them is live on the public site/);
+  assert.doesNotMatch(out.message, /of them are/);
+});
+
+// ── Round 3, item 1: a refusal is not a mid-flight death ────────────────────
+
+/**
+ * THE ONE THIS ROUND WAS SENT BACK FOR.
+ *
+ * Every rejection went through the interruption sentence, so the server saying
+ * "nothing was changed" was immediately contradicted by "some pages may
+ * already have been changed" — and then the operator was pointed at Restore
+ * All, which rolls every page in the project back to the archive point and
+ * takes any unrelated edit made since with it. A destructive action
+ * recommended in response to a no-op.
+ */
+const REFUSAL = 'No archive with id "999999" — nothing was changed. Take an archive first.';
+
+test('a server refusal says what the server said and NOTHING else', () => {
+  const out = describeBulkTemplateFailure({ error: REFUSAL, status: 400, liveCount: 1 });
+  assert.equal(out.definite, true);
+  assert.equal(out.message, REFUSAL);
+  assert.doesNotMatch(out.message, /part-way/);
+  assert.doesNotMatch(out.message, /may already have been changed/);
+  assert.doesNotMatch(out.message, /Restore All/);
+});
+
+test('the full stop is not doubled onto a sentence that already has one', () => {
+  const out = describeBulkTemplateFailure({ error: REFUSAL, status: 400 });
+  assert.doesNotMatch(out.message, /\.\./);
+  // And a reason with no stop of its own still gets one.
+  const bare = describeBulkTemplateFailure({ error: 'Not authenticated', status: 401 });
+  assert.equal(bare.message, 'Not authenticated.');
+});
+
+test('every 4xx and 5xx the route can raise is treated as definite', () => {
+  // The store answers ok:false only when ZERO pages were written, and every
+  // refusal this route raises happens before a single write.
+  for (const status of [400, 401, 403, 404, 409, 422, 500]) {
+    const out = describeBulkTemplateFailure({ error: 'refused', status, liveCount: 3 });
+    assert.equal(out.definite, true, `status ${status}`);
+    assert.doesNotMatch(out.message, /part-way/, `status ${status}`);
+  }
+});
+
+test('a rejection with NO status is still the mid-flight sentence', () => {
+  // A serverless timeout, a dropped connection, a non-JSON body: App.api
+  // throws those without a status, and pages may genuinely have moved.
+  for (const status of [undefined, null, '', NaN, 0]) {
+    const out = describeBulkTemplateFailure({
+      error: 'Non-JSON response (504) from /api/builder/landing-pages/bulk-set-template',
+      status,
+      liveCount: 96,
+    });
+    assert.equal(out.definite, false, `status ${String(status)}`);
+    assert.match(out.message, /some pages may already have been changed/);
+    assert.match(out.message, /96 of the selected pages are live/);
+    assert.match(out.message, /Restore All from Archives/);
+  }
+});
+
+test('a refusal AFTER the archive was taken says the archive is there', () => {
+  // Otherwise the Archives list grows an entry the operator cannot account
+  // for — and he is being told to restore from that list.
+  const out = describeBulkTemplateFailure({ error: REFUSAL, status: 400, archiveTaken: true });
+  assert.match(out.message, /An archive was saved just before this/);
+  assert.match(out.message, /undoes nothing/);
+  assert.doesNotMatch(out.message, /part-way/);
+});
+
+test('the pre-flight check writing nothing is definite even when it dies', () => {
+  // The check endpoint cannot change a page whatever happens to it, so a
+  // network death there is still "nothing was changed" — and no archive has
+  // been taken yet at that point.
+  const out = describeBulkTemplateFailure({
+    error: 'Failed to fetch',
+    wroteNothing: true,
+    archiveTaken: false,
+  });
+  assert.equal(out.definite, true);
+  assert.match(out.message, /Failed to fetch\. Nothing was changed\./);
+  assert.doesNotMatch(out.message, /Restore All/);
+  assert.doesNotMatch(out.message, /archive was saved/);
+});
+
+test('a garbage argument does not throw and does not claim to know', () => {
+  for (const bad of [null, undefined, 'x', 7]) {
+    const out = describeBulkTemplateFailure(bad);
+    assert.equal(typeof out.message, 'string');
+    assert.ok(out.message.length > 0);
+    assert.equal(out.isError, true);
   }
 });
