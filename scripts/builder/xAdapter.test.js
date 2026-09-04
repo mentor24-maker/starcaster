@@ -597,6 +597,48 @@ test('refresh renews with the REFRESH token and returns the rotated one', async 
       // the body earns `unauthorized_client`, which names nothing useful.
       assert.match(String(calls[0].headers.Authorization), /^Basic /);
       assert.equal(form.get('client_secret'), null);
+      // The ID goes in both places, which is not a contradiction: X's own
+      // published example for this grant carries `client_id` as a form field
+      // alongside the Basic header. Raised by review round 3 of 86bbpz1hu.
+      // UNMEASURED against the live endpoint — every X call here is canned, so
+      // this test pins what we send, not what X requires.
+      assert.equal(form.get('client_id'), 'x-client-id');
+    });
+  });
+});
+
+/**
+ * The same field on the OTHER two calls that authenticate this way.
+ *
+ * Pinned separately from the wording above because they are separate request
+ * builders: `tokenRequest` serves both grants and `revoke` builds its own body,
+ * so a change to one silently leaves the others behind. If X does require the
+ * field, omitting it fails every client sign-in at the exchange and every
+ * revoke — and neither failure names the missing field.
+ */
+test('every X call that authenticates as the app carries client_id in the body too', async () => {
+  await withEnv(APP_ENV, async () => {
+    await withFetch([{ status: 200, body: TOKENS }, { status: 200, body: ME }], async (calls) => {
+      const started = x.authorizeUrl({ projectId: 'proj-a', userId: 'user-1' });
+      const url = new URL(started.data.url);
+      await x.exchange({
+        code: 'auth-code',
+        state: url.searchParams.get('state'),
+        nonce: started.data.nonce,
+        redirectUri: url.searchParams.get('redirect_uri'),
+      });
+      const exchangeForm = new URLSearchParams(calls[0].body);
+      assert.equal(exchangeForm.get('grant_type'), 'authorization_code');
+      assert.equal(exchangeForm.get('client_id'), 'x-client-id', 'the token exchange sent no client_id');
+      assert.equal(exchangeForm.get('client_secret'), null, 'the secret belongs in the header alone');
+    });
+
+    await withFetch({ status: 200, body: { revoked: true } }, async (calls) => {
+      await x.revoke({ accountId: '4455', accessToken: 'A', refreshToken: 'R' });
+      const revokeForm = new URLSearchParams(calls[0].body);
+      assert.equal(revokeForm.get('client_id'), 'x-client-id', 'the revoke sent no client_id');
+      assert.equal(revokeForm.get('token'), 'R', 'adding client_id displaced the token being revoked');
+      assert.equal(revokeForm.get('client_secret'), null, 'the secret belongs in the header alone');
     });
   });
 });

@@ -130,13 +130,28 @@ function withSweep({ adapters = {}, identityStore = null, legacyPage = null } = 
   const schema = parseSchemaFile(SQL_PATH);
   const db = createFakeDb(schema);
 
+  /**
+   * `failNextRead` makes ONE single-row read fail, the way a decrypt failure or
+   * a probe that went down between the list and the read presents. The column
+   * probe is exempt — it is a different query and failing it would break the
+   * scoping rather than the read under test.
+   */
+  const fault = { failNextRead: false };
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({
       projectConnections: 'project_connections',
       projectConnectionHandoffs: 'project_connection_handoffs',
     }),
-    sbQuery: async (args) => db.sbQuery(args),
+    sbQuery: async (args) => {
+      const query = String(args?.query || '');
+      const isProbe = query.includes('select=project_id,owner_user_id');
+      if (fault.failNextRead && !isProbe && query.includes('limit=1')) {
+        fault.failNextRead = false;
+        return { ok: false, status: 502, error: 'Bad Gateway (simulated cold start)' };
+      }
+      return db.sbQuery(args);
+    },
   };
 
   const legacy = { deleted: 0, page: legacyPage };
@@ -187,7 +202,7 @@ function withSweep({ adapters = {}, identityStore = null, legacyPage = null } = 
     else delete process.env.CHANNELS_ENCRYPTION_KEY;
   }
 
-  return { db, store, sweep, resolver, route, registry, identities, legacy, restore };
+  return { db, fault, store, sweep, resolver, route, registry, identities, legacy, restore };
 }
 
 /** Store a grant through the REAL store, so it is really encrypted and scoped. */
@@ -346,7 +361,13 @@ test('a refresh that fails marks the connection needs-attention rather than thro
 
   const stored = await h.store.getConnection({ provider: 'bluesky', accountId: 'did:plc:delray' }, SCOPE);
   assert.equal(stored.data.status, 'expiring', 'the stored status is what makes the card amber (6b)');
-  assert.match(stored.data.lastError, /Could not renew this connection/);
+  // The status here is unchanged by review round 3 — this row has life left on
+  // it, so `expiring` was always the answer. What changed is the SENTENCE: a
+  // 502 is the provider being unreachable, and the card now says so rather than
+  // implying the grant itself was refused. The two now read differently on
+  // purpose, because they mean different things and one of them is permanent.
+  assert.match(stored.data.lastError, /Could not reach bluesky to renew this connection/);
+  assert.match(stored.data.lastError, /will be retried/);
 });
 
 // ── One batch, and what remains ─────────────────────────────────────────────
@@ -727,6 +748,115 @@ test('a lapsed token whose renewal FAILS is expired, and the reason names the re
     'the row was written off with no word about the renewal that was tried'
   );
   assert.match(swept.data.results[0].reason, /refresh token has itself expired/);
+});
+
+/**
+ * ── Review round 3 of 86bbpz1hu ─────────────────────────────────────────────
+ *
+ * The test above is a JUDGMENT: X answered 400 and said the refresh token is
+ * itself dead. `expired` is the honest record of that, and `liveness` refuses
+ * the row for its status for ever, which is right — no refresh token overrules
+ * a grant the provider withdrew.
+ *
+ * This test is the other half, and getting them confused ended a client's
+ * connection on one network blip. An unreachable provider has judged NOTHING.
+ * The refresh token on that row is still perfectly good and the next attempt
+ * would renew it — but `expired` is not a live status, so the row was never
+ * elected again, and every post after it fell through to the shared keys, which
+ * for X are Dane's own account. Review reproduced it: the adapter asked once
+ * across two passes, `ok: true` both times, card green throughout.
+ *
+ * The two tests are deliberately identical except for the status code.
+ */
+test('a lapsed token whose renewal cannot REACH the provider stays recoverable — one blip must not end it', async (t) => {
+  let refreshes = 0;
+  const h = withSweep({
+    adapters: {
+      bluesky: {
+        verify: async () => ok({ valid: true }),
+        refresh: async () => { refreshes += 1; return fail(502, 'Bad Gateway from the provider'); },
+        revoke: async () => ok({ revokedAtProvider: true }),
+        authorizeUrl: () => ok({}), exchange: async () => ok({}), listAccounts: async () => ok({}),
+      },
+    },
+  });
+  t.after(h.restore);
+
+  await grant(h.store, {
+    provider: 'bluesky', accountId: 'did:plc:blip', accountLabel: 'blip.bsky.social',
+    accessToken: 'DEAD', refreshToken: 'STILL_GOOD', status: 'connected',
+    expiresAt: new Date(NOW - DAY).toISOString(),
+  });
+
+  const swept = await h.sweep.runVerifySweep({ scope: SCOPE, nowMs: NOW });
+  assert.equal(refreshes, 1, 'the renewal was never attempted, so this test proves nothing');
+
+  const stored = await h.store.getConnection({ provider: 'bluesky', accountId: 'did:plc:blip' }, SCOPE);
+  assert.notEqual(
+    stored.data.status,
+    'expired',
+    'one unreachable-provider failure wrote the connection off permanently — that is the round 3 defect'
+  );
+  assert.equal(stored.data.status, 'expiring');
+  // Amber, and the sentence under it says which of the two things happened.
+  assert.match(stored.data.lastError, /could not be reached/i);
+  assert.match(stored.data.lastError, /retried/i);
+  // Reported as an UNKNOWN, not a pass and not a failure: nothing was learnt
+  // about this grant (DOCTRINE 3.11).
+  assert.equal(swept.data.results[0].checked, false);
+  assert.equal(swept.data.results[0].healthy, null);
+  assert.match(swept.data.results[0].reason, /could not be reached/i);
+
+  // The point of all of it: the row is still elected for renewal.
+  const live = h.resolver.LIVE_STATUSES;
+  assert.ok(live.includes(stored.data.status), 'the status the sweep wrote is one the resolver will never elect again');
+});
+
+/**
+ * Review round 3, item 2.
+ *
+ * Moving the expired write-off to AFTER `getConnection` (round 2's fix, and it
+ * was right) meant a row whose credential would not decrypt returned
+ * `cannotCheck` — which writes no status at all, by design. So an already
+ * expired connection kept its `connected` status and a GREEN card, while the
+ * clock said plainly that it was past its deadline.
+ *
+ * It is not written off either. Failing to read our OWN vault is our fault, not
+ * a judgment X made, and the refresh token on that row may be perfectly good —
+ * writing `expired` here would be the test above's defect one branch over.
+ */
+test('an expired row whose credential cannot be READ goes amber, not green — and is not written off', async (t) => {
+  const h = withSweep({
+    adapters: {
+      bluesky: {
+        verify: async () => ok({ valid: true }),
+        refresh: async () => ok({ refreshed: true, accessToken: 'RENEWED', expiresAt: new Date(NOW + DAY).toISOString() }),
+        revoke: async () => ok({ revokedAtProvider: true }),
+        authorizeUrl: () => ok({}), exchange: async () => ok({}), listAccounts: async () => ok({}),
+      },
+    },
+  });
+  t.after(h.restore);
+
+  await grant(h.store, {
+    provider: 'bluesky', accountId: 'did:plc:unreadable', accountLabel: 'unreadable.bsky.social',
+    accessToken: 'DEAD', refreshToken: 'STILL_GOOD', status: 'connected',
+    expiresAt: new Date(NOW - DAY).toISOString(),
+  });
+
+  h.fault.failNextRead = true;
+  const swept = await h.sweep.runVerifySweep({ scope: SCOPE, nowMs: NOW });
+
+  const stored = await h.store.getConnection({ provider: 'bluesky', accountId: 'did:plc:unreadable' }, SCOPE);
+  assert.notEqual(
+    stored.data.status,
+    'connected',
+    'an expired connection kept a green card because the sweep could not read its credential'
+  );
+  assert.equal(stored.data.status, 'expiring');
+  assert.match(stored.data.lastError, /could not be read/i);
+  assert.match(stored.data.lastError, /expired at/i, 'the clock\'s own reading was left out of the sentence');
+  assert.equal(swept.data.results[0].healthy, null, 'a check that could not run was reported as a verdict');
 });
 
 /**

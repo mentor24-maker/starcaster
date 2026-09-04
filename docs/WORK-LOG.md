@@ -104,6 +104,50 @@ needs — was fixed. Nothing visible was broken by that second one, because the
 live screen uses a different route, but a route that looks like it works is
 worse than one that is missing.
 
+A third round of checking found the same accident arriving through yet another
+door, and this time the answer was to close the room rather than the door.
+
+The door: if X could not be reached at the moment a client's permission needed
+renewing — a momentary outage, a slow answer, a busy signal — the system wrote
+that permission down as dead. Not "not renewed yet". Dead. And "dead" is a
+verdict it never revisits, deliberately, because a client who takes their
+permission back must not have it quietly renewed. So one bad second at X ended
+the connection for good, the client's own permission still perfectly valid, and
+every post from then on went out on Dane's account with the card still green.
+The distinction that was missing is an ordinary one: X saying "no" is an answer,
+and X not answering at all is not. Only the first is written down as final now.
+The second says so on the card and is tried again on the next post.
+
+The room: for every other platform, the account Starcaster falls back to is
+Starcaster's own — wrong, but institutional. For X it is Dane's personal
+account. Three rounds of review each found a different route by which a
+client's post could end up there, and each was closed individually. So the rule
+is now stated once, at the exit itself: if a project has its own X connection
+and it cannot be used right now, the post does not go out at all, for any
+reason — including a reason nobody has thought of yet. It fails loudly, says
+which account and why, and can be retried. A project with no X connection is
+untouched and still posts the old way, which is Dane's own posting and the one
+thing that must not change.
+
+Two smaller repairs went with it. A permission already past its deadline whose
+stored value could not be read was leaving a green card on a connection the
+clock had plainly condemned; it now goes amber and says why, without being
+written off, because failing to read our own records is our fault and not a
+verdict about the client. And the client identifier is now sent on the three
+calls to X that identify Starcaster as an application — X's own published
+examples include it, leaving it out would fail every client sign-in, and adding
+it costs nothing if it turns out to be optional. That one is unproven against
+the live service, as everything about X here still is.
+
+Something was also wrong with the tests themselves, and it is worth recording
+because it made a whole class of checking worthless. The test scaffolding
+rebuilt its fake database for each test but let one module keep talking to the
+previous one — so any test asking "what did this actually write down?" was
+reading an abandoned copy. No test had ever asked that question, so nothing
+noticed. The reproduction for the fault above is the first one that had to, and
+it passed on its own and failed alongside the others until the scaffolding was
+fixed.
+
 ## 2026-09-03 — A refusal that can never clear stops promising it will (#585)
 
 When you comment `merge` on a finished ticket, an automatic step goes to GitHub

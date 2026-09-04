@@ -33,6 +33,7 @@ const projectScopePath = require.resolve('../../lib/projectScope.js');
 const storePath = require.resolve('../../lib/projectConnectionsStore.js');
 const apiSettingsPath = require.resolve('../../lib/apiSettings.js');
 const resolverPath = require.resolve('../../lib/connections/resolveCredentials.js');
+const sweepPath = require.resolve('../../lib/connections/verifySweep.js');
 const registryPath = require.resolve('../../lib/connections/registry.js');
 
 const SCOPE_A = { projectId: 'proj_a', userId: 'user_1' };
@@ -156,6 +157,26 @@ function withResolver(envOverrides = {}, registryStub = null) {
   delete require.cache[projectScopePath];
   delete require.cache[storePath];
   delete require.cache[resolverPath];
+  /**
+   * And the sweep, which is the one that had been missing.
+   *
+   * `verifySweep.js` captures `projectConnectionsStore` at load (line 79), and
+   * the resolver calls `refreshBeforeUse` without passing a store — so a cached
+   * sweep writes the renewal's status into the FIRST test's database, silently,
+   * for the whole rest of the file.
+   *
+   * Nothing caught it because no test in this file had ever read a row back
+   * after a resolver-driven refresh; they all asserted on the resolver's own
+   * answer, which carries the connection through in memory and is right either
+   * way. Review round 3's reproduction is the first that has to look at what
+   * was WRITTEN, and it passed alone and failed in the suite until this
+   * existed. An assertion about a stored status is worth nothing without it.
+   *
+   * Listed here AND in `restore()`, like `storePath` and `resolverPath` above.
+   * Measured: either line alone is enough, and removing both brings the defect
+   * straight back — so this is deliberate redundancy, not a line to tidy away.
+   */
+  delete require.cache[sweepPath];
 
   const store = require(storePath);
   const resolver = require(resolverPath);
@@ -192,6 +213,7 @@ function withResolver(envOverrides = {}, registryStub = null) {
     delete require.cache[projectScopePath];
     delete require.cache[storePath];
     delete require.cache[resolverPath];
+    delete require.cache[sweepPath];
     publisherPaths.forEach((modulePath) => delete require.cache[modulePath]);
     if (hadKey) process.env.CHANNELS_ENCRYPTION_KEY = previousKey;
     else delete process.env.CHANNELS_ENCRYPTION_KEY;
@@ -485,7 +507,18 @@ test('an X connection that expired an hour ago is RENEWED and posts as the clien
   } finally { h.restore(); }
 });
 
-test('when the renewal FAILS, it falls back to the shared keys and says which account and why', async () => {
+/**
+ * Revisited in review round 3. This used to assert that a failed renewal falls
+ * back to the shared keys, and for a provider whose shared keys are the Alphire
+ * app that is still right — the test below pins it, on Facebook.
+ *
+ * For X it was the second door into the room. The shared X keys are DANE'S OWN
+ * ACCOUNT, so "post with them instead" means a client's marketing on a named
+ * human's timeline, unrecallable, with `ok: true` and a green card. The answer
+ * is not to post at all. The sentence still has to name the account and the
+ * reason, which is the half of the old test that was always right.
+ */
+test('when the renewal FAILS, X REFUSES rather than posting from the shared keys — and says which account and why', async () => {
   const seen = [];
   const h = withResolver({}, registryRenewing({
     ok: false,
@@ -499,17 +532,60 @@ test('when the renewal FAILS, it falls back to the shared keys and says which ac
     });
 
     const res = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
-    assert.equal(res.ok, true, res.error);
     assert.equal(seen.length, 1, 'the renewal was never attempted, so this test proves nothing');
-    // The branch where the OLD behaviour was right, pinned so the fix above
-    // cannot turn into "post with a dead token".
-    assert.equal(res.data.source, 'environment', 'a token that could not be renewed was posted with anyway');
-    assert.equal(res.data.values.access_token, 'ENV_X_TOKEN_dane');
+    assert.equal(res.ok, false, 'a client whose X connection could not be renewed was posted for anyway');
+    assert.equal(res.status, 503);
+    assert.equal(res.code, 'CONNECTION_UNUSABLE');
+    // THE assertion: there is no credential in this answer at all, so nothing
+    // downstream can reach Dane's account through it by accident.
+    assert.equal(res.data, null, 'a refusal handed back values a publisher could post with');
+    assert.equal(
+      JSON.stringify(res).includes('ENV_X_TOKEN_dane'),
+      false,
+      "the shared account's token travelled in the refusal"
+    );
     // Skipped ONCE, not twice: the row is amended in place, not appended again.
-    assert.equal(res.data.skipped.length, 1, 'one row was reported as skipped more than once');
-    assert.match(res.data.skipped[0].why, /expired at/);
-    assert.match(res.data.skipped[0].why, /could not be renewed/);
-    assert.match(res.data.skipped[0].why, /invalid_grant/);
+    assert.equal(res.skipped.length, 1, 'one row was reported as skipped more than once');
+    assert.match(res.skipped[0].why, /expired at/);
+    assert.match(res.skipped[0].why, /could not be renewed/);
+    assert.match(res.skipped[0].why, /invalid_grant/);
+    assert.match(res.error, /expired at/);
+    assert.match(res.error, /invalid_grant/);
+  } finally { h.restore(); }
+});
+
+/**
+ * The narrowness, pinned. `sharedKeysArePersonal` is set on X alone, because X
+ * alone borrows a person's account. For Facebook the shared keys are the
+ * Alphire application's own, and taking a client off the air because their own
+ * grant lapsed would be a worse answer than posting institutionally — so the
+ * fallback there is unchanged, and this test fails if the refusal spreads.
+ */
+test('Facebook: a failed renewal still falls back — the X refusal must not spread to the other providers', async () => {
+  const seen = [];
+  const h = withResolver({}, {
+    adapterFor(provider) {
+      if (provider !== 'facebook_page') return null;
+      return {
+        async refresh(account) {
+          seen.push(account);
+          return { ok: false, status: 400, error: 'Meta refused the refresh' };
+        },
+      };
+    },
+  });
+  try {
+    await grant(h.store, SCOPE_A, {
+      ...CLIENT_PAGE,
+      refreshToken: 'CLIENT_PAGE_REFRESH',
+      expiresAt: new Date(Date.now() - 3600_000).toISOString(),
+    });
+
+    const res = await h.resolver.resolveCredentials('facebook_page', SCOPE_A.projectId);
+    assert.equal(seen.length, 1, 'the renewal was never attempted, so this test proves nothing');
+    assert.equal(res.ok, true, res.error);
+    assert.equal(res.data.source, 'environment', 'the X-only refusal reached a provider it does not belong to');
+    assert.equal(res.data.values.access_token, 'ENV_META_TOKEN_dane');
   } finally { h.restore(); }
 });
 
@@ -531,10 +607,116 @@ test('a REVOKED connection is never renewed — only the clock is recoverable', 
     });
 
     const res = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
-    assert.equal(res.ok, true, res.error);
     assert.equal(seen.length, 0, 'a revoked grant was put back into service by a refresh');
-    assert.equal(res.data.source, 'environment');
-    assert.match(res.data.skipped[0].why, /status is "revoked"/);
+    // Review round 3: not renewed AND not fallen back from. A client who
+    // withdrew their grant gets a refusal that tells the operator to reconnect,
+    // not their next post on Dane's timeline.
+    assert.equal(res.ok, false, "a revoked X grant fell through to Dane's own account");
+    assert.equal(res.code, 'CONNECTION_UNUSABLE');
+    assert.match(res.error, /status is "revoked"/);
+    assert.match(res.error, /reconnect x/i, 'a refusal that cannot be retried away must say what to do instead');
+    assert.match(res.skipped[0].why, /status is "revoked"/);
+  } finally { h.restore(); }
+});
+
+/**
+ * ── Review round 3 of 86bbpz1hu, reproduced ─────────────────────────────────
+ *
+ * Round 1: the connection went dead two hours in. Round 2: a lapsed token was
+ * never offered a renewal. Round 3: ONE momentary failure at X — a 502 on a
+ * cold start, a timeout, a rate limit — wrote `expired` on the row. `expired`
+ * is not a live status, so `liveness` refused it for its STATUS from then on
+ * and it was never elected for renewal again. The refresh token was perfectly
+ * good the whole time; nothing ever asked it a second time.
+ *
+ * Review measured the adapter being asked exactly ONCE across two passes, both
+ * of which answered `ok: true` with `ENV_X_TOKEN_dane` — Dane's own account —
+ * and left the card green.
+ *
+ * This test is that reproduction: fail once, succeed thereafter, resolve twice.
+ * It asserts on the TOKEN VALUE and on the number of attempts, because `ok` was
+ * true throughout the defect.
+ */
+test('a MOMENTARY failure at X does not end the connection — the next post renews it', async () => {
+  const seen = [];
+  let attempts = 0;
+  const h = withResolver({}, registryRenewing(() => {
+    attempts += 1;
+    if (attempts === 1) return { ok: false, status: 502, error: 'Bad Gateway from X' };
+    return {
+      ok: true,
+      status: 200,
+      data: {
+        refreshed: true,
+        accessToken: 'RENEWED_X_TOKEN_delray',
+        refreshToken: 'RENEWED_X_REFRESH_delray',
+        expiresAt: new Date(Date.now() + 7200_000).toISOString(),
+      },
+    };
+  }, seen));
+  try {
+    await grant(h.store, SCOPE_A, {
+      ...CLIENT_X,
+      expiresAt: new Date(Date.now() - 3600_000).toISOString(),
+    });
+
+    // Pass one: X is unreachable. Nothing is sent — and nothing is sent from
+    // the shared keys either, which is the room this round closed.
+    const first = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
+    assert.equal(first.ok, false, 'a post went out while X could not be reached to renew the token');
+    assert.equal(first.code, 'CONNECTION_UNUSABLE');
+
+    // The status the failure wrote down is the whole defect. `expired` here and
+    // the connection is over; `expiring` and it is merely unrenewed.
+    const afterFirst = await h.store.getConnection({ provider: 'x', accountId: '4455' }, SCOPE_A);
+    assert.equal(
+      afterFirst.data.status,
+      'expiring',
+      'one unreachable-provider failure wrote the row off permanently — that is the round 3 defect'
+    );
+    assert.match(afterFirst.data.lastError, /could not reach x/i);
+    assert.match(afterFirst.data.lastError, /will be retried/i);
+
+    // Pass two: X is answering again. The row must be elected a SECOND time.
+    const second = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
+    assert.equal(attempts, 2, 'the adapter was asked once across two passes — the row was never re-elected');
+    assert.equal(second.ok, true, second.error);
+    assert.equal(second.data.source, 'connection', 'the recovered connection still did not post as the client');
+    assert.equal(second.data.values.access_token, 'RENEWED_X_TOKEN_delray');
+    assert.notEqual(
+      second.data.values.access_token,
+      'ENV_X_TOKEN_dane',
+      "the client's post would have gone out on Starcaster's own X account"
+    );
+  } finally { h.restore(); }
+});
+
+/**
+ * The room rather than a door.
+ *
+ * Three rounds found three separate ways for a client's X post to leave through
+ * the shared keys. Each was closed on its own; a fourth was likely. So the rule
+ * is now stated once, at the exit itself, and does not depend on anybody having
+ * anticipated the reason: a project that HAS an X connection and cannot use it
+ * is refused, whatever made it unusable.
+ *
+ * `nowMs` is not stubbed and the status here is one nothing else in this file
+ * produces — the point is that the exit does not care why.
+ */
+test('X: a connection that is unusable for a reason nobody anticipated still never borrows the shared account', async () => {
+  const h = withResolver();
+  try {
+    await grant(h.store, SCOPE_A, { ...CLIENT_X, status: 'error' });
+    const res = await h.resolver.resolveCredentials('x', SCOPE_A.projectId);
+    assert.equal(res.ok, false, "an unusable X connection fell through to Dane's own account");
+    assert.equal(res.status, 503, 'the refusal must be retryable — the cause is usually momentary');
+    assert.equal(res.data, null);
+    assert.equal(
+      JSON.stringify(res).includes('ENV_X_TOKEN_dane'),
+      false,
+      "the shared account's token travelled in the refusal"
+    );
+    assert.match(res.error, /status is "error"/, 'the refusal did not say which account or why');
   } finally { h.restore(); }
 });
 
@@ -980,6 +1162,39 @@ test('X: a refusal stops createPost rather than posting from the shared account'
     // Not the "X credentials are missing" sentence: the credentials are fine,
     // the lookup is what failed, and only one of those is worth retrying.
     assert.doesNotMatch(posted.error, /Save API Key/);
+  } finally { h.restore(); }
+});
+
+/**
+ * The whole epic's promise, asserted where a client would actually feel it.
+ *
+ * Review round 3 closed the room at the resolver. This test asks the question
+ * one floor up, through the publisher a campaign really calls: a project whose
+ * X connection has lapsed does not post AT ALL. Every round of this ticket
+ * ended with `ok: true` and a post on the wrong timeline, so `ok: false` is the
+ * assertion — and the error must be the retryable one, because the ordinary
+ * cause is a renewal that will succeed on the next attempt.
+ */
+test('X: a client whose connection has lapsed does not post — not on their account, and not on Dane\'s', async () => {
+  const seen = [];
+  const h = withResolver({}, registryRenewing({
+    ok: false, status: 503, error: 'X is not answering',
+  }, seen));
+  try {
+    await grant(h.store, SCOPE_A, {
+      ...CLIENT_X,
+      expiresAt: new Date(Date.now() - 3600_000).toISOString(),
+    });
+    const posted = await h.publishers.x.createPost('hello', { projectId: SCOPE_A.projectId });
+    assert.equal(seen.length, 1, 'the renewal was never attempted, so this test proves nothing');
+    assert.equal(posted.ok, false, "a client's post went out while their own X connection was unusable");
+    assert.equal(posted.code, 'CONNECTION_UNUSABLE');
+    assert.equal(
+      JSON.stringify(posted).includes('ENV_X_TOKEN_dane'),
+      false,
+      "the shared account's token reached the publisher"
+    );
+    assert.match(posted.error, /@delraytennis/, 'the refusal did not say which account could not be used');
   } finally { h.restore(); }
 });
 
