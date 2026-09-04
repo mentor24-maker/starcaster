@@ -71,6 +71,43 @@ it, and the request counter counts requests that were actually sent rather than
 attempts that never left the machine, which matters because that figure is the
 one being budgeted against.
 
+Review sent it back a second time, and that one was not about the work at all:
+the main line of code moved underneath it in the two hours after the pull
+request went up, and it landed in the one file this ticket's headline
+measurement lives in. Two people had solved the same small problem within a day
+of each other — how do you count what a pass costs — and both answers were
+sitting there, disagreeing on purpose about what counts as a request. Keeping
+both would have left the report with two numbers and nothing saying which one it
+meant. There is one now, and the argument that lost is written down beside it,
+because the losing argument is the part a future reader needs.
+
+Underneath that was a worse one, and it is the kind of thing that never
+announces itself. The same two days had each given the same exit code a meaning:
+one branch made "3" mean *you have taken the deck, so I stood down*, the other
+made it mean *I just closed a ticket*. Both were right on their own. Merged
+carelessly, a pass that had just changed the board would have been read by the
+supervising job as a pass that politely declined to run — and reported as
+"paused". Nothing would have failed; an exit code is just a number, and every
+check in the repo stays green through a wrong one. The decline keeps 3, because
+that is what every other tool here means by it. Writing took a number nobody had
+claimed. Two tests now fail if anyone ever collapses them back together, and one
+of them reads both files to make sure the two ends still agree.
+
+The last thing was a line nothing was testing: the very last line a drift pass
+prints, the one reporting what it spent. It calls a function that lives in
+another file, and if that name ever changed, the pass would crash **after**
+doing all of its work — every ticket read, every repair applied, and then a
+failure at the finish line. That is exactly what nearly happened here, and only
+the merge conflict made anyone look. It is tested now, from both ends, and so is
+the identical last line in the other watchdog.
+
+The measurement was retaken through the surviving counter: **31 requests in 19
+seconds** against a 340-ticket queue. That is the read half only — the writes go
+out through a separate program with its own budget, so the printed number is a
+floor, and it now says so. The repair job takes a fresh reading at most every
+half hour, which 31 requests buys comfortably; it would not be safe on the
+ten-minute cycle, and that throttle is deliberate rather than incidental.
+
 ## 2026-09-03 — A refusal that can never clear stops promising it will (#585)
 
 When you comment `merge` on a finished ticket, an automatic step goes to GitHub
