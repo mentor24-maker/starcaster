@@ -123,6 +123,82 @@ a sentence sitting beside a check that no longer matched it, so rather than
 just correcting the sentence we made it fail on its own: a test now reads the
 note and the code together, and complains if the note names anything the code
 will not take.
+## 2026-09-04 — The Pages list stops claiming every page uses the same template (#598)
+
+On Builder: Pages, the Template column said "Standard Right-Form" on every
+single row, and the Template dropdown above it listed "Standard Right-Form"
+five times over. Neither was true, and both came from the same mistake.
+
+A page carries two template-ish values that mean different things. One is a
+leftover layout name the server makes up from the page's own web address, and
+it names no template at all. The other records which saved template the page
+was actually built from. The screen was reading the first one — and the code
+that turns a value into a name ends with "…or if you don't recognise it, give
+me the first template in the list". The first template in the list is Standard
+Right-Form. So every value it could not recognise came out wearing that name,
+on every row. The dropdown then added one entry per unrecognised page, each
+labelled through the same guess, which is where the five identical entries
+came from.
+
+The column now reads the value that actually means something, and the code
+behind it never guesses: it gives the template's real name, or says "No
+template" when a page genuinely has none, or says "Unknown template" and shows
+the value when something is set that names nothing. That last case is a real
+data problem and should look like one rather than hiding behind a plausible
+name. The dropdown is rebuilt from real templates only.
+
+Two problems turned up only because the screen was opened and used rather than
+just read. The same list of options was also filling the bulk-edit dropdown,
+which *writes* to pages — so it could have offered "No template" as something
+to save onto them. And real template names are longer than the fake one had
+been, so a long one ran straight across the neighbouring column and made the
+web addresses unreadable; it now shortens with the same word-boundary
+cropping the other columns already use, with the full name on hover.
+
+Checked against the live database first, because the whole change depends on
+that second value existing there: it does, and 116 of the 136 pages have one.
+Nothing about the database was changed.
+
+## 2026-09-04 — A job that has stopped working now says so within hours, not the next day (#596)
+
+On 3 September the step that merges finished work was dead for sixteen hours,
+and nothing told anybody. Four separate reporting surfaces were all working
+correctly and all stayed quiet — one of them cheerfully reported everything as
+fine.
+
+The reason turned out to be about resolution rather than about anything being
+broken. Each scheduled job records a "beat" when it runs, and those beats are
+copied to a shared ClickUp ticket at most once a day so both machines can read
+them. That is the right arrangement for noticing a machine that has been
+switched off. It is useless for noticing a job dying on a machine that is wide
+awake, because a perfectly healthy job legitimately shows up as twenty-one
+hours old between copies, and nobody reading that can tell it apart from a dead
+one.
+
+There has always been a second copy of every beat, written on the machine
+itself, on every single run, accurate to the minute. Nothing was reading it.
+Now something does, every ten minutes, and it speaks up once on the party line
+when a job it owns has stopped.
+
+The interesting part was choosing how long to wait before calling a job dead.
+The ticket proposed one hour, and required that the number be measured before
+being trusted. Fourteen days of this machine's real logs said one hour would
+have gone off about once every ten runs, on jobs that were working perfectly —
+and this project had already had to kill one alarm for that exact reason a
+couple of days earlier. The finding that settled it was that the biggest
+ordinary gaps are not glitches at all: when a loop hits a usage limit it reads
+the stated reset time and deliberately sleeps for hours, which is precisely the
+right behaviour and would have been reported as a fault. So the threshold is
+worked out per job from that job's own rhythm, with a floor, and lands at three
+hours for the fast one and six for the rest. Not "within the hour" — but it
+turns a sixteen-hour silence into at most six, and it will not cry wolf.
+
+Two things the original ticket assumed turned out not to be true, and both were
+corrected on the ticket before any code was written rather than quietly built
+as described. And the command that reports on the automatic merge lane now says
+in words whether that lane has ever merged anything at all; it used to print
+"RUNNING" beside a note that no merge had ever happened, which reads as healthy
+and described a lane that had never once done its job.
 ## 2026-09-04 — A repair on a timer was taking tickets away from builds that were still running (#595)
 
 When a build loop starts a job, it moves that job's ticket to **Building** and

@@ -46,6 +46,36 @@ const DEFAULT_WIP_CAP = 5;
 const CAP_ENV = 'CLAUDE_LOOP_WIP_CAP';
 
 /**
+ * The SECOND ceiling: how much finished work may be parked on Dane at once.
+ *
+ * WHY THERE ARE TWO NUMBERS NOW (2026-09-04, task 86bbuzzbk). Until today one
+ * cap of five covered both machine work and operator-held work, so a ticket
+ * waiting on Dane's merge consumed a build slot. See IN_PROGRESS_STATUSES in
+ * loopStatuses.js for the full argument; the short version is that "is the
+ * merge pipeline full?" and "should loop-build stop producing?" are different
+ * questions, and one number could only answer them by getting one wrong.
+ *
+ * WHY IT IS A CEILING AND NOT "UNCOUNTED". Simply not counting operator-held
+ * work would leave the number of open pull requests unbounded, and that is the
+ * exact cost the cap was built to control: branch protection is `strict:true`,
+ * so every merge dates every other open branch (see this file's header). Ten
+ * waiting PRs mean ten catch-up merges when they drain. That cost is real and
+ * does not go away because it is inconvenient — so operator-held work is still
+ * bounded, just at its own larger number, and the loop declines with a
+ * DIFFERENT message saying which of the two limits it hit.
+ *
+ * TEN, and where it comes from: Dane's stated target on 2026-09-04 — wake in
+ * the night and clear ten. It is his number, not a measurement, and it is the
+ * right kind of number to put here because the thing being bounded is his
+ * queue. Raise it once a merge queue absorbs the catch-up churn (task
+ * 86bbv1qp9); until then ten is roughly ten catch-up merges to drain, which is
+ * about the most a sitting at 3am should cost.
+ */
+const DEFAULT_OPERATOR_CAP = 10;
+
+const OPERATOR_CAP_ENV = 'CLAUDE_LOOP_OPERATOR_CAP';
+
+/**
  * How old a "Building" ticket must be before the cap stops counting it,
  * overridable for experiments and — the reason it exists — so the discount can
  * be WATCHED WORKING on real data. Without it the only way to see this fire is
@@ -77,6 +107,20 @@ function resolveCap(env = process.env) {
   if (!raw) return DEFAULT_WIP_CAP;
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 0) return DEFAULT_WIP_CAP;
+  return n;
+}
+
+/**
+ * The operator ceiling in force. Same discipline as `resolveCap` — a malformed
+ * or negative override is ignored rather than obeyed, because a typo here
+ * would either uncap Dane's queue entirely or stop the loop dead, and neither
+ * belongs to a mistyped environment variable.
+ */
+function resolveOperatorCap(env = process.env) {
+  const raw = String(env?.[OPERATOR_CAP_ENV] ?? '').trim();
+  if (!raw) return DEFAULT_OPERATOR_CAP;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) return DEFAULT_OPERATOR_CAP;
   return n;
 }
 
@@ -120,6 +164,12 @@ function resolveCap(env = process.env) {
 // A VIEW of the one taxonomy since 2026-09-02 (task 86bbtujed) — the WHY
 // above is unchanged; the list itself now has a single home.
 const IN_FLIGHT_STATUSES = loopStatuses.IN_FLIGHT_STATUSES;
+
+// The two halves of the set above, as VIEWS of the one taxonomy. The build cap
+// measures against IN_PROGRESS; OPERATOR_HELD carries its own ceiling
+// (task 86bbuzzbk). Both are imported rather than re-listed here.
+const IN_PROGRESS_STATUSES = loopStatuses.IN_PROGRESS_STATUSES;
+const OPERATOR_HELD_STATUSES = loopStatuses.OPERATOR_HELD_STATUSES;
 
 /**
  * The one status a STRANDED ticket may be discounted from — and why it is only
@@ -306,7 +356,13 @@ function classifyPrs({ prs, ticketStatusById, nowMs = Date.now(), strandedAfterM
   for (const [k, v] of Object.entries(source)) byId[String(k).trim().toLowerCase()] = v;
   const knownIds = Object.keys(byId);
 
-  const groups = { inFlight: [], strandedBuilds: [], rework: [], queued: [], live: [], unknown: [], unrecognised: [] };
+  // `inFlight` stays the honest union of the two below — pulse, the throughput
+  // report and this module's own reporting all want that total. The cap is the
+  // only thing that stopped measuring against it (task 86bbuzzbk).
+  const groups = {
+    inFlight: [], inProgress: [], operatorHeld: [],
+    strandedBuilds: [], rework: [], queued: [], live: [], unknown: [], unrecognised: [],
+  };
   // Whether the discount could be assessed AT ALL. Told apart from "assessed,
   // found none" everywhere below: a clause that vanishes when nobody looked is
   // how "could not tell" comes to read as an all-clear (DOCTRINE 3.11).
@@ -325,7 +381,14 @@ function classifyPrs({ prs, ticketStatusById, nowMs = Date.now(), strandedAfterM
     // in-flight status that can be going nowhere by construction, and two of
     // them held 40% of the cap for a whole night (2026-09-02).
     else if (isStrandedBuild(info, nowMs, strandedAfterMs)) groups.strandedBuilds.push(pr.number);
-    else if (IN_FLIGHT_STATUSES.includes(status)) groups.inFlight.push(pr.number);
+    else if (IN_FLIGHT_STATUSES.includes(status)) {
+      groups.inFlight.push(pr.number);
+      // The same PR lands in exactly one of these two as well. Kept as a
+      // partition of `inFlight` rather than as an independent test, so the
+      // three counts cannot drift into disagreeing about one pull request.
+      if (OPERATOR_HELD_STATUSES.includes(status)) groups.operatorHeld.push(pr.number);
+      else groups.inProgress.push(pr.number);
+    }
     // The REAL status, not "queued means rework". Until task 86bbr1u9v there
     // was no other way to tell, and that guess is the bug this ticket closes.
     else if (status === loopStatuses.REWORK) groups.rework.push(pr.number);
@@ -362,8 +425,12 @@ function countOpenPrs(prs) {
  * @returns {{ claim: boolean, code: 0|3, openCount: number, cap: number, message: string }}
  *   `code` mirrors the node-role guard: 0 = go ahead, 3 = a normal decline.
  */
-function wipDecision({ prs, cap, ticketStatusById, nowMs = Date.now(), strandedAfterMs = resolveStrandedAfterMs() } = {}) {
+function wipDecision({
+  prs, cap, operatorCap, ticketStatusById,
+  nowMs = Date.now(), strandedAfterMs = resolveStrandedAfterMs(),
+} = {}) {
   const limit = Number.isInteger(cap) ? cap : DEFAULT_WIP_CAP;
+  const operatorLimit = Number.isInteger(operatorCap) ? operatorCap : DEFAULT_OPERATOR_CAP;
 
   // No ticket statuses supplied — ClickUp could not be read, or an older
   // caller. Fall back to counting every open PR, which is the pre-2026-08-25
@@ -374,17 +441,29 @@ function wipDecision({ prs, cap, ticketStatusById, nowMs = Date.now(), strandedA
     const capped = openCount >= limit;
     return {
       claim: !capped, code: capped ? 3 : 0, openCount, inFlight: openCount, cap: limit,
+      // WITHOUT STATUSES THE SPLIT CANNOT BE MADE, so it is reported as null
+      // rather than as zero (task 86bbuzzbk). Zero would read as "nothing is
+      // waiting on Dane", which is a finding this path did not make — the same
+      // could-not-tell-versus-all-clear distinction `strandedPhrase` above
+      // already carries, and DOCTRINE 3.2.
+      inProgress: null,
+      operatorHeld: null,
+      operatorCap: operatorLimit,
+      limitHit: capped ? 'wip' : null,
       groups: null,
       message: capped
         ? `WIP cap reached — ${openCount} PR(s) open, cap ${limit}. Not claiming; the merge side is the bottleneck.\n` +
           'This is a normal outcome, not a failure. Ticket statuses were NOT available, so every open PR was\n' +
-          `counted — the conservative reading. Raise it with ${CAP_ENV} for an experiment.`
+          'counted — the conservative reading, and it means work parked on Dane was counted against the build\n' +
+          `cap too, which it normally is not. Raise it with ${CAP_ENV} for an experiment.`
         : `${openCount} PR(s) open, cap ${limit} — room to claim another (ticket statuses unavailable; counted them all).`,
     };
   }
 
   const groups = classifyPrs({ prs, ticketStatusById, nowMs, strandedAfterMs });
   const inFlight = groups.inFlight.length;
+  const inProgress = groups.inProgress.length;
+  const operatorHeld = groups.operatorHeld.length;
   const notCounted = groups.rework.length + groups.queued.length + groups.live.length
     + groups.unknown.length + groups.unrecognised.length + groups.strandedBuilds.length;
 
@@ -430,20 +509,59 @@ function wipDecision({ prs, cap, ticketStatusById, nowMs = Date.now(), strandedA
     ? `${groups.strandedBuilds.length} stranded`
     : 'stranded builds NOT checked';
 
-  if (inFlight >= limit) {
+  // EVERY message names all three numbers, whichever way the decision goes
+  // (task 86bbuzzbk). Splitting one cap into two makes it possible to report a
+  // count that is no longer the one being enforced, and "4 in flight, cap 5"
+  // while the loop was actually declining on the OTHER limit would be the same
+  // class of defect the rework phrase above exists to prevent — a true number
+  // standing where the deciding one belongs.
+  const census = `${inProgress} building or in review (cap ${limit}), `
+    + `${operatorHeld} waiting on Dane (ceiling ${operatorLimit}), `
+    + `${strandedPhrase}, ${reworkPhrase}, which never count`;
+
+  const common = {
+    openCount: countOpenPrs(prs),
+    inFlight,
+    inProgress,
+    operatorHeld,
+    rework: groups.rework.length,
+    stranded: groups.strandedBuilds.length,
+    cap: limit,
+    operatorCap: operatorLimit,
+    groups,
+  };
+
+  if (inProgress >= limit) {
     return {
-      claim: false, code: 3, openCount: countOpenPrs(prs), inFlight, rework: groups.rework.length, stranded: groups.strandedBuilds.length, cap: limit, groups,
+      ...common, claim: false, code: 3, limitHit: 'wip',
       message:
-        `WIP cap reached — ${inFlight} in flight, cap ${limit} (${strandedPhrase}, ${reworkPhrase}, which never count). ` +
+        `WIP cap reached — ${census}. ` +
         `Not claiming; the merge side is the bottleneck.${tail}\n` +
         'This is a normal outcome, not a failure. Work queued beyond the merge rate does not ship sooner —\n' +
         `it goes stale, and every merge re-dates every open branch. Raise it with ${CAP_ENV} for an experiment.`,
     };
   }
 
+  // The second limit, and it is a DIFFERENT sentence on purpose. "The merge
+  // side is the bottleneck" would be false here — the machines are idle and
+  // the queue is deep; what is full is Dane's own inbox, and only he can empty
+  // it. A reader who cannot tell those two apart cannot act on either.
+  if (operatorHeld >= operatorLimit) {
+    return {
+      ...common, claim: false, code: 3, limitHit: 'operator',
+      message:
+        `OPERATOR CEILING reached — ${census}. ` +
+        `Not claiming: ${operatorHeld} finished ticket(s) are already waiting on Dane, and building more\n` +
+        `would only deepen a pile he has to clear by hand — every one of them needs a catch-up merge once\n` +
+        `the first lands. The machines are not blocked; his inbox is full.${tail}\n` +
+        `This is a normal outcome, not a failure. It clears the moment he merges. Raise it with\n` +
+        `${OPERATOR_CAP_ENV} for an experiment.`,
+    };
+  }
+
   return {
-    claim: true, code: 0, openCount: countOpenPrs(prs), inFlight, rework: groups.rework.length, stranded: groups.strandedBuilds.length, cap: limit, groups,
-    message: `${inFlight} in flight, cap ${limit} (${strandedPhrase}, ${reworkPhrase}, which never count) — room to claim another.${tail}`,
+    ...common, claim: true, code: 0, limitHit: null,
+    message: `${census} — room to claim another.${tail}`,
   };
 }
 
@@ -492,8 +610,9 @@ function wipDecision({ prs, cap, ticketStatusById, nowMs = Date.now(), strandedA
  * @returns {Promise<{determined:boolean, why:string|null, decision:object|null,
  *   statusesAvailable:boolean, queueFailure:string|null}>}
  */
-async function probeCap({ listOpenPrs, readTicketStatuses, cap } = {}) {
+async function probeCap({ listOpenPrs, readTicketStatuses, cap, operatorCap } = {}) {
   const limit = Number.isInteger(cap) ? cap : DEFAULT_WIP_CAP;
+  const operatorLimit = Number.isInteger(operatorCap) ? operatorCap : DEFAULT_OPERATOR_CAP;
 
   let prs = null;
   let why = null;
@@ -530,7 +649,7 @@ async function probeCap({ listOpenPrs, readTicketStatuses, cap } = {}) {
     // With ticketStatusById undefined this is the documented conservative
     // fallback — count every open PR — which is exactly what BOTH callers
     // want when the queue is unreadable. Unchanged behaviour, one code path.
-    decision: wipDecision({ prs, cap: limit, ticketStatusById }),
+    decision: wipDecision({ prs, cap: limit, operatorCap: operatorLimit, ticketStatusById }),
     statusesAvailable: ticketStatusById !== undefined,
     queueFailure: ticketStatusById === undefined ? queueFailure : null,
   };
@@ -568,9 +687,14 @@ module.exports = {
   isStrandedBuild,
   DEFAULT_WIP_CAP,
   CAP_ENV,
+  DEFAULT_OPERATOR_CAP,
+  OPERATOR_CAP_ENV,
   IN_FLIGHT_STATUSES,
+  IN_PROGRESS_STATUSES,
+  OPERATOR_HELD_STATUSES,
   TERMINAL_STATUSES,
   resolveCap,
+  resolveOperatorCap,
   ticketIdFromPrBody,
   classifyPrs,
   countOpenPrs,

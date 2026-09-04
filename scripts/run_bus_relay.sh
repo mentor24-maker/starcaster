@@ -66,6 +66,29 @@ REPO="$REPO" "$REPO/scripts/bus_relay_interval.sh" "interval: " || true
 # quiet; it is silent otherwise. Never allowed to fail the relay.
 npm run --silent heartbeat -- --check || true
 
+# THE SAME WATCHDOG'S OTHER HALF, AND IT RUNS FROM THE OPPOSITE VANTAGE POINT
+# (task 86bbugeda).
+#
+# Everything above is written around the machine that does NOT own the job.
+# That vantage point is the only one that survives the owning machine being
+# dead — and it is blind to the failure that cost sixteen hours on 2026-09-03,
+# where the Mini was awake, launchd was firing on time, and the work simply was
+# not happening. The shared roll call cannot see that: its rows are pushed at
+# most once a day, so a perfectly healthy job legitimately reads as 21 hours
+# stale, and a reader cannot tell that from a dead one.
+#
+# The LOCAL stamps can, because they are written on every run. So this line
+# asks the local question, and it only ever considers roles THIS machine owns
+# (lib/nodeHeartbeat.js -> recencyReport) — on a machine that owns none it
+# measures nothing and says so. Its thresholds are derived per role from each
+# job's own cadence, measured against 14 days of this machine's real logs; the
+# arithmetic and the numbers are in lib/nodeHeartbeat.js.
+#
+# Separate from the --check above rather than folded into it, because that one
+# needs ClickUp to answer and this one does not: a ClickUp outage must not take
+# an alarm offline that never needed ClickUp in the first place.
+npm run --silent heartbeat -- --stale-check --check || true
+
 # THE OTHER WATCHDOG, IN THE SAME PLACE AND FOR THE SAME REASON (task 86bbqrw3p).
 #
 # The heartbeat above asks "did a job stop firing?". This asks the question a
