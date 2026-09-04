@@ -1,3 +1,43 @@
+## 2026-09-04 — A job that has stopped working now says so within hours, not the next day (#596)
+
+On 3 September the step that merges finished work was dead for sixteen hours,
+and nothing told anybody. Four separate reporting surfaces were all working
+correctly and all stayed quiet — one of them cheerfully reported everything as
+fine.
+
+The reason turned out to be about resolution rather than about anything being
+broken. Each scheduled job records a "beat" when it runs, and those beats are
+copied to a shared ClickUp ticket at most once a day so both machines can read
+them. That is the right arrangement for noticing a machine that has been
+switched off. It is useless for noticing a job dying on a machine that is wide
+awake, because a perfectly healthy job legitimately shows up as twenty-one
+hours old between copies, and nobody reading that can tell it apart from a dead
+one.
+
+There has always been a second copy of every beat, written on the machine
+itself, on every single run, accurate to the minute. Nothing was reading it.
+Now something does, every ten minutes, and it speaks up once on the party line
+when a job it owns has stopped.
+
+The interesting part was choosing how long to wait before calling a job dead.
+The ticket proposed one hour, and required that the number be measured before
+being trusted. Fourteen days of this machine's real logs said one hour would
+have gone off about once every ten runs, on jobs that were working perfectly —
+and this project had already had to kill one alarm for that exact reason a
+couple of days earlier. The finding that settled it was that the biggest
+ordinary gaps are not glitches at all: when a loop hits a usage limit it reads
+the stated reset time and deliberately sleeps for hours, which is precisely the
+right behaviour and would have been reported as a fault. So the threshold is
+worked out per job from that job's own rhythm, with a floor, and lands at three
+hours for the fast one and six for the rest. Not "within the hour" — but it
+turns a sixteen-hour silence into at most six, and it will not cry wolf.
+
+Two things the original ticket assumed turned out not to be true, and both were
+corrected on the ticket before any code was written rather than quietly built
+as described. And the command that reports on the automatic merge lane now says
+in words whether that lane has ever merged anything at all; it used to print
+"RUNNING" beside a note that no merge had ever happened, which reads as healthy
+and described a lane that had never once done its job.
 ## 2026-09-04 — A repair on a timer was taking tickets away from builds that were still running (#595)
 
 When a build loop starts a job, it moves that job's ticket to **Building** and

@@ -1009,3 +1009,94 @@ test('a latch recorded before this change still reads, and says the sentences ar
   assert.deepEqual(d.items, [], 'an old ledger has no items — it must not invent any');
   assert.equal(d.disabled, true);
 });
+
+const lane = require('./autoMergeLane.js');
+
+// --- has Lane A ever merged anything? (task 86bbugeda) -----------------------
+//
+// `auto-merge-status` printed `LANE A: RUNNING` beside `ledger: not created
+// yet` on 2026-09-03. Both lines were true and the pair reads as a working
+// lane; the lane had never merged a single pull request in its life. "The gate
+// is open" and "anything has ever come out of it" are different questions.
+
+test('a lane with no ledger file has NEVER merged, and says so', () => {
+  const h = lane.laneAMergeHistory({ ledger: null, fresh: true, readable: true });
+  assert.equal(h.verdict, 'never');
+  assert.equal(h.count, 0);
+  assert.match(h.why, /NEVER merged anything/);
+});
+
+test('a lane that has merged reports how many, all-time', () => {
+  let ledger = null;
+  ledger = lane.ledgerAfterMerge(ledger, { pr: 101, task: 'aaa', at: 1000 }, 1000);
+  ledger = lane.ledgerAfterMerge(ledger, { pr: 102, task: 'bbb', at: 2000 }, 2000);
+  const h = lane.laneAMergeHistory({ ledger, fresh: false, readable: true });
+  assert.equal(h.verdict, 'yes');
+  assert.equal(h.count, 2);
+  assert.match(h.why, /PR #102/);
+});
+
+test('pruning the rate-cap window must NOT walk the all-time count back to zero', () => {
+  // THE BUG THIS PINS. `merges` is pruned to two days because it is the rate
+  // cap's working set. Deriving "has it ever merged" from it would make a lane
+  // that merged plenty last week read as one that has never run — the exact
+  // wrong answer, arriving three days after the right one.
+  const DAY = 24 * 60 * 60 * 1000;
+  const t0 = Date.parse('2026-09-01T00:00:00Z');
+  let ledger = lane.ledgerAfterMerge(null, { pr: 7, task: 'aaa', at: t0 }, t0);
+  assert.equal(ledger.merges.length, 1);
+  assert.equal(ledger.everMerged.count, 1);
+
+  // Five days later a second merge lands. `ledgerAfterMerge` prunes the first
+  // one out of the rate-cap window on the way past, so the window holds ONE
+  // entry while the lane has merged TWO. Counting the window here would report
+  // the wrong number forever, and would report zero on the next quiet week.
+  const later = t0 + 5 * DAY;
+  ledger = lane.ledgerAfterMerge(ledger, { pr: 8, task: 'bbb', at: later }, later);
+  assert.equal(ledger.merges.length, 1, 'the rate-cap window has legitimately pruned the older merge');
+  assert.equal(ledger.everMerged.count, 2, 'the all-time count must not be derived from the pruned window');
+
+  // And once the window empties entirely, the lane must still read as one that
+  // HAS merged — an empty two-day window does not unsay a merge that happened.
+  const muchLater = later + 5 * DAY;
+  const emptied = { ...ledger, merges: ledger.merges.filter((m) => muchLater - m.at < 2 * DAY) };
+  assert.equal(emptied.merges.length, 0);
+  const h = lane.laneAMergeHistory({ ledger: emptied, fresh: false, readable: true });
+  assert.equal(h.verdict, 'yes');
+  assert.equal(h.count, 2);
+});
+
+test('a ledger written before the counter existed answers CANNOT TELL, never "never"', () => {
+  // Confidently wrong is the failure mode here: an old ledger with an empty
+  // window is not evidence of a lane that has never run, and reporting it as
+  // one would send somebody to fix a lane that works.
+  const old = { version: 1, merges: [], switch: null, disabled: null, lastDigestAt: 0 };
+  const h = lane.laneAMergeHistory({ ledger: old, fresh: false, readable: true });
+  assert.equal(h.verdict, 'unknown');
+  assert.match(h.why, /not "never"/);
+});
+
+test('an old ledger with merges still in its window reports what it can, and says the rest is unrecorded', () => {
+  const old = { version: 1, merges: [{ pr: 3, at: 5 }], switch: null, disabled: null, lastDigestAt: 0 };
+  const h = lane.laneAMergeHistory({ ledger: old, fresh: false, readable: true });
+  assert.equal(h.verdict, 'yes');
+  assert.equal(h.count, null, 'the all-time count is genuinely unknown, so it is not invented');
+  assert.match(h.why, /predates the all-time counter/);
+});
+
+test('an unreadable ledger is CANNOT TELL, not a lane that has never merged', () => {
+  const h = lane.laneAMergeHistory({ ledger: null, fresh: false, readable: false });
+  assert.equal(h.verdict, 'unknown');
+  assert.match(h.why, /could not be read/);
+});
+
+test('the all-time counter survives a round trip through asLedger', () => {
+  // The normaliser drops anything it does not recognise, so a field it forgets
+  // to carry is silently lost on the next write — which is how the count would
+  // reset to zero on the first pass after this shipped.
+  let ledger = lane.ledgerAfterMerge(null, { pr: 55, task: 'zzz', at: 1000 }, 1000);
+  const reloaded = JSON.parse(JSON.stringify(ledger));
+  const h = lane.laneAMergeHistory({ ledger: reloaded, fresh: false, readable: true });
+  assert.equal(h.count, 1);
+  assert.match(h.why, /PR #55/);
+});

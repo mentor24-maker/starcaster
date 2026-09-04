@@ -111,7 +111,7 @@ const {
   digestDue, digestBody, digestSince, WINDOW_MS,
   ledgerAfterMerge, ledgerAfterSwitch, ledgerAfterDisable, ledgerAfterLatchNag,
   latchNagDue,
-  ledgerAfterDigest, switchSignalsFromLedger, mergesSince,
+  ledgerAfterDigest, switchSignalsFromLedger, mergesSince, laneAMergeHistory,
 } = autoMergeLane;
 const { readLedgerFile, saveLedgerIfReadable } = autoMergeLedgerFile;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
@@ -4482,7 +4482,18 @@ if (cmd === 'whoami') {
   console.log(`cap:     ${cap.why}`);
   console.log(`window:  ${WINDOW_MS / 60000} minutes`);
   console.log(`digest:  ${digestDue(led.ledger.lastDigestAt, now) ? 'due' : `last posted ${clockAt(led.ledger.lastDigestAt)}`}`);
+  // "Running" is about the gate being OPEN. Whether anything has ever come out
+  // of it is a different question, and printing only the first one is how
+  // `LANE A: RUNNING` sat beside `ledger: not created yet` on 2026-09-03 and
+  // read as a healthy lane that had never merged a single pull request
+  // (task 86bbugeda).
+  const history = laneAMergeHistory({ ledger: led.ledger, fresh: led.fresh, readable: led.ok });
   console.log(`LANE A:  ${gate.allowed ? 'RUNNING' : `NOT RUNNING — ${gate.why}`}`);
+  console.log(`history: ${history.verdict === 'never' ? 'NEVER MERGED — ' : (history.verdict === 'unknown' ? 'CANNOT TELL — ' : '')}${history.why}`);
+  if (gate.allowed && history.verdict === 'never') {
+    console.log('         RUNNING here means the gate is open, NOT that this lane works —');
+    console.log('         nothing has ever come out of it.');
+  }
   const recent = mergesSince(led.ledger, digestSince(led.ledger, now));
   console.log(`recent:  ${recent.length} auto-merge(s) since the last digest (or the last 24 hours if none has posted)`);
   for (const m of recent) console.log(`  PR #${m.pr}  task ${m.task}  ${clockAt(m.at)}  ${(m.files || []).join(' ')}`);
