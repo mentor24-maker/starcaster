@@ -656,6 +656,7 @@ function listOpenPullRequests(repo) {
 function capProbe({ repo } = {}) {
   return wipCap.probeCap({
     cap: wipCap.resolveCap(process.env),
+    operatorCap: wipCap.resolveOperatorCap(process.env),
     listOpenPrs: async () => listOpenPullRequests(repo),
     readTicketStatuses: async () => {
       // fatal:false is REQUIRED — see fetchAllTasks. With the default, a
