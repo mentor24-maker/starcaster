@@ -749,7 +749,13 @@ above can't see on their own: a Loop Queue task left in-flight after its PR
 already merged (moves it to Live), and a branch stamped with a task
 (`npm run thread`) that has since closed but is still on the Mac (flags it to
 the bus — `npm run tidy`'s own closed-task cleanup should have caught it).
-Dry-run by default (`npm run reconcile`); `-- --live` performs the repairs.
+Dry-run by default (`npm run reconcile`); `-- --live` performs the repairs by
+hand, and `-- --check` is the SCHEDULED shape — the same writes, plus the two
+disciplines a background pass owes (2026-09-02, task 86bbtqytq): it asks the
+pipeline switch before it reads anything and stands down if Dane has the deck,
+and its bus flags carry a 6h window that CLEARS when the contradiction
+resolves. That window used to be permanent, which made a drift posted once
+never speakable again — an alarm that fires only the first time.
 **Scheduled since 2026-09-02** (task 86bbtnk3k): `npm run repair` runs it —
 with the loop's dropped-claim backstop before it and a DRY stranded-ticket
 sweep after it — on the relay's ten-minute idle wake, throttled to one fresh

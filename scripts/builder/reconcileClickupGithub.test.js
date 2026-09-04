@@ -225,20 +225,65 @@ test('a write failure during a live repair is UNCHECKED, not silently swallowed'
   assert.match(unchecked[0], /could not move the task/);
 });
 
-test('a contradiction already flagged on an earlier run is NOT re-posted (review finding 8)', async () => {
+test('a contradiction already flagged INSIDE THE WINDOW is not re-posted (review finding 8)', async () => {
+  const now = Date.parse('2026-09-02T20:00:00.000Z');
   const posted = [];
   const { clean, repaired, unchecked } = buckets();
   await checkMergedTasks([task('t1', 'Stuck', 'in review')], clean, repaired, unchecked, {
     getComments: comments('https://github.com/org/repo/pull/9'),
     prState: () => ({ state: 'CLOSED' }),
     postBus: async (ch, text) => posted.push(text),
-    alreadyFlagged: new Set(['contradiction:closed-pr:t1:9']),
+    alreadyFlagged: new Map([
+      ['contradiction:closed-pr|t1|9', new Date(now - 60 * 60 * 1000).toISOString()],
+    ]),
     recordFlagged: () => { throw new Error('must not record — nothing new was posted'); },
     isLive: true,
+    now,
   });
-  assert.equal(posted.length, 0, 'an unchanged contradiction is posted once, not every run');
+  assert.equal(posted.length, 0, 'an unchanged contradiction is posted once per window, not every run');
   assert.equal(repaired.length, 1);
-  assert.match(repaired[0], /already flagged on an earlier run/);
+  assert.match(repaired[0], /already said/);
+});
+
+test('the SAME contradiction is said again once the 6h window has passed', async () => {
+  // The half that was missing until 2026-09-02: the old state file had no
+  // clock, so a drift posted once was struck off forever however long it sat.
+  const now = Date.parse('2026-09-02T20:00:00.000Z');
+  const posted = [];
+  const recorded = [];
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Stuck', 'in review')], clean, repaired, unchecked, {
+    getComments: comments('https://github.com/org/repo/pull/9'),
+    prState: () => ({ state: 'CLOSED' }),
+    postBus: async (ch, text) => posted.push(text),
+    alreadyFlagged: new Map([
+      ['contradiction:closed-pr|t1|9', new Date(now - 7 * 60 * 60 * 1000).toISOString()],
+    ]),
+    recordFlagged: (key) => recorded.push(key),
+    isLive: true,
+    now,
+  });
+  assert.equal(posted.length, 1);
+  assert.deepEqual(recorded, ['contradiction:closed-pr|t1|9']);
+});
+
+test('a held finding is still RAISED, so the prune does not mistake it for resolved', async () => {
+  // Otherwise: held by the window this pass -> cleared as resolved -> posted
+  // again next pass. The window would produce the noise it exists to stop.
+  const now = Date.parse('2026-09-02T20:00:00.000Z');
+  const raised = [];
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Stuck', 'in review')], clean, repaired, unchecked, {
+    getComments: comments('https://github.com/org/repo/pull/9'),
+    prState: () => ({ state: 'CLOSED' }),
+    postBus: async () => {},
+    alreadyFlagged: new Map([['contradiction:closed-pr|t1|9', new Date(now).toISOString()]]),
+    recordFlagged: () => {},
+    recordRaised: (key) => raised.push(key),
+    isLive: true,
+    now,
+  });
+  assert.deepEqual(raised, ['contradiction:closed-pr|t1|9']);
 });
 
 // ── checkStampedBranches ─────────────────────────────────────────────────
@@ -434,4 +479,89 @@ test('the leftover-PR scan is bounded — the terminal set only grows', () => {
     'and take the most recently updated, so the cap keeps the useful end');
   assert.match(src, /scanning the \$\{scanned\.length\} most recently updated of \$\{terminal\.length\}/,
     'and say how many it skipped — a silent cap is a check that quietly stops covering things');
+});
+
+// ── the scheduled shape (2026-09-02, task 86bbtqytq) ────────────────────────
+//
+// This tool named the stuck ticket exactly and reached nobody. `npm run repair`
+// (#544) gave it a schedule; these two disciplines are what a SCHEDULED pass
+// owes on top of that — a window that clears, and asking the switch first.
+
+const {
+  flagDue,
+  flagKey,
+  pruneFlags,
+  REPOST_EVERY_MS,
+} = require('../reconcile_clickup_github.cjs');
+
+const NOW = Date.parse('2026-09-02T20:00:00.000Z');
+const HOUR = 60 * 60 * 1000;
+
+test('a contradiction is posted once, held for 6h, then said again', () => {
+  const key = flagKey('closed-pr', '86bbqw49y', 513);
+  assert.equal(flagDue({ key, state: new Map(), now: NOW }).due, true, 'never said before');
+  const said = new Map([[key, new Date(NOW - HOUR).toISOString()]]);
+  assert.equal(flagDue({ key, state: said, now: NOW }).due, false);
+  const old = new Map([[key, new Date(NOW - 7 * HOUR).toISOString()]]);
+  assert.equal(flagDue({ key, state: old, now: NOW }).due, true,
+    'a drift still unfixed after 6h is said again — it did not stop being true');
+  assert.equal(REPOST_EVERY_MS, 6 * HOUR);
+});
+
+test('BREAK-TEST: the window is not infinite — the old state file had no clock at all', () => {
+  // It used to be a bare array of keys: posted once, struck off FOREVER. An
+  // alarm that fires once and then goes quiet is the failure suppression is
+  // meant to prevent. A legacy entry loads with no time and reads as never
+  // said, which errs towards speaking.
+  const key = flagKey('merged-operator', '86bbqw49y', 513);
+  assert.equal(flagDue({ key, state: new Map([[key, '']]), now: NOW }).due, true);
+  assert.equal(flagDue({ key, state: new Map([[key, 'not a date']]), now: NOW }).due, true);
+});
+
+test('a RESOLVED contradiction loses its stamp, so a returning drift is announced at once', () => {
+  const gone = flagKey('closed-pr', '86bbqw49y', 513);
+  const still = flagKey('stale-branch', 'weekly-report', '86bbk34ym');
+  const state = new Map([[gone, new Date(NOW).toISOString()], [still, new Date(NOW).toISOString()]]);
+  const out = pruneFlags(state, {
+    subjects: new Set(['86bbqw49y', 'weekly-report']),
+    raised: new Set([still]),
+  });
+  assert.deepEqual(out.cleared, [gone]);
+  assert.ok(out.state.has(still), 'a contradiction raised again this pass keeps its window');
+});
+
+test('BREAK-TEST: a subject this pass never LOOKED at keeps its stamp', () => {
+  // "I did not see it" is not "it is fixed" (DOCTRINE 3.11). The terminal scan
+  // is bounded at 25, so tickets rotate out of view every run — clearing on
+  // absence would repost the same contradiction on a loop.
+  const key = flagKey('open-pr-under-terminal', '86bbjk5rw', 374);
+  const state = new Map([[key, new Date(NOW).toISOString()]]);
+  const out = pruneFlags(state, { subjects: new Set(['86bbsomethingelse']), raised: new Set() });
+  assert.deepEqual(out.cleared, []);
+  assert.ok(out.state.has(key));
+});
+
+test('the key fences its subject, so the pruner never has to guess which shape it is', () => {
+  // Two of the four contradiction shapes put a BRANCH where the others put a
+  // task id. A pruner that split on ':' would read "stale-branch" as the
+  // subject of every branch flag and clear nothing, silently.
+  assert.equal(flagKey('stale-branch', 'watchdogs-reach-dane', '86bbtqytq').split('|')[1],
+    'watchdogs-reach-dane');
+  assert.equal(flagKey('closed-pr', '86bbtqytq', 583).split('|')[1], '86bbtqytq');
+});
+
+test('BREAK-TEST: --check asks the pipeline switch BEFORE it reads or writes anything', () => {
+  // It moves tickets and posts to the bus. Running while Dane has the deck is
+  // exactly the collision the switch exists to prevent (PR #432).
+  const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
+  assert.match(src, /pipeline\.mjs/, 'it must consult the one switch implementation, not read the flag twice');
+  const pauseAt = src.indexOf('const deck = pipelinePaused()');
+  const readAt = src.indexOf('await listTasks(LOOP_QUEUE_LIST');
+  assert.ok(pauseAt > 0 && pauseAt < readAt, 'the switch is asked before the queue is read');
+  assert.match(src, /process\.exit\(3\)/, 'and a paused deck is a normal decline, not a failure');
+});
+
+test('--check IS the live shape — a scheduled watchdog that only proposed would fix nothing', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
+  assert.match(src, /const live = check \|\| process\.argv\.includes\('--live'\)/);
 });

@@ -18,7 +18,10 @@ const HOUR = 60 * 60 * 1000;
 test('the repair runs marker -> drift -> stranded, calling the real tools', () => {
   assert.deepEqual(repair.STEPS.map((s) => s.id), ['marker', 'drift', 'stranded']);
   assert.deepEqual([...repair.STEPS[0].npmArgs], ['clickup', '--', 'pass-reconcile']);
-  assert.deepEqual([...repair.STEPS[1].npmArgs], ['reconcile', '--', '--live']);
+  // --check, not --live: the scheduled shape asks the pipeline switch before
+  // it reads anything and puts a 6h window on its bus flags (task 86bbtqytq).
+  // The writes are identical; the discipline is what --check adds.
+  assert.deepEqual([...repair.STEPS[1].npmArgs], ['reconcile', '--', '--check']);
   assert.deepEqual([...repair.STEPS[2].npmArgs], ['pipeline', '--', 'sweep']);
 });
 
@@ -140,4 +143,24 @@ test('the sweep-never-applies rationale is written where the refusal lives', () 
   assert.match(src, /hand session/i);
   assert.match(src, /only machine-readable difference/i,
     'the safety argument must live beside the code, or the next editor adds --apply as an obvious improvement');
+});
+
+// ── a step that declined is not a step that passed (task 86bbtqytq) ─────────
+
+test('a drift step that stood down for the deck reads PAUSED, never CLEAN', () => {
+  // reconcile exits 3 when Dane has the deck: it read nothing and moved
+  // nothing. Folding that into "clean" would report a pass that checked
+  // nothing as a healthy one — DOCTRINE 3.11 in the composer.
+  const drift = repair.STEPS.find((s) => s.id === 'drift');
+  assert.equal(repair.readStep(drift, 3), 'paused');
+  const outcome = repair.composeOutcome(['clean', 'paused', 'clean']);
+  assert.equal(outcome.word, 'PAUSED');
+  assert.equal(outcome.code, 0, 'a deliberate operator state is not an alarm');
+  assert.match(repair.renderStepLine(drift, 'paused', 'Dane has the deck'), /SKIP/);
+});
+
+test('a real finding still outranks a paused step', () => {
+  assert.equal(repair.composeOutcome(['paused', 'findings']).code, 3);
+  assert.equal(repair.composeOutcome(['paused', 'cannot-tell']).code, 2);
+  assert.equal(repair.composeOutcome(['paused', 'failed']).code, 1);
 });

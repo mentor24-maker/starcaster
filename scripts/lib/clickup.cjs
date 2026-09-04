@@ -102,7 +102,24 @@ async function call(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {})
   }
 }
 
+/**
+ * WHAT A PASS COSTS, in the units ClickUp throttles on (task 86bbtqytq).
+ *
+ * `clickup_direct.mjs` has counted its own requests since the relay's interval
+ * was set, and closes every pass with "requests this pass: N". The scripts on
+ * THIS client — reconcile, stale-ready — had no such number, so the one
+ * question the ticket asked about scheduling reconcile more often ("measure
+ * before you schedule it; a watchdog that exhausts the rate limit takes the
+ * relay down with it") could only be answered by arithmetic on the source.
+ *
+ * A counter, not an estimate: comment paging makes the real figure depend on
+ * how chatty each ticket is, which no reading of the code produces.
+ */
+let requestCount = 0;
+const requestsMade = () => requestCount;
+
 async function callOnce(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {}) {
+  requestCount += 1;
   requireToken();
   let res;
   try {
@@ -321,6 +338,7 @@ module.exports = {
   // Exported rather than re-implemented: a second fetch wrapper is a second
   // place for the token contract and the JSON/non-JSON handling to drift.
   call,
+  requestsMade,
   listTasks,
   pageComments,
   getTaskComments,

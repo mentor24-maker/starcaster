@@ -8,6 +8,28 @@
  *
  *   npm run reconcile              # dry run — prints every proposed action
  *   npm run reconcile -- --live    # moves tasks / posts to the bus
+ *   npm run reconcile -- --check   # the SCHEDULED shape: --live, plus the two
+ *                                  # disciplines every sentinel here follows
+ *
+ * THE SCHEDULED SHAPE (2026-09-02, task 86bbtqytq). This tool named the stuck
+ * ticket exactly — "86bbqw49y sits in ready to launch but PR #513 is already
+ * MERGED" — and reached nobody, because at the time nothing ran it. That half
+ * was fixed the same day by `npm run repair` (#544), which rides the relay's
+ * ten-minute idle wake and calls this as its `drift` step. Two things were
+ * still missing from THIS end, and both are the difference between a watchdog
+ * and a noise source:
+ *
+ *   - **It never asked the pipeline switch.** Every actor asks. This one moves
+ *     tickets and posts to the bus, so running it while Dane has the deck is
+ *     exactly the collision the switch exists to prevent. `--check` asks first
+ *     and exits 3 without reading anything if he has it.
+ *   - **Its suppression had no window and never cleared.** A contradiction
+ *     posted once was struck off FOREVER — an alarm that fires once and then
+ *     goes quiet is the failure the suppression was meant to prevent, arriving
+ *     through the thing meant to prevent it. It is now one post per key per
+ *     6h, and a key whose contradiction has RESOLVED is cleared, so a drift
+ *     that returns is announced again at once. Same discipline as
+ *     `stale-ready` and `repair`, deliberately not a fourth dialect.
  *
  * WHAT IT CHECKS
  *   1. Every in-flight task whose comments link a GitHub PR. The NEWEST
@@ -43,7 +65,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { listTasks, getTaskComments, moveTaskStatus, postBusMessage } = require('./lib/clickup.cjs');
+const { listTasks, getTaskComments, moveTaskStatus, postBusMessage, requestsMade } = require('./lib/clickup.cjs');
 
 /** How many terminal tasks the leftover-PR scan looks at, most recent first.
  *  Bounded because the terminal set grows forever — see the scan below. */
@@ -67,8 +89,36 @@ const PR_URL_RE = /github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/;
 // the rolling ClickUp write quota). Machine-local, never committed.
 const FLAG_STATE_FILE = path.join(root, '.git', 'reconciler-flags.json');
 
-const live = process.argv.includes('--live');
+/** One post per contradiction per this window, cleared the moment the
+ *  contradiction resolves. The number is `nodeHeartbeat`'s, not a fourth copy
+ *  of six hours — every sentinel in this system shares one. */
+const { REPOST_EVERY_MS } = require('../lib/nodeHeartbeat.js');
+
+const check = process.argv.includes('--check');
+// --check IS the live shape. A scheduled watchdog that only proposed repairs
+// would leave the ticket it named sitting exactly where it found it.
+const live = check || process.argv.includes('--live');
 const quiet = process.argv.includes('--quiet');
+
+/**
+ * Has Dane taken the deck? Asked by RUNNING the one switch implementation
+ * rather than reading the flag a second way here — two readers of a safety
+ * flag are two flags, and they disagree quietly (stale_ready.mjs makes the
+ * same call for the same reason).
+ *
+ * Fails safe in the switch's own direction: if it cannot be asked at all, that
+ * counts as paused. Running while he has the deck collides with whatever he is
+ * doing on it; declining when he does not costs one idle wake.
+ */
+function pipelinePaused() {
+  const out = require('child_process').spawnSync(
+    process.execPath, [path.join(root, 'scripts', 'pipeline.mjs'), 'check'], { encoding: 'utf8' },
+  );
+  if (out.error) return { paused: true, why: `the pipeline switch could not be read (${out.error.message})` };
+  if (out.status === 0) return { paused: false, why: '' };
+  const said = String(out.stderr || out.stdout || '').trim().split('\n')[0];
+  return { paused: true, why: said || `the pipeline check exited ${out.status}` };
+}
 
 function say(line) {
   if (!quiet) console.log(line);
@@ -118,22 +168,82 @@ function distinctPrs(comments) {
   return prs;
 }
 
+/**
+ * key -> ISO time this machine last posted it.
+ *
+ * It used to be a bare ARRAY of keys with no times, which made the window
+ * infinite: a contradiction posted once was never said again, however long it
+ * went unfixed and however many times it came back. Legacy arrays still on
+ * disk load with NO timestamp, which reads as "never posted" and errs towards
+ * speaking — one duplicate at most, once, and only on the first run after this
+ * change.
+ */
 function loadFlagState() {
   try {
-    return new Set(JSON.parse(fs.readFileSync(FLAG_STATE_FILE, 'utf8')));
+    const raw = JSON.parse(fs.readFileSync(FLAG_STATE_FILE, 'utf8'));
+    if (Array.isArray(raw)) return new Map(raw.map((k) => [String(k), '']));
+    return new Map(Object.entries(raw || {}).map(([k, v]) => [String(k), String(v || '')]));
   } catch {
-    return new Set();
+    return new Map();
   }
 }
 
-function saveFlagState(set) {
+function saveFlagState(state) {
   try {
-    fs.writeFileSync(FLAG_STATE_FILE, JSON.stringify([...set], null, 2));
+    fs.writeFileSync(FLAG_STATE_FILE, JSON.stringify(Object.fromEntries(state), null, 2));
   } catch (err) {
     // Best-effort: a missing state file only costs one duplicate post, never
     // a wrong action — but say so rather than pretend it saved.
     console.error(`[reconcile] could not save flag state (${err.message}) — a flag may repost next run`);
   }
+}
+
+/**
+ * May this contradiction be posted? Pure, so the suppression rule itself is
+ * break-testable — the same split `lib/staleReady.js` uses for `duePosts`.
+ * An unparseable or missing stamp reads as never posted.
+ */
+function flagDue({ key, state, now, everyMs = REPOST_EVERY_MS }) {
+  const seen = state instanceof Map ? state : new Map(Object.entries(state || {}));
+  const at = Date.parse(seen.get(String(key)) || '');
+  if (!Number.isFinite(at)) return { due: true, why: 'never said' };
+  const ago = now - at;
+  if (ago >= everyMs) return { due: true, why: `last said ${Math.round(ago / 3600000)}h ago` };
+  return { due: false, why: `already said ${Math.round(ago / 60000)}m ago (one post per ${Math.round(everyMs / 3600000)}h)` };
+}
+
+/**
+ * Drop the stamps for contradictions that have RESOLVED, so a drift that comes
+ * back is announced at once instead of being swallowed by a window its first
+ * appearance opened.
+ *
+ * Resolved means: this pass EXAMINED the subject (a task id, a branch name)
+ * and did not raise that key. A subject the pass could not look at — an
+ * unreadable ticket, a terminal task outside the bounded scan — keeps its
+ * stamp, because "I did not see it" is not "it is fixed". The subject is
+ * carried explicitly rather than parsed back out of the key: two of the four
+ * key shapes put a branch where the others put a task id, and a reader that
+ * guessed would fail silently, which is the exact bug the permanent window
+ * already was.
+ */
+function pruneFlags(state, { subjects, raised }) {
+  const seen = state instanceof Map ? state : new Map(Object.entries(state || {}));
+  const examined = subjects instanceof Set ? subjects : new Set(subjects || []);
+  const live = raised instanceof Set ? raised : new Set(raised || []);
+  const next = new Map();
+  const cleared = [];
+  for (const [key, at] of seen) {
+    const subject = String(key).split('|')[1] || '';
+    if (examined.has(subject) && !live.has(key)) { cleared.push(key); continue; }
+    next.set(key, at);
+  }
+  return { state: next, cleared };
+}
+
+/** The stamp key. The subject is fenced off with a `|` so `pruneFlags` can
+ *  recover it without knowing which of the four contradiction shapes this is. */
+function flagKey(reason, subject, detail) {
+  return `contradiction:${reason}|${subject}|${detail}`;
 }
 
 /**
@@ -148,7 +258,14 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
     postBus = postBusMessage,
     alreadyFlagged = null,
     recordFlagged = () => {},
+    recordRaised = () => {},
+    // Which subjects this pass actually LOOKED at. A subject examined and not
+    // flagged is a contradiction that has resolved; one that was never
+    // examined keeps its stamp, because "I did not see it" is not "it is
+    // fixed" (DOCTRINE 3.11 in the suppression layer).
+    recordExamined = () => {},
     isLive = live,
+    now = Date.now(),
     log = say,
   } = deps;
 
@@ -190,21 +307,24 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
     // 2026-08-25 shape is a Live ticket linking an open leftover AND a later
     // merged PR that actually shipped it — so "newest" is the merged one and
     // the check returned silently on the exact case it was written for.
+    let everyPrRead = true;
     for (const linked of distinctPrs(comments)) {
       const pr = prState(linked.owner, linked.repoName, linked.number);
       if (!pr) {
+        everyPrRead = false;
         unchecked.push(`${label}: terminal, but the state of PR #${linked.number} could not be read`);
         continue;
       }
       if (pr.state !== 'OPEN') continue;
       await flag(
-        `contradiction:open-pr-under-terminal:${task.id}:${linked.number}`,
+        flagKey('open-pr-under-terminal', task.id, linked.number),
         `${label} is "${task.status?.status}" but its linked PR #${linked.number} is still OPEN. ` +
           'Either the work shipped under a different PR and this one is a leftover — which counts against the ' +
           'work-in-progress cap and blocks the build loop — or the task was closed too early. Close the PR, or reopen the task.',
-        { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what: `${label}: open PR under a terminal task` }
+        { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, recordRaised, isLive, now, what: `${label}: open PR under a terminal task` }
       );
     }
+    if (everyPrRead) recordExamined(String(task.id));
   }
 
 
@@ -237,6 +357,7 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
       continue;
     }
     const multi = prs.length > 1 ? ` (newest of ${prs.length} linked PRs)` : '';
+    recordExamined(String(task.id));
 
     if (pr.state === 'OPEN') {
       clean.push(`${label}: ${prName} is open${multi}, matches ClickUp`);
@@ -258,10 +379,10 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
       } else {
         // Operator status: flag, never move — the operator owns the exit.
         await flag(
-          `contradiction:merged-operator:${task.id}:${authoritative.number}`,
+          flagKey('merged-operator', task.id, authoritative.number),
           `${label} sits in "${task.status?.status}" but ${prName} is already MERGED. ` +
             `Only you move a task out of that status — moving it automatically would bury the handoff. Worth a look.`,
-          { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what: `${label}: merged PR under an operator status` }
+          { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, recordRaised, isLive, now, what: `${label}: merged PR under an operator status` }
         );
       }
       continue;
@@ -269,31 +390,38 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
 
     // CLOSED (unmerged) while still in-flight — the stuck-ticket case.
     await flag(
-      `contradiction:closed-pr:${task.id}:${authoritative.number}`,
+      flagKey('closed-pr', task.id, authoritative.number),
       `${label} is in-flight ("${task.status?.status}") but its newest PR ${prName} is CLOSED without merging` +
         `${multi}. The work is not shipping under that PR — reopen it, link a new one, or park the task.`,
-      { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what: `${label}: in-flight over a closed, unmerged PR` }
+      { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, recordRaised, isLive, now, what: `${label}: in-flight over a closed, unmerged PR` }
     );
   }
 }
 
-/** Post a contradiction to the bus once per unchanged state; dry-run proposes. */
+/**
+ * Post a contradiction to the bus, at most once per 6h per key; dry-run
+ * proposes. Every raised key is recorded whether or not it was posted — that
+ * is what tells the next prune the contradiction is still live, and a held
+ * finding that vanished from the record would be cleared and then re-posted on
+ * the following pass, which is the noise this window exists to stop.
+ */
 async function flag(key, message, ctx) {
-  const { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what } = ctx;
+  const { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, recordRaised, isLive, what, now } = ctx;
+  if (recordRaised) recordRaised(key);
   if (!isLive) {
     repaired.push(`[DRY RUN] ${what} — would flag to the bus: ${message}`);
     return;
   }
-  if (alreadyFlagged && alreadyFlagged.has(key)) {
-    // Already posted on an earlier run and nothing changed — not re-posted,
-    // and not silently dropped from the report either.
-    repaired.push(`${what} — already flagged on an earlier run (not re-posted)`);
+  const decision = flagDue({ key, state: alreadyFlagged, now: now || Date.now() });
+  if (!decision.due) {
+    // Held by the window, and never silently dropped from the report.
+    repaired.push(`${what} — ${decision.why}, not re-posted`);
     return;
   }
   try {
     await postBus(BUS_CHANNEL, `[reconciler] ${message}`);
-    recordFlagged(key);
-    repaired.push(`${what} — flagged to the bus`);
+    recordFlagged(key, now || Date.now());
+    repaired.push(`${what} — flagged to the bus (${decision.why})`);
   } catch (err) {
     unchecked.push(`${what}: contradiction found but could not post to the bus — ${err.message}`);
   }
@@ -307,7 +435,10 @@ async function checkStampedBranches(tasks, clean, repaired, unchecked, deps = {}
     postBus = postBusMessage,
     alreadyFlagged = null,
     recordFlagged = () => {},
+    recordRaised = () => {},
+    recordExamined = () => {},
     isLive = live,
+    now = Date.now(),
   } = deps;
 
   const tasksById = new Map(tasks.map((t) => [t.id, t]));
@@ -329,16 +460,17 @@ async function checkStampedBranches(tasks, clean, repaired, unchecked, deps = {}
       continue;
     }
 
+    recordExamined(String(branch.name));
     if (!isTerminal(task)) {
       clean.push(`branch ${branch.name}: tracked by task ${taskId} (${task.status?.status})`);
       continue;
     }
 
     await flag(
-      `contradiction:stale-branch:${branch.name}:${taskId}`,
+      flagKey('stale-branch', branch.name, taskId),
       `branch \`${branch.name}\` is still on this Mac, but its stamped task ${taskId} ("${task.name}") ` +
         `is already ${task.status?.status}. \`npm run tidy\` should have cleaned this up — worth a look.`,
-      { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what: `branch ${branch.name}: stamped task already terminal` }
+      { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, recordRaised, isLive, now, what: `branch ${branch.name}: stamped task already terminal` }
     );
   }
 }
@@ -347,6 +479,20 @@ async function main() {
   const clean = [];
   const repaired = [];
   const unchecked = [];
+
+  // THE SWITCH, BEFORE ANYTHING IS READ OR WRITTEN. Only in --check: a person
+  // running this by hand has already decided to look, and a read costs him
+  // nothing. The scheduled pass is the one that must not move a ticket out
+  // from under him. Exit 3 is the same "normal decline" dialect the preflight
+  // and `node:owns` speak.
+  if (check) {
+    const deck = pipelinePaused();
+    if (deck.paused) {
+      console.log(`[reconcile] not running: ${deck.why}`);
+      console.log('[reconcile] Dane has the deck. Nothing was read, nothing was moved, nothing was posted.');
+      process.exit(3);
+    }
+  }
 
   let tasks;
   try {
@@ -361,17 +507,44 @@ async function main() {
   }
 
   // Flag state is only touched on a live run; dry-run must change nothing.
-  const alreadyFlagged = live ? loadFlagState() : new Set();
-  const recordFlagged = (key) => alreadyFlagged.add(key);
-  const deps = { alreadyFlagged, recordFlagged };
+  const alreadyFlagged = live ? loadFlagState() : new Map();
+  const now = Date.now();
+  const raised = new Set();
+  const examined = new Set();
+  const recordFlagged = (key, at) => alreadyFlagged.set(key, new Date(at || now).toISOString());
+  const deps = {
+    alreadyFlagged,
+    recordFlagged,
+    recordRaised: (key) => raised.add(key),
+    recordExamined: (subject) => examined.add(subject),
+    now,
+  };
 
   await checkMergedTasks(tasks, clean, repaired, unchecked, deps);
   await checkStampedBranches(tasks, clean, repaired, unchecked, deps);
 
-  if (live) saveFlagState(alreadyFlagged);
+  if (live) {
+    // Clear the stamps for contradictions that have resolved, THEN save. An
+    // alarm that fires once and never again is the failure the suppression was
+    // meant to prevent; this is the half that was missing.
+    const pruned = pruneFlags(alreadyFlagged, { subjects: examined, raised });
+    if (pruned.cleared.length) {
+      say(`[reconcile] ${pruned.cleared.length} earlier flag(s) cleared — those contradictions are resolved, `
+        + 'so if one returns it is announced at once rather than held by an old window.');
+    }
+    saveFlagState(pruned.state);
+  }
 
   say('');
   say(`[reconcile] ${clean.length} checked clean, ${repaired.length} ${live ? 'repaired/flagged' : 'would repair/flag'}, ${unchecked.length} could not check.`);
+  // What this pass COST, in the units ClickUp throttles on — the same closing
+  // line the relay prints, for the same reason. The ticket that scheduled this
+  // check asked for a MEASURED figure rather than an assumed one: a watchdog
+  // that exhausts the rate limit takes the relay down with it, which is worse
+  // than the drift it watches for. If this creeps toward 100 the answer is a
+  // cheaper pass (the terminal scan is already capped) or a longer throttle,
+  // decided on this number.
+  say(`[reconcile] ClickUp requests this pass: ${requestsMade()} (ClickUp allows ~100/minute)`);
   if (repaired.length) {
     say(live ? '\nRepaired / flagged:' : '\nWould repair / flag:');
     repaired.forEach((line) => say(`  ✓ ${line}`));
@@ -396,6 +569,10 @@ if (require.main === module) {
 module.exports = {
   checkMergedTasks,
   checkStampedBranches,
+  flagDue,
+  flagKey,
+  pruneFlags,
+  REPOST_EVERY_MS,
   isInFlight,
   isTerminal,
   distinctPrs,

@@ -24,7 +24,7 @@
  *             vantage that survives that (the watchdog doctrine). On a
  *             machine with no marker it answers "no claim" and writes
  *             nothing.
- *   drift     `reconcile -- --live`. Its writes are already automation-safe
+ *   drift     `reconcile -- --check`. Its writes are already automation-safe
  *             by design: it moves a ticket only on hard evidence (its PR
  *             MERGED, ticket in a machine status → Live), FLAGS operator
  *             statuses rather than ever moving them, and reports could-not-
@@ -67,10 +67,15 @@ const STEPS = Object.freeze([
   }),
   Object.freeze({
     id: 'drift',
-    npmArgs: Object.freeze(['reconcile', '--', '--live']),
+    // --check, not --live: same writes, plus the two disciplines a SCHEDULED
+    // pass owes (task 86bbtqytq). It asks the pipeline switch before it reads
+    // anything, and its bus flags carry a 6h window that clears when the
+    // contradiction resolves. `--live` remains the by-hand shape.
+    npmArgs: Object.freeze(['reconcile', '--', '--check']),
     // reconcile dialect: 0 ran (its own output says clean/repaired/flagged),
-    // 1 could not read the queue at all — nothing was checked.
-    reading: Object.freeze({ 0: 'clean', 1: 'cannot-tell' }),
+    // 3 declined because Dane has the deck, 1 could not read the queue at all
+    // — nothing was checked.
+    reading: Object.freeze({ 0: 'clean', 3: 'paused', 1: 'cannot-tell' }),
   }),
   Object.freeze({
     id: 'stranded',
@@ -117,6 +122,11 @@ function composeOutcome(meanings) {
   if (meanings.includes('failed')) return { code: 1, word: 'FAILED' };
   if (meanings.includes('cannot-tell')) return { code: 2, word: 'CANNOT TELL' };
   if (meanings.includes('findings')) return { code: 3, word: 'FINDINGS' };
+  // A step that DECLINED because Dane has the deck ran no check, so the pass
+  // is not clean — it is quiet on purpose, which is a different word. Exit 0,
+  // because a deliberate operator state is not an alarm: the same call the
+  // preflight makes when the switch turns it away.
+  if (meanings.includes('paused')) return { code: 0, word: 'PAUSED' };
   return { code: 0, word: meanings.includes('repaired') ? 'REPAIRED' : 'CLEAN' };
 }
 
@@ -143,7 +153,8 @@ function readDue({ lastReadAtMs, nowMs, everyMs = READ_EVERY_MS } = {}) {
 /** One line per step for the log: meaning first, so a column scans. */
 function renderStepLine(step, meaning, firstLine) {
   const word = {
-    clean: 'ok  ', repaired: 'FIX ', findings: 'HELD', 'cannot-tell': '????', failed: 'FAIL',
+    clean: 'ok  ', repaired: 'FIX ', findings: 'HELD', paused: 'SKIP',
+    'cannot-tell': '????', failed: 'FAIL',
   }[meaning] || 'FAIL';
   return `${word}  ${step.id.padEnd(9)} ${String(firstLine || '').trim()}`.trimEnd();
 }
