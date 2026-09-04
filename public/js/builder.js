@@ -2417,19 +2417,50 @@ App.builder = (function () {
     return [...saved, ...starters, ...base];
   }
 
+  const PAGES_TEMPLATE_NONE_LABEL = 'No template';
+
+  // Options for the Template filter above the Manage Pages table.
+  //
+  // Every entry is a REAL template — the project's saved page templates, the
+  // starter templates, and the built-in stubs — and the filter MATCHES ON THE
+  // DISPLAYED NAME, so the option's value is that name. That is the behaviour
+  // the screen promises: pick a name, get the pages whose Template column reads
+  // that name.
+  //
+  // Matching on the name rather than the id is also what makes the list
+  // duplicate-free honestly. getStarterModularPageTemplates() derives one
+  // starter from every LANDING_TEMPLATES entry, sharing its name and prefixing
+  // its id ("standard-right-form" -> "starter::standard-right-form"). Both are
+  // ids a page can legitimately carry, so listing by id necessarily shows
+  // "Standard Right-Form" twice — the old "Base:" / "Starter:" label prefixes
+  // hid that rather than fixing it. Two entries the column renders identically
+  // cannot be told apart on screen, so they are one entry that matches both.
+  //
+  // This used to append one option per page whose templateId matched nothing,
+  // labelled through getLandingPageTemplateName, whose fallback names the first
+  // built-in. Five pages with five unrecognised slugs therefore produced five
+  // options all reading "Standard Right-Form". That loop is gone; it could only
+  // ever invent duplicates.
   function getPagesTableTemplateFilterOptions() {
-    const options = getPageTemplateSelectOptions();
-    const seen = new Set(options.map((option) => safeText(option.value)));
-    (Array.isArray(savedPages) ? savedPages : []).forEach((page) => {
-      const id = safeText(page.templateId);
-      if (!id || seen.has(id)) return;
-      seen.add(id);
-      options.push({
-        value: id,
-        label: getLandingPageTemplateName(id),
-      });
-    });
-    return options.sort((a, b) => safeText(a.label).localeCompare(safeText(b.label)));
+    const seen = new Set();
+    const options = [];
+    const add = (id) => {
+      const label = getPagesTableTemplateLabel(id);
+      if (!label || seen.has(label)) return;
+      seen.add(label);
+      options.push({ value: label, label });
+    };
+    savedPageTemplates.forEach((template) => add(template.id));
+    getStarterModularPageTemplates().forEach((template) => add(template.id));
+    LANDING_TEMPLATES.forEach((template) => add(template.id));
+    options.sort((a, b) => safeText(a.label).localeCompare(safeText(b.label)));
+    // Last, and outside the sort: it is not a template, it is the absence of
+    // one, and the screen reads better with it at the bottom. `seen` keeps it
+    // from being added twice if a saved template is actually named this.
+    if (!seen.has(PAGES_TEMPLATE_NONE_LABEL)) {
+      options.push({ value: PAGES_TEMPLATE_NONE_LABEL, label: PAGES_TEMPLATE_NONE_LABEL });
+    }
+    return options;
   }
 
   function getFormTemplateById(templateId) {
@@ -4455,6 +4486,45 @@ App.builder = (function () {
     const starter = getStarterModularPageTemplateById(templateId);
     if (starter) return safeText(starter.name) || 'Starter Template';
     return getBaseLandingTemplateById(templateId).name;
+  }
+
+  // getStarterModularPageTemplates() rebuilds every starter's layout sections
+  // on each call, and the Manage Pages table asks for a label once per row to
+  // render, once per row to filter and twice per comparison to sort. Only the
+  // id -> name pairing is needed for a label, and the starters are derived from
+  // a constant, so it is computed once.
+  let starterTemplateNamesById = null;
+  function getStarterTemplateName(id) {
+    if (!starterTemplateNamesById) {
+      starterTemplateNamesById = new Map(
+        getStarterModularPageTemplates().map((t) => [safeText(t.id), safeText(t.name)])
+      );
+    }
+    return starterTemplateNamesById.get(safeText(id)) || '';
+  }
+
+  // The honest twin of getLandingPageTemplateName, for the Manage Pages table.
+  //
+  // getLandingPageTemplateName ends in getBaseLandingTemplateById, which ends
+  // in `|| LANDING_TEMPLATES[0]` — so every value it does not recognise renders
+  // as "Standard Right-Form". Page Details and the visual editor rely on that
+  // fallback and are out of scope, so this is a separate function rather than a
+  // change to that one.
+  //
+  // Three answers, never a guess: the template's name when the id resolves,
+  // "No template" when there is no id (a legitimate state — 20 of 136 pages in
+  // production are in it), and "Unknown template (<id>)" when an id is set but
+  // names nothing, which is a real data problem and should look like one.
+  function getPagesTableTemplateLabel(pageTemplateId) {
+    const id = safeText(pageTemplateId);
+    if (!id) return PAGES_TEMPLATE_NONE_LABEL;
+    const saved = getSavedPageTemplateById(id);
+    if (saved) return safeText(saved.name) || `Template ${saved.id}`;
+    const starter = getStarterTemplateName(id);
+    if (starter) return starter;
+    const base = LANDING_TEMPLATES.find((item) => item.id === id);
+    if (base) return safeText(base.name) || 'Base Template';
+    return `Unknown template (${id})`;
   }
 
   function getLandingPageFieldRows(key) {
@@ -8308,10 +8378,16 @@ App.builder = (function () {
 
     const rows = savedPages.filter((item) => {
       const name = safeText(item.name).toLowerCase();
-      const templateId = safeText(item.templateId);
+      // pageTemplateId, not templateId: the latter is a legacy layout name that
+      // deriveTemplateId() invents from the page's own slug, so filtering on it
+      // matched one page per value and nothing else. Compared as the DISPLAYED
+      // name, which is what the dropdown offers — see
+      // getPagesTableTemplateFilterOptions.
       const slug = safeText(item.slug).toLowerCase();
       if (nameFilter && !name.includes(nameFilter)) return false;
-      if (templateFilter && templateId !== templateFilter) return false;
+      if (templateFilter && getPagesTableTemplateLabel(item.pageTemplateId) !== templateFilter) {
+        return false;
+      }
       if (slugFilter && !slug.includes(slugFilter)) return false;
       const visibilityState = pageVisibilityState(item);
       if (visibilityFilter === 'public' && visibilityState !== 'public') return false;
@@ -8329,8 +8405,10 @@ App.builder = (function () {
         left = safeText(a.name).toLowerCase();
         right = safeText(b.name).toLowerCase();
       } else if (key === 'templateId') {
-        left = getLandingPageTemplateName(a.templateId).toLowerCase();
-        right = getLandingPageTemplateName(b.templateId).toLowerCase();
+        // The sort key names the COLUMN, not the page field; the column shows
+        // pageTemplateId, so sorting reads the same label it displays.
+        left = getPagesTableTemplateLabel(a.pageTemplateId).toLowerCase();
+        right = getPagesTableTemplateLabel(b.pageTemplateId).toLowerCase();
       } else if (key === 'slug') {
         left = safeText(a.slug).toLowerCase();
         right = safeText(b.slug).toLowerCase();
@@ -8516,6 +8594,8 @@ App.builder = (function () {
   function clampPagesTableText() {
     document.querySelectorAll('#builderPagesTableBody .builder-pages-name-text')
       .forEach((el) => clampCellTextToBoundary(el, el, el.title, ' '));
+    document.querySelectorAll('#builderPagesTableBody .builder-pages-template-text')
+      .forEach((el) => clampCellTextToBoundary(el, el, el.title, ' '));
     document.querySelectorAll('#builderPagesTableBody .builder-pages-slug-link')
       .forEach((link) => {
         const code = link.querySelector('code');
@@ -8617,7 +8697,21 @@ App.builder = (function () {
       nameTd.appendChild(nameSpan);
       row.appendChild(nameTd);
 
-      append(getLandingPageTemplateName(item.templateId) || '-', 'builder-pages-col-template');
+      // Clamped like Name and Slug, and for a new reason: this column used to
+      // render the same short fallback ("Standard Right-Form") on every row, so
+      // it always fitted. Now that it shows the REAL name, a long one ("Website
+      // Main Template Template") runs straight over the Slug column — the cell
+      // is a fixed 9rem with nowrap and nothing cropping it. T7 rung 10: crop
+      // between words, keep the whole value in `title`.
+      const templateTd = document.createElement('td');
+      templateTd.className = 'builder-pages-col-template';
+      const templateText = getPagesTableTemplateLabel(item.pageTemplateId);
+      const templateSpan = document.createElement('span');
+      templateSpan.className = 'builder-pages-template-text';
+      templateSpan.textContent = templateText;
+      templateSpan.title = templateText;
+      templateTd.appendChild(templateSpan);
+      row.appendChild(templateTd);
 
       const slugTd = document.createElement('td');
       slugTd.className = 'builder-pages-col-slug';
@@ -13863,9 +13957,14 @@ App.builder = (function () {
         if (landingPageBulkEditSummary) {
           landingPageBulkEditSummary.textContent = `${ids.length} page${ids.length === 1 ? '' : 's'} selected.`;
         }
+        // The real template list, NOT the filter list. The filter list carries
+        // a "No template" entry whose value is a sentinel, and this is a write
+        // surface — offering it here would save that sentinel as a page's
+        // template. (It also used to carry one invented entry per unrecognised
+        // page slug, which was never assignable either.)
         setSelectOptions(
           byId('builderPagesBulkTemplateSelect'),
-          getPagesTableTemplateFilterOptions(),
+          getPageTemplateSelectOptions(),
           'Leave Unchanged'
         );
         const applyPrimary = byId('builderPagesBulkApplyPrimaryColor');
