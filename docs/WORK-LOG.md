@@ -1,3 +1,33 @@
+## 2026-09-04 — Background jobs get out of your way on ClickUp (#605)
+
+ClickUp lets our whole company make about a hundred requests a minute — one
+allowance shared by every automatic job on the Mac Mini and by whatever session
+you happen to be talking to. Until now nothing knew that. Each program counted
+only its own requests, so a background job could truthfully report "I have only
+used 97" and still be refused, because four other programs had been spending at
+the same time. That is what took the relay down on 3 September.
+
+Your decision that day was that background jobs get out of the way — "you are
+never blocked by a background job" — and this is that, made mechanical. Every
+program on a machine now writes what it spends into one small shared file, so
+they can all see each other. A background job stops once the minute's budget is
+down to the last 25 requests, says out loud what it did not get to, and does
+not pretend it finished. A session you are talking to never stops, even at the
+very last request.
+
+The 25 was measured rather than picked: a new command reads the relay's own log
+— 854 real passes over ten days — and five real interactive commands run back
+to back inside one minute turned out to cost six requests in total. So the
+reserve is four times the busiest interactive minute actually observed. The
+cost is stated too, rather than discovered later: about one relay pass in six
+will now stop early and finish on the next one instead of running the budget
+down to single digits.
+
+One honest limit, written into the code so nobody mistakes it for a promise:
+this works within a single machine. The Mini and the MacBook spend against the
+same ClickUp allowance and share no files, so this makes collisions rarer, not
+impossible.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
