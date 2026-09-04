@@ -799,7 +799,7 @@ function digestBody({ entries = [], sinceLabel = 'the last day', clockLabel } = 
  * (lib/nodeRoles.js), so one machine's file is the whole record.
  */
 function emptyLedger() {
-  return { version: 1, merges: [], switch: null, disabled: null, lastDigestAt: 0 };
+  return { version: 1, merges: [], switch: null, disabled: null, lastDigestAt: 0, everMerged: null };
 }
 
 /** Normalize whatever came off disk into a ledger, without throwing. */
@@ -812,6 +812,17 @@ function asLedger(raw) {
     switch: raw.switch && raw.switch.kind ? raw.switch : null,
     disabled: raw.disabled && raw.disabled.at ? raw.disabled : null,
     lastDigestAt: Number(raw.lastDigestAt) || 0,
+    // The all-time tally. `merges` above is PRUNED to two days because it is
+    // the rate cap's working set, so it can never answer "has this lane ever
+    // merged anything" — which is the question `auto-merge-status` was
+    // answering with silence while printing LANE A: RUNNING (task 86bbugeda).
+    everMerged: raw.everMerged && Number.isFinite(Number(raw.everMerged.count))
+      ? {
+        count: Number(raw.everMerged.count),
+        lastAt: Number(raw.everMerged.lastAt) || 0,
+        lastPr: raw.everMerged.lastPr == null ? null : raw.everMerged.lastPr,
+      }
+      : null,
   };
 }
 
@@ -825,7 +836,72 @@ function pruneMerges(merges, now, keepMs = 2 * DAY_MS) {
 
 function ledgerAfterMerge(ledger, entry, now) {
   const l = asLedger(ledger);
-  return { ...l, merges: pruneMerges([...l.merges, entry], now) };
+  const prior = l.everMerged || { count: 0, lastAt: 0, lastPr: null };
+  return {
+    ...l,
+    merges: pruneMerges([...l.merges, entry], now),
+    // Monotonic, and deliberately not derived from `merges` — pruning must
+    // never be able to walk this backwards to zero and turn a working lane
+    // into one that reads as having never run.
+    everMerged: {
+      count: prior.count + 1,
+      lastAt: Number(entry && entry.at) || Number(now) || prior.lastAt,
+      lastPr: entry && entry.pr != null ? entry.pr : prior.lastPr,
+    },
+  };
+}
+
+/**
+ * Has Lane A ever actually merged anything?
+ *
+ * THREE ANSWERS, NEVER TWO. On 2026-09-03 `auto-merge-status` printed
+ * `LANE A: RUNNING` beside `ledger: not created yet`, which reads as a healthy
+ * lane and describes one that has never merged a single pull request in its
+ * life. "Running" is about the gate being open; this is about whether anything
+ * has ever come out of it, and the two were never distinguished.
+ *
+ *   'never'   — confirmed: there is no ledger file at all, so nothing has run.
+ *   'yes'     — confirmed, with a count and when.
+ *   'unknown' — a ledger written before this counter existed. It may have
+ *               merged plenty; we cannot say, and saying "never" would be a
+ *               confident wrong answer about the lane's whole history.
+ *
+ * `fresh` is the ledger FILE's own answer to "did I exist before this read"
+ * (autoMergeLedgerFile.js), which is the only evidence that separates "never"
+ * from "unknown".
+ */
+function laneAMergeHistory({ ledger, fresh = false, readable = true } = {}) {
+  if (!readable) {
+    return { verdict: 'unknown', count: null, why: 'the auto-merge ledger could not be read, so whether this lane has ever merged is unknown' };
+  }
+  if (fresh) {
+    return { verdict: 'never', count: 0, why: 'has NEVER merged anything — no ledger file exists, so no auto-merge has ever happened' };
+  }
+  const l = asLedger(ledger);
+  if (l.everMerged) {
+    if (l.everMerged.count <= 0) {
+      return { verdict: 'never', count: 0, why: 'has NEVER merged anything — the ledger exists but its all-time count is zero' };
+    }
+    const pr = l.everMerged.lastPr == null ? '' : ` (most recently PR #${l.everMerged.lastPr})`;
+    return {
+      verdict: 'yes',
+      count: l.everMerged.count,
+      lastAt: l.everMerged.lastAt,
+      why: `has merged ${l.everMerged.count} pull request${l.everMerged.count === 1 ? '' : 's'} all told${pr}`,
+    };
+  }
+  if (l.merges.length > 0) {
+    return {
+      verdict: 'yes',
+      count: null,
+      why: `has merged at least ${l.merges.length} in the last two days; this ledger predates the all-time counter, so the full history is not recorded`,
+    };
+  }
+  return {
+    verdict: 'unknown',
+    count: null,
+    why: 'nothing merged in the last two days, and this ledger predates the all-time counter — whether it has EVER merged is unknown, not "never"',
+  };
 }
 
 /**
@@ -946,5 +1022,6 @@ module.exports = {
   LATCH_NAG_EVERY_MS,
   ledgerAfterDigest,
   switchSignalsFromLedger,
+  laneAMergeHistory,
   mergesSince,
 };
