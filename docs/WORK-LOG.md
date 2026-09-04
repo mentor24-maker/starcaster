@@ -1,3 +1,54 @@
+## 2026-09-04 — The machine can now merge its own tooling overnight, within a boundary Dane drew (#599)
+
+Overnight on 3 September, nine pieces of finished work were merged and the
+automatic merge lane merged none of them. Every one of those merges was Dane's
+own hand on a button, and the times show it: a cluster while he was up, then
+three and a half hours of nothing, then a merge at 4:29am when he happened to be
+awake, then nearly four more hours of nothing. Seven hours of a ten-hour night
+with no merges at all. The rate at which work reached the live site was not a
+property of the pipeline; it was a property of his sleep schedule.
+
+The cause was narrow and correct behaviour. The automatic lane only accepts
+changes where every file is a test or a document, and that night the pipeline
+had been working almost entirely on itself — on the scripts that run the
+pipeline. Not one of those changes could ever have qualified, so the lane
+considered them and correctly declined, every ten minutes, all night.
+
+The fix is a second lane for the pipeline's own tooling. Dane picked the
+boundary himself rather than accepting the one that was proposed: scripts,
+documents and tests only, with the shared library folder deliberately left out,
+because the live web server loads that folder directly and part of it is what
+draws clients' published pages. A bad automatic merge there would reach a
+client's website with nobody in the way.
+
+Building it turned up something the boundary alone did not cover. The scripts
+folder is also where the merging machinery itself lives, and the rule protecting
+that machinery had only ever listed its *tests* — the machinery's own code
+needed no rule while the lane refused everything that was not a test or a
+document. Widening the lane quietly removed that protection, and the very first
+thing it would have done is merge a change to the merge step. So the rule now
+covers the code as well, along with every automated check, every startup script,
+and the git hooks, which have no file extension and would have slipped past
+every existing pattern.
+
+Dane attached one condition to his answer: that the boundary must not be allowed
+to expire silently, because nothing stops a future change from making a script
+reachable from the live server. That is now a check running on every pull
+request. It traces what the server actually loads and fails if anything
+auto-mergeable turns up in there, naming the exact import that did it.
+
+Two numbers worth recording. Of 413 files under scripts, 63 are now permanently
+off-limits to automatic merging and 350 are eligible. And on the fourteen
+changes merged over the 3rd and 4th, this new lane would have merged none of
+them — not because the boundary is wrong, but because that night's work was
+almost entirely the merge machinery itself, which no lane may touch. It would
+have carried five of the last sixty.
+
+One more thing was measured and is not fixed here: the original lane has never
+once armed. In 573 passes since 23 August it considered 640 tickets, announced
+nothing and merged nothing. That is recorded on the ticket and needs its own
+look.
+
 ## 2026-09-04 — A job that has stopped working now says so within hours, not the next day (#596)
 
 On 3 September the step that merges finished work was dead for sixteen hours,
