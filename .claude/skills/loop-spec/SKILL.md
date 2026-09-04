@@ -187,9 +187,50 @@ The escape hatch is `--no-card`, which is a written claim that no card is owed,
 not a way around the format.
 
 4. **Report back.** List the tasks you filed (name + risk + one-line goal) and
-   the total. Remind the operator they can now start the build loop:
-   `/loop 30m loop-build` — from wherever this session already is; the build
-   loop makes its own worktree per task.
+   the total.
+
+   **Then say what the build loop is actually doing — never tell him to start
+   one without checking.** Both lanes have run unattended on the Mac Mini as
+   launchd agents since 2026-09-02 (`com.starcaster.loop-build`,
+   `com.starcaster.loop-review`, driving the committed
+   `scripts/loop_runner.sh`). The line that used to close this step —
+   *"you can now start the build loop: `/loop 30m loop-build`"* — was written
+   when loops were started by hand, and it is now wrong in both directions:
+
+   - If a loop IS running and he starts another, the second one is a second
+     claimant. Claiming a ticket is check-then-act (a GET, a comparison, a
+     PUT), which is only sound with exactly one claimant — the whole reason
+     `lib/nodeRoles.js` exists.
+   - If it is running on a machine this session is not on, the pass he starts
+     declines and exits 0, and a queue that never moves looks exactly like a
+     queue with nothing to do.
+
+   It happened on 2026-09-03: a session filed three tickets, recited this line,
+   and the loop was already alive on the Mini with a pass 40 minutes old. Dane
+   caught it (ticket 86bbuv0kp).
+
+   One command answers it, run on the machine that owns the role — from here,
+   over SSH to the Mini:
+
+   ```
+   ./scripts/install_loop_runner.sh --status
+   ```
+
+   It reports, per lane: installed, loaded (a PID means the runner is alive),
+   whether the lock is held by a live pid, and when the log was last written.
+   Report that in plain language, plus the two states that matter most, because
+   **a loop that is alive and claiming nothing is the failure that reads as
+   healthy**:
+
+   - the work-in-progress cap is full (`5 in flight, cap 5`) — the merge side
+     is the bottleneck, not the queue. Say which tickets are waiting to merge.
+   - the pipeline is paused (`npm run pipeline -- check`, exit 3) — say since
+     when and why.
+
+   Offer to start a loop by hand ONLY when the check shows none running AND
+   this machine owns the role (`npm run node:owns -- loop-build`, exit 0).
+   Then, and only then, the command is `/loop 30m loop-build` — the loop makes
+   its own worktree per task, so it may be started from any folder.
 
 ## Evidence, or it is a question
 
