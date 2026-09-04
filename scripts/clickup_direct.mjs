@@ -107,7 +107,8 @@ const {
   laneADecision, laneAEligibility, laneGate, killSwitchState, switchCommand,
   rateCapState, selfDisableState, announcementNotice, cancellationNotice,
   digestDue, digestBody, digestSince, WINDOW_MS,
-  ledgerAfterMerge, ledgerAfterSwitch, ledgerAfterDisable,
+  ledgerAfterMerge, ledgerAfterSwitch, ledgerAfterDisable, ledgerAfterLatchNag,
+  latchNagDue,
   ledgerAfterDigest, switchSignalsFromLedger, mergesSince,
 } = autoMergeLane;
 const { readLedgerFile, saveLedgerIfReadable } = autoMergeLedgerFile;
@@ -791,6 +792,17 @@ async function deliverToBus(channel, content, { taskId, target, receipted, simul
  * ticket, so the bus post carried nothing that was lost — a chat outage must
  * not fail a pass that told the operator everything anyway (task 86bbjxew2).
  */
+/** The stored "could not verify" sentences, rendered for a bus post or the
+ *  status command. One definition, so the two can never disagree about what
+ *  the latch was about — the whole complaint in task 86bbt0mz6 was that the
+ *  count was the only thing anybody could see. */
+function latchItemLines(d) {
+  const items = (d && Array.isArray(d.items)) ? d.items : [];
+  if (!items.length) return '';
+  const dropped = Number(d.droppedItems) || 0;
+  const more = dropped ? `\n  ...and ${dropped} more (the stored list is capped)` : '';
+  return `\n\nWhat it could not verify:\n${items.map((x) => `  - ${x}`).join('\n')}${more}`;
+}
 function reportBusFailure({ delivered, cosmetic, unchecked, busSkipped, line }) {
   if (busFailureBucket({ delivered, cosmetic }) === 'skipped') busSkipped.push(line);
   else unchecked.push(line);
@@ -3874,13 +3886,39 @@ if (cmd === 'whoami') {
 
     const selfDisable = selfDisableState({ unchecked, mainBuildRed: mainRed, persisted: ledger.disabled });
     if (selfDisable.disabled && selfDisable.fresh) {
-      ledger = ledgerAfterDisable(ledger, selfDisable.why, now);
-      const line = `[CC-starcaster bus-relay] AUTO-MERGE DISABLED ITSELF: ${selfDisable.why}. No pull request will be auto-merged until a human says "resume auto-merging". Merges on your own word are unaffected.`;
+      // The sentences go INTO the ledger, not just their count (task
+      // 86bbt0mz6). `unchecked` holds a full English line for every thing
+      // this pass could not check; discarding them at the moment of latching
+      // is what left an August outage undiagnosable two days later.
+      ledger = ledgerAfterDisable(ledger, selfDisable.why, now, {
+        items: selfDisable.items,
+        trigger: selfDisable.trigger,
+      });
+      const line = `[CC-starcaster bus-relay] AUTO-MERGE DISABLED ITSELF: ${selfDisable.why}. No pull request will be auto-merged until a human says "resume auto-merging". Merges on your own word are unaffected.${latchItemLines(selfDisable)}`;
       // A dry run says what it would post. Until 2026-08-30 this was the one
       // Lane A write with no guard — and because the ledger write IS guarded,
       // the flag never persisted and it re-posted on every dry run.
       if (dryRun) console.error(`  DRY RUN — would post to the bus: ${line}`);
       else await postToBus(channel, line);
+    }
+
+    // A latch that has been in force for a day says so again. The FIRST
+    // engagement announces itself above; the silence AFTERWARDS is the defect
+    // — the halt went only to a launchd log nobody reads, so a lane that had
+    // switched itself off looked exactly like a quiet night. Two days in
+    // August 2026; 10.8 hours on 2026-09-03, found only because Dane asked
+    // why nothing had merged since 6:27pm.
+    const nag = latchNagDue({ disabled: selfDisable, now, lastNagAt: ledger.disabled?.lastNagAt });
+    if (nag.due) {
+      const line = `[CC-starcaster bus-relay] AUTO-MERGE IS STILL LATCHED OFF — ${nag.why}. ${selfDisable.why}${latchItemLines(selfDisable)}\n\nNothing will auto-merge until a human says "resume auto-merging". Your own merge commands still work.`;
+      if (dryRun) console.error(`  DRY RUN — would post to the bus: ${line}`);
+      else {
+        const posted = await postToBus(channel, line);
+        // Only a delivered nag resets the clock. Stamping it on a failed post
+        // would buy silence for a day on the strength of a message nobody got.
+        if (posted && posted.ok) ledger = ledgerAfterLatchNag(ledger, now);
+        else busSkipped.push('the auto-merge latch reminder could not be posted to the party line — it will be tried again next pass');
+      }
     }
 
     const gate = laneGate({
@@ -4218,6 +4256,18 @@ if (cmd === 'whoami') {
 
   console.log(`switch:  ${ks.state} — ${ks.why}`);
   console.log(`disabled:${disabled.disabled ? ` yes — ${disabled.why}` : ' no'}`);
+  // "Why is the lane off?" answerable in one read-only command.
+  if (disabled.disabled) {
+    if (disabled.trigger === 'main-red') {
+      console.log('         (the trigger was a RED BUILD ON MAIN, not an unchecked item)');
+    } else if (disabled.items.length) {
+      console.log('         what it could not verify:');
+      for (const item of disabled.items) console.log(`           - ${item}`);
+      if (disabled.droppedItems) console.log(`           ...and ${disabled.droppedItems} more (the stored list is capped)`);
+    } else {
+      console.log('         (this latch was recorded before the reasons were stored — the sentences are gone)');
+    }
+  }
   console.log(`cap:     ${cap.why}`);
   console.log(`window:  ${WINDOW_MS / 60000} minutes`);
   console.log(`digest:  ${digestDue(led.ledger.lastDigestAt, now) ? 'due' : `last posted ${clockAt(led.ledger.lastDigestAt)}`}`);

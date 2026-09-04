@@ -430,7 +430,25 @@ function rateCapState(entries, now, { perHour = CAP_PER_HOUR, perDay = CAP_PER_D
  */
 function selfDisableState({ unchecked = [], mainBuildRed = false, persisted = null } = {}) {
   if (persisted && persisted.at) {
-    return { disabled: true, why: persisted.why || 'auto-merge disabled itself earlier', at: Number(persisted.at) || null, fresh: false };
+    return {
+      disabled: true,
+      // A latch read back from the ledger is NOT this pass's finding, and the
+      // stored sentence says "this pass" (task 86bbt0mz6). Replayed verbatim
+      // it reads as a live verdict: on 2026-09-03 the relay printed "this pass
+      // could not fully verify 4 thing(s)" on every pass for 10.8 hours while
+      // the same passes reported "0 could not be checked" one line later. Two
+      // different passes' facts, ten hours apart, printed as one.
+      why: persistedLatchWhy(persisted),
+      at: Number(persisted.at) || null,
+      fresh: false,
+      // The sentences themselves, so "why is the lane off?" is answerable
+      // later. Before this they were discarded at the moment of latching and
+      // only the COUNT survived — which is what made an August outage
+      // undiagnosable two days after the fact.
+      items: Array.isArray(persisted.items) ? persisted.items : [],
+      droppedItems: Number(persisted.droppedItems) || 0,
+      trigger: persisted.trigger || 'unchecked',
+    };
   }
   if (Array.isArray(unchecked) && unchecked.length) {
     return {
@@ -438,6 +456,9 @@ function selfDisableState({ unchecked = [], mainBuildRed = false, persisted = nu
       fresh: true,
       at: null,
       why: `this pass could not fully verify ${unchecked.length} thing(s), so it is not in a position to merge on its own word`,
+      items: unchecked.slice(),
+      droppedItems: 0,
+      trigger: 'unchecked',
     };
   }
   if (mainBuildRed) {
@@ -446,9 +467,15 @@ function selfDisableState({ unchecked = [], mainBuildRed = false, persisted = nu
       fresh: true,
       at: null,
       why: 'the build on main is red after the last auto-merge',
+      // Deliberately empty, and a trigger of its own: a red main is not an
+      // unchecked item, and dressing it as one would send whoever reads this
+      // looking for a verification failure that never happened.
+      items: [],
+      droppedItems: 0,
+      trigger: 'main-red',
     };
   }
-  return { disabled: false, why: '', at: null, fresh: false };
+  return { disabled: false, why: '', at: null, fresh: false, items: [], droppedItems: 0, trigger: '' };
 }
 
 /**
@@ -456,6 +483,47 @@ function selfDisableState({ unchecked = [], mainBuildRed = false, persisted = nu
  * important first. Returned rather than thrown so the caller can SAY why —
  * silent automation and an unnoticed outage look the same (condition 3).
  */
+/** How many stored sentences a latch keeps. A pathological pass could put
+ *  hundreds on `unchecked`; the ledger is a diagnostic, not a log. */
+const LATCH_ITEM_CAP = 20;
+
+/** One relatch-free day. A latch still in force after this says so again —
+ *  the same reasoning the pipeline pause uses for nagging hourly: a latch
+ *  nobody remembers looks exactly like a lane with nothing to do. */
+const LATCH_NAG_EVERY_MS = DAY_MS;
+
+/**
+ * The stored reason, re-tensed. The recorded sentence was written by the pass
+ * that latched and says "this pass"; every later reader is a different pass.
+ * Saying WHEN is the whole difference between "something is wrong right now"
+ * and "something went wrong at 10:41 this morning and nothing has cleared it".
+ */
+function persistedLatchWhy(persisted) {
+  const stored = String((persisted && persisted.why) || 'auto-merge disabled itself earlier');
+  const at = Number(persisted && persisted.at) || 0;
+  const when = at ? new Date(at).toISOString() : 'an earlier pass';
+  const retensed = stored.replace(/^this pass could not fully verify/, 'a pass could not fully verify');
+  return `auto-merge has been latched off since ${when} — ${retensed}. It stays off until a human says "resume auto-merging".`;
+}
+
+/**
+ * Is it time to say again that the lane is still latched?
+ *
+ * The FIRST engagement already announces itself (the caller posts on
+ * `fresh`). The gap this closes is the silence afterwards: a persisted latch
+ * printed its halt only to a launchd log nobody reads, so a lane that had
+ * switched itself off looked exactly like a quiet night — two days in August,
+ * 10.8 hours on 2026-09-03.
+ */
+function latchNagDue({ disabled, now, lastNagAt = 0, everyMs = LATCH_NAG_EVERY_MS } = {}) {
+  if (!disabled || !disabled.disabled || disabled.fresh) return { due: false, why: 'not a persisted latch' };
+  const since = Number(lastNagAt) || Number(disabled.at) || 0;
+  if (!since) return { due: false, why: 'no clock to measure from' };
+  const age = Number(now) - since;
+  if (age < everyMs) return { due: false, why: `last said ${Math.round(age / 3600000)}h ago` };
+  return { due: true, why: `still latched, and nothing has been said for ${Math.round(age / 3600000)}h` };
+}
+
 function laneGate({ killSwitch, selfDisable, rateCap } = {}) {
   if (killSwitch && killSwitch.state === 'off') return { allowed: false, why: killSwitch.why, kind: 'kill-switch' };
   if (selfDisable && selfDisable.disabled) return { allowed: false, why: selfDisable.why, kind: 'self-disabled' };
@@ -779,10 +847,29 @@ function ledgerAfterSwitch(ledger, signal) {
   return { ...l, switch: signal, disabled: signal.kind === 'resume' ? null : l.disabled };
 }
 
-function ledgerAfterDisable(ledger, why, at) {
+function ledgerAfterDisable(ledger, why, at, { items = [], trigger = 'unchecked' } = {}) {
   const l = asLedger(ledger);
   if (l.disabled && l.disabled.at) return l;
-  return { ...l, disabled: { at: Number(at), why: String(why || 'auto-merge disabled itself') } };
+  const all = Array.isArray(items) ? items.map((x) => String(x)) : [];
+  const kept = all.slice(0, LATCH_ITEM_CAP);
+  return {
+    ...l,
+    disabled: {
+      at: Number(at),
+      why: String(why || 'auto-merge disabled itself'),
+      // The sentences, not just how many there were. Capped, and the cap says
+      // what it swallowed rather than pretending the list was complete.
+      items: kept,
+      droppedItems: all.length - kept.length,
+      trigger,
+    },
+  };
+}
+
+function ledgerAfterLatchNag(ledger, at) {
+  const l = asLedger(ledger);
+  if (!l.disabled) return l;
+  return { ...l, disabled: { ...l.disabled, lastNagAt: Number(at) } };
 }
 
 function ledgerAfterDigest(ledger, at) {
@@ -852,6 +939,11 @@ module.exports = {
   ledgerAfterMerge,
   ledgerAfterSwitch,
   ledgerAfterDisable,
+  ledgerAfterLatchNag,
+  persistedLatchWhy,
+  latchNagDue,
+  LATCH_ITEM_CAP,
+  LATCH_NAG_EVERY_MS,
   ledgerAfterDigest,
   switchSignalsFromLedger,
   mergesSince,
