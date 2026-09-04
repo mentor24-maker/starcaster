@@ -146,18 +146,35 @@ function isReviewPassed(text) {
  * comment mentioned would be a catastrophe that looks like success. No
  * "PR opened:" line means no candidate — refuse rather than guess.
  * Newest wins, so a rebuilt ticket merges its latest PR.
+ *
+ * `findPullRequests` is the same rule, returning EVERY trail PR newest-first
+ * rather than only the winner. It exists because the reconciler needs both
+ * questions answered from ONE definition of "this ticket's PR": which PR is
+ * authoritative (the newest), and which PRs are this ticket's at all (all of
+ * them, to spot a leftover open one under a closed ticket). Before 2026-09-04
+ * the reconciler answered the second question with its own loose regex over
+ * prose and closed a live urgent ticket on a PR belonging to another ticket —
+ * exactly the catastrophe the paragraph above says this parser exists to
+ * prevent, arriving through the one caller that did not use it (86bbuv66c).
  */
 const PR_OPENED_RE = /^\s*PR opened:\s*(https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+))\b/im;
 
-function findPullRequest(comments) {
-  const sorted = byDateNewestFirst(comments);
-  for (const c of sorted) {
+function findPullRequests(comments) {
+  const found = [];
+  const seen = new Set();
+  for (const c of byDateNewestFirst(comments)) {
     const m = PR_OPENED_RE.exec(String(c.comment_text || ''));
-    if (m) {
-      return { url: m[1], owner: m[2], repo: m[3], number: Number(m[4]), commentId: String(c.id) };
-    }
+    if (!m) continue;
+    const url = m[1];
+    if (seen.has(url)) continue;
+    seen.add(url);
+    found.push({ url, owner: m[2], repo: m[3], number: Number(m[4]), commentId: String(c.id) });
   }
-  return null;
+  return found;
+}
+
+function findPullRequest(comments) {
+  return findPullRequests(comments)[0] || null;
 }
 
 function commentDate(c) {
@@ -1192,6 +1209,7 @@ module.exports = {
   isReviewVerdict,
   isReviewPassed,
   findPullRequest,
+  findPullRequests,
   mergeDecision,
   checkState,
   githubGate,

@@ -43,7 +43,15 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { listTasks, getTaskComments, moveTaskStatus, postBusMessage, commentOnTask } = require('./lib/clickup.cjs');
+const {
+  listTasks,
+  getTaskCommentRecords,
+  moveTaskStatus,
+  postBusMessage,
+  commentOnTask,
+} = require('./lib/clickup.cjs');
+const { thisNode } = require('../lib/nodeRoles.js');
+const { findPullRequests } = require('./builder/mergeOnComment.js');
 
 /** How many terminal tasks the leftover-PR scan looks at, most recent first.
  *  Bounded because the terminal set grows forever — see the scan below. */
@@ -58,9 +66,38 @@ const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 // moves a task out of these (two-account model), so the tool flags, never
 // moves. A merged PR is meaningful against BOTH; the difference is the action.
 const AUTO_REPAIR_STATUSES = new Set(['building', 'in review']);
+
+/** Which machine is writing. Never thrown from: a name is a nicety, not a gate. */
+const NODE_NAME = (() => {
+  try { return thisNode() || 'an unnamed machine'; } catch { return 'an unnamed machine'; }
+})();
 const OPERATOR_STATUSES = new Set(['needs your input', 'ready to launch']);
 const TERMINAL_STATUS_TO_SET = 'Live';
-const PR_URL_RE = /github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/;
+/**
+ * WHICH PULL REQUEST IS THIS TICKET'S? Asked of `mergeOnComment`, never
+ * answered here (2026-09-04, ticket 86bbuv66c).
+ *
+ * This file used to match `github.com/<owner>/<repo>/pull/<n>` against every
+ * comment on the ticket and treat the newest hit as the ticket's own work. A
+ * ticket's comments routinely cite other tickets' PRs — the loops file
+ * cross-references as evidence, which is exactly what they should do — so that
+ * regex answered a different question than the one being asked, and answered
+ * it confidently.
+ *
+ * On 2026-09-03 it closed 86bbu60ax, an urgent claimed ticket, on the strength
+ * of PR #558 ("Docs: overlay screens…"), unrelated work merged two hours
+ * earlier and mentioned once in a comment. No PR of its own, no branch, no fix
+ * on main — marked shipped. The merge path had already learned this lesson and
+ * written it down: `findPullRequest`'s own header says merging a PR that a
+ * comment mentioned in passing "would be a catastrophe that looks like
+ * success". It trusts one shape, the `PR opened: <url>` line the loop writes
+ * through `clickup pr-opened`, and refuses rather than guesses.
+ *
+ * So there is now ONE definition of "this ticket's PR" in the repo and this
+ * file calls it. A second regex here would be a second definition, and two
+ * definitions of a safety rule disagree quietly — which is the whole shape of
+ * the incident.
+ */
 
 // Where flagged contradictions are remembered between scheduled runs, so an
 // unchanged drift is posted to the bus ONCE, not every run (channel spam +
@@ -104,20 +141,6 @@ function ghPrState(owner, repoName, number) {
 
 /** Distinct PR URLs in a comment list, in order (comments arrive oldest-first,
  *  so the LAST entry is the newest — the authoritative one). */
-function distinctPrs(comments) {
-  const seen = new Set();
-  const prs = [];
-  for (const text of comments) {
-    const m = String(text || '').match(PR_URL_RE);
-    if (!m) continue;
-    const key = `${m[1]}/${m[2]}#${m[3]}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    prs.push({ owner: m[1], repoName: m[2], number: m[3] });
-  }
-  return prs;
-}
-
 function loadFlagState() {
   try {
     return new Set(JSON.parse(fs.readFileSync(FLAG_STATE_FILE, 'utf8')));
@@ -137,12 +160,40 @@ function saveFlagState(set) {
 }
 
 /**
+ * The comment this job posts before it closes anything.
+ *
+ * WHY A JOB SAYING ITS OWN NAME MATTERS HERE. Every write in this repo goes
+ * through one ClickUp API token, and that token is Dane's — so ClickUp's
+ * activity feed labelled the false close of 86bbu60ax as HIS doing. He was
+ * asked whether he had closed it and could only say he did not think so. The
+ * feed carried no information in either direction, and the answer came from
+ * reading this file, not from any audit trail.
+ *
+ * Comments are the one place an actor can be named, and the loops already sign
+ * theirs. A status change signed nothing, which is backwards: the close is the
+ * destructive half.
+ */
+function closureNote({ prName, prUrl, mergedAt }) {
+  const when = mergedAt ? ` (merged ${mergedAt})` : '';
+  return [
+    `Closed to ${TERMINAL_STATUS_TO_SET} by \`npm run reconcile -- --live\` on ${NODE_NAME}.`,
+    '',
+    `Evidence: this ticket's own \`PR opened:\` trail names ${prName} — ${prUrl} — and GitHub reports it MERGED${when}.`,
+    '',
+    'If that is wrong, the trail is wrong: a PR merely mentioned in discussion is never read as this'
+    + " ticket's work (86bbuv66c). Reopen the ticket and say so on it.",
+    '',
+    '[machine] posted by the reconciler under Dane\'s token — not his word',
+  ].join('\n');
+}
+
+/**
  * @param {object} deps injectable so a test drives this with fake data instead
  *   of the network — every one defaults to the real implementation.
  */
 async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
   const {
-    getComments = getTaskComments,
+    getComments = getTaskCommentRecords,
     prState = ghPrState,
     updateStatus = moveTaskStatus,
     postBus = postBusMessage,
@@ -151,6 +202,7 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
     recordFlagged = () => {},
     isLive = live,
     log = say,
+    onWrite = () => {},
   } = deps;
 
   const inFlight = tasks.filter(isInFlight);
@@ -187,12 +239,16 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
       unchecked.push(`${label}: terminal, but its comments could not be read — cannot tell whether a PR is still open`);
       continue;
     }
-    // EVERY distinct linked PR, not just the newest (review round 1). The real
-    // 2026-08-25 shape is a Live ticket linking an open leftover AND a later
-    // merged PR that actually shipped it — so "newest" is the merged one and
-    // the check returned silently on the exact case it was written for.
-    for (const linked of distinctPrs(comments)) {
-      const pr = prState(linked.owner, linked.repoName, linked.number);
+    // EVERY PR in the ticket's trail, not just the newest (review round 1).
+    // The real 2026-08-25 shape is a Live ticket whose trail carries an open
+    // leftover AND a later merged PR that actually shipped it — so "newest" is
+    // the merged one and the check returned silently on the exact case it was
+    // written for. Trail only, for the reason at PR_OPENED above: a PR quoted
+    // in discussion belongs to another ticket, and flagging its owner's open PR
+    // as this ticket's leftover is the same mis-attribution, one degree less
+    // destructive.
+    for (const linked of findPullRequests(comments)) {
+      const pr = prState(linked.owner, linked.repo, linked.number);
       if (!pr) {
         unchecked.push(`${label}: terminal, but the state of PR #${linked.number} could not be read`);
         continue;
@@ -221,23 +277,25 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
       continue;
     }
 
-    const prs = distinctPrs(comments);
+    // The ticket's OWN pull request, from its `PR opened:` trail. A PR merely
+    // mentioned in a comment is somebody else's work and decides nothing here.
+    const prs = findPullRequests(comments);
     if (prs.length === 0) {
-      // Not clean: an in-flight task with no PR link cannot be confirmed
+      // Not clean: an in-flight task with no PR trail cannot be confirmed
       // shipped-or-not, so it is unverified, not fine (DOCTRINE 3.11).
-      unchecked.push(`${label}: in-flight but no PR linked in its comments — cannot confirm whether it shipped`);
+      unchecked.push(`${label}: in-flight but no "PR opened:" trail in its comments — cannot confirm whether it shipped`);
       continue;
     }
 
-    // Newest distinct PR is authoritative; a superseded older link never wins.
-    const authoritative = prs[prs.length - 1];
-    const pr = prState(authoritative.owner, authoritative.repoName, authoritative.number);
+    // Newest trail PR is authoritative; a superseded older link never wins.
+    const authoritative = prs[0];
+    const pr = prState(authoritative.owner, authoritative.repo, authoritative.number);
     const prName = `PR #${authoritative.number}`;
     if (!pr) {
-      unchecked.push(`${label}: could not read ${prName} (${authoritative.owner}/${authoritative.repoName}) from GitHub`);
+      unchecked.push(`${label}: could not read ${prName} (${authoritative.owner}/${authoritative.repo}) from GitHub`);
       continue;
     }
-    const multi = prs.length > 1 ? ` (newest of ${prs.length} linked PRs)` : '';
+    const multi = prs.length > 1 ? ` (newest of ${prs.length} trail PRs)` : '';
 
     if (pr.state === 'OPEN') {
       clean.push(`${label}: ${prName} is open${multi}, matches ClickUp`);
@@ -247,8 +305,29 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
     if (pr.state === 'MERGED') {
       if (AUTO_REPAIR_STATUSES.has(status)) {
         if (isLive) {
+          // THE TRAIL COMES FIRST, AND IT GATES THE WRITE (86bbuv66c).
+          // Closing a ticket is destructive and this path wrote nothing at all
+          // — no comment, no tag, no log line naming the ticket — so the false
+          // close of 86bbu60ax took three sessions an hour to attribute, and
+          // would never have been noticed on a ticket nobody was holding. The
+          // merge path posts its record before moving; so does this one now.
+          // A comment that cannot be posted means the move does not happen:
+          // an unexplained close is the failure, so writing one anyway to
+          // "at least get the status right" would be doing the damage on
+          // purpose.
+          const note = closureNote({ prName, prUrl: authoritative.url, mergedAt: pr.mergedAt });
+          try {
+            commentOn(task.id, note);
+          } catch (err) {
+            unchecked.push(
+              `${label}: ${prName} merged, but the explanation comment could not be posted (${err.message}) — `
+              + `NOT moved to ${TERMINAL_STATUS_TO_SET}, because a close with no trail is what this check exists to prevent`
+            );
+            continue;
+          }
           try {
             updateStatus(task.id, TERMINAL_STATUS_TO_SET);
+            onWrite();
             repaired.push(`${label}: ${prName} merged${multi} — moved to ${TERMINAL_STATUS_TO_SET}`);
           } catch (err) {
             unchecked.push(`${label}: ${prName} merged, but could not move the task — ${err.message}`);
@@ -447,7 +526,8 @@ async function main() {
   // Flag state is only touched on a live run; dry-run must change nothing.
   const alreadyFlagged = live ? loadFlagState() : new Set();
   const recordFlagged = (key) => alreadyFlagged.add(key);
-  const deps = { alreadyFlagged, recordFlagged };
+  const wrote = { count: 0 };
+  const deps = { alreadyFlagged, recordFlagged, onWrite: () => { wrote.count += 1; } };
 
   await checkMergedTasks(tasks, clean, repaired, unchecked, deps);
   await checkStampedBranches(tasks, clean, repaired, unchecked, deps);
@@ -468,6 +548,18 @@ async function main() {
     say('\nChecked, no drift:');
     clean.forEach((line) => say(`  · ${line}`));
   }
+
+  // A PASS THAT WROTE MUST NOT EXIT LIKE A PASS THAT DID NOT (86bbuv66c).
+  // This exited 0 whether it had changed the board or not, and `npm run repair`
+  // maps the drift step's 0 to "clean" — so the supervising job printed
+  // REPAIR: CLEAN in the very pass that closed a live ticket. The marker step
+  // one entry above it has always had a 3 = repaired code; this one now does
+  // too, and repair.js's dialect learns it in the same commit. Found by
+  // session starcaster-3e while re-deriving the chain.
+  //
+  // Only a LIVE write counts. A dry run fills `repaired` with "would move"
+  // lines, and exiting 3 for those would report a rehearsal as a change.
+  if (live && wrote.count > 0) process.exit(3);
 }
 
 if (require.main === module) {
@@ -482,10 +574,9 @@ module.exports = {
   checkStampedBranches,
   isInFlight,
   isTerminal,
-  distinctPrs,
   ghPrState,
-  PR_URL_RE,
   AUTO_REPAIR_STATUSES,
   OPERATOR_STATUSES,
   TERMINAL_STATUS_TO_SET,
+  closureNote,
 };

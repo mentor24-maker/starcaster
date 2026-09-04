@@ -849,6 +849,22 @@ Before reporting a task complete, run and state the results of:
    If that control ever fails, fix the scene, never the comparison.
    `docs/VISUAL_REVIEW.md`.
 
+**Read the exit code, not the log.** Every browser gate above answers with one
+of three verdicts (`scripts/ui/harness-exit.mjs`, `docs/DOCTRINE.md` §5.33):
+**0** ran and passed, **1** ran and found a defect in your change, **2** could
+not take a reading at all. A **2** is not a failure of your work and not a
+pass — it means the instrument was blind (no fixture project, a stale build,
+another worktree owning the port, a throttled server, a missing variant), so
+fix that and run it again. Until 2026-09-03 eight of these paths printed a
+perfect explanation and exited 0 or 1; `check:screens` with no fixture project
+printed "9 screen-width combination(s) checked, 0 skipped, 0 failing" — which
+is exactly what a clean sweep prints — and exited 0.
+
+**A 1 always outranks a 2**, so a gate that reports 2 really did find nothing
+wrong; it just could not see. The one exception is `check:shots`, which never
+judges your change at all — it only photographs it — so it answers **0 or 2 and
+never 1**. When it stops, the camera broke, not your code.
+
 `npm run check:css` is deliberately absent from this list: CI runs it on
 every pull request, so it is the one visual gate nobody has to remember.
 What it and `check:render` do **and do not** cover is `docs/DOCTRINE.md`
