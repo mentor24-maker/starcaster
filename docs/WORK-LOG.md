@@ -38,6 +38,193 @@ as described. And the command that reports on the automatic merge lane now says
 in words whether that lane has ever merged anything at all; it used to print
 "RUNNING" beside a note that no merge had ever happened, which reads as healthy
 and described a lane that had never once done its job.
+## 2026-09-04 — A repair on a timer was taking tickets away from builds that were still running (#595)
+
+When a build loop starts a job, it moves that job's ticket to **Building** and
+leaves a small note on disk saying "I have this one". If the loop dies partway,
+that ticket would sit in Building forever, because nothing ever picks work up
+from there — so a repair step exists to find the abandoned note and put the
+ticket back in the queue.
+
+That step decided a build was dead from one fact: the ticket is in Building.
+Which is a fair guess in the one place it was written for — it runs as the very
+first thing a new build pass does, and a new pass starting really does mean the
+old one has finished.
+
+Then the same repair was put on a timer, running every ten minutes. A clock
+going off tells you nothing about whether a build is still running. So any job
+taking longer than half an hour had its ticket pulled out from under it and put
+back in the queue while it was still being built — it happened twice in one
+morning. For that stretch the ticket was sitting there available with a live
+build already on it, so a second loop could have started building the very same
+thing on a second branch. Two loops doing one job is the exact problem the
+claim system was built to prevent, and it was arriving through the machinery
+meant to guard against the opposite. Neither side got a warning: the build
+carried on unaware, and the hand-back note read like ordinary tidying.
+
+The repair now says which seat it is sitting in. Called by a new build pass, it
+behaves exactly as before. Called by the timer, it looks at how old the claim
+is instead — under ninety minutes it leaves the ticket alone and says why, over
+that it hands it back as it always did. A claim whose timestamp cannot be read
+is left alone too, and says so out loud rather than quietly picking a side.
+The ninety minutes is not a new number; it is the same one the stranded-ticket
+sweep already uses, borrowed rather than copied so the two cannot drift apart.
+
+The ticket that reported this suggested checking whether the recorded process
+id was still alive. That turned out not to work: the id belongs to the tiny
+command that writes the claim note, not to the build itself, and it is gone
+within seconds. Checking it would have called every claim dead — the same bug
+wearing new clothes — and process ids get recycled, so it would occasionally
+have done the reverse and left a ticket stranded for good. That correction went
+on the ticket before anything was built.
+
+The cost, stated plainly: a build that dies five minutes in now waits up to
+ninety minutes for the *timer* to clean up after it. It does not wait for the
+ordinary repair, which still happens the moment the next build pass starts. A
+ticket repaired late is visible sitting in the queue; a ticket built twice is
+silent and expensive.
+
+Review found three things wrong with that first version, all now fixed.
+
+The "I cannot tell how old this claim is" case could never actually happen.
+Reading the note off disk was quietly filling in a missing timestamp with the
+current time, so a note with no date read as "claimed just now" — and because
+every timer run is a fresh start, it read that way again on the next run, and
+the one after, for as long as you like. The ticket would never have been handed
+back and the honest "I cannot tell" answer could never have been given. The
+clock now belongs to the moment the claim is made and to nowhere else; reading
+a note never changes what it says.
+
+The tidy-up note the repair leaves on a ticket was crediting the wrong thing.
+It said the next build pass had returned the ticket, when on a timer no build
+pass ran at all — the scheduled repair did — and it printed a command to
+reproduce it that was missing the very flag that makes it the scheduled
+version. Anyone re-running the line as written would have got a different
+program. The note now names whichever one actually ran, and prints the command
+that matches.
+
+And the ninety minutes is now measured the same way in both places that use it.
+It was the same number but a different starting line: the stranded-ticket sweep
+counts ninety minutes since anything last happened on the ticket, while this
+counted ninety minutes since the claim was made and never looked again. So a
+build that had visibly done something ten minutes ago could still be declared
+dead, and the two halves of one repair run could disagree about the same
+ticket. It now counts from whichever is more recent — the claim, or the last
+sign of life on the ticket.
+
+Worth recording, because it happened while this very fix was being written: the
+timer took this ticket away from the build working on it, at 10:28, and left
+the note crediting a build pass that never ran. Both defects, live, on their own
+ticket.
+## 2026-09-03 — Three watchdogs saw a stuck ticket and none of them reached you (#586)
+
+A ticket you had already said `merge` on sat in "Ready to launch" for twelve
+hours. Its pull request was already merged; the work was already live on the
+site. Three separate watchdogs were awake and pointed straight at it, and not
+one of them said anything. The loudest reported "nothing is stuck" — honestly,
+because its rule was "say something after 24 hours", and twelve is less than
+twenty-four. You found it by asking about an unrelated ticket that looked odd.
+
+There are two clocks now. A ticket nobody has touched still gets its 24 hours:
+you have not said anything about it, and nagging you about work you never asked
+to be finished is how a watchdog becomes noise. A ticket carrying your own
+`merge` comment is a different thing entirely — you have said what you expect —
+and it is now flagged after **two hours**.
+
+The part that matters is what those two hours are counted from. Not the
+ticket's "last changed" time, which is what every clock here used before: any
+edit at all resets that, and this ticket collected twenty-five automated
+refusal comments while it sat there. A clock reading ticket age would have been
+reset, over and over, by the exact refusals it exists to notice. So the fuse
+burns from **your comment**, which nothing can reset. A ticket that looks four
+minutes old by the old measure is still caught, and there is a test that fails
+if anyone ever points it back at ticket age.
+
+The two hours are not a new number. They are read from the threshold the system
+already gives a build in flight — your words, "no new constant enters the
+codebase without a sibling" — and a test pins both ends, so retuning one of them
+fails loudly instead of quietly moving the other.
+
+The second watchdog, the one that had named this ticket exactly and reached
+nobody, got the two habits a background job owes. It asks the pause switch
+before it does anything, so it stands down while you have the deck. And its
+messages now expire after six hours and clear when the problem is fixed — before
+this, a problem reported once was struck off forever, which is an alarm that
+fires the first time and then never again. A check that stood down for you now
+reports "paused" rather than "clean", because a pass that looked at nothing must
+never read as a healthy one.
+
+Both tools also now say what they cost. A drift pass spends 32 requests against
+ClickUp's roughly one hundred per minute; the new fuse adds one per ticket in
+the stage. That was measured rather than guessed, because the ticket asked for
+it — and the measuring turned up something larger, which is written on the
+ticket rather than fixed here: the ten-minute relay is already spending 108 to
+114 requests a pass and is retrying against the limit thirty-six times in the
+current log. Two tickets already own that problem.
+
+The third thing the ticket raised is not solved and is not claimed to be: all of
+this still reports to the bus, and the bus was not read. Saying so plainly is
+the honest half of the fix.
+
+Review sent this back once, and it was right to. The drift watchdog asks the
+pause switch by running it and reading the answer — but the switch has two ways
+of saying "no", and this code was hearing them as one. "Dane has the deck" and
+"I could not reach ClickUp to find out" both come back as the same refusal, on
+purpose, because both must lead to the same action: stand down. What they must
+never share is the sentence. The first version printed *"Dane has the deck"* for
+both, so a rotated token or a rate-limited read — and the relay is currently
+retrying against that limit thirty-six times a log — would have made the
+watchdog announce something about you that it had no way of knowing, then go
+quiet indefinitely while every board stayed green. That is the exact shape of
+failure this whole ticket was written to close, arriving through the check meant
+to close it.
+
+It now says "could not tell", does not mention you, and reports differently
+enough that the surrounding job reads the whole pass as CANNOT TELL rather than
+as a healthy paused one. The action is unchanged: it still stands down, which is
+the safe direction either way. Two other things came out of the same read — the
+switch call and every step of the repair job now have a time limit, so a call
+that never answers can no longer pin the ten-minute cycle with nothing to break
+it, and the request counter counts requests that were actually sent rather than
+attempts that never left the machine, which matters because that figure is the
+one being budgeted against.
+
+Review sent it back a second time, and that one was not about the work at all:
+the main line of code moved underneath it in the two hours after the pull
+request went up, and it landed in the one file this ticket's headline
+measurement lives in. Two people had solved the same small problem within a day
+of each other — how do you count what a pass costs — and both answers were
+sitting there, disagreeing on purpose about what counts as a request. Keeping
+both would have left the report with two numbers and nothing saying which one it
+meant. There is one now, and the argument that lost is written down beside it,
+because the losing argument is the part a future reader needs.
+
+Underneath that was a worse one, and it is the kind of thing that never
+announces itself. The same two days had each given the same exit code a meaning:
+one branch made "3" mean *you have taken the deck, so I stood down*, the other
+made it mean *I just closed a ticket*. Both were right on their own. Merged
+carelessly, a pass that had just changed the board would have been read by the
+supervising job as a pass that politely declined to run — and reported as
+"paused". Nothing would have failed; an exit code is just a number, and every
+check in the repo stays green through a wrong one. The decline keeps 3, because
+that is what every other tool here means by it. Writing took a number nobody had
+claimed. Two tests now fail if anyone ever collapses them back together, and one
+of them reads both files to make sure the two ends still agree.
+
+The last thing was a line nothing was testing: the very last line a drift pass
+prints, the one reporting what it spent. It calls a function that lives in
+another file, and if that name ever changed, the pass would crash **after**
+doing all of its work — every ticket read, every repair applied, and then a
+failure at the finish line. That is exactly what nearly happened here, and only
+the merge conflict made anyone look. It is tested now, from both ends, and so is
+the identical last line in the other watchdog.
+
+The measurement was retaken through the surviving counter: **31 requests in 19
+seconds** against a 340-ticket queue. That is the read half only — the writes go
+out through a separate program with its own budget, so the printed number is a
+floor, and it now says so. The repair job takes a fresh reading at most every
+half hour, which 31 requests buys comfortably; it would not be safe on the
+ten-minute cycle, and that throttle is deliberate rather than incidental.
 
 ## 2026-09-03 — A refusal that can never clear stops promising it will (#585)
 

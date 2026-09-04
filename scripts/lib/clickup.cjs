@@ -181,6 +181,47 @@ async function call(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {})
   }
 }
 
+/**
+ * WHAT A PASS COSTS, in the units ClickUp throttles on (task 86bbtqytq).
+ *
+ * `clickup_direct.mjs` has counted its own requests since the relay's interval
+ * was set, and closes every pass with "requests this pass: N". The scripts on
+ * THIS client — reconcile, stale-ready — had no such number, so the one
+ * question the ticket asked about scheduling reconcile more often ("measure
+ * before you schedule it; a watchdog that exhausts the rate limit takes the
+ * relay down with it") could only be answered by arithmetic on the source.
+ *
+ * A counter, not an estimate: comment paging makes the real figure depend on
+ * how chatty each ticket is, which no reading of the code produces.
+ *
+ * ONE COUNTER, AND IT IS THE ONE DOOR'S (resolved 2026-09-04, round 3).
+ *
+ * This branch and `main` grew a counter each, within hours, and they were
+ * written to disagree on purpose about what a request IS:
+ *
+ *   - the one door counts at the ATTEMPT — "a request that failed to connect
+ *     still spent whatever the attempt costs, and for a budget you would
+ *     rather over-count than under-count";
+ *   - this file's counted after `requireToken()` — "a missing token is a
+ *     request that never left the machine, and counting attempts there would
+ *     inflate exactly the number the ticket asked to be measured".
+ *
+ * Keeping both is the "keep both sides" shape DOCTRINE 6.7 was written about,
+ * so there is now one, and it is `budget.requests`. The losing argument turns
+ * out to cost nothing here, which is why the merge is safe rather than a coin
+ * flip: `clickupFetch` is reached from exactly one place in this file
+ * (`callOnce`, below), and `requireToken()` guards that line — so a missing
+ * token throws before the door is opened and is not counted either way. The
+ * two counters were numerically identical for every caller of this module.
+ *
+ * KNOWN UNDER-COUNT, unchanged by any of this and worth knowing before you
+ * schedule anything on the figure: WRITES from this module shell out to
+ * `scripts/clickup_direct.mjs`, a separate process with its own budget. They
+ * really are spent against the same per-token limit, and this number does not
+ * see them. It is a floor for a pass's cost, not the whole of it.
+ */
+const requestsMade = () => budget.requests;
+
 async function callOnce(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {}) {
   requireToken();
   // Through the one door. This file's contract is to THROW on a transport
@@ -440,6 +481,7 @@ module.exports = {
   // Exported rather than re-implemented: a second fetch wrapper is a second
   // place for the token contract and the JSON/non-JSON handling to drift.
   call,
+  requestsMade,
   listTasks,
   pageComments,
   getTaskComments,
