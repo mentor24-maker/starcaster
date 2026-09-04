@@ -27,6 +27,27 @@ on:
 # `[gate-waived: ...]` line to the body is the fix for two of the refusals, and
 # a gate that could not see its own fix would send people to a re-run button.
 
+# AND THERE IS DELIBERATELY NO `merge_group:` HERE (2026-09-04, task
+# 86bbv1qp9). CI gained one; this must not, and the reason is structural rather
+# than a preference.
+#
+# This gate asks a question ABOUT A PULL REQUEST — it runs
+# `review_gate.mjs --pr ${{ github.event.pull_request.number }}`, and reads
+# that PR's ticket for a review verdict. A `merge_group` event has no pull
+# request: it carries a batch of commits stacked for merging, and
+# `github.event.pull_request.number` is empty there. Adding the trigger would
+# not make the gate stricter, it would make it run against nothing and answer
+# with whatever an empty PR number produces.
+#
+# So the queue's required check is `verify` ONLY, which is what `main`'s branch
+# protection already required before the queue existed. Nothing is weakened:
+# this gate still runs on every pull request, and a PR cannot ENTER a queue
+# without passing the checks required to merge it.
+#
+# If this ever needs to bind inside the queue, it needs a different question —
+# one asked of the commits in the group rather than of a PR number — not this
+# trigger. `mergeQueueTriggers.test.js` fails if someone adds it here.
+
 permissions:
   contents: read
   pull-requests: read
