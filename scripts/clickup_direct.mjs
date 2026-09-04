@@ -111,7 +111,7 @@ const {
   digestDue, digestBody, digestSince, WINDOW_MS,
   ledgerAfterMerge, ledgerAfterSwitch, ledgerAfterDisable, ledgerAfterLatchNag,
   latchNagDue,
-  ledgerAfterDigest, switchSignalsFromLedger, mergesSince,
+  ledgerAfterDigest, switchSignalsFromLedger, mergesSince, laneAMergeHistory,
 } = autoMergeLane;
 const { readLedgerFile, saveLedgerIfReadable } = autoMergeLedgerFile;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
@@ -402,11 +402,14 @@ function usage(code = 2) {
   console.error('                                             of that skill hands the ticket back if this one dies. Opt-in on purpose:');
   console.error('                                             a hand-driven session claims with this same command, and a marker from');
   console.error('                                             one would let a loop reclaim a ticket a person is building.');
-  console.error('  pass-reconcile                             the FIRST thing a loop-build pass runs: if the previous pass left a');
+  console.error('  pass-reconcile [--scheduled]               the FIRST thing a loop-build pass runs: if the previous pass left a');
   console.error('                                             claim marker and its ticket is still "Building", hand it back (Rework');
   console.error('                                             if a PR is open, else Queued) and clear the marker.');
   console.error('                                             exit 0 = nothing to do, 1 = a hand-back failed, 2 = could not tell');
   console.error('                                             (never 0), 3 = a hand-back was performed.');
+  console.error('                                             --scheduled: the caller is a TIMER, not a new pass, so a firing clock');
+  console.error('                                             proves nothing about whether a pass is alive. Judges on the claim\'s');
+  console.error('                                             age instead and leaves a young claim in "Building", saying why.');
   console.error('  migrate-rework [--apply] [--list <id>]     one-off: move tickets that are Queued WITH AN OPEN PR into Rework.');
   console.error('                                             Dry run unless --apply. Run it AFTER the claim rule is live on main —');
   console.error('                                             a Rework ticket is claimed by nothing until then.');
@@ -653,6 +656,7 @@ function listOpenPullRequests(repo) {
 function capProbe({ repo } = {}) {
   return wipCap.probeCap({
     cap: wipCap.resolveCap(process.env),
+    operatorCap: wipCap.resolveOperatorCap(process.env),
     listOpenPrs: async () => listOpenPullRequests(repo),
     readTicketStatuses: async () => {
       // fatal:false is REQUIRED — see fetchAllTasks. With the default, a
@@ -2080,7 +2084,12 @@ function passMarkerPath() {
 function writePassMarker(task, skill) {
   const file = passMarkerPath();
   try {
-    writeFileSync(file, `${JSON.stringify(passClaim.claimRecord({ task, skill, pid: process.pid }), null, 2)}\n`);
+    // `newClaimRecord`, not `claimRecord`: the clock belongs to the WRITE.
+    // The read path deliberately preserves a missing `at` so it reaches the
+    // `undated` branch and says COULD NOT TELL out loud — if this line ever
+    // stops stamping one, every scheduled run returns exit 2 rather than
+    // silently reading the marker as "claimed just now" forever.
+    writeFileSync(file, `${JSON.stringify(passClaim.newClaimRecord({ task, skill, pid: process.pid }), null, 2)}\n`);
     console.error(`  (pass marker written for ${task} — the next ${skill} pass will hand it back if this one does not finish)`);
   } catch (err) {
     // NOT fatal, and said out loud. The claim itself is what matters; losing
@@ -2244,19 +2253,40 @@ if (cmd === 'whoami') {
   // Nothing in a killed session runs again. The next pass is the cheapest
   // thing guaranteed to run afterwards, and a fresh session is exactly what
   // survives the previous one being killed.
+  //
+  // `--scheduled` says WHICH SEAT IS ASKING (2026-09-04, task 86bbu60ax).
+  // Without it, the caller is a new pass and the inference above holds. With
+  // it, the caller is `npm run repair` on the relay's idle wake, where a
+  // firing timer proves nothing about whether a pass is running — so it judges
+  // on the claim's age instead and leaves a young claim alone. Before that
+  // flag existed, a build that outlived the half-hour throttle had its LIVE
+  // claim revoked on a timer, putting a ticket somebody was actively building
+  // back into the claim line.
   const file = passMarkerPath();
   const marker = passClaim.readMarker(file);
+  const trigger = flag('scheduled') ? passClaim.TRIGGER_SCHEDULED : passClaim.TRIGGER_PASS;
 
   let status = '';
+  // The clock the SWEEP measures by, taken from the same response as the
+  // status (task 86bbu60ax, found in review). `classifyTicket` calls a ticket
+  // stranded after 90 minutes of no activity ON THE TICKET; the marker's `at`
+  // is stamped once and never refreshed. Feeding this in makes the borrowed
+  // constant mean the same thing in both steps of one `npm run repair` run,
+  // instead of only being the same number.
+  let lastActivityMs = null;
   if (marker.found && marker.record) {
     const seen = await call('GET', `/api/v2/task/${marker.record.task}`);
     // An unreadable status is NOT a hand-back. Moving a ticket on a reading we
     // did not take is how a live build gets yanked out from under a pass that
     // is genuinely running.
-    if (seen.res.ok) status = seen.json.status?.status ?? '';
+    if (seen.res.ok) {
+      status = seen.json.status?.status ?? '';
+      const updated = Number(seen.json.date_updated);
+      if (Number.isFinite(updated)) lastActivityMs = updated;
+    }
   }
 
-  const decision = passClaim.reconcileDecision({ marker, status });
+  const decision = passClaim.reconcileDecision({ marker, status, trigger, lastActivityMs });
   let ok = true;
   let destination = '';
 
@@ -2283,11 +2313,14 @@ if (cmd === 'whoami') {
     const note = await call('POST', `/api/v2/task/${decision.task}/comment`, {
       comment_text: pipelinePause.sweptTicketNote({
         at: new Date().toISOString(),
-        by: `the next ${marker.record.skill || 'loop'} pass`,
+        // WHO RAN, from the seat — never a fixed string. Under `--scheduled`
+        // no pass ran at all; `npm run repair` on the relay's idle wake did,
+        // and the command to reproduce it carries the flag, because without
+        // the flag it is the other seat and a different program.
+        ...passClaim.handbackActor(trigger, { skill: marker.record.skill }),
         kind: 'a build',
         destination: plan.status,
         why: plan.why,
-        command: 'npm run clickup -- pass-reconcile',
       }),
       notify_all: false,
     });
@@ -4527,7 +4560,18 @@ if (cmd === 'whoami') {
   console.log(`cap:     ${cap.why}`);
   console.log(`window:  ${WINDOW_MS / 60000} minutes`);
   console.log(`digest:  ${digestDue(led.ledger.lastDigestAt, now) ? 'due' : `last posted ${clockAt(led.ledger.lastDigestAt)}`}`);
+  // "Running" is about the gate being OPEN. Whether anything has ever come out
+  // of it is a different question, and printing only the first one is how
+  // `LANE A: RUNNING` sat beside `ledger: not created yet` on 2026-09-03 and
+  // read as a healthy lane that had never merged a single pull request
+  // (task 86bbugeda).
+  const history = laneAMergeHistory({ ledger: led.ledger, fresh: led.fresh, readable: led.ok });
   console.log(`LANE A:  ${gate.allowed ? 'RUNNING' : `NOT RUNNING — ${gate.why}`}`);
+  console.log(`history: ${history.verdict === 'never' ? 'NEVER MERGED — ' : (history.verdict === 'unknown' ? 'CANNOT TELL — ' : '')}${history.why}`);
+  if (gate.allowed && history.verdict === 'never') {
+    console.log('         RUNNING here means the gate is open, NOT that this lane works —');
+    console.log('         nothing has ever come out of it.');
+  }
   const recent = mergesSince(led.ledger, digestSince(led.ledger, now));
   console.log(`recent:  ${recent.length} auto-merge(s) since the last digest (or the last 24 hours if none has posted)`);
   for (const m of recent) console.log(`  PR #${m.pr}  task ${m.task}  ${clockAt(m.at)}  ${(m.files || []).join(' ')}`);

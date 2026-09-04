@@ -7141,6 +7141,7 @@ button.builder-inline-asset-status-btn:focus-visible {
    drops whole words until the text fits. The full value stays in `title`,
    which T7 rung 10 makes mandatory. */
 #builderManagePagesPage .builder-pages-name-text,
+#builderManagePagesPage .builder-pages-template-text,
 #builderManagePagesPage .builder-pages-slug-link {
   display: block;
   max-width: 100%;

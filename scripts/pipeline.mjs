@@ -38,6 +38,10 @@ import pipelinePause from './builder/pipelinePause.js';
 import buildStart from './builder/buildStart.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import nodeRoles from '../lib/nodeRoles.js';
+// The one door to ClickUp, and the budget it keeps (task 86bbugcpa).
+import clickupLib from './lib/clickup.cjs';
+
+const { clickupFetch, getBudget } = clickupLib;
 
 const {
   SWITCH_TASK_NAME, STRANDED_AFTER_MS,
@@ -54,6 +58,9 @@ const { resolveBuildStart, prLookupArgs } = buildStart;
 const { readSwitch: storeReadSwitch, fetchQueue: storeFetchQueue, loopNoteOf, whyOf } = pipelinePauseStore;
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
+/** Constant in every real run; overridable only so tests can point at a
+ *  server that is not ClickUp. Same knob the shared client uses. */
+const API_BASE = process.env.CLICKUP_API_BASE || 'https://api.clickup.com';
 const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
@@ -112,19 +119,30 @@ if (!TOKEN) {
   process.exit(2);
 }
 
-/** Every request this process makes; reported at the end, like bus-relay's. */
-let requestCount = 0;
+/**
+ * Every request this process makes; reported at the end, like bus-relay's.
+ *
+ * The counter is the SHARED one now (2026-09-04, task 86bbugcpa) rather than a
+ * private `let` — the limit is per token and there is one token for the whole
+ * company, so a count that only knows about its own file is not a budget. The
+ * number printed below is unchanged in practice: every request this command
+ * makes, including the pause store's, already went through `call`, because the
+ * store takes its transport injected instead of opening its own.
+ */
+const requestsThisPass = () => getBudget().requests;
 
 async function call(method, path, body) {
-  requestCount += 1;
-  const res = await fetch(`https://api.clickup.com${path}`, {
+  // Through the one door. It never throws — a transport failure comes back as
+  // `transportError` — but this file's contract is that `call` DOES throw and
+  // `tryCall` below catches it, so the rejection is re-raised here and nowhere
+  // else. Behaviour is identical to the bare `fetch` this replaced.
+  const out = await clickupFetch(`${API_BASE}${path}`, {
     method,
     headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   });
-  const text = await res.text();
-  let json = null;
-  try { json = JSON.parse(text); } catch { /* a non-JSON error page */ }
+  if (out.transportError) throw out.transportError;
+  const { res, json, text } = out;
   return { res, json, text, ok: res.ok };
 }
 
@@ -503,7 +521,7 @@ if (cmd === 'check') {
   } else {
     console.log('\nin flight:     could not be read, so this answer is INCOMPLETE.');
   }
-  console.error(`  requests this pass: ${requestCount}`);
+  console.error(`  requests this pass: ${requestsThisPass()}`);
 
 } else if (cmd === 'sweep') {
   // The repair, on its own, runnable at ANY time — which is the whole of this
@@ -541,7 +559,7 @@ if (cmd === 'check') {
     `[CC-starcaster] Stranded work swept by ${by}.\n`,
   ));
 
-  console.error(`  requests this pass: ${requestCount}`);
+  console.error(`  requests this pass: ${requestsThisPass()}`);
   process.exit(sweepExitCode({ ...sweepState, found, applied: apply }));
 
 } else if (cmd === 'pause') {
@@ -610,19 +628,19 @@ if (cmd === 'check') {
     if (!working.length) {
       const r = drainReport({ ended: 'clear', working, stranded, waitedMs: Date.now() - startedAt });
       console.log(r.message);
-      console.error(`  requests this pass: ${requestCount}`);
+      console.error(`  requests this pass: ${requestsThisPass()}`);
       process.exit(r.code);
     }
     if (now) {
       const r = drainReport({ ended: 'left', working, stranded });
       console.log(r.message);
-      console.error(`  requests this pass: ${requestCount}`);
+      console.error(`  requests this pass: ${requestsThisPass()}`);
       process.exit(r.code);
     }
     if (Date.now() - startedAt >= waitMs) {
       const r = drainReport({ ended: 'timeout', working, stranded, budgetMs: waitMs });
       console.log(r.message);
-      console.error(`  requests this pass: ${requestCount}`);
+      console.error(`  requests this pass: ${requestsThisPass()}`);
       process.exit(r.code);
     }
     console.error(`  waiting on ${describeTickets(working)} … (checked ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })})`);
@@ -665,7 +683,7 @@ if (cmd === 'check') {
       /^\[CC-starcaster\] The build pipeline is RUNNING again[^\n]*\n/,
       `[CC-starcaster] Stranded work swept by ${by} (the pipeline was already running).\n`,
     ));
-    console.error(`  requests this pass: ${requestCount}`);
+    console.error(`  requests this pass: ${requestsThisPass()}`);
     process.exit(sweepExitCode({ ...sweepState, found, applied: true }));
   }
 
@@ -694,7 +712,7 @@ if (cmd === 'check') {
   // and only the first is an all-clear. The other two used to print one anyway,
   // directly under the stderr line saying the ticket was still stranded.
   console.log(`The pipeline is RUNNING again. ${sweptSummary(swept, sweepState)}`);
-  console.error(`  requests this pass: ${requestCount}`);
+  console.error(`  requests this pass: ${requestsThisPass()}`);
 
 } else {
   usage();

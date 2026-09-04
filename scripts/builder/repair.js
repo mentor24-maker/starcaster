@@ -23,7 +23,8 @@
  *             dead, the Mini rebooted — and the relay's idle wake is the one
  *             vantage that survives that (the watchdog doctrine). On a
  *             machine with no marker it answers "no claim" and writes
- *             nothing.
+ *             nothing. It is called with `--scheduled`, which is not a
+ *             formality — see the step below.
  *   drift     `reconcile -- --check`. Its writes are already automation-safe
  *             by design: it moves a ticket only on hard evidence (its PR
  *             MERGED, ticket in a machine status → Live), FLAGS operator
@@ -59,10 +60,19 @@
 const STEPS = Object.freeze([
   Object.freeze({
     id: 'marker',
-    npmArgs: Object.freeze(['clickup', '--', 'pass-reconcile']),
-    // pass-reconcile dialect: 0 nothing / 3 handed back (news!) / 2 could not
-    // tell / 1 a hand-back failed. Nothing here aborts the run; 3 is a
-    // repair to report, 2 and 1 are degradations to report.
+    // `--scheduled` IS LOAD-BEARING (2026-09-04, task 86bbu60ax). Without it,
+    // pass-reconcile assumes its original seat — the first thing a new
+    // loop-build pass runs, where a new pass starting proves the previous one
+    // ended. A timer proves no such thing, so this call was revoking LIVE
+    // build claims every half hour: twice in one morning on 86bbqb0ac, while
+    // the pass was still building, putting the ticket back in the claim line
+    // for a second builder to take. The flag makes it judge on the claim's age
+    // instead. passClaim.js carries the argument.
+    npmArgs: Object.freeze(['clickup', '--', 'pass-reconcile', '--scheduled']),
+    // pass-reconcile dialect: 0 nothing (including a live claim deliberately
+    // left alone) / 3 handed back (news!) / 2 could not tell / 1 a hand-back
+    // failed. Nothing here aborts the run; 3 is a repair to report, 2 and 1
+    // are degradations to report.
     reading: Object.freeze({ 0: 'clean', 3: 'repaired', 2: 'cannot-tell', 1: 'failed' }),
   }),
   Object.freeze({

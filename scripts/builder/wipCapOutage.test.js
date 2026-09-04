@@ -161,6 +161,13 @@ test('the queue read succeeding still governs the answer', () => {
   const out = runWipCheck({ fetchStub: stub, prsJson: SIX_OPEN });
   assert.equal(out.status, 0,
     `6 open PRs whose tickets are all Queued rework must NOT cap the loop — that is the deadlock.\n${out.stderr}`);
-  assert.match(out.stdout, /0 in flight, cap 5/);
+  // Since task 86bbuzzbk the headline carries both limits by name. This is
+  // still the control it always was — it proves the statuses were really read,
+  // because an unread queue takes the fallback path and would say "6 PR(s)
+  // open" instead.
+  assert.match(out.stdout, /0 building or in review \(cap 5\)/);
+  assert.match(out.stdout, /0 waiting on Dane \(ceiling 10\)/);
   assert.match(out.stdout, /6 queued with a PR already open/);
+  assert.doesNotMatch(out.stdout, /6 PR\(s\) open, cap 5/,
+    'that phrasing is the statuses-unavailable fallback — seeing it here means the queue was not read');
 });
