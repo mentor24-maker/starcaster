@@ -53,8 +53,24 @@ const F = process.env.NAV_MATRIX_OUT || path.join(os.tmpdir(), 'starcaster-nav-c
  */
 function prepare(what, cmd, args, env) {
   try {
-    execFileSync(cmd, args, { cwd: ROOT, stdio: 'pipe', env });
+    /*
+     * `maxBuffer` is not a formality. Node's default is 1 MiB, and a build or
+     * a vitest run talks far more than that — the child would be KILLED for
+     * being chatty and the ENOBUFS reported below as "the fixture failed",
+     * which is a false refusal on a setup that was working fine.
+     *
+     * The output is captured rather than inherited so the message below can
+     * carry it; the cost is that it does not stream live.
+     */
+    execFileSync(cmd, args, { cwd: ROOT, stdio: 'pipe', env, maxBuffer: 64 * 1024 * 1024 });
   } catch (e) {
+    if (e && e.code === 'ENOBUFS') {
+      cannotTell('check:nav-controls',
+        `${what} produced more output than this check could hold, so it was killed mid-run.\n\n` +
+        `  ${cmd} ${args.join(' ')}\n\n` +
+        'NOTHING IS WRONG WITH THE NAV CONTROLS — this is the check\'s own buffer, not your code.\n' +
+        'Raise `maxBuffer` in scripts/ui/check_nav_controls.mjs, or run the command above by hand.');
+    }
     cannotTell('check:nav-controls',
       `${what} failed, so there is no fixture to measure.\n\n  ${cmd} ${args.join(' ')}\n\n` +
       String(e.stderr || e.stdout || e.message || '').slice(-2000));

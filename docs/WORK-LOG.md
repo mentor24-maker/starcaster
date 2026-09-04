@@ -43,6 +43,31 @@ Two of the five turned out to have been fixed back in August and were left
 alone. Every path that changed was broken deliberately and the answer read off
 the screen, rather than trusted because the code looked right.
 
+**And then the review caught this fix making the exact mistake it was written
+to remove.** In three places the new code asked "could I see anything?" *before*
+it asked "did I find anything wrong?" — and because the first question quits on
+the spot, real problems were never even printed. Break the page preview on
+purpose and the rendering check went from correctly saying "failed" to saying
+"could not tell": a genuine defect reported as a broken instrument. Worse in
+the general case — a change that broke all 41 of its rendering rules would have
+reported "could not tell" and listed none of them, because a rule that fails to
+render was never counted as measured.
+
+Both questions now go through the single shared rule that already knew the
+right answer: a real failure outranks a could-not-tell, and a pass never does.
+The two orderings were broken deliberately and read off the screen the same way
+everything else here was — the old code says "could not tell" and prints
+nothing, the new code says "failed" and prints all 41.
+
+Four smaller things went with it: a run that reached only some of its screens
+no longer calls the rest clean; the screenshot tool now answers only "fine" or
+"could not tell", never "your change is broken", because it never judges the
+change in the first place — it just takes the pictures; a setup step that
+produces a lot of output is no longer killed for being chatty and then blamed
+for failing; and the test that polices all of this now reads the code with the
+comments stripped out, having twice matched its own explanations of the very
+mistakes it was checking for.
+
 ## 2026-09-03 — A safety brake that had never once been applied (#567)
 
 When an agent finishes a turn, a check looks at whether the work added a

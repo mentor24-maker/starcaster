@@ -229,8 +229,12 @@ function clickup(args, label) {
   const result = spawnSync('npm', ['run', '--silent', 'clickup', '--', ...args], { cwd: ROOT, encoding: 'utf8' });
   process.stderr.write(result.stderr || '');
   if (result.status !== 0) {
-    console.error(`\n[check:shots] ${label} FAILED. The images are on disk; nothing was filed.\n`);
-    process.exit(1);
+    // Also a 2, for the same reason as everything else here: the pictures were
+    // taken fine and ClickUp would not accept them. That says nothing at all
+    // about the change, so it must not exit with the code that means it does.
+    cannotTell('check:shots',
+      `${label} failed, so nothing was filed — but the shots themselves are fine and on disk ` +
+      `(${path.relative(ROOT, runDir)}).\nThis is ClickUp refusing the upload, not a problem with your change.`);
   }
   return result.stdout || '';
 }
@@ -288,7 +292,7 @@ try {
   if (!afterProbe.png || !controlProbe.png) {
     failure =
       `the control scene "${probe.id}" rendered ${afterProbe.modules} module(s) and no shell to photograph. ` +
-      'NOTHING WAS MEASURED — either the preview surface changed or the bundle is stale (`npm run build:builder`).';
+      'NOTHING WAS PHOTOGRAPHED — either the preview surface changed or the bundle is stale (`npm run build:builder`).';
   } else {
     const check = comparePixels(await raw(controlProbe.png), await raw(afterProbe.png));
     if (!check.identical) {
@@ -308,7 +312,7 @@ try {
       const beforeShot = await shoot(beforePage, scene);
       if (!afterShot.png) {
         failure = `scene "${scene.id}" rendered nothing on THIS build (${afterShot.modules} module(s)). ` +
-          'A scene that photographs an empty page proves nothing, so this is a failure rather than a pass.';
+          'A scene that photographs an empty page proves nothing, so this is not a pass.';
         break;
       }
       if (!beforeShot.png) {
@@ -326,9 +330,26 @@ try {
   await browser.close();
 }
 
+/*
+ * EVERY WAY THIS TOOL CAN STOP IS A 2, NEVER A 1.
+ *
+ * check:shots makes no assertion about the code — it photographs two builds
+ * and files the pairs that differ, leaving the judgement to the operator's
+ * eye. So it has no way to discover a defect, and therefore no honest use for
+ * exit 1: a control scene with no shell, a control shot that differs from
+ * itself, and a scene that renders nothing are all the camera failing, not the
+ * change. Reporting them as 1 sent whoever read the log hunting a bug this
+ * tool had not looked for (review round 1, task 86bbt6hgx).
+ *
+ * The one that looks like an exception is not: a scene rendering nothing on
+ * THIS build could well be your change's fault — but `check:render` is the
+ * gate that says so, with a real failure and an exit 1. This one only reports
+ * that it could not take the picture.
+ */
 if (failure) {
-  console.error(`\n[check:shots] FAILED — ${failure}\n`);
-  process.exit(1);
+  cannotTell('check:shots',
+    `${failure}\n\nNothing was filed. This tool only photographs — it never judges the change — ` +
+    'so a stop here is always a broken camera, never a verdict on your code.');
 }
 
 if (!changes.length) {

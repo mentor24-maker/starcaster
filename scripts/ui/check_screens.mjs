@@ -185,10 +185,23 @@ if (notes.length) {
 }
 console.log(`\nScreenshots: ${path.relative(ROOT, SHOT_DIR)}/ — look at them. Passing assertions are not proof.`);
 
-// Nothing measured at all. The loudest form of the same defect: every screen
-// skipped reads as "0 failing", which is exactly what a clean sweep prints.
+/*
+ * A SKIPPED SCREEN IS AN UNMEASURED SCREEN — at any count, not just zero.
+ *
+ * This used to fire only when NOTHING was measured, which drew the line in an
+ * arbitrary place: 8 of 9 screens unreachable with 1 measured still printed
+ * "0 failing" and exited 0. Both skip paths above are instrument problems (the
+ * screen would not load, or the app landed somewhere else), so by this file's
+ * own definition those screens were not checked — and a run cannot call clean
+ * what it never looked at.
+ */
 if (!checked) {
   blind.push(`not one of the ${SCREENS.length} screen(s) was measured (${skipped} skipped) — there is nothing here to pass`);
+} else if (skipped > 0) {
+  blind.push(
+    `${skipped} screen-width combination(s) were skipped and ${checked} measured — the skipped ones ` +
+    'are unreachable, not clean, so this run says nothing about them (the "skip" lines above name each)'
+  );
 }
 
 const code = verdict({ failures: failures.length, blind: blind.length });

@@ -44,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const { cannotTell, EXIT_CANNOT_TELL } = await import('./harness-exit.mjs');
+const { cannotTell, verdict, EXIT_FAIL, EXIT_CANNOT_TELL } = await import('./harness-exit.mjs');
 const { createRequire } = await import('node:module');
 // lib/builder/template.js is a GENERATED artifact and a fresh worktree has
 // none. Without this the run dies on a raw MODULE_NOT_FOUND stack that says
@@ -823,11 +823,13 @@ for (const width of WIDTHS) {
 // the SAME database. On 2026-08-13 that silently cut this page from 53
 // modules to 3, and the check reported a confident pass over what was left.
 // Counting the cards is what makes that loud instead of invisible.
+const blind = [];
+
 if (cardsSeen > 0 && cardsSeen < EXPECTED_MODULES) {
   // A 2, not a 1: the fixture is the INSTRUMENT. Nothing here says the panels
   // are wrong, and reporting it as a failure sends the reader hunting a defect
   // in code that could be perfect (task 86bbt6hgx).
-  cannotTell('check:panels',
+  blind.push(
     `The fixture is INCOMPLETE — ${cardsSeen} module cards on the page, ` +
     `${EXPECTED_MODULES} module types exist.\n` +
     'Another session has probably re-seeded over it. Re-run `npm run seed:ui-fixture`\n' +
@@ -835,7 +837,7 @@ if (cardsSeen > 0 && cardsSeen < EXPECTED_MODULES) {
 }
 
 if (panelsSeen === 0) {
-  cannotTell('check:panels',
+  blind.push(
     'No panels carrying `.is-lattice` were found.\n' +
     'Zero assertions is never a green result. The class is stamped on EVERY module\n' +
     'editor by ModuleEditorWrapper (components/builder/builder-module-card.tsx)\n' +
@@ -845,9 +847,28 @@ if (panelsSeen === 0) {
     'is why this is a 2 rather than a 1.');
 }
 
-if (allFailures.length) {
+/*
+ * FAILURES FIRST, THEN THE REFUSAL. Both guards above used to exit 2 on the
+ * spot, ahead of this block — so a partial fixture plus a genuine W0/W9
+ * violation on the panels that DID render reported as a broken instrument and
+ * threw the violation list away (review round 1, task 86bbt6hgx). The
+ * incomplete-fixture case is the common one: another session re-seeding over
+ * the shared page did exactly this on 2026-08-13. A width that is wrong is
+ * wrong whatever else about the run was hollow, which is the ranking
+ * `verdict()` encodes.
+ */
+const code = verdict({ failures: allFailures.length, blind: blind.length });
+
+if (code === EXIT_FAIL) {
   console.error(`\n[check:panels] FAILED — ${allFailures.length} problem(s):\n`);
   for (const f of allFailures) console.error(`  ✗ ${f}`);
+  if (blind.length) {
+    console.error(
+      '\nAND the run was partly blind, which does NOT excuse the failures above —\n' +
+      'it means there may be more of them that went unmeasured:\n\n' +
+      blind.map((b) => `  • ${b.split('\n')[0]}`).join('\n') + '\n'
+    );
+  }
   console.error(
     '\nW0: one label width and one field width per panel. The two numbers live in\n' +
     'src/css/_variables.css (--builder-field-label-w / --builder-field-control-w).\n' +
@@ -856,6 +877,8 @@ if (allFailures.length) {
   );
   process.exit(1);
 }
+
+if (code === EXIT_CANNOT_TELL) cannotTell('check:panels', blind.join('\n\n'));
 
 console.log(
   `[check:panels] OK — W0 and W9 hold across ${panelsSeen} panel(s) `

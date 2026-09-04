@@ -2027,6 +2027,41 @@ A real failure outranks a could-not-tell — a screen that overflowed its
 viewport overflowed it, whatever else about the run was hollow. A **pass**
 never does, because a pass over something nobody measured is the whole defect.
 
+**And the ranking is worth nothing unless the failures are counted FIRST.**
+The first version of this fix stated the rule above, encoded it in `verdict()`,
+wrote it down here — and then broke it in three places, because each harness
+called `cannotTell()` *above* its failure block. `cannotTell()` exits on the
+spot, so the refusal short-circuited and the real failures were never even
+printed. Measured on the review pass: break the preview renderer and
+`check_render` said `COULD NOT TAKE A READING` where `main` had correctly said
+`FAILED` — the fix introducing the exact mistake it was written to remove.
+Worse in the general case, `check_render` counts a contract as `measured` only
+*after* it renders, so a change breaking all 41 gave `failures = 41,
+measured = 0` and reported "not a failure of your change either".
+
+So: **compute the verdict, then act on it.** Never `if (blind) refuse()` above
+`if (failures) fail()` — the two guards read as independent and are not.
+`check_screens` is the model (`verdict({ failures, blind })` into a single
+`process.exitCode`), and `scripts/builder/harnessExitCodes.test.js` asserts on
+the *position* of those calls, because an assertion that merely proved both
+exist passes on the broken ordering.
+
+**A tool that never judges the code has no honest use for exit 1.**
+`check:shots` photographs two builds and files the pairs that differ, leaving
+the judgement to the operator's eye — so it cannot discover a defect, and its
+every stop (no shell on the control scene, the control differing from itself, a
+scene rendering nothing, ClickUp refusing the upload) is a broken camera. It
+answers 0 or 2, never 1. Where a stop genuinely *is* the change's fault — the
+preview surface no longer rendering — the gate that says so is `check:render`,
+with a real failure and a real 1.
+
+**Corollary, learned twice in one file: a source-scanning test must read the
+source with comments stripped.** These harnesses carry long comments quoting
+the very calls they replaced, so a test grepping raw source matches its own
+documentation. It bit the `stdio: 'ignore'` assertion, then the `process.exit(2)`
+one, then a `process.exit(1)` count that found two — the call, and the sentence
+saying there was only one.
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory

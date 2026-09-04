@@ -69,7 +69,13 @@ test('every harness refusal goes through the shared module, so they cannot disag
       '"could not take a reading" is how these drift apart');
     // A literal exit(2) is not wrong, but it is a refusal written without the
     // banner that makes a 2 legible in a log. Route it through cannotTell.
-    assert.doesNotMatch(src, /process\.exit\(\s*2\s*\)/,
+    //
+    // Scanned over `code(file)`, not `read(file)`: these files' comments quote
+    // the very calls they replaced, so the raw source version of this
+    // assertion would fail CI the moment somebody documented the old shape —
+    // which is the trap this file's own header describes, and which the
+    // neighbouring `stdio: 'ignore'` assertion already avoids the same way.
+    assert.doesNotMatch(code(file), /process\.exit\(\s*2\s*\)/,
       `${file} still exits 2 by literal — use cannotTell() so the refusal prints its banner`);
   }
 });
@@ -110,21 +116,142 @@ test('a vacuity guard is a 2, not a 1 — the instrument failed, not the code', 
   // sends whoever reads the log hunting a defect in code that may be perfect.
   for (const [file, needles] of [
     ['check_panels.mjs', ['The fixture is INCOMPLETE', 'No panels carrying']],
-    ['check_render.mjs', ['rendered no text module', 'NONE were measured']],
+    ['check_render.mjs', ['NONE were measured']],
   ]) {
     const src = read(file);
     for (const needle of needles) {
       const at = src.indexOf(needle);
       assert.notEqual(at, -1, `${file} no longer contains the guard for "${needle}"`);
+      /*
+       * The guard must feed the blind list or refuse outright — never push a
+       * failure. check_panels collects its two into `blind` and refuses at the
+       * end (so a real W0/W9 violation can outrank it — see the ordering test
+       * below); check_render refuses on the spot, having nothing to outrank.
+       */
       const window = src.slice(Math.max(0, at - 400), at + 900);
-      assert.match(window, /cannotTell\(/,
-        `${file}: the "${needle}" guard must exit 2 — nothing about it says the code under test is wrong`);
+      assert.match(window, /cannotTell\(|blind\.push\(/,
+        `${file}: the "${needle}" guard must end in a 2 — nothing about it says the code under test is wrong`);
+      assert.doesNotMatch(window, /failures\.push\(|allFailures\.push\(/,
+        `${file}: the "${needle}" guard must not report a failure — the instrument was blind, ` +
+        'and calling that a defect sends the reader hunting a bug that is not there');
     }
-    // Exactly one exit(1) survives in each: the real assertion failure.
-    const ones = src.match(/process\.exit\(1\)/g) || [];
+    /*
+     * Exactly one exit(1) survives in each: the real assertion failure.
+     *
+     * Counted over `code(file)`, for the same reason the exit(2) scan above
+     * is — and this one proved it the hard way. check_render's helper carries
+     * a comment saying "one process.exit(1) in the file", and counting the RAW
+     * source found two: the call and the sentence describing it.
+     */
+    const ones = code(file).match(/process\.exit\(1\)/g) || [];
     assert.equal(ones.length, 1,
       `${file} should have exactly one exit(1) — the genuine failure — but has ${ones.length}`);
   }
+
+  // And whatever check_panels put in that list has to actually reach a 2.
+  assert.match(code('check_panels.mjs'), /cannotTell\('check:panels', blind\./,
+    'check_panels collects its blind reasons but never refuses with them — a list nothing reads ' +
+    'is the same defect as no list at all');
+});
+
+test('the check:render baseline guard is a 1 — a dead preview surface is a defect', () => {
+  /*
+   * The one guard that went the OTHER way and had to come back (review round
+   * 1). A baseline that will not render has exactly two causes: a stale bundle
+   * or a broken preview surface. `ensureBuildIsCurrent` catches the stale
+   * bundle earlier and exits 2, so by the time this guard is reached the only
+   * live explanation is the code under test — and calling that a broken
+   * instrument is the same 1-vs-2 mistake this whole ticket is about.
+   */
+  const src = read('check_render.mjs');
+  const at = src.indexOf('rendered no text module');
+  assert.notEqual(at, -1, 'check_render no longer guards the baseline render');
+
+  const window = src.slice(at, at + 600);
+  assert.match(window, /reportFailures\(/,
+    'the baseline guard must report a FAILURE — a preview surface that does not render is the ' +
+    'change\'s defect, not a broken instrument');
+  assert.doesNotMatch(window, /cannotTell\(/,
+    'the baseline guard must not refuse: the only instrument cause (a stale build) is already ' +
+    'caught by ensureBuildIsCurrent, which exits 2 well before this line');
+
+  // And the guard that DOES own the stale-build case still runs first.
+  assert.ok(src.indexOf('ensureBuildIsCurrent(BASE_URL)') < at,
+    'ensureBuildIsCurrent must run before the baseline guard, or the stale-build case ' +
+    'reaches a guard that now calls it a failure');
+});
+
+test('a real failure outranks a could-not-tell — the refusal never short-circuits it', () => {
+  /*
+   * THE ROUND-1 SEND-BACK, held in place.
+   *
+   * `verdict()` encodes the ranking and DOCTRINE §5.33 states it, but three
+   * harnesses called `cannotTell()` ABOVE their failure block, so the refusal
+   * exited 2 and the real failures were never printed:
+   *
+   *   - check_render, every contract failing R1 → failures 41, measured 0 → 2
+   *   - check_panels, a partial fixture plus a genuine W0/W9 violation → 2
+   *
+   * Both now compute `verdict()` first and act on it, the way check_screens
+   * always did. Asserting on POSITION is the point: the bug was ordering, and
+   * an assertion that only proved both calls exist would have passed on the
+   * broken code.
+   */
+  for (const [file, needle] of [
+    ['check_render.mjs', 'NONE were measured'],
+    ['check_panels.mjs', 'No panels carrying'],
+  ]) {
+    const src = code(file);
+    const verdictAt = src.indexOf('verdict({ failures:');
+    assert.notEqual(verdictAt, -1,
+      `${file} must reach its exit through verdict(), which is where the ranking lives`);
+
+    const refusalAt = src.lastIndexOf('cannotTell(');
+    assert.notEqual(refusalAt, -1, `${file} no longer refuses at all`);
+    assert.ok(verdictAt < refusalAt,
+      `${file}: the vacuity refusal runs BEFORE the verdict is computed, so a run with real ` +
+      'failures exits 2 and prints none of them — that is the round-1 defect');
+
+    // The failure branch must be gated on the verdict too, not on its own
+    // separate `if (failures.length)` sitting below a refusal that already
+    // exited.
+    assert.match(src.slice(verdictAt, refusalAt), /code === EXIT_FAIL/,
+      `${file}: the failure report must be selected by the verdict, so it cannot be skipped`);
+  }
+});
+
+test('check:shots answers 0 or 2 and never 1 — it photographs, it does not judge', () => {
+  /*
+   * Three instrument-shaped stops (no shell on the control scene, the control
+   * differing from itself, a scene rendering nothing) all exited 1. This tool
+   * makes no assertion about the code at all, so it has no honest use for a
+   * code that means "your change is wrong".
+   */
+  const src = code('shoot_changes.mjs');
+  assert.doesNotMatch(src, /process\.exit\(1\)/,
+    'check:shots must not exit 1 — it never judges the change, so every stop is a broken camera');
+  assert.match(src, /if \(failure\) \{\s*\n\s*cannotTell\(/,
+    'the single failure path must refuse with cannotTell so the 2 prints its banner');
+});
+
+test('check_screens counts every skipped screen as unmeasured, not just an empty run', () => {
+  // 8 of 9 screens skipped with 1 measured printed "0 failing" and exited 0.
+  // The line between 0 and 1 measured was arbitrary: both skip paths are the
+  // screen failing to load, which is unmeasured by this file's own definition.
+  const src = code('check_screens.mjs');
+  assert.match(src, /\} else if \(skipped > 0\) \{\s*\n\s*blind\.push\(/,
+    'a partly-skipped run must count as blind — an unreachable screen is not a clean one');
+});
+
+test('a precondition that talks a lot is not mistaken for one that failed', () => {
+  // execFileSync's default maxBuffer is 1 MiB. A build or a vitest run exceeds
+  // it, the child is killed, and the ENOBUFS was reported as "the fixture
+  // failed" — a refusal on a setup that was working.
+  const src = code('check_nav_controls.mjs');
+  assert.match(src, /maxBuffer:/,
+    "prepare() must raise maxBuffer, or a chatty build is killed and blamed for failing");
+  assert.match(src, /ENOBUFS/,
+    'and if the buffer is exceeded anyway, the refusal must say so rather than blaming the fixture');
 });
 
 /*
