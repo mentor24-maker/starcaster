@@ -24,9 +24,19 @@
  *     turns every one of these into CANNOT TELL — and CANNOT TELL must never
  *     become a pass by way of an exception nobody caught.
  *
- * The transport is injected (`deps.clickupFetch`) rather than imported, so the
- * shared client's counter sees these requests while the tests can still drive
- * every failure shape without a network.
+ * The transport is injected (`deps.fetchImpl`, defaulting to the shared door's
+ * `clickupFetch`) rather than imported, so the shared client's counter sees
+ * these requests while the tests can still drive every failure shape without a
+ * network.
+ *
+ * THE PARAMETER NAME IS LOAD-BEARING (review round 3, 2026-09-04). This header
+ * named the transport `clickupFetch` while both functions below take
+ * `fetchImpl`. (Written without the `deps.` prefix on purpose — the test that
+ * pins this header cannot tell a history note from an instruction.) A test
+ * author following the header passes `clickupFetch:`, the object is accepted
+ * in silence, the default is used, and their stub never runs — against a real
+ * token, in CI. Nothing throws and nothing reads wrong; the test simply is not
+ * testing what it says.
  */
 
 const { clickupFetch } = require('../lib/clickup.cjs');

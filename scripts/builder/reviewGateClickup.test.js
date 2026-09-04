@@ -286,3 +286,53 @@ test('the default transport is the shared door, so these requests are counted', 
     'and the substitute is PUT BACK — a leaked spy would silently mute every test after this one, '
     + 'so the restore is asserted rather than left as a comment nobody can fail');
 });
+
+/*
+ * THE HEADER MUST NAME PARAMETERS THAT EXIST (review round 3, 2026-09-04).
+ *
+ * This module's header said the transport arrives as `deps.clickupFetch`. Both
+ * functions take `fetchImpl`. Nothing failed and nothing could: an unknown key
+ * in a destructured options object is accepted in silence, so a test author
+ * who followed the header would pass `clickupFetch:`, watch the default run
+ * instead of their stub, and be testing the real transport against a real
+ * token in CI without a single warning.
+ *
+ * That is the third comment-versus-code drift this ticket has been sent back
+ * for — rounds 1, 2 and 3 were each a sentence beside a check that had stopped
+ * being true. Prose is the one thing here nothing else can fail on, so this
+ * asserts it: every `deps.<name>` the header mentions must be a name the
+ * functions really destructure.
+ */
+test('every parameter the module header names is one the code accepts', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, 'reviewGateClickup.js'), 'utf8');
+
+  const header = src.match(/\/\*[\s\S]*?\*\//);
+  assert.ok(header, 'the module header is the thing under test — it must exist');
+
+  const named = [...new Set([...header[0].matchAll(/deps\.(\w+)/g)].map((m) => m[1]))];
+  assert.ok(named.length > 0,
+    'the header describes an injected dependency — if that stops being true, '
+    + 'delete this test rather than letting it pass vacuously');
+
+  // The real parameters: whatever the functions destructure out of their
+  // options object. Read from the signatures, never transcribed.
+  const accepted = new Set();
+  for (const sig of src.matchAll(/async function \w+\([^)]*\{([^}]*)\}\s*=\s*\{\}\s*\)/g)) {
+    for (const part of sig[1].split(',')) {
+      const name = part.split('=')[0].trim();
+      if (name) accepted.add(name);
+    }
+  }
+  assert.ok(accepted.has('token'), 'the signature reader found nothing — it has drifted, not the header');
+
+  for (const name of named) {
+    assert.ok(accepted.has(name),
+      `the header tells the next reader to pass \`${name}\`, and neither function accepts it. `
+      + `An unknown key is ignored in silence, so their stub would never run. `
+      + `Accepted: ${[...accepted].join(', ')}. `
+      + `(Quoting a name the code USED to accept? Write it without the \`deps.\` `
+      + `prefix — this check cannot tell a history note from an instruction.)`);
+  }
+});

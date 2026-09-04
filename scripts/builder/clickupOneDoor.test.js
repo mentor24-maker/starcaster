@@ -25,7 +25,12 @@ const ROOT = path.join(__dirname, '..', '..');
 /*
  * EMPTY SINCE 2026-09-04 (task 86bbugcpa). `pipeline.mjs`, `pulse.cjs` and
  * `review_gate.mjs` were the last three, and they are migrated — every ClickUp
- * request in the repo now goes through the door and is counted.
+ * request in the repo's server-side and tooling code now goes through the door
+ * and is counted. That sentence is bounded on purpose, and the bound is the
+ * walk below: it says "server-side and tooling" because browser code is not
+ * walked and could not use the door anyway. Round 3 sent this ticket back for
+ * the unbounded version of this sentence, sitting two paragraphs above the
+ * repo's own line about a guard that overstates its reach.
  *
  * It stays as a Map rather than being deleted because the shape is the point:
  * a future slice that genuinely cannot migrate in one go has somewhere honest
@@ -37,14 +42,61 @@ const NOT_YET_MIGRATED = new Map([]);
 /** The one file allowed to call fetch against ClickUp. */
 const THE_DOOR = 'scripts/lib/clickup.cjs';
 
+/*
+ * WHAT THE DETECTORS OPEN — and why this is a denylist rather than a list of
+ * folders to visit (review round 3, 2026-09-04).
+ *
+ * Both detectors below used to walk `scripts/` and `lib/` and nothing else,
+ * while the note on NOT_YET_MIGRATED claimed the whole repo. Measured on this
+ * branch before the fix: a bare `fetch('https://api.clickup.com/...')` written
+ * into `routes/`, and the indirect `deps.fetchImpl || fetch` shape written
+ * into `api/`, BOTH passed — 12 of 12 green, neither detector ever opened the
+ * file. `routes/` is not a hypothetical folder here: `routes/publicSite.js` is
+ * the bug-report request path that calls `lib/clickupForward.js`, one of the
+ * five files this very slice migrated.
+ *
+ * So the walk starts at the repo root and skips a named few, rather than
+ * visiting a named few. The direction matters more than the contents: a new
+ * top-level folder is covered the day it appears, instead of being invisible
+ * until somebody remembers this file. Narrowing now takes an edit here, and
+ * the control below fails if the walk stops reaching a tree that has code in
+ * it today.
+ */
+const NOT_WALKED = new Map([
+  ['node_modules', 'third-party code — not ours to route through the door'],
+  // Browser trees. The door is a Node module (`scripts/lib/clickup.cjs`), so
+  // browser code cannot go through it whatever this guard says. Browser code
+  // must not reach ClickUp AT ALL — that would put the company token in a
+  // page — and that is landmine 7's rule, enforced elsewhere, not a counting
+  // rule this file can express.
+  ['components', 'browser code — cannot use a Node door; see landmine 7'],
+  ['src', 'browser code — cannot use a Node door; see landmine 7'],
+  ['public', 'browser code, plus multi-megabyte GENERATED bundles whose hits '
+    + 'would name a file nobody can edit'],
+  // Retired code, imported by nothing. A ClickUp call in here spends no
+  // budget because it never runs.
+  ['archive', 'retired code, executed by nothing'],
+]);
+
+const SOURCE_FILE = /\.(mjs|cjs|js|ts|tsx)$/;
+// Tests are excluded on purpose: this file and its neighbours write offending
+// shapes on purpose, as the controls that prove the detectors can still see.
+const TEST_FILE = /\.test\.(mjs|cjs|js|ts|tsx)$/;
+
 function sourceFiles(dir, out = []) {
+  if (!fs.existsSync(dir)) return out;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    if (NOT_WALKED.has(entry.name) || entry.name.startsWith('.')) continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) sourceFiles(full, out);
-    else if (/\.(mjs|cjs|js)$/.test(entry.name) && !/\.test\.js$/.test(entry.name)) out.push(full);
+    else if (SOURCE_FILE.test(entry.name) && !TEST_FILE.test(entry.name)) out.push(full);
   }
   return out;
+}
+
+/** Every file both detectors read. One function, so they cannot diverge. */
+function walkedSourceFiles() {
+  return sourceFiles(ROOT);
 }
 
 /** A bare fetch whose URL mentions ClickUp. Comments are stripped first: this
@@ -65,7 +117,7 @@ function bareClickUpFetches(src) {
 
 test('exactly one function in the repo calls fetch against api.clickup.com', () => {
   const offenders = [];
-  for (const full of [...sourceFiles(path.join(ROOT, 'scripts')), ...sourceFiles(path.join(ROOT, 'lib'))]) {
+  for (const full of walkedSourceFiles()) {
     const rel = path.relative(ROOT, full);
     if (rel === THE_DOOR) continue;
     const hits = bareClickUpFetches(fs.readFileSync(full, 'utf8'));
@@ -75,6 +127,52 @@ test('exactly one function in the repo calls fetch against api.clickup.com', () 
   }
   assert.deepEqual(offenders, [],
     'a ClickUp request outside the shared client is an uncounted request — route it through clickupFetch');
+});
+
+/*
+ * THE WALK MUST REACH WHAT THE SENTENCE CLAIMS. This is the control the round
+ * 3 send-back asked for, and it is the half that was missing: the detectors
+ * each had controls proving they can SEE an offender, and nothing proved they
+ * were ever pointed at the file. A guard can go blind either way, and a walk
+ * that quietly stops opening a folder looks exactly like a repo with nothing
+ * wrong in it.
+ *
+ * Named trees rather than a count, because a count drifts and tells you
+ * nothing about WHICH tree vanished. Every one of these holds ClickUp-capable
+ * Node code today; `routes/` and `api/` are the two that were measured blind.
+ */
+test('the walk reaches every tree that could hold a ClickUp call', () => {
+  const walked = walkedSourceFiles().map((f) => path.relative(ROOT, f));
+  for (const tree of ['api', 'lib', 'routes', 'scripts', 'workers']) {
+    assert.ok(
+      walked.some((rel) => rel.startsWith(`${tree}${path.sep}`)),
+      `the walk opened no file under ${tree}/ — it has narrowed, and both `
+      + 'detectors are blind there while still reporting a clean repo',
+    );
+  }
+  assert.ok(
+    walked.some((rel) => !rel.includes(path.sep)),
+    'the walk opened no repo-root file — server.js and middleware.mjs are '
+    + 'server-side code and can reach ClickUp like anything else',
+  );
+});
+
+/*
+ * ...AND EVERY SKIP IS DECLARED, REAL, AND REASONED. The skip list is the only
+ * way coverage can be lost now, so it is asserted rather than trusted: an
+ * entry naming a folder that no longer exists is a skip nobody has read since
+ * the folder was renamed, and it hides whatever took the name.
+ */
+test('every skipped tree exists and says why it is skipped', () => {
+  for (const [name, why] of NOT_WALKED) {
+    if (name === 'node_modules') continue; // not committed; may be absent
+    assert.ok(
+      fs.existsSync(path.join(ROOT, name)),
+      `${name} is skipped but does not exist — delete the entry, or it is `
+      + 'silently excusing whatever folder took that name',
+    );
+    assert.ok(why && why.length > 10, `${name} must say WHY it is skipped`);
+  }
 });
 
 test('the door itself really is the fetch call', () => {
@@ -180,7 +278,7 @@ function touchesClickUp(code) {
 
 test('no ClickUp caller resolves its own transport behind the door\'s back', () => {
   const offenders = [];
-  for (const full of [...sourceFiles(path.join(ROOT, 'scripts')), ...sourceFiles(path.join(ROOT, 'lib'))]) {
+  for (const full of walkedSourceFiles()) {
     const rel = path.relative(ROOT, full);
     if (rel === THE_DOOR) continue;
     const hits = indirectTransportFallback(fs.readFileSync(full, 'utf8'));

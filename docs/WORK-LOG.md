@@ -75,6 +75,40 @@ fails. So does one that forgets to put the stand-in back afterwards.
 All four commands were photographed before and after: two are identical down
 to the byte, and the others differ only in their clocks and in which tickets
 happened to be moving at the time.
+
+Review sent it back once more, and this time the finding held up. The check
+that hunts for stray connections to ClickUp was only opening **two** of the
+codebase's folders, while the note beside it told the next reader that every
+ClickUp request in the whole codebase was accounted for. We proved it by
+measurement rather than by reading: we wrote an obvious stray connection into
+two of the folders it never opens, ran the check, and it reported all clear —
+twelve checks, twelve passes. One of those folders is not hypothetical; it is
+where the live request path that files a bug report actually lives, which is
+one of the very things this ticket moved. The check now starts at the top of
+the codebase and walks all of it, skipping a short list of folders that each
+say in writing why they are skipped — the code that runs in a visitor's
+browser (which cannot use the shared door at all, and must never carry our
+login), retired code that nothing runs, and other people's code.
+
+The more useful half is a check on the check. Everything here could already
+prove it was able to *spot* a stray connection; nothing proved it was ever
+*looking at the file*. A guard can go blind in either direction, and a guard
+that has quietly stopped opening a folder looks exactly like a codebase with
+nothing wrong in it. So it now fails outright if it stops reaching any folder
+that has code in it today, naming which one went missing, and it fails if the
+skip list ever names a folder that no longer exists — because that entry would
+be silently excusing whatever folder later took the name.
+
+One more sentence had stopped being true. The note at the top of one file told
+the next reader to hand it a stand-in connection under a name the code does not
+accept. Nothing would have gone wrong loudly: an unrecognised name is ignored
+in silence, so their stand-in would simply never run and the real login would
+be used instead — inside GitHub, on every pull request, while their test
+reported success. That is the third time this one ticket has been sent back for
+a sentence sitting beside a check that no longer matched it, so rather than
+just correcting the sentence we made it fail on its own: a test now reads the
+note and the code together, and complains if the note names anything the code
+will not take.
 ## 2026-09-03 — Three watchdogs saw a stuck ticket and none of them reached you (#586)
 
 A ticket you had already said `merge` on sat in "Ready to launch" for twelve
