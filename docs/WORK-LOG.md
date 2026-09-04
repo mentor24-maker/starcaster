@@ -61,6 +61,116 @@ rediscover by diffing.
 All four commands were photographed before and after: two are identical down
 to the byte, and the others differ only in their clocks and in which tickets
 happened to be moving at the time.
+## 2026-09-03 — Three watchdogs saw a stuck ticket and none of them reached you (#586)
+
+A ticket you had already said `merge` on sat in "Ready to launch" for twelve
+hours. Its pull request was already merged; the work was already live on the
+site. Three separate watchdogs were awake and pointed straight at it, and not
+one of them said anything. The loudest reported "nothing is stuck" — honestly,
+because its rule was "say something after 24 hours", and twelve is less than
+twenty-four. You found it by asking about an unrelated ticket that looked odd.
+
+There are two clocks now. A ticket nobody has touched still gets its 24 hours:
+you have not said anything about it, and nagging you about work you never asked
+to be finished is how a watchdog becomes noise. A ticket carrying your own
+`merge` comment is a different thing entirely — you have said what you expect —
+and it is now flagged after **two hours**.
+
+The part that matters is what those two hours are counted from. Not the
+ticket's "last changed" time, which is what every clock here used before: any
+edit at all resets that, and this ticket collected twenty-five automated
+refusal comments while it sat there. A clock reading ticket age would have been
+reset, over and over, by the exact refusals it exists to notice. So the fuse
+burns from **your comment**, which nothing can reset. A ticket that looks four
+minutes old by the old measure is still caught, and there is a test that fails
+if anyone ever points it back at ticket age.
+
+The two hours are not a new number. They are read from the threshold the system
+already gives a build in flight — your words, "no new constant enters the
+codebase without a sibling" — and a test pins both ends, so retuning one of them
+fails loudly instead of quietly moving the other.
+
+The second watchdog, the one that had named this ticket exactly and reached
+nobody, got the two habits a background job owes. It asks the pause switch
+before it does anything, so it stands down while you have the deck. And its
+messages now expire after six hours and clear when the problem is fixed — before
+this, a problem reported once was struck off forever, which is an alarm that
+fires the first time and then never again. A check that stood down for you now
+reports "paused" rather than "clean", because a pass that looked at nothing must
+never read as a healthy one.
+
+Both tools also now say what they cost. A drift pass spends 32 requests against
+ClickUp's roughly one hundred per minute; the new fuse adds one per ticket in
+the stage. That was measured rather than guessed, because the ticket asked for
+it — and the measuring turned up something larger, which is written on the
+ticket rather than fixed here: the ten-minute relay is already spending 108 to
+114 requests a pass and is retrying against the limit thirty-six times in the
+current log. Two tickets already own that problem.
+
+The third thing the ticket raised is not solved and is not claimed to be: all of
+this still reports to the bus, and the bus was not read. Saying so plainly is
+the honest half of the fix.
+
+Review sent this back once, and it was right to. The drift watchdog asks the
+pause switch by running it and reading the answer — but the switch has two ways
+of saying "no", and this code was hearing them as one. "Dane has the deck" and
+"I could not reach ClickUp to find out" both come back as the same refusal, on
+purpose, because both must lead to the same action: stand down. What they must
+never share is the sentence. The first version printed *"Dane has the deck"* for
+both, so a rotated token or a rate-limited read — and the relay is currently
+retrying against that limit thirty-six times a log — would have made the
+watchdog announce something about you that it had no way of knowing, then go
+quiet indefinitely while every board stayed green. That is the exact shape of
+failure this whole ticket was written to close, arriving through the check meant
+to close it.
+
+It now says "could not tell", does not mention you, and reports differently
+enough that the surrounding job reads the whole pass as CANNOT TELL rather than
+as a healthy paused one. The action is unchanged: it still stands down, which is
+the safe direction either way. Two other things came out of the same read — the
+switch call and every step of the repair job now have a time limit, so a call
+that never answers can no longer pin the ten-minute cycle with nothing to break
+it, and the request counter counts requests that were actually sent rather than
+attempts that never left the machine, which matters because that figure is the
+one being budgeted against.
+
+Review sent it back a second time, and that one was not about the work at all:
+the main line of code moved underneath it in the two hours after the pull
+request went up, and it landed in the one file this ticket's headline
+measurement lives in. Two people had solved the same small problem within a day
+of each other — how do you count what a pass costs — and both answers were
+sitting there, disagreeing on purpose about what counts as a request. Keeping
+both would have left the report with two numbers and nothing saying which one it
+meant. There is one now, and the argument that lost is written down beside it,
+because the losing argument is the part a future reader needs.
+
+Underneath that was a worse one, and it is the kind of thing that never
+announces itself. The same two days had each given the same exit code a meaning:
+one branch made "3" mean *you have taken the deck, so I stood down*, the other
+made it mean *I just closed a ticket*. Both were right on their own. Merged
+carelessly, a pass that had just changed the board would have been read by the
+supervising job as a pass that politely declined to run — and reported as
+"paused". Nothing would have failed; an exit code is just a number, and every
+check in the repo stays green through a wrong one. The decline keeps 3, because
+that is what every other tool here means by it. Writing took a number nobody had
+claimed. Two tests now fail if anyone ever collapses them back together, and one
+of them reads both files to make sure the two ends still agree.
+
+The last thing was a line nothing was testing: the very last line a drift pass
+prints, the one reporting what it spent. It calls a function that lives in
+another file, and if that name ever changed, the pass would crash **after**
+doing all of its work — every ticket read, every repair applied, and then a
+failure at the finish line. That is exactly what nearly happened here, and only
+the merge conflict made anyone look. It is tested now, from both ends, and so is
+the identical last line in the other watchdog.
+
+The measurement was retaken through the surviving counter: **31 requests in 19
+seconds** against a 340-ticket queue. That is the read half only — the writes go
+out through a separate program with its own budget, so the printed number is a
+floor, and it now says so. The repair job takes a fresh reading at most every
+half hour, which 31 requests buys comfortably; it would not be safe on the
+ten-minute cycle, and that throttle is deliberate rather than incidental.
+
 ## 2026-09-03 — A refusal that can never clear stops promising it will (#585)
 
 When you comment `merge` on a finished ticket, an automatic step goes to GitHub

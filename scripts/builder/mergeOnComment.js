@@ -1205,6 +1205,7 @@ module.exports = {
   parseMergeMarker,
   latestMergeMarker,
   normalizeCommand,
+  commentDate,
   isMergeCommand,
   isReviewVerdict,
   isReviewPassed,
