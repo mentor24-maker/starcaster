@@ -91,7 +91,14 @@ test('a clean read saves normally, and a missing path is refused', () => {
 
 test('a stored CANNOT TELL run survives write-then-read — the whitelist test', () => {
   const file = path.join(dir(), 'ledger.json');
-  const run = { pr: 604, reason: 'CANNOT TELL — github and git disagree', firstSeenAt: T0, passes: 5, escalatedAt: null };
+  // EVERY FIELD, not just the key. `headSha` is what identifies the block
+  // since review round 1, so a field dropped here is a run that can never be
+  // recognised as continuing — the counter resets every pass and the alarm
+  // never fires, while every in-memory test still passes.
+  const run = {
+    pr: 604, headSha: '4dd9729b', reason: 'CANNOT TELL — github and git disagree',
+    rewordings: 3, firstSeenAt: T0, passes: 5, escalatedAt: null,
+  };
   const ledger = ledgerAfterCannotTell(asLedger(null), '86bbuvd50', run);
   assert.equal(writeLedgerFile(ledger, file).ok, true);
 
@@ -136,7 +143,7 @@ test('junk in the stored runs is dropped, never thrown on', () => {
     assert.deepEqual(asLedger({ cannotTell: junk }).cannotTell, {}, `cannotTell: ${JSON.stringify(junk)}`);
   }
   assert.deepEqual(asLedger({ cannotTell: { good: { reason: 'r' }, bad: 'not an object', worse: null } }).cannotTell,
-    { good: { pr: null, reason: 'r', firstSeenAt: undefined, passes: undefined, escalatedAt: null } },
+    { good: { pr: null, headSha: null, reason: 'r', rewordings: undefined, firstSeenAt: undefined, passes: undefined, escalatedAt: null } },
     'one bad entry must not take the good ones with it');
 });
 
@@ -152,22 +159,25 @@ test('junk in the stored runs is dropped, never thrown on', () => {
  * This drives the same loop the relay runs: read the ledger, decide, write it
  * back, repeat, on a real file, at the relay's real ten-minute cadence.
  */
-function drivePasses({ file, taskId, pr, verdicts, startAt, everyMs = 10 * 60_000 }) {
+function drivePasses({ file, taskId, pr, headSha = 'aa11bb22', verdicts, startAt, everyMs = 10 * 60_000 }) {
   const posts = [];
   verdicts.forEach((v, i) => {
     const now = startAt + i * everyMs;
     const read = readLedgerFile(file);
-    const stored = read.ledger.cannotTell[taskId] || null;
-    const samePr = !stored || stored.pr == null || Number(stored.pr) === Number(pr);
+    // WHAT THE RELAY DOES, line for line: read the stored run, hand it the
+    // reading and the identity, write back whatever comes out. The "is this
+    // the same block" question lives in cannotTellRun, not here — it used to
+    // be duplicated in this driver AND in the relay, which is two places to
+    // fix and one of them would have been missed.
     const run = cannotTellRun({
-      prev: samePr ? stored : null,
+      prev: read.ledger.cannotTell[taskId] || null,
       verdict: v === null ? '' : v,
       isCannotTell: v !== null,
+      identity: { pr, headSha },
       now,
     });
     if (run.escalate) posts.push({ pass: i + 1, atMs: now, reason: run.reason });
-    const next = run.next ? { ...run.next, pr } : null;
-    assert.equal(saveLedgerIfReadable(read, ledgerAfterCannotTell(read.ledger, taskId, next)).ok, true);
+    assert.equal(saveLedgerIfReadable(read, ledgerAfterCannotTell(read.ledger, taskId, run.next)).ok, true);
   });
   return posts;
 }
@@ -192,20 +202,42 @@ test('ACROSS REAL PASSES: an unchanging cannot-tell escalates exactly once, then
   assert.equal(readLedgerFile(file).ledger.cannotTell.t1.passes, 20, 'it keeps counting while silent');
 });
 
-test('ACROSS REAL PASSES: a CHANGED verdict resets the clock and may escalate on its own merits', () => {
+test('ACROSS REAL PASSES: a NEW COMMIT resets the clock and may escalate on its own merits', () => {
   const file = path.join(dir(), 'ledger.json');
-  const posts = drivePasses({
-    file,
-    taskId: 't1',
-    pr: 604,
-    // Stuck for two hours (escalates once), then a DIFFERENT wall for two more.
-    verdicts: [...Array(12).fill(STUCK), ...Array(12).fill('CANNOT TELL — a required check has never reported')],
-    startAt: T0,
+  // Stuck for two hours on one commit (escalates once), then somebody pushes
+  // and it is stuck again on the new one. That second wall is genuinely new
+  // and gets its own 90 minutes and its own message.
+  const first = drivePasses({ file, taskId: 't1', pr: 604, headSha: 'aaaa1111', verdicts: Array(12).fill(STUCK), startAt: T0 });
+  const second = drivePasses({
+    file, taskId: 't1', pr: 604, headSha: 'bbbb2222',
+    verdicts: Array(12).fill('CANNOT TELL — a required check has never reported'),
+    startAt: T0 + 120 * 60_000,
   });
-  assert.equal(posts.length, 2, 'a new fact deserves its own message');
-  assert.equal(posts[0].pass, 10);
-  assert.equal(posts[1].pass, 22, 'the second run started its own 90-minute clock at the change');
-  assert.match(posts[1].reason, /a required check has never reported/);
+  assert.equal(first.length, 1, 'the first wall spoke once');
+  assert.equal(first[0].pass, 10);
+  assert.equal(second.length, 1, 'a new commit deserves its own message');
+  assert.equal(second[0].pass, 10, 'the second run started its own 90-minute clock at the push');
+  assert.match(second[0].reason, /a required check has never reported/);
+});
+
+test('ACROSS REAL PASSES: THE SEND-BACK — an alternating wording is ONE block, and it speaks', () => {
+  const file = path.join(dir(), 'ledger.json');
+  // The defect review round 1 found, driven over a real file: GitHub gives two
+  // wordings for one fact, interleaved. Under the prose grain the clock reset
+  // on nearly every pass and the alarm was never reachable at all — on this
+  // sequence it posted NOTHING across three hours.
+  const COMPUTING = 'CANNOT TELL yet — GitHub is still computing whether the branch merges cleanly';
+  const verdicts = [STUCK, COMPUTING, STUCK, STUCK, COMPUTING, STUCK, COMPUTING, COMPUTING,
+    STUCK, COMPUTING, STUCK, STUCK, COMPUTING, STUCK, STUCK, COMPUTING, STUCK, STUCK];
+  const posts = drivePasses({ file, taskId: 't1', pr: 604, verdicts, startAt: T0 });
+
+  assert.equal(posts.length, 1, `escalated ${posts.length} times on an alternating verdict — it must speak exactly once`);
+  assert.equal(posts[0].pass, 10, 'at ninety minutes, the same as an unchanging one');
+  assert.match(posts[0].reason, /reworded itself \d+ time/, 'and it must say GitHub kept changing its answer');
+  assert.match(posts[0].reason, /still computing/, 'quoting the NEWEST wording, not the first');
+  const run = readLedgerFile(file).ledger.cannotTell.t1;
+  assert.equal(run.passes, 18, 'the count ran through every reword');
+  assert.equal(run.firstSeenAt, T0, 'and the clock never restarted');
 });
 
 test('ACROSS REAL PASSES: a verdict that CLEARS leaves no residue — the next block starts from zero', () => {
@@ -232,7 +264,7 @@ test('ACROSS REAL PASSES: a new PR on the same ticket is a new block, not a cont
   const before = readLedgerFile(file).ledger.cannotTell.t1;
   assert.ok(before.escalatedAt, 'the first block did escalate');
 
-  const posts = drivePasses({ file, taskId: 't1', pr: 605, verdicts: Array(3).fill(STUCK), startAt: T0 + 200 * 60_000 });
+  const posts = drivePasses({ file, taskId: 't1', pr: 605, headSha: 'cccc3333', verdicts: Array(3).fill(STUCK), startAt: T0 + 200 * 60_000 });
   assert.deepEqual(posts, [], 'thirty minutes on a fresh PR is not an alarm');
   const after = readLedgerFile(file).ledger.cannotTell.t1;
   assert.equal(after.pr, 605);

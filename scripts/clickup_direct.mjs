@@ -1152,7 +1152,11 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // than remembered in a marker of our own on purpose: GitHub is the thing
   // that will or will not perform the merge, so its answer is the only one
   // that cannot drift from what actually happens.
-  const fields = 'number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,title,url,statusCheckRollup,autoMergeRequest';
+  // `headRefOid` IDENTIFIES A STUCK BLOCK for the CANNOT TELL bound (review
+  // round 1 of task 86bbuvd50). The bound used to compare the reason PROSE,
+  // and GitHub rewords a cannot-tell mid-block — so the commit is what says
+  // whether this is still the same wall or a new one.
+  const fields = 'number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,headRefOid,title,url,statusCheckRollup,autoMergeRequest';
   const view = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
   if (!view.ok) {
     // A read that failed is not a red PR — it is a PR nobody checked. Say so
@@ -1162,7 +1166,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // `cannotTell: true` WITHOUT ASKING readsAsCannotTell: this path KNOWS no
     // reading was taken — it is the ticket's own "a rate-limited read" — while
     // its reason text predates the marker that predicate looks for.
-    return { outcome: 'waiting', reason: 'could not read the PR', pr: pr.number, prUrl: pr.url, cannotTell: true };
+    return { outcome: 'waiting', reason: 'could not read the PR', pr: pr.number, prUrl: pr.url, headSha: null, cannotTell: true };
   }
   let prJson;
   try {
@@ -1171,7 +1175,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     unchecked.push(`${task.id}: gh returned unparseable JSON for PR #${pr.number} — merge authorization still pending`);
     // Same as above: gh answered with something unreadable, so no reading was
     // taken. The code knows; the prose does not say so.
-    return { outcome: 'waiting', reason: 'unparseable gh output', pr: pr.number, prUrl: pr.url, cannotTell: true };
+    return { outcome: 'waiting', reason: 'unparseable gh output', pr: pr.number, prUrl: pr.url, headSha: null, cannotTell: true };
   }
 
   // THE PR IS ALREADY MERGED AND HIS WORD IS STILL UNSPENT (task 86bbup3u1).
@@ -1282,7 +1286,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
       if (after.action === 'wait' || after.action === 'update-branch' || after.action === 'catch-up-locally') {
         console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
-        return { outcome: 'waiting', reason: after.reason, pr: pr.number, prUrl: pr.url, cannotTell: mergeOnComment.readsAsCannotTell(after.reason) };
+        return { outcome: 'waiting', reason: after.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(after.reason) };
       }
       // The verdict and the refusal code travel, for the same reason they do
       // on the conflict path: this machine performed the merge, so it holds
@@ -1383,7 +1387,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
       if (after.action === 'wait' || after.action === 'update-branch') {
         console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
-        return { outcome: 'waiting', reason: after.reason, pr: pr.number, prUrl: pr.url, cannotTell: mergeOnComment.readsAsCannotTell(after.reason) };
+        return { outcome: 'waiting', reason: after.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(after.reason) };
       }
       // CARRY THE CLEAN VERDICT (review round 2). If GitHub STILL says
       // conflict after a catch-up that merged and pushed, that is the textbook
@@ -1608,7 +1612,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   if (prOpenForWork) {
     if (staleness.state === 'pending') {
       console.error(`  MERGE WAITING on ${label}: ${staleness.reason}`);
-      return { outcome: 'waiting', reason: staleness.reason, pr: pr.number, prUrl: pr.url, cannotTell: mergeOnComment.readsAsCannotTell(staleness.reason) };
+      return { outcome: 'waiting', reason: staleness.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(staleness.reason) };
     }
     if (staleness.state === 'stale') {
       if (dryRun) {
@@ -1624,7 +1628,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       if (!inPassBudget || !mergeOnComment.mayWaitInPass(inPassBudget.used, inPassBudget.cap)) {
         const why = `the review gate is stale (${staleness.reason}) but this pass has no wait budget left — the next pass re-runs it`;
         console.error(`  MERGE WAITING on ${label}: ${why}`);
-        return { outcome: 'waiting', reason: why, pr: pr.number, prUrl: pr.url, cannotTell: mergeOnComment.readsAsCannotTell(why) };
+        return { outcome: 'waiting', reason: why, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(why) };
       }
 
       const cannotRerun = (why) => refuse(
@@ -1681,7 +1685,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         // paths know how to explain themselves to the operator and this one
         // does not.
         console.error(`  MERGE WAITING on ${label}: ${next.reason} (found while re-running the review gate)`);
-        return { outcome: 'waiting', reason: next.reason, pr: pr.number, prUrl: pr.url, cannotTell: mergeOnComment.readsAsCannotTell(next.reason) };
+        return { outcome: 'waiting', reason: next.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(next.reason) };
       }
       console.error(`  ${label}: the re-run of the review gate came back clean — ${next.reason}`);
       // The re-run rewrote the answer the rest of this function acts on: the
@@ -1734,7 +1738,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         // treadmill back with nothing to show it.
         unchecked.push(`${task.id}: could not ${auto.action} auto-merge on PR #${pr.number} (${ran.stderr.slice(0, 200)}) — the merge falls back to the next pass`);
         console.error(`  MERGE WAITING on ${label}: could not ${auto.action} auto-merge — ${gate.reason}`);
-        return { outcome: 'waiting', reason: gate.reason, pr: pr.number, prUrl: pr.url, cannotTell: mergeOnComment.readsAsCannotTell(gate.reason) };
+        return { outcome: 'waiting', reason: gate.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(gate.reason) };
       }
 
       // READ IT BACK. `gh` exiting 0 is not evidence that GitHub is holding
@@ -1757,7 +1761,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
 
     const why = auto.action === 'already-armed' ? `${gate.reason} — auto-merge is armed, GitHub lands it` : gate.reason;
     console.error(`  MERGE WAITING on ${label}: ${why}`);
-    return { outcome: 'waiting', reason: why, pr: pr.number, prUrl: pr.url, cannotTell: mergeOnComment.readsAsCannotTell(why) };
+    return { outcome: 'waiting', reason: why, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(why) };
   }
 
   if (gate.action === 'refuse') {
@@ -3825,6 +3829,9 @@ if (cmd === 'whoami') {
   // reason `laneCandidates` is: one reader and one writer of that file per
   // pass, in one place, or the last write silently wins.
   const mergeReadings = [];
+  // Lane A's readings are collected separately because they are taken AFTER
+  // the bound has already run over the watch loop's — see boundCannotTell.
+  const laneReadings = [];
   let lastRes = null;
   // One entry per watch — see busRelayPlan.sweepVerdict for why the unit is
   // the LIST and not the ticket.
@@ -4064,16 +4071,23 @@ if (cmd === 'whoami') {
         // no residue". A pass that only recorded its cannot-tells would count
         // up and never down.
         //
-        // 'threw' is the one outcome deliberately not recorded: the step
-        // crashed, so no reading exists in either direction, and calling that
-        // "cleared" would wipe a real run that a later pass is still counting.
-        // It is already reported loudly in `unchecked` by the catch above.
-        if (m.outcome !== 'threw') {
+        // TWO OUTCOMES ARE DELIBERATELY NOT RECORDED, and for the same
+        // reason: no reading was taken, so neither may be read as "cleared".
+        // 'threw' — the step crashed mid-decision; already reported loudly in
+        // `unchecked` by the catch above. 'none' — this ticket carried no
+        // merge authorization for the step to act on, which says nothing
+        // whatever about whether a block is still there. Counting 'none' as a
+        // clear is what made Lane A's tickets uncountable: they reach this
+        // loop with no merge word (that is WHY they are lane candidates), so
+        // every pass wiped the run the lane's own merge step had just stored,
+        // and the bound could never reach ninety minutes on them.
+        if (m.outcome !== 'threw' && m.outcome !== 'none') {
           mergeReadings.push({
             task: t,
             pr: m.pr == null ? null : m.pr,
             prUrl: m.prUrl || null,
             reason: m.reason || '',
+            headSha: m.headSha || null,
             isCannotTell: Boolean(m.cannotTell),
           });
         }
@@ -4183,69 +4197,87 @@ if (cmd === 'whoami') {
     // down. That is the right direction to fail — the alternative is an alarm
     // fired off a record nobody could read — and `led.why` is already pushed
     // to `unchecked` above, so the blindness itself is reported.
-    for (const reading of mergeReadings) {
-      const t = reading.task;
-      const stored = ledger.cannotTell[t.id] || null;
-      // A DIFFERENT PULL REQUEST IS A DIFFERENT BLOCK, even on the same
-      // ticket. The run is keyed by ticket because that is how the log lines
-      // read and how the threshold was measured, but a ticket whose PR was
-      // closed and reopened under a new number has not been stuck for two
-      // hours — it has been stuck for one pass. Comparing the reason text
-      // alone would not catch that: the wording rarely names the number.
-      const samePr = !stored || stored.pr == null || reading.pr == null
-        || Number(stored.pr) === Number(reading.pr);
-      const run = mergeOnComment.cannotTellRun({
-        prev: samePr ? stored : null,
-        verdict: reading.reason,
-        isCannotTell: reading.isCannotTell,
-        now: Date.now(),
-      });
-      const next = run.next ? { ...run.next, pr: reading.pr } : null;
+    //
+    // IT IS A FUNCTION BECAUSE IT RUNS TWICE. The watch loop's readings are
+    // bounded here, above the lane gate; Lane A's own merge step takes its
+    // readings further down and is bounded straight after it, because a pull
+    // request stuck on the auto-merge lane is exactly as invisible as one
+    // stuck on his word (review round 1 of task 86bbuvd50). Splitting it any
+    // other way loses one of the two: bounding only after the lane would go
+    // deaf whenever the lane is halted, and bounding only before it never
+    // sees the lane's readings at all, since they do not exist yet.
+    const boundedTickets = new Set();
+    const boundCannotTell = async (readings) => {
+      for (const reading of readings) {
+        const t = reading.task;
+        // ONE READING PER TICKET PER PASS, first wins. A Ready-to-launch
+        // ticket carrying his merge word is read by the watch loop AND is a
+        // lane candidate, and two readings of one block would let the second
+        // overwrite the first's clock.
+        if (boundedTickets.has(t.id)) continue;
+        boundedTickets.add(t.id);
 
-      if (!run.escalate) {
-        // 'clear' carries next === null, which DELETES the record — that is
-        // criterion 5, and it is why this loop runs over every reading rather
-        // than only the stuck ones.
+        const stored = ledger.cannotTell[t.id] || null;
+        // WHAT THE RUN IS STUCK ON, not what it SAYS. A different pull request
+        // or a different head commit is a different block and restarts the
+        // clock; a reworded verdict on the same commit does not. The prose
+        // grain shipped first and escalated on one of the three real blocks in
+        // the relay's own log — see sameCannotTellBlock for the wordings.
+        const run = mergeOnComment.cannotTellRun({
+          prev: stored,
+          verdict: reading.reason,
+          isCannotTell: reading.isCannotTell,
+          identity: { pr: reading.pr, headSha: reading.headSha },
+          now: Date.now(),
+        });
+        const next = run.next;
+
+        if (!run.escalate) {
+          // 'clear' carries next === null, which DELETES the record — that is
+          // criterion 5, and it is why this loop runs over every reading rather
+          // than only the stuck ones.
+          ledger = ledgerAfterCannotTell(ledger, t.id, next);
+          continue;
+        }
+
+        const label = `"${t.name}" (${t.id})`;
+        const notice = mergeOnComment.cannotTellEscalation({
+          label,
+          taskUrl: t.url,
+          pr: reading.pr,
+          prUrl: reading.prUrl,
+          decision: run,
+          node: nodeRoles.thisNode().name,
+          at: clockAt(Date.now()),
+        });
+
+        if (dryRun) {
+          // Nothing written and nothing stamped: a rehearsal that marked the run
+          // as escalated would buy real silence on a message nobody got. Same
+          // rule as `throughput --dry-run`, which had this exact defect.
+          console.error(`  DRY RUN — would escalate a stuck merge on ${label}: ${run.reason}`);
+          continue;
+        }
+
+        const out = await call('POST', `/api/v2/task/${t.id}/comment`, { comment_text: notice.body });
+        if (!out.res.ok) {
+          // The clock is NOT stamped on a failed post — the run keeps counting
+          // and the next pass tries again. Stamping here would spend the one
+          // escalation this run is allowed on a message that never landed,
+          // which is the silence this whole ticket is about, reached through
+          // the fix for it.
+          unchecked.push(`${t.id}: PR #${reading.pr} has been stuck on an unresolvable CANNOT TELL for over ${Math.round(run.heldMs / 60000)} minutes and the escalation comment FAILED to post (HTTP ${out.res.status}) — nobody has been told`);
+          ledger = ledgerAfterCannotTell(ledger, t.id, { ...next, escalatedAt: null });
+          continue;
+        }
         ledger = ledgerAfterCannotTell(ledger, t.id, next);
-        continue;
+
+        const bus = await postToBus(channel, notice.bus);
+        if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${t.id}: the stuck-merge escalation landed on the ticket but the bus post failed (${bus.why})` });
+        console.error(`  MERGE STUCK escalated on ${label}: ${run.reason}`);
       }
-
-      const label = `"${t.name}" (${t.id})`;
-      const notice = mergeOnComment.cannotTellEscalation({
-        label,
-        taskUrl: t.url,
-        pr: reading.pr,
-        prUrl: reading.prUrl,
-        decision: run,
-        node: nodeRoles.thisNode().name,
-        at: clockAt(Date.now()),
-      });
-
-      if (dryRun) {
-        // Nothing written and nothing stamped: a rehearsal that marked the run
-        // as escalated would buy real silence on a message nobody got. Same
-        // rule as `throughput --dry-run`, which had this exact defect.
-        console.error(`  DRY RUN — would escalate a stuck merge on ${label}: ${run.reason}`);
-        continue;
-      }
-
-      const out = await call('POST', `/api/v2/task/${t.id}/comment`, { comment_text: notice.body });
-      if (!out.res.ok) {
-        // The clock is NOT stamped on a failed post — the run keeps counting
-        // and the next pass tries again. Stamping here would spend the one
-        // escalation this run is allowed on a message that never landed,
-        // which is the silence this whole ticket is about, reached through
-        // the fix for it.
-        unchecked.push(`${t.id}: PR #${reading.pr} has been stuck on the same CANNOT TELL for over ${Math.round(run.heldMs / 60000)} minutes and the escalation comment FAILED to post (HTTP ${out.res.status}) — nobody has been told`);
-        ledger = ledgerAfterCannotTell(ledger, t.id, { ...next, escalatedAt: null });
-        continue;
-      }
-      ledger = ledgerAfterCannotTell(ledger, t.id, next);
-
-      const bus = await postToBus(channel, notice.bus);
-      if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${t.id}: the stuck-merge escalation landed on the ticket but the bus post failed (${bus.why})` });
-      console.error(`  MERGE STUCK escalated on ${label}: ${run.reason}`);
-    }
+    };
+    await boundCannotTell(mergeReadings);
 
     // Every source the switch can be set from. `readable` is the fail-safe:
     // if the party line or the ledger could not be read, we cannot know
@@ -4439,6 +4471,24 @@ if (cmd === 'whoami') {
             merges.threw++;
             continue;
           }
+          // THE LANE'S OWN READING (review round 1 of task 86bbuvd50). It is
+          // the identical merge step, so it produces the identical verdicts —
+          // and a PR that GitHub cannot make its mind up about does not care
+          // which lane authorized it. Only the `act === 'merge'` path is here
+          // because it is the only lane path that calls the merge step at all:
+          // arming and cancelling never ask GitHub whether the branch merges,
+          // so they have no verdict to bound. Same two exclusions as the watch
+          // loop — a throw and a 'none' are both "no reading was taken".
+          if (m.outcome !== 'threw' && m.outcome !== 'none') {
+            laneReadings.push({
+              task: t,
+              pr: m.pr == null ? null : m.pr,
+              prUrl: m.prUrl || null,
+              reason: m.reason || '',
+              headSha: m.headSha || null,
+              isCannotTell: Boolean(m.cannotTell),
+            });
+          }
           if (m.outcome === 'merged') {
             lane.merged++;
             ledger = ledgerAfterMerge(ledger, {
@@ -4468,6 +4518,12 @@ if (cmd === 'whoami') {
         }
       }
     }
+
+    // The lane's own stuck merges, bounded on the same clock and the same
+    // ledger as the watch loop's. This runs BELOW the lane gate because the
+    // readings do not exist until the lane has run; the half above the gate is
+    // what keeps the bound audible while the lane is halted.
+    await boundCannotTell(laneReadings);
 
     // Standing condition 3: announced, never silent. One post a day, and it
     // posts "none" on a quiet day — a silent day and a broken job must not

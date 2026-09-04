@@ -1263,6 +1263,41 @@ function mergedElsewhereNotice({ commentId, pr, mergedAt, armed }) {
 const CANNOT_TELL_STALE_MS = 90 * 60 * 1000;
 
 /**
+ * Is this pass looking at the SAME BLOCK the stored run is counting?
+ *
+ * A block is one pull request stuck on one commit — NOT one form of words.
+ * Review round 1 of task 86bbuvd50 killed the first answer, which compared the
+ * reason TEXT: replayed over the relay's own log it escalated on one of the
+ * three blocks that actually needed hands, because GitHub alternates between
+ * two CANNOT TELL wordings inside a single block
+ *
+ *   CANNOT TELL — GitHub reports this branch as CONFLICTING, but git merges
+ *   origin/main into a6f52c23 cleanly (merge-tree exit 0)...
+ *   CANNOT TELL yet — GitHub is still computing whether the branch merges
+ *   cleanly; the next pass asks again
+ *
+ * and 86bbpz1hu alternated eight times in thirteen passes — its longest
+ * unbroken streak of one wording was about thirty minutes, so the clock reset
+ * long before ninety was ever reached. Both wordings are the same fact:
+ * GitHub cannot give a stable answer about this branch. The prose is GitHub's
+ * polling state; the head commit is the thing that actually changed or did not.
+ *
+ * UNKNOWN IS A WILDCARD, NEVER A DIFFERENCE. A pass that could not read the PR
+ * has no SHA to compare — that is the ticket's own "a rate-limited read" — and
+ * treating an unreadable pass as a new block would restart the clock every time
+ * GitHub rate-limited us, which is this bug wearing a different hat. Only a
+ * KNOWN difference on both sides ends a run. An old record written before this
+ * field existed has no `headSha` either, and continues for the same reason.
+ */
+function sameCannotTellBlock(previous, identity = {}) {
+  if (!previous) return false;
+  const differs = (a, b) => a != null && b != null && String(a) !== String(b);
+  if (differs(previous.pr, identity.pr)) return false;
+  if (differs(previous.headSha, identity.headSha)) return false;
+  return true;
+}
+
+/**
  * Should this repeated CANNOT TELL be escalated, and has it already been?
  *
  * PURE. The caller owns reading and writing `prev` (the per-PR ledger entry);
@@ -1274,12 +1309,15 @@ const CANNOT_TELL_STALE_MS = 90 * 60 * 1000;
  * cancels auto-merge. CANNOT TELL is a CORRECT verdict — only its silence was
  * wrong. Every branch below returns the same `verdict` it was handed.
  *
- * @param {object|null} prev   the stored run: { reason, firstSeenAt, passes, escalatedAt }
+ * @param {object|null} prev   the stored run: { pr, headSha, reason, rewordings, firstSeenAt, passes, escalatedAt }
  * @param {string} verdict     this pass's reason text, verbatim ('' if not a cannot-tell)
  * @param {boolean} isCannotTell  whether this pass's verdict is a cannot-tell at all
+ * @param {object} identity    what this pass is stuck ON: { pr, headSha }; either may be
+ *                             null when it could not be read, and an unknown never
+ *                             ends a run — see sameCannotTellBlock
  * @returns {{ state:'clear'|'new'|'holding'|'escalate'|'quiet', next:object|null, escalate:boolean, reason?:string }}
  */
-function cannotTellRun({ prev, verdict, isCannotTell, now = Date.now(), thresholdMs = CANNOT_TELL_STALE_MS } = {}) {
+function cannotTellRun({ prev, verdict, isCannotTell, identity = {}, now = Date.now(), thresholdMs = CANNOT_TELL_STALE_MS } = {}) {
   // Not a cannot-tell this pass — the block is over, whatever it was. Returning
   // `next: null` is what leaves NO RESIDUE: a resolved wobble must not make the
   // next unrelated block start half-way to an alarm.
@@ -1288,13 +1326,21 @@ function cannotTellRun({ prev, verdict, isCannotTell, now = Date.now(), threshol
   const reason = String(verdict || '').trim();
   const previous = prev && typeof prev === 'object' ? prev : null;
 
-  // A DIFFERENT cannot-tell is a different fact, so the clock restarts and the
-  // new run may escalate later on its own merits. Comparing the reason text is
-  // what makes "still the same wall" different from "a new wall every pass".
-  if (!previous || String(previous.reason || '') !== reason) {
+  // What this pass is stuck ON. An unknown field is carried forward from the
+  // stored run rather than overwritten with null, so one unreadable pass does
+  // not erase the identity the next pass would have compared against.
+  const pr = identity.pr != null ? identity.pr : (previous ? previous.pr : null);
+  const headSha = identity.headSha != null ? identity.headSha : (previous ? previous.headSha : null);
+  const at = { pr: pr == null ? null : pr, headSha: headSha == null ? null : headSha };
+
+  // A DIFFERENT BLOCK is a different fact, so the clock restarts and the new
+  // run may escalate later on its own merits. "Different" is a different pull
+  // request or a different head commit — never a different form of words; see
+  // sameCannotTellBlock for the log that settled it.
+  if (!sameCannotTellBlock(previous, identity)) {
     return {
       state: 'new',
-      next: { reason, firstSeenAt: now, passes: 1, escalatedAt: null },
+      next: { ...at, reason, rewordings: 0, firstSeenAt: now, passes: 1, escalatedAt: null },
       escalate: false,
     };
   }
@@ -1318,13 +1364,20 @@ function cannotTellRun({ prev, verdict, isCannotTell, now = Date.now(), threshol
   if (!Number.isFinite(firstSeenAt)) {
     return {
       state: 'new',
-      next: { reason, firstSeenAt: now, passes: 1, escalatedAt: null },
+      next: { ...at, reason, rewordings: 0, firstSeenAt: now, passes: 1, escalatedAt: null },
       escalate: false,
     };
   }
 
   const heldMs = Number(now) - firstSeenAt;
-  const carried = { reason, firstSeenAt, passes, escalatedAt: previous.escalatedAt || null };
+  // The NEWEST wording is what gets stored and quoted — the run is identified
+  // by the commit, but the message must say what GitHub is saying now, not
+  // what it said ninety minutes ago. `rewordings` counts how many times that
+  // answer has been reworded, because "GitHub has given three different
+  // answers about the same commit" IS the diagnosis in the alternating case.
+  const reworded = String(previous.reason || '') !== reason;
+  const rewordings = Math.max(0, Number(previous.rewordings || 0) + (reworded ? 1 : 0));
+  const carried = { ...at, reason, rewordings, firstSeenAt, passes, escalatedAt: previous.escalatedAt || null };
 
   // ESCALATED ALREADY — the whole point of the bound. It stays silent until the
   // verdict changes or clears, both of which are handled above. Without this
@@ -1338,14 +1391,23 @@ function cannotTellRun({ prev, verdict, isCannotTell, now = Date.now(), threshol
   const hours = Math.floor(heldMs / 3_600_000);
   const mins = Math.round((heldMs % 3_600_000) / 60_000);
   const held = hours ? `${hours}h ${mins}m` : `${mins}m`;
+  // TWO WORDINGS OF THE SAME SENTENCE, because "answered the same way" is
+  // FALSE of the alternating case and that case is the common one — 84 of the
+  // 108 measured lines are one wording and the rest are GitHub's "still
+  // computing", interleaved. Claiming a verbatim repeat where there was none
+  // would make the message argue with the log a reader is about to open.
+  const what = rewordings > 0
+    ? `This pull request has been unable to settle on an answer for ${held} across ${passes} pass(es) — `
+      + `it has reworded itself ${rewordings} time(s) while the commit has not moved. The newest is: `
+    : `This pull request has answered the same way for ${held} across ${passes} pass(es) and has not moved: `;
   return {
     state: 'escalate',
     next: { ...carried, escalatedAt: now },
     escalate: true,
     heldMs,
     reason:
-      `This pull request has answered the same way for ${held} across ${passes} pass(es) and has not moved: `
-      + `"${reason}" — a verdict that repeats without changing is not a momentary wobble, and nothing on `
+      what
+      + `"${reason}" — a verdict that will not settle is not a momentary wobble, and nothing on `
       + 'this side will say so again until it changes or clears. It needs an agent session or Dane to look. '
       + 'Nothing was merged, refused or cancelled by this message.',
   };
@@ -1424,6 +1486,7 @@ module.exports = {
   AUTO_MERGE_STALE_MS,
   CANNOT_TELL_STALE_MS,
   cannotTellRun,
+  sameCannotTellBlock,
   readsAsCannotTell,
   cannotTellEscalation,
   autoMergeDecision,

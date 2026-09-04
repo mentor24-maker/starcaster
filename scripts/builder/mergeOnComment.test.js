@@ -1480,22 +1480,96 @@ test('past the threshold it escalates exactly once, then goes quiet', () => {
   }
 });
 
-test('a CHANGED verdict resets the clock and may escalate on its own merits', () => {
-  const first = mergeOnComment.cannotTellRun({ prev: null, ...CT, now: T0 });
-  const changed = mergeOnComment.cannotTellRun({
-    prev: first.next, isCannotTell: true,
-    verdict: 'CANNOT TELL yet — GitHub is still computing', now: T0 + 200 * MIN,
+// ── What counts as "the same verdict" (review round 1) ─────────────────────
+//
+// THE SECOND BUG, and it hid inside the fix for the first. The rule shipped
+// comparing the reason PROSE, which is right in spirit and wrong in grain:
+// GitHub rewords a cannot-tell mid-block, so the clock restarted every time it
+// did and ninety minutes was never reached. Replayed over the relay's own log
+// the bound escalated on ONE of the three blocks that actually needed hands.
+// A block is one pull request stuck on one commit; the wording is GitHub's
+// polling state, not a new fact.
+
+const SAME = { pr: 606, headSha: 'a6f52c23' };
+const COMPUTING = 'CANNOT TELL yet — GitHub is still computing whether the branch merges cleanly';
+
+test('THE SEND-BACK: a REWORDED verdict on the same commit is the SAME block', () => {
+  // 86bbpz1hu alternated between these two wordings eight times in thirteen
+  // passes. Its longest unbroken streak of one wording was about thirty
+  // minutes, so under the prose grain the clock never got a third of the way.
+  let prev = null;
+  const wordings = [CT.verdict, COMPUTING, CT.verdict, CT.verdict, COMPUTING, CT.verdict, COMPUTING];
+  wordings.forEach((verdict, i) => {
+    const out = mergeOnComment.cannotTellRun({
+      prev, verdict, isCannotTell: true, identity: SAME, now: T0 + i * 10 * MIN,
+    });
+    if (i) assert.notEqual(out.state, 'new', `pass ${i + 1} restarted the run on a reword — that IS the defect`);
+    assert.equal(out.next.firstSeenAt, T0, 'the clock must keep running through a reword');
+    assert.equal(out.next.passes, i + 1);
+    prev = out.next;
   });
-  assert.equal(changed.state, 'new', 'a different wall is a different fact');
-  assert.equal(changed.escalate, false);
-  assert.equal(changed.next.firstSeenAt, T0 + 200 * MIN, 'the clock restarts from the change');
-  assert.equal(changed.next.passes, 1);
+  assert.equal(prev.reason, COMPUTING, 'and the NEWEST wording is what gets quoted, not the first');
+  assert.equal(prev.rewordings, 5, 'while the rewordings are counted, because that IS the diagnosis');
+});
+
+test('a NEW HEAD COMMIT is a new block: the clock restarts and may escalate on its own merits', () => {
+  // Criterion 4, read at the grain that survives production. A push is a
+  // genuinely new wall — GitHub has a new commit to make its mind up about,
+  // and "stuck for two hours" is no longer true of it.
+  const first = mergeOnComment.cannotTellRun({ prev: null, ...CT, identity: SAME, now: T0 });
+  const pushed = mergeOnComment.cannotTellRun({
+    prev: first.next, ...CT, identity: { pr: 606, headSha: 'ff00ff00' }, now: T0 + 200 * MIN,
+  });
+  assert.equal(pushed.state, 'new', 'a different commit is a different fact');
+  assert.equal(pushed.escalate, false);
+  assert.equal(pushed.next.firstSeenAt, T0 + 200 * MIN, 'the clock restarts from the push');
+  assert.equal(pushed.next.passes, 1);
 
   const later = mergeOnComment.cannotTellRun({
-    prev: changed.next, isCannotTell: true,
-    verdict: 'CANNOT TELL yet — GitHub is still computing', now: T0 + 300 * MIN,
+    prev: pushed.next, ...CT, identity: { pr: 606, headSha: 'ff00ff00' }, now: T0 + 300 * MIN,
   });
   assert.equal(later.escalate, true, 'the new run escalates on its own merits');
+});
+
+test('a DIFFERENT PULL REQUEST on the same ticket is a new block', () => {
+  // A ticket whose PR was closed and reopened under a new number has been
+  // stuck for one pass, not two hours.
+  const first = mergeOnComment.cannotTellRun({ prev: null, ...CT, identity: SAME, now: T0 });
+  const reopened = mergeOnComment.cannotTellRun({
+    prev: { ...first.next, escalatedAt: T0 + 90 * MIN },
+    ...CT, identity: { pr: 607, headSha: 'a6f52c23' }, now: T0 + 200 * MIN,
+  });
+  assert.equal(reopened.state, 'new');
+  assert.equal(reopened.next.escalatedAt, null, 'the old escalation must not silence the new block');
+});
+
+test('AN UNKNOWN COMMIT NEVER ENDS A RUN — a read that failed is not a new wall', () => {
+  // The ticket's own "a rate-limited read". A pass that could not reach GitHub
+  // has no SHA to compare; treating that as a new block would restart the
+  // clock every time GitHub throttled us, which is this bug wearing a hat.
+  const first = mergeOnComment.cannotTellRun({ prev: null, ...CT, identity: SAME, now: T0 });
+  const blind = mergeOnComment.cannotTellRun({
+    prev: first.next, isCannotTell: true, verdict: 'could not read the PR',
+    identity: { pr: 606, headSha: null }, now: T0 + 10 * MIN,
+  });
+  assert.equal(blind.state, 'holding', 'an unreadable pass continues the run it cannot see past');
+  assert.equal(blind.next.headSha, 'a6f52c23', 'and carries the identity forward rather than erasing it');
+
+  const back = mergeOnComment.cannotTellRun({
+    prev: blind.next, ...CT, identity: SAME, now: T0 + 95 * MIN,
+  });
+  assert.equal(back.escalate, true, 'so the run still reaches the threshold on the far side of the outage');
+});
+
+test('an OLD RECORD written before the commit was stored keeps counting', () => {
+  // The upgrade case: a run persisted by the previous version has no headSha.
+  // Failing toward silence here would mute every run in flight when this ships.
+  const out = mergeOnComment.cannotTellRun({
+    prev: { pr: 606, reason: CT.verdict, firstSeenAt: T0, passes: 8, escalatedAt: null },
+    ...CT, identity: SAME, now: T0 + 95 * MIN,
+  });
+  assert.equal(out.escalate, true, 'a record with no stored commit must continue, not restart');
+  assert.equal(out.next.headSha, 'a6f52c23', 'and it adopts the commit it can now see');
 });
 
 test('a verdict that clears leaves NO residue', () => {
@@ -1529,6 +1603,81 @@ test('an unreadable stored timestamp restarts the clock rather than disabling th
     assert.equal(out.state, 'new', `firstSeenAt ${String(bad)} must restart, not stall`);
     assert.equal(out.next.firstSeenAt, T0);
     assert.equal(out.next.escalatedAt, null, 'and must stay reachable on a later pass');
+  }
+});
+
+/**
+ * THE REPLAY. The test the send-back asked for, and the only one that could
+ * have caught the prose grain.
+ *
+ * These are the real pass sequences out of `~/Library/Logs/bus-relay-launchd.log`
+ * on the Mini — minutes from the block's first reading, and which of the two
+ * wordings GitHub gave on that pass. `null` is a reading that was NOT a
+ * cannot-tell, which is what ENDS a block. Nothing here is invented or
+ * rounded: every synthetic fixture in this file repeats one string verbatim,
+ * and the real log never does, which is exactly why the defect survived eight
+ * break-tests.
+ *
+ * The three long blocks each needed an agent session to unstick. The short one
+ * cleared itself in 53 minutes and must stay silent — it is the closest any
+ * self-clearing run has ever come to the 90-minute threshold, so it is the
+ * real-data guard on the noisy direction.
+ */
+const CONFLICTING = 'CANNOT TELL — GitHub reports this branch as CONFLICTING, but git merges origin/main '
+  + 'into 4dd9729b cleanly (merge-tree exit 0). The two sources disagree, so no conflict is claimed';
+const REAL_BLOCKS = [
+  // The ONE block the prose grain did catch, and this row says why: its first
+  // twelve passes are the same wording, so the old clock survived to 90m. The
+  // other two reworded before then, which is the whole defect in one column.
+  { ticket: '86bbugcpa', pr: 592, sha: '65debd98', needed: 'an agent session', escalations: 1, rewordedBySpeaking: false,
+    passes: [[0, null], [22, 1], [33, 1], [43, 1], [54, 1], [64, 1], [75, 1], [86, 1], [96, 1], [106, 1],
+      [117, 1], [128, 1], [138, 2], [149, 2], [160, 2], [170, 1], [181, 1]] },
+  { ticket: '86bbuvcwc', pr: 597, sha: '4dd9729b', needed: 'an agent session', escalations: 1, rewordedBySpeaking: true,
+    passes: [[0, null], [21, 1], [32, 1], [42, 1], [53, 1], [64, 1], [74, 1], [85, 1], [95, 1], [106, 2],
+      [117, 2], [127, 2], [138, 1], [148, 1], [159, 2], [169, 1], [180, 1], [190, null]] },
+  { ticket: '86bbpz1hu', pr: 563, sha: 'a6f52c23', needed: 'an agent session', escalations: 1, rewordedBySpeaking: true,
+    passes: [[0, null], [21, 1], [32, 1], [43, 1], [53, 2], [64, 1], [75, 2], [85, 2], [96, 1], [106, 1],
+      [117, 2], [127, 1], [138, 1], [148, 2], [159, null]] },
+  { ticket: '86bbtqpxd', pr: 596, sha: '0b5545f9', needed: 'nothing — it cleared itself', escalations: 0,
+    passes: [[0, null], [11, 1], [22, 1], [33, 2], [43, 1], [54, 1], [64, 2]] },
+];
+
+test('REPLAYED OVER THE REAL RELAY LOG: every block that needed hands escalates exactly once', () => {
+  for (const block of REAL_BLOCKS) {
+    let prev = null;
+    const posts = [];
+    for (const [mins, wording] of block.passes) {
+      const verdict = wording === null ? 'checks still running: verify, Vercel'
+        : (wording === 1 ? CONFLICTING : COMPUTING);
+      const run = mergeOnComment.cannotTellRun({
+        prev,
+        verdict,
+        isCannotTell: mergeOnComment.readsAsCannotTell(verdict),
+        // Production reads the commit out of `gh pr view --json headRefOid`,
+        // so it is known on EVERY pass — including the "still computing" ones,
+        // whose prose does not mention it.
+        identity: { pr: block.pr, headSha: block.sha },
+        now: T0 + mins * MIN,
+      });
+      if (run.escalate) posts.push({ mins, reason: run.reason });
+      prev = run.next;
+    }
+    assert.equal(posts.length, block.escalations,
+      `${block.ticket} (needed ${block.needed}) escalated ${posts.length} time(s), expected ${block.escalations}`);
+    if (block.escalations) {
+      assert.ok(posts[0].mins >= 90, `${block.ticket} escalated at ${posts[0].mins}m — before the threshold`);
+      assert.ok(posts[0].mins <= 130, `${block.ticket} took ${posts[0].mins}m to speak — far past the threshold`);
+      assert.match(posts[0].reason, /CANNOT TELL/, 'and quote the verdict it is stuck on, verbatim');
+      // The message must not CLAIM a verbatim repeat where the log shows a
+      // reworded one — a reader opening that log would catch it out.
+      if (block.rewordedBySpeaking) {
+        assert.match(posts[0].reason, /reworded itself \d+ time/,
+          `${block.ticket} reworded before the bound spoke; the message must say so`);
+      } else {
+        assert.match(posts[0].reason, /answered the same way/,
+          `${block.ticket} really did repeat itself verbatim; the message must not invent a reword`);
+      }
+    }
   }
 });
 
@@ -1657,6 +1806,46 @@ test('EVERY waiting verdict the merge step returns answers the cannot-tell quest
   for (const line of waits) {
     assert.ok(/cannotTell:/.test(line), `a waiting return with no cannotTell verdict:\n  ${line.trim()}`);
     assert.ok(/pr:/.test(line), `a waiting return that does not name its PR:\n  ${line.trim()}`);
+    // AND THE COMMIT IT IS STUCK ON (review round 1). A waiting path that
+    // forgets this is not a syntax error either: an undefined SHA reads as
+    // "unknown", which continues whatever run is stored, so the bound would
+    // silently key on the wrong thing instead of failing.
+    assert.ok(/headSha:/.test(line), `a waiting return that does not name its head commit:\n  ${line.trim()}`);
+  }
+});
+
+test('the relay asks GitHub for the head commit at all', () => {
+  // The identity is only as good as the field it is read from. `headRefOid`
+  // missing from the --json list makes every reading's SHA undefined, which
+  // fails SILENTLY into "unknown" and takes the fix back to the prose grain.
+  assert.match(RELAY_SRC, /headRefOid/, 'the merge step must read the head commit from gh pr view');
+  assert.match(RELAY_SRC, /identity: \{ pr: reading\.pr, headSha: reading\.headSha \}/,
+    'and hand it to the bound as the block identity');
+});
+
+test('LANE A IS BOUNDED TOO — its readings reach the same clock', () => {
+  // Review round 1's second finding: `mergeReadings` was fed only from the
+  // watch loop, so a PR stuck this way on the auto-merge lane was unbounded.
+  // The bound runs twice on purpose — above the lane gate so it stays audible
+  // while the lane is halted, and again after the lane so the lane's own
+  // readings are counted.
+  assert.match(RELAY_SRC, /laneReadings\.push\(/, "Lane A's merge step must record its reading");
+  assert.match(RELAY_SRC, /await boundCannotTell\(laneReadings\)/, 'and that reading must reach the bound');
+  assert.match(RELAY_SRC, /await boundCannotTell\(mergeReadings\)/, 'while the watch loop stays bounded above the gate');
+  const src = RELAY_SRC;
+  assert.ok(src.indexOf('await boundCannotTell(mergeReadings)') < src.indexOf('const killSwitch = killSwitchState'),
+    'the first call must stay ABOVE the lane gate, or the bound goes deaf exactly when auto-merge is latched off');
+});
+
+test('a no-reading outcome is never counted as a verdict that cleared', () => {
+  // 'none' means this ticket carried no merge authorization to act on, which
+  // says nothing about whether a block is still there. Reading it as "cleared"
+  // wiped the run every pass for exactly the tickets Lane A handles — they
+  // reach the watch loop with no merge word, which is WHY they are candidates.
+  const pushes = RELAY_SRC.split('\n').filter((l) => /outcome !== 'threw'/.test(l));
+  assert.ok(pushes.length >= 2, `expected both reading sites to guard on outcome, found ${pushes.length}`);
+  for (const line of pushes) {
+    assert.ok(/outcome !== 'none'/.test(line), `a reading site that counts 'none' as a reading:\n  ${line.trim()}`);
   }
 });
 

@@ -831,8 +831,16 @@ function asLedger(raw) {
 }
 
 /**
- * Normalize the stored CANNOT TELL runs: `{ [ticketId]: { pr, reason,
- * firstSeenAt, passes, escalatedAt } }`.
+ * Normalize the stored CANNOT TELL runs: `{ [ticketId]: { pr, headSha, reason,
+ * rewordings, firstSeenAt, passes, escalatedAt } }`.
+ *
+ * THE WHITELIST IS PER FIELD, NOT ONLY PER KEY, and review round 1 of task
+ * 86bbuvd50 is why that sentence is here: `headSha` is what identifies the
+ * block now, so a field dropped in this object is a run that can never be
+ * recognised as continuing — the counter resets every pass, the alarm never
+ * fires, and every in-memory test still passes. Exactly the trap one floor
+ * down. The round-trip test in autoMergeLedgerFile.test.js checks the whole
+ * record, field by field, for this reason.
  *
  * WHY THIS FUNCTION IS THE WHOLE POINT OF THE TICKET'S SECOND HALF.
  * `asLedger` above does not merge what came off disk — it REBUILDS the ledger
@@ -855,7 +863,9 @@ function asCannotTellRuns(raw) {
     if (!taskId || !run || typeof run !== 'object' || Array.isArray(run)) continue;
     out[taskId] = {
       pr: run.pr == null ? null : run.pr,
+      headSha: run.headSha == null ? null : run.headSha,
       reason: String(run.reason || ''),
+      rewordings: run.rewordings,
       firstSeenAt: run.firstSeenAt,
       passes: run.passes,
       escalatedAt: run.escalatedAt == null ? null : run.escalatedAt,
@@ -885,7 +895,9 @@ function ledgerAfterCannotTell(ledger, taskId, next) {
   else {
     runs[taskId] = {
       pr: next.pr == null ? null : next.pr,
+      headSha: next.headSha == null ? null : next.headSha,
       reason: String(next.reason || ''),
+      rewordings: next.rewordings,
       firstSeenAt: next.firstSeenAt,
       passes: next.passes,
       escalatedAt: next.escalatedAt == null ? null : next.escalatedAt,
