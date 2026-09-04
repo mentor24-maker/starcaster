@@ -1108,13 +1108,22 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // restarts CI, so merging on the checks just read would be merging on a
   // result that no longer describes the branch.
   if (gate.action === 'update-branch') {
-    // GitHub is already holding this one, and `allow_update_branch` means it
-    // does the catch-up itself. Pushing our own catch-up on top would restart
-    // CI for nothing and race the thing we just delegated to.
-    if (prJson.autoMergeRequest) {
-      console.error(`  MERGE WAITING on ${label}: behind main, but auto-merge is armed — GitHub catches it up and lands it`);
-      return { outcome: 'waiting', reason: 'behind main; auto-merge armed, GitHub catches it up' };
-    }
+    // ARMING DOES NOT CATCH A BRANCH UP, AND THIS WAS MEASURED, NOT ASSUMED
+    // (2026-09-03, task 86bbup3u1). The first version of this change skipped
+    // the catch-up whenever auto-merge was armed, on the belief that
+    // `allow_update_branch` let GitHub do it. It does not — that setting adds
+    // the "Update branch" button; it does not make GitHub push to an armed
+    // PR. PR #583 was armed while BEHIND and sat for twenty minutes with its
+    // head SHA never moving, which is a WORSE livelock than the one this
+    // ticket is about: permanent, and wearing the word "armed" the whole
+    // time.
+    //
+    // So the catch-up stays this machine's job, exactly as before. What
+    // arming changes is the OTHER half: once the branch is current and CI is
+    // running, nobody has to be awake at the right moment to merge it.
+    // GitHub lands it the instant the checks go green, instead of the merge
+    // depending on a ten-minute pass happening to find the PR green before
+    // main moved again. Arming is confirmed to survive the catch-up push.
     if (dryRun) {
       console.error(`  DRY RUN — would update PR #${pr.number} from main, then wait for CI`);
       return { outcome: 'would-update-branch', pr: pr.number };
@@ -1125,17 +1134,20 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       // conflict hand-off rather than retrying it forever.
       gate = { action: 'conflict', reason: `the branch could not be caught up with main (${upd.stderr.slice(0, 200)})` };
     } else {
-      // Do not go away for an hour: CI takes ~85s and the whole merge is
-      // three minutes of work. 'update-branch' out of the wait means main
-      // moved AGAIN while we waited — the next pass catches up from the top
-      // rather than this one chasing a moving target.
-      const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
-      if (after.action === 'wait' || after.action === 'update-branch') {
-        console.error(`  MERGE WAITING on ${label}: branch updated from main — ${after.reason}`);
-        return { outcome: 'waiting', reason: after.reason };
+      // The push restarted CI, so the checks just read no longer describe the
+      // branch. This used to hold the pass open for 180s hoping to see the
+      // new run finish — the treadmill. Now it falls through to the arming
+      // path below with a 'wait', which hands the PR to GitHub and returns:
+      // GitHub merges it whenever the re-run goes green, however long that
+      // takes, with nothing here having to be awake for it.
+      //
+      // The staleness question below still gets asked first, and that is the
+      // point of falling through rather than arming here.
+      gate = { action: 'wait', reason: 'the branch was caught up with main and its checks are re-running' };
+      const reread = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
+      if (reread.ok) {
+        try { prJson = JSON.parse(reread.stdout); } catch { /* keep the pre-push read; the gate above is already 'wait' */ }
       }
-      gate = { action: after.action, reason: after.reason };
-      if (after.prJson) prJson = after.prJson;
     }
   }
 
