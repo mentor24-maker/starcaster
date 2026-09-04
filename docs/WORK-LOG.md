@@ -1,3 +1,42 @@
+## 2026-09-03 — A refusal that can never clear stops promising it will (#585)
+
+When you comment `merge` on a finished ticket, an automatic step goes to GitHub
+and merges it. Sometimes it cannot, and it says why on the ticket. Every one of
+those messages ended with the same reassurance: *your approval is still
+standing, you do not have to say merge again, the moment the reason above is
+dealt with it goes through on its own.*
+
+That sentence is true of some reasons and false of others, and nothing in the
+system knew the difference. "The tests are failing" clears itself the moment
+somebody pushes a fix — a later pass really does merge it. "This pull request
+has already been merged" never clears. There is no later. But both got the same
+comforting paragraph.
+
+One ticket sat for twelve hours in the approved-and-waiting column with its
+work already merged and live on the site, while the step posted twenty-five
+messages telling you it was handled. Sixteen of them were for a reason that
+could never come right. Then the messages stopped, because the system suppresses
+a repeat that has not changed — so the ticket went from lying reassuringly to
+saying nothing at all. It was only found because you asked about a different
+ticket that looked stuck.
+
+Every reason the step can give is now written down in one place and marked as
+either *it will clear on its own* or *it will not*. A reason that will not clear
+no longer gets the reassurance. It says plainly what it needs and who has to do
+it — an agent session, or you — and that nothing further is coming, so nobody
+reads it as progress. Anything the step genuinely could not work out counts as
+the second kind: if it cannot honestly tell you to wait, it tells you to look.
+
+A new reason cannot be added without deciding which kind it is. There is no
+default and no way to skip the question; the step refuses to write the message
+at all rather than guess.
+
+The separate sweep that already noticed this exact situation — finished work
+sitting in a column you have to move it out of — used to report it only in the
+group chat, where it scrolled past with everything else. It now also writes it
+on the ticket itself, once, where the next reader of that ticket cannot miss it.
+It still never moves the ticket for you: that column is yours.
+
 ## 2026-09-03 — A safety brake that had never once been applied (#567)
 
 When an agent finishes a turn, a check looks at whether the work added a
