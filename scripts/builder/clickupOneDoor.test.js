@@ -18,18 +18,21 @@ const ROOT = path.join(__dirname, '..', '..');
  * allowance was rate-limited on every pass, which disabled the auto-merge lane
  * for 271 consecutive passes.
  *
- * THE ALLOWLIST IS DELIBERATE, AND IT SHRINKS. This ticket's non-goals forbid
- * migrating the other callers here — clickup_direct.mjs alone is 4100 lines and
- * the slice has to stay reviewable. Without an allowlist this test could not be
- * written at all until every slice landed, which is how a guard ends up never
- * being written. Each entry names the ticket that removes it. Adding a NEW file
- * to this list is not a fix; migrating it is.
+ * THE ALLOWLIST IS DELIBERATE, AND IT SHRINKS — and as of 2026-09-04 it is
+ * empty. It was never a place to park work: each entry named the ticket that
+ * removed it, and every one of those tickets has now landed.
  */
-const NOT_YET_MIGRATED = new Map([
-  ['scripts/pipeline.mjs', '86bbugcpa'],
-  ['scripts/pulse.cjs', '86bbugcpa'],
-  ['scripts/review_gate.mjs', '86bbugcpa'],
-]);
+/*
+ * EMPTY SINCE 2026-09-04 (task 86bbugcpa). `pipeline.mjs`, `pulse.cjs` and
+ * `review_gate.mjs` were the last three, and they are migrated — every ClickUp
+ * request in the repo now goes through the door and is counted.
+ *
+ * It stays as a Map rather than being deleted because the shape is the point:
+ * a future slice that genuinely cannot migrate in one go has somewhere honest
+ * to say so, naming the ticket that empties it again. Adding an entry is not a
+ * fix; it is a debt with a name on it.
+ */
+const NOT_YET_MIGRATED = new Map([]);
 
 /** The one file allowed to call fetch against ClickUp. */
 const THE_DOOR = 'scripts/lib/clickup.cjs';
@@ -80,21 +83,78 @@ test('the door itself really is the fetch call', () => {
   // carries no literal api.clickup.com for the detector above to find. That is
   // the point of a door.
   assert.match(door, /async function clickupFetch\(/);
-  assert.match(door, /await fetch\(url, init\)/);
+  // The transport is a parameter now (task 86bbugcpa) so that a caller with
+  // its own test fakes comes THROUGH the door rather than around it. What is
+  // asserted is still structural: the door is the thing that calls out.
+  assert.match(door, /await fetchImpl\(url, init\)/);
+  assert.match(door, /\{ fetchImpl = fetch \} = \{\}/,
+    'the default transport must still be the real fetch');
 });
 
 /*
  * THE DETECTOR MUST BE ABLE TO FIND SOMETHING, or the guard above passes for
- * the wrong reason forever. The three not-yet-migrated files are known,
- * present offenders — so they double as the detector's own control. When the
- * next slice migrates them, this test is what says the allowlist is stale.
+ * the wrong reason forever.
+ *
+ * Until 2026-09-04 its control was the not-yet-migrated files themselves:
+ * real, present offenders it had to keep finding. That was the right control
+ * while they existed, and this slice migrated the last of them — so the
+ * control had to become synthetic or the guard would have been left grading
+ * itself against an empty list, which is the same as not running.
+ *
+ * These are the shapes the real files actually had, before each was migrated.
  */
-test('the detector really detects — every allowlisted file still has a bare ClickUp fetch', () => {
-  for (const file of NOT_YET_MIGRATED.keys()) {
-    const hits = bareClickUpFetches(fs.readFileSync(path.join(ROOT, file), 'utf8'));
-    assert.ok(hits.length >= 1,
-      `${file} no longer has a bare ClickUp fetch — it is migrated, so remove it from NOT_YET_MIGRATED`);
+const KNOWN_OFFENDING_SHAPES = [
+  { why: 'pipeline.mjs, before migration', src: 'const res = await fetch(`https://api.clickup.com${path}`, { method });' },
+  { why: 'pulse.cjs, before migration', src: 'const res = await fetch(`https://api.clickup.com${apiPath}`, { method: "GET" });' },
+  { why: 'review_gate.mjs, before migration', src: 'const res = await fetch("https://api.clickup.com/api/v2/task/x/comment", {});' },
+  { why: 'a call built on the shared base constant', src: 'const r = await fetch(`${API_BASE}/api/v2/task/x`, {});' },
+  { why: 'no await — still a request', src: 'fetch(`https://api.clickup.com/api/v2/x`).then(f);' },
+];
+
+test('the detector really detects — every known offending shape is caught', () => {
+  for (const { why, src } of KNOWN_OFFENDING_SHAPES) {
+    assert.ok(bareClickUpFetches(src).length >= 1, `the detector went blind to: ${why}`);
   }
+});
+
+/*
+ * AND THE SHAPE IT USED TO MISS. `lib/clickupForward.js` resolved its
+ * transport indirectly — `deps?.fetchImpl || globalThis.fetch` — so it never
+ * wrote `fetch(` against a ClickUp URL and the guard above read clean while
+ * the forwarder spent uncounted requests from the bug reporter's own request
+ * path. It was migrated in this slice; this is what stops the pattern coming
+ * back, in that file or any other.
+ */
+function indirectTransportFallback(src) {
+  const code = src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+  if (!/api\.clickup\.com|API_BASE/.test(code)) return [];
+  const hits = [];
+  const re = /(?:\|\|\s*globalThis\.fetch|\|\|\s*global\.fetch|=\s*globalThis\.fetch\b)/g;
+  let m;
+  while ((m = re.exec(code))) hits.push(m[0].trim());
+  return hits;
+}
+
+test('no ClickUp caller resolves its own transport behind the door\'s back', () => {
+  const offenders = [];
+  for (const full of [...sourceFiles(path.join(ROOT, 'scripts')), ...sourceFiles(path.join(ROOT, 'lib'))]) {
+    const rel = path.relative(ROOT, full);
+    if (rel === THE_DOOR) continue;
+    const hits = indirectTransportFallback(fs.readFileSync(full, 'utf8'));
+    if (hits.length) offenders.push(`${rel}: ${hits.join(' | ')}`);
+  }
+  assert.deepEqual(offenders, [],
+    'falling back to globalThis.fetch is a second door the uniqueness check cannot see — '
+    + 'pass your fetch to clickupFetch as { fetchImpl } instead, so the request is still counted');
+});
+
+test('the indirect detector really detects', () => {
+  const shape = 'const API_BASE = "https://api.clickup.com";\nconst f = deps?.fetchImpl || globalThis.fetch;';
+  assert.ok(indirectTransportFallback(shape).length >= 1, 'the pattern that hid clickupForward must be caught');
+  // And it must not fire on a file that has nothing to do with ClickUp.
+  assert.deepEqual(indirectTransportFallback('const f = deps.fetchImpl || globalThis.fetch;'), []);
 });
 
 test('a comment mentioning fetch does not count as one', () => {
@@ -102,9 +162,18 @@ test('a comment mentioning fetch does not count as one', () => {
   assert.deepEqual(bareClickUpFetches(src), [], 'comments are stripped before matching');
 });
 
-test('the migrated file has no bare ClickUp fetch left', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'scripts/clickup_direct.mjs'), 'utf8');
-  assert.deepEqual(bareClickUpFetches(src), [], 'clickup_direct.mjs is migrated (task 86bbugcdb)');
+test('every migrated file has no bare ClickUp fetch left', () => {
+  const MIGRATED = [
+    ['scripts/clickup_direct.mjs', '86bbugcdb'],
+    ['scripts/pipeline.mjs', '86bbugcpa'],
+    ['scripts/pulse.cjs', '86bbugcpa'],
+    ['scripts/review_gate.mjs', '86bbugcpa'],
+    ['lib/clickupForward.js', '86bbugcpa'],
+  ];
+  for (const [file, ticket] of MIGRATED) {
+    const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    assert.deepEqual(bareClickUpFetches(src), [], `${file} is migrated (task ${ticket})`);
+  }
 });
 
 /*

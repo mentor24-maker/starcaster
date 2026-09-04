@@ -102,11 +102,21 @@ const budget = {
   at: 0,
 };
 
-async function clickupFetch(url, init = {}) {
+/**
+ * `fetchImpl` is injectable (2026-09-04, task 86bbugcpa) so that a caller with
+ * its own test fakes can come through the door instead of routing around it.
+ * `lib/clickupForward.js` runs on the bug reporter's request path and its
+ * tests drive every ClickUp failure shape through a substitute transport; the
+ * alternative was leaving it outside the door, which is exactly the second
+ * door this whole ticket exists to close. The request is counted whichever
+ * transport is used — the counter measures the ATTEMPT, and a caller cannot
+ * opt out of being counted by supplying its own `fetch`.
+ */
+async function clickupFetch(url, init = {}, { fetchImpl = fetch } = {}) {
   budget.requests += 1;
   let res;
   try {
-    res = await fetch(url, init);
+    res = await fetchImpl(url, init);
   } catch (err) {
     return { res: null, json: null, text: null, transportError: err };
   }
@@ -128,6 +138,10 @@ async function clickupFetch(url, init = {}) {
  *  A header ClickUp did not send leaves the previous reading alone rather than
  *  overwriting it with null — a missing header is "no news", not "no budget". */
 function recordLimits(res) {
+  // A response without headers is not a crash. Real ClickUp always sends them,
+  // but an injected transport need not, and the door must not be the thing
+  // that breaks when a caller hands it a simpler shape than a real Response.
+  if (!res || !res.headers || typeof res.headers.get !== 'function') return;
   const limit = res.headers.get('x-ratelimit-limit');
   const remaining = res.headers.get('x-ratelimit-remaining');
   const reset = res.headers.get('x-ratelimit-reset');
