@@ -33,6 +33,9 @@
  */
 
 const { isReviewVerdict, isReviewPassed } = require('./mergeOnComment.js');
+// The refusal-reason table (task 86bbtqpxd). This module raises exactly one
+// refusal of its own, and it names its class like every other raise site.
+const { REFUSAL_CODES } = require('./refusalClass.js');
 const { prTrailLanded } = require('./loopTrail.js');
 
 /**
@@ -614,10 +617,13 @@ function duringRerunWait({ staleness, gate } = {}) {
  * result nobody saw is not a pass. The refusal is re-decidable, so the next
  * pass merges it on the operator's original word once the re-run has landed.
  */
-function afterRerunDecision({ action, reason } = {}) {
+function afterRerunDecision({ action, reason, refusalCode } = {}) {
   const act = String(action || '');
   if (act === 'merge' || act === 'refuse' || act === 'conflict') {
-    return { action: act, reason: reason || '' };
+    // `refusalCode` rides through unchanged: a refusal that came from
+    // githubGate is already classified, and re-labelling it here would be a
+    // second opinion about a reason this function did not raise (86bbtqpxd).
+    return { action: act, reason: reason || '', ...(refusalCode ? { refusalCode } : {}) };
   }
   if (act === 'update-branch') {
     return {
@@ -627,6 +633,7 @@ function afterRerunDecision({ action, reason } = {}) {
   }
   return {
     action: 'refuse',
+    refusalCode: REFUSAL_CODES.reviewGateRerunUnresolved,
     reason: `the review gate was re-run because it was stale, and this pass could not confirm the result (${reason || 'no answer'}) — refusing rather than merging on a stale gate`,
   };
 }

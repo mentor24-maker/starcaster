@@ -68,9 +68,19 @@ const STEPS = Object.freeze([
   Object.freeze({
     id: 'drift',
     npmArgs: Object.freeze(['reconcile', '--', '--live']),
-    // reconcile dialect: 0 ran (its own output says clean/repaired/flagged),
-    // 1 could not read the queue at all — nothing was checked.
-    reading: Object.freeze({ 0: 'clean', 1: 'cannot-tell' }),
+    // reconcile dialect: 0 ran and changed nothing, 3 ran and WROTE, 1 could
+    // not read the queue at all — nothing was checked.
+    //
+    // THE 3 IS NOT DECORATION (2026-09-04, ticket 86bbuv66c). This step used to
+    // have a two-value dialect, and reconcile exited 0 whether it had moved a
+    // ticket or not — so the pass that wrongly closed a live urgent ticket
+    // printed "REPAIR: CLEAN". The marker step above has always been able to
+    // say "3 = repaired"; the step that does the destructive writing could not.
+    // A watchdog that cannot report its own writes is narrating, not watching.
+    // `composeOutcome` maps 'repaired' to exit 0 with the word REPAIRED, so a
+    // pass that repaired still does not page — it is a change to report, not a
+    // failure. Found by session starcaster-3e.
+    reading: Object.freeze({ 0: 'clean', 3: 'repaired', 1: 'cannot-tell' }),
   }),
   Object.freeze({
     id: 'stranded',

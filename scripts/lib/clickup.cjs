@@ -324,7 +324,22 @@ async function pageComments({ get, taskId, maxPages = 40 }) {
  * caller here wants the trail, and half a trail that looks whole is how a
  * reader concludes something never happened.
  */
-async function getTaskComments(taskId) {
+/**
+ * A task's comments as RECORDS — `{ id, date, comment_text }`, oldest-first.
+ *
+ * `getTaskComments` below flattens these to bare strings, which is all most
+ * callers want. A caller that has to decide something about a comment needs
+ * more than its text: `mergeOnComment.findPullRequest` sorts by `date` to pick
+ * the newest `PR opened:` line and returns the `id` so the decision can be
+ * marked as spent. Handed strings instead, it silently sees every comment as
+ * equally old and returns whichever it met first — which is the OLDEST, the
+ * opposite of the rule it documents.
+ *
+ * That is not hypothetical: the reconciler passed strings, so it could not use
+ * that parser at all, wrote its own loose regex over prose, and closed a live
+ * ticket on another ticket's pull request (86bbuv66c, 2026-09-04).
+ */
+async function getTaskCommentRecords(taskId) {
   const out = await pageComments({ get: (p) => call('GET', p), taskId });
   if (!out.complete) {
     if (out.capped) {
@@ -334,7 +349,15 @@ async function getTaskComments(taskId) {
     throw new Error(`getTaskComments(${taskId}): HTTP ${f.status} ${(f.json && f.json.err) || String(f.text || '').slice(0, 200)}`);
   }
   // API order is newest-first within a page; reverse the whole set to oldest-first.
-  return out.comments.reverse().map((c) => c.comment_text || '');
+  return out.comments.reverse().map((c) => ({
+    id: String(c.id ?? ''),
+    date: c.date,
+    comment_text: c.comment_text || '',
+  }));
+}
+
+async function getTaskComments(taskId) {
+  return (await getTaskCommentRecords(taskId)).map((c) => c.comment_text);
 }
 
 /**
@@ -389,6 +412,24 @@ function moveTaskStatus(taskId, status, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
   });
 }
 
+/**
+ * Comment on a task through the direct door.
+ *
+ * A DURABLE surface, which is why it exists (2026-09-03, task 86bbtqpxd). The
+ * reconciler used to report a contradiction to the bus and nowhere else, so a
+ * finding about one specific ticket competed with every other message in the
+ * room and was read as traffic. A comment lands on the ticket the finding is
+ * ABOUT, where the next reader of that ticket cannot miss it — and it survives
+ * the channel scrolling.
+ */
+function commentOnTask(taskId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
+  return runDirect(['comment', '--task', String(taskId), '--body-file', '-'], {
+    input: text,
+    what: `comment on task ${taskId}`,
+    timeoutMs,
+  });
+}
+
 /** Post to the bus through the direct door (inherits its quota reporting). */
 function postBusMessage(channelId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
   return runDirect(['chat', '--channel', String(channelId), '--body-file', '-'], {
@@ -416,6 +457,8 @@ module.exports = {
   listTasks,
   pageComments,
   getTaskComments,
+  getTaskCommentRecords,
   moveTaskStatus,
+  commentOnTask,
   postBusMessage,
 };
