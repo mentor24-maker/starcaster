@@ -34,6 +34,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { BASE_URL, ensureBuildIsCurrent } from './app-driver.mjs';
+import { cannotTell } from './harness-exit.mjs';
 import {
   RENDER_CONTRACTS,
   RENDER_DIFFERENTIALS,
@@ -55,12 +56,8 @@ let createEmptyModule;
 try {
   ({ createEmptyModule } = require(path.join(ROOT, 'lib/builder/template.js')));
 } catch {
-  console.error(
-    '\n[check:render] lib/builder/template.js is missing — it is a generated file\n' +
-    'and a fresh worktree does not have one.\n\n' +
-    'Run `npm run build:builder-template`.\n'
-  );
-  process.exit(2);
+  cannotTell('check:render',
+    'lib/builder/template.js is missing — it is a generated file and a fresh worktree\ndoes not have one.\n\nRun `npm run build:builder-template`.');
 }
 
 /** The preview page reads its document from here (BUILDER_PREVIEW_STORAGE_KEY). */
@@ -593,12 +590,13 @@ try {
   await render(page, documentFor({ type: 'text', text: '<p>Baseline</p>', settings: {} }));
   const baseline = await sample(page, '.builder-preview-text', [], 0);
   if (!baseline.found) {
-    console.error(
-      '\n[check:render] The baseline page rendered no text module.\n' +
-      'Nothing below could be measured against it, so this is a failure rather than a pass.\n' +
-      'Either the preview surface changed or the bundle is stale — `npm run build:builder`.\n'
-    );
-    process.exit(1);
+    // The preview surface itself did not come up, so no contract below could
+    // be measured at all. That is an instrument problem, not a rendering
+    // defect — a 2 (task 86bbt6hgx).
+    cannotTell('check:render',
+      'The baseline page rendered no text module.\n' +
+      'Nothing below could be measured against it, so this run says nothing about your change.\n' +
+      'Either the preview surface changed or the bundle is stale — `npm run build:builder`.');
   }
   const DEFAULT_VIEWPORT = page.viewportSize();
   for (const contract of RENDER_CONTRACTS) {
@@ -858,11 +856,10 @@ try {
 }
 
 if (!measured) {
-  console.error(
-    `\n[check:render] ${RENDER_CONTRACTS.length} contract(s) defined and NONE were measured.\n` +
-    'That is a failure, not a pass. Every assertion is vacuous on a page that did not render.\n'
-  );
-  process.exit(1);
+  cannotTell('check:render',
+    `${RENDER_CONTRACTS.length} contract(s) defined and NONE were measured.\n` +
+    'Every assertion is vacuous on a page that did not render, so this is not a pass —\n' +
+    'and it is not a failure of your change either. Nothing was read.');
 }
 
 for (const notice of notices) console.log(`[check:render] NOTE — ${notice}`);

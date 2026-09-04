@@ -44,6 +44,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BASE_URL, ensureBuildIsCurrent } from './app-driver.mjs';
+import { cannotTell } from './harness-exit.mjs';
 import { SHOT_SCENES } from './shot-scenes.mjs';
 import { VISUAL_SOURCES, visualFilesIn, comparePixels, describeChange } from './visual-diff.mjs';
 
@@ -56,11 +57,8 @@ let createEmptyModule;
 try {
   ({ createEmptyModule } = require(path.join(ROOT, 'lib/builder/template.js')));
 } catch {
-  console.error(
-    '\n[check:shots] lib/builder/template.js is missing — it is a generated file\n' +
-    'and a fresh worktree does not have one.\n\nRun `npm run build:builder-template`.\n'
-  );
-  process.exit(2);
+  cannotTell('check:shots',
+    'lib/builder/template.js is missing — it is a generated file and a fresh worktree\ndoes not have one.\n\nRun `npm run build:builder-template`.');
 }
 
 const DRAFT_KEY = 'starcaster_builder_preview_draft';
@@ -96,11 +94,9 @@ function changedFiles() {
   try {
     mergeBase = git('merge-base', BASE_REF, 'HEAD');
   } catch {
-    console.error(
-      `\n[check:shots] Could not find a merge base with \`${BASE_REF}\`.\n` +
-      'Run `git fetch origin` first, or pass `--base <ref>`.\n'
-    );
-    process.exit(2);
+    cannotTell('check:shots',
+      `Could not find a merge base with \`${BASE_REF}\`.\n` +
+      'Run `git fetch origin` first, or pass `--base <ref>`.');
   }
   // Working tree vs the merge base: committed AND uncommitted edits both
   // count. The loop runs this before it commits as often as after, and a
@@ -137,12 +133,10 @@ function buildBaseline(mergeBase, outDir) {
   for (const script of ['scripts/build_builder_bundle.mjs', 'scripts/build_styles.mjs']) {
     const result = spawnSync(process.execPath, [path.join(outDir, script)], { cwd: outDir, encoding: 'utf8' });
     if (result.status !== 0) {
-      console.error(
-        `\n[check:shots] Could not build the "before" side (${script} failed at ${mergeBase.slice(0, 8)}).\n` +
-        'Without it there is nothing to compare against, so this is a failure rather than a pass.\n\n' +
-        (result.stderr || result.stdout || '').slice(-1500) + '\n'
-      );
-      process.exit(2);
+      cannotTell('check:shots',
+        `Could not build the "before" side (${script} failed at ${mergeBase.slice(0, 8)}).\n` +
+        'Without it there is nothing to compare against, so this run says nothing either way.\n\n' +
+        (result.stderr || result.stdout || '').slice(-1500));
     }
   }
   return outDir;

@@ -1982,6 +1982,51 @@ server does not send must render nothing, never `0`. Defaulting
 `livePostCount ?? 0` would have told the operator every tag on his blog was
 dead during a deploy.
 
+### 5.33 A check that could not run must not exit 0 — and must not exit 1 either
+
+The browser harnesses under `scripts/ui/` are the only gates CI cannot run, so
+their exit code is the whole of what a script, a log skim or an unattended pass
+ever sees. Two of them were observed on 2026-09-02 printing an excellent
+refusal and exiting **0**. `check:panels`'s own text says it best — *"without a
+project the builder renders an empty page and every assertion passes on zero
+panels, which is worse than failing"* — and then, at the time, it agreed with
+itself and exited 2 while three of its siblings did not.
+
+The audit (task 86bbt6hgx) found eight such paths. `check_screens` had four in
+one file: no fixture project (*"these checks are hollow"*), a project that
+would not activate (*"screens may render empty"*), a rate-limited run
+(*"treat everything above as unreliable"*), and measuring not one screen —
+all ending at `process.exitCode = failures.length ? 1 : 0`. Run with no project
+id against a live server it printed **"9 screen-width combination(s) checked,
+0 skipped, 0 failing"** and exited 0, which is byte-for-byte what a clean sweep
+prints. `check_nav_controls` collected every control whose fixture variant was
+missing, printed the list, and then never let it near the exit code — with all
+variants gone it would print *"OK — all 0 controls move the rendered page"*.
+
+**Three verdicts, one shared module** (`scripts/ui/harness-exit.mjs`):
+
+| exit | meaning |
+|---|---|
+| 0 | ran, and what it measured was correct |
+| 1 | ran, and what it measured was **wrong** — the code under test has a defect |
+| 2 | **could not take a reading** — says nothing about the code |
+
+Same scheme as `npm run throughput`, and the same answer `doctor:node` gives
+with CANNOT TELL rather than PASS.
+
+**The 1-vs-2 half matters as much as the 0-vs-2 half, and is easier to get
+wrong.** Four vacuity guards already exited 1, each with a sentence reading
+"that is a failure, not a pass" — correct when 1 was the only non-zero code
+available, and wrong now: an unseeded fixture, a stale build, a throttled
+server and a missing variant are all faults of the **instrument**. Reporting
+them as 1 sends whoever reads the log hunting a defect in code that may be
+perfect. The rule of thumb: *if the code under test could be flawless and this
+could still happen, it is a 2.*
+
+A real failure outranks a could-not-tell — a screen that overflowed its
+viewport overflowed it, whatever else about the run was hollow. A **pass**
+never does, because a pass over something nobody measured is the whole defect.
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory

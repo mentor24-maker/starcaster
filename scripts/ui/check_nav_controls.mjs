@@ -40,16 +40,35 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const require = createRequire(path.join(ROOT, 'package.json'));
 const { chromium } = require('playwright');
 const { CONTROLS } = await import(path.join(ROOT, 'scripts/ui/nav-control-matrix.mjs'));
+const { cannotTell, verdict, EXIT_CANNOT_TELL } = await import(path.join(ROOT, 'scripts/ui/harness-exit.mjs'));
 
 const F = process.env.NAV_MATRIX_OUT || path.join(os.tmpdir(), 'starcaster-nav-control-matrix');
 
+/*
+ * Both preconditions used to run with `stdio: 'ignore'`, so a failure in
+ * either arrived as a bare Node stack trace with exit 1 and not one line of
+ * the tool's own output — "the check is broken" when the truth was "the check
+ * could not be set up" (task 86bbt6hgx). Output is captured and printed now,
+ * and the verdict is 2: neither of these says anything about the nav controls.
+ */
+function prepare(what, cmd, args, env) {
+  try {
+    execFileSync(cmd, args, { cwd: ROOT, stdio: 'pipe', env });
+  } catch (e) {
+    cannotTell('check:nav-controls',
+      `${what} failed, so there is no fixture to measure.\n\n  ${cmd} ${args.join(' ')}\n\n` +
+      String(e.stderr || e.stdout || e.message || '').slice(-2000));
+  }
+}
+
 // The fixture inlines the compiled stylesheet, which is a gitignored build
 // artifact — build it first so this command works on a fresh clone.
-execFileSync('npm', ['run', 'build:styles'], { cwd: ROOT, stdio: 'ignore' });
+prepare('Building the stylesheet (`npm run build:styles`)', 'npm', ['run', 'build:styles'], process.env);
 
 // Render the fixture second, so the check can never measure a stale one.
-execFileSync('npx', ['vitest', 'run', 'components/builder/nav-control-matrix.fixture.test.tsx'],
-  { cwd: ROOT, stdio: 'ignore', env: { ...process.env, NAV_MATRIX_OUT: F } });
+prepare('Rendering the nav fixture', 'npx',
+  ['vitest', 'run', 'components/builder/nav-control-matrix.fixture.test.tsx'],
+  { ...process.env, NAV_MATRIX_OUT: F });
 
 const b = await chromium.launch();
 const p = await b.newPage({ viewport:{width:1400,height:900} });
@@ -121,4 +140,25 @@ if (dead.length) {
   console.error('Rule the fixture out first — see the note at the top of this file.\n');
   process.exit(1);
 }
+
+/*
+ * A control whose fixture variant is missing was never measured — it is not
+ * alive and it is not dead, and until 2026-09-03 it was printed and then
+ * discarded: only `dead` gated the exit. So a run where EVERY variant went
+ * missing printed "OK — all 0 controls move the rendered page" and exited 0,
+ * which is the whole defect of task 86bbt6hgx in one line. Unmeasured is a 2.
+ */
+if (verdict({ failures: 0, blind: broken.length }) === EXIT_CANNOT_TELL) {
+  console.error(
+    `\n[check:nav-controls] COULD NOT TAKE A READING — exiting ${EXIT_CANNOT_TELL}.\n\n` +
+    `${broken.length} of ${CONTROLS.length} control(s) have no fixture variant, so they were\n` +
+    'never measured — neither working nor dead:\n\n' +
+    broken.map((c) => `  • ${c.key}`).join('\n') +
+    '\n\nThe variants come from components/builder/nav-control-matrix.fixture.test.tsx.\n' +
+    'A control missing from it is invisible to this sweep, which is what "all controls\n' +
+    'move the rendered page" would otherwise be claiming over.\n'
+  );
+  process.exit(EXIT_CANNOT_TELL);
+}
+
 console.log(`\n[check:nav-controls] OK — all ${live.length} controls move the rendered page.\n`);

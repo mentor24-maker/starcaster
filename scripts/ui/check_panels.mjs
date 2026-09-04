@@ -44,6 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const { cannotTell, EXIT_CANNOT_TELL } = await import('./harness-exit.mjs');
 const { createRequire } = await import('node:module');
 // lib/builder/template.js is a GENERATED artifact and a fresh worktree has
 // none. Without this the run dies on a raw MODULE_NOT_FOUND stack that says
@@ -55,12 +56,9 @@ try {
     path.join(ROOT, 'lib/builder/template.js')
   ));
 } catch {
-  console.error(
-    '\n[check:panels] lib/builder/template.js is missing — it is a generated file\n' +
-    'and a fresh worktree does not have one.\n\n' +
-    'Run `npm run build:builder-template`.\n'
-  );
-  process.exit(2);
+  cannotTell('check:panels',
+    'lib/builder/template.js is missing — it is a generated file and a fresh worktree\n' +
+    'does not have one.\n\nRun `npm run build:builder-template`.');
 }
 const EXPECTED_MODULES = BUILDER_MODULE_TYPES.length;
 const PROJECT_ID = process.env.UI_HARNESS_PROJECT_ID || '';
@@ -87,12 +85,10 @@ const WIDTHS = (process.env.UI_HARNESS_WIDTHS || '1440,1600,1920').split(',').ma
 const NON_STRETCH = ['check', 'align', 'color'];
 
 if (!PROJECT_ID) {
-  console.error(
+  cannotTell('check:panels',
     'Set UI_HARNESS_PROJECT_ID first — `npm run seed:ui-fixture` prints it.\n' +
     'Without a project the builder renders an empty page and every assertion\n' +
-    'passes on zero panels, which is worse than failing.'
-  );
-  process.exit(2);
+    'passes on zero panels, which is worse than failing.');
 }
 
 /** Walk from the pages list into an expanded module panel. */
@@ -828,25 +824,25 @@ for (const width of WIDTHS) {
 // modules to 3, and the check reported a confident pass over what was left.
 // Counting the cards is what makes that loud instead of invisible.
 if (cardsSeen > 0 && cardsSeen < EXPECTED_MODULES) {
-  console.error(
-    `\n[check:panels] The fixture is INCOMPLETE — ${cardsSeen} module cards on the page, ` +
+  // A 2, not a 1: the fixture is the INSTRUMENT. Nothing here says the panels
+  // are wrong, and reporting it as a failure sends the reader hunting a defect
+  // in code that could be perfect (task 86bbt6hgx).
+  cannotTell('check:panels',
+    `The fixture is INCOMPLETE — ${cardsSeen} module cards on the page, ` +
     `${EXPECTED_MODULES} module types exist.\n` +
     'Another session has probably re-seeded over it. Re-run `npm run seed:ui-fixture`\n' +
-    'and check again; a pass over a partial fixture is not a pass.\n'
-  );
-  process.exit(1);
+    'and check again; a pass over a partial fixture is not a pass.');
 }
 
 if (panelsSeen === 0) {
-  console.error(
+  cannotTell('check:panels',
     'No panels carrying `.is-lattice` were found.\n' +
-    'That is a FAILURE, not a pass. The class is stamped on EVERY module\n' +
+    'Zero assertions is never a green result. The class is stamped on EVERY module\n' +
     'editor by ModuleEditorWrapper (components/builder/builder-module-card.tsx)\n' +
     'and on the section, cell and table-cell editors, so finding none means\n' +
     'either the fixture page has no modules (`npm run seed:ui-fixture`) or the\n' +
-    'navigation above stopped working. Zero assertions is never a green result.'
-  );
-  process.exit(1);
+    'navigation above stopped working — an instrument problem either way, which\n' +
+    'is why this is a 2 rather than a 1.');
 }
 
 if (allFailures.length) {
