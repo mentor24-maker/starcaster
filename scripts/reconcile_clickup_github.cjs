@@ -43,9 +43,15 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { listTasks, getTaskCommentRecords, moveTaskStatus, postBusMessage, runDirect } = require('./lib/clickup.cjs');
+const {
+  listTasks,
+  getTaskCommentRecords,
+  moveTaskStatus,
+  postBusMessage,
+  commentOnTask,
+} = require('./lib/clickup.cjs');
 const { thisNode } = require('../lib/nodeRoles.js');
-const { findPullRequest, findPullRequests } = require('./builder/mergeOnComment.js');
+const { findPullRequests } = require('./builder/mergeOnComment.js');
 
 /** How many terminal tasks the leftover-PR scan looks at, most recent first.
  *  Bounded because the terminal set grows forever — see the scan below. */
@@ -181,14 +187,6 @@ function closureNote({ prName, prUrl, mergedAt }) {
   ].join('\n');
 }
 
-/** Post a comment through the same verified door the status write uses. */
-function postTaskComment(taskId, body) {
-  return runDirect(['comment', '--task', String(taskId), '--body-file', '-'], {
-    input: body,
-    what: `comment on task ${taskId}`,
-  });
-}
-
 /**
  * @param {object} deps injectable so a test drives this with fake data instead
  *   of the network — every one defaults to the real implementation.
@@ -198,8 +196,8 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
     getComments = getTaskCommentRecords,
     prState = ghPrState,
     updateStatus = moveTaskStatus,
-    postComment = postTaskComment,
     postBus = postBusMessage,
+    commentOn = commentOnTask,
     alreadyFlagged = null,
     recordFlagged = () => {},
     isLive = live,
@@ -319,7 +317,7 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
           // purpose.
           const note = closureNote({ prName, prUrl: authoritative.url, mergedAt: pr.mergedAt });
           try {
-            postComment(task.id, note);
+            commentOn(task.id, note);
           } catch (err) {
             unchecked.push(
               `${label}: ${prName} merged, but the explanation comment could not be posted (${err.message}) — `
@@ -339,11 +337,40 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
         }
       } else {
         // Operator status: flag, never move — the operator owns the exit.
+        //
+        // AND SAY IT ON THE TICKET, not only on the bus (2026-09-03, task
+        // 86bbtqpxd). This exact finding was made about ticket 86bbqw49y and
+        // went to the bus, where it competed with everything else and nobody
+        // acted on it; the ticket sat twelve hours with its work already live
+        // in production. A merged PR under an operator status means FINISHED
+        // WORK IS INVISIBLE ON THE DEPLOY LIST, which is not a line in a
+        // sweep report — so it also lands as a comment on the ticket it is
+        // about, where the next reader of that ticket cannot miss it. Still
+        // never a MOVE: only Dane takes a task out of an operator status.
         await flag(
           `contradiction:merged-operator:${task.id}:${authoritative.number}`,
           `${label} sits in "${task.status?.status}" but ${prName} is already MERGED. ` +
             `Only you move a task out of that status — moving it automatically would bury the handoff. Worth a look.`,
-          { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what: `${label}: merged PR under an operator status` }
+          {
+            repaired,
+            unchecked,
+            postBus,
+            commentOn,
+            alreadyFlagged,
+            recordFlagged,
+            isLive,
+            what: `${label}: merged PR under an operator status`,
+            ticketComment: {
+              taskId: task.id,
+              text: `**${prName} for this ticket is already MERGED, and this ticket is still "${task.status?.status}".**\n\n`
+                + 'The work is on `main` and `main` auto-deploys, so it is live. Nothing further is going to happen '
+                + 'here on its own: only Dane moves a ticket out of an operator status, and the reconciler will not '
+                + 'do it for him — moving it automatically would bury whatever hand-off the status is holding.\n\n'
+                + '**Dane** moves this to Live, or **an agent session** asks him to. Until one of those happens this '
+                + 'is finished work that does not appear on the deploy list.\n\n'
+                + '(Automatic — npm run reconcile. Posted once; it will not repeat while nothing changes.)',
+            },
+          }
         );
       }
       continue;
@@ -359,25 +386,79 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
   }
 }
 
-/** Post a contradiction to the bus once per unchanged state; dry-run proposes. */
+/**
+ * Post a contradiction once per unchanged state; dry-run proposes.
+ *
+ * `ticketComment` is the DURABLE half (2026-09-03, task 86bbtqpxd). A bus line
+ * is a message in a room; a ticket comment is on the thing the finding is
+ * about. Findings that name one ticket and mean "somebody has to act on THIS"
+ * carry both. It is written FIRST, because it is the one that survives — if
+ * the bus post then fails, the finding is still recorded where it belongs, and
+ * the failure is reported rather than swallowed.
+ *
+ * THE TWO SURFACES DEDUP SEPARATELY, AND THAT IS THE WHOLE POINT (review round
+ * 1 of the same task). There was ONE key, checked before either post, so the
+ * moment the durable half was added it was already suppressed on every ticket
+ * that had ever been flagged to the bus — including 86bbqb08p, a live instance
+ * of exactly the case this comment exists for, whose key was already in
+ * `.git/reconciler-flags.json` from before the feature shipped. The finding
+ * would have stayed a bus line on that ticket forever, which is the condition
+ * being fixed, surviving the fix.
+ *
+ * Splitting the keys also makes each half RECOVERABLE. The single key was
+ * recorded when EITHER surface succeeded, so a ticket comment that threw while
+ * the bus post landed was never retried — reported, but not recoverable. Now
+ * each key is recorded only when its own surface actually carried the finding,
+ * so a failed half is tried again on the next run and a succeeded half is not
+ * repeated.
+ */
 async function flag(key, message, ctx) {
-  const { repaired, unchecked, postBus, alreadyFlagged, recordFlagged, isLive, what } = ctx;
+  const { repaired, unchecked, postBus, commentOn, alreadyFlagged, recordFlagged, isLive, what, ticketComment } = ctx;
   if (!isLive) {
     repaired.push(`[DRY RUN] ${what} — would flag to the bus: ${message}`);
+    if (ticketComment) repaired.push(`[DRY RUN] ${what} — would also comment on task ${ticketComment.taskId} (the durable record)`);
     return;
   }
-  if (alreadyFlagged && alreadyFlagged.has(key)) {
-    // Already posted on an earlier run and nothing changed — not re-posted,
-    // and not silently dropped from the report either.
+
+  // The bus key is the ORIGINAL string, so runs from before the durable half
+  // existed keep suppressing the bus repeat exactly as they did. The ticket
+  // comment gets its own, which no earlier run can have written.
+  const busKey = key;
+  const commentKey = `${key}#ticket-comment`;
+  const wantsComment = Boolean(ticketComment && commentOn);
+  const busDone = Boolean(alreadyFlagged && alreadyFlagged.has(busKey));
+  const commentDone = !wantsComment || Boolean(alreadyFlagged && alreadyFlagged.has(commentKey));
+
+  if (busDone && commentDone) {
+    // Both surfaces carried it on an earlier run and nothing changed — not
+    // re-posted, and not silently dropped from the report either.
     repaired.push(`${what} — already flagged on an earlier run (not re-posted)`);
     return;
   }
+
+  if (wantsComment && !commentDone) {
+    try {
+      await commentOn(ticketComment.taskId, ticketComment.text);
+      recordFlagged(commentKey);
+      repaired.push(`${what} — recorded on the ticket itself`);
+    } catch (err) {
+      unchecked.push(`${what}: contradiction found but the ticket comment FAILED to post — ${err.message} (it will be tried again next run)`);
+    }
+  }
+
+  if (busDone) {
+    // The ticket comment was the outstanding half; say so rather than
+    // reporting a bus post that did not happen.
+    repaired.push(`${what} — already flagged to the bus on an earlier run (not re-posted)`);
+    return;
+  }
+
   try {
     await postBus(BUS_CHANNEL, `[reconciler] ${message}`);
-    recordFlagged(key);
+    recordFlagged(busKey);
     repaired.push(`${what} — flagged to the bus`);
   } catch (err) {
-    unchecked.push(`${what}: contradiction found but could not post to the bus — ${err.message}`);
+    unchecked.push(`${what}: contradiction found but could not post to the bus — ${err.message} (it will be tried again next run)`);
   }
 }
 

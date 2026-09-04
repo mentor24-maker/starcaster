@@ -398,6 +398,24 @@ function moveTaskStatus(taskId, status, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
   });
 }
 
+/**
+ * Comment on a task through the direct door.
+ *
+ * A DURABLE surface, which is why it exists (2026-09-03, task 86bbtqpxd). The
+ * reconciler used to report a contradiction to the bus and nowhere else, so a
+ * finding about one specific ticket competed with every other message in the
+ * room and was read as traffic. A comment lands on the ticket the finding is
+ * ABOUT, where the next reader of that ticket cannot miss it — and it survives
+ * the channel scrolling.
+ */
+function commentOnTask(taskId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
+  return runDirect(['comment', '--task', String(taskId), '--body-file', '-'], {
+    input: text,
+    what: `comment on task ${taskId}`,
+    timeoutMs,
+  });
+}
+
 /** Post to the bus through the direct door (inherits its quota reporting). */
 function postBusMessage(channelId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
   return runDirect(['chat', '--channel', String(channelId), '--body-file', '-'], {
@@ -427,5 +445,6 @@ module.exports = {
   getTaskComments,
   getTaskCommentRecords,
   moveTaskStatus,
+  commentOnTask,
   postBusMessage,
 };
