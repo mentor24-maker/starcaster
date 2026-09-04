@@ -1,3 +1,32 @@
+## 2026-09-04 — Move a whole batch of pages onto a different template in one go (#602)
+
+Builder: Pages now has a fourth button above the table — **Change Template**.
+Filter the list down to one template, tick the box at the top-left of the table
+to select everything showing, pick a new template, and all of those pages move
+onto it at once. Each one is rebuilt with the new template's layout, which is
+what you asked for when this was specced: not just relabelling the pages, but
+actually re-pouring them.
+
+That is a destructive thing to do to a page — it is the same operation that
+emptied 35 sections off the Delray home page back in August — so two things
+happen automatically and cannot be switched off. First, an archive of your
+pages is saved *before* a single page is touched; if that archive cannot be
+saved, nothing changes at all and it tells you so. Second, every page is read
+back after it is written and the message tells you how many came back correct,
+rather than trusting that the save worked. Undo is the Archives button: open
+the archive it just made and click Restore All. One caveat the dialog now
+states plainly — that archive holds *all* your pages, so restoring it also
+rolls back any other page edits made after it was taken.
+
+The list of templates you can move pages onto is deliberately shorter than the
+one in the filter dropdown at the top of the column. The filter is for looking;
+this is for writing. Three kinds of entry in that filter would have destroyed
+pages rather than re-templated them: a built-in placeholder that has no layout
+at all, the "starter" templates whose layouts only exist inside the browser,
+and your email templates, which are not page layouts. The picker offers your
+real, saved page templates and nothing else, and if a project has none it says
+so instead of showing you an empty box.
+
 ## 2026-09-04 — The Pages list stops claiming every page uses the same template (#598)
 
 On Builder: Pages, the Template column said "Standard Right-Form" on every
