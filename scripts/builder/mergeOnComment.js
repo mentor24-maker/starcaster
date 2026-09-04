@@ -1351,6 +1351,70 @@ function cannotTellRun({ prev, verdict, isCannotTell, now = Date.now(), threshol
   };
 }
 
+/**
+ * Does this waiting verdict READ as a cannot-tell?
+ *
+ * The bound is calibrated on a measured population — every
+ * `MERGE WAITING ... CANNOT TELL` line in the relay's launchd log (see
+ * CANNOT_TELL_STALE_MS) — and this predicate is what selects that same
+ * population at runtime. Matching the marker rather than the prose around it
+ * is deliberate: the reasons get reworded constantly (three tickets reworded
+ * one of them in a fortnight), and a threshold measured on one population and
+ * applied to a wider one is the calibration error the ticket warned about in
+ * both directions.
+ *
+ * TWO CALLERS PASS `true` WITHOUT ASKING THIS, and they are right to: the
+ * failed `gh pr view` and the unparseable-JSON paths KNOW no reading was taken
+ * — that is the ticket's own "a rate-limited read" — while their reason text
+ * predates the marker. Where the code knows, the code says so; where only the
+ * verdict knows, this asks it. What no caller may do is leave the question
+ * unanswered, which is why every `outcome: 'waiting'` return is checked by a
+ * source assertion in the test file.
+ */
+function readsAsCannotTell(reason) {
+  return /CANNOT TELL/.test(String(reason == null ? '' : reason));
+}
+
+/**
+ * The one message a bounded CANNOT TELL run gets to send.
+ *
+ * It says, in this order, the four things the ticket asked for and the one
+ * thing that makes them actionable: how long, how many passes, the verdict
+ * VERBATIM (never a summary — the wording is the diagnosis), who wrote this
+ * and from which machine, and what a person can actually do about it.
+ *
+ * It also says what it did NOT do. Every non-goal on the ticket is a thing a
+ * reader will otherwise assume happened: nothing was merged, nothing was
+ * refused, auto-merge was not cancelled, and the operator's approval is
+ * untouched. A message that leaves that ambiguous is the 86bbqw49y defect —
+ * an automated note that let the reader infer a merge decision it never made.
+ */
+function cannotTellEscalation({ label, taskUrl, pr, prUrl, decision, node, at } = {}) {
+  const machine = node ? `on ${node}` : 'on an unnamed machine';
+  const prBit = pr ? `PR #${pr}` : 'this pull request';
+  const when = at ? ` at ${at}` : '';
+  const body = [
+    `**Stuck on the same answer — ${prBit} has not moved.**`,
+    '',
+    decision.reason,
+    '',
+    'What a person can do: read the pull request on GitHub and find out which of '
+    + 'the two disagreeing sources is right — the checks, the mergeability, the '
+    + 'branch protection. If it needs a push, it needs an agent session; if it '
+    + 'needs nothing, it will clear on its own and this goes quiet by itself.',
+    '',
+    `Auto-merge is exactly as it was and the merge command still stands. ${prUrl || ''}`.trim(),
+    '',
+    `(Automatic — bus-relay merge step, ${machine}${when}.)`,
+  ].join('\n');
+
+  const bus = `[CC-starcaster bus-relay] MERGE STUCK — ${label}${taskUrl ? ` (${taskUrl})` : ''}: `
+    + `${decision.reason} Written by the bus-relay merge step ${machine}.`
+    + `${prUrl ? `\n\n${prUrl}` : ''}`;
+
+  return { body, bus };
+}
+
 module.exports = {
   REFUSAL_CODES: R,
   classifyRefusal,
@@ -1360,6 +1424,8 @@ module.exports = {
   AUTO_MERGE_STALE_MS,
   CANNOT_TELL_STALE_MS,
   cannotTellRun,
+  readsAsCannotTell,
+  cannotTellEscalation,
   autoMergeDecision,
   autoMergeArmedTooLong,
   mergedElsewhereNotice,

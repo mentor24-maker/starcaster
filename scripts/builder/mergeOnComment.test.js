@@ -1556,3 +1556,116 @@ test('the bound never changes a merge decision — the ticket\'s non-goals', () 
     assert.ok(!(key in out), `cannotTellRun returned "${key}" — it must not influence the merge decision`);
   }
 });
+
+// ── The wiring half of task 86bbuvd50 ──────────────────────────────────────
+//
+// The decision function above shipped in PR #604 and the relay did not call
+// it, so the loop was still unbounded in production. These are the tests that
+// stop that shipping inert a second time.
+
+test('readsAsCannotTell selects the population the threshold was measured on', () => {
+  assert.equal(mergeOnComment.readsAsCannotTell('CANNOT TELL — GitHub and git disagree'), true);
+  assert.equal(mergeOnComment.readsAsCannotTell(
+    'CANNOT TELL — GitHub reported a merge state this gate does not know how to read'), true);
+  // Ordinary waits are NOT cannot-tells. A threshold measured on one
+  // population and applied to a wider one is the calibration error the ticket
+  // named — an alarm on every routine six-minute CI wait teaches everyone to
+  // ignore it, which is the silent failure wearing a louder coat.
+  assert.equal(mergeOnComment.readsAsCannotTell('the checks are still running'), false);
+  assert.equal(mergeOnComment.readsAsCannotTell(
+    'the review gate is stale but this pass has no wait budget left — the next pass re-runs it'), false);
+  for (const empty of [null, undefined, '', 0]) {
+    assert.equal(mergeOnComment.readsAsCannotTell(empty), false, `${String(empty)} is not a verdict`);
+  }
+  // Lower case is not the marker. The dialect is shouted on purpose across
+  // this repo, and matching loosely would catch the prose ABOUT cannot-tells.
+  assert.equal(mergeOnComment.readsAsCannotTell('this gate cannot tell which check failed'), false);
+});
+
+test('the escalation says the four things the ticket asked for', () => {
+  const decision = mergeOnComment.cannotTellRun({
+    prev: { reason: 'CANNOT TELL — github and git disagree', firstSeenAt: 1_700_000_000_000, passes: 8, escalatedAt: null },
+    verdict: 'CANNOT TELL — github and git disagree',
+    isCannotTell: true,
+    now: 1_700_000_000_000 + 127 * 60_000,
+  });
+  assert.equal(decision.escalate, true);
+  const { body, bus } = mergeOnComment.cannotTellEscalation({
+    label: '"A stuck ticket" (86bbuvd50)',
+    taskUrl: 'https://app.clickup.com/t/86bbuvd50',
+    pr: 604,
+    prUrl: 'https://github.com/mentor24-maker/starcaster/pull/604',
+    decision,
+    node: 'mac-mini',
+    at: '9:14pm',
+  });
+  for (const text of [body, bus]) {
+    assert.match(text, /2h 7m/, 'the elapsed time');
+    assert.match(text, /9 pass\(es\)/, 'the count');
+    assert.match(text, /"CANNOT TELL — github and git disagree"/, 'the verdict VERBATIM, not a summary');
+    assert.match(text, /mac-mini/, 'the machine');
+    assert.match(text, /bus-relay merge step/, 'the actor');
+  }
+  assert.match(body, /PR #604/);
+  assert.ok(bus.includes('https://github.com/mentor24-maker/starcaster/pull/604'), 'the bus line links the PR');
+  assert.ok(bus.includes('https://app.clickup.com/t/86bbuvd50'), 'and the ticket');
+});
+
+test('the escalation states what it did NOT do, both surfaces', () => {
+  // Every non-goal is something a reader will otherwise assume happened. An
+  // automated note that lets the reader infer a merge decision it never made
+  // is the 86bbqw49y defect.
+  const decision = {
+    reason: 'This pull request has answered the same way for 1h 40m across 6 pass(es) and has not moved: "x". '
+      + 'Nothing was merged, refused or cancelled by this message.',
+    heldMs: 100 * 60_000,
+  };
+  const { body } = mergeOnComment.cannotTellEscalation({ label: 'L', decision, node: 'mac-mini' });
+  assert.match(body, /Nothing was merged, refused or cancelled/);
+  assert.match(body, /Auto-merge is exactly as it was/);
+  assert.doesNotMatch(body, /Nothing was merged, refused or cancelled[\s\S]*Nothing was merged, refused or cancelled/,
+    'said once, not twice — the sentence is the decision function\'s and must not be duplicated around it');
+});
+
+test('an escalation with nothing to name still names the machine gap out loud', () => {
+  const { body, bus } = mergeOnComment.cannotTellEscalation({
+    label: 'L', decision: { reason: 'stuck', heldMs: 1 },
+  });
+  assert.match(body, /on an unnamed machine/, 'an unknown machine is stated, never silently omitted');
+  assert.match(bus, /on an unnamed machine/);
+  assert.match(body, /this pull request/, 'and a missing PR number reads as prose, not "PR #undefined"');
+});
+
+// ── Source assertions: this must not ship inert ────────────────────────────
+
+const RELAY_SRC = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+
+test('the relay actually CALLS the bound — the whole defect of the first slice', () => {
+  assert.match(RELAY_SRC, /mergeOnComment\.cannotTellRun\(/,
+    'the decision function shipped once already with no caller; a bound nothing calls is the bug it fixes');
+  assert.match(RELAY_SRC, /cannotTellEscalation\(/, 'and the escalation must be built');
+  assert.match(RELAY_SRC, /ledgerAfterCannotTell\(/, 'and the run must be persisted, or it resets every pass');
+});
+
+test('EVERY waiting verdict the merge step returns answers the cannot-tell question', () => {
+  // A new waiting path that forgets the field is not a syntax error and no
+  // behavioural test would catch it: `Boolean(undefined)` is false, so the
+  // path would simply never be counted, silently, forever. That is this
+  // ticket's own bug reappearing through a route it did not cover.
+  const waits = RELAY_SRC.split('\n').filter((l) => l.includes("outcome: 'waiting'"));
+  assert.ok(waits.length >= 9, `expected the merge step's waiting returns, found ${waits.length}`);
+  for (const line of waits) {
+    assert.ok(/cannotTell:/.test(line), `a waiting return with no cannotTell verdict:\n  ${line.trim()}`);
+    assert.ok(/pr:/.test(line), `a waiting return that does not name its PR:\n  ${line.trim()}`);
+  }
+});
+
+test('a rehearsal does not stamp the escalation clock', () => {
+  // `throughput --dry-run` had exactly this defect: a rehearsal muted the real
+  // alarm. Here it would spend the one escalation a run is allowed on a
+  // message nobody was sent.
+  const block = RELAY_SRC.slice(RELAY_SRC.indexOf('The bound on CANNOT TELL'));
+  const upToLoopEnd = block.slice(0, block.indexOf('MERGE STUCK escalated on'));
+  assert.match(upToLoopEnd, /if \(dryRun\) \{[\s\S]*?would escalate a stuck merge[\s\S]*?continue;/,
+    'the dry-run branch must return before any write or any stamp');
+});

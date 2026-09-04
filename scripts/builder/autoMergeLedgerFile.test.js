@@ -7,7 +7,10 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { readLedgerFile, writeLedgerFile, saveLedgerIfReadable } = require('./autoMergeLedgerFile');
-const { asLedger, ledgerAfterSwitch, killSwitchState, switchSignalsFromLedger } = require('./autoMergeLane');
+const {
+  asLedger, ledgerAfterSwitch, killSwitchState, switchSignalsFromLedger, ledgerAfterCannotTell,
+} = require('./autoMergeLane');
+const { cannotTellRun } = require('./mergeOnComment');
 
 /**
  * Review round 2 on task 86bbkw2au (2026-08-30): a corrupt ledger was being
@@ -74,4 +77,165 @@ test('a clean read saves normally, and a missing path is refused', () => {
   assert.equal(saveLedgerIfReadable(read, ledger).ok, true);
   assert.deepEqual(readLedgerFile(file).ledger, ledger);
   assert.equal(saveLedgerIfReadable({ ok: true, file: null }, ledger).ok, false);
+});
+
+// ── The CANNOT TELL run survives a round trip (2026-09-04, task 86bbuvd50) ──
+//
+// THIS IS THE TEST THE WHOLE SECOND HALF OF THE TICKET TURNED ON, and it is
+// here rather than in autoMergeLane.test.js because only a real write and a
+// real read back can catch what it catches. `asLedger` REBUILDS the ledger
+// from a fixed list of keys, so an unnamed key is dropped on every read — the
+// counter would reset every pass, the bound would never be reached, and every
+// in-memory test would still pass. The first pass on this ticket stopped at
+// exactly this trap and wrote it down rather than guessing past it.
+
+test('a stored CANNOT TELL run survives write-then-read — the whitelist test', () => {
+  const file = path.join(dir(), 'ledger.json');
+  const run = { pr: 604, reason: 'CANNOT TELL — github and git disagree', firstSeenAt: T0, passes: 5, escalatedAt: null };
+  const ledger = ledgerAfterCannotTell(asLedger(null), '86bbuvd50', run);
+  assert.equal(writeLedgerFile(ledger, file).ok, true);
+
+  const back = readLedgerFile(file);
+  assert.equal(back.ok, true);
+  assert.deepEqual(back.ledger.cannotTell['86bbuvd50'], run,
+    'the run came back changed or empty — asLedger is a whitelist, so a new key must be named in it');
+});
+
+test('an escalated run keeps its escalatedAt across the pass boundary, so it stays quiet', () => {
+  // The quiet half of the bound is only real if the stamp PERSISTS. In memory
+  // it always does; on disk it does only because the key is whitelisted.
+  const file = path.join(dir(), 'ledger.json');
+  const escalated = { pr: 7, reason: 'CANNOT TELL — x', firstSeenAt: T0, passes: 9, escalatedAt: T0 + 90 * 60_000 };
+  assert.equal(writeLedgerFile(ledgerAfterCannotTell(asLedger(null), 't1', escalated), file).ok, true);
+  assert.equal(readLedgerFile(file).ledger.cannotTell.t1.escalatedAt, T0 + 90 * 60_000);
+});
+
+test('a cleared run leaves NO residue on disk', () => {
+  const file = path.join(dir(), 'ledger.json');
+  const stuck = ledgerAfterCannotTell(asLedger(null), 't1', { pr: 7, reason: 'r', firstSeenAt: T0, passes: 3, escalatedAt: null });
+  assert.equal(writeLedgerFile(stuck, file).ok, true);
+  const cleared = ledgerAfterCannotTell(readLedgerFile(file).ledger, 't1', null);
+  assert.equal(writeLedgerFile(cleared, file).ok, true);
+  assert.deepEqual(readLedgerFile(file).ledger.cannotTell, {},
+    'a resolved wobble must not leave the next block starting half-way to an alarm');
+});
+
+test('the runs ride alongside the rate cap and the switch, never over them', () => {
+  // One file, several independent records. A write of one must not blank another.
+  const file = path.join(dir(), 'ledger.json');
+  const stopped = ledgerAfterSwitch(asLedger(null), { kind: 'stop', at: T0, where: 'on the party line' });
+  const both = ledgerAfterCannotTell(stopped, 't1', { pr: 7, reason: 'r', firstSeenAt: T0, passes: 1, escalatedAt: null });
+  assert.equal(writeLedgerFile(both, file).ok, true);
+  const back = readLedgerFile(file).ledger;
+  assert.equal(back.switch.kind, 'stop', 'the persisted stop must survive a cannot-tell write');
+  assert.equal(back.cannotTell.t1.passes, 1);
+});
+
+test('junk in the stored runs is dropped, never thrown on', () => {
+  for (const junk of [null, 'a string', 42, ['an array']]) {
+    assert.deepEqual(asLedger({ cannotTell: junk }).cannotTell, {}, `cannotTell: ${JSON.stringify(junk)}`);
+  }
+  assert.deepEqual(asLedger({ cannotTell: { good: { reason: 'r' }, bad: 'not an object', worse: null } }).cannotTell,
+    { good: { pr: null, reason: 'r', firstSeenAt: undefined, passes: undefined, escalatedAt: null } },
+    'one bad entry must not take the good ones with it');
+});
+
+/**
+ * THE END-TO-END PROOF, and the one thing neither half could show alone.
+ *
+ * The decision function is pure and its tests build `prev` in memory; the
+ * round-trip tests above write a record and read it back. Only both together
+ * answer the question the ticket actually asked — does the relay say this
+ * ONCE across real pass boundaries? — because the quiet depends entirely on an
+ * `escalatedAt` surviving a file it is read out of ten minutes later.
+ *
+ * This drives the same loop the relay runs: read the ledger, decide, write it
+ * back, repeat, on a real file, at the relay's real ten-minute cadence.
+ */
+function drivePasses({ file, taskId, pr, verdicts, startAt, everyMs = 10 * 60_000 }) {
+  const posts = [];
+  verdicts.forEach((v, i) => {
+    const now = startAt + i * everyMs;
+    const read = readLedgerFile(file);
+    const stored = read.ledger.cannotTell[taskId] || null;
+    const samePr = !stored || stored.pr == null || Number(stored.pr) === Number(pr);
+    const run = cannotTellRun({
+      prev: samePr ? stored : null,
+      verdict: v === null ? '' : v,
+      isCannotTell: v !== null,
+      now,
+    });
+    if (run.escalate) posts.push({ pass: i + 1, atMs: now, reason: run.reason });
+    const next = run.next ? { ...run.next, pr } : null;
+    assert.equal(saveLedgerIfReadable(read, ledgerAfterCannotTell(read.ledger, taskId, next)).ok, true);
+  });
+  return posts;
+}
+
+const STUCK = 'CANNOT TELL — GitHub reports this branch as CONFLICTING, but git merges it cleanly';
+
+test('ACROSS REAL PASSES: an unchanging cannot-tell escalates exactly once, then goes quiet', () => {
+  const file = path.join(dir(), 'ledger.json');
+  // Twenty passes, ten minutes apart: three hours and ten minutes of the same
+  // answer. That is the shape of the 2026-09-04 blocks, which ran 2h07m to
+  // 2h39m before an agent session unstuck them.
+  const posts = drivePasses({ file, taskId: 't1', pr: 604, verdicts: Array(20).fill(STUCK), startAt: T0 });
+
+  assert.equal(posts.length, 1, `escalated ${posts.length} times — the bound must speak once, not once per pass`);
+  // Ten-minute passes, so the first pass at or past 90 minutes is the tenth.
+  assert.equal(posts[0].pass, 10);
+  assert.equal(posts[0].atMs - T0, 90 * 60_000, 'and not a pass earlier — 90 minutes is the measured threshold');
+  assert.match(posts[0].reason, /1h 30m/);
+  assert.match(posts[0].reason, /10 pass\(es\)/);
+  // Passes 11 through 20 — the ticket asked specifically for a sixth, seventh
+  // and eighth silent pass; this is ten of them.
+  assert.equal(readLedgerFile(file).ledger.cannotTell.t1.passes, 20, 'it keeps counting while silent');
+});
+
+test('ACROSS REAL PASSES: a CHANGED verdict resets the clock and may escalate on its own merits', () => {
+  const file = path.join(dir(), 'ledger.json');
+  const posts = drivePasses({
+    file,
+    taskId: 't1',
+    pr: 604,
+    // Stuck for two hours (escalates once), then a DIFFERENT wall for two more.
+    verdicts: [...Array(12).fill(STUCK), ...Array(12).fill('CANNOT TELL — a required check has never reported')],
+    startAt: T0,
+  });
+  assert.equal(posts.length, 2, 'a new fact deserves its own message');
+  assert.equal(posts[0].pass, 10);
+  assert.equal(posts[1].pass, 22, 'the second run started its own 90-minute clock at the change');
+  assert.match(posts[1].reason, /a required check has never reported/);
+});
+
+test('ACROSS REAL PASSES: a verdict that CLEARS leaves no residue — the next block starts from zero', () => {
+  const file = path.join(dir(), 'ledger.json');
+  const posts = drivePasses({
+    file,
+    taskId: 't1',
+    pr: 604,
+    // Stuck 80 minutes (never escalates), clears, then stuck again with the
+    // SAME wording. If the first run leaked, the second would alarm at once.
+    verdicts: [...Array(8).fill(STUCK), null, ...Array(8).fill(STUCK)],
+    startAt: T0,
+  });
+  assert.deepEqual(posts, [], 'neither run reached 90 minutes, so nothing may be said');
+  const run = readLedgerFile(file).ledger.cannotTell.t1;
+  assert.equal(run.passes, 8, 'the second run counted from one, not from nine');
+});
+
+test('ACROSS REAL PASSES: a new PR on the same ticket is a new block, not a continuing one', () => {
+  const file = path.join(dir(), 'ledger.json');
+  // Two hours stuck on #604 — escalated. The PR is closed and reopened as
+  // #605, same wording. That branch has been stuck for one pass, not twelve.
+  drivePasses({ file, taskId: 't1', pr: 604, verdicts: Array(12).fill(STUCK), startAt: T0 });
+  const before = readLedgerFile(file).ledger.cannotTell.t1;
+  assert.ok(before.escalatedAt, 'the first block did escalate');
+
+  const posts = drivePasses({ file, taskId: 't1', pr: 605, verdicts: Array(3).fill(STUCK), startAt: T0 + 200 * 60_000 });
+  assert.deepEqual(posts, [], 'thirty minutes on a fresh PR is not an alarm');
+  const after = readLedgerFile(file).ledger.cannotTell.t1;
+  assert.equal(after.pr, 605);
+  assert.equal(after.passes, 3, 'the count restarted with the pull request');
+  assert.equal(after.escalatedAt, null, 'and the old escalation did not silence the new block');
 });
