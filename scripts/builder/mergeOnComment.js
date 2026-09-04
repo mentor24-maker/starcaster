@@ -1220,6 +1220,137 @@ function mergedElsewhereNotice({ commentId, pr, mergedAt, armed }) {
   };
 }
 
+
+/**
+ * How long one unchanging CANNOT TELL may repeat before somebody is told.
+ *
+ * MEASURED, NOT CHOSEN (2026-09-04, task 86bbuvd50 — and the ticket asked for
+ * this explicitly, because the 2026-09-02 recency-alarm proposal died of a
+ * number picked from a single incident).
+ *
+ * Every `MERGE WAITING ... CANNOT TELL` line in the relay's own launchd log,
+ * grouped by ticket, first sighting to last:
+ *
+ *   86bbugcpa   16 lines   09:23 -> 12:02   2h39m   an agent session unstuck it
+ *   86bbuvcwc   16 lines   09:55 -> 12:33   2h38m   an agent session unstuck it
+ *   86bbpz1hu   13 lines   10:37 -> 12:44   2h07m   an agent session unstuck it
+ *   86bbtqpxd    6 lines   23:56 -> 00:50     54m   cleared on its own
+ *   86bbpz1gd    4 lines   14:20 -> 15:04     44m   cleared on its own
+ *   86bbugzep    2 lines   16:04 -> 16:44     40m   cleared on its own
+ *   86bbugeda    2 lines   08:40 -> 08:50     10m   cleared on its own
+ *   86bbqz7rg    1 line                        —    cleared on its own
+ *   86bbjt1b0    1 line                        —    cleared on its own
+ *
+ * **Nothing sits between 54 minutes and 2h07m.** That empty gap chose the
+ * threshold, the same way DOCTRINE 6.22's did. Ninety minutes is above every
+ * run that has ever resolved itself and below every run that has ever needed
+ * hands, with roughly half an hour of margin on each side.
+ *
+ * MEASURED IN TIME, NOT IN PASSES, and that is deliberate. A ticket only
+ * produces a line on passes where the relay actually looks at it — 86bbugzep's
+ * two lines span forty minutes, not twenty — so a pass count is not a clock.
+ * The count is still reported, because it is what a reader wants to see; it is
+ * simply not what the decision turns on.
+ *
+ * DO NOT UNIFY THIS WITH `pipelinePause.STRANDED_AFTER_MS`, which is also 90
+ * minutes. The equality is a coincidence of two independent measurements: that
+ * one bounds how long a BUILD PASS may legitimately take, this one bounds how
+ * long GitHub may legitimately be undecided. They will move for different
+ * reasons, and a future reader tidying them into one constant would couple two
+ * unrelated clocks — the drift failure this repo already carries three
+ * comments about.
+ */
+const CANNOT_TELL_STALE_MS = 90 * 60 * 1000;
+
+/**
+ * Should this repeated CANNOT TELL be escalated, and has it already been?
+ *
+ * PURE. The caller owns reading and writing `prev` (the per-PR ledger entry);
+ * this only decides. That split is why the quiet-after-escalating rule can be
+ * tested without a ledger, a relay pass or a clock.
+ *
+ * WHAT THIS DOES NOT DO (the ticket's non-goals, restated where they can be
+ * violated): it never claims a conflict, never refuses a merge and never
+ * cancels auto-merge. CANNOT TELL is a CORRECT verdict — only its silence was
+ * wrong. Every branch below returns the same `verdict` it was handed.
+ *
+ * @param {object|null} prev   the stored run: { reason, firstSeenAt, passes, escalatedAt }
+ * @param {string} verdict     this pass's reason text, verbatim ('' if not a cannot-tell)
+ * @param {boolean} isCannotTell  whether this pass's verdict is a cannot-tell at all
+ * @returns {{ state:'clear'|'new'|'holding'|'escalate'|'quiet', next:object|null, escalate:boolean, reason?:string }}
+ */
+function cannotTellRun({ prev, verdict, isCannotTell, now = Date.now(), thresholdMs = CANNOT_TELL_STALE_MS } = {}) {
+  // Not a cannot-tell this pass — the block is over, whatever it was. Returning
+  // `next: null` is what leaves NO RESIDUE: a resolved wobble must not make the
+  // next unrelated block start half-way to an alarm.
+  if (!isCannotTell) return { state: 'clear', next: null, escalate: false };
+
+  const reason = String(verdict || '').trim();
+  const previous = prev && typeof prev === 'object' ? prev : null;
+
+  // A DIFFERENT cannot-tell is a different fact, so the clock restarts and the
+  // new run may escalate later on its own merits. Comparing the reason text is
+  // what makes "still the same wall" different from "a new wall every pass".
+  if (!previous || String(previous.reason || '') !== reason) {
+    return {
+      state: 'new',
+      next: { reason, firstSeenAt: now, passes: 1, escalatedAt: null },
+      escalate: false,
+    };
+  }
+
+  // A POSITIVE FINITE NUMBER, nothing looser. `Number(null)` is 0 and 0 is
+  // finite, so a plain `Number.isFinite` check would read a null timestamp as
+  // the epoch — making heldMs about 56 years and escalating instantly on a
+  // corrupt record. The test for this caught it; the noisy direction is as
+  // wrong as the silent one.
+  const rawFirst = previous.firstSeenAt;
+  const firstSeenAt = typeof rawFirst === 'number' && Number.isFinite(rawFirst) && rawFirst > 0
+    ? rawFirst
+    : NaN;
+  const passes = Number(previous.passes || 0) + 1;
+
+  // An unreadable stored timestamp is NOT read as "just started" — that would
+  // make the alarm unreachable forever, which is this ticket's own bug wearing
+  // a different hat (and exactly what task 86bbu60ax found in the claim reader
+  // on 2026-09-04). It restarts the clock and says so by leaving escalatedAt
+  // null, so the next pass can still get there.
+  if (!Number.isFinite(firstSeenAt)) {
+    return {
+      state: 'new',
+      next: { reason, firstSeenAt: now, passes: 1, escalatedAt: null },
+      escalate: false,
+    };
+  }
+
+  const heldMs = Number(now) - firstSeenAt;
+  const carried = { reason, firstSeenAt, passes, escalatedAt: previous.escalatedAt || null };
+
+  // ESCALATED ALREADY — the whole point of the bound. It stays silent until the
+  // verdict changes or clears, both of which are handled above. Without this
+  // branch the fix would post every ten minutes forever, which is the failure
+  // REPORTING-NEEDS-A-READER clause 2 names: one noisy escalation beats 820
+  // silent ones, and N escalations beat neither.
+  if (previous.escalatedAt) return { state: 'quiet', next: carried, escalate: false };
+
+  if (heldMs < Number(thresholdMs)) return { state: 'holding', next: carried, escalate: false };
+
+  const hours = Math.floor(heldMs / 3_600_000);
+  const mins = Math.round((heldMs % 3_600_000) / 60_000);
+  const held = hours ? `${hours}h ${mins}m` : `${mins}m`;
+  return {
+    state: 'escalate',
+    next: { ...carried, escalatedAt: now },
+    escalate: true,
+    heldMs,
+    reason:
+      `This pull request has answered the same way for ${held} across ${passes} pass(es) and has not moved: `
+      + `"${reason}" — a verdict that repeats without changing is not a momentary wobble, and nothing on `
+      + 'this side will say so again until it changes or clears. It needs an agent session or Dane to look. '
+      + 'Nothing was merged, refused or cancelled by this message.',
+  };
+}
+
 module.exports = {
   REFUSAL_CODES: R,
   classifyRefusal,
@@ -1227,6 +1358,8 @@ module.exports = {
   refusalNeeds,
   IN_PASS_WAIT_MS,
   AUTO_MERGE_STALE_MS,
+  CANNOT_TELL_STALE_MS,
+  cannotTellRun,
   autoMergeDecision,
   autoMergeArmedTooLong,
   mergedElsewhereNotice,
