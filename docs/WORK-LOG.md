@@ -1,3 +1,34 @@
+## 2026-09-04 — A merge that gets stuck now says so once, instead of forever (#606)
+
+When you say "merge" on a ticket, a background job picks it up and tries. If
+GitHub gives an answer it cannot make sense of, that job says so in its log and
+tries again on the next pass, ten minutes later. Sometimes it can never make
+sense of the answer, and the job would repeat itself in exactly the same words
+forever — five identical passes over fifty minutes on 4 September, while you
+had said "merge" nearly an hour earlier and had to ask what was happening.
+Nothing counted the repeats and nothing ever said "this is the fifth time",
+so a block that would never clear on its own looked precisely like one about
+to clear on the next try.
+
+Now it keeps count. If the same unresolvable answer comes back for ninety
+minutes, you get one message — on the ticket and on the party line — saying how
+long it has been stuck, how many tries that was, exactly what the answer said,
+and which machine is telling you. Then it goes quiet until something actually
+changes. It does not nag, and when the block clears it forgets it ever
+happened, so the next one starts from zero.
+
+The ninety minutes was measured, not guessed. Every stuck run in the job's own
+history was listed: the ones that sorted themselves out took up to 54 minutes,
+and the ones that needed somebody to step in took 2 hours or more. Nothing at
+all sits in between, and ninety minutes sits in that empty gap — late enough
+that an ordinary wait never trips it, early enough that a real block does not
+sit unmentioned for half a day.
+
+Half of this shipped a few hours earlier (#604) and deliberately stopped short:
+the part that remembers the count between tries sat behind a trap that would
+have made it forget every time, silently, with every test still passing. That
+trap is closed here, and the test that would have caught it is in place.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
