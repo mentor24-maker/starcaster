@@ -436,7 +436,7 @@ function unmetProtectionRule(pr) {
  * and names what it saw (DOCTRINE 3.11) — never a pass, and never a plausible
  * reason, for a question that could not be answered.
  */
-function githubGate(pr) {
+function githubGate(pr, { gitCrossCheck = null } = {}) {
   const state = String((pr && pr.state) || '').toUpperCase();
   if (state === 'MERGED') return { action: 'refuse', reason: 'the PR is already merged' };
   if (state !== 'OPEN') return { action: 'refuse', reason: `the PR is ${state || 'in an unknown state'}, not open` };
@@ -449,8 +449,51 @@ function githubGate(pr) {
   // Conflicts first: a CONFLICTING PR cannot be helped by updating the
   // branch, and update-branch on one is exactly the "resolve it blind" this
   // must never do.
+  //
+  // ONE ASYNCHRONOUS READING IS NOT A SETTLED FACT (2026-09-03, task
+  // 86bbupfgn). On 2026-09-03 PR #567 read CONFLICTING/DIRTY from two
+  // different GitHub endpoints five minutes apart, while `git merge-tree`
+  // said clean and the real merge brought 16 commits across with zero
+  // conflicts. The gate handed the ticket to an agent session — of which
+  // none was watching — so a green, approved PR simply stopped, and the
+  // sentence it stopped with ("the branch conflicts with newer work on
+  // main") was false.
+  //
+  // Note the shape: the UNKNOWN branch below already knows this reading is
+  // computed in the background and can be not-yet-true. DIRTY comes from the
+  // same computation and got no such treatment.
+  //
+  // WHY GitHub said dirty is still unknown, and this code does not guess.
+  // The ticket's leading suspect was a stale computation against an older
+  // base — GitHub reported base_sha 0c6f096b while main was at 9b0056e2 —
+  // and that was MEASURED and does not hold: `git merge-tree --write-tree`
+  // is clean against BOTH commits (verified 2026-09-03 on the real objects).
+  // So the fix deliberately assumes nothing about the cause. It only refuses
+  // to assert a conflict that a second source contradicts.
   if (mergeable === 'CONFLICTING' || mergeStateStatus === 'DIRTY') {
-    return { action: 'conflict', reason: 'the branch conflicts with newer work on main' };
+    const cc = gitCrossCheck;
+    if (cc && cc.known && cc.conflicts === false) {
+      return {
+        action: 'wait',
+        disagreement: true,
+        reason: `CANNOT TELL — GitHub reports this branch as ${mergeable === 'CONFLICTING' ? 'CONFLICTING' : 'DIRTY'}, but git merges ${cc.base || 'main'} into ${cc.head || 'the branch'} cleanly (merge-tree exit 0). The two sources disagree, so no conflict is claimed; the next pass asks again`,
+      };
+    }
+    if (cc && cc.known && cc.conflicts === true) {
+      return {
+        action: 'conflict',
+        reason: 'the branch conflicts with newer work on main — GitHub and git agree',
+      };
+    }
+    // No cross-check available. The hand-off still happens, because an
+    // unverified conflict is not a reason to merge — but the sentence says
+    // what was actually read and what could not be, rather than asserting a
+    // conflict nothing confirmed (DOCTRINE 3.11).
+    return {
+      action: 'conflict',
+      needsGitCrossCheck: true,
+      reason: `GitHub reports this branch as ${mergeable === 'CONFLICTING' ? 'CONFLICTING' : 'DIRTY'}${cc && cc.why ? `, and git could not be consulted (${cc.why})` : ', and this pass did not cross-check it against git'} — treated as a conflict because an unconfirmed conflict is still not something to merge`,
+    };
   }
 
   // GitHub answers UNKNOWN while it is still computing mergeability. That is
