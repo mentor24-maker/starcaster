@@ -1,3 +1,30 @@
+## 2026-09-04 — A pull request that could never merge, saying it was about to (#597)
+
+Every task adds one line to the top of the work log, so any two jobs running at
+once always bump into each other there. Years ago we told git "on that one file,
+just keep both entries" — and git does exactly that. The trouble is that GitHub
+answers two different questions about merging, and only one of them respects
+that instruction. When GitHub actually performs a merge, it obeys. But the little
+"can this be merged?" badge GitHub works out in advance and shows on the pull
+request does not — so a branch that merges perfectly can wear a red CONFLICTING
+badge.
+
+That badge is not just cosmetic. GitHub refuses to auto-merge anything it has
+badged, so the pull request stops dead: every check green, the merge armed, and
+nothing happening. That is what happened to #585 yesterday. You had said
+`merge`. The relay checked, correctly noticed that GitHub and git disagreed,
+declined to call it a conflict — and then told you five times over fifty minutes
+that auto-merge was armed and would land it. It was never going to.
+
+Two changes. The note in the settings file that claimed GitHub honours the
+instruction everywhere now says which question gets which answer. And the relay
+now performs the fix instead of describing it: when GitHub says conflicting and
+git says clean, it merges `main` into the branch and pushes, which clears the
+badge in seconds — exactly what clearing #585 by hand did. It writes a note on
+the ticket when it does, because a machine pushing to your branch on its own
+initiative should never be silent. If the merge turns out to genuinely conflict,
+it aborts and hands off untouched, and it never force-pushes.
+
 ## 2026-09-03 — Three watchdogs saw a stuck ticket and none of them reached you (#586)
 
 A ticket you had already said `merge` on sat in "Ready to launch" for twelve
