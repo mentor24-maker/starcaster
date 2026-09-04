@@ -4260,6 +4260,128 @@ App.builder = (function () {
     }
   }
 
+  // ── Bulk template change ────────────────────────────────────────────────
+  //
+  // The destination list is NOT the Template filter's list. That list is built
+  // for reading and carries three things this write surface cannot accept:
+  // the project's EMAIL templates (builder_page_templates holds both kinds —
+  // 20 of 32 rows in the production copy are email), the starter templates
+  // (whose layouts are assembled here in the browser by
+  // buildStarterModularLayoutSections, so the server cannot resolve one), and
+  // the built-in stub, which the server declares with an EMPTY layout — moving
+  // pages onto it would delete their content rather than change their template.
+  //
+  // getUnifiedModularPageTemplates().saved is the same source the single-page
+  // picker trusts: real, saved, modular page templates, newest first.
+  function getBulkTemplateChangeOptions() {
+    return getUnifiedModularPageTemplates().saved
+      // A template with NO sections is excluded, and this is not belt-and-
+      // braces for the server's identical rule — the page-templates endpoint
+      // INJECTS a built-in stub declared with an empty layout into this very
+      // list, so without this line the fixture project's only offer is the one
+      // destination the server refuses. Applying it would not change a
+      // template; it would delete the content of every selected page.
+      .filter((template) => Array.isArray(template.layoutSections) && template.layoutSections.length)
+      .map((template) => ({
+        value: String(template.id),
+        label: safeText(template.name) || `Template ${template.id}`,
+      }));
+  }
+
+  function openBulkChangeTemplateDialog() {
+    const dialog = byId('builderPagesChangeTemplateDialog');
+    const select = byId('builderPagesChangeTemplateSelect');
+    const countEl = byId('builderPagesChangeTemplateCount');
+    const warningEl = byId('builderPagesChangeTemplateWarning');
+    const confirmBtn = byId('builderPagesChangeTemplateConfirmBtn');
+    if (!dialog || !select || !countEl || !warningEl) return;
+
+    const n = selectedPageIds.size;
+    countEl.textContent = `${n} page${n === 1 ? '' : 's'} selected.`;
+
+    const options = getBulkTemplateChangeOptions();
+    setSelectOptions(select, options, 'Choose a template…');
+    // An empty list is a state, not a failure, and it has to say which — a
+    // dialog with an empty dropdown and no explanation reads as broken.
+    if (!options.length) {
+      warningEl.textContent = 'This project has no saved page templates yet, so there is nothing to move these pages onto. Save a page as a template first.';
+      if (confirmBtn) confirmBtn.disabled = true;
+    } else {
+      warningEl.textContent = 'The sections on these pages will be REPLACED with the chosen template’s layout. Each page keeps its own background and theme. An archive of all your pages is saved first, and Restore All on that archive undoes this — along with any other page edits made after it was taken.';
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
+    if (confirmBtn) confirmBtn.textContent = 'Change Template';
+    dialog.showModal();
+  }
+
+  // Archive first, then change. The order is the whole safety of this
+  // operation: it re-pours every selected page, which is what emptied 35
+  // sections off the Delray home page on 2026-08-14.
+  //
+  // The archive is not best-effort. If it fails, nothing is written and the
+  // failure is what the operator is told. The server refuses the change
+  // without a real snapshot id too — a guard that only lives in the browser is
+  // not a guard.
+  async function runBulkChangeTemplate() {
+    const select = byId('builderPagesChangeTemplateSelect');
+    const confirmBtn = byId('builderPagesChangeTemplateConfirmBtn');
+    const dialog = byId('builderPagesChangeTemplateDialog');
+    const ids = Array.from(selectedPageIds);
+    const pageTemplateId = safeText(select && select.value);
+
+    if (!ids.length) { notify('Select at least one page first', true); return; }
+    if (!pageTemplateId) { notify('Choose a template first', true); return; }
+
+    const templateName = getPagesTableTemplateLabel(pageTemplateId);
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Archiving…'; }
+
+    let snapshotId = '';
+    try {
+      // The label names the REASON, not the contents: the snapshot endpoint
+      // ignores the pages it is sent and archives all of them, so "3 pages"
+      // here would read as an archive holding three.
+      const label = `Before changing the template on ${ids.length} page${ids.length === 1 ? '' : 's'} — ${new Date().toLocaleString()}`;
+      const archive = await api('/api/builder/page-snapshots', {
+        method: 'POST',
+        body: JSON.stringify({ label }),
+      });
+      snapshotId = safeText(archive && archive.snapshot && archive.snapshot.id);
+      if (!snapshotId) throw new Error('The archive did not come back with an id');
+    } catch (err) {
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Change Template'; }
+      notify(`Could not save an archive, so nothing was changed: ${err.message || 'archive failed'}`, true);
+      return;
+    }
+
+    if (confirmBtn) confirmBtn.textContent = 'Changing…';
+    try {
+      const result = await api('/api/builder/landing-pages/bulk-set-template', {
+        method: 'POST',
+        body: JSON.stringify({ pageIds: ids, pageTemplateId, snapshotId }),
+      });
+      const rows = Array.isArray(result.results) ? result.results : [];
+      const failedRows = rows.filter((row) => !row.ok);
+      const unverified = rows.filter((row) => row.ok && !row.verified);
+      if (dialog) dialog.close();
+      await loadSavedPages();
+      renderPagesTable();
+      syncLandingPageTableControls();
+
+      // Three different outcomes, three different sentences. "Saved but could
+      // not be confirmed" is its own answer, not a success and not a failure.
+      if (failedRows.length) {
+        notify(`${rows.length - failedRows.length} of ${rows.length} pages moved to ${templateName}; ${failedRows.length} failed: ${safeText(failedRows[0].error) || 'unknown error'}`, true);
+      } else if (unverified.length) {
+        notify(`${rows.length} pages written to ${templateName}, but ${unverified.length} could not be read back to confirm. Check them before publishing.`, true);
+      } else {
+        notify(`${rows.length} page${rows.length === 1 ? '' : 's'} moved to ${templateName}, all confirmed. Undo from Archives.`);
+      }
+    } catch (err) {
+      notify(err.message || 'Could not change the template', true);
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Change Template'; }
+    }
+  }
+
   async function loadSavedPageTemplates() {
     try {
       const result = await api('/api/builder/page-templates');
@@ -8447,6 +8569,8 @@ App.builder = (function () {
     if (bulkArchiveBtn2) bulkArchiveBtn2.disabled = !selectedPageIds.size;
     const bulkPublishBtn = byId('builderPagesBulkPublishBtn');
     if (bulkPublishBtn) bulkPublishBtn.disabled = !selectedPageIds.size;
+    const bulkChangeTemplateBtn = byId('builderPagesBulkChangeTemplateBtn');
+    if (bulkChangeTemplateBtn) bulkChangeTemplateBtn.disabled = !selectedPageIds.size;
   }
 
   function pageIsPublished(item) {
@@ -13896,6 +14020,26 @@ App.builder = (function () {
           landingPageBulkArchiveBtn.textContent = 'Archive';
         }
       });
+    }
+
+    const landingPageBulkChangeTemplateBtn = byId('builderPagesBulkChangeTemplateBtn');
+    if (landingPageBulkChangeTemplateBtn && !landingPageBulkChangeTemplateBtn.dataset.bound) {
+      landingPageBulkChangeTemplateBtn.dataset.bound = '1';
+      landingPageBulkChangeTemplateBtn.addEventListener('click', () => {
+        if (!selectedPageIds.size) { notify('Select at least one page first', true); return; }
+        openBulkChangeTemplateDialog();
+      });
+    }
+    ['builderPagesChangeTemplateCancelBtn', 'builderPagesChangeTemplateCancelBtn2'].forEach((id) => {
+      const cancelBtn = byId(id);
+      if (!cancelBtn || cancelBtn.dataset.bound) return;
+      cancelBtn.dataset.bound = '1';
+      cancelBtn.addEventListener('click', () => byId('builderPagesChangeTemplateDialog')?.close());
+    });
+    const changeTemplateConfirmBtn = byId('builderPagesChangeTemplateConfirmBtn');
+    if (changeTemplateConfirmBtn && !changeTemplateConfirmBtn.dataset.bound) {
+      changeTemplateConfirmBtn.dataset.bound = '1';
+      changeTemplateConfirmBtn.addEventListener('click', () => runBulkChangeTemplate());
     }
 
     const archiveRestoreAllBtn = byId('builderPageArchiveRestoreAllBtn');
