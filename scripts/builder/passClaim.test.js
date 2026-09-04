@@ -34,6 +34,204 @@ test('the night of 2026-09-01, both shapes, repaired by the next pass', () => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// WHICH SEAT IS ASKING (2026-09-04, task 86bbu60ax).
+//
+// The same command runs in two places that want different answers, and until
+// this ticket they shared one code path with no way to tell them apart. On a
+// timer, "the ticket is in Building" was read as "the pass is dead" — so a
+// build that outlived the half-hour throttle had its LIVE claim revoked, twice
+// in one morning on 86bbqb0ac, while the pass was still building it.
+// ---------------------------------------------------------------------------
+
+const MIN = 60 * 1000;
+const NOW = Date.parse('2026-09-04T12:00:00Z');
+const claimedAgo = (ms) => new Date(NOW - ms).toISOString();
+
+test('a SCHEDULED run leaves a live claim in Building and says why', () => {
+  // Acceptance criterion 1, and the whole point of the ticket. 35 minutes is
+  // the length of the build that was actually interrupted.
+  const d = pc.reconcileDecision({
+    marker: found({ task: '86bbqb0ac', skill: 'loop-build', at: claimedAgo(35 * MIN) }),
+    status: 'Building',
+    trigger: pc.TRIGGER_SCHEDULED,
+    nowMs: NOW,
+  });
+  assert.equal(d.action, 'in-flight', 'a 35-minute-old claim is a slow pass, not a dead one');
+  assert.equal(d.task, '86bbqb0ac');
+  assert.match(d.reason, /35 min/, 'the age is named');
+  assert.match(d.reason, /loop-build/, 'and who holds it');
+  const m = pc.reconcileMessage(d);
+  assert.match(m, /LEFT ALONE/);
+  assert.doesNotMatch(m, /Handed back/, 'the one thing it must never say');
+  assert.equal(pc.reconcileExitCode({ action: d.action }), 0,
+    'nothing was repaired and nothing is wrong — a 3 here would post to the bus every half hour');
+});
+
+test('a SCHEDULED run still hands back a claim past the grace', () => {
+  // Acceptance criterion 2. The schedule is the backstop for when there is no
+  // next pass at all (the runner dead, the Mini rebooted) — it must still work.
+  const d = pc.reconcileDecision({
+    marker: found({ task: '86bbjt1b4', skill: 'loop-build', at: claimedAgo(4 * 60 * MIN) }),
+    status: 'Building',
+    trigger: pc.TRIGGER_SCHEDULED,
+    nowMs: NOW,
+  });
+  assert.equal(d.action, 'handback');
+  assert.equal(d.task, '86bbjt1b4');
+  assert.match(d.reason, /4.0 hours/, 'says how long it sat');
+  assert.equal(pc.reconcileExitCode({ action: d.action, ok: true }), 3);
+  assert.match(pc.reconcileMessage(d, { destination: 'Queued' }), /DROPPED ITS TICKET/,
+    'and the existing note is unchanged');
+});
+
+test('the grace boundary is exact, and the far side is a hand-back', () => {
+  const at = (ms) => pc.reconcileDecision({
+    marker: found({ task: 'a1', at: claimedAgo(ms) }),
+    status: 'Building',
+    trigger: pc.TRIGGER_SCHEDULED,
+    nowMs: NOW,
+  }).action;
+  assert.equal(at(pc.LIVE_CLAIM_GRACE_MS - 1), 'in-flight');
+  assert.equal(at(pc.LIVE_CLAIM_GRACE_MS), 'in-flight', 'exactly at the grace is still inside it');
+  assert.equal(at(pc.LIVE_CLAIM_GRACE_MS + 1), 'handback');
+});
+
+test('the grace is BORROWED from the sweep, not a second number', () => {
+  // Two definitions of "how long may a pass hold a ticket" would drift, and
+  // the drift would be invisible: each looks right on its own.
+  const pipelinePause = require('./pipelinePause.js');
+  assert.equal(pc.LIVE_CLAIM_GRACE_MS, pipelinePause.STRANDED_AFTER_MS);
+  const code = withoutComments(read('scripts/builder/passClaim.js'));
+  assert.doesNotMatch(code, /60\s*\*\s*1000/, 'no hand-rolled duration arithmetic in this module');
+});
+
+test('a claim with no readable date is NOT handed back, and says so', () => {
+  // Acceptance criterion 3. The whole fail-safe direction in one branch: a
+  // ticket repaired late is loud and visible; a ticket built twice is silent.
+  for (const at of [undefined, '', 'yesterday', null, 'NaN']) {
+    const d = pc.reconcileDecision({
+      marker: { found: true, record: { task: 'a1', skill: 'loop-build', at, pid: 1 } },
+      status: 'Building',
+      trigger: pc.TRIGGER_SCHEDULED,
+      nowMs: NOW,
+    });
+    assert.equal(d.action, 'undated', `at=${JSON.stringify(at)} must not authorise a move`);
+    assert.equal(pc.reconcileExitCode({ action: d.action }), 2, '"could not tell" is never 0');
+    assert.match(pc.reconcileMessage(d), /COULD NOT TELL/);
+    assert.doesNotMatch(pc.reconcileMessage(d), /Handed back/);
+  }
+});
+
+test('a claim stamped in the FUTURE reads as young, not as ancient', () => {
+  // Clock skew between two machines is a disagreement, not evidence, and it
+  // must land on the leave-it-alone side. `age > grace` gets this right for
+  // free; `Math.abs(age) > grace` would hand a live claim back.
+  //
+  // THE OFFSET MUST EXCEED THE GRACE. The first version of this test used 30
+  // minutes, and 30 is under the 90-minute grace from either sign — so it
+  // passed with `Math.abs` in place and could not fail. Break-testing found
+  // that; it is the second assertion in this repo that was comparing nothing.
+  const d = pc.reconcileDecision({
+    marker: found({ task: 'a1', at: new Date(NOW + 4 * 60 * MIN).toISOString() }),
+    status: 'Building',
+    trigger: pc.TRIGGER_SCHEDULED,
+    nowMs: NOW,
+  });
+  assert.equal(d.action, 'in-flight', 'a clock four hours ahead is skew, not a four-hour-old claim');
+  assert.doesNotMatch(pc.reconcileMessage(d), /-\d/, 'and never renders a negative age');
+});
+
+test('the PASS seat is unchanged — status alone, whatever the age', () => {
+  // The inference is sound there and only there: the runner is a serial
+  // `while true` loop, so a new pass starting means the previous one ended.
+  // A young claim at the start of a new pass is the 2:06am case (86bbr2jpq):
+  // claimed at 2:06, killed by a usage limit at 2:08.
+  for (const trigger of [undefined, pc.TRIGGER_PASS]) {
+    const d = pc.reconcileDecision({
+      marker: found({ task: '86bbr2jpq', at: claimedAgo(2 * MIN) }),
+      status: 'Building',
+      ...(trigger ? { trigger } : {}),
+      nowMs: NOW,
+    });
+    assert.equal(d.action, 'handback', 'a two-minute-old claim at a new pass is still a dead pass');
+  }
+});
+
+test('an UNRECOGNISED trigger errs toward leaving live work alone', () => {
+  // The safe seat is the one named explicitly, so a typo or a future caller
+  // that forgets lands in the conservative branch rather than the destructive
+  // one. Getting this backwards is how a fail-safe becomes a fail-open.
+  for (const trigger of ['Pass', 'scheduledd', '', null, 0, {}]) {
+    const d = pc.reconcileDecision({
+      marker: found({ task: 'a1', at: claimedAgo(2 * MIN) }),
+      status: 'Building',
+      trigger,
+      nowMs: NOW,
+    });
+    assert.equal(d.action, 'in-flight', `trigger=${JSON.stringify(trigger)} must not hand a live claim back`);
+  }
+});
+
+test('the seat never overrides the earlier branches', () => {
+  // A scheduled run must still do nothing on no marker, clear a resolved one,
+  // and refuse to act on an unreadable status. The trigger only decides what
+  // "Building" means.
+  const sched = (over) => pc.reconcileDecision({ trigger: pc.TRIGGER_SCHEDULED, nowMs: NOW, ...over });
+  assert.equal(sched({ marker: none, status: '' }).action, 'nothing');
+  assert.equal(sched({ marker: found({ task: 'a1', at: claimedAgo(MIN) }), status: 'In review' }).action, 'resolved');
+  assert.equal(sched({ marker: found({ task: 'a1', at: claimedAgo(MIN) }), status: '' }).action, 'unreadable');
+  assert.equal(sched({ marker: { found: true, record: null, why: 'not valid JSON' }, status: 'Building' }).action, 'unreadable');
+});
+
+test('the pid is recorded and read by NOTHING', () => {
+  // The ticket proposed it as the liveness signal. It is the pid of the
+  // short-lived `clickup_direct.mjs claim` process, which exits seconds after
+  // writing the marker — measured on a live claim on 2026-09-04, the marker
+  // for a ticket being actively built named pid 21193, already gone. A probe
+  // on it would call EVERY claim dead (the bug, re-derived), and pid reuse
+  // would occasionally do the reverse and strand a ticket forever.
+  const code = withoutComments(read('scripts/builder/passClaim.js'));
+  const decision = code.slice(code.indexOf('function reconcileDecision'), code.indexOf('function reconcileMessage'));
+  assert.doesNotMatch(decision, /\.pid/, 'the decision must never consult the pid');
+  assert.doesNotMatch(code, /process\.kill|kill\(/, 'and nothing here probes a process');
+  // It stays in the record, for a human reading the file by hand at 3am.
+  assert.equal(pc.claimRecord({ task: 'a1', pid: 21193 }).pid, 21193);
+});
+
+test('the SCHEDULED repair passes the flag — the whole fix is one argument', () => {
+  // The module could be perfect and the bug would remain if the caller did not
+  // say which seat it is in. That argument is the fix.
+  const repair = require('./repair.js');
+  const marker = repair.STEPS.find((s) => s.id === 'marker');
+  assert.deepEqual([...marker.npmArgs], ['clickup', '--', 'pass-reconcile', '--scheduled']);
+
+  const code = withoutComments(read('scripts/clickup_direct.mjs'));
+  const cmd = code.slice(code.indexOf("} else if (cmd === 'pass-reconcile') {"), code.indexOf("} else if (cmd === 'wip-check')"));
+  assert.match(cmd, /flag\('scheduled'\) \? passClaim\.TRIGGER_SCHEDULED : passClaim\.TRIGGER_PASS/,
+    'the flag selects the seat, and its ABSENCE is the pass seat — the preflight passes no flag');
+  assert.match(cmd, /reconcileDecision\(\{ marker, status, trigger \}\)/, 'and it reaches the decision');
+});
+
+test('an in-flight or undated outcome never deletes the marker', () => {
+  // Deleting it would disarm the safety net for a pass that is still running —
+  // it would then strand for real, with nothing left to notice.
+  const code = withoutComments(read('scripts/clickup_direct.mjs'));
+  const cmd = code.slice(code.indexOf("} else if (cmd === 'pass-reconcile') {"), code.indexOf("} else if (cmd === 'wip-check')"));
+  const del = cmd.slice(cmd.indexOf('if (decision.action ==='), cmd.indexOf('reconcileMessage'));
+  assert.doesNotMatch(del, /in-flight|undated/,
+    'the delete is an allow-list of resolved outcomes; a new action must not fall into it');
+  assert.match(del, /'resolved' \|\| \(decision\.action === 'handback' && ok\)/);
+});
+
+test('the repair step says WHY the flag is there, so nobody tidies it away', () => {
+  // A bare `--scheduled` in an args array reads as noise. The comment is the
+  // only thing standing between this fix and a future cleanup pass.
+  const code = read('scripts/builder/repair.js');
+  assert.match(code, /--scheduled` IS LOAD-BEARING/);
+  assert.match(code, /86bbu60ax/, 'and names the ticket');
+});
+
 test('a pass that finished leaves nothing to do', () => {
   assert.equal(pc.reconcileDecision({ marker: none, status: '' }).action, 'nothing');
 });

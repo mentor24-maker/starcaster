@@ -402,11 +402,14 @@ function usage(code = 2) {
   console.error('                                             of that skill hands the ticket back if this one dies. Opt-in on purpose:');
   console.error('                                             a hand-driven session claims with this same command, and a marker from');
   console.error('                                             one would let a loop reclaim a ticket a person is building.');
-  console.error('  pass-reconcile                             the FIRST thing a loop-build pass runs: if the previous pass left a');
+  console.error('  pass-reconcile [--scheduled]               the FIRST thing a loop-build pass runs: if the previous pass left a');
   console.error('                                             claim marker and its ticket is still "Building", hand it back (Rework');
   console.error('                                             if a PR is open, else Queued) and clear the marker.');
   console.error('                                             exit 0 = nothing to do, 1 = a hand-back failed, 2 = could not tell');
   console.error('                                             (never 0), 3 = a hand-back was performed.');
+  console.error('                                             --scheduled: the caller is a TIMER, not a new pass, so a firing clock');
+  console.error('                                             proves nothing about whether a pass is alive. Judges on the claim\'s');
+  console.error('                                             age instead and leaves a young claim in "Building", saying why.');
   console.error('  migrate-rework [--apply] [--list <id>]     one-off: move tickets that are Queued WITH AN OPEN PR into Rework.');
   console.error('                                             Dry run unless --apply. Run it AFTER the claim rule is live on main —');
   console.error('                                             a Rework ticket is claimed by nothing until then.');
@@ -2167,8 +2170,18 @@ if (cmd === 'whoami') {
   // Nothing in a killed session runs again. The next pass is the cheapest
   // thing guaranteed to run afterwards, and a fresh session is exactly what
   // survives the previous one being killed.
+  //
+  // `--scheduled` says WHICH SEAT IS ASKING (2026-09-04, task 86bbu60ax).
+  // Without it, the caller is a new pass and the inference above holds. With
+  // it, the caller is `npm run repair` on the relay's idle wake, where a
+  // firing timer proves nothing about whether a pass is running — so it judges
+  // on the claim's age instead and leaves a young claim alone. Before that
+  // flag existed, a build that outlived the half-hour throttle had its LIVE
+  // claim revoked on a timer, putting a ticket somebody was actively building
+  // back into the claim line.
   const file = passMarkerPath();
   const marker = passClaim.readMarker(file);
+  const trigger = flag('scheduled') ? passClaim.TRIGGER_SCHEDULED : passClaim.TRIGGER_PASS;
 
   let status = '';
   if (marker.found && marker.record) {
@@ -2179,7 +2192,7 @@ if (cmd === 'whoami') {
     if (seen.res.ok) status = seen.json.status?.status ?? '';
   }
 
-  const decision = passClaim.reconcileDecision({ marker, status });
+  const decision = passClaim.reconcileDecision({ marker, status, trigger });
   let ok = true;
   let destination = '';
 

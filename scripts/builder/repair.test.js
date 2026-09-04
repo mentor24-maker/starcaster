@@ -17,7 +17,11 @@ const HOUR = 60 * 60 * 1000;
 
 test('the repair runs marker -> drift -> stranded, calling the real tools', () => {
   assert.deepEqual(repair.STEPS.map((s) => s.id), ['marker', 'drift', 'stranded']);
-  assert.deepEqual([...repair.STEPS[0].npmArgs], ['clickup', '--', 'pass-reconcile']);
+  // `--scheduled` since 2026-09-04 (task 86bbu60ax): a timer proves nothing
+  // about whether a pass is alive, so without it this call was revoking LIVE
+  // build claims every half hour. passClaim.test.js owns the behaviour; this
+  // pins the argument, because the argument IS the fix.
+  assert.deepEqual([...repair.STEPS[0].npmArgs], ['clickup', '--', 'pass-reconcile', '--scheduled']);
   assert.deepEqual([...repair.STEPS[1].npmArgs], ['reconcile', '--', '--live']);
   assert.deepEqual([...repair.STEPS[2].npmArgs], ['pipeline', '--', 'sweep']);
 });
