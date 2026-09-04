@@ -705,8 +705,19 @@ test('the relay merges through the SAME gate, not a second one', () => {
   // and the one that drifted would be the one nobody was watching.
   assert.match(RELAY, /lane: \{ name: 'A', decision, files: decision\.eligibility\.files \}/,
     'the lane must reach the merge through runMergeStep');
-  const mergeCommands = (RELAY.match(/'pr', 'merge'/g) || []).length;
-  assert.equal(mergeCommands, 1, `there must be exactly ONE place that merges a PR, found ${mergeCommands}`);
+  // COUNT WHAT PERFORMS A MERGE, NOT WHAT SHARES ITS VERB. `gh pr merge
+  // --auto` and `gh pr merge --disable-auto` arm and disarm GitHub's own
+  // auto-merge and merge nothing themselves (task 86bbup3u1); counting them
+  // as merge implementations would either fail this guard forever or, if the
+  // number were simply bumped to 3, stop it noticing a genuine second merge.
+  const mergeInvocations = RELAY.match(/'pr', 'merge'.*/g) || [];
+  const performing = mergeInvocations.filter((line) => !/'--auto'|'--disable-auto'/.test(line));
+  assert.equal(performing.length, 1,
+    `there must be exactly ONE place that merges a PR, found ${performing.length}`);
+  // And the arming calls really are arming: an `--auto` that lost its flag
+  // would merge immediately, past every wait this path exists to respect.
+  assert.equal(mergeInvocations.length - performing.length, 2,
+    'expected exactly two auto-merge control calls (arm and disarm)');
   const gateCalls = (RELAY.match(/githubGate\(/g) || []).length;
   assert.ok(gateCalls >= 1, 'the lane must not re-implement mergeability');
 });
@@ -766,7 +777,17 @@ test('a lane merge threads its marker under the ANNOUNCEMENT, not an undefined c
   // filed a false "could not write the dedup marker" under the very section
   // the self-disable watches. Every auto-merge would have disabled the lane.
   assert.match(RELAY, /const authorizingComment = lane \? decision\.announcementId : decision\.commentId;/);
-  assert.match(RELAY, /markMergeHandled\(authorizingComment, task, unchecked, mergedRecord\.marker\)/);
+  // The bookkeeping moved into `recordMergedTicket` (task 86bbup3u1), because
+  // there are now two ways a merge ends — this pass merging, and GitHub's
+  // auto-merge landing it between passes — and both owe the identical trail.
+  // What this guard is about is unchanged: the marker threads under
+  // `authorizingComment`, which is the announcement for a lane.
+  assert.match(RELAY, /markMergeHandled\(authorizingComment, task, unchecked, record\.marker\)/,
+    'the shared record path must thread the marker under the authorizing comment');
+  assert.match(RELAY, /await recordMergedTicket\(mergedRecord, pr\)/,
+    'the operator-authorised merge must go through the shared record path');
+  assert.match(RELAY, /await recordMergedTicket\(record, pr\)/,
+    'the already-merged path must go through the same shared record path');
   assert.match(RELAY, /mergedNotice\(\{\n\s*commentId: authorizingComment,/);
   const laneSection = RELAY.slice(RELAY.indexOf('async function runMergeStep'), RELAY.indexOf('function ledgerPath'));
   assert.equal(/mergedRecord\.marker[\s\S]*decision\.commentId/.test(laneSection.slice(laneSection.indexOf('MERGED PR'))), false,
