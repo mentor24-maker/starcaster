@@ -772,6 +772,36 @@ any edit resets it, so on 86bbqw49y the twenty-five automated refusal comments
 would each have reset the very clock built to catch them.
 
 
+### 3.19 Break-test a check in the PASSING direction too — a false positive is worse than a miss
+
+2026-09-03, writing `check_builder_only_notes.cjs` (86bbunq4c).
+
+Every check here gets broken on purpose to prove it can fail. That is half the
+job. The other half is proving it can **pass**, and it is the half that gets
+skipped, because a green check feels like the finished state rather than a
+claim to be tested.
+
+This one caught a leak correctly and then flagged a note that was correctly
+guarded: an inline `<BuilderOnlyNote …>text</BuilderOnlyNote>` written on a
+single line. The scan walked backwards from the match looking for an opening
+tag, and met that line's own CLOSING tag first. Only writing the compliant case
+and running it found that.
+
+**A false positive on a gate is worse than a missed defect**, and the asymmetry
+is not close. A miss costs one bug. A check that fails work which is already
+correct teaches people to reach for `SKIP_CONVENTIONS=1` — and that switch is
+not per-rule, so one annoying check disables every check in the file. The
+cheapest way to lose a whole gate is to make it cry wolf once.
+
+So a check ships with two rehearsals, not one:
+
+- the defect it exists for → it must fail;
+- the **compliant** version of the same code → it must pass.
+
+Related: §3.12 (a guard after the refusal is unreachable) and §3.11 (a survey
+that skips what it cannot read has surveyed nothing) — this check fails when it
+scans zero files for exactly that reason.
+
 ## 4. Secrets
 
 ### 4.1 The rule is about EXPOSURE, not custody
@@ -1725,8 +1755,42 @@ defaults, and a new cloud still lands on `auto` because
 
 No unit test could have caught it: each half was correct in isolation. The
 differential render check caught it because it builds a module the way the
-Builder does — defaults merged in — and the contracts it ran carried hand-typed
+PALETTE does — defaults merged in — and the contracts it ran carried hand-typed
 lists that abruptly stopped rendering.
+
+**Correction, 2026-09-03 (task 86bbunf43): the mechanism above named the wrong
+file, and the rule is right anyway.** `builder-template.ts`'s default block is
+`createEmptyModule`, and it reaches a module newly created from the palette —
+not a module already saved on a page. Measured rather than argued:
+
+```
+normalizeLayoutSections([ a saved blog-tag-cloud carrying only `tags` ])
+  → keys: tags, marginTop, marginBottom, marginLeft, marginRight
+```
+
+No `layout`, no `minFontSize`, no `tagSource`. So the sentence "every such page
+would have silently swapped its content on a live site" **is false**: live pages
+were never at risk from that edit; newly created clouds, the saved-section
+editor, the module repository and `check:render`'s own harness were, because all
+of them build through `createEmptyModule`.
+
+**There are two default sites and they have different blast radii:**
+
+| where | reaches |
+|---|---|
+| `createEmptyModule` (`builder-template.ts`) | a module created from the palette, and nothing else |
+| a per-type block inside `normalizeBuilderModuleSettingsForType` (`if (!settings.color) settings.color = …`) | EVERY saved module, on every load |
+
+The rule — *a default is not neutral; a key whose absence is the signal must
+stay absent* — applies to both, and applies with real teeth to the second,
+which is the one that can rewrite live pages. Guard the site that matches the
+danger: this doctrine sent a guard to the wrong file once already, during
+86bbunf43, and the test it produced could not fail.
+
+`components/builder-module-defaults-reach.test.tsx` pins all three facts, so the
+next person does not have to take this paragraph's word for it — and so a change
+that DOES make createEmptyModule reach saved modules fails a test instead of
+quietly making this section true again.
 
 ### 5.28 A module renders inside ARBITRARY tenant themes, so it may not rely on element defaults
 
@@ -1785,6 +1849,218 @@ The guard is a test that renders the module with `liveSite` and asserts the
 demo strings are absent — `components/builder-template-preview-tag-cloud.test.tsx`,
 "placeholder tags never reach a visitor". Copy that shape for any module
 carrying an affordance.
+
+**This rule was written, and then broken twice more the same day, which is why
+there is now a check.** #576 guarded two empty states in `blog-related-posts`
+and left four identical ones untouched a few hundred lines away; the operator
+found one of those four — the very string quoted above — on the live site hours
+later (86bbunq4c, #580). A rule that has to be remembered at each of six call
+sites is not a rule, it is a hope. The six now go through one component,
+`<BuilderOnlyNote liveSite={liveSite}>`, and **`npm run check:builder-notes`**
+(blocking in CI and pre-commit, `scripts/check_builder_only_notes.cjs`) fails on
+a new builder-facing phrase in a render file that is not inside one. It also
+fails when it scans zero files, so renaming a renderer cannot switch it off
+quietly (§3.11).
+
+Two corollaries, each found by getting them wrong first:
+
+**Where the note is ALL the module would render, the module stands down.**
+Hiding just the text leaves a "You Might Also Like" heading over empty space, or
+a coloured newsletter box promising a signup that cannot happen. That is not a
+fix — it is §5.31 below, the exact symptom the operator reported the same
+morning.
+
+**Test both halves: silent for a visitor AND still helpful in the Builder.**
+Asserting only the leak lets the next person "fix" it by deleting the note,
+trading a visible failure for a silent one. Break-testing proves it: removing
+the text passes the leak test and fails the builder-side one.
+
+### 5.30 When the unit a rule is EVALUATED on is smaller than the unit it is ACTED on, saying it in the acted-on unit is wrong in both directions
+
+2026-09-03, found while verifying #575 (ticket 86bbukxdv), two bugs in two
+files, neither caught by any test.
+
+A saved section's **drift** — has this copy been hand-edited since the master
+last changed? — is evaluated on one **copy of a section**. Everything done with
+that answer happens to a **page**: pages are what get written, what get
+published, and what a dialog names to the operator. A page can hold more than
+one copy of the same master, so the two units come apart, and the whole class of
+error is what you write when you forget that:
+
+```js
+const drifted = sections.some(s => follows(s) && hasDrifted(s, master));
+if (drifted) pageLabels.push(labelFor(page));      // "this page is left alone"
+```
+
+That is true of a **copy** and false of the **page**. A page holding one
+hand-edited copy and one untouched copy is written — the untouched copy takes
+the update — so it is neither skipped nor left alone, and a "Save & Publish"
+built on this list named a page in its *left alone* column and then published
+it. The mirror image sat in the engine: `overwritten` was filled in from
+`outcome.drifted`, which says a copy on this page drifted, not that a drifted
+copy was written over — so the save reported "1 page with local changes was
+overwritten" about an edit still sitting untouched on that page. **One told him
+a page would not be touched when it was; the other told him his edit was gone
+when it was not.**
+
+**Both quantifiers are reachable and they are different questions.** `some`
+answers *is any copy here drifted?*; `every` answers *is this page entirely
+drifted?*. Neither is the default reading of "drifted pages" — which is why the
+phrase should not appear without one of them beside it.
+
+**Neither bug was findable by the test suite, and that is the part to take
+seriously.** Every fixture in the suite gave each page exactly one copy, so the
+two quantifiers agreed on every input any test could produce. They were found by
+driving the real UI against the local database, where the seeded fixture's own
+**Block States** page happens to carry two copies of one master — an accident,
+not a design. The suite now has that shape in it deliberately
+(`lib/builder-client/shared-block-usage.test.ts`, "a page holding a drifted copy
+AND an untouched one is NOT left alone").
+
+**What to do with this.** When a rule is evaluated per element and reported per
+container, write the aggregation explicitly and put a container holding *two
+elements that disagree* into the fixtures. One-element-per-container fixtures
+cannot distinguish `some` from `every`, so a green suite says nothing at all
+about the one line that matters. The same shape is waiting anywhere a per-item
+verdict is summarised per page, per section, per project or per tenant.
+
+The saved-section-specific version, with the code, is `docs/SAVED_SECTIONS.md`
+§3 and landmine 5.
+
+### 5.31 An empty screen that does not say WHY reads as a broken one
+
+2026-09-03. The operator reported three things as broken in one day. All three
+were behaving correctly:
+
+| what he saw | what was true |
+|---|---|
+| `/tags?tag=junior%20tennis` showed no posts while the manager said 13 | all 13 were DRAFTS; the public feed asks for `status=published` |
+| "You Might Also Like" flashed and vanished on a live post | it matched by CATEGORY, and no post on the platform has one |
+| "No posts match your filters" for a `?tag=` the dropdown showed as "All Tags" | no post carries that tag; the `<select>` had no matching `<option>` |
+
+Not one was a code defect in the thing he pointed at. Each cost real diagnosis
+time, and in each case the answer was a single sentence the screen could have
+said itself. **He cannot read the database, so "empty" and "broken" are the
+same picture.**
+
+The rule: anything that can render empty names the value and the cause.
+"No posts tagged 'junior tennis'", not "no results". "This post is not in any
+category, so there is nothing to match on", not a blank space. Where two
+screens count the same thing differently — the manager's 13 and the site's 0 —
+**each says what it counts**, or the operator is left to reconcile them by
+hand: `listTags` now returns `livePostCount` beside `postCount` (#577).
+
+Two things that make an explanation worse than none:
+
+- **On a public page the explanation is for the BUILDER only.** A visitor gets
+  nothing at all. That is §5.29, and it is why the empty state needs
+  `liveSite` before it needs good wording.
+- **Compute the number where the emptiness is decided.** The popup counts the
+  posts it actually loaded, not the row's stored count — two reads at two
+  moments, and summarising from the wrong one reports a figure nobody measured.
+
+### 5.32 A count and its qualifier come out of ONE pass, or they will disagree
+
+2026-09-03, while fixing 5.31. The tag manager needed "13 posts, 0 of them
+live". The obvious implementation counts the posts, then counts the published
+ones — two scans of a list that can change between them, and a live count that
+contradicts its own total is worse than the single misleading number it
+replaced.
+
+`listTags` accumulates both in the same loop over the same array
+(`lib/blogTagsStore.js`). The test that holds it reads the source and asserts
+`await allPosts(` appears exactly once in the function — a second scan is a
+second answer.
+
+The same rule caught a subtler case: the counts must fold **across spellings**
+the way the total does. "Junior Tennis" and "junior tennis" are one tag; a live
+count accumulated per-spelling produces a number larger than the total beside
+it.
+
+And the mirror of it: **absent is not zero.** A client reading a field an older
+server does not send must render nothing, never `0`. Defaulting
+`livePostCount ?? 0` would have told the operator every tag on his blog was
+dead during a deploy.
+
+### 5.33 A check that could not run must not exit 0 — and must not exit 1 either
+
+The browser harnesses under `scripts/ui/` are the only gates CI cannot run, so
+their exit code is the whole of what a script, a log skim or an unattended pass
+ever sees. Two of them were observed on 2026-09-02 printing an excellent
+refusal and exiting **0**. `check:panels`'s own text says it best — *"without a
+project the builder renders an empty page and every assertion passes on zero
+panels, which is worse than failing"* — and then, at the time, it agreed with
+itself and exited 2 while three of its siblings did not.
+
+The audit (task 86bbt6hgx) found eight such paths. `check_screens` had four in
+one file: no fixture project (*"these checks are hollow"*), a project that
+would not activate (*"screens may render empty"*), a rate-limited run
+(*"treat everything above as unreliable"*), and measuring not one screen —
+all ending at `process.exitCode = failures.length ? 1 : 0`. Run with no project
+id against a live server it printed **"9 screen-width combination(s) checked,
+0 skipped, 0 failing"** and exited 0, which is byte-for-byte what a clean sweep
+prints. `check_nav_controls` collected every control whose fixture variant was
+missing, printed the list, and then never let it near the exit code — with all
+variants gone it would print *"OK — all 0 controls move the rendered page"*.
+
+**Three verdicts, one shared module** (`scripts/ui/harness-exit.mjs`):
+
+| exit | meaning |
+|---|---|
+| 0 | ran, and what it measured was correct |
+| 1 | ran, and what it measured was **wrong** — the code under test has a defect |
+| 2 | **could not take a reading** — says nothing about the code |
+
+Same scheme as `npm run throughput`, and the same answer `doctor:node` gives
+with CANNOT TELL rather than PASS.
+
+**The 1-vs-2 half matters as much as the 0-vs-2 half, and is easier to get
+wrong.** Four vacuity guards already exited 1, each with a sentence reading
+"that is a failure, not a pass" — correct when 1 was the only non-zero code
+available, and wrong now: an unseeded fixture, a stale build, a throttled
+server and a missing variant are all faults of the **instrument**. Reporting
+them as 1 sends whoever reads the log hunting a defect in code that may be
+perfect. The rule of thumb: *if the code under test could be flawless and this
+could still happen, it is a 2.*
+
+A real failure outranks a could-not-tell — a screen that overflowed its
+viewport overflowed it, whatever else about the run was hollow. A **pass**
+never does, because a pass over something nobody measured is the whole defect.
+
+**And the ranking is worth nothing unless the failures are counted FIRST.**
+The first version of this fix stated the rule above, encoded it in `verdict()`,
+wrote it down here — and then broke it in three places, because each harness
+called `cannotTell()` *above* its failure block. `cannotTell()` exits on the
+spot, so the refusal short-circuited and the real failures were never even
+printed. Measured on the review pass: break the preview renderer and
+`check_render` said `COULD NOT TAKE A READING` where `main` had correctly said
+`FAILED` — the fix introducing the exact mistake it was written to remove.
+Worse in the general case, `check_render` counts a contract as `measured` only
+*after* it renders, so a change breaking all 41 gave `failures = 41,
+measured = 0` and reported "not a failure of your change either".
+
+So: **compute the verdict, then act on it.** Never `if (blind) refuse()` above
+`if (failures) fail()` — the two guards read as independent and are not.
+`check_screens` is the model (`verdict({ failures, blind })` into a single
+`process.exitCode`), and `scripts/builder/harnessExitCodes.test.js` asserts on
+the *position* of those calls, because an assertion that merely proved both
+exist passes on the broken ordering.
+
+**A tool that never judges the code has no honest use for exit 1.**
+`check:shots` photographs two builds and files the pairs that differ, leaving
+the judgement to the operator's eye — so it cannot discover a defect, and its
+every stop (no shell on the control scene, the control differing from itself, a
+scene rendering nothing, ClickUp refusing the upload) is a broken camera. It
+answers 0 or 2, never 1. Where a stop genuinely *is* the change's fault — the
+preview surface no longer rendering — the gate that says so is `check:render`,
+with a real failure and a real 1.
+
+**Corollary, learned twice in one file: a source-scanning test must read the
+source with comments stripped.** These harnesses carry long comments quoting
+the very calls they replaced, so a test grepping raw source matches its own
+documentation. It bit the `stdio: 'ignore'` assertion, then the `process.exit(2)`
+one, then a `process.exit(1)` count that found two — the call, and the sentence
+saying there was only one.
 
 ## 6. Working in this repo
 
@@ -2095,6 +2371,26 @@ carries. And a break-test asserts the **value** the rule requires, not a bound
 the wrong answer also satisfies: `assert.equal(clampToFloor(null), 3600)`, not
 `>= 900`. A guard that only checks `isFinite` has not checked "is this a
 number" — `Number()` manufactures finite zeros from garbage.
+
+**Two more shapes, 2026-09-03 (tasks 86bbuk7xz, 86bbunf43).** Both were written,
+both passed, and both were found only by reverting the fix and watching the test
+stay green:
+
+- *A fixture that cannot discriminate.* The test for case-insensitive tag order
+  used `ATP tennis` — which sorts first under codepoint order AND under
+  alphabetical order. Reverting to plain `.sort()` changed nothing it measured.
+  `US Open` sorts differently under each rule; that is a fixture, the other is a
+  prop.
+- *An assertion on the wrong path.* The guard for "a feed that never set
+  `filterMode` is unchanged" was routed through
+  `normalizeBuilderModuleSettingsForType` on the belief that module defaults
+  merge there. They do not (§5.27), so flipping the palette default left it
+  green — the assertion never touched the value it was defending.
+
+One sentence covers all four cases in this section: **the fixture must be able
+to tell the two behaviours apart, and the assertion must travel the path the
+value actually comes from.** Break-testing is what surfaces the difference; a
+green break-test is a finding, not a formality.
 
 ### 6.9 CC runs the operational commands — handing one over is a claim it cannot
 
@@ -2677,6 +2973,172 @@ one question two ways, do not pick quietly and do not build both. Name the
 contradiction as its own finding, take it to the operator as a decision with
 a recommendation, and record the answer once — in the code that enforces it
 and here.
+
+### 6.18 A script that edits production data dry-runs first, and a count of zero is a finding
+
+2026-09-03, task 86bbunf43. Setting one module setting on the live Delray
+`/tags` page nearly wrote **nothing at all** and would have reported success.
+
+`getPage` returns `{ ok, status, data }` — every store here does (landmine 12) —
+and the script read the page straight off the return value. So
+`page.layoutSections` was `undefined`, the map that finds the Post Feed ran over
+an empty list, and the script printed, cheerfully and without an error:
+
+```
+page "undefined" slug=undefined sections=0
+0 Post Feed module(s) on this page
+```
+
+Nothing threw. With `--apply` on that run it would have written the page back
+unchanged, republished it, and announced a completed job over an empty set —
+and the next honest thing anyone did would have been to explain why the setting
+"did not take" on a page it never touched.
+
+**Do this**, for any script that writes production data:
+
+- **Dry run by default; `--apply` to write.** Not a flag to skip the dry run —
+  the dry run is the default and writing is the opt-in.
+- **Print what it MATCHED before it writes** — names, not just counts. `page
+  "undefined"` is what gave this away; a bare `0` might not have.
+- **Treat zero as a finding.** A sweep that matched nothing has either found
+  nothing or asked the wrong question, and those look identical from the exit
+  code. Say which one you believe and why.
+- **Read every row back afterwards** and assert the value, not the absence of an
+  error (§5.20, landmines 12 and 13).
+
+The same discipline caught the other half of that task: the 13 posts were
+published through the app's own store rather than raw SQL, and each row was read
+back — 13 of 13 confirmed — rather than trusted from a write that reported OK.
+
+### 6.19 Search the queue for the SYMPTOM before filing — doctrine cites its own open tickets
+
+2026-09-03. The operator reported *"No tags found. Add tags in the Messaging
+section."* on a client's live blog. A ticket was filed for it (86bbunq4c), the
+sweep was done, six leaks were fixed and it shipped as #580.
+
+**A ticket for that exact string was already open.** 86bbugd2e, filed the same
+morning, named it verbatim, named the second half of the same defect ("Tags:
+Example Tag"), and set out the same scope. Worse, `docs/DOCTRINE.md` §5.29 —
+read during the very work that duplicated it — **quotes both the string and the
+ticket number**. It was read past.
+
+`npm run map` and reading the queue is already the rule (CLAUDE.md, "One topic,
+one worktree", rule 4). What this adds is *what to search for*: the rule as
+written protects against two sessions building the same EPIC, and this was not
+an epic. It was a one-line bug report whose text already existed in the tracker.
+
+- Search the queue for the **operator's own words** — the error string, the page,
+  the module — not for the name you are about to give the work.
+- When doctrine names an open ticket, **read that ticket** before filing a new
+  one. A `§` that cites a task id is a live cross-reference, not a footnote.
+- Filing the duplicate was the cheap part; the cost is that 86bbugd2e's OTHER
+  half stayed queued behind a ticket that looked done, and the operator's
+  report of it was answered twice with half an answer.
+
+The repair is not to close the older ticket. It is to fold the finished half
+into it, leave the unfinished half visible, and say plainly which is which.
+
+### 6.20 A command handed to the operator is plain text — formatting silently breaks the match
+
+2026-09-03, 11:11pm. The auto-merge lane had latched itself off thirteen hours
+earlier and only a person can clear it. The operator was told, in a message that
+rendered the phrase in bold-and-backticks, to post `resume auto-merging` on the
+party line. He copied what he was given. ClickUp preserved the formatting, so
+what arrived was:
+
+```
+**`resume auto-merging`**
+```
+
+`switchCommand` matches "resume" against the WHOLE message, deliberately — a
+stop that fires when he only mentioned it costs a delay and one word to undo,
+while a resume that fires when he was talking ABOUT resuming costs an unwanted
+merge. That asymmetry is right and is not the defect. The defect is that the
+near-miss looked exactly like silence: nothing matched, nothing said so, and he
+reasonably believed the lane was back. It stayed off for another 35 minutes and
+was only found because he asked. His second attempt, typed as plain text,
+matched on the first try.
+
+Measured against the real matcher — it is forgiving about case, spacing, a
+hyphen and single backticks, and unforgiving about bold and about extra words:
+
+```
+"resume auto-merging"        -> resume      "**`resume auto-merging`**" -> null
+"Resume auto-merging"        -> resume      "please resume auto-merging" -> null
+"`resume auto-merging`"      -> resume      "resume auto-merge"          -> null
+```
+
+- **Never wrap a phrase he is meant to type in backticks, bold, or a fenced
+  block.** Put it on its own line as bare text, with nothing around it.
+- This is §6.12 pointed the other way. That rule says match what he TYPED
+  rather than what the tool stored; this one says do not make him type what the
+  tool will mangle. Both failures look like the operator getting it wrong.
+- The matcher saying "that did not take" is filed as 86bbuv99r — but no code fix
+  removes this rule, because the next command an agent hands over is a fresh
+  chance to format it.
+
+### 6.21 ClickUp's audit trail cannot name a machine actor — do not conclude from it
+
+2026-09-03, 11:57pm. A ticket in `Building` was closed to `Live` with no branch,
+no pull request, no tag and no comment. Two agent sessions spent twenty minutes
+looking for the actor. The ClickUp Activity feed said:
+
+> You changed status from Building to Live
+
+That sentence carried **no information in either direction**. Every script in
+this system authenticates with the operator's personal token, so the loops, both
+agent sessions, `pulse` and the review gate all appear in the feed as him. One
+session nearly accepted authorship of a write it had not made; the operator
+nearly accepted authorship of one he had not made either.
+
+The answer came from reading the code, not the trail: `npm run repair` runs
+`reconcile --live` unattended, `reconcile` matched a merged pull request that
+was mentioned in passing in a comment and belonged to a different ticket, and
+`AUTO_REPAIR_STATUSES` made the ticket eligible the moment it was claimed.
+Filed as 86bbuv66c.
+
+- **A status change attributed to Dane is evidence of nothing.** Treat it as
+  "some holder of the token", which is every actor in the system.
+- Machine COMMENTS already carry a `[machine]` stamp for exactly this reason
+  (§2.5). Status writes have no equivalent, so the only way to attribute one is
+  to read every code path that could have made it.
+- When an unexplained write appears, enumerate the WRITERS and check each one's
+  log, rather than reading the feed. The feed will name the operator every time.
+
+### 6.22 Measure a duration threshold within one cadence era
+
+2026-09-03. Choosing an alarm threshold for "this job has stopped working", the
+honest move was to measure how long real failures last rather than pick a round
+number — the ticket asked for exactly that, because a recency alarm had already
+been killed on this project for firing on eleven nights in fourteen.
+
+The log held 866 passes and 83 failures. It also held a **cadence change**: the
+job ran hourly until 2026-08-30 and every ten minutes after. Measured across
+that boundary, a four-pass blip from the hourly era reads as a *three-hour
+outage* and lands in the same population as a twenty-minute one, and any
+threshold drawn from the mixture fits neither era.
+
+Segmented to the ten-minute era — 687 passes — the separation was clean:
+
+```
+blips (1-2 consecutive failures)   36 runs   longest 21 min without a success
+real outages (3+)                   4 runs   shortest 36 min
+```
+
+Nothing between 21 and 36 minutes. That gap chose the threshold, and it
+contradicted the proposal in the ticket: sixty minutes would have caught two of
+the four real outages.
+
+- Before measuring durations out of a log, **check whether the thing being
+  measured changed rate inside the window.** Median gap between events, by day,
+  is a two-line check and it decides whether the rest of the analysis means
+  anything.
+- Prefer a threshold expressed as a multiple of each job's own interval to a
+  global constant, for the same reason: one number cannot serve a ten-minute job
+  and a weekly one.
+- Say which era the numbers come from when recording them. A future reader
+  re-measuring over the whole log will get a different answer and assume the
+  first was wrong.
 
 ## 7. Operator-facing gotchas
 

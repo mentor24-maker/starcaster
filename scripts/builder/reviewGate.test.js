@@ -930,9 +930,22 @@ test('the merge step checks staleness before merging, and never merges past a st
   //
   // BREAK-TEST: delete the `reviewGateStaleness` call that guards the merge and
   // this fails — `assert.equal(asks, 2)` reports 1.
+  //
+  // A THIRD SITE ARRIVED WITH AUTO-MERGE (task 86bbup3u1), and it is a guard,
+  // not a weakening. Branch protection on main requires `verify` and nothing
+  // else, so GitHub's auto-merge cannot see this repo's review gate at all —
+  // handing it a PR whose gate is stale would merge past exactly what the two
+  // sites below prevent. So the arming path asks the same question a third
+  // time, on the freshly-read PR, and refuses to arm (and disarms a PR that
+  // has gone stale since) on anything but a fresh or absent gate.
   const asks = (src.match(/reviewGate\.reviewGateStaleness\(/g) || []).length;
-  assert.equal(asks, 2,
-    `expected two staleness checks — the one guarding the merge and the one the re-run waits on — found ${asks}`);
+  assert.equal(asks, 3,
+    `expected three staleness checks — guarding the merge, the re-run's wait, and guarding the auto-merge arming — found ${asks}`);
+  // The arming one is not decorative: it must feed autoMergeDecision, which is
+  // what actually refuses. BREAK-TEST: pass a literal 'fresh' instead and this
+  // fails.
+  assert.match(src, /reviewGateState: freshStaleness\.state/,
+    'the arming path must hand the REAL staleness answer to autoMergeDecision');
   assert.match(src, /reviewGate\.afterRerunDecision\(/,
     'the merge path must route the re-run result through the tested decision');
   assert.match(src, /'run', 'rerun'/,

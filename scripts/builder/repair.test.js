@@ -71,6 +71,12 @@ test('each dialect reads by its own contract, and an undefined code is a failure
   assert.equal(repair.readStep(marker, 3), 'repaired', 'a hand-back is news, not an abort');
   assert.equal(repair.readStep(marker, 2), 'cannot-tell');
   assert.equal(repair.readStep(drift, 1), 'cannot-tell', 'reconcile 1 = nothing could be checked');
+  assert.equal(repair.readStep(drift, 3), 'repaired',
+    'reconcile 3 = it WROTE. Until 2026-09-04 this step had no such code, reconcile exited 0 whether it '
+    + 'had changed the board or not, and the pass that wrongly closed a live ticket printed REPAIR: CLEAN '
+    + '(86bbuv66c). A destructive step that cannot report its own writes is narrating, not watching.');
+  assert.equal(repair.composeOutcome(['repaired', 'clean', 'clean']).code, 0,
+    'a repaired run is a change to report, not a failure to page on');
   assert.equal(repair.readStep(stranded, 3), 'findings', 'a dry sweep that found work is the point of the schedule');
   assert.equal(repair.readStep(stranded, 7), 'failed', 'a tool speaking a new code has changed its contract');
 });

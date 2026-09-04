@@ -104,6 +104,213 @@ needs — was fixed. Nothing visible was broken by that second one, because the
 live screen uses a different route, but a route that looks like it works is
 worse than one that is missing.
 
+## 2026-09-03 — A refusal that can never clear stops promising it will (#585)
+
+When you comment `merge` on a finished ticket, an automatic step goes to GitHub
+and merges it. Sometimes it cannot, and it says why on the ticket. Every one of
+those messages ended with the same reassurance: *your approval is still
+standing, you do not have to say merge again, the moment the reason above is
+dealt with it goes through on its own.*
+
+That sentence is true of some reasons and false of others, and nothing in the
+system knew the difference. "The tests are failing" clears itself the moment
+somebody pushes a fix — a later pass really does merge it. "This pull request
+has already been merged" never clears. There is no later. But both got the same
+comforting paragraph.
+
+One ticket sat for twelve hours in the approved-and-waiting column with its
+work already merged and live on the site, while the step posted twenty-five
+messages telling you it was handled. Sixteen of them were for a reason that
+could never come right. Then the messages stopped, because the system suppresses
+a repeat that has not changed — so the ticket went from lying reassuringly to
+saying nothing at all. It was only found because you asked about a different
+ticket that looked stuck.
+
+Every reason the step can give is now written down in one place and marked as
+either *it will clear on its own* or *it will not*. A reason that will not clear
+no longer gets the reassurance. It says plainly what it needs and who has to do
+it — an agent session, or you — and that nothing further is coming, so nobody
+reads it as progress. Anything the step genuinely could not work out counts as
+the second kind: if it cannot honestly tell you to wait, it tells you to look.
+
+A new reason cannot be added without deciding which kind it is. There is no
+default and no way to skip the question; the step refuses to write the message
+at all rather than guess.
+
+The separate sweep that already noticed this exact situation — finished work
+sitting in a column you have to move it out of — used to report it only in the
+group chat, where it scrolled past with everything else. It now also writes it
+on the ticket itself, once, where the next reader of that ticket cannot miss it.
+It still never moves the ticket for you: that column is yours.
+
+Review caught three things in the first version of this, all of the same shape:
+the label saying which kind of reason it is was being *dropped* somewhere
+between where it is decided and where the message is written. On one route that
+made the message fall back to the reassuring wording again — the exact bug,
+rebuilt. On another it stopped the hourly job dead partway through, so the rest
+of that run's tickets were never looked at, which is the same silence in
+different clothes. The label now travels with the answer everywhere, a mistake
+like it can no longer take the whole run down with it, and a reason the step
+genuinely *cannot* work out is now announced as "I cannot tell" rather than as a
+confident "this will never clear".
+
+The sweep's note on the ticket also had to be fixed to reach the tickets that
+already had the finding. It was sharing one "already said this" marker with the
+group-chat message, so on every ticket flagged before the note existed the note
+was suppressed before it was ever written once — including a real one sitting on
+the board. The two now keep separate markers, which also means either one
+failing gets retried instead of being quietly written off.
+
+## 2026-09-03 — Four checks that said "I could not look at this" and then reported a pass (#584)
+
+Five of this project's checks work by opening a real web browser and looking at
+the screen — do the settings panels line up, does a page fit its window, does
+that button actually change anything. They are the only checks the automated
+build system cannot run for us, because it has no browser. So when one of them
+finishes, the single number it hands back — pass or fail — is the whole of what
+anything else ever learns about it.
+
+Four of the five had places where they could not see anything at all, said so
+clearly in writing, and then handed back **pass**.
+
+The clearest one: run the screen-layout check without first setting up its test
+content, and it printed
+
+> 9 screen-width combination(s) checked, 0 skipped, 0 failing.
+
+That is word for word what it prints after a completely clean sweep. Three lines
+higher it had already said the run was "hollow" — but nobody reads three lines
+higher when the last line says nothing is failing, and no script can read at all.
+Every screen it measured was blank.
+
+The navigation check had the same shape from the other direction. It kept a list
+of controls it could not test, printed that list, and then simply never looked at
+it again when deciding pass or fail. If it had somehow lost every one of them it
+would have announced "all 0 controls move the rendered page" and called that a
+success.
+
+So these checks now give one of three answers instead of two, which is the same
+scheme the pipeline's own health report has used for a while:
+
+- **passed** — I looked, and it is fine
+- **failed** — I looked, and your change broke something
+- **could not tell** — I could not look at all; this says nothing about your change
+
+That third answer is the whole fix, and the distinction between it and "failed"
+matters as much as the one between it and "passed". A missing test fixture or a
+half-finished build is a problem with the *measuring instrument*, not with the
+work being measured — calling it a failure sends whoever reads the log hunting a
+bug that was never there.
+
+Two of the five turned out to have been fixed back in August and were left
+alone. Every path that changed was broken deliberately and the answer read off
+the screen, rather than trusted because the code looked right.
+
+**And then the review caught this fix making the exact mistake it was written
+to remove.** In three places the new code asked "could I see anything?" *before*
+it asked "did I find anything wrong?" — and because the first question quits on
+the spot, real problems were never even printed. Break the page preview on
+purpose and the rendering check went from correctly saying "failed" to saying
+"could not tell": a genuine defect reported as a broken instrument. Worse in
+the general case — a change that broke all 41 of its rendering rules would have
+reported "could not tell" and listed none of them, because a rule that fails to
+render was never counted as measured.
+
+Both questions now go through the single shared rule that already knew the
+right answer: a real failure outranks a could-not-tell, and a pass never does.
+The two orderings were broken deliberately and read off the screen the same way
+everything else here was — the old code says "could not tell" and prints
+nothing, the new code says "failed" and prints all 41.
+
+Four smaller things went with it: a run that reached only some of its screens
+no longer calls the rest clean; the screenshot tool now answers only "fine" or
+"could not tell", never "your change is broken", because it never judges the
+change in the first place — it just takes the pictures; a setup step that
+produces a lot of output is no longer killed for being chatty and then blamed
+for failing; and the test that polices all of this now reads the code with the
+comments stripped out, having twice matched its own explanations of the very
+mistakes it was checking for.
+## 2026-09-03 — Overlay screens get their own written record (#558)
+
+An overlay screen is the layer of colour, gradient or picture that sits over a
+row's background and under its words. It is what makes white text readable on a
+photograph, and what stops a background video from competing with the writing on
+top of it. It got its editor a few days ago, and until now the only thing
+written down about it was four paragraphs buried inside the video-backgrounds
+document — written back when an overlay was a detail of how video tinting
+worked, rather than a feature in its own right.
+
+It has its own document now, `docs/OVERLAY_SCREENS.md`, including a plain
+section on what an overlay is for and where the controls are. Two things in it
+are worth knowing even if you never open the file. The first is that there are
+**two** opacity controls in that panel and they are not the same knob — one is
+inside the colour swatch, one is the labelled Opacity row below it, and they
+multiply. That is why an overlay sometimes looks stubbornly too faint with the
+slider already at full. The second is the reason the document is named the way
+it is: a setting in the Builder has four separate parts, and all of them have to
+be there. The type, the bit that saves and loads it, the bit that draws it, and
+the panel you change it in. This feature has now shipped **twice** with three of
+the four working perfectly — the value saved, loaded and drew correctly, and
+there was simply no way to reach it. Both times every test passed, because every
+test was true.
+
+Writing it turned up three things the task itself had wrong. It asked for three
+follow-up features to be described as not yet built; one of them, gradient
+direction, had already shipped, so describing it as unbuilt would have been the
+exact mistake the task was trying to prevent, just pointing the other way. The
+line references it gave had drifted by as much as ninety-six lines. And a
+long-standing warning about there being three copies of one dropdown turned out
+to describe two different mechanisms as if they were one. All three were
+corrected on the task before a word was written, and the document says what is
+actually true of the code today.
+
+The list of what is built and what is not then went wrong twice more before this
+landed, in opposite directions on the same three features — which is the best
+argument for how it is now written. It no longer records where a feature stands
+with a reviewer, because that changes hourly; it records only whether the code
+is on the live branch, which anyone can check and which cannot go stale. All
+three follow-ups have since shipped, so the "not yet merged" list is currently
+empty, and it says so out loud rather than being deleted.
+
+## 2026-09-03 — A safety brake that had never once been applied (#567)
+
+When an agent finishes a turn, a check looks at whether the work added a
+database script you have to run by hand, and refuses to end the turn until the
+reply hands that script over as a clickable link. Because a check like that
+could in principle argue with an agent forever, it was given a brake: after
+three refusals in one session, give up and let the turn end.
+
+The brake has never worked. Not once, since it was written.
+
+It counted the refusals in a small file tucked inside the repo's hidden `.git`
+folder. That works in the main copy of the project, where `.git` really is a
+folder. But every piece of work here happens in a separate side folder, and
+there `.git` is not a folder at all — it is a one-line text file pointing at
+the real one. Writing a file inside a file is impossible, so the count was
+never saved. The failure was caught and thrown away without a word, under a
+comment reassuring the reader that losing the count cost "at worst one extra
+prompt."
+
+It did not cost one extra prompt. It cost the whole brake: with nothing ever
+counted, the tally read zero forever, so the third refusal never arrived. The
+same missing file also meant a script that *had* been handed over properly was
+demanded all over again on the next turn, and the next.
+
+Worth saying plainly: nothing bad has actually happened because of this. Going
+back through every session on this machine, the check has genuinely fired five
+times, each in a side folder, and each of those sessions complied on its very
+next turn — so no session ever reached even a second refusal, let alone needed
+the brake. The repair is a precaution, not a rescue.
+
+The fix is to ask git where the real folder is instead of guessing. The more
+interesting part is why this survived: the test covering the brake built its
+practice repo in the one shape where the bug cannot appear, so it passed
+cheerfully the entire time. The new tests build a genuine side folder and check
+that the file `.git` really is a file before asserting anything — and reverting
+the fix now makes them refuse forever, in writing, which is the only kind of
+proof worth having. The same mistake had already been fixed a week earlier in
+the twin check next door and left alive in this one, so the shared piece now
+lives in a single file that both of them read.
 ## 2026-09-03 — A map on a directions page shows the map (#571)
 
 Open the Delray directions page and you did not get a map. You got a grey

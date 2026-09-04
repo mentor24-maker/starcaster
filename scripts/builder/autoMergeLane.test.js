@@ -355,7 +355,14 @@ test('a disable persists until a human clears it', () => {
   const d = selfDisableState({ persisted: { at: T0, why: 'main went red' } });
   assert.equal(d.disabled, true);
   assert.equal(d.fresh, false, 'a remembered disable must not re-announce itself every pass');
-  assert.equal(d.why, 'main went red');
+  // The reason KEEPS its substance but is no longer replayed verbatim (task
+  // 86bbt0mz6). This assertion used to be `equal(d.why, 'main went red')`,
+  // which pinned the defect: a stored sentence written by the pass that
+  // latched, replayed unchanged by every pass after it, reads as a live
+  // finding. On 2026-09-03 that put "this pass could not fully verify 4
+  // thing(s)" one line above "0 could not be checked" for 10.8 hours.
+  assert.match(d.why, /main went red/, 'the recorded substance must survive');
+  assert.match(d.why, /latched off since/, 'and it must say it is a REMEMBERED state, with a date');
 });
 
 test('the gate reports WHY, cheapest and most serious reason first', () => {
@@ -705,8 +712,19 @@ test('the relay merges through the SAME gate, not a second one', () => {
   // and the one that drifted would be the one nobody was watching.
   assert.match(RELAY, /lane: \{ name: 'A', decision, files: decision\.eligibility\.files \}/,
     'the lane must reach the merge through runMergeStep');
-  const mergeCommands = (RELAY.match(/'pr', 'merge'/g) || []).length;
-  assert.equal(mergeCommands, 1, `there must be exactly ONE place that merges a PR, found ${mergeCommands}`);
+  // COUNT WHAT PERFORMS A MERGE, NOT WHAT SHARES ITS VERB. `gh pr merge
+  // --auto` and `gh pr merge --disable-auto` arm and disarm GitHub's own
+  // auto-merge and merge nothing themselves (task 86bbup3u1); counting them
+  // as merge implementations would either fail this guard forever or, if the
+  // number were simply bumped to 3, stop it noticing a genuine second merge.
+  const mergeInvocations = RELAY.match(/'pr', 'merge'.*/g) || [];
+  const performing = mergeInvocations.filter((line) => !/'--auto'|'--disable-auto'/.test(line));
+  assert.equal(performing.length, 1,
+    `there must be exactly ONE place that merges a PR, found ${performing.length}`);
+  // And the arming calls really are arming: an `--auto` that lost its flag
+  // would merge immediately, past every wait this path exists to respect.
+  assert.equal(mergeInvocations.length - performing.length, 2,
+    'expected exactly two auto-merge control calls (arm and disarm)');
   const gateCalls = (RELAY.match(/githubGate\(/g) || []).length;
   assert.ok(gateCalls >= 1, 'the lane must not re-implement mergeability');
 });
@@ -766,7 +784,17 @@ test('a lane merge threads its marker under the ANNOUNCEMENT, not an undefined c
   // filed a false "could not write the dedup marker" under the very section
   // the self-disable watches. Every auto-merge would have disabled the lane.
   assert.match(RELAY, /const authorizingComment = lane \? decision\.announcementId : decision\.commentId;/);
-  assert.match(RELAY, /markMergeHandled\(authorizingComment, task, unchecked, mergedRecord\.marker\)/);
+  // The bookkeeping moved into `recordMergedTicket` (task 86bbup3u1), because
+  // there are now two ways a merge ends — this pass merging, and GitHub's
+  // auto-merge landing it between passes — and both owe the identical trail.
+  // What this guard is about is unchanged: the marker threads under
+  // `authorizingComment`, which is the announcement for a lane.
+  assert.match(RELAY, /markMergeHandled\(authorizingComment, task, unchecked, record\.marker\)/,
+    'the shared record path must thread the marker under the authorizing comment');
+  assert.match(RELAY, /await recordMergedTicket\(mergedRecord, pr\)/,
+    'the operator-authorised merge must go through the shared record path');
+  assert.match(RELAY, /await recordMergedTicket\(record, pr\)/,
+    'the already-merged path must go through the same shared record path');
   assert.match(RELAY, /mergedNotice\(\{\n\s*commentId: authorizingComment,/);
   const laneSection = RELAY.slice(RELAY.indexOf('async function runMergeStep'), RELAY.indexOf('function ledgerPath'));
   assert.equal(/mergedRecord\.marker[\s\S]*decision\.commentId/.test(laneSection.slice(laneSection.indexOf('MERGED PR'))), false,
@@ -867,4 +895,117 @@ test('stripping the fence does NOT loosen resume into a substring match', () => 
 
 test('a fenced stop still stops', () => {
   assert.equal(switchCommand('```\nstop auto-merging\n```'), 'stop');
+});
+
+/*
+ * THE LATCH (2026-09-03, task 86bbt0mz6).
+ *
+ * The lane latched itself off on 2026-08-30 and stayed off for two days; it
+ * did it again on 2026-09-03 and stayed off 10.8 hours, found only because
+ * Dane asked why nothing had merged since 6:27pm. The latch was RIGHT both
+ * times. What made it undiagnosable:
+ *
+ *   - the stored reason kept only a COUNT, and `unchecked` holds a full
+ *     English sentence for every item — all discarded at the moment of
+ *     latching;
+ *   - the stored sentence says "this pass", so replaying it made a
+ *     ten-hour-old finding read as a live verdict, one line above the same
+ *     pass reporting "0 could not be checked";
+ *   - and after the first announcement, nothing ever said it was still off.
+ */
+const {
+  ledgerAfterLatchNag, persistedLatchWhy, latchNagDue,
+  LATCH_ITEM_CAP, LATCH_NAG_EVERY_MS,
+} = require('./autoMergeLane.js');
+
+const THREE = ['could not read PR #1', 'could not post to the bus', 'could not stamp the note'];
+
+test('a latch stores the sentences themselves, not just how many there were', () => {
+  const l = ledgerAfterDisable(null, 'why', 1000, { items: THREE, trigger: 'unchecked' });
+  assert.deepEqual(l.disabled.items, THREE);
+  assert.equal(l.disabled.droppedItems, 0);
+  assert.equal(l.disabled.trigger, 'unchecked');
+});
+
+test('auto-merge-status can read those sentences back off a persisted latch', () => {
+  const l = ledgerAfterDisable(null, 'why', 1000, { items: THREE, trigger: 'unchecked' });
+  const d = selfDisableState({ persisted: l.disabled });
+  assert.deepEqual(d.items, THREE);
+  assert.equal(d.disabled, true);
+  assert.equal(d.fresh, false);
+});
+
+test('the stored list is capped, and says how many it dropped', () => {
+  const many = Array.from({ length: LATCH_ITEM_CAP + 7 }, (_, i) => `item ${i}`);
+  const l = ledgerAfterDisable(null, 'why', 1000, { items: many, trigger: 'unchecked' });
+  assert.equal(l.disabled.items.length, LATCH_ITEM_CAP);
+  assert.equal(l.disabled.droppedItems, 7);
+});
+
+/*
+ * BREAK-TEST: drop the `.replace(/^this pass/...)` and this fails — the
+ * replayed sentence claims the CURRENT pass could not verify something, which
+ * is what put "could not fully verify 4 thing(s)" and "0 could not be checked"
+ * one line apart in the same log for ten hours.
+ */
+test('a replayed latch is re-tensed and dated, so it cannot read as this pass\'s finding', () => {
+  const at = Date.UTC(2026, 8, 3, 16, 41, 10);
+  const why = persistedLatchWhy({ at, why: 'this pass could not fully verify 4 thing(s), so it is not in a position to merge on its own word' });
+  assert.ok(!why.startsWith('this pass'), 'a stored reason must not be replayed in the present tense');
+  assert.match(why, /latched off since/);
+  assert.match(why, /2026-09-03/, 'it must say WHEN, or "still broken" and "broke this morning" look alike');
+});
+
+/*
+ * BREAK-TEST: return `{ due: true }` unconditionally and this fails — the nag
+ * would fire on every pass, which is the "all is well x365" failure the bus
+ * throttles exist to prevent, in its noisy mirror image.
+ */
+test('a latch under a day old does not nag', () => {
+  const at = 1_000_000_000;
+  const d = selfDisableState({ persisted: { at, why: 'w' } });
+  assert.equal(latchNagDue({ disabled: d, now: at + 3600_000 }).due, false);
+});
+
+test('a latch still in force after a day says so again', () => {
+  const at = 1_000_000_000;
+  const d = selfDisableState({ persisted: { at, why: 'w' } });
+  const out = latchNagDue({ disabled: d, now: at + LATCH_NAG_EVERY_MS + 1 });
+  assert.equal(out.due, true);
+  assert.match(out.why, /still latched/);
+});
+
+test('a FRESH latch never nags — it has just announced itself', () => {
+  const d = selfDisableState({ unchecked: ['one'] });
+  assert.equal(d.fresh, true);
+  assert.equal(latchNagDue({ disabled: d, now: Date.now() }).due, false);
+});
+
+test('the nag clock resets only when a nag is recorded, so it is once a day and not once a pass', () => {
+  const at = 1_000_000_000;
+  const l0 = ledgerAfterDisable(null, 'w', at, { items: ['one'], trigger: 'unchecked' });
+  const nagged = ledgerAfterLatchNag(l0, at + LATCH_NAG_EVERY_MS + 1);
+  const d = selfDisableState({ persisted: nagged.disabled });
+  const soonAfter = latchNagDue({ disabled: d, now: at + LATCH_NAG_EVERY_MS + 2, lastNagAt: nagged.disabled.lastNagAt });
+  assert.equal(soonAfter.due, false, 'a nag just posted must not repeat on the next pass');
+});
+
+/*
+ * Acceptance criterion 3. A red main is a different fact from a verification
+ * failure, and reporting it as "0 things could not be verified" would send
+ * whoever reads it hunting for an unchecked item that never existed.
+ */
+test('a latch for a RED MAIN reports that reason and is not dressed as an unchecked item', () => {
+  const d = selfDisableState({ mainBuildRed: true });
+  assert.equal(d.disabled, true);
+  assert.equal(d.trigger, 'main-red');
+  assert.deepEqual(d.items, []);
+  assert.match(d.why, /red/);
+  assert.ok(!/could not fully verify/.test(d.why));
+});
+
+test('a latch recorded before this change still reads, and says the sentences are gone', () => {
+  const d = selfDisableState({ persisted: { at: 1000, why: 'this pass could not fully verify 4 thing(s)' } });
+  assert.deepEqual(d.items, [], 'an old ledger has no items — it must not invent any');
+  assert.equal(d.disabled, true);
 });

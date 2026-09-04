@@ -32,6 +32,7 @@ import {
   launch, signIn, activateProject, gotoScreen, revealPanels, measureActiveScreen,
   BASE_URL, FIXTURE_PROJECT_NAME,
 } from './app-driver.mjs';
+import { verdict, EXIT_CANNOT_TELL } from './harness-exit.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SHOT_DIR = path.join(ROOT, '.ui-check');
@@ -67,6 +68,15 @@ mkdirSync(SHOT_DIR, { recursive: true });
 
 const failures = [];
 const notes = [];
+/*
+ * Reasons this run could not measure what it claims to measure. Every one of
+ * these used to print and then exit 0 — the text said "hollow", "may render
+ * empty", "treat everything above as unreliable", and the exit code said pass
+ * (task 86bbt6hgx). They are collected rather than exited on immediately so
+ * the run still produces its screenshots and its report; only the VERDICT
+ * changes.
+ */
+const blind = [];
 let checked = 0;
 let skipped = 0;
 let throttled = 0;
@@ -86,6 +96,7 @@ try {
     const how = await activateProject(page, projectId);
     if (String(how).startsWith('failed')) {
       console.log(`  (could not activate ${projectId}: ${how} — screens may render empty)`);
+      blind.push(`the fixture project ${projectId} would not activate (${how}), so screens render empty`);
     }
   } else {
     // An inactive project renders empty tables, which measure as "fits" and
@@ -94,6 +105,7 @@ try {
       `  (no UI_HARNESS_PROJECT_ID set — screens may render empty.\n` +
       `   Run npm run seed:ui-fixture and export the id it prints, or these checks are hollow.)\n`
     );
+    blind.push('no UI_HARNESS_PROJECT_ID — run `npm run seed:ui-fixture` and export the id it prints');
   }
 
   for (const width of WIDTHS) {
@@ -163,6 +175,7 @@ if (throttled > 0) {
     '  broken app while looking like clean results. Restart `npm run dev` and re-run;\n' +
     '  treat everything above as unreliable.'
   );
+  blind.push(`${throttled} request(s) were rate-limited — every measurement after the first is unreliable`);
 }
 
 console.log(`\n${checked} screen-width combination(s) checked, ${skipped} skipped, ${failures.length} failing.`);
@@ -171,4 +184,35 @@ if (notes.length) {
   [...new Set(notes)].forEach((n) => console.log(`  ${n}`));
 }
 console.log(`\nScreenshots: ${path.relative(ROOT, SHOT_DIR)}/ — look at them. Passing assertions are not proof.`);
-process.exitCode = failures.length ? 1 : 0;
+
+/*
+ * A SKIPPED SCREEN IS AN UNMEASURED SCREEN — at any count, not just zero.
+ *
+ * This used to fire only when NOTHING was measured, which drew the line in an
+ * arbitrary place: 8 of 9 screens unreachable with 1 measured still printed
+ * "0 failing" and exited 0. Both skip paths above are instrument problems (the
+ * screen would not load, or the app landed somewhere else), so by this file's
+ * own definition those screens were not checked — and a run cannot call clean
+ * what it never looked at.
+ */
+if (!checked) {
+  blind.push(`not one of the ${SCREENS.length} screen(s) was measured (${skipped} skipped) — there is nothing here to pass`);
+} else if (skipped > 0) {
+  blind.push(
+    `${skipped} screen-width combination(s) were skipped and ${checked} measured — the skipped ones ` +
+    'are unreachable, not clean, so this run says nothing about them (the "skip" lines above name each)'
+  );
+}
+
+const code = verdict({ failures: failures.length, blind: blind.length });
+if (code === EXIT_CANNOT_TELL) {
+  console.error(
+    `\n[check:screens] COULD NOT TAKE A READING — exiting ${EXIT_CANNOT_TELL}.\n\n` +
+    'No screen failed, but this run could not see what it is supposed to see, so a pass\n' +
+    'would be a pass over nothing:\n\n' +
+    blind.map((b) => `  • ${b}`).join('\n') +
+    '\n\nFix the instrument and run it again. Exit 2 means "could not tell", never "failed" —\n' +
+    'nothing above says anything about the code you are changing.\n'
+  );
+}
+process.exitCode = code;

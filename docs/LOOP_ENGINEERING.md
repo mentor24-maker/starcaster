@@ -695,7 +695,32 @@ settings' generic `TO DO / IN PROGRESS / COMPLETE` are not this board.
 
 ## How to run it
 
-Two commands, each in **its own session**:
+**They are already running.** Since 2026-09-02 (task 86bbtuje2, PR #537) both
+lanes run unattended on the Mac Mini as launchd agents —
+`com.starcaster.loop-build` and `com.starcaster.loop-review` — keeping the
+committed `scripts/loop_runner.sh` alive across crashes and reboots. Nobody
+starts them by hand, and nobody should: `lib/nodeRoles.js` names the Mini as
+the owner of both roles, and a second claimant makes a check-then-act claim
+unsound.
+
+So the question is never "shall I start one", it is "what is it doing":
+
+```
+./scripts/install_loop_runner.sh --status    # on the Mini: installed? alive? lock held? last pass?
+npm run node:owns -- loop-build              # may THIS machine run it? 0 yes, 3 another machine's
+npm run pipeline -- check                    # is the line paused? 3 = paused, claim nothing
+```
+
+A loop that is alive and claims nothing every pass is the state that reads as
+healthy and is not — usually the work-in-progress cap being full, which means
+the merge side is the bottleneck, not the queue. The status output and the last
+pass's own report say which.
+
+### Starting one by hand — the fallback
+
+Only on a machine that owns the role and has no schedule installed (a new
+machine mid-cutover, or the Mini with its agents unloaded). Two commands, each
+in **its own session**:
 
 ```
 # In session A:

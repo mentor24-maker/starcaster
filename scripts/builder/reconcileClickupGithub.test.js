@@ -9,7 +9,7 @@ const {
   checkMergedTasks,
   checkStampedBranches,
   isTerminal,
-  distinctPrs,
+  closureNote,
 } = require('../reconcile_clickup_github.cjs');
 
 /**
@@ -29,7 +29,23 @@ function buckets() {
   return { clean: [], repaired: [], unchecked: [] };
 }
 
-const comments = (...c) => async () => c;
+/**
+ * Comment RECORDS, oldest-first, the shape `getTaskCommentRecords` returns.
+ *
+ * They were bare strings until 2026-09-04 (ticket 86bbuv66c). The decision now
+ * runs through `mergeOnComment.findPullRequest`, which sorts by `date` to pick
+ * the newest `PR opened:` line — handed strings it would see every comment as
+ * equally old and take whichever it met first, which is the OLDEST. So the
+ * dates here are load-bearing, not decoration.
+ */
+const comments = (...c) => async () => c.map((text, i) => ({
+  id: `c${i + 1}`,
+  date: String(1_700_000_000_000 + i * 1000),
+  comment_text: text,
+}));
+
+/** The shape `clickup pr-opened` writes — the only shape that decides anything. */
+const trail = (n) => `PR opened: https://github.com/org/repo/pull/${n}`;
 
 // ── checkMergedTasks ─────────────────────────────────────────────────────
 
@@ -37,7 +53,7 @@ test('dry run: a merged PR on an auto-repair status is "would repair", and NOTHI
   const { clean, repaired, unchecked } = buckets();
   let writes = 0;
   await checkMergedTasks([task('t1', 'Widget', 'in review')], clean, repaired, unchecked, {
-    getComments: comments('see https://github.com/org/repo/pull/42'),
+    getComments: comments(trail(42)),
     prState: () => ({ state: 'MERGED' }),
     updateStatus: () => { writes += 1; },
     isLive: false,
@@ -53,10 +69,11 @@ test('live: a merged PR on Building IS repaired — the task is moved to Live, v
   const { clean, repaired, unchecked } = buckets();
   const moved = [];
   await checkMergedTasks([task('t1', 'Widget', 'building')], clean, repaired, unchecked, {
-    getComments: comments('PR: https://github.com/org/repo/pull/42'),
+    getComments: comments(trail(42)),
     prState: () => ({ state: 'MERGED' }),
     updateStatus: (id, status) => moved.push([id, status]),
     isLive: true,
+    commentOn: () => {},
   });
   assert.deepEqual(moved, [['t1', 'Live']]);
   assert.equal(repaired.length, 1);
@@ -67,10 +84,11 @@ test('the second run is a no-op: once a task is Live it is out of the in-flight 
   const moved = [];
   const run1 = buckets();
   await checkMergedTasks([task('t1', 'Widget', 'in review')], run1.clean, run1.repaired, run1.unchecked, {
-    getComments: comments('https://github.com/org/repo/pull/42'),
+    getComments: comments(trail(42)),
     prState: () => ({ state: 'MERGED' }),
     updateStatus: (id, status) => moved.push([id, status]),
     isLive: true,
+    commentOn: () => {},
   });
   assert.equal(moved.length, 1);
 
@@ -81,10 +99,11 @@ test('the second run is a no-op: once a task is Live it is out of the in-flight 
   // end state.
   const run2 = buckets();
   await checkMergedTasks([task('t1', 'Widget', 'live', 'closed')], run2.clean, run2.repaired, run2.unchecked, {
-    getComments: comments('https://github.com/org/repo/pull/42'),
+    getComments: comments(trail(42)),
     prState: () => ({ state: 'MERGED' }),
     updateStatus: (id, status) => moved.push([id, status]),
     isLive: true,
+    commentOn: () => {},
   });
   assert.equal(moved.length, 1, 'the second run must not touch it again');
   assert.deepEqual(run2, buckets());
@@ -96,23 +115,23 @@ test('the NEWEST linked PR is authoritative — a superseded older link never wi
   // Oldest comment links the abandoned first PR; newest links the merged one.
   await checkMergedTasks([task('t1', 'Rebuilt', 'in review')], clean, repaired, unchecked, {
     getComments: comments(
-      'PR opened: https://github.com/org/repo/pull/10',   // superseded
+      trail(10),   // superseded
       'sent back, reworked',
-      'PR opened: https://github.com/org/repo/pull/20',   // the real one
+      trail(20),   // the real one
     ),
-    prState: (o, r, n) => { seen.push(n); return n === '20' ? { state: 'MERGED' } : { state: 'CLOSED' }; },
+    prState: (o, r, n) => { seen.push(n); return Number(n) === 20 ? { state: 'MERGED' } : { state: 'CLOSED' }; },
     updateStatus: () => {},
     isLive: false,
   });
-  assert.deepEqual(seen, ['20'], 'only the newest PR is consulted');
+  assert.deepEqual(seen, [20], 'only the newest PR is consulted');
   assert.equal(repaired.length, 1);
-  assert.match(repaired[0], /PR #20 merged \(newest of 2 linked PRs\)/);
+  assert.match(repaired[0], /PR #20 merged \(newest of 2 trail PRs\)/);
 });
 
 test('a CLOSED-unmerged PR while the task is in-flight is FLAGGED, never "clean" (review finding 2)', async () => {
   const dry = buckets();
   await checkMergedTasks([task('t1', 'Stuck', 'in review')], dry.clean, dry.repaired, dry.unchecked, {
-    getComments: comments('https://github.com/org/repo/pull/9'),
+    getComments: comments(trail(9)),
     prState: () => ({ state: 'CLOSED' }),
     isLive: false,
   });
@@ -123,11 +142,12 @@ test('a CLOSED-unmerged PR while the task is in-flight is FLAGGED, never "clean"
   const posted = [];
   const wet = buckets();
   await checkMergedTasks([task('t1', 'Stuck', 'in review')], wet.clean, wet.repaired, wet.unchecked, {
-    getComments: comments('https://github.com/org/repo/pull/9'),
+    getComments: comments(trail(9)),
     prState: () => ({ state: 'CLOSED' }),
     postBus: async (ch, text) => posted.push(text),
     recordFlagged: () => {},
     isLive: true,
+    commentOn: () => {},
   });
   assert.equal(posted.length, 1);
   assert.match(posted[0], /CLOSED without merging/);
@@ -138,24 +158,226 @@ test('a merged PR on an OPERATOR status is FLAGGED, never auto-moved (review fin
     const { clean, repaired, unchecked } = buckets();
     const moved = [];
     const posted = [];
+    const commented = [];
     await checkMergedTasks([task('t1', 'Held', status)], clean, repaired, unchecked, {
-      getComments: comments('https://github.com/org/repo/pull/42'),
+      getComments: comments(trail(42)),
       prState: () => ({ state: 'MERGED' }),
       updateStatus: (id, s) => moved.push([id, s]),
       postBus: async (ch, text) => posted.push(text),
+      commentOn: async (id, text) => commented.push([id, text]),
       recordFlagged: () => {},
       isLive: true,
+      commentOn: () => {},
     });
     assert.equal(moved.length, 0, `${status}: must never be auto-moved`);
     assert.equal(posted.length, 1, `${status}: must be flagged instead`);
     assert.match(posted[0], /Only you move a task out of that status/);
+    assert.equal(unchecked.length, 0, `${status}: nothing should have been left unverified`);
   }
+});
+
+/**
+ * AC5 of task 86bbtqpxd — this finding is DURABLE, not one line in a sweep.
+ *
+ * The reconciler made exactly this finding about ticket 86bbqw49y and posted
+ * it to the bus, where it competed with everything else and nobody acted on
+ * it. The ticket sat twelve hours with its work already merged and live in
+ * production. A merged PR under an operator status means FINISHED WORK IS
+ * INVISIBLE ON THE DEPLOY LIST, so it lands on the ticket it is about too.
+ */
+test('a merged PR under an operator status is recorded ON THE TICKET, not only on the bus', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const posted = [];
+  const commented = [];
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], clean, repaired, unchecked, {
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async (ch, text) => posted.push(text),
+    commentOn: async (id, text) => commented.push([id, text]),
+    recordFlagged: () => {},
+    isLive: true,
+  });
+  assert.equal(commented.length, 1, 'the durable half of the finding is missing');
+  assert.equal(commented[0][0], 't1', 'it goes on the ticket the finding is ABOUT');
+  const body = commented[0][1];
+  assert.match(body, /already MERGED/);
+  assert.match(body, /Dane|an agent session/, 'the message must name who acts (DOCTRINE 2.5)');
+  assert.match(body, /deploy list/, 'it must say WHY this matters, not just that it is odd');
+  assert.equal(posted.length, 1, 'the bus still hears about it once');
+});
+
+test('the durable comment is proposed, never written, in a dry run', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const commented = [];
+  const posted = [];
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], clean, repaired, unchecked, {
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async (ch, text) => posted.push(text),
+    commentOn: async (id, text) => commented.push([id, text]),
+    isLive: false,
+  });
+  assert.equal(commented.length, 0, 'a dry run must never write');
+  assert.equal(posted.length, 0);
+  assert.ok(repaired.some((r) => /would also comment on task t1/.test(r)), 'and it must SAY it would have');
+});
+
+test('a failed ticket comment is reported, never swallowed', async () => {
+  // DOCTRINE 3.11: a surface that could not be written is not a surface that
+  // carried the finding.
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], clean, repaired, unchecked, {
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async () => {},
+    commentOn: async () => { throw new Error('ClickUp said no'); },
+    recordFlagged: () => {},
+    isLive: true,
+  });
+  assert.equal(unchecked.length, 1);
+  assert.match(unchecked[0], /ticket comment FAILED to post/);
+  assert.match(unchecked[0], /ClickUp said no/);
+});
+
+test('an unchanged finding is not re-posted on the next run — one comment, not one per run', async () => {
+  const flagged = new Set();
+  const commented = [];
+  const posted = [];
+  const deps = {
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async (ch, text) => posted.push(text),
+    commentOn: async (id, text) => commented.push([id, text]),
+    alreadyFlagged: flagged,
+    recordFlagged: (key) => flagged.add(key),
+    isLive: true,
+  };
+  for (let run = 0; run < 3; run += 1) {
+    const { clean, repaired, unchecked } = buckets();
+    await checkMergedTasks([task('t1', 'Held', 'ready to launch')], clean, repaired, unchecked, deps);
+  }
+  assert.equal(commented.length, 1, 'three runs, one comment');
+  assert.equal(posted.length, 1, 'three runs, one bus post');
+});
+
+// ── ROUND 2 of task 86bbtqpxd: the durable half must actually REACH the
+//    tickets that already carry the finding ────────────────────────────────
+//
+// Review round 1 measured this on the live flag file: the single dedup key was
+// checked before EITHER surface was written, so the moment the ticket comment
+// was added it was already suppressed on every ticket ever flagged to the bus.
+// `.git/reconciler-flags.json` on the Mini held
+// `contradiction:merged-operator:86bbqb08p:553` from before the feature
+// existed — a live instance of exactly the case the comment is for, which
+// would have stayed a bus line forever. The fix that removes a bus-only
+// finding must not itself be delivered only where there was no bus finding.
+
+test('ROUND 2: a finding flagged to the bus BEFORE the durable half existed still gets its ticket comment', async () => {
+  const flagged = new Set(['contradiction:merged-operator:t1:42']); // written by an older run
+  const commented = [];
+  const posted = [];
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], clean, repaired, unchecked, {
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async (ch, text) => posted.push(text),
+    commentOn: async (id, text) => commented.push([id, text]),
+    alreadyFlagged: flagged,
+    recordFlagged: (key) => flagged.add(key),
+    isLive: true,
+  });
+  assert.equal(commented.length, 1, 'the ticket comment was never posted, so an old bus flag must not suppress it');
+  assert.equal(commented[0][0], 't1');
+  assert.equal(posted.length, 0, 'the bus half WAS already said — it is not repeated');
+  assert.ok(repaired.some((r) => /already flagged to the bus/.test(r)), 'and the report says why the bus was skipped');
+
+  // ...and it is not said twice on the run after that.
+  const second = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], second.clean, second.repaired, second.unchecked, {
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async (ch, text) => posted.push(text),
+    commentOn: async (id, text) => commented.push([id, text]),
+    alreadyFlagged: flagged,
+    recordFlagged: (key) => flagged.add(key),
+    isLive: true,
+  });
+  assert.equal(commented.length, 1, 'one comment in total, still');
+  assert.equal(posted.length, 0);
+});
+
+test('ROUND 2: a ticket comment that FAILED is retried next run; the bus post that succeeded is not', async () => {
+  // Round 1, finding 3a: `recordFlagged` ran whenever EITHER surface landed,
+  // so a comment that threw beside a bus post that worked was reported and
+  // then never attempted again. Reported is not recoverable.
+  const flagged = new Set();
+  const posted = [];
+  const commented = [];
+  let commentWorks = false;
+  const deps = () => ({
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async (ch, text) => posted.push(text),
+    commentOn: async (id, text) => {
+      if (!commentWorks) throw new Error('ClickUp said no');
+      commented.push([id, text]);
+    },
+    alreadyFlagged: flagged,
+    recordFlagged: (key) => flagged.add(key),
+    isLive: true,
+  });
+
+  const first = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], first.clean, first.repaired, first.unchecked, deps());
+  assert.equal(commented.length, 0);
+  assert.equal(posted.length, 1, 'the bus half landed');
+  assert.match(first.unchecked[0], /ticket comment FAILED to post/);
+  assert.match(first.unchecked[0], /tried again next run/, 'it must say it is recoverable, because it now is');
+
+  commentWorks = true;
+  const second = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], second.clean, second.repaired, second.unchecked, deps());
+  assert.equal(commented.length, 1, 'the half that failed is retried');
+  assert.equal(posted.length, 1, 'the half that succeeded is NOT repeated');
+
+  const third = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], third.clean, third.repaired, third.unchecked, deps());
+  assert.equal(commented.length, 1, 'and now both halves are done and stay quiet');
+  assert.equal(posted.length, 1);
+});
+
+test('ROUND 2: a bus post that FAILED is retried next run; the comment that succeeded is not', async () => {
+  const flagged = new Set();
+  const posted = [];
+  const commented = [];
+  let busWorks = false;
+  const deps = () => ({
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async (ch, text) => { if (!busWorks) throw new Error('party line down'); posted.push(text); },
+    commentOn: async (id, text) => commented.push([id, text]),
+    alreadyFlagged: flagged,
+    recordFlagged: (key) => flagged.add(key),
+    isLive: true,
+  });
+
+  const first = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], first.clean, first.repaired, first.unchecked, deps());
+  assert.equal(commented.length, 1, 'the durable half landed');
+  assert.equal(posted.length, 0);
+  assert.match(first.unchecked[0], /could not post to the bus/);
+
+  busWorks = true;
+  const second = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], second.clean, second.repaired, second.unchecked, deps());
+  assert.equal(posted.length, 1, 'the bus half is retried');
+  assert.equal(commented.length, 1, 'the ticket is not commented on twice');
 });
 
 test('an open PR is clean', async () => {
   const { clean, repaired, unchecked } = buckets();
   await checkMergedTasks([task('t1', 'X', 'building')], clean, repaired, unchecked, {
-    getComments: comments('https://github.com/org/repo/pull/9'),
+    getComments: comments(trail(9)),
     prState: () => ({ state: 'OPEN' }),
     isLive: false,
   });
@@ -172,7 +394,7 @@ test('an in-flight task with NO PR link is UNCHECKED, not clean (review finding 
   });
   assert.equal(clean.length, 0, 'no way to confirm shipped-or-not is not "fine"');
   assert.equal(unchecked.length, 1);
-  assert.match(unchecked[0], /no PR linked/);
+  assert.match(unchecked[0], /no "PR opened:" trail/);
 });
 
 test('comments that could not be read are UNCHECKED (DOCTRINE 3.11)', async () => {
@@ -188,7 +410,7 @@ test('comments that could not be read are UNCHECKED (DOCTRINE 3.11)', async () =
 test('a linked PR gh could not read is UNCHECKED, never assumed merged or open', async () => {
   const { clean, repaired, unchecked } = buckets();
   await checkMergedTasks([task('t1', 'X', 'building')], clean, repaired, unchecked, {
-    getComments: comments('https://github.com/org/repo/pull/9'),
+    getComments: comments(trail(9)),
     prState: () => null,
     isLive: false,
   });
@@ -215,10 +437,11 @@ test('Queued is out of scope entirely; Live is inspected ONLY for an open PR', a
 test('a write failure during a live repair is UNCHECKED, not silently swallowed', async () => {
   const { clean, repaired, unchecked } = buckets();
   await checkMergedTasks([task('t1', 'X', 'building')], clean, repaired, unchecked, {
-    getComments: comments('https://github.com/org/repo/pull/9'),
+    getComments: comments(trail(9)),
     prState: () => ({ state: 'MERGED' }),
     updateStatus: () => { throw new Error('status did not stick'); },
     isLive: true,
+    commentOn: () => {},
   });
   assert.equal(repaired.length, 0, 'a failed write is not a repair');
   assert.equal(unchecked.length, 1);
@@ -229,12 +452,13 @@ test('a contradiction already flagged on an earlier run is NOT re-posted (review
   const posted = [];
   const { clean, repaired, unchecked } = buckets();
   await checkMergedTasks([task('t1', 'Stuck', 'in review')], clean, repaired, unchecked, {
-    getComments: comments('https://github.com/org/repo/pull/9'),
+    getComments: comments(trail(9)),
     prState: () => ({ state: 'CLOSED' }),
     postBus: async (ch, text) => posted.push(text),
     alreadyFlagged: new Set(['contradiction:closed-pr:t1:9']),
     recordFlagged: () => { throw new Error('must not record — nothing new was posted'); },
     isLive: true,
+    commentOn: () => {},
   });
   assert.equal(posted.length, 0, 'an unchanged contradiction is posted once, not every run');
   assert.equal(repaired.length, 1);
@@ -283,6 +507,7 @@ test('a branch whose stamped task is terminal is flagged — dry proposes, live 
     postBus: async (ch, text) => posted.push(text),
     recordFlagged: () => {},
     isLive: true,
+    commentOn: () => {},
   });
   assert.equal(posted.length, 1);
   assert.match(posted[0], /already live/i);
@@ -313,14 +538,17 @@ test('a stamp pointing at a task outside this list is UNCHECKED, not assumed orp
 
 // ── pure helpers ──────────────────────────────────────────────────────────
 
-test('distinctPrs de-duplicates and preserves order (oldest→newest)', () => {
-  const prs = distinctPrs([
-    'https://github.com/org/repo/pull/10',
-    'noise',
-    'https://github.com/org/repo/pull/10',   // dup of the first
-    'https://github.com/org/repo/pull/20',
-  ]);
-  assert.deepEqual(prs.map((p) => p.number), ['10', '20']);
+test('closureNote names the actor, the machine, the PR and its merge time', () => {
+  const note = closureNote({
+    prName: 'PR #42',
+    prUrl: 'https://github.com/org/repo/pull/42',
+    mergedAt: '2026-09-04T03:06:41Z',
+  });
+  assert.match(note, /reconcile/, 'the job must name itself — the ClickUp token is Dane, so nothing else can');
+  assert.match(note, /PR #42/);
+  assert.match(note, /https:\/\/github\.com\/org\/repo\/pull\/42/);
+  assert.match(note, /2026-09-04T03:06:41Z/);
+  assert.match(note, /not his word/, 'a machine write must never read as the operator');
 });
 
 test('isTerminal: type wins, name is the fallback', () => {
@@ -363,6 +591,7 @@ test('it is never repaired automatically — only a person knows which side is w
     updateStatus: () => { writes += 1; },
     postBus: () => {},
     isLive: true,
+    commentOn: () => {},
   });
   assert.equal(writes, 0, 'a terminal task with an open PR must never be moved automatically');
 });
@@ -397,12 +626,13 @@ test('THE REAL SHAPE: a Live ticket linking an open leftover AND a newer merged 
   const { clean, repaired, unchecked } = buckets();
   await checkMergedTasks([task('t1', 'Race-safe verdicts', 'live', 'closed')], clean, repaired, unchecked, {
     getComments: comments(
-      'PR opened: https://github.com/org/repo/pull/374',
-      'PR opened: https://github.com/org/repo/pull/391',
+      trail(374),
+      trail(391),
     ),
-    // distinctPrs yields the number as a STRING (it comes straight out of the
-    // URL regex), so compare numerically — a === against a literal silently
-    // matches nothing and the test passes for the wrong reason.
+    // The trail parser yields the number as a Number; older code yielded a
+    // string. Comparing numerically survives both — a === against a literal of
+    // the wrong type silently matches nothing and the test passes for the
+    // wrong reason.
     prState: (o, r, number) => ({ state: Number(number) === 374 ? 'OPEN' : 'MERGED' }),
     isLive: false,
   });
@@ -434,4 +664,102 @@ test('the leftover-PR scan is bounded — the terminal set only grows', () => {
     'and take the most recently updated, so the cap keeps the useful end');
   assert.match(src, /scanning the \$\{scanned\.length\} most recently updated of \$\{terminal\.length\}/,
     'and say how many it skipped — a silent cap is a check that quietly stops covering things');
+});
+
+
+// ── the 2026-09-03 false close (ticket 86bbuv66c) ─────────────────────────
+
+test('a PR mentioned in DISCUSSION is not this ticket\'s PR — no move, and it says it cannot confirm', async () => {
+  // The incident, in one test. 86bbu60ax carried a cross-reference to PR #558
+  // ("Docs: overlay screens…", merged, unrelated) filed by a loop pass as
+  // evidence — exactly what a loop should do. The moment a session claimed the
+  // ticket into Building, reconcile read that URL as the ticket's own work and
+  // closed an urgent, unbuilt ticket as shipped.
+  const { clean, repaired, unchecked } = buckets();
+  const moved = [];
+  await checkMergedTasks([task('t1', 'Reconcile bug', 'building')], clean, repaired, unchecked, {
+    getComments: comments(
+      'That is precisely the open defect on https://github.com/org/repo/pull/558 — filed as evidence.',
+    ),
+    prState: () => ({ state: 'MERGED' }),
+    updateStatus: (id, status) => moved.push([id, status]),
+    commentOn: () => {},
+    isLive: true,
+  });
+  assert.deepEqual(moved, [], 'a quoted PR must never close a ticket');
+  assert.equal(repaired.length, 0);
+  assert.equal(unchecked.length, 1);
+  assert.match(unchecked[0], /no "PR opened:" trail/);
+});
+
+test('a quoted PR does not win over the ticket\'s own older trail PR', async () => {
+  // The sharper version: the ticket HAS a trail, and someone later pasted a
+  // different, merged PR into discussion. Newest-comment-wins would close it.
+  const { clean, repaired, unchecked } = buckets();
+  const moved = [];
+  await checkMergedTasks([task('t1', 'Widget', 'in review')], clean, repaired, unchecked, {
+    getComments: comments(
+      trail(42),
+      'see also https://github.com/org/repo/pull/558 which shipped last night',
+    ),
+    prState: (o, r, number) => ({ state: Number(number) === 42 ? 'OPEN' : 'MERGED' }),
+    updateStatus: (id, status) => moved.push([id, status]),
+    commentOn: () => {},
+    isLive: true,
+  });
+  assert.deepEqual(moved, [], 'the ticket\'s own PR is open, so it has not shipped');
+  assert.equal(clean.length, 1);
+  assert.match(clean[0], /PR #42 is open/);
+});
+
+test('the explanation comment is posted BEFORE the move, and a failed comment cancels the move', async () => {
+  const order = [];
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Widget', 'building')], clean, repaired, unchecked, {
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED', mergedAt: '2026-09-04T03:06:41Z' }),
+    commentOn: () => order.push('comment'),
+    updateStatus: () => order.push('move'),
+    isLive: true,
+  });
+  assert.deepEqual(order, ['comment', 'move'], 'the trail is written first, or a failure leaves a silent close');
+
+  const second = buckets();
+  const moved = [];
+  await checkMergedTasks([task('t2', 'Widget', 'building')], second.clean, second.repaired, second.unchecked, {
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED' }),
+    commentOn: () => { throw new Error('ClickUp said no'); },
+    updateStatus: (id, status) => moved.push([id, status]),
+    isLive: true,
+  });
+  assert.deepEqual(moved, [], 'no explanation means no close — an unexplained close is the defect');
+  assert.equal(second.repaired.length, 0);
+  assert.match(second.unchecked[0], /ClickUp said no/);
+  assert.match(second.unchecked[0], /NOT moved/);
+});
+
+test('onWrite fires only when a live move actually happens — it is what makes the pass exit 3', async () => {
+  let writes = 0;
+  const dry = buckets();
+  await checkMergedTasks([task('t1', 'Widget', 'building')], dry.clean, dry.repaired, dry.unchecked, {
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED' }),
+    commentOn: () => {},
+    updateStatus: () => {},
+    onWrite: () => { writes += 1; },
+    isLive: false,
+  });
+  assert.equal(writes, 0, 'a rehearsal that reported exit 3 would call a dry run a change');
+
+  const live = buckets();
+  await checkMergedTasks([task('t1', 'Widget', 'building')], live.clean, live.repaired, live.unchecked, {
+    getComments: comments(trail(42)),
+    prState: () => ({ state: 'MERGED' }),
+    commentOn: () => {},
+    updateStatus: () => {},
+    onWrite: () => { writes += 1; },
+    isLive: true,
+  });
+  assert.equal(writes, 1);
 });

@@ -68,6 +68,85 @@ const SHELL_TIMEOUT_MS = Number(process.env.CLICKUP_SHELL_TIMEOUT_MS) || 2 * 60 
  */
 const API_BASE = process.env.CLICKUP_API_BASE || 'https://api.clickup.com';
 
+// ── THE ONE DOOR TO CLICKUP ───────────────────────────────────────────────────
+/**
+ * The single place in this repo that calls `fetch` against api.clickup.com
+ * (2026-09-03, task 86bbugcdb).
+ *
+ * WHY. The limit is per TOKEN, and there is one token for the whole company.
+ * Six files each opened their own connection, four of them counted nothing,
+ * and only one read `x-ratelimit-*` at all — and printed the numbers to stderr
+ * rather than keeping them. So nothing in the system could answer "how much
+ * budget is left?", and on 2026-09-03 a bus-relay pass spending 114 requests
+ * against a ~100/minute allowance was rate-limited on every pass for hours,
+ * which disabled the auto-merge lane for 271 consecutive passes.
+ *
+ * THIS FUNCTION NEVER THROWS. That is a safety property, not a style choice.
+ * `fetch` REJECTS on a transport failure rather than resolving with a non-ok
+ * response; when that rejection escaped, it killed the process with exit 1 —
+ * and `loop-build` reads exit 1 as "could not tell, so proceed, unbounded by
+ * the cap". A routine network blip therefore UNCAPPED the loop (task
+ * 86bbm4zwd). Callers get `transportError` set and decide for themselves
+ * whether to throw; the two existing callers do NOT agree on the answer, so
+ * this one does not pick for them.
+ *
+ * It counts at the ATTEMPT, not the success: a request that failed to connect
+ * still spent whatever the attempt costs, and for a budget you would rather
+ * over-count than under-count.
+ */
+const budget = {
+  requests: 0,
+  limit: null,
+  remaining: null,
+  resetSeconds: null,
+  at: 0,
+};
+
+async function clickupFetch(url, init = {}) {
+  budget.requests += 1;
+  let res;
+  try {
+    res = await fetch(url, init);
+  } catch (err) {
+    return { res: null, json: null, text: null, transportError: err };
+  }
+  recordLimits(res);
+  let text;
+  try {
+    text = await res.text();
+  } catch (err) {
+    // The body can fail mid-stream after a perfectly good set of headers — a
+    // dropped connection reads as a rejection here, not at the line above.
+    return { res, json: null, text: null, transportError: err };
+  }
+  let json = null;
+  try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
+  return { res, json, text, transportError: null };
+}
+
+/** Keep the live rate-limit state instead of printing it and throwing it away.
+ *  A header ClickUp did not send leaves the previous reading alone rather than
+ *  overwriting it with null — a missing header is "no news", not "no budget". */
+function recordLimits(res) {
+  const limit = res.headers.get('x-ratelimit-limit');
+  const remaining = res.headers.get('x-ratelimit-remaining');
+  const reset = res.headers.get('x-ratelimit-reset');
+  if (limit == null && remaining == null) return;
+  if (limit != null) budget.limit = Number(limit);
+  if (remaining != null) budget.remaining = Number(remaining);
+  if (reset != null) budget.resetSeconds = Number(reset);
+  budget.at = Date.now();
+}
+
+/** What is left, for a caller that wants to decide something with it. A copy,
+ *  so a caller cannot edit the counter it is reading. */
+function getBudget() {
+  const secs = Number.isFinite(budget.resetSeconds)
+    ? Math.max(0, budget.resetSeconds - Math.floor(Date.now() / 1000))
+    : null;
+  return { ...budget, resetsInSeconds: secs };
+}
+
 function requireToken() {
   if (!TOKEN) {
     throw new Error(
@@ -104,28 +183,24 @@ async function call(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {})
 
 async function callOnce(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {}) {
   requireToken();
-  let res;
-  try {
-    res = await fetch(`${API_BASE}${apiPath}`, {
-      method,
-      headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-      // The deadline covers the response HEADERS. `res.text()` below is bounded
-      // by the same signal, because aborting the signal also errors a body that
-      // is still streaming.
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (err) {
-    throw new Error(timeoutAwareMessage(err, `${method} ${apiPath}`, timeoutMs));
+  // Through the one door. This file's contract is to THROW on a transport
+  // failure — every caller here is written around that — so the no-throw
+  // result is converted back at exactly this line, and nowhere else.
+  const out = await clickupFetch(`${API_BASE}${apiPath}`, {
+    method,
+    headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+    // The deadline covers the response HEADERS. Reading the body is bounded by
+    // the same signal, because aborting the signal also errors a body that is
+    // still streaming.
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (out.transportError) {
+    const where = out.res ? `${method} ${apiPath} (reading the response body)` : `${method} ${apiPath}`;
+    throw new Error(timeoutAwareMessage(out.transportError, where, timeoutMs));
   }
-  let text;
-  try {
-    text = await res.text();
-  } catch (err) {
-    throw new Error(timeoutAwareMessage(err, `${method} ${apiPath} (reading the response body)`, timeoutMs));
-  }
-  let json = null;
-  try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
+  const { res, json } = out;
+  const text = out.text;
   // resetSeconds is surfaced so the retry loop above can wait exactly as long
   // as ClickUp asks, rather than guessing.
   return { ok: res.ok, status: res.status, json, text, resetSeconds: res.headers.get('x-ratelimit-reset') };
@@ -235,7 +310,22 @@ async function pageComments({ get, taskId, maxPages = 40 }) {
  * caller here wants the trail, and half a trail that looks whole is how a
  * reader concludes something never happened.
  */
-async function getTaskComments(taskId) {
+/**
+ * A task's comments as RECORDS — `{ id, date, comment_text }`, oldest-first.
+ *
+ * `getTaskComments` below flattens these to bare strings, which is all most
+ * callers want. A caller that has to decide something about a comment needs
+ * more than its text: `mergeOnComment.findPullRequest` sorts by `date` to pick
+ * the newest `PR opened:` line and returns the `id` so the decision can be
+ * marked as spent. Handed strings instead, it silently sees every comment as
+ * equally old and returns whichever it met first — which is the OLDEST, the
+ * opposite of the rule it documents.
+ *
+ * That is not hypothetical: the reconciler passed strings, so it could not use
+ * that parser at all, wrote its own loose regex over prose, and closed a live
+ * ticket on another ticket's pull request (86bbuv66c, 2026-09-04).
+ */
+async function getTaskCommentRecords(taskId) {
   const out = await pageComments({ get: (p) => call('GET', p), taskId });
   if (!out.complete) {
     if (out.capped) {
@@ -245,7 +335,15 @@ async function getTaskComments(taskId) {
     throw new Error(`getTaskComments(${taskId}): HTTP ${f.status} ${(f.json && f.json.err) || String(f.text || '').slice(0, 200)}`);
   }
   // API order is newest-first within a page; reverse the whole set to oldest-first.
-  return out.comments.reverse().map((c) => c.comment_text || '');
+  return out.comments.reverse().map((c) => ({
+    id: String(c.id ?? ''),
+    date: c.date,
+    comment_text: c.comment_text || '',
+  }));
+}
+
+async function getTaskComments(taskId) {
+  return (await getTaskCommentRecords(taskId)).map((c) => c.comment_text);
 }
 
 /**
@@ -300,6 +398,24 @@ function moveTaskStatus(taskId, status, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
   });
 }
 
+/**
+ * Comment on a task through the direct door.
+ *
+ * A DURABLE surface, which is why it exists (2026-09-03, task 86bbtqpxd). The
+ * reconciler used to report a contradiction to the bus and nowhere else, so a
+ * finding about one specific ticket competed with every other message in the
+ * room and was read as traffic. A comment lands on the ticket the finding is
+ * ABOUT, where the next reader of that ticket cannot miss it — and it survives
+ * the channel scrolling.
+ */
+function commentOnTask(taskId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
+  return runDirect(['comment', '--task', String(taskId), '--body-file', '-'], {
+    input: text,
+    what: `comment on task ${taskId}`,
+    timeoutMs,
+  });
+}
+
 /** Post to the bus through the direct door (inherits its quota reporting). */
 function postBusMessage(channelId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
   return runDirect(['chat', '--channel', String(channelId), '--body-file', '-'], {
@@ -311,6 +427,9 @@ function postBusMessage(channelId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) 
 
 module.exports = {
   WORKSPACE,
+  // The one door, and the budget it keeps (task 86bbugcdb).
+  clickupFetch,
+  getBudget,
   COMMENT_PAGE_SIZE,
   HTTP_TIMEOUT_MS,
   SHELL_TIMEOUT_MS,
@@ -324,6 +443,8 @@ module.exports = {
   listTasks,
   pageComments,
   getTaskComments,
+  getTaskCommentRecords,
   moveTaskStatus,
+  commentOnTask,
   postBusMessage,
 };

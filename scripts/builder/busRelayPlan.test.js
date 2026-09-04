@@ -650,3 +650,101 @@ test('the reason a list fell short is carried into the line, not dropped', () =>
   ]);
   assert.match(v.line, /HTTP 429/);
 });
+
+/*
+ * THE HIGH-WATER MARK (2026-09-03, task 86bbugbay).
+ *
+ * The ordering fix above kept a spent budget off the merge lane. It did not
+ * make the budget smaller: a pass still spent 114-115 requests against a
+ * ~100-per-minute allowance, was rate-limited partway, and finished
+ * INCOMPLETE — which disables Lane A by standing condition 4. Lane A halted
+ * 271 consecutive passes and had never merged anything.
+ *
+ * Recency is a sound proxy here because a task's `date_updated` equals its
+ * newest comment's timestamp to the millisecond (measured on 86bbqpwfa,
+ * 2026-09-03). The risk is not cost, it is a MISSED operator comment, which
+ * is silent — so every test below is about what must still be read.
+ */
+const { ticketsToRead, markAfterPass, DEFAULT_OVERLAP_MS } = require('./busRelayPlan.js');
+
+const at = (ms) => ({ id: `t${ms}`, date_updated: String(ms) });
+const NOTIFY = { list: 'AR', merge: false };
+const MERGES = { list: 'LQ', merge: true };
+
+test('a ticket untouched since the last completed pass costs no comment read', () => {
+  const mark = 10_000_000;
+  const out = ticketsToRead({ watch: NOTIFY, tasks: [at(1), at(mark + 5_000)], mark });
+  assert.equal(out.read.length, 1);
+  assert.equal(out.read[0].id, `t${mark + 5000}`);
+  assert.equal(out.skipped, 1);
+});
+
+test('a comment posted BETWEEN two passes is read on the next one', () => {
+  const mark = 10_000_000;
+  const between = at(mark + 1);
+  const out = ticketsToRead({ watch: NOTIFY, tasks: [between], mark });
+  assert.deepEqual(out.read, [between]);
+});
+
+/*
+ * THE TRAP THE TICKET NAMED. A comment that lands WHILE a pass is running, on
+ * a ticket that pass has already read, is older than the mark that pass then
+ * writes. Without an overlap it falls into the gap between the two passes and
+ * is never relayed — and a missed merge command is the exact failure this
+ * whole epic exists to fix.
+ *
+ * BREAK-TEST: set overlapMs to 0 and this assertion fails (verified by hand,
+ * 2026-09-03) — `read` comes back empty.
+ */
+test('a comment posted DURING a pass, on a ticket that pass already read, is still read next pass', () => {
+  const mark = 10_000_000;
+  const duringPass = at(mark - 30_000); // 30s before the mark: mid-pass
+  const out = ticketsToRead({ watch: NOTIFY, tasks: [duringPass], mark, overlapMs: DEFAULT_OVERLAP_MS });
+  assert.deepEqual(out.read, [duringPass], 'the overlap window must cover a comment that landed mid-pass');
+});
+
+test('the overlap is at least one relay interval, or the blind spot reopens', () => {
+  assert.ok(DEFAULT_OVERLAP_MS >= 600 * 1000);
+});
+
+/*
+ * BREAK-TEST: return `{ mark: startedAt, advanced: true }` unconditionally and
+ * this fails (verified by hand) — the mark advances past tickets the pass
+ * never reached, and their comments are skipped forever.
+ */
+test('a pass that did not complete a list does NOT advance that list\'s mark', () => {
+  const out = markAfterPass({ complete: false, startedAt: 20_000_000, previous: 10_000_000 });
+  assert.equal(out.mark, 10_000_000);
+  assert.equal(out.advanced, false);
+  assert.match(out.why, /re-read/);
+});
+
+test('a completed list stamps the time the pass STARTED, never when it finished', () => {
+  const out = markAfterPass({ complete: true, startedAt: 20_000_000, previous: 10_000_000 });
+  assert.equal(out.mark, 20_000_000);
+  assert.equal(out.advanced, true);
+});
+
+test('a cold start reads everything and says so, rather than relaying nothing', () => {
+  const out = ticketsToRead({ watch: NOTIFY, tasks: [at(1), at(2)], mark: NaN });
+  assert.equal(out.read.length, 2);
+  assert.match(out.reason, /cold start/);
+});
+
+/*
+ * THE NON-GOAL THE TICKET ASKED US TO DECIDE, pinned as a test so a later
+ * "optimisation" cannot quietly extend the filter to the merge lane.
+ *
+ * A refused merge command is re-decided every pass (task 86bbjt18r): PR #558
+ * was refused on 2026-09-03 because CI had not finished inside the merge
+ * step's wait, and the promise made to the operator was that a later pass
+ * would pick it up. The ticket then goes quiet — so a recency filter here
+ * would turn "you do not have to say merge again" into a lie. Lane A's own
+ * window works the same way: going quiet for an hour IS the lane.
+ */
+test('a merge-capable watch reads every ticket regardless of recency', () => {
+  const ancient = at(1);
+  const out = ticketsToRead({ watch: MERGES, tasks: [ancient], mark: 10_000_000 });
+  assert.deepEqual(out.read, [ancient], 'a quiet Ready-to-launch ticket must still be re-decided every pass');
+  assert.equal(out.skipped, 0);
+});
