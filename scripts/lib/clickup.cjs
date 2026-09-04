@@ -102,11 +102,21 @@ const budget = {
   at: 0,
 };
 
-async function clickupFetch(url, init = {}) {
+/**
+ * `fetchImpl` is injectable (2026-09-04, task 86bbugcpa) so that a caller with
+ * its own test fakes can come through the door instead of routing around it.
+ * `lib/clickupForward.js` runs on the bug reporter's request path and its
+ * tests drive every ClickUp failure shape through a substitute transport; the
+ * alternative was leaving it outside the door, which is exactly the second
+ * door this whole ticket exists to close. The request is counted whichever
+ * transport is used — the counter measures the ATTEMPT, and a caller cannot
+ * opt out of being counted by supplying its own `fetch`.
+ */
+async function clickupFetch(url, init = {}, { fetchImpl = fetch } = {}) {
   budget.requests += 1;
   let res;
   try {
-    res = await fetch(url, init);
+    res = await fetchImpl(url, init);
   } catch (err) {
     return { res: null, json: null, text: null, transportError: err };
   }
@@ -128,6 +138,10 @@ async function clickupFetch(url, init = {}) {
  *  A header ClickUp did not send leaves the previous reading alone rather than
  *  overwriting it with null — a missing header is "no news", not "no budget". */
 function recordLimits(res) {
+  // A response without headers is not a crash. Real ClickUp always sends them,
+  // but an injected transport need not, and the door must not be the thing
+  // that breaks when a caller hands it a simpler shape than a real Response.
+  if (!res || !res.headers || typeof res.headers.get !== 'function') return;
   const limit = res.headers.get('x-ratelimit-limit');
   const remaining = res.headers.get('x-ratelimit-remaining');
   const reset = res.headers.get('x-ratelimit-reset');
@@ -180,6 +194,47 @@ async function call(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {})
     waitedMs += decision.waitMs;
   }
 }
+
+/**
+ * WHAT A PASS COSTS, in the units ClickUp throttles on (task 86bbtqytq).
+ *
+ * `clickup_direct.mjs` has counted its own requests since the relay's interval
+ * was set, and closes every pass with "requests this pass: N". The scripts on
+ * THIS client — reconcile, stale-ready — had no such number, so the one
+ * question the ticket asked about scheduling reconcile more often ("measure
+ * before you schedule it; a watchdog that exhausts the rate limit takes the
+ * relay down with it") could only be answered by arithmetic on the source.
+ *
+ * A counter, not an estimate: comment paging makes the real figure depend on
+ * how chatty each ticket is, which no reading of the code produces.
+ *
+ * ONE COUNTER, AND IT IS THE ONE DOOR'S (resolved 2026-09-04, round 3).
+ *
+ * This branch and `main` grew a counter each, within hours, and they were
+ * written to disagree on purpose about what a request IS:
+ *
+ *   - the one door counts at the ATTEMPT — "a request that failed to connect
+ *     still spent whatever the attempt costs, and for a budget you would
+ *     rather over-count than under-count";
+ *   - this file's counted after `requireToken()` — "a missing token is a
+ *     request that never left the machine, and counting attempts there would
+ *     inflate exactly the number the ticket asked to be measured".
+ *
+ * Keeping both is the "keep both sides" shape DOCTRINE 6.7 was written about,
+ * so there is now one, and it is `budget.requests`. The losing argument turns
+ * out to cost nothing here, which is why the merge is safe rather than a coin
+ * flip: `clickupFetch` is reached from exactly one place in this file
+ * (`callOnce`, below), and `requireToken()` guards that line — so a missing
+ * token throws before the door is opened and is not counted either way. The
+ * two counters were numerically identical for every caller of this module.
+ *
+ * KNOWN UNDER-COUNT, unchanged by any of this and worth knowing before you
+ * schedule anything on the figure: WRITES from this module shell out to
+ * `scripts/clickup_direct.mjs`, a separate process with its own budget. They
+ * really are spent against the same per-token limit, and this number does not
+ * see them. It is a floor for a pass's cost, not the whole of it.
+ */
+const requestsMade = () => budget.requests;
 
 async function callOnce(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {}) {
   requireToken();
@@ -440,6 +495,7 @@ module.exports = {
   // Exported rather than re-implemented: a second fetch wrapper is a second
   // place for the token contract and the JSON/non-JSON handling to drift.
   call,
+  requestsMade,
   listTasks,
   pageComments,
   getTaskComments,

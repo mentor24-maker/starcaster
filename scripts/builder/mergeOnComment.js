@@ -442,9 +442,12 @@ function unmetProtectionRule(pr) {
  * What to do with the PR itself, given `gh pr view --json
  * state,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup`.
  *
- *   'merge'         — go
- *   'update-branch' — behind main; catch it up, then re-run the gate
- *   'conflict'      — hand it to an agent session; a script never resolves conflicts
+ *   'merge'            — go
+ *   'update-branch'    — behind main; catch it up via GitHub, then re-run the gate
+ *   'catch-up-locally' — GitHub says it conflicts and git says it does not;
+ *                        merge main in HERE and push (GitHub's own
+ *                        `update-branch` refuses on a PR it has flagged)
+ *   'conflict'         — hand it to an agent session; a script never resolves conflicts
  *   'wait'          — checks still running; say nothing, try next pass
  *   'refuse'        — terminal; comment on the ticket and stop
  *
@@ -500,10 +503,29 @@ function githubGate(pr, { gitCrossCheck = null } = {}) {
   if (mergeable === 'CONFLICTING' || mergeStateStatus === 'DIRTY') {
     const cc = gitCrossCheck;
     if (cc && cc.known && cc.conflicts === false) {
+      // THE DISAGREEMENT HAS A KNOWN REMEDY, SO REPORTING IT IS NOT ENOUGH
+      // (2026-09-04, task 86bbuvcwc). This used to answer `wait` — no
+      // conflict claimed, ask again next pass — which is right about the
+      // conflict and wrong about what happens next. Nothing was going to
+      // change on its own: measured on PR #585, this exact line was printed
+      // five times over fifty minutes, saying auto-merge would land a pull
+      // request GitHub had flagged and therefore would not land.
+      //
+      // One confirmed cause is `docs/WORK-LOG.md merge=union`. Git honours
+      // that driver and so does a merge GitHub PERFORMS, but the mergeability
+      // GitHub PRECOMPUTES does not — so a union-only difference reads as
+      // CONFLICTING for as long as the branch stays behind. That is not
+      // asserted as THE cause here, because this function does not know it:
+      // it is one measured instance of the general shape.
+      //
+      // What IS general is the remedy, and it was measured on the same PR —
+      // merging main in and pushing flipped GitHub to MERGEABLE within
+      // seconds. So the answer is the local catch-up, not GitHub's
+      // `update-branch` (which refuses on a PR it has called CONFLICTING).
       return {
-        action: 'wait',
+        action: 'catch-up-locally',
         disagreement: true,
-        reason: `CANNOT TELL — GitHub reports this branch as ${mergeable === 'CONFLICTING' ? 'CONFLICTING' : 'DIRTY'}, but git merges ${cc.base || 'main'} into ${cc.head || 'the branch'} cleanly (merge-tree exit 0). The two sources disagree, so no conflict is claimed; the next pass asks again`,
+        reason: `GitHub reports this branch as ${mergeable === 'CONFLICTING' ? 'CONFLICTING' : 'DIRTY'}, but git merges ${cc.base || 'main'} into ${cc.head || 'the branch'} cleanly (merge-tree exit 0). The two sources disagree, so no conflict is claimed — this machine merges ${cc.base || 'main'} into the branch and pushes, which is what cleared the identical reading on PR #585`,
       };
     }
     if (cc && cc.known && cc.conflicts === true) {
@@ -707,7 +729,7 @@ function mayWaitInPass(waitsUsed, cap = MAX_IN_PASS_WAITS) {
  * string to prove every raise site is classified, and a comment quoting it
  * would be an eleventh refusal that carries no code.)
  *
- * @returns {{ action: 'merge'|'refuse'|'conflict'|'update-branch'|'wait'|'poll-again', reason?: string, refusalCode?: string }}
+ * @returns {{ action: 'merge'|'refuse'|'conflict'|'update-branch'|'catch-up-locally'|'wait'|'poll-again', reason?: string, refusalCode?: string }}
  */
 function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS } = {}) {
   const action = String(gate?.action || '');
@@ -724,6 +746,18 @@ function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS 
   // the next pass, where the catch-up path already lives.
   if (action === 'update-branch') {
     return { action, reason: gate.reason || 'the branch fell behind main while waiting' };
+  }
+
+  // Same reasoning, different remedy (task 86bbuvcwc). A branch GitHub has
+  // flagged as CONFLICTING while git calls it clean does not un-flag itself
+  // either, so polling it out can only end in a wrong-reason answer. It goes
+  // back terminal, to the caller that owns the local catch-up.
+  if (action === 'catch-up-locally') {
+    return {
+      action,
+      disagreement: true,
+      reason: gate.reason || 'GitHub and git disagree about whether this branch conflicts',
+    };
   }
 
   // Anything else means "not resolved yet". Out of budget is a WAIT — the
@@ -1205,6 +1239,7 @@ module.exports = {
   parseMergeMarker,
   latestMergeMarker,
   normalizeCommand,
+  commentDate,
   isMergeCommand,
   isReviewVerdict,
   isReviewPassed,

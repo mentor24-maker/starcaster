@@ -631,6 +631,18 @@ function afterRerunDecision({ action, reason, refusalCode } = {}) {
       reason: `main moved while waiting on the review-gate re-run (${reason || 'the branch is behind main'}) — the next pass catches the branch up, which re-runs the gate itself`,
     };
   }
+  // The same shape, arriving by the other route (task 86bbuvcwc): GitHub has
+  // flagged the branch CONFLICTING while git merges it cleanly. Also neither a
+  // pass nor a failure — the next pass's catch-up path is what settles it, and
+  // that push re-runs the gate. Without this arm it fell to the refusal below
+  // and blamed the re-run for a branch that merely needs catching up, which is
+  // the wrong-reason defect the arm above was written for.
+  if (act === 'catch-up-locally') {
+    return {
+      action: 'wait',
+      reason: `GitHub and git disagree about whether this branch conflicts (${reason || 'no reason given'}) — the next pass catches the branch up, which re-runs the gate itself`,
+    };
+  }
   return {
     action: 'refuse',
     refusalCode: REFUSAL_CODES.reviewGateRerunUnresolved,

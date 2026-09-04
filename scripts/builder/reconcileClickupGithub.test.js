@@ -9,6 +9,9 @@ const {
   checkMergedTasks,
   checkStampedBranches,
   isTerminal,
+  deckVerdict,
+  standDownReport,
+  SWITCH_TIMEOUT_MS,
   closureNote,
 } = require('../reconcile_clickup_github.cjs');
 
@@ -240,7 +243,7 @@ test('a failed ticket comment is reported, never swallowed', async () => {
 });
 
 test('an unchanged finding is not re-posted on the next run — one comment, not one per run', async () => {
-  const flagged = new Set();
+  const flagged = new Map();
   const commented = [];
   const posted = [];
   const deps = {
@@ -249,7 +252,7 @@ test('an unchanged finding is not re-posted on the next run — one comment, not
     postBus: async (ch, text) => posted.push(text),
     commentOn: async (id, text) => commented.push([id, text]),
     alreadyFlagged: flagged,
-    recordFlagged: (key) => flagged.add(key),
+    recordFlagged: (key, at) => flagged.set(key, new Date(at || Date.now()).toISOString()),
     isLive: true,
   };
   for (let run = 0; run < 3; run += 1) {
@@ -273,7 +276,9 @@ test('an unchanged finding is not re-posted on the next run — one comment, not
 // finding must not itself be delivered only where there was no bus finding.
 
 test('ROUND 2: a finding flagged to the bus BEFORE the durable half existed still gets its ticket comment', async () => {
-  const flagged = new Set(['contradiction:merged-operator:t1:42']); // written by an older run
+  // Written by an older run: the `|`-fenced key `flagKey` produces, stamped
+  // just now so the 6h window is what holds it rather than the run being new.
+  const flagged = new Map([['contradiction:merged-operator|t1|42', new Date().toISOString()]]);
   const commented = [];
   const posted = [];
   const { clean, repaired, unchecked } = buckets();
@@ -283,13 +288,13 @@ test('ROUND 2: a finding flagged to the bus BEFORE the durable half existed stil
     postBus: async (ch, text) => posted.push(text),
     commentOn: async (id, text) => commented.push([id, text]),
     alreadyFlagged: flagged,
-    recordFlagged: (key) => flagged.add(key),
+    recordFlagged: (key, at) => flagged.set(key, new Date(at || Date.now()).toISOString()),
     isLive: true,
   });
   assert.equal(commented.length, 1, 'the ticket comment was never posted, so an old bus flag must not suppress it');
   assert.equal(commented[0][0], 't1');
   assert.equal(posted.length, 0, 'the bus half WAS already said — it is not repeated');
-  assert.ok(repaired.some((r) => /already flagged to the bus/.test(r)), 'and the report says why the bus was skipped');
+  assert.ok(repaired.some((r) => /the bus half: already said/.test(r)), 'and the report says which surface was skipped and why');
 
   // ...and it is not said twice on the run after that.
   const second = buckets();
@@ -299,7 +304,7 @@ test('ROUND 2: a finding flagged to the bus BEFORE the durable half existed stil
     postBus: async (ch, text) => posted.push(text),
     commentOn: async (id, text) => commented.push([id, text]),
     alreadyFlagged: flagged,
-    recordFlagged: (key) => flagged.add(key),
+    recordFlagged: (key, at) => flagged.set(key, new Date(at || Date.now()).toISOString()),
     isLive: true,
   });
   assert.equal(commented.length, 1, 'one comment in total, still');
@@ -310,7 +315,7 @@ test('ROUND 2: a ticket comment that FAILED is retried next run; the bus post th
   // Round 1, finding 3a: `recordFlagged` ran whenever EITHER surface landed,
   // so a comment that threw beside a bus post that worked was reported and
   // then never attempted again. Reported is not recoverable.
-  const flagged = new Set();
+  const flagged = new Map();
   const posted = [];
   const commented = [];
   let commentWorks = false;
@@ -323,7 +328,7 @@ test('ROUND 2: a ticket comment that FAILED is retried next run; the bus post th
       commented.push([id, text]);
     },
     alreadyFlagged: flagged,
-    recordFlagged: (key) => flagged.add(key),
+    recordFlagged: (key, at) => flagged.set(key, new Date(at || Date.now()).toISOString()),
     isLive: true,
   });
 
@@ -347,7 +352,7 @@ test('ROUND 2: a ticket comment that FAILED is retried next run; the bus post th
 });
 
 test('ROUND 2: a bus post that FAILED is retried next run; the comment that succeeded is not', async () => {
-  const flagged = new Set();
+  const flagged = new Map();
   const posted = [];
   const commented = [];
   let busWorks = false;
@@ -357,7 +362,7 @@ test('ROUND 2: a bus post that FAILED is retried next run; the comment that succ
     postBus: async (ch, text) => { if (!busWorks) throw new Error('party line down'); posted.push(text); },
     commentOn: async (id, text) => commented.push([id, text]),
     alreadyFlagged: flagged,
-    recordFlagged: (key) => flagged.add(key),
+    recordFlagged: (key, at) => flagged.set(key, new Date(at || Date.now()).toISOString()),
     isLive: true,
   });
 
@@ -448,21 +453,66 @@ test('a write failure during a live repair is UNCHECKED, not silently swallowed'
   assert.match(unchecked[0], /could not move the task/);
 });
 
-test('a contradiction already flagged on an earlier run is NOT re-posted (review finding 8)', async () => {
+test('a contradiction already flagged INSIDE THE WINDOW is not re-posted (review finding 8)', async () => {
+  const now = Date.parse('2026-09-02T20:00:00.000Z');
   const posted = [];
   const { clean, repaired, unchecked } = buckets();
   await checkMergedTasks([task('t1', 'Stuck', 'in review')], clean, repaired, unchecked, {
     getComments: comments(trail(9)),
     prState: () => ({ state: 'CLOSED' }),
     postBus: async (ch, text) => posted.push(text),
-    alreadyFlagged: new Set(['contradiction:closed-pr:t1:9']),
+    alreadyFlagged: new Map([
+      ['contradiction:closed-pr|t1|9', new Date(now - 60 * 60 * 1000).toISOString()],
+    ]),
     recordFlagged: () => { throw new Error('must not record — nothing new was posted'); },
     isLive: true,
+    now,
     commentOn: () => {},
   });
-  assert.equal(posted.length, 0, 'an unchanged contradiction is posted once, not every run');
+  assert.equal(posted.length, 0, 'an unchanged contradiction is posted once per window, not every run');
   assert.equal(repaired.length, 1);
-  assert.match(repaired[0], /already flagged on an earlier run/);
+  assert.match(repaired[0], /already said/);
+});
+
+test('the SAME contradiction is said again once the 6h window has passed', async () => {
+  // The half that was missing until 2026-09-02: the old state file had no
+  // clock, so a drift posted once was struck off forever however long it sat.
+  const now = Date.parse('2026-09-02T20:00:00.000Z');
+  const posted = [];
+  const recorded = [];
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Stuck', 'in review')], clean, repaired, unchecked, {
+    getComments: comments(trail(9)),
+    prState: () => ({ state: 'CLOSED' }),
+    postBus: async (ch, text) => posted.push(text),
+    alreadyFlagged: new Map([
+      ['contradiction:closed-pr|t1|9', new Date(now - 7 * 60 * 60 * 1000).toISOString()],
+    ]),
+    recordFlagged: (key) => recorded.push(key),
+    isLive: true,
+    now,
+  });
+  assert.equal(posted.length, 1);
+  assert.deepEqual(recorded, ['contradiction:closed-pr|t1|9']);
+});
+
+test('a held finding is still RAISED, so the prune does not mistake it for resolved', async () => {
+  // Otherwise: held by the window this pass -> cleared as resolved -> posted
+  // again next pass. The window would produce the noise it exists to stop.
+  const now = Date.parse('2026-09-02T20:00:00.000Z');
+  const raised = [];
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Stuck', 'in review')], clean, repaired, unchecked, {
+    getComments: comments(trail(9)),
+    prState: () => ({ state: 'CLOSED' }),
+    postBus: async () => {},
+    alreadyFlagged: new Map([['contradiction:closed-pr|t1|9', new Date(now).toISOString()]]),
+    recordFlagged: () => {},
+    recordRaised: (key) => raised.push(key),
+    isLive: true,
+    now,
+  });
+  assert.deepEqual(raised, ['contradiction:closed-pr|t1|9']);
 });
 
 // ── checkStampedBranches ─────────────────────────────────────────────────
@@ -666,6 +716,153 @@ test('the leftover-PR scan is bounded — the terminal set only grows', () => {
     'and say how many it skipped — a silent cap is a check that quietly stops covering things');
 });
 
+// ── the scheduled shape (2026-09-02, task 86bbtqytq) ────────────────────────
+//
+// This tool named the stuck ticket exactly and reached nobody. `npm run repair`
+// (#544) gave it a schedule; these two disciplines are what a SCHEDULED pass
+// owes on top of that — a window that clears, and asking the switch first.
+
+const {
+  flagDue,
+  flagKey,
+  pruneFlags,
+  REPOST_EVERY_MS,
+} = require('../reconcile_clickup_github.cjs');
+
+const NOW = Date.parse('2026-09-02T20:00:00.000Z');
+const HOUR = 60 * 60 * 1000;
+
+test('a contradiction is posted once, held for 6h, then said again', () => {
+  const key = flagKey('closed-pr', '86bbqw49y', 513);
+  assert.equal(flagDue({ key, state: new Map(), now: NOW }).due, true, 'never said before');
+  const said = new Map([[key, new Date(NOW - HOUR).toISOString()]]);
+  assert.equal(flagDue({ key, state: said, now: NOW }).due, false);
+  const old = new Map([[key, new Date(NOW - 7 * HOUR).toISOString()]]);
+  assert.equal(flagDue({ key, state: old, now: NOW }).due, true,
+    'a drift still unfixed after 6h is said again — it did not stop being true');
+  assert.equal(REPOST_EVERY_MS, 6 * HOUR);
+});
+
+test('BREAK-TEST: the window is not infinite — the old state file had no clock at all', () => {
+  // It used to be a bare array of keys: posted once, struck off FOREVER. An
+  // alarm that fires once and then goes quiet is the failure suppression is
+  // meant to prevent. A legacy entry loads with no time and reads as never
+  // said, which errs towards speaking.
+  const key = flagKey('merged-operator', '86bbqw49y', 513);
+  assert.equal(flagDue({ key, state: new Map([[key, '']]), now: NOW }).due, true);
+  assert.equal(flagDue({ key, state: new Map([[key, 'not a date']]), now: NOW }).due, true);
+});
+
+test('a RESOLVED contradiction loses its stamp, so a returning drift is announced at once', () => {
+  const gone = flagKey('closed-pr', '86bbqw49y', 513);
+  const still = flagKey('stale-branch', 'weekly-report', '86bbk34ym');
+  const state = new Map([[gone, new Date(NOW).toISOString()], [still, new Date(NOW).toISOString()]]);
+  const out = pruneFlags(state, {
+    subjects: new Set(['86bbqw49y', 'weekly-report']),
+    raised: new Set([still]),
+  });
+  assert.deepEqual(out.cleared, [gone]);
+  assert.ok(out.state.has(still), 'a contradiction raised again this pass keeps its window');
+});
+
+test('BREAK-TEST: a subject this pass never LOOKED at keeps its stamp', () => {
+  // "I did not see it" is not "it is fixed" (DOCTRINE 3.11). The terminal scan
+  // is bounded at 25, so tickets rotate out of view every run — clearing on
+  // absence would repost the same contradiction on a loop.
+  const key = flagKey('open-pr-under-terminal', '86bbjk5rw', 374);
+  const state = new Map([[key, new Date(NOW).toISOString()]]);
+  const out = pruneFlags(state, { subjects: new Set(['86bbsomethingelse']), raised: new Set() });
+  assert.deepEqual(out.cleared, []);
+  assert.ok(out.state.has(key));
+});
+
+test('the key fences its subject, so the pruner never has to guess which shape it is', () => {
+  // Two of the four contradiction shapes put a BRANCH where the others put a
+  // task id. A pruner that split on ':' would read "stale-branch" as the
+  // subject of every branch flag and clear nothing, silently.
+  assert.equal(flagKey('stale-branch', 'watchdogs-reach-dane', '86bbtqytq').split('|')[1],
+    'watchdogs-reach-dane');
+  assert.equal(flagKey('closed-pr', '86bbtqytq', 583).split('|')[1], '86bbtqytq');
+});
+
+test('BREAK-TEST: --check asks the pipeline switch BEFORE it reads or writes anything', () => {
+  // It moves tickets and posts to the bus. Running while Dane has the deck is
+  // exactly the collision the switch exists to prevent (PR #432).
+  const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
+  assert.match(src, /pipeline\.mjs/, 'it must consult the one switch implementation, not read the flag twice');
+  const pauseAt = src.indexOf('const deck = deckVerdict()');
+  const readAt = src.indexOf('await listTasks(LOOP_QUEUE_LIST');
+  assert.ok(pauseAt > 0 && pauseAt < readAt, 'the switch is asked before the queue is read');
+});
+
+// ── the switch's TWO non-zero answers (review round 1, 2026-09-03) ────────
+//
+// The whole ticket is about a check that could not run being reported as a
+// normal state. This pass shipped one of its own: every non-zero exit from the
+// switch was graded "Dane has the deck", so a throttled ClickUp read or a
+// rotated token printed a false statement about him and took the drift
+// watchdog off the air on a green board. The ACTION is right and unchanged —
+// stand down either way. The words and the exit code are the fix.
+
+test('a genuine pause is still a normal decline: exit 3, and it names Dane', () => {
+  const out = standDownReport({ paused: true, readable: true, why: 'Dane paused it at 6:12pm — "taking the deck"' });
+  assert.equal(out.exit, 3);
+  assert.ok(out.lines.join(' ').includes('Dane has the deck'));
+});
+
+test('BREAK-TEST: an UNREADABLE switch exits 2 and never says Dane has the deck', () => {
+  // Break it by folding unreadable back into paused (return the paused branch
+  // for both) and this fails on both counts.
+  const out = standDownReport({ paused: true, readable: false, why: 'CLICKUP_API_TOKEN is not set in this environment.' });
+  assert.equal(out.exit, 2, 'cannot-tell is exit 2, which is what repair reads as CANNOT TELL');
+  const said = out.lines.join(' ');
+  assert.ok(!/Dane/.test(said), 'nothing here knows what Dane is doing — saying so is the lie that hid this');
+  assert.match(said, /COULD NOT TELL/);
+  assert.match(said, /not an all-clear/);
+});
+
+test('BREAK-TEST: the two stand-downs never print the same sentence', () => {
+  const paused = standDownReport({ paused: true, readable: true, why: 'x' });
+  const blind = standDownReport({ paused: true, readable: false, why: 'x' });
+  assert.notEqual(paused.exit, blind.exit);
+  const shared = paused.lines.filter((l) => blind.lines.includes(l));
+  assert.deepEqual(shared, [], 'the switch itself requires these lead to the same behaviour in different words');
+});
+
+test('the verdict is graded by pulseDigest, not by a second reading of the exit code', () => {
+  // Unreadable: the switch answered with no parseable verdict line at all,
+  // which is what a missing token actually produces.
+  const blind = deckVerdict(() => ({ status: 2, stdout: '', stderr: 'CLICKUP_API_TOKEN is not set in this environment.' }));
+  assert.equal(blind.readable, false);
+  assert.equal(blind.paused, true, 'it still stands down — the safe direction is unchanged');
+
+  const paused = deckVerdict(() => ({ status: 3, stdout: JSON.stringify({ paused: true, certain: true, code: 3, message: 'The pipeline is PAUSED.' }) }));
+  assert.equal(paused.readable, true);
+  assert.equal(paused.paused, true);
+
+  const running = deckVerdict(() => ({ status: 0, stdout: JSON.stringify({ paused: false, certain: true, code: 0, message: 'The pipeline is RUNNING.' }) }));
+  assert.equal(running.paused, false);
+  assert.equal(running.readable, true);
+});
+
+test('BREAK-TEST: the switch read carries a deadline, so a hung switch cannot pin the relay wake', () => {
+  let opts = null;
+  deckVerdict((_bin, _args, o) => { opts = o; return { status: 0, stdout: '{"paused":false,"certain":true}' }; });
+  assert.equal(opts.timeout, SWITCH_TIMEOUT_MS);
+  assert.ok(SWITCH_TIMEOUT_MS > 0);
+});
+
+test('it asks with --json, because the exit code cannot carry the distinction', () => {
+  let args = null;
+  deckVerdict((_bin, a) => { args = a; return { status: 0, stdout: '{"paused":false,"certain":true}' }; });
+  assert.ok(args.includes('check') && args.includes('--json'),
+    'both non-zero answers exit 3 by contract; only --json says which');
+});
+
+test('--check IS the live shape — a scheduled watchdog that only proposed would fix nothing', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
+  assert.match(src, /const live = check \|\| process\.argv\.includes\('--live'\)/);
+});
 
 // ── the 2026-09-03 false close (ticket 86bbuv66c) ─────────────────────────
 
@@ -739,7 +936,7 @@ test('the explanation comment is posted BEFORE the move, and a failed comment ca
   assert.match(second.unchecked[0], /NOT moved/);
 });
 
-test('onWrite fires only when a live move actually happens — it is what makes the pass exit 3', async () => {
+test('onWrite fires only when a live move actually happens — it is what makes the pass exit 4', async () => {
   let writes = 0;
   const dry = buckets();
   await checkMergedTasks([task('t1', 'Widget', 'building')], dry.clean, dry.repaired, dry.unchecked, {
@@ -762,4 +959,59 @@ test('onWrite fires only when a live move actually happens — it is what makes 
     isLive: true,
   });
   assert.equal(writes, 1);
+});
+
+// ── the closing line nothing was testing (review round 2, 2026-09-04) ───────
+//
+// `requestsMade()` is called on the LAST line of a reconcile pass — after every
+// ticket has been read, every repair applied and every bus post sent. If the
+// symbol is ever missing, the pass throws a TypeError at the finish line having
+// already done all of its work: the board is changed, the exit code is non-zero,
+// and the supervising `npm run repair` reads the whole pass as a failure.
+//
+// Nothing covered it. `grep requestsMade scripts/builder/*.test.js` found
+// nothing, so every gate stayed green through a rename — and the merge that
+// prompted this test came within one conflict of proving it, because `main` had
+// independently rewritten the very function the counter lives in. The conflict
+// is the only reason anybody looked.
+//
+// `stale_ready.mjs` closes with the identical line and would die the identical
+// way, so it is covered here too rather than waiting for its own incident.
+
+test('the counter both closing lines call exists, is callable, and returns a number', () => {
+  const clickup = require('../lib/clickup.cjs');
+  assert.equal(typeof clickup.requestsMade, 'function',
+    'reconcile and stale-ready both call this on their last line — undefined here is a TypeError after the work is done');
+  const n = clickup.requestsMade();
+  assert.ok(Number.isFinite(n), `the closing line interpolates this into a report; got ${typeof n}`);
+  assert.ok(n >= 0, 'a request count is never negative');
+});
+
+test('and each closing line really reaches THAT export, not a local of its own', () => {
+  // A rename on either side has to fail somewhere. The source check is what
+  // catches the half a runtime check cannot: a script that quietly stopped
+  // importing it and grew its own counter would still pass the test above.
+  const reconcileSrc = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
+  assert.match(reconcileSrc, /requestsMade,/, 'reconcile imports the shared counter');
+  assert.match(reconcileSrc, /requests this pass: \$\{requestsMade\(\)\}/, 'and its closing line calls it');
+
+  const staleSrc = fs.readFileSync(path.join(__dirname, '../stale_ready.mjs'), 'utf8');
+  assert.match(staleSrc, /requests this pass: \$\{clickup\.requestsMade\(\)\}/,
+    'stale-ready closes with the same line, through the same export');
+});
+
+test('the counter is the ONE DOOR\'s, so a pass counts what the door actually spent', () => {
+  // The merge decision, asserted (2026-09-04). Two counters existed for a day:
+  // this file's, incremented inside `callOnce`, and the shared client's
+  // `budget.requests`, incremented at the attempt inside `clickupFetch`.
+  // Keeping both is the "keep both sides" shape DOCTRINE 6.7 is about — two
+  // numbers that disagree on purpose, with nothing saying which one the report
+  // means. Re-introduce a private counter here and this fails.
+  const clickup = require('../lib/clickup.cjs');
+  const src = fs.readFileSync(path.join(__dirname, '../lib/clickup.cjs'), 'utf8');
+  assert.match(src, /const requestsMade = \(\) => budget\.requests;/,
+    'the reported figure and the budget the client throttles on must be one number');
+  assert.doesNotMatch(src, /requestCount \+= 1/, 'a second, private counter is exactly what was merged away');
+  assert.equal(clickup.requestsMade(), clickup.getBudget().requests,
+    'and they agree at runtime, not only in the source');
 });

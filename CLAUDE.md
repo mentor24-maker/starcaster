@@ -386,6 +386,29 @@ offline — it is what `doctor:node` reads to say when each owned job last
 actually worked here), and the shared row is pushed **at most once a day**,
 which is the resolution the requirement needs and what keeps the ticket quiet.
 
+**That day-resolution row cannot see a job dying on a machine that is awake**,
+and on 2026-09-03 the merge lane was dead for sixteen hours while every surface
+stayed quiet or said something reassuring — the roll call among them, because a
+perfectly healthy job legitimately reads as ~21h stale between pushes. So there
+is a second, local alarm reading the precise stamps:
+
+```
+npm run heartbeat -- --stale-check           has a job THIS machine owns stopped beating?
+npm run heartbeat -- --stale-check --check   the same, and post to the bus once if so
+```
+
+It runs on the relay's ten-minute wake, considers only roles this machine owns
+(the stamps exist nowhere else), and needs no ClickUp — deliberately, so a
+ClickUp outage cannot silence an alarm that never needed it. **The threshold is
+per role and derived, six missed runs with a three-hour floor**: 3h for the
+relay, 6h for the loops and the pulse. One hour was the original proposal and
+the measurements killed it — over 14 days of the Mini's real logs the p90
+beat-to-beat gap is already 1.0h for two roles, and the loops legitimately sleep
+for hours waiting out a stated usage limit. The arithmetic, the measured table
+and each incident are in `lib/nodeHeartbeat.js`. It clears itself on the next
+beat and says so — and that is the only "good news" it ever posts, because the
+message is only sent when an alarm actually went out.
+
 **Two jobs beat today: `bus-relay` and `pipeline-pulse`.** The two loop lanes
 run inside long-lived agent sessions with no committed runner to hang an emitter
 on, `db-refresh` has no schedule on purpose, `pulse-pipelines` lives in another
@@ -749,7 +772,13 @@ above can't see on their own: a Loop Queue task left in-flight after its PR
 already merged (moves it to Live), and a branch stamped with a task
 (`npm run thread`) that has since closed but is still on the Mac (flags it to
 the bus — `npm run tidy`'s own closed-task cleanup should have caught it).
-Dry-run by default (`npm run reconcile`); `-- --live` performs the repairs.
+Dry-run by default (`npm run reconcile`); `-- --live` performs the repairs by
+hand, and `-- --check` is the SCHEDULED shape — the same writes, plus the two
+disciplines a background pass owes (2026-09-02, task 86bbtqytq): it asks the
+pipeline switch before it reads anything and stands down if Dane has the deck,
+and its bus flags carry a 6h window that CLEARS when the contradiction
+resolves. That window used to be permanent, which made a drift posted once
+never speakable again — an alarm that fires only the first time.
 **Scheduled since 2026-09-02** (task 86bbtnk3k): `npm run repair` runs it —
 with the loop's dropped-claim backstop before it and a DRY stranded-ticket
 sweep after it — on the relay's ten-minute idle wake, throttled to one fresh

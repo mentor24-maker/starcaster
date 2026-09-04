@@ -175,6 +175,24 @@ test('the taxonomy is internally coherent', () => {
     assert.ok(s.IN_FLIGHT_STATUSES.includes(held),
       'operator-held work is still in-flight work — a full inbox is a full pipeline');
   }
+
+  // IN_PROGRESS is in-flight minus operator-held, and it is a PARTITION: the
+  // two halves add back up to the whole, with nothing in both and nothing in
+  // neither (2026-09-04, task 86bbuzzbk). Asserted as a relationship rather
+  // than as a literal list, so re-listing either side by hand breaks it.
+  assert.deepEqual(
+    [...s.IN_PROGRESS_STATUSES].sort(),
+    s.IN_FLIGHT_STATUSES.filter((x) => !s.OPERATOR_HELD_STATUSES.includes(x)).sort(),
+  );
+  assert.deepEqual(
+    [...s.IN_PROGRESS_STATUSES, ...s.OPERATOR_HELD_STATUSES].sort(),
+    [...s.IN_FLIGHT_STATUSES].sort(),
+    'the two halves must reconstitute in-flight exactly — no status may fall between them',
+  );
+  for (const held of s.OPERATOR_HELD_STATUSES) {
+    assert.ok(!s.IN_PROGRESS_STATUSES.includes(held),
+      `"${held}" is parked on Dane — it must not count against the BUILD cap`);
+  }
 });
 
 test('every consumer holds a VIEW of the taxonomy, not a copy', () => {
@@ -187,8 +205,12 @@ test('every consumer holds a VIEW of the taxonomy, not a copy', () => {
   // pipelinePause's pair is the NARROW view — is a PASS running — which is
   // exactly IN_FLIGHT minus OPERATOR_HELD, derived here so the relationship
   // itself is what breaks if someone edits one side.
-  const narrow = s.IN_FLIGHT_STATUSES.filter((x) => !s.OPERATOR_HELD_STATUSES.includes(x));
-  assert.deepEqual(Object.keys(pauseMod.IN_FLIGHT_STATUSES).sort(), [...narrow].sort());
+  // That narrow view has a name of its own since task 86bbuzzbk, because
+  // wipCap's build cap now measures against the same set. Asserted through the
+  // NAME so the two consumers cannot drift apart silently.
+  assert.deepEqual(Object.keys(pauseMod.IN_FLIGHT_STATUSES).sort(), [...s.IN_PROGRESS_STATUSES].sort());
+  assert.equal(wipCapMod.IN_PROGRESS_STATUSES, s.IN_PROGRESS_STATUSES);
+  assert.equal(wipCapMod.OPERATOR_HELD_STATUSES, s.OPERATOR_HELD_STATUSES);
 });
 
 test('no consumer file defines a status name in executable text any more', () => {

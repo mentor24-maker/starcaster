@@ -20,6 +20,14 @@
  *   npm run stale-ready -- --check --dry-run   say what it WOULD post, send nothing
  *   npm run stale-ready -- --force             ignore the hourly read throttle
  *
+ * TWO CLOCKS (2026-09-02, task 86bbtqytq). A ticket sitting untouched in
+ * `Ready to launch` has 24 hours. A ticket carrying Dane's own `merge` comment
+ * has TWO, measured from that comment rather than from ticket age — he has
+ * stated an expectation, and 86bbqw49y sat 12 hours past one while this check
+ * honestly reported "nothing is stuck". `lib/staleReady.js` carries the rule
+ * and the reasoning; the overrides are `--stale-after-hours` and
+ * `--approved-after-hours`, and the relay passes neither.
+ *
  * Exit codes, because scripts branch on this:
  *   0  nothing is stuck
  *   1  at least one ticket is stuck — whoever it turns out to be on
@@ -97,6 +105,20 @@ const FORCE = flag('force');
 const STALE_AFTER_HOURS = Number(arg('stale-after-hours', String(staleReady.STALE_AFTER_HOURS)));
 if (!Number.isFinite(STALE_AFTER_HOURS) || STALE_AFTER_HOURS < 0) {
   console.log(`--stale-after-hours must be a number of hours, not "${arg('stale-after-hours')}".`);
+  process.exit(2);
+}
+/**
+ * The SHORT fuse, same override and same reason as the one above: the claim a
+ * unit test cannot make is "it actually fires against the live board", and
+ * sitting for two hours to rehearse it is a rehearsal nobody repeats.
+ * `run_bus_relay.sh` passes neither flag, so the shipped numbers are the two
+ * derived ones.
+ */
+const APPROVED_AFTER_HOURS = Number(
+  arg('approved-after-hours', String(staleReady.APPROVED_STALE_AFTER_HOURS)),
+);
+if (!Number.isFinite(APPROVED_AFTER_HOURS) || APPROVED_AFTER_HOURS < 0) {
+  console.log(`--approved-after-hours must be a number of hours, not "${arg('approved-after-hours')}".`);
   process.exit(2);
 }
 const NOW = Date.now();
@@ -292,21 +314,47 @@ for (const task of ready) {
     taskId: id,
     name: task.name,
     url: task.url || `https://app.clickup.com/t/${id}`,
-    hours: (NOW - updated) / staleReady.MS_PER_HOUR,
+    hours: Number.isFinite(updated) && updated > 0
+      ? (NOW - updated) / staleReady.MS_PER_HOUR
+      : NaN,
   };
 
-  if (!Number.isFinite(updated) || updated <= 0) {
-    // No usable clock on the ticket. Reported through the same door as an
-    // unreadable trail rather than assumed fresh — "could not measure it" and
-    // "it is fine" are different findings.
-    records.push({ ...base, hours: NaN });
-    continue;
-  }
-  if (base.hours <= STALE_AFTER_HOURS) { records.push(base); continue; }
-
+  // THE COMMENTS ARE READ FOR EVERY TICKET IN THE STAGE NOW, not only the ones
+  // already past 24h (task 86bbtqytq). The short fuse cannot be applied
+  // without knowing whether he has said "merge", and that lives nowhere but
+  // the comment trail — a ticket skipped as "only 12 hours old" is precisely
+  // the ticket this pass exists to catch.
+  //
+  // WHAT IT COSTS, MEASURED RATHER THAN ASSUMED: one comment page per ticket
+  // in `Ready to launch`, once an hour (the read throttle above). The stage
+  // holds a handful of tickets by design — it is the one stage a human drains
+  // by hand — so this is single digits of requests per reading against
+  // ClickUp's ~100/minute. The figure and the method are in the ticket's
+  // closing note.
   let comments = null;
   try { comments = await readComments(id); } catch { comments = null; }
-  if (!comments) { records.push({ ...base, commentsReadable: false }); continue; }
+
+  if (!comments) {
+    // Unreadable at ANY age now, not just past the threshold. "He may have
+    // approved this and I cannot see it" is a real gap in the stage that
+    // matters most, and DOCTRINE 3.11 says a sweep reports what it could not
+    // check rather than folding it into clean.
+    records.push({ ...base, commentsReadable: false });
+    continue;
+  }
+
+  const approvedAt = staleReady.liveApprovalAt(comments, { operatorId: OPERATOR_ID });
+  if (approvedAt > 0) base.approvedHours = (NOW - approvedAt) / staleReady.MS_PER_HOUR;
+
+  // Which clock this ticket is on, asked ONCE, from the module that owns the
+  // rule. Under its own threshold there is nothing more to read: the GitHub
+  // calls below are what make a finding specific, and a fresh ticket has no
+  // finding to be specific about.
+  const clock = staleReady.stalenessClock(base);
+  if (!Number.isFinite(clock.hours) || clock.hours <= clock.thresholdHours) {
+    records.push({ ...base, commentsReadable: true });
+    continue;
+  }
 
   const pr = findPullRequest(comments);
   if (!pr) { records.push({ ...base, commentsReadable: true, pr: null }); continue; }
@@ -329,11 +377,25 @@ for (const task of ready) {
   });
 }
 
-const { findings, fresh } = staleReady.readyFindings(records, { staleAfterHours: STALE_AFTER_HOURS });
+const { findings, fresh, unmeasured } = staleReady.readyFindings(records, {
+  staleAfterHours: STALE_AFTER_HOURS,
+  approvedAfterHours: APPROVED_AFTER_HOURS,
+});
 
 console.log(staleReady.renderReport({
-  findings, fresh, readyCount: ready.length, staleAfterHours: STALE_AFTER_HOURS,
+  findings, fresh, unmeasured, readyCount: ready.length,
+  staleAfterHours: STALE_AFTER_HOURS, approvedAfterHours: APPROVED_AFTER_HOURS,
 }));
+
+// What this pass COST, in the units ClickUp throttles on — the same closing
+// line reconcile and the relay print. It is here because the short fuse made
+// this check read a comment page for EVERY ticket in the stage rather than
+// only the stale ones, and "how much did that add" must be answerable by
+// looking rather than by arithmetic: the relay's own passes were measured at
+// 108-114 requests on 2026-09-03 and are already retrying against ClickUp's
+// ~100/minute window (tasks 86bbugbay, 86bbuebkb).
+console.log('');
+console.log(`ClickUp requests this pass: ${clickup.requestsMade()} (ClickUp allows ~100/minute)`);
 
 const code = staleReady.exitCodeFor(findings);
 
@@ -371,7 +433,8 @@ if (held.length) {
 if (!due.length) process.exit(code);
 
 const text = staleReady.renderStalePost({
-  findings: due, node: NODE.name || 'an unnamed machine', staleAfterHours: STALE_AFTER_HOURS,
+  findings: due, node: NODE.name || 'an unnamed machine',
+  staleAfterHours: STALE_AFTER_HOURS, approvedAfterHours: APPROVED_AFTER_HOURS,
 });
 
 if (DRY) {

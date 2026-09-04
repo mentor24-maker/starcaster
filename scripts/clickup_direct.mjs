@@ -111,7 +111,7 @@ const {
   digestDue, digestBody, digestSince, WINDOW_MS,
   ledgerAfterMerge, ledgerAfterSwitch, ledgerAfterDisable, ledgerAfterLatchNag,
   latchNagDue,
-  ledgerAfterDigest, switchSignalsFromLedger, mergesSince,
+  ledgerAfterDigest, switchSignalsFromLedger, mergesSince, laneAMergeHistory,
 } = autoMergeLane;
 const { readLedgerFile, saveLedgerIfReadable } = autoMergeLedgerFile;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
@@ -402,11 +402,14 @@ function usage(code = 2) {
   console.error('                                             of that skill hands the ticket back if this one dies. Opt-in on purpose:');
   console.error('                                             a hand-driven session claims with this same command, and a marker from');
   console.error('                                             one would let a loop reclaim a ticket a person is building.');
-  console.error('  pass-reconcile                             the FIRST thing a loop-build pass runs: if the previous pass left a');
+  console.error('  pass-reconcile [--scheduled]               the FIRST thing a loop-build pass runs: if the previous pass left a');
   console.error('                                             claim marker and its ticket is still "Building", hand it back (Rework');
   console.error('                                             if a PR is open, else Queued) and clear the marker.');
   console.error('                                             exit 0 = nothing to do, 1 = a hand-back failed, 2 = could not tell');
   console.error('                                             (never 0), 3 = a hand-back was performed.');
+  console.error('                                             --scheduled: the caller is a TIMER, not a new pass, so a firing clock');
+  console.error('                                             proves nothing about whether a pass is alive. Judges on the claim\'s');
+  console.error('                                             age instead and leaves a young claim in "Building", saying why.');
   console.error('  migrate-rework [--apply] [--list <id>]     one-off: move tickets that are Queued WITH AN OPEN PR into Rework.');
   console.error('                                             Dry run unless --apply. Run it AFTER the claim rule is live on main —');
   console.error('                                             a Rework ticket is claimed by nothing until then.');
@@ -653,6 +656,7 @@ function listOpenPullRequests(repo) {
 function capProbe({ repo } = {}) {
   return wipCap.probeCap({
     cap: wipCap.resolveCap(process.env),
+    operatorCap: wipCap.resolveOperatorCap(process.env),
     listOpenPrs: async () => listOpenPullRequests(repo),
     readTicketStatuses: async () => {
       // fatal:false is REQUIRED — see fetchAllTasks. With the default, a
@@ -1228,6 +1232,83 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         localVerdict: cross.known
           ? { code: branchCatchUp.CODES.REAL_CONFLICT, reason: `git merge-tree reports a conflict merging ${cross.base} into ${cross.head}` }
           : { code: branchCatchUp.CODES.FETCH_FAILED, reason: cross.why || 'the git cross-check could not be taken' },
+      };
+    }
+  }
+
+  // GITHUB SAYS IT CONFLICTS, GIT SAYS IT DOES NOT — DO THE CATCH-UP, DO NOT
+  // ONLY REPORT IT (2026-09-04, task 86bbuvcwc). Declining to claim a
+  // conflict on a disagreement is right and stays. What was missing is that
+  // the disagreement has a KNOWN remedy, so answering `wait` promised a
+  // change that was never coming: on PR #585 this printed five times over
+  // fifty minutes — "auto-merge is armed, GitHub lands it" — while GitHub's
+  // own auto-merge refused to land a pull request GitHub had flagged. Dane
+  // had said "merge" and nothing at all was going to happen.
+  //
+  // NOT `gh pr update-branch`, which is the arm below: GitHub refuses it on a
+  // PR it has called CONFLICTING. The local catch-up is the remedy that was
+  // actually measured — merging origin/main in and pushing flipped GitHub to
+  // MERGEABLE within seconds, and the armed merge then landed it.
+  //
+  // The variable below is deliberately NOT named `local`. conflictWork.test.js
+  // locates the conflict hand-off's own catch-up by searching this file for
+  // its exact declaration and slicing forward from the FIRST hit; an earlier
+  // copy of that spelling — in code or in a comment quoting it — would make
+  // the assertion silently measure this block instead of the one it guards.
+  // The same warning already sits on that statement. Do not spell it out.
+  if (gate.action === 'catch-up-locally') {
+    if (dryRun) {
+      console.error(`  DRY RUN — would merge main into ${prJson.headRefName} here and push it, then re-read PR #${pr.number}: ${gate.reason}`);
+      return { outcome: 'would-catch-up-disagreement', pr: pr.number, reason: gate.reason };
+    }
+    const caughtUp = branchCatchUp.catchUpBranchLocally({ repo, branch: prJson.headRefName });
+    if (caughtUp.ok) {
+      console.error(`  ${label}: CAUGHT UP after a GitHub/git disagreement — ${caughtUp.reason}`);
+      // A BRANCH CAUGHT UP AUTOMATICALLY IS NOT A SILENT WRITE (the identical
+      // reason as 86bbuv66c). This machine just pushed a merge commit to a
+      // branch on its own initiative; if the only record is a log line on one
+      // machine, nobody reading the ticket can tell where the commit came
+      // from. It is said in the same breath as the wait.
+      const said = await call('POST', `/api/v2/task/${task.id}/comment`, {
+        comment_text: `**Branch caught up automatically.** GitHub reported PR #${pr.number} as conflicting while git merged it cleanly — GitHub's precomputed mergeability does not apply the \`union\` merge driver that resolves \`docs/WORK-LOG.md\`, so a branch can read as conflicting while it is not. This machine merged \`main\` into \`${prJson.headRefName}\` and pushed it: an ordinary merge commit, never a force-push, so the branch only gained history. The checks are re-running now. Your approval still stands — you do not have to say "merge" again.`,
+      });
+      if (!said.res.ok) unchecked.push(`${task.id}: PR #${pr.number} was caught up automatically, but the comment saying so FAILED to post — the push has no record on the ticket`);
+      const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
+      if (after.action === 'wait' || after.action === 'update-branch' || after.action === 'catch-up-locally') {
+        console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
+        return { outcome: 'waiting', reason: after.reason };
+      }
+      // The verdict and the refusal code travel, for the same reason they do
+      // on the conflict path: this machine performed the merge, so it holds
+      // the strongest evidence there is about whether anything overlaps, and
+      // a gate object never loses its code on a reassignment.
+      gate = { action: after.action, reason: after.reason, refusalCode: after.refusalCode, localVerdict: caughtUp };
+      if (after.prJson) prJson = after.prJson;
+    } else if (caughtUp.code === branchCatchUp.CODES.REAL_CONFLICT) {
+      // THE OTHER DIRECTION, AND IT IS THE ONE THAT MUST NOT BE SKIPPED. A
+      // real merge is a stronger reading than `merge-tree`, and it says the
+      // branches genuinely overlap — so this goes to the hand-off, exactly as
+      // it did before. A fix that only ever caught up would push merge
+      // commits onto branches that really do conflict.
+      console.error(`  ${label}: the catch-up found a REAL conflict — ${caughtUp.reason}`);
+      // No `localVerdict` is attached on purpose: the hand-off block below owns
+      // that vocabulary, and letting it take its own reading keeps ONE place
+      // deciding what a conflict verdict says. It costs a second local merge
+      // that reaches the same answer and pushes nothing — a real conflict
+      // aborts — which is cheap next to two ways of describing one finding.
+      gate = {
+        action: 'conflict',
+        reason: `the branch conflicts with newer work on main — GitHub said so, and the catch-up merge agrees (${caughtUp.reason})`,
+      };
+    } else {
+      // The remedy could not be applied at all — a failed fetch, a lost push
+      // race, the wrong checkout. That is neither a conflict nor a pass, so
+      // it stays a wait and names what could not be settled (DOCTRINE 3.11).
+      // The next pass tries again.
+      console.error(`  ${label}: the catch-up could not be performed — ${caughtUp.reason}`);
+      gate = {
+        action: 'wait',
+        reason: `${gate.reason}. That catch-up could NOT be performed this pass (${caughtUp.reason}), so the branch is still flagged and the next pass tries again`,
       };
     }
   }
@@ -2003,7 +2084,12 @@ function passMarkerPath() {
 function writePassMarker(task, skill) {
   const file = passMarkerPath();
   try {
-    writeFileSync(file, `${JSON.stringify(passClaim.claimRecord({ task, skill, pid: process.pid }), null, 2)}\n`);
+    // `newClaimRecord`, not `claimRecord`: the clock belongs to the WRITE.
+    // The read path deliberately preserves a missing `at` so it reaches the
+    // `undated` branch and says COULD NOT TELL out loud — if this line ever
+    // stops stamping one, every scheduled run returns exit 2 rather than
+    // silently reading the marker as "claimed just now" forever.
+    writeFileSync(file, `${JSON.stringify(passClaim.newClaimRecord({ task, skill, pid: process.pid }), null, 2)}\n`);
     console.error(`  (pass marker written for ${task} — the next ${skill} pass will hand it back if this one does not finish)`);
   } catch (err) {
     // NOT fatal, and said out loud. The claim itself is what matters; losing
@@ -2167,19 +2253,40 @@ if (cmd === 'whoami') {
   // Nothing in a killed session runs again. The next pass is the cheapest
   // thing guaranteed to run afterwards, and a fresh session is exactly what
   // survives the previous one being killed.
+  //
+  // `--scheduled` says WHICH SEAT IS ASKING (2026-09-04, task 86bbu60ax).
+  // Without it, the caller is a new pass and the inference above holds. With
+  // it, the caller is `npm run repair` on the relay's idle wake, where a
+  // firing timer proves nothing about whether a pass is running — so it judges
+  // on the claim's age instead and leaves a young claim alone. Before that
+  // flag existed, a build that outlived the half-hour throttle had its LIVE
+  // claim revoked on a timer, putting a ticket somebody was actively building
+  // back into the claim line.
   const file = passMarkerPath();
   const marker = passClaim.readMarker(file);
+  const trigger = flag('scheduled') ? passClaim.TRIGGER_SCHEDULED : passClaim.TRIGGER_PASS;
 
   let status = '';
+  // The clock the SWEEP measures by, taken from the same response as the
+  // status (task 86bbu60ax, found in review). `classifyTicket` calls a ticket
+  // stranded after 90 minutes of no activity ON THE TICKET; the marker's `at`
+  // is stamped once and never refreshed. Feeding this in makes the borrowed
+  // constant mean the same thing in both steps of one `npm run repair` run,
+  // instead of only being the same number.
+  let lastActivityMs = null;
   if (marker.found && marker.record) {
     const seen = await call('GET', `/api/v2/task/${marker.record.task}`);
     // An unreadable status is NOT a hand-back. Moving a ticket on a reading we
     // did not take is how a live build gets yanked out from under a pass that
     // is genuinely running.
-    if (seen.res.ok) status = seen.json.status?.status ?? '';
+    if (seen.res.ok) {
+      status = seen.json.status?.status ?? '';
+      const updated = Number(seen.json.date_updated);
+      if (Number.isFinite(updated)) lastActivityMs = updated;
+    }
   }
 
-  const decision = passClaim.reconcileDecision({ marker, status });
+  const decision = passClaim.reconcileDecision({ marker, status, trigger, lastActivityMs });
   let ok = true;
   let destination = '';
 
@@ -2206,11 +2313,14 @@ if (cmd === 'whoami') {
     const note = await call('POST', `/api/v2/task/${decision.task}/comment`, {
       comment_text: pipelinePause.sweptTicketNote({
         at: new Date().toISOString(),
-        by: `the next ${marker.record.skill || 'loop'} pass`,
+        // WHO RAN, from the seat — never a fixed string. Under `--scheduled`
+        // no pass ran at all; `npm run repair` on the relay's idle wake did,
+        // and the command to reproduce it carries the flag, because without
+        // the flag it is the other seat and a different program.
+        ...passClaim.handbackActor(trigger, { skill: marker.record.skill }),
         kind: 'a build',
         destination: plan.status,
         why: plan.why,
-        command: 'npm run clickup -- pass-reconcile',
       }),
       notify_all: false,
     });
@@ -4450,7 +4560,18 @@ if (cmd === 'whoami') {
   console.log(`cap:     ${cap.why}`);
   console.log(`window:  ${WINDOW_MS / 60000} minutes`);
   console.log(`digest:  ${digestDue(led.ledger.lastDigestAt, now) ? 'due' : `last posted ${clockAt(led.ledger.lastDigestAt)}`}`);
+  // "Running" is about the gate being OPEN. Whether anything has ever come out
+  // of it is a different question, and printing only the first one is how
+  // `LANE A: RUNNING` sat beside `ledger: not created yet` on 2026-09-03 and
+  // read as a healthy lane that had never merged a single pull request
+  // (task 86bbugeda).
+  const history = laneAMergeHistory({ ledger: led.ledger, fresh: led.fresh, readable: led.ok });
   console.log(`LANE A:  ${gate.allowed ? 'RUNNING' : `NOT RUNNING — ${gate.why}`}`);
+  console.log(`history: ${history.verdict === 'never' ? 'NEVER MERGED — ' : (history.verdict === 'unknown' ? 'CANNOT TELL — ' : '')}${history.why}`);
+  if (gate.allowed && history.verdict === 'never') {
+    console.log('         RUNNING here means the gate is open, NOT that this lane works —');
+    console.log('         nothing has ever come out of it.');
+  }
   const recent = mergesSince(led.ledger, digestSince(led.ledger, now));
   console.log(`recent:  ${recent.length} auto-merge(s) since the last digest (or the last 24 hours if none has posted)`);
   for (const m of recent) console.log(`  PR #${m.pr}  task ${m.task}  ${clockAt(m.at)}  ${(m.files || []).join(' ')}`);

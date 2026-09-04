@@ -29,6 +29,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const gate = require('./builder/reviewGate.js');
+const reviewGateClickup = require('./builder/reviewGateClickup.js');
 
 const CLICKUP_TOKEN = process.env.CLICKUP_API_TOKEN;
 const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
@@ -67,45 +68,24 @@ function gh(args) {
   };
 }
 
-/**
- * The ticket's comments, or null if they could not be read. Null and an empty
- * array mean very different things here — "I could not look" versus "I looked
- * and there is nothing" — so the two are never collapsed.
+/*
+ * Both ClickUp calls live in scripts/builder/reviewGateClickup.js now
+ * (2026-09-04, task 86bbugcpa). They went there for two reasons at once: they
+ * route through the shared client so this gate's requests are counted against
+ * the one company token, and — because this file runs `main()` on import and
+ * so can never be required by a test — that was the only way to PIN what they
+ * do with a missing or expired token, which is the failure mode CI has
+ * actually had. The pin runs the pre-migration originals as a control.
  */
-async function readTicketComments(taskId) {
-  if (!CLICKUP_TOKEN) {
-    return { comments: null, why: 'CLICKUP_API_TOKEN is not set in this job — the CI secret is missing' };
-  }
-  try {
-    const res = await fetch(`https://api.clickup.com/api/v2/task/${encodeURIComponent(taskId)}/comment`, {
-      headers: { Authorization: CLICKUP_TOKEN, 'Content-Type': 'application/json' },
-    });
-    if (!res.ok) return { comments: null, why: `ClickUp answered HTTP ${res.status}` };
-    const json = await res.json();
-    if (!Array.isArray(json?.comments)) return { comments: null, why: 'ClickUp returned no comment list' };
-    return { comments: json.comments, why: '' };
-  } catch (err) {
-    return { comments: null, why: `ClickUp is unreachable: ${err?.message || err}` };
-  }
-}
+const readTicketComments = (taskId) =>
+  reviewGateClickup.readTicketComments(taskId, { token: CLICKUP_TOKEN });
 
-/** Announce an override. Returns ok/why so a failure is reported, not assumed. */
-async function announceWaiver(content) {
-  if (!CLICKUP_TOKEN) return { ok: false, why: 'no ClickUp token in this job' };
-  try {
-    const res = await fetch(
-      `https://api.clickup.com/api/v3/workspaces/${WORKSPACE}/chat/channels/${BUS_CHANNEL}/messages`,
-      {
-        method: 'POST',
-        headers: { Authorization: CLICKUP_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'message', content, content_format: 'text/md' }),
-      },
-    );
-    return { ok: res.ok, why: res.ok ? '' : `HTTP ${res.status}` };
-  } catch (err) {
-    return { ok: false, why: String(err?.message || err) };
-  }
-}
+const announceWaiver = (content) =>
+  reviewGateClickup.announceWaiver(content, {
+    token: CLICKUP_TOKEN,
+    workspace: WORKSPACE,
+    busChannel: BUS_CHANNEL,
+  });
 
 async function main() {
   const prNumber = arg('pr', process.env.PR_NUMBER || '');
