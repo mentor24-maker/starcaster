@@ -1413,3 +1413,146 @@ test('DIRTY without CONFLICTING is treated the same way — it is the same compu
   assert.equal(g.action, 'catch-up-locally');
   assert.match(g.reason, /DIRTY/);
 });
+
+// Imported as a namespace rather than destructured: these tests assert on the
+// module's own exported constant as well as its function, and reading the
+// source file back is part of pinning the measurement.
+const mergeOnComment = require('./mergeOnComment.js');
+const fs = require('node:fs');
+const path = require('node:path');
+
+// ── The CANNOT TELL bound (2026-09-04, task 86bbuvd50) ───────────────────────
+//
+// THE BUG. A CANNOT TELL is a correct verdict, and the relay repeated it every
+// ten minutes forever while saying "the next pass asks again". On 2026-09-04
+// three pull requests each sat that way for over two hours — #596, #592 and
+// #563 — and each needed an agent session to catch the branch up. A permanent
+// block was indistinguishable from a momentary one, and one of them latched the
+// whole auto-merge lane off.
+//
+// The threshold is MEASURED; the table and the empty 54m..2h07m gap it came
+// from are on CANNOT_TELL_STALE_MS.
+
+const CT = { isCannotTell: true, verdict: 'GITHUB AND GIT DISAGREE — CANNOT TELL' };
+const T0 = 1_700_000_000_000;
+const MIN = 60_000;
+
+test('a fresh cannot-tell starts a run and does NOT escalate', () => {
+  const out = mergeOnComment.cannotTellRun({ prev: null, ...CT, now: T0 });
+  assert.equal(out.state, 'new');
+  assert.equal(out.escalate, false, 'the first sighting is an ordinary wait, not an alarm');
+  assert.equal(out.next.passes, 1);
+  assert.equal(out.next.firstSeenAt, T0);
+  assert.equal(out.next.escalatedAt, null);
+});
+
+test('an ordinary wobble under the threshold never escalates', () => {
+  // The direction that matters most: a bound that fires early turns every
+  // ordinary wait into an alarm and teaches everyone to ignore it. The longest
+  // run that EVER cleared on its own was 54 minutes, so 54 must stay silent.
+  let prev = null;
+  for (const mins of [0, 10, 20, 30, 40, 54]) {
+    const out = mergeOnComment.cannotTellRun({ prev, ...CT, now: T0 + mins * MIN });
+    assert.equal(out.escalate, false, `escalated at ${mins}m — the measured self-clearing ceiling is 54m`);
+    prev = out.next;
+  }
+});
+
+test('past the threshold it escalates exactly once, then goes quiet', () => {
+  // The ticket's own acceptance criterion: "a sixth, seventh and eighth
+  // identical pass produce no further post".
+  let prev = mergeOnComment.cannotTellRun({ prev: null, ...CT, now: T0 }).next;
+  const at = mergeOnComment.cannotTellRun({ prev, ...CT, now: T0 + 95 * MIN });
+  assert.equal(at.state, 'escalate');
+  assert.equal(at.escalate, true);
+  assert.match(at.reason, /1h 35m/, 'it must say how long, in the operator\'s units');
+  assert.match(at.reason, /GITHUB AND GIT DISAGREE/, 'and quote the verdict verbatim');
+  assert.match(at.reason, /nothing was merged, refused or cancelled/i,
+    'it must say it changed no merge decision — the ticket\'s non-goal, stated where a reader sees it');
+  assert.ok(at.next.escalatedAt, 'the escalation must be recorded, or it repeats forever');
+
+  let prev2 = at.next;
+  for (const mins of [105, 115, 125, 200, 600]) {
+    const later = mergeOnComment.cannotTellRun({ prev: prev2, ...CT, now: T0 + mins * MIN });
+    assert.equal(later.escalate, false, `posted again at ${mins}m — one escalation, then silence`);
+    assert.equal(later.state, 'quiet');
+    prev2 = later.next;
+  }
+});
+
+test('a CHANGED verdict resets the clock and may escalate on its own merits', () => {
+  const first = mergeOnComment.cannotTellRun({ prev: null, ...CT, now: T0 });
+  const changed = mergeOnComment.cannotTellRun({
+    prev: first.next, isCannotTell: true,
+    verdict: 'CANNOT TELL yet — GitHub is still computing', now: T0 + 200 * MIN,
+  });
+  assert.equal(changed.state, 'new', 'a different wall is a different fact');
+  assert.equal(changed.escalate, false);
+  assert.equal(changed.next.firstSeenAt, T0 + 200 * MIN, 'the clock restarts from the change');
+  assert.equal(changed.next.passes, 1);
+
+  const later = mergeOnComment.cannotTellRun({
+    prev: changed.next, isCannotTell: true,
+    verdict: 'CANNOT TELL yet — GitHub is still computing', now: T0 + 300 * MIN,
+  });
+  assert.equal(later.escalate, true, 'the new run escalates on its own merits');
+});
+
+test('a verdict that clears leaves NO residue', () => {
+  const escalated = mergeOnComment.cannotTellRun({
+    prev: { reason: CT.verdict, firstSeenAt: T0, passes: 9, escalatedAt: T0 + 95 * MIN },
+    ...CT, now: T0 + 120 * MIN,
+  });
+  assert.equal(escalated.state, 'quiet');
+
+  const cleared = mergeOnComment.cannotTellRun({
+    prev: escalated.next, isCannotTell: false, verdict: '', now: T0 + 130 * MIN,
+  });
+  assert.equal(cleared.state, 'clear');
+  assert.equal(cleared.next, null, 'a resolved block must not leave the next one half-way to an alarm');
+  assert.equal(cleared.escalate, false);
+
+  const fresh = mergeOnComment.cannotTellRun({ prev: cleared.next, ...CT, now: T0 + 140 * MIN });
+  assert.equal(fresh.escalate, false, 'the next block starts from zero');
+  assert.equal(fresh.next.passes, 1);
+});
+
+test('an unreadable stored timestamp restarts the clock rather than disabling the alarm', () => {
+  // Reading a missing timestamp as "just started, forever" makes the alarm
+  // unreachable — this ticket's own bug one level up, and the exact defect
+  // task 86bbu60ax found in the claim reader the same day.
+  for (const bad of [undefined, null, 'not-a-date', NaN]) {
+    const out = mergeOnComment.cannotTellRun({
+      prev: { reason: CT.verdict, firstSeenAt: bad, passes: 4, escalatedAt: null },
+      ...CT, now: T0,
+    });
+    assert.equal(out.state, 'new', `firstSeenAt ${String(bad)} must restart, not stall`);
+    assert.equal(out.next.firstSeenAt, T0);
+    assert.equal(out.next.escalatedAt, null, 'and must stay reachable on a later pass');
+  }
+});
+
+test('the threshold sits in the measured gap, and the measurement is written down', () => {
+  // The number is load-bearing and was picked from real data. If someone
+  // changes it, they must move it deliberately and re-measure.
+  assert.equal(mergeOnComment.CANNOT_TELL_STALE_MS, 90 * 60 * 1000);
+  const src = fs.readFileSync(path.join(__dirname, 'mergeOnComment.js'), 'utf8');
+  assert.match(src, /86bbugcpa\s+16 lines/, 'the measured table must stay beside the constant');
+  assert.match(src, /Nothing sits between 54 minutes and 2h07m/,
+    'the gap that chose the threshold is the justification and must not be deleted');
+  assert.match(src, /DO NOT UNIFY THIS WITH/,
+    'the coincidence with the stranded clock must stay flagged, or someone will tidy them into one');
+});
+
+test('the bound never changes a merge decision — the ticket\'s non-goals', () => {
+  // It must not claim a conflict, refuse a merge, or cancel auto-merge. The
+  // function returns a report and a stored counter, and nothing else.
+  const out = mergeOnComment.cannotTellRun({
+    prev: { reason: CT.verdict, firstSeenAt: T0, passes: 9, escalatedAt: null },
+    ...CT, now: T0 + 200 * MIN,
+  });
+  assert.equal(out.escalate, true);
+  for (const key of ['action', 'refuse', 'conflict', 'cancel', 'merge']) {
+    assert.ok(!(key in out), `cannotTellRun returned "${key}" — it must not influence the merge decision`);
+  }
+});
