@@ -22,7 +22,20 @@ worth remembering. The bug-report forwarder never *looked* like it was calling
 ClickUp — it picked its connection up in a roundabout way, so the automatic
 check that hunts for stray connections read clean while the forwarder spent
 requests nobody was counting. There is now a second check that looks for that
-exact sleight of hand, and we deliberately broke it to watch it catch it.
+sleight of hand, and we deliberately broke it to watch it catch it.
+
+The first version of that second check only recognised *one way of writing*
+the trick, while the note above it told the next reader that the whole trick
+was covered. Review caught it, and that overclaim was the real defect: a guard
+that says more than it does is worse than no guard, because the next person
+trusts the sentence and stops looking. It now recognises every ordinary way of
+writing the same thing, each one named and separately proved catchable, with
+four correct spellings listed alongside that it must *not* complain about. The
+same check also used to decide which files to inspect by looking for a variable
+name — one that three files with nothing to do with ClickUp happen to use, so
+the first of them to grow an ordinary test hook would have been failed by a
+ClickUp check and told to route a Google Drive call through it. It now looks
+for ClickUp itself.
 
 The riskiest piece was the gate that runs inside GitHub, because its ClickUp
 login has quietly expired on us before, and a gate that keeps answering while
@@ -33,7 +46,17 @@ checked by anything. We moved those calls somewhere testable and wrote that
 test **before** changing how they connect. It does not simply check for the
 right wording; it runs the *old* code alongside the new one and insists they
 give the same answer for a healthy reply, an expired login, a revoked one, a
-refusal, a garbled response and a ClickUp that cannot be reached at all.
+refusal, and a ClickUp that cannot be reached at all.
+
+There is exactly one case where the two do *not* agree, and this entry claimed
+otherwise until review checked. When ClickUp answers normally but sends back
+something that is not readable at all, the old code called it "ClickUp is
+unreachable" — which is the one thing it definitely was not; it answered. The
+new wording describes the reply that actually arrived. Nothing downstream
+changes: the gate says "cannot tell" either way, and only the sentence a human
+reads is different. That difference is now written down as a test of its own,
+so it is a decision on the record rather than something a future reader has to
+rediscover by diffing.
 
 All four commands were photographed before and after: two are identical down
 to the byte, and the others differ only in their clocks and in which tickets

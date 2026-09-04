@@ -124,17 +124,58 @@ test('the detector really detects — every known offending shape is caught', ()
  * the forwarder spent uncounted requests from the bug reporter's own request
  * path. It was migrated in this slice; this is what stops the pattern coming
  * back, in that file or any other.
+ *
+ * IT HAS TO CATCH THE PATTERN, NOT ONE SPELLING OF IT (review round 1,
+ * 2026-09-04). The first version matched `|| globalThis.fetch` and
+ * `|| global.fetch` and nothing else, while the sentence above claimed the
+ * pattern was closed — so `?? globalThis.fetch`, `|| fetch` and a destructured
+ * `{ fetchImpl = fetch }` all walked through a guard that said it had them.
+ * `|| fetch` is the shortest of them and the likeliest to be written. A guard
+ * that overstates its reach is worse than no guard at all: the next reader
+ * trusts the sentence and stops looking.
+ *
+ * WHAT COUNTS AS THE PATTERN: resolving a transport to the AMBIENT `fetch` —
+ * by `||`, by `??`, by plain assignment, or by a default in a destructured
+ * parameter — spelled `fetch`, `globalThis.fetch` or `global.fetch`. The `\b`
+ * is load-bearing: every migrated caller defaults to `clickupFetch` and passes
+ * `fetchImpl` around, and neither of those may match.
  */
+const AMBIENT_FETCH = String.raw`(?:globalThis\.|global\.)?fetch\b`;
+// The `=` alternative must be a real assignment or default, never the tail of
+// `===`/`!==`/`>=` and never the `=` of an arrow (`=> fetch(x)` is a CALL, and
+// calls are the other detector's job).
+const RESOLVES_TO = String.raw`(?:\|\||\?\?|(?<![=!<>])=(?![=>]))`;
+
 function indirectTransportFallback(src) {
   const code = src
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
-  if (!/api\.clickup\.com|API_BASE/.test(code)) return [];
+  if (!touchesClickUp(code)) return [];
   const hits = [];
-  const re = /(?:\|\|\s*globalThis\.fetch|\|\|\s*global\.fetch|=\s*globalThis\.fetch\b)/g;
+  const re = new RegExp(`${RESOLVES_TO}\\s*${AMBIENT_FETCH}`, 'g');
   let m;
   while ((m = re.exec(code))) hits.push(m[0].trim());
   return hits;
+}
+
+/*
+ * WHETHER A FILE TALKS TO CLICKUP AT ALL — gated on the HOST, or on importing
+ * something ClickUp-shaped. Never on a variable NAME (review round 1).
+ *
+ * The gate used to be `/api\.clickup\.com|API_BASE/`, and `API_BASE` is not a
+ * ClickUp word: `lib/googleDrive.js`, `lib/vercelEnvAudit.js` and
+ * `lib/acquire/YoutubeDetailsRun.js` each declare one of their own. Nothing
+ * failed while none of them had a test seam — but the first one to grow an
+ * ordinary `{ fetchImpl = fetch }` would have failed a test named after
+ * ClickUp, telling its author to route a Google Drive call through
+ * `clickupFetch`. A guard that fires on the wrong file teaches people to
+ * ignore it.
+ */
+function touchesClickUp(code) {
+  if (/api\.clickup\.com/.test(code)) return true;
+  // The door, and the modules built on it: `./lib/clickup.cjs`,
+  // `../scripts/lib/clickup.cjs`, `./reviewGateClickup.js`, `clickup_direct.mjs`.
+  return /(?:require\s*\(|from)\s*['"][^'"]*clickup[^'"]*['"]/i.test(code);
 }
 
 test('no ClickUp caller resolves its own transport behind the door\'s back', () => {
@@ -150,11 +191,86 @@ test('no ClickUp caller resolves its own transport behind the door\'s back', () 
     + 'pass your fetch to clickupFetch as { fetchImpl } instead, so the request is still counted');
 });
 
-test('the indirect detector really detects', () => {
-  const shape = 'const API_BASE = "https://api.clickup.com";\nconst f = deps?.fetchImpl || globalThis.fetch;';
-  assert.ok(indirectTransportFallback(shape).length >= 1, 'the pattern that hid clickupForward must be caught');
-  // And it must not fire on a file that has nothing to do with ClickUp.
-  assert.deepEqual(indirectTransportFallback('const f = deps.fetchImpl || globalThis.fetch;'), []);
+/*
+ * EVERY SPELLING GETS ITS OWN CONTROL. The review that sent this back found
+ * the guard catching one of four and claiming all four, so a single sample
+ * shape is not enough evidence any more: each spelling is named, and each one
+ * is proven to be catchable on its own.
+ *
+ * It is a separate list from KNOWN_OFFENDING_SHAPES above because it controls
+ * a DIFFERENT detector. `bareClickUpFetches` misses all of these by design —
+ * none of them writes `fetch(` against a ClickUp URL, which is the whole
+ * reason this second detector exists.
+ */
+const CLICKUP_GATE = 'const API = "https://api.clickup.com";\n';
+
+const KNOWN_INDIRECT_SHAPES = [
+  { why: 'clickupForward.js, before migration — the one that got through', src: 'const f = deps?.fetchImpl || globalThis.fetch;' },
+  { why: 'nullish coalescing instead of or', src: 'const f = deps?.fetchImpl ?? globalThis.fetch;' },
+  { why: 'the ambient fetch, unqualified — the shortest spelling of all', src: 'const f = deps?.fetchImpl || fetch;' },
+  { why: 'nullish coalescing onto the ambient fetch', src: 'const f = deps?.fetchImpl ?? fetch;' },
+  { why: 'a default in a destructured parameter', src: 'async function go({ fetchImpl = fetch } = {}) { return fetchImpl(u); }' },
+  { why: 'a destructured default onto the qualified global', src: 'async function go({ fetchImpl = globalThis.fetch } = {}) { return fetchImpl(u); }' },
+  { why: 'the older global alias', src: 'const f = deps.fetchImpl || global.fetch;' },
+  { why: 'a plain assignment, no fallback at all', src: 'const send = fetch;' },
+];
+
+test('the indirect detector really detects — every spelling of the pattern', () => {
+  for (const { why, src } of KNOWN_INDIRECT_SHAPES) {
+    assert.ok(indirectTransportFallback(CLICKUP_GATE + src).length >= 1,
+      `the indirect detector went blind to: ${why}`);
+  }
+});
+
+/*
+ * AND THE SHAPES IT MUST NOT FIRE ON. A guard that cries wolf on the correct
+ * code teaches the next reader to route around it, which costs more than the
+ * one it was written to catch.
+ */
+const NOT_THE_PATTERN = [
+  { why: 'defaulting to the DOOR is the shape we are asking for', src: 'async function go({ fetchImpl = clickupFetch } = {}) { return fetchImpl(u); }' },
+  { why: 'passing a caller\'s transport through is not resolving one', src: 'const f = deps.fetchImpl || other.fetchImpl;' },
+  { why: 'an arrow that CALLS the door', src: 'const f = () => clickupFetch(url);' },
+  { why: 'comparing against fetch is not installing it', src: 'if (transport === fetch) report();' },
+];
+
+test('the indirect detector does not fire on correct code', () => {
+  for (const { why, src } of NOT_THE_PATTERN) {
+    assert.deepEqual(indirectTransportFallback(CLICKUP_GATE + src), [],
+      `the indirect detector cried wolf on: ${why}`);
+  }
+});
+
+/*
+ * THE GATE IS THE OTHER HALF OF THE GUARD. It decides which files are looked
+ * at, so a gate that is too wide fails an innocent file and a gate that is too
+ * narrow never looks at the guilty one. Both directions are asserted.
+ */
+test('the gate lets in ClickUp files and keeps out everything else', () => {
+  // In: the host, or an import of the door / something built on it.
+  assert.equal(touchesClickUp('const u = "https://api.clickup.com/api/v2/x";'), true);
+  assert.equal(touchesClickUp("const { clickupFetch } = require('./lib/clickup.cjs');"), true);
+  assert.equal(touchesClickUp("const { clickupFetch } = require('../scripts/lib/clickup.cjs');"), true);
+  assert.equal(touchesClickUp("import clickupLib from './lib/clickup.cjs';"), true);
+  assert.equal(touchesClickUp("const m = require('./reviewGateClickup.js');"), true);
+
+  // Out: a file that merely has a base URL of its own. These three really
+  // exist and really declare `API_BASE` — lib/googleDrive.js,
+  // lib/vercelEnvAudit.js, lib/acquire/YoutubeDetailsRun.js — which is why
+  // the name was never a safe gate.
+  assert.equal(touchesClickUp('const API_BASE = "https://www.googleapis.com";'), false);
+  assert.equal(touchesClickUp('const f = deps.fetchImpl || globalThis.fetch;'), false);
+});
+
+test('the three real files that declare their own API_BASE are not gated in', () => {
+  for (const rel of ['lib/googleDrive.js', 'lib/vercelEnvAudit.js', 'lib/acquire/YoutubeDetailsRun.js']) {
+    const full = path.join(ROOT, rel);
+    if (!fs.existsSync(full)) continue; // moved or renamed: not this test's business
+    const code = fs.readFileSync(full, 'utf8');
+    assert.match(code, /API_BASE/, `${rel} is the control for this test — it must still declare API_BASE`);
+    assert.equal(touchesClickUp(code), false,
+      `${rel} has nothing to do with ClickUp and must not be judged by a ClickUp guard`);
+  }
 });
 
 test('a comment mentioning fetch does not count as one', () => {

@@ -133,6 +133,54 @@ test('announceWaiver answers exactly as it did before the migration', async () =
 });
 
 /*
+ * THE ONE CASE THAT REALLY DID CHANGE, PINNED AS A CHANGE (review round 1,
+ * 2026-09-04).
+ *
+ * A 200 whose body is not JSON is the single scenario where the two
+ * implementations disagree, and it was the one scenario the pin did not cover
+ * while docs/WORK-LOG.md claimed it did. It cannot join SCENARIOS above,
+ * because that loop asserts the two answer IDENTICALLY — so it is asserted
+ * here, in both directions, with the decision written down.
+ *
+ * WHY THE OLD MESSAGE IS THE WRONG ONE. The original called `res.json()`
+ * inside its try, so a parse failure fell into the same catch as a dead socket
+ * and reported `ClickUp is unreachable: ...`. ClickUp was not unreachable: it
+ * was reached, it answered, and the answer was 200. That message sends its
+ * reader — somebody staring at a red check in Actions — to the network, which
+ * is the one place the fault is not. The migrated message says what is true of
+ * the response that arrived.
+ *
+ * NOTHING DOWNSTREAM MOVES. Both answers are `comments: null`, which the gate
+ * turns into CANNOT TELL either way; only the reason a human reads is
+ * different. That is why this is a decision recorded here rather than a
+ * behaviour change needing its own ticket.
+ */
+test('a 200 whose body will not parse: the reason changed, deliberately', async () => {
+  const parseError = new SyntaxError('Unexpected token < in JSON at position 0');
+  const before = await originalReadTicketComments('t', {
+    token: 'tok',
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => { throw parseError; } }),
+  });
+  const after = await migrated.readTicketComments('t', {
+    token: 'tok',
+    // What the door hands back for a body it could not parse: the response is
+    // there, `json` is null, and the raw `text` is kept.
+    fetchImpl: async () => ({ res: { ok: true, status: 200 }, json: null, text: '<html>502</html>', transportError: null }),
+  });
+
+  assert.equal(before.comments, null, 'the old code could not read the trail');
+  assert.equal(after.comments, null, 'and neither can the new one — the VERDICT is unchanged');
+
+  assert.equal(before.why, `ClickUp is unreachable: ${parseError.message}`,
+    'the pre-migration reason, stated so the change is visible and not inferred');
+  assert.equal(after.why, 'ClickUp returned no comment list',
+    'the reason now describes the response that ARRIVED, rather than blaming the network');
+
+  assert.notEqual(after.why, before.why,
+    'this is the deliberate divergence — if these ever match again, this test is stale, not passing');
+});
+
+/*
  * THE MISSING-TOKEN CASE GETS ITS OWN TEST, because it is the one CI actually
  * hits and because it must not reach the network at all — a gate that spends a
  * request to discover it has no token is a gate that can be rate-limited into
