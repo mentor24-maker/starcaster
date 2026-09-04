@@ -983,7 +983,12 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // answer costs nothing and says nothing.
   const alreadySaid = (why) => decision.priorRefusal === why;
 
-  const refuse = async (why, plainEnglish) => {
+  // `refusalCode` is REQUIRED at every call (task 86bbtqpxd). It decides
+  // whether the operator is told his approval carries over — a promise that
+  // is true of a red check and false of an already-merged PR — and
+  // `refusalNotice` throws on a code it cannot classify, so a new refusal
+  // reason cannot reach him wearing the reassuring wording by default.
+  const refuse = async (why, plainEnglish, refusalCode) => {
     if (lane) return { outcome: 'lane-cancel', reason: why };
     if (alreadySaid(why)) {
       console.error(`  MERGE REFUSED (unchanged, nothing posted) on ${label}: ${why}`);
@@ -991,13 +996,21 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     }
     console.error(`  MERGE REFUSED on ${label}: ${why}`);
     if (dryRun) return { outcome: 'would-refuse', reason: why };
-    const notice = refusalNotice({ commentId: decision.commentId, why, plainEnglish });
+    const notice = refusalNotice({ commentId: decision.commentId, why, plainEnglish, refusalCode });
     const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
     if (!cOut.res.ok) {
       unchecked.push(`${task.id}: merge refused (${why}) but the explanation comment FAILED to post — the operator has not been told`);
       return { outcome: 'refused', reason: why };
     }
-    const bus = await postToBus(channel, `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. Explanation posted on the ticket; it is still Ready to launch.`);
+    // ONE bus post per occurrence, and a TERMINAL one says out loud that
+    // nothing further is coming (task 86bbtqpxd). The dedup above already
+    // stops the repeat; what was missing is that the single post read like a
+    // progress note. A refusal that can never clear is the end of the line,
+    // and the line that reports it has to be the line somebody acts on.
+    const busLine = notice.terminal
+      ? `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. This reason is TERMINAL — no later pass will clear it and this step will not post about it again. It needs an agent session or Dane; the ticket comment says what. It is still Ready to launch.`
+      : `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. Explanation posted on the ticket; it is still Ready to launch.`;
+    const bus = await postToBus(channel, busLine);
     if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${task.id}: merge refusal explained on the ticket but the bus post failed (${bus.why})` });
     await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'refused', reason: why };
@@ -1038,7 +1051,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   };
 
   if (decision.act === 'refuse') {
-    return refuse(decision.reason, 'This ticket is not in a state a script may merge from.');
+    return refuse(decision.reason, 'This ticket is not in a state a script may merge from.', decision.refusalCode);
   }
 
   const pr = decision.pr;
@@ -1407,6 +1420,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       const cannotRerun = (why) => refuse(
         `the review gate on PR #${pr.number} is out of date (${staleness.reason}) and ${why}`,
         `PR #${pr.number} carries a review check that was worked out BEFORE the review landed, so it is answering an older question. It could not be re-run, and merging on the old answer is not something this step will do.`,
+        mergeOnComment.REFUSAL_CODES.reviewGateCannotRerun,
       );
       if (!staleness.runId) return cannotRerun('its workflow run could not be identified, so it cannot be re-run');
 
@@ -1430,7 +1444,13 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       });
       const next = reviewGate.afterRerunDecision(after);
       if (next.action === 'refuse') {
-        return refuse(next.reason, `PR #${pr.number} was not merged: its review check had to be re-run first, and the re-run did not clear it.`);
+        // The re-run path can pass through githubGate's own answer, which
+        // carries its own code; only its OWN unresolved answer needs one here.
+        return refuse(
+          next.reason,
+          `PR #${pr.number} was not merged: its review check had to be re-run first, and the re-run did not clear it.`,
+          next.refusalCode || mergeOnComment.REFUSAL_CODES.reviewGateRerunUnresolved,
+        );
       }
       if (next.action === 'conflict' || next.action === 'wait') {
         // Rare: the branch went stale or fell behind during the three minutes
@@ -1516,7 +1536,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   }
 
   if (gate.action === 'refuse') {
-    return refuse(gate.reason, `PR #${pr.number} is not in a state that can be merged safely.`);
+    return refuse(gate.reason, `PR #${pr.number} is not in a state that can be merged safely.`, gate.refusalCode);
   }
 
   if (dryRun) {
@@ -1529,7 +1549,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // get to route around a standing decision).
   const merged = gh(['pr', 'merge', String(pr.number), '--repo', repo, '--squash', '--delete-branch']);
   if (!merged.ok) {
-    return refuse(`the merge command itself failed (${merged.stderr.slice(0, 300)})`, `PR #${pr.number} could not be merged.`);
+    return refuse(`the merge command itself failed (${merged.stderr.slice(0, 300)})`, `PR #${pr.number} could not be merged.`, mergeOnComment.REFUSAL_CODES.mergeCommandFailed);
   }
   const mergedAt = new Date().toISOString();
   console.error(`  MERGED PR #${pr.number} for ${label}`);

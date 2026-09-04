@@ -25,6 +25,11 @@
 // two cannot disagree about it (task 86bbq80j5).
 const { isRealOverlap, isSelfHealing, isPermanent, conflictActor, verdictCopy, conflictVerdictKind } = require('./conflictWork');
 
+// Every refusal reason, classified terminal/transient/unknown where it is
+// RAISED (task 86bbtqpxd). There is no default: a code absent from that table
+// throws rather than inheriting a promise nobody chose for it.
+const { REFUSAL_CODES: R, classifyRefusal, speaksAsTerminal, refusalNeeds } = require('./refusalClass');
+
 /**
  * The exact phrases that mean "merge it". Deliberately a closed set matched
  * as a WHOLE comment, never as a substring: "do not merge this yet" and
@@ -318,11 +323,16 @@ function mergeDecision({ status, comments, operatorId, handled, refused, refused
   // answer, not by being permanently struck off. The moment the reason
   // changes (or disappears), the next pass acts.
   const wasRefusedFor = base.priorRefusal;
-  const refuse = (reason) => (
-    reason === wasRefusedFor
-      ? { ...base, act: 'ignore', reason: `already refused for the same reason: ${reason}` }
-      : { ...base, act: 'refuse', reason }
-  );
+  // The CODE travels with the reason from here on (task 86bbtqpxd).
+  // `classifyRefusal` throws on an unknown one, so a new refusal added
+  // without a classification fails at the raise site rather than quietly
+  // inheriting the standing-approval promise.
+  const refuse = (refusalCode, reason) => {
+    classifyRefusal(refusalCode);
+    return reason === wasRefusedFor
+      ? { ...base, act: 'ignore', reason: `already refused for the same reason: ${reason}`, refusalCode }
+      : { ...base, act: 'refuse', reason, refusalCode };
+  };
 
   // The newest REVIEW verdict must be a PASS, and the authorization must be
   // NEWER than it. Both halves matter: the first is "a human-independent
@@ -332,18 +342,18 @@ function mergeDecision({ status, comments, operatorId, handled, refused, refused
   // and must not release the new PR.
   const verdict = all.find((c) => isReviewVerdict(c.comment_text));
   if (!verdict) {
-    return refuse('no review verdict on this ticket — loop-review has not passed it');
+    return refuse(R.noReviewVerdict, 'no review verdict on this ticket — loop-review has not passed it');
   }
   if (!isReviewPassed(verdict.comment_text)) {
-    return refuse('the most recent review verdict is not a PASS');
+    return refuse(R.reviewNotPassed, 'the most recent review verdict is not a PASS');
   }
   if (commentDate(authorization) < commentDate(verdict)) {
-    return refuse('the merge command predates the current review verdict — it authorized an earlier round');
+    return refuse(R.authorizationPredatesVerdict, 'the merge command predates the current review verdict — it authorized an earlier round');
   }
 
   const pr = findPullRequest(all);
   if (!pr) {
-    return refuse('no "PR opened:" comment on this ticket — nothing to merge');
+    return refuse(R.noPrRecorded, 'no "PR opened:" comment on this ticket — nothing to merge');
   }
 
   return { ...base, act: 'merge', pr, reason: `authorized by comment ${authorization.id}` };
@@ -438,10 +448,10 @@ function unmetProtectionRule(pr) {
  */
 function githubGate(pr) {
   const state = String((pr && pr.state) || '').toUpperCase();
-  if (state === 'MERGED') return { action: 'refuse', reason: 'the PR is already merged' };
-  if (state !== 'OPEN') return { action: 'refuse', reason: `the PR is ${state || 'in an unknown state'}, not open` };
+  if (state === 'MERGED') return { action: 'refuse', refusalCode: R.prAlreadyMerged, reason: 'the PR is already merged' };
+  if (state !== 'OPEN') return { action: 'refuse', refusalCode: R.prNotOpen, reason: `the PR is ${state || 'in an unknown state'}, not open` };
 
-  if (pr.isDraft) return { action: 'refuse', reason: 'the PR is still a draft' };
+  if (pr.isDraft) return { action: 'refuse', refusalCode: R.prIsDraft, reason: 'the PR is still a draft' };
 
   const mergeable = String(pr.mergeable || '').toUpperCase();
   const mergeStateStatus = String(pr.mergeStateStatus || '').toUpperCase();
@@ -465,7 +475,7 @@ function githubGate(pr) {
 
   const checks = checkState(pr.statusCheckRollup);
   if (checks.failed.length) {
-    return { action: 'refuse', reason: `checks are red: ${checks.failed.join(', ')}` };
+    return { action: 'refuse', refusalCode: R.checksRed, reason: `checks are red: ${checks.failed.join(', ')}` };
   }
   if (checks.pending.length) {
     return { action: 'wait', reason: `checks still running: ${checks.pending.join(', ')}` };
@@ -474,7 +484,7 @@ function githubGate(pr) {
   // verified. main is protected on the "verify" check precisely so this
   // cannot ship unchecked.
   if (!checks.total) {
-    return { action: 'refuse', reason: 'the PR reports no checks at all — nothing verified this branch' };
+    return { action: 'refuse', refusalCode: R.noChecksAtAll, reason: 'the PR reports no checks at all — nothing verified this branch' };
   }
 
   // Behind main: the machine's own job, and it does it this pass.
@@ -492,6 +502,7 @@ function githubGate(pr) {
   if (mergeStateStatus === 'UNSTABLE') {
     return {
       action: 'refuse',
+      refusalCode: R.unstableCannotTell,
       reason: 'CANNOT TELL — GitHub reports a check on this branch is not passing, but every check this gate can read is green, so it cannot name which one; read the PR\'s checks on GitHub',
     };
   }
@@ -499,7 +510,7 @@ function githubGate(pr) {
   if (mergeStateStatus === 'BLOCKED') {
     const rule = unmetProtectionRule(pr);
     if (rule) {
-      return { action: 'refuse', reason: `GitHub is holding the merge because ${rule}` };
+      return { action: 'refuse', refusalCode: R.blockedByNamedRule, reason: `GitHub is holding the merge because ${rule}` };
     }
     // The #487 sentence used to live here, and it was a guess wearing a
     // fact's clothes. GitHub reports BLOCKED for any unsatisfied protection
@@ -507,12 +518,13 @@ function githubGate(pr) {
     // neither, so neither may be named back.
     return {
       action: 'refuse',
+      refusalCode: R.blockedCannotTell,
       reason: 'CANNOT TELL which rule — GitHub reports the merge is blocked while every check this gate can read is green, and it did not name the rule. It is not necessarily a missing review: a conflict GitHub has not finished recomputing reads exactly like this, so re-read the PR before acting on it',
     };
   }
 
   if (mergeStateStatus === 'DRAFT') {
-    return { action: 'refuse', reason: 'GitHub still reports the PR as a draft' };
+    return { action: 'refuse', refusalCode: R.githubReportsDraft, reason: 'GitHub still reports the PR as a draft' };
   }
 
   if (mergeStateStatus === 'CLEAN' || mergeStateStatus === 'HAS_HOOKS') {
@@ -525,6 +537,7 @@ function githubGate(pr) {
   // evidence.
   return {
     action: 'refuse',
+    refusalCode: R.unreadableMergeState,
     reason: `CANNOT TELL — GitHub reported a merge state this gate does not know how to read (${mergeStateStatus ? `mergeStateStatus "${mergeStateStatus}"` : 'no mergeStateStatus at all'}, mergeable "${mergeable || 'absent'}")`,
   };
 }
@@ -699,7 +712,18 @@ const APPROVAL_CARRIES_OVER = '**Your approval is still standing — you do not 
  * hand-off that cannot name a specific waiting actor does not get to imply
  * one. `actor` is that name, made structural so a test can check it.
  */
-const ACTOR_PROMISES = { 'later-pass': true, 'loop-queue': true, nobody: false, none: false };
+const ACTOR_PROMISES = {
+  'later-pass': true,
+  'loop-queue': true,
+  // A TERMINAL refusal: the reason will never clear on its own, so no pass is
+  // coming and the body must say who has to act instead (task 86bbtqpxd). The
+  // hyphenated name is the two actors the `needs` sentences name out loud, so
+  // the structural field and the prose cannot drift apart into a message that
+  // implies an actor it never names (`docs/DOCTRINE.md` §2.5).
+  'agent-or-operator': false,
+  nobody: false,
+  none: false,
+};
 
 /** May this notice tell him the approval carries over? Only if the marker is
  *  re-decidable AND a named actor is going to act on the reason. */
@@ -715,15 +739,43 @@ function markerKind(what) {
 }
 
 /**
- * A precondition failed, or GitHub says the PR cannot be merged safely. The
- * marker is re-decidable, so the promise is the truthful one: the reason may
- * be fixed later and this goes through on its own.
+ * A precondition failed, or GitHub says the PR cannot be merged safely.
+ *
+ * WHICH PROMISE THIS MAKES DEPENDS ON THE REASON'S CLASS, NOT ON ITS WORDING
+ * (2026-09-03, task 86bbtqpxd). Until now every refusal said the same thing —
+ * "your approval is still standing ... it goes through on its own" — and that
+ * sentence is true of "checks are red" and flatly false of "the PR is already
+ * merged". Ticket 86bbqw49y carried twenty-five of them, sixteen for a reason
+ * no pass could ever clear, and sat twelve hours with its work already live.
+ *
+ * So the class comes from `refusalClass.js`, keyed on the code the raise site
+ * chose:
+ *
+ *   transient — unchanged. The marker is re-decidable, a later pass merges on
+ *               the same word, and the body says so truthfully.
+ *   terminal / unknown — the promise is dropped entirely and replaced by the
+ *               reason's own `needs` sentence, which names WHO must act.
+ *
+ * THE MARKER STAYS RE-DECIDABLE EVEN WHEN THE MESSAGE IS TERMINAL, and that
+ * is deliberate. Terminal describes the REASON, not the operator's word: if an
+ * agent session records the missing PR, his "merge" should still be good. A
+ * terminal marker would spend it and make him say it twice for someone else's
+ * omission. What changes is what he is TOLD, which is the whole defect.
+ *
+ * `refusalCode` is required. An absent or unknown one throws (there is no
+ * default), because a refusal that could not be classified is exactly the one
+ * that would otherwise inherit the reassuring wording by accident.
  */
-function refusalNotice({ commentId, why, plainEnglish }) {
+function refusalNotice({ commentId, why, plainEnglish, refusalCode }) {
+  classifyRefusal(refusalCode);
+  const terminal = speaksAsTerminal(refusalCode);
+  const closing = terminal ? refusalNeeds(refusalCode) : APPROVAL_CARRIES_OVER;
   return {
     marker: `refused: ${why}`,
-    actor: 'later-pass',
-    body: `Merge not performed. ${plainEnglish}\n\nWhy: ${why}.\n\n${APPROVAL_CARRIES_OVER}\n\n(Automatic: your comment ${commentId} on this ticket was read as a merge authorization. Nothing on GitHub or this ticket was changed. — bus-relay merge step)`,
+    actor: terminal ? 'agent-or-operator' : 'later-pass',
+    refusalCode,
+    terminal,
+    body: `Merge not performed. ${plainEnglish}\n\nWhy: ${why}.\n\n${closing}\n\n(Automatic: your comment ${commentId} on this ticket was read as a merge authorization. Nothing on GitHub or this ticket was changed. — bus-relay merge step)`,
   };
 }
 
@@ -1015,6 +1067,10 @@ function mergedElsewhereNotice({ commentId, pr, mergedAt, armed }) {
 }
 
 module.exports = {
+  REFUSAL_CODES: R,
+  classifyRefusal,
+  speaksAsTerminal,
+  refusalNeeds,
   IN_PASS_WAIT_MS,
   AUTO_MERGE_STALE_MS,
   autoMergeDecision,

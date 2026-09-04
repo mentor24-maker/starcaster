@@ -588,10 +588,17 @@ function assertPromiseMatchesMarker(notice, label) {
 }
 
 test('EVERY notice the merge path posts says truthfully whether the approval survives', () => {
-  assertPromiseMatchesMarker(
-    refusalNotice({ commentId: '77', why: 'checks are red: verify (FAILURE)', plainEnglish: 'x' }),
-    'refusal',
-  );
+  // Walks the WHOLE refusal table (task 86bbtqpxd), not one sample. A refusal
+  // now carries a class, and the promise it is allowed to make follows from
+  // that class — so the invariant has to hold for every reason there is,
+  // including the terminal ones that never used to exist here.
+  const { REFUSAL_CODES } = require('./refusalClass.js');
+  for (const code of Object.values(REFUSAL_CODES)) {
+    assertPromiseMatchesMarker(
+      refusalNotice({ commentId: '77', why: `some reason (${code})`, plainEnglish: 'x', refusalCode: code }),
+      `refusal: ${code}`,
+    );
+  }
   assertPromiseMatchesMarker(
     conflictHandOffNotice({ commentId: '77', pr: SOME_PR, localVerdict: null }),
     'hand-off, unchecked locally',
