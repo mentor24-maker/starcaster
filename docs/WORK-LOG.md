@@ -28,14 +28,28 @@ The first version of that second check only recognised *one way of writing*
 the trick, while the note above it told the next reader that the whole trick
 was covered. Review caught it, and that overclaim was the real defect: a guard
 that says more than it does is worse than no guard, because the next person
-trusts the sentence and stops looking. It now recognises every ordinary way of
-writing the same thing, each one named and separately proved catchable, with
-four correct spellings listed alongside that it must *not* complain about. The
-same check also used to decide which files to inspect by looking for a variable
-name — one that three files with nothing to do with ClickUp happen to use, so
-the first of them to grow an ordinary test hook would have been failed by a
-ClickUp check and told to route a Google Drive call through it. It now looks
-for ClickUp itself.
+trusts the sentence and stops looking. It got better at this three times over,
+and each round the note above it still promised a little more than the check
+below it delivered.
+
+So this entry is not going to make that promise a fourth time. The check now
+recognises several more ways of writing the trick, each one named and
+separately proved catchable, and it decides which files to inspect by looking
+for ClickUp itself rather than for a variable name that three unrelated files
+happen to share. What it does **not** do is guarantee that no second door
+exists anywhere in the repo, and review found three specific ways past it that
+still work. Dane's call was to ship the migration — which is the valuable half,
+and is correct — and to book the guard's remaining holes as work of their own
+rather than spend a fifth round on them. That is ticket 86bbuzq5f, and the
+probes review used to find each hole are already written down there as the
+things it has to make fail.
+
+The lesson underneath four rounds of this is worth keeping: we were trying to
+prove a rule about the *whole repo* by searching the text of the code for
+patterns, and English sentences describing a rule will always outrun the
+patterns that look for it. Whether that check should keep scanning the text at
+all, or should instead watch the running program and object the moment a
+request goes out the wrong way, is the open question on that ticket.
 
 The riskiest piece was the gate that runs inside GitHub, because its ClickUp
 login has quietly expired on us before, and a gate that keeps answering while
