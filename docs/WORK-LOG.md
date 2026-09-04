@@ -1,3 +1,53 @@
+## 2026-09-03 — Three watchdogs saw a stuck ticket and none of them reached you (#586)
+
+A ticket you had already said `merge` on sat in "Ready to launch" for twelve
+hours. Its pull request was already merged; the work was already live on the
+site. Three separate watchdogs were awake and pointed straight at it, and not
+one of them said anything. The loudest reported "nothing is stuck" — honestly,
+because its rule was "say something after 24 hours", and twelve is less than
+twenty-four. You found it by asking about an unrelated ticket that looked odd.
+
+There are two clocks now. A ticket nobody has touched still gets its 24 hours:
+you have not said anything about it, and nagging you about work you never asked
+to be finished is how a watchdog becomes noise. A ticket carrying your own
+`merge` comment is a different thing entirely — you have said what you expect —
+and it is now flagged after **two hours**.
+
+The part that matters is what those two hours are counted from. Not the
+ticket's "last changed" time, which is what every clock here used before: any
+edit at all resets that, and this ticket collected twenty-five automated
+refusal comments while it sat there. A clock reading ticket age would have been
+reset, over and over, by the exact refusals it exists to notice. So the fuse
+burns from **your comment**, which nothing can reset. A ticket that looks four
+minutes old by the old measure is still caught, and there is a test that fails
+if anyone ever points it back at ticket age.
+
+The two hours are not a new number. They are read from the threshold the system
+already gives a build in flight — your words, "no new constant enters the
+codebase without a sibling" — and a test pins both ends, so retuning one of them
+fails loudly instead of quietly moving the other.
+
+The second watchdog, the one that had named this ticket exactly and reached
+nobody, got the two habits a background job owes. It asks the pause switch
+before it does anything, so it stands down while you have the deck. And its
+messages now expire after six hours and clear when the problem is fixed — before
+this, a problem reported once was struck off forever, which is an alarm that
+fires the first time and then never again. A check that stood down for you now
+reports "paused" rather than "clean", because a pass that looked at nothing must
+never read as a healthy one.
+
+Both tools also now say what they cost. A drift pass spends 32 requests against
+ClickUp's roughly one hundred per minute; the new fuse adds one per ticket in
+the stage. That was measured rather than guessed, because the ticket asked for
+it — and the measuring turned up something larger, which is written on the
+ticket rather than fixed here: the ten-minute relay is already spending 108 to
+114 requests a pass and is retrying against the limit thirty-six times in the
+current log. Two tickets already own that problem.
+
+The third thing the ticket raised is not solved and is not claimed to be: all of
+this still reports to the bus, and the bus was not read. Saying so plainly is
+the honest half of the fix.
+
 ## 2026-09-03 — A safety brake that had never once been applied (#567)
 
 When an agent finishes a turn, a check looks at whether the work added a
