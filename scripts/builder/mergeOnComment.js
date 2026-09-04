@@ -561,7 +561,30 @@ function githubGate(pr) {
  *     the existing wording.
  */
 
-/** ~2x the observed 85s median for `verify`. Named, not a literal. */
+/**
+ * How long a pass will hold itself open waiting on CI.
+ *
+ * MEASURED AGAINST `verify`, AND THE MEASUREMENT MOVED (2026-09-03, task
+ * 86bbup3u1). This was set at 180s as "~2x the observed 85s median". That
+ * median is no longer true: four consecutive runs on PR #571 that afternoon
+ * took 127s, 317s, 346s and 342s. 180s is now SHORTER than the thing it is
+ * waiting for, which is not a slow wait — it is a wait that can never
+ * succeed.
+ *
+ * It is deliberately NOT raised to cover the new figure, and that is the
+ * point of this ticket. The bound is not free: MAX_IN_PASS_WAITS x this must
+ * stay under the relay's own 600s interval (see below), so covering a 350s CI
+ * run would mean a cap of one, and one stuck PR would spend the whole pass.
+ * A budget cannot be both big enough for CI and small enough for the
+ * schedule.
+ *
+ * So the merge path no longer tries to win that race. It hands the PR to
+ * GitHub's own auto-merge (see autoMergeDecision) and returns immediately;
+ * GitHub merges it whenever the checks go green, however long they take, and
+ * keeps the branch current itself. This budget survives only for the one
+ * caller that genuinely must wait in-pass — the stale review-gate re-run,
+ * which has to see a NEW answer appear before it can act on anything.
+ */
 const IN_PASS_WAIT_MS = 180_000;
 
 /** How often to re-ask GitHub inside that budget. */
@@ -839,8 +862,164 @@ function mergedNotice({ commentId, pr, mergedAt, lane, files }) {
   };
 }
 
+/**
+ * GITHUB'S AUTO-MERGE, AND WHY THE RELAY STOPPED WAITING (2026-09-03, task
+ * 86bbup3u1).
+ *
+ * `main` is protected with `strict: true`, so a branch must contain every
+ * commit on main to merge, and every merge invalidates every other open
+ * branch. The relay's answer was to catch the branch up itself and then wait
+ * out CI in-pass. That works when the queue is quiet and CANNOT work when it
+ * is busy, which is exactly when the merge lane matters: catch up, restart
+ * CI, run out of budget, defer — and by the next pass main has moved again.
+ * On 2026-09-03 the operator said "merge" at 15:43 and the PR was still open
+ * an hour later, having gone round that loop four times. Nothing refused and
+ * nothing errored; every pass was a healthy pass.
+ *
+ * The fix is to stop racing. GitHub will hold a merge itself: armed on a PR,
+ * auto-merge lands it the moment the required checks pass, and with
+ * `allow_update_branch` on it does the catch-up too. The relay arms it and
+ * goes home.
+ *
+ * WHAT ARMING IS NOT. It is not a second merge gate. Arming happens ONLY on
+ * the two non-terminal answers — `wait` (checks still running) and
+ * `update-branch` (behind main) — which the existing gate reaches only after
+ * every other precondition already holds: the PR is open, not a draft, not
+ * conflicting, no check is red, and the operator's word is on the ticket.
+ * `refuse` and `conflict` are untouched and never arm. GitHub then applies
+ * the branch protection rules on its own account, so an armed PR whose checks
+ * later go red does not merge.
+ */
+function autoMergeDecision({ gate, autoMergeRequest, reviewGateState, alreadyMerged = false } = {}) {
+  if (alreadyMerged) return { action: 'none', reason: 'the PR is already merged' };
+
+  const armed = Boolean(autoMergeRequest);
+  const review = String(reviewGateState || '');
+
+  // THE ONE THING GITHUB DOES NOT CHECK FOR US, AND IT IS THIS REPO'S OWN
+  // REVIEW GATE. Branch protection on `main` requires exactly one check,
+  // `verify`. `review-gate` runs on every PR but is NOT required, so GitHub's
+  // auto-merge — which enforces the protection rules and nothing else —
+  // would happily land a PR whose review gate is stale or red. The relay's
+  // own merge path refuses that case outright, so arming without this guard
+  // would delegate the merge to a WEAKER gate than the one being replaced,
+  // which is the kind of trade that gets made once and discovered later.
+  //
+  // So the review gate is checked HERE, before arming, and is re-checked on
+  // every later pass: a PR that goes stale after it was armed is DISARMED
+  // rather than left to GitHub. 'absent' passes for the same reason the merge
+  // path lets it through — a PR carrying no review-gate check at all is a
+  // different situation from one carrying a bad answer, and it is not this
+  // function's to redefine.
+  const reviewOk = review === 'fresh' || review === 'absent' || review === '';
+  if (!reviewOk) {
+    return armed
+      ? {
+          action: 'disarm',
+          reason: `the review gate is "${review}", which GitHub's auto-merge does not check — disarming so this merge goes back through the relay's own gate`,
+        }
+      : { action: 'none', reason: `the review gate is "${review}", so this PR is not in a state to hand to GitHub` };
+  }
+
+  const action = String((gate && gate.action) || '');
+  if (action !== 'wait' && action !== 'update-branch') {
+    return { action: 'none', reason: `the gate says "${action || 'nothing'}", which is not a state that arms auto-merge` };
+  }
+
+  if (armed) {
+    return { action: 'already-armed', reason: 'auto-merge is already armed on this PR; GitHub lands it when the checks pass' };
+  }
+
+  return {
+    action: 'arm',
+    reason: action === 'update-branch'
+      ? 'the branch is behind main — GitHub catches it up and merges when the checks pass'
+      : 'the checks are still running — GitHub merges when they pass',
+  };
+}
+
+/**
+ * How long an armed PR may sit before its silence is worth a word.
+ *
+ * AN ARMED MERGE THAT NEVER FIRES IS A NEW KIND OF QUIET, and it is the thing
+ * this ticket's own incident should teach. Before auto-merge, a pass that
+ * could not merge said so every ten minutes in its log. After it, the pass
+ * ends cleanly having handed the PR to GitHub — and if GitHub then never
+ * merges it (a check goes red later, someone pushes, the arming is dropped,
+ * a protection rule changes) there is nothing on our side still watching.
+ * "Handed off" would read exactly like "done".
+ *
+ * Two hours is chosen against the thing it must not cry wolf about: a CI run
+ * here is ~6 minutes and the relay wakes every 10, so anything still armed
+ * after two hours has missed roughly twelve chances to merge and is not
+ * merely slow.
+ */
+const AUTO_MERGE_STALE_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Has an armed PR been armed too long? Returns a REASON, not just a boolean,
+ * because the caller puts it in front of a person.
+ *
+ * A missing or unreadable `enabledAt` is NOT treated as "fine": it comes back
+ * as `cannot-tell`, which the caller reports rather than swallows. Reading an
+ * unknown as healthy is how the silence this guards against gets rebuilt one
+ * level up.
+ */
+function autoMergeArmedTooLong({ autoMergeRequest, now = Date.now(), thresholdMs = AUTO_MERGE_STALE_MS } = {}) {
+  if (!autoMergeRequest) return { state: 'not-armed' };
+
+  const raw = autoMergeRequest.enabledAt || autoMergeRequest.enabled_at || '';
+  const at = Date.parse(raw);
+  if (!raw || Number.isNaN(at)) {
+    return {
+      state: 'cannot-tell',
+      reason: 'auto-merge is armed but GitHub did not say when it was armed, so how long it has been waiting cannot be read',
+    };
+  }
+
+  const heldMs = Number(now) - at;
+  if (heldMs < Number(thresholdMs)) return { state: 'ok', heldMs };
+
+  const hours = Math.floor(heldMs / 3_600_000);
+  const mins = Math.round((heldMs % 3_600_000) / 60_000);
+  return {
+    state: 'stale',
+    heldMs,
+    reason: `auto-merge has been armed on this PR for ${hours}h ${mins}m without landing — GitHub is holding it for something (a check that went red after arming, a push that dropped the arming, or a protection rule that is not satisfied)`,
+  };
+}
+
+/**
+ * The PR is MERGED and an unhandled merge authorization is still sitting on
+ * the ticket. Before auto-merge this could only mean somebody merged by hand,
+ * and the gate's answer — refuse, "the PR is already merged" — was a fair
+ * description of what the relay itself had done. Once the relay arms GitHub
+ * to merge on its behalf it becomes the ORDINARY ending, and a refusal notice
+ * telling the operator his merge was not performed, on a ticket whose PR is
+ * merged, is simply false.
+ *
+ * So a merged PR with a live authorization completes the bookkeeping the
+ * merge path would have done: record it and move the ticket to Live. This
+ * cannot double-merge — the merge already happened; the only thing left is
+ * saying so.
+ */
+function mergedElsewhereNotice({ commentId, pr, mergedAt, armed }) {
+  const how = armed
+    ? "GitHub's auto-merge landed it, which this relay armed on your word"
+    : 'it was merged outside this relay (by hand, or by another session)';
+  return {
+    marker: `merged PR #${pr.number} at ${mergedAt}`,
+    actor: 'none',
+    body: `Merged: PR #${pr.number} (${pr.url}) is merged into main — ${how}. Recorded here on your merge command ${commentId}, and this ticket is moving to Live. main auto-deploys, so this is on its way live now.\n\n(Automatic — bus-relay merge step.)`,
+  };
+}
+
 module.exports = {
   IN_PASS_WAIT_MS,
+  AUTO_MERGE_STALE_MS,
+  autoMergeDecision,
+  autoMergeArmedTooLong,
+  mergedElsewhereNotice,
   IN_PASS_POLL_MS,
   MAX_IN_PASS_WAITS,
   mayWaitInPass,
