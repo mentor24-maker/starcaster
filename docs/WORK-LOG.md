@@ -1,3 +1,39 @@
+## 2026-09-04 — The Pages list stops claiming every page uses the same template (#598)
+
+On Builder: Pages, the Template column said "Standard Right-Form" on every
+single row, and the Template dropdown above it listed "Standard Right-Form"
+five times over. Neither was true, and both came from the same mistake.
+
+A page carries two template-ish values that mean different things. One is a
+leftover layout name the server makes up from the page's own web address, and
+it names no template at all. The other records which saved template the page
+was actually built from. The screen was reading the first one — and the code
+that turns a value into a name ends with "…or if you don't recognise it, give
+me the first template in the list". The first template in the list is Standard
+Right-Form. So every value it could not recognise came out wearing that name,
+on every row. The dropdown then added one entry per unrecognised page, each
+labelled through the same guess, which is where the five identical entries
+came from.
+
+The column now reads the value that actually means something, and the code
+behind it never guesses: it gives the template's real name, or says "No
+template" when a page genuinely has none, or says "Unknown template" and shows
+the value when something is set that names nothing. That last case is a real
+data problem and should look like one rather than hiding behind a plausible
+name. The dropdown is rebuilt from real templates only.
+
+Two problems turned up only because the screen was opened and used rather than
+just read. The same list of options was also filling the bulk-edit dropdown,
+which *writes* to pages — so it could have offered "No template" as something
+to save onto them. And real template names are longer than the fake one had
+been, so a long one ran straight across the neighbouring column and made the
+web addresses unreadable; it now shortens with the same word-boundary
+cropping the other columns already use, with the full name on hover.
+
+Checked against the live database first, because the whole change depends on
+that second value existing there: it does, and 116 of the 136 pages have one.
+Nothing about the database was changed.
+
 ## 2026-09-04 — A job that has stopped working now says so within hours, not the next day (#596)
 
 On 3 September the step that merges finished work was dead for sixteen hours,
