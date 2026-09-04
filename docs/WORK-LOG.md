@@ -1,3 +1,48 @@
+## 2026-09-03 — Four checks that said "I could not look at this" and then reported a pass (#584)
+
+Five of this project's checks work by opening a real web browser and looking at
+the screen — do the settings panels line up, does a page fit its window, does
+that button actually change anything. They are the only checks the automated
+build system cannot run for us, because it has no browser. So when one of them
+finishes, the single number it hands back — pass or fail — is the whole of what
+anything else ever learns about it.
+
+Four of the five had places where they could not see anything at all, said so
+clearly in writing, and then handed back **pass**.
+
+The clearest one: run the screen-layout check without first setting up its test
+content, and it printed
+
+> 9 screen-width combination(s) checked, 0 skipped, 0 failing.
+
+That is word for word what it prints after a completely clean sweep. Three lines
+higher it had already said the run was "hollow" — but nobody reads three lines
+higher when the last line says nothing is failing, and no script can read at all.
+Every screen it measured was blank.
+
+The navigation check had the same shape from the other direction. It kept a list
+of controls it could not test, printed that list, and then simply never looked at
+it again when deciding pass or fail. If it had somehow lost every one of them it
+would have announced "all 0 controls move the rendered page" and called that a
+success.
+
+So these checks now give one of three answers instead of two, which is the same
+scheme the pipeline's own health report has used for a while:
+
+- **passed** — I looked, and it is fine
+- **failed** — I looked, and your change broke something
+- **could not tell** — I could not look at all; this says nothing about your change
+
+That third answer is the whole fix, and the distinction between it and "failed"
+matters as much as the one between it and "passed". A missing test fixture or a
+half-finished build is a problem with the *measuring instrument*, not with the
+work being measured — calling it a failure sends whoever reads the log hunting a
+bug that was never there.
+
+Two of the five turned out to have been fixed back in August and were left
+alone. Every path that changed was broken deliberately and the answer read off
+the screen, rather than trusted because the code looked right.
+
 ## 2026-09-03 — A safety brake that had never once been applied (#567)
 
 When an agent finishes a turn, a check looks at whether the work added a
