@@ -5,7 +5,9 @@
  *   npm run pipeline -- status                    is the line running, and if not, since when and who
  *   npm run pipeline -- check                     the same question, for a machine: 0 = running, 3 = paused
  *   npm run pipeline -- pause [--now] [--why "…"] stop new claims, wait for work in flight to finish
- *   npm run pipeline -- resume --operator-asked   hand the deck back, and sweep up anything stranded
+ *   npm run pipeline -- resume --operator-asked --why "…"
+ *                                               hand the deck back, and sweep up anything stranded.
+ *                                               --why is REQUIRED and takes Dane's own words, quoted.
  *
  * THE `--` IS NOT OPTIONAL. Without it npm swallows every `--flag` before this
  * script ever sees it: `resume --operator-asked` is then refused for missing
@@ -102,9 +104,12 @@ function usage(code = 2) {
   console.error('  pause [--now] [--why "..."] [--by NAME] [--wait-minutes N]');
   console.error('                                  stop new claims immediately, then wait for work in flight to finish.');
   console.error('                                  --now skips the wait and names exactly what it left running.');
-  console.error('  resume --operator-asked [--by NAME] [--no-sweep]');
+  console.error('  resume --operator-asked --why "..." [--by NAME] [--no-sweep]');
   console.error('                                  hand the deck back. Refused without --operator-asked: an agent may pause');
-  console.error('                                  the line but may not un-pause the operator\'s deck. Sweeps tickets that');
+  console.error('                                  the line but may not un-pause the operator\'s deck. Refused without --why');
+  console.error('                                  too: paste what Dane actually said, quoted, so the switch ticket can');
+  console.error('                                  answer "on whose word?" later without reading a session transcript.');
+  console.error('                                  Sweeps tickets that');
   console.error('                                  were stranded mid-pass, with a note: a half-built build goes to Rework, an');
   console.error('                                  unstarted one to Queued, and a review is released where it stands so its');
   console.error('                                  finished build is not lost. `sweep` is that same repair on its own.');
@@ -484,11 +489,22 @@ if (cmd === 'check') {
   console.log(v.message);
 
   if (sw.readable && sw.switchFound) {
+    // WHICHEVER record is current, not only a pause. A running pipeline is a
+    // state somebody put it into, and until 2026-09-01 `status` said nothing
+    // about who or on what word — so the question "was this resume authorized?"
+    // had no surface to be asked on (task 86bbrqa5j). A resume written before
+    // --why existed prints "(not recorded)", which is the honest answer and is
+    // itself the visibility the ticket asked for.
     const { state } = readTrail(sw.comments || []);
-    if (state?.paused) {
+    if (state) {
       console.log('');
-      console.log(`paused since:  ${fmt(state.atMs) || state.at}`);
-      console.log(`paused by:     ${state.by || '(not recorded)'}`);
+      if (state.paused) {
+        console.log(`paused since:  ${fmt(state.atMs) || state.at}`);
+        console.log(`paused by:     ${state.by || '(not recorded)'}`);
+      } else {
+        console.log(`resumed:       ${fmt(state.atMs) || state.at}`);
+        console.log(`resumed by:    ${state.by || '(not recorded)'}`);
+      }
       console.log(`from machine:  ${state.node || '(not recorded)'}`);
       console.log(`why:           ${state.why || '(not recorded)'}`);
     }
@@ -648,7 +664,12 @@ if (cmd === 'check') {
   }
 
 } else if (cmd === 'resume') {
-  const auth = resumeAuthorization({ operatorAsked: flag('operator-asked') });
+  // BOTH halves of the claim are read and judged before anything is read from
+  // ClickUp or written to it. `resume` sweeps stranded tickets on its way past
+  // — real writes — so a guard that ran later would refuse a resume that had
+  // already changed the board, which is the failure shape DOCTRINE warns about.
+  const why = arg('why', '');
+  const auth = resumeAuthorization({ operatorAsked: flag('operator-asked'), why });
   if (!auth.allowed) { console.error(auth.message); process.exit(auth.code); }
   console.error(auth.message);
 
@@ -695,7 +716,7 @@ if (cmd === 'check') {
     : await sweepStranded({ by, queue: sw.queue, apply: true, strandedAfterMs });
 
   const at = new Date().toISOString();
-  await writeRecord(sw.task.id, resumeRecord({ by, node: thisNodeName(), at }), 'Resume', at);
+  await writeRecord(sw.task.id, resumeRecord({ by, node: thisNodeName(), at, why }), 'Resume', at);
   await stampSwitchNote(sw.task, `▶ running — resumed ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase().replace(/\s/g, '')}`);
 
   const pausedForMs = Number.isFinite(before.atMs) ? Date.now() - before.atMs : null;

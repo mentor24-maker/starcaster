@@ -353,10 +353,107 @@ test('resume is refused without --operator-asked', () => {
   assert.match(a.message, /--operator-asked/, 'a refusal must say what would satisfy it');
 });
 
-test('resume is allowed with --operator-asked, and says it is on the record', () => {
-  const a = pause.resumeAuthorization({ operatorAsked: true });
+test('resume is allowed with --operator-asked AND --why, and says it is on the record', () => {
+  const a = pause.resumeAuthorization({ operatorAsked: true, why: 'Dane: go ahead and resume' });
   assert.equal(a.allowed, true);
   assert.match(a.message, /recorded/i);
+  assert.match(a.message, /go ahead and resume/,
+    'the words being written down are echoed back, so a wrong paste is visible before it lands');
+});
+
+// ---------------------------------------------------------------------------
+// On whose word. 2026-09-01, task 86bbrqa5j: a resume recorded who and when
+// and nothing else, so "was this authorized?" could only be answered by
+// reading another session's transcript off disk.
+// ---------------------------------------------------------------------------
+
+test('resume is refused when --operator-asked is given without --why', () => {
+  const a = pause.resumeAuthorization({ operatorAsked: true });
+  assert.equal(a.allowed, false);
+  assert.equal(a.code, 1);
+  assert.match(a.message, /--why/, 'a refusal must name what would satisfy it');
+  assert.match(a.message, /nothing has been written/i,
+    'it must say the board is unchanged, or the reader cannot tell what to do next');
+});
+
+test('an empty or whitespace --why is not an answer', () => {
+  // The shape a session reaches for when it has no sentence to paste, which is
+  // exactly the case the requirement exists to catch.
+  for (const why of ['', '   ', '\n\t ']) {
+    const a = pause.resumeAuthorization({ operatorAsked: true, why });
+    assert.equal(a.allowed, false, `"${why}" must not authorize a resume`);
+    assert.equal(a.code, 1);
+  }
+});
+
+test('the two halves of the claim are refused separately, each naming its own gap', () => {
+  // One merged message would tell a caller who typed --operator-asked that it
+  // was missing, which sends them looking for a flag they already used.
+  const noFlag = pause.resumeAuthorization({});
+  const noWhy = pause.resumeAuthorization({ operatorAsked: true });
+  assert.equal(noFlag.code, 2);
+  assert.equal(noWhy.code, 1);
+  assert.doesNotMatch(noWhy.message, /only the operator takes the pipeline off pause/,
+    'the --why refusal must not re-litigate authority the caller already claimed');
+});
+
+test('--why is required BEFORE anything is read or written, not after', () => {
+  // The acceptance criterion that matters: `resume` sweeps stranded tickets on
+  // its way past — real ClickUp writes — so a guard placed later would refuse a
+  // resume that had already moved the board. Source-level, because the writes
+  // need a live token (same reason as the wiring tests above).
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  const start = code.indexOf("} else if (cmd === 'resume') {");
+  assert.ok(start > 0, 'found the resume command');
+  const body = code.slice(start, code.indexOf("} else if (cmd === 'pause') {", start) > start
+    ? code.indexOf("} else if (cmd === 'pause') {", start)
+    : code.length);
+
+  const gate = body.indexOf('resumeAuthorization(');
+  const bail = body.indexOf('process.exit(auth.code)');
+  assert.ok(gate > 0 && bail > gate, 'the authorization is taken and acted on');
+
+  // Nothing may touch ClickUp before the refusal.
+  for (const [what, re] of [
+    ['the switch read', /await readSwitch\(/],
+    ['the stranded sweep', /await sweepStranded\(/],
+    ['the record write', /await writeRecord\(/],
+    ['the party-line announce', /await announce\(/],
+  ]) {
+    const at = body.search(re);
+    if (at === -1) continue;
+    assert.ok(at > bail, `${what} must come AFTER the refusal, or a refused resume still changes things`);
+  }
+
+  // And the flag must actually reach both the gate and the record.
+  assert.match(body, /resumeAuthorization\(\{ operatorAsked: flag\('operator-asked'\), why \}\)/,
+    'the gate must judge the real --why, not a constant');
+  assert.match(body, /resumeRecord\(\{ by, node: thisNodeName\(\), at, why \}\)/,
+    'and the same value must be written to the switch ticket');
+});
+
+test('a resume record carries the why through the writer and back out of the reader', () => {
+  const at = new Date(1_700_000_000_000).toISOString();
+  const rec = pause.resumeRecord({ by: 'Dane', node: 'mac-mini', at, why: 'he said: take it off pause' });
+  assert.match(rec, /why: he said: take it off pause/);
+  const back = pause.parseRecord(rec);
+  assert.equal(back.kind, 'running');
+  assert.equal(back.why, 'he said: take it off pause');
+});
+
+test('status prints the reason on a RUNNING pipeline, not only a paused one', () => {
+  // Before this, the details block was gated on `state?.paused`, so the one
+  // state an unauthorised resume leaves behind was the one state that printed
+  // nothing about who did it or why.
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  const start = code.indexOf("} else if (cmd === 'status') {");
+  const body = code.slice(start, code.indexOf("} else if (cmd === 'sweep') {", start));
+  assert.ok(start > 0 && body.length > 100, 'found the status command');
+  assert.doesNotMatch(body, /if \(state\?\.paused\) \{\s*console\.log\(''\);/,
+    'the details block must not be gated on the pause state');
+  assert.match(body, /resumed by:/, 'a running line must say who resumed it');
+  assert.match(body, /why: *\$\{state\.why \|\| '\(not recorded\)'\}/,
+    'and why — with an honest "(not recorded)" for resumes written before --why existed');
 });
 
 test('a swept ticket is told to look for its own branch before rebuilding', () => {

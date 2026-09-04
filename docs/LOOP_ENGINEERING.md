@@ -1644,7 +1644,8 @@ npm run pipeline -- status                    is it running? if not, since when,
 npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
 npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
 npm run pipeline -- pause --now               ... or don't wait, and name exactly what was left running
-npm run pipeline -- resume --operator-asked   hand the deck back — yours, never an agent's
+npm run pipeline -- resume --operator-asked --why "<his words>"   hand the deck back — yours,
+                                              never an agent's. --why is required: quote him.
 ```
 
 The `--` is required in every one of those. npm eats any `--flag` typed without

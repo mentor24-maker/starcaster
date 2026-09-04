@@ -791,18 +791,65 @@ function numericOption(argv, name, fallback) {
  * announced on the party line, so a resume nobody authorized is visible within
  * minutes rather than never. Prevention where it is possible, evidence where
  * it is not (DOCTRINE §3.11).
+ *
+ * THAT EVIDENCE WAS MISSING UNTIL NOW, which is what `--why` fixes (2026-09-01,
+ * task 86bbrqa5j). A resume recorded who and when and nothing else, so the one
+ * question worth asking afterwards — on whose word? — could not be answered
+ * from the switch ticket at all. On 2026-09-01 the line was paused for a
+ * hand-driven fast-track; at 2:33pm Dane wrote "I am finished (for now) with
+ * the other fast-track task", and nineteen seconds later a different session
+ * resumed. That sentence retires the pause's stated REASON; it is not "hand
+ * the deck back", and he had not authorized it. Establishing that meant
+ * reading another session's transcript off disk.
+ *
+ * The flag is REQUIRED, and the requirement — not the audit trail — is the
+ * mechanism. An agent that must paste the operator's own words has to go find
+ * those words, and the 2:34pm session would have discovered at that moment
+ * that no such sentence existed. An OPTIONAL field would have been skipped by
+ * exactly the session that most needed to fill it in.
+ *
+ * What it deliberately does NOT do is check that the text really is a quote.
+ * That is not detectable, and a check that pretended to would be worse than
+ * none — it would licence the claim it cannot verify. Requiring the field is
+ * the whole of it.
  */
-function resumeAuthorization({ operatorAsked } = {}) {
-  if (operatorAsked) return { allowed: true, message: 'Resuming on the operator\'s say-so (--operator-asked). Recorded on the switch and announced on the party line.' };
+function resumeAuthorization({ operatorAsked, why } = {}) {
+  if (!operatorAsked) {
+    return {
+      allowed: false,
+      code: 2,
+      message:
+        'Refusing to resume: only the operator takes the pipeline off pause.\n' +
+        'An agent may pause the line — that is a safety move anyone should be able to make — but it may not\n' +
+        'hand the deck back, because only the person working on it knows whether he is finished.\n' +
+        'If Dane has said to resume, re-run with --operator-asked. That claim is recorded on the switch ticket\n' +
+        'with this machine\'s name and announced on the party line, so it is checkable afterwards.',
+    };
+  }
+
+  // The second half of the same claim, and it is refused separately so the
+  // message can name the one thing that is missing. Whitespace is not an
+  // answer: `--why "   "` is the shape a session reaches for when it has no
+  // sentence to paste, which is precisely the case this exists to catch.
+  if (!String(why || '').trim()) {
+    return {
+      allowed: false,
+      code: 1,
+      message:
+        'Refusing to resume: --operator-asked was given, but not --why.\n' +
+        'Saying the operator asked is a claim no script can check. What makes it checkable later is his own\n' +
+        'words, written onto the switch ticket beside it — so `resume` will not run without them.\n\n' +
+        '  npm run pipeline -- resume --operator-asked --why "<paste what Dane actually said>"\n\n' +
+        'Quote him, do not summarise him. If you cannot find a sentence to paste, that is the answer:\n' +
+        'nobody has handed the deck back, and the pipeline stays paused. Nothing has been written.',
+    };
+  }
+
   return {
-    allowed: false,
-    code: 2,
+    allowed: true,
     message:
-      'Refusing to resume: only the operator takes the pipeline off pause.\n' +
-      'An agent may pause the line — that is a safety move anyone should be able to make — but it may not\n' +
-      'hand the deck back, because only the person working on it knows whether he is finished.\n' +
-      'If Dane has said to resume, re-run with --operator-asked. That claim is recorded on the switch ticket\n' +
-      'with this machine\'s name and announced on the party line, so it is checkable afterwards.',
+      'Resuming on the operator\'s say-so (--operator-asked). Recorded on the switch and announced on the party line.\n' +
+      `  on his word: ${String(why).trim()}`,
   };
 }
 
