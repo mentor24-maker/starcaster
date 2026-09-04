@@ -1,3 +1,152 @@
+## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
+
+Until now, when Starcaster posted to X on a client's behalf, the post actually
+went out through Starcaster's own X account. There was one set of X keys for
+the whole platform, and no way to sign in as anybody else. This adds the
+missing half: a client presses Connect on the Connections screen, approves it
+on X's own screen, and from then on their posts go out as them.
+
+Dane's own X posting is untouched and keeps working exactly as before. A
+client with no X connection still goes out the old way, on the same code, so
+nothing that works today can stop working because of this.
+
+The reason this was more than "add another platform" is that X has two
+completely different ways of signing in, and the one Starcaster already used
+cannot represent anybody but the account it was set up with. So the second way
+had to be built alongside it, and the two now have to coexist without ever
+getting muddled — a post signed with half of one and half of the other belongs
+to nobody, X rejects it, and the error names neither account. The code makes
+that mixture impossible to build rather than merely unlikely.
+
+One small thing that turns out to matter a lot: an X permission expires after
+about two hours. The renewal machinery built last week could never actually
+renew one, and it needed two separate things to be able to: the value it
+renews *with*, and the deadline that tells it when to bother. Neither had
+anywhere to travel. Facebook and Instagram never noticed, since their
+permissions do not expire.
+
+Both are carried now. The first was fixed in the original round of this work;
+the second was caught in review, and it was the one that mattered more,
+because it failed *silently*. Everything looked right — the permission saved,
+the card went green, the renewal check ran on schedule and reported success —
+and it renewed nothing, because it had never been told when the permission
+runs out and read that silence as "this one lasts forever". A client's posts
+would have started failing an afternoon later with nothing anywhere saying
+why. A permission that arrives without the means to renew itself is also now
+refused outright rather than saved, for the same reason.
+
+Two smaller things were corrected alongside it. When X refuses a client's post
+for want of permission, the message used to send whoever was reading it off to
+Starcaster's own developer settings to change a key that has nothing to do
+with that client — it now names the connection that actually needs redoing.
+And image posting is flagged, in the code, as unproven: it goes through an
+address X has announced it is retiring, nothing here can test it without a
+live X account, and it was carrying a comment that claimed otherwise.
+
+Before any of this can be switched on, X's developer site has to issue two new
+values and be told the address to send clients back to. Until that is done the
+Connect button says so in plain English, and says which two values it means —
+they are easy to confuse with the ones already saved.
+
+One last thing came out of storing that deadline, and it was hiding in a shared
+piece of plumbing rather than in anything to do with X. Every stored date passes
+a check that refuses impossible times — hour 25, minute 61, the 30th of
+February. That check was reading the seconds wrongly. Clocks in this system
+record time down to the millisecond, so the seconds arrive as something like
+"59.096", and the check compared that against 59 and decided a second which does
+not exist had been supplied. It was right about 60. It was wrong about every
+fraction of the 59th, which is one ordinary second in every sixty.
+
+Nothing had met it before, because no part of the connection code stored a real
+deadline until this work. Now every X connection stores one — so a client who
+happened to press Connect in the last second of a minute would have been told
+their account could not be saved, with a reason nobody could act on, roughly one
+attempt in sixty. It also explains a test that had been failing at random. The
+check now reads the whole seconds and ignores the fraction, so 60 is still
+refused and 59.999 is correctly a real time.
+
+Review then found the thing all of that had made reachable, and it was the
+worst kind: it looked like success. Storing the deadline was right, but two
+places treated "past its deadline" as "dead" when what it actually means is
+"nobody has renewed it yet". A client's X permission lasts about two hours. Any
+project that went an afternoon without posting was past that, and from then on
+every post it sent went out on Starcaster's own X account instead — with the
+card still green, nothing written to any log, and the whole point of this work
+quietly reversed. The renewal machinery was sitting right there and worked
+perfectly; nothing ever asked it, because it only ran on permissions that had
+NOT yet run out, which is exactly backwards.
+
+The second place was the scheduled health check, and it made the first one
+permanent. On finding a lapsed permission it wrote it off as dead without
+trying to renew it — so once the check had been past, that account was
+finished for good rather than until the next renewal.
+
+Both now try renewing first and only give up if the renewal genuinely fails,
+in which case they say which account and why. A permission the client or X
+actually withdrew is still refused outright: only the clock is recoverable, and
+no amount of renewing overrules somebody taking a permission back.
+
+One trap had to be avoided on the way. The act of renewing a permission also
+marks that account as the most recently touched — and "most recently touched"
+is how Starcaster decides which of a client's accounts to post from. That is
+right when the renewal happens because a post is about to go out. It would be
+badly wrong on a schedule: a client with two X accounts would find their posts
+drifting onto whichever one the health check happened to renew last, on a
+timer, with nothing visibly wrong. The scheduled renewal is marked not to
+re-elect. The test proving it does that had to be rewritten once — the first
+version could not actually fail, because everything in a test happens inside
+the same millisecond and the ordering it was checking held by accident.
+
+Finally, the note about image posting being unproven moved out of the code and
+onto the card the client actually reads, and a sign-in route that could never
+have completed an X connection — it dropped one of the two values the sign-in
+needs — was fixed. Nothing visible was broken by that second one, because the
+live screen uses a different route, but a route that looks like it works is
+worse than one that is missing.
+
+A third round of checking found the same accident arriving through yet another
+door, and this time the answer was to close the room rather than the door.
+
+The door: if X could not be reached at the moment a client's permission needed
+renewing — a momentary outage, a slow answer, a busy signal — the system wrote
+that permission down as dead. Not "not renewed yet". Dead. And "dead" is a
+verdict it never revisits, deliberately, because a client who takes their
+permission back must not have it quietly renewed. So one bad second at X ended
+the connection for good, the client's own permission still perfectly valid, and
+every post from then on went out on Dane's account with the card still green.
+The distinction that was missing is an ordinary one: X saying "no" is an answer,
+and X not answering at all is not. Only the first is written down as final now.
+The second says so on the card and is tried again on the next post.
+
+The room: for every other platform, the account Starcaster falls back to is
+Starcaster's own — wrong, but institutional. For X it is Dane's personal
+account. Three rounds of review each found a different route by which a
+client's post could end up there, and each was closed individually. So the rule
+is now stated once, at the exit itself: if a project has its own X connection
+and it cannot be used right now, the post does not go out at all, for any
+reason — including a reason nobody has thought of yet. It fails loudly, says
+which account and why, and can be retried. A project with no X connection is
+untouched and still posts the old way, which is Dane's own posting and the one
+thing that must not change.
+
+Two smaller repairs went with it. A permission already past its deadline whose
+stored value could not be read was leaving a green card on a connection the
+clock had plainly condemned; it now goes amber and says why, without being
+written off, because failing to read our own records is our fault and not a
+verdict about the client. And the client identifier is now sent on the three
+calls to X that identify Starcaster as an application — X's own published
+examples include it, leaving it out would fail every client sign-in, and adding
+it costs nothing if it turns out to be optional. That one is unproven against
+the live service, as everything about X here still is.
+
+Something was also wrong with the tests themselves, and it is worth recording
+because it made a whole class of checking worthless. The test scaffolding
+rebuilt its fake database for each test but let one module keep talking to the
+previous one — so any test asking "what did this actually write down?" was
+reading an abandoned copy. No test had ever asked that question, so nothing
+noticed. The reproduction for the fault above is the first one that had to, and
+it passed on its own and failed alongside the others until the scaffolding was
+fixed.
 ## 2026-09-04 — A pull request that could never merge, saying it was about to (#597)
 
 Every task adds one line to the top of the work log, so any two jobs running at

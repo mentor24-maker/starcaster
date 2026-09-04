@@ -1591,7 +1591,7 @@ function connectionsReturnUrl(origin, params = {}) {
  * The storing itself is lib/connections/completeConnection.js — the same code
  * path POST /api/connections/:provider/finish uses, not a second copy of it.
  */
-async function completeConnectionsOAuth({ provider, code, redirectUri, scope, origin, res }) {
+async function completeConnectionsOAuth({ provider, code, redirectUri, state, nonce, scope, origin, res }) {
   const entry = connectionsRegistry.getEntry(provider);
   const adapterRes = connectionsRegistry.getAdapter(provider);
   const displayName = entry?.displayName || provider;
@@ -1603,7 +1603,11 @@ async function completeConnectionsOAuth({ provider, code, redirectUri, scope, or
     }));
   }
 
-  const exchanged = await adapterRes.data.exchange({ code, redirectUri });
+  // `state` and `nonce` are carried through for PKCE. Only X reads them today
+  // (lib/connections/adapters/x.js derives its code_verifier from the nonce);
+  // the Meta adapters ignore both, so passing them costs nothing and means the
+  // next PKCE provider is a new adapter rather than a change here.
+  const exchanged = await adapterRes.data.exchange({ code, redirectUri, state, nonce });
   if (!exchanged.ok) {
     // The adapter's own sentence, verbatim. For Instagram this is the whole
     // point of the slice: a personal account or an unlinked one produces plain
@@ -2046,6 +2050,87 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, start.data, start.data), true;
   }
 
+  /**
+   * X's OWN callback. Connections 7 of 7 (86bbpz1hu).
+   *
+   * A separate URL from Meta's, and it has to be: a provider only accepts a
+   * redirect_uri registered with it, and this one is registered at
+   * developer.x.com rather than in the Meta app. The path is the adapter's
+   * `callbackPath` — read from the adapter rather than written out again here,
+   * because two copies of a registered URL is one typo away from a sign-in that
+   * fails for every client with an error naming none of this.
+   *
+   * Everything about WHOSE connection this is comes from the signed state, not
+   * from the session: the browser arriving here has been at x.com and carries
+   * no project header, which is exactly why this route is exempt from the
+   * project-context requirement in routes/index.js.
+   */
+  if (pathname === connectionsRegistry.getEntry('x')?.adapter?.callbackPath && requestMethod === 'GET') {
+    const urlObj = getUrlObj(req);
+    const origin = getAppPublicOrigin(req);
+    const xAdapterRes = connectionsRegistry.getAdapter('x');
+    if (!xAdapterRes.ok) {
+      return sendRedirect(res, connectionsReturnUrl(origin, {
+        connect_oauth: 'error',
+        connect_provider: 'x',
+        connect_error: xAdapterRes.error,
+      })), true;
+    }
+
+    // X reports a refusal on the redirect rather than at the token endpoint —
+    // a client pressing Cancel arrives here with `error=access_denied` and no
+    // code. Passing its own words through means "you cancelled" reads as
+    // cancelling rather than as a failure.
+    const oauthError = safeText(urlObj.searchParams.get('error'));
+    if (oauthError) {
+      return sendRedirect(res, connectionsReturnUrl(origin, {
+        connect_oauth: 'error',
+        connect_provider: 'x',
+        connect_error: safeText(urlObj.searchParams.get('error_description')) || oauthError,
+      })), true;
+    }
+
+    const stateRaw = safeText(urlObj.searchParams.get('state'));
+    const stateRes = verifyOAuthState(stateRaw);
+    if (!stateRes.ok) {
+      return sendRedirect(res, connectionsReturnUrl(origin, {
+        connect_oauth: 'error',
+        connect_provider: 'x',
+        connect_error: stateRes.error || 'Invalid OAuth state',
+      })), true;
+    }
+    // The state is signed, so a request that reaches here has not been tampered
+    // with — but it could still be a state built for ANOTHER provider and
+    // replayed at this URL, which would run X's exchange against a Meta code.
+    if (safeText(stateRes.data.provider) !== 'x') {
+      return sendRedirect(res, connectionsReturnUrl(origin, {
+        connect_oauth: 'error',
+        connect_provider: 'x',
+        connect_error: 'This sign-in did not begin as an X connection.',
+      })), true;
+    }
+
+    const code = safeText(urlObj.searchParams.get('code'));
+    if (!code) {
+      return sendRedirect(res, connectionsReturnUrl(origin, {
+        connect_oauth: 'error',
+        connect_provider: 'x',
+        connect_error: 'Missing OAuth code',
+      })), true;
+    }
+
+    return await completeConnectionsOAuth({
+      provider: 'x',
+      code,
+      redirectUri: xAdapterRes.data.callbackUrl(),
+      state: stateRaw,
+      nonce: stateRes.data.nonce,
+      scope: { projectId: stateRes.data.projectId, userId: stateRes.data.userId },
+      origin,
+      res,
+    }), true;
+  }
+
   if (pathname === '/api/promote/social/facebook/oauth/callback' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     // The origin the BROWSER is sent back to when this is over — the admin app
@@ -2108,6 +2193,8 @@ async function handle(req, res, pathname, method) {
         provider: statedProvider,
         code,
         redirectUri,
+        state: stateRaw,
+        nonce: stateRes.data.nonce,
         scope: { projectId: stateRes.data.projectId, userId: stateRes.data.userId },
         origin,
         res,
