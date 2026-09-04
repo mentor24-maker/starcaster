@@ -794,8 +794,12 @@ test('A CLEAN CATCH-UP CARRIES ITS VERDICT — GitHub disagreeing does not erase
   // hand-off then had to guess about — and guessing is the defect.
   const from = SCRIPT.indexOf('const local = branchCatchUp.catchUpBranchLocally(');
   const block = SCRIPT.slice(from, SCRIPT.indexOf('} else {', from));
-  assert.match(block, /gate = \{ action: after\.action, reason: after\.reason, localVerdict: local \};/,
-    'the CLEAN verdict must travel with the gate');
+  // `refusalCode` joined it there in round 1 of task 86bbtqpxd, for the same
+  // reason and after the same kind of incident: the rebuilt gate is what
+  // reaches `refuse()`, and a field dropped on the way is a finding this
+  // machine made and then threw away. BOTH must travel.
+  assert.match(block, /gate = \{ action: after\.action, reason: after\.reason, refusalCode: after\.refusalCode, localVerdict: local \};/,
+    'the CLEAN verdict and the refusal code must both travel with the gate');
   assert.ok(!/gate = \{ action: after\.action, reason: after\.reason \};\n\s*if \(after\.prJson\) prJson = after\.prJson;\n\s*\} else \{/.test(SCRIPT),
     'the verdict-dropping form must not come back');
 });
