@@ -18,7 +18,10 @@ const HOUR = 60 * 60 * 1000;
 test('the repair runs marker -> drift -> stranded, calling the real tools', () => {
   assert.deepEqual(repair.STEPS.map((s) => s.id), ['marker', 'drift', 'stranded']);
   assert.deepEqual([...repair.STEPS[0].npmArgs], ['clickup', '--', 'pass-reconcile']);
-  assert.deepEqual([...repair.STEPS[1].npmArgs], ['reconcile', '--', '--live']);
+  // --check, not --live: the scheduled shape asks the pipeline switch before
+  // it reads anything and puts a 6h window on its bus flags (task 86bbtqytq).
+  // The writes are identical; the discipline is what --check adds.
+  assert.deepEqual([...repair.STEPS[1].npmArgs], ['reconcile', '--', '--check']);
   assert.deepEqual([...repair.STEPS[2].npmArgs], ['pipeline', '--', 'sweep']);
 });
 
@@ -71,10 +74,23 @@ test('each dialect reads by its own contract, and an undefined code is a failure
   assert.equal(repair.readStep(marker, 3), 'repaired', 'a hand-back is news, not an abort');
   assert.equal(repair.readStep(marker, 2), 'cannot-tell');
   assert.equal(repair.readStep(drift, 1), 'cannot-tell', 'reconcile 1 = nothing could be checked');
-  assert.equal(repair.readStep(drift, 3), 'repaired',
-    'reconcile 3 = it WROTE. Until 2026-09-04 this step had no such code, reconcile exited 0 whether it '
+  assert.equal(repair.readStep(drift, 4), 'repaired',
+    'reconcile 4 = it WROTE. Until 2026-09-04 this step had no such code, reconcile exited 0 whether it '
     + 'had changed the board or not, and the pass that wrongly closed a live ticket printed REPAIR: CLEAN '
     + '(86bbuv66c). A destructive step that cannot report its own writes is narrating, not watching.');
+  assert.equal(repair.readStep(drift, 3), 'paused',
+    'reconcile 3 = Dane has the deck — the repo-wide decline dialect, the same 3 node:owns and the '
+    + 'preflight speak');
+  assert.equal(repair.readStep(drift, 2), 'cannot-tell',
+    'reconcile 2 = the switch could not be ASKED, which is not a decline and never an all-clear');
+
+  // BREAK-TEST FOR THE MERGE ITSELF (2026-09-04). "it wrote" and "Dane has the
+  // deck" arrived on two branches on the same day, both claiming exit 3. Give
+  // them one number and nothing fails — a pass that CLOSED a ticket reports
+  // PAUSED, quietly, forever. Collapse the two lines above onto one code and
+  // this assertion is what says so.
+  assert.notEqual(repair.readStep(drift, 3), repair.readStep(drift, 4),
+    'a decline and a destructive write must never read as the same thing');
   assert.equal(repair.composeOutcome(['repaired', 'clean', 'clean']).code, 0,
     'a repaired run is a change to report, not a failure to page on');
   assert.equal(repair.readStep(stranded, 3), 'findings', 'a dry sweep that found work is the point of the schedule');
@@ -146,4 +162,71 @@ test('the sweep-never-applies rationale is written where the refusal lives', () 
   assert.match(src, /hand session/i);
   assert.match(src, /only machine-readable difference/i,
     'the safety argument must live beside the code, or the next editor adds --apply as an obvious improvement');
+});
+
+// ── a step that declined is not a step that passed (task 86bbtqytq) ─────────
+
+test('a drift step that stood down for the deck reads PAUSED, never CLEAN', () => {
+  // reconcile exits 3 when Dane has the deck: it read nothing and moved
+  // nothing. Folding that into "clean" would report a pass that checked
+  // nothing as a healthy one — DOCTRINE 3.11 in the composer.
+  const drift = repair.STEPS.find((s) => s.id === 'drift');
+  assert.equal(repair.readStep(drift, 3), 'paused');
+  const outcome = repair.composeOutcome(['clean', 'paused', 'clean']);
+  assert.equal(outcome.word, 'PAUSED');
+  assert.equal(outcome.code, 0, 'a deliberate operator state is not an alarm');
+  assert.match(repair.renderStepLine(drift, 'paused', 'Dane has the deck'), /SKIP/);
+});
+
+test('BREAK-TEST: a drift step that could not ASK the switch reads CANNOT TELL, not PAUSED', () => {
+  // Review round 1 (2026-09-03). reconcile now exits 2 when the switch itself
+  // could not be read — a throttled ClickUp call, a rotated token. Before this
+  // lane existed, that arrived as exit 3 and the whole pass composed to
+  // `exit 0 / PAUSED`: the drift watchdog off the air, on a green board,
+  // indefinitely. Break it by deleting the `2:` entry from the drift dialect
+  // and this fails — `readStep` falls through to 'failed', which is loud but
+  // wrong, because nothing failed.
+  const drift = repair.STEPS.find((s) => s.id === 'drift');
+  assert.equal(repair.readStep(drift, 2), 'cannot-tell');
+  const outcome = repair.composeOutcome(['clean', 'cannot-tell', 'clean']);
+  assert.equal(outcome.word, 'CANNOT TELL');
+  assert.equal(outcome.code, 2, 'a blind watchdog must not exit 0');
+  assert.notEqual(repair.readStep(drift, 2), repair.readStep(drift, 3),
+    'the two non-zero switch answers must not collapse into one reading');
+});
+
+test('BREAK-TEST: no step may run without a deadline', () => {
+  // The runner had none, so a step that never returned pinned the relay's
+  // ten-minute wake and the next wake found it still there.
+  const io = read('scripts/repair.mjs');
+  assert.match(io, /timeout: STEP_TIMEOUT_MS/, 'the step spawn carries a deadline');
+  assert.match(io, /const STEP_TIMEOUT_MS = /);
+});
+
+test('a real finding still outranks a paused step', () => {
+  assert.equal(repair.composeOutcome(['paused', 'findings']).code, 3);
+  assert.equal(repair.composeOutcome(['paused', 'cannot-tell']).code, 2);
+  assert.equal(repair.composeOutcome(['paused', 'failed']).code, 1);
+});
+
+// ---------------------------------------------------------------------------
+// The dialect is a CONTRACT BETWEEN TWO FILES, so test it across both.
+// ---------------------------------------------------------------------------
+
+test('reconcile exits the codes this table says it does', () => {
+  // repair.js declares what reconcile's exit codes MEAN; reconcile.cjs decides
+  // what they ARE. Nothing made the two agree, and on 2026-09-04 they very
+  // nearly did not: two branches gave exit 3 two different meanings on the same
+  // day — "Dane has the deck" and "this pass wrote" — and merging both would
+  // have made a pass that CLOSED a ticket report PAUSED. An exit code is an
+  // integer; every gate in this repo stays green through a wrong one.
+  const src = read('scripts/reconcile_clickup_github.cjs');
+  const [, drift] = repair.STEPS;
+
+  assert.match(src, /if \(live && wrote\.count > 0\) process\.exit\(4\)/,
+    `a live write exits 4, which this table reads as "${repair.readStep(drift, 4)}"`);
+  assert.match(src, /exit: 3,[\s\S]{0,400}?Dane has the deck/,
+    `a genuine pause exits 3, which this table reads as "${repair.readStep(drift, 3)}"`);
+  assert.match(src, /exit: 2,[\s\S]{0,400}?COULD NOT TELL/,
+    `an unaskable switch exits 2, which this table reads as "${repair.readStep(drift, 2)}"`);
 });
