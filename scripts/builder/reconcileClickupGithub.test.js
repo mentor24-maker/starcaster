@@ -239,6 +239,120 @@ test('an unchanged finding is not re-posted on the next run — one comment, not
   assert.equal(posted.length, 1, 'three runs, one bus post');
 });
 
+// ── ROUND 2 of task 86bbtqpxd: the durable half must actually REACH the
+//    tickets that already carry the finding ────────────────────────────────
+//
+// Review round 1 measured this on the live flag file: the single dedup key was
+// checked before EITHER surface was written, so the moment the ticket comment
+// was added it was already suppressed on every ticket ever flagged to the bus.
+// `.git/reconciler-flags.json` on the Mini held
+// `contradiction:merged-operator:86bbqb08p:553` from before the feature
+// existed — a live instance of exactly the case the comment is for, which
+// would have stayed a bus line forever. The fix that removes a bus-only
+// finding must not itself be delivered only where there was no bus finding.
+
+test('ROUND 2: a finding flagged to the bus BEFORE the durable half existed still gets its ticket comment', async () => {
+  const flagged = new Set(['contradiction:merged-operator:t1:42']); // written by an older run
+  const commented = [];
+  const posted = [];
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], clean, repaired, unchecked, {
+    getComments: comments('https://github.com/org/repo/pull/42'),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async (ch, text) => posted.push(text),
+    commentOn: async (id, text) => commented.push([id, text]),
+    alreadyFlagged: flagged,
+    recordFlagged: (key) => flagged.add(key),
+    isLive: true,
+  });
+  assert.equal(commented.length, 1, 'the ticket comment was never posted, so an old bus flag must not suppress it');
+  assert.equal(commented[0][0], 't1');
+  assert.equal(posted.length, 0, 'the bus half WAS already said — it is not repeated');
+  assert.ok(repaired.some((r) => /already flagged to the bus/.test(r)), 'and the report says why the bus was skipped');
+
+  // ...and it is not said twice on the run after that.
+  const second = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], second.clean, second.repaired, second.unchecked, {
+    getComments: comments('https://github.com/org/repo/pull/42'),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async (ch, text) => posted.push(text),
+    commentOn: async (id, text) => commented.push([id, text]),
+    alreadyFlagged: flagged,
+    recordFlagged: (key) => flagged.add(key),
+    isLive: true,
+  });
+  assert.equal(commented.length, 1, 'one comment in total, still');
+  assert.equal(posted.length, 0);
+});
+
+test('ROUND 2: a ticket comment that FAILED is retried next run; the bus post that succeeded is not', async () => {
+  // Round 1, finding 3a: `recordFlagged` ran whenever EITHER surface landed,
+  // so a comment that threw beside a bus post that worked was reported and
+  // then never attempted again. Reported is not recoverable.
+  const flagged = new Set();
+  const posted = [];
+  const commented = [];
+  let commentWorks = false;
+  const deps = () => ({
+    getComments: comments('https://github.com/org/repo/pull/42'),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async (ch, text) => posted.push(text),
+    commentOn: async (id, text) => {
+      if (!commentWorks) throw new Error('ClickUp said no');
+      commented.push([id, text]);
+    },
+    alreadyFlagged: flagged,
+    recordFlagged: (key) => flagged.add(key),
+    isLive: true,
+  });
+
+  const first = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], first.clean, first.repaired, first.unchecked, deps());
+  assert.equal(commented.length, 0);
+  assert.equal(posted.length, 1, 'the bus half landed');
+  assert.match(first.unchecked[0], /ticket comment FAILED to post/);
+  assert.match(first.unchecked[0], /tried again next run/, 'it must say it is recoverable, because it now is');
+
+  commentWorks = true;
+  const second = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], second.clean, second.repaired, second.unchecked, deps());
+  assert.equal(commented.length, 1, 'the half that failed is retried');
+  assert.equal(posted.length, 1, 'the half that succeeded is NOT repeated');
+
+  const third = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], third.clean, third.repaired, third.unchecked, deps());
+  assert.equal(commented.length, 1, 'and now both halves are done and stay quiet');
+  assert.equal(posted.length, 1);
+});
+
+test('ROUND 2: a bus post that FAILED is retried next run; the comment that succeeded is not', async () => {
+  const flagged = new Set();
+  const posted = [];
+  const commented = [];
+  let busWorks = false;
+  const deps = () => ({
+    getComments: comments('https://github.com/org/repo/pull/42'),
+    prState: () => ({ state: 'MERGED' }),
+    postBus: async (ch, text) => { if (!busWorks) throw new Error('party line down'); posted.push(text); },
+    commentOn: async (id, text) => commented.push([id, text]),
+    alreadyFlagged: flagged,
+    recordFlagged: (key) => flagged.add(key),
+    isLive: true,
+  });
+
+  const first = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], first.clean, first.repaired, first.unchecked, deps());
+  assert.equal(commented.length, 1, 'the durable half landed');
+  assert.equal(posted.length, 0);
+  assert.match(first.unchecked[0], /could not post to the bus/);
+
+  busWorks = true;
+  const second = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'ready to launch')], second.clean, second.repaired, second.unchecked, deps());
+  assert.equal(posted.length, 1, 'the bus half is retried');
+  assert.equal(commented.length, 1, 'the ticket is not commented on twice');
+});
+
 test('an open PR is clean', async () => {
   const { clean, repaired, unchecked } = buckets();
   await checkMergedTasks([task('t1', 'X', 'building')], clean, repaired, unchecked, {

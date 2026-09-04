@@ -630,14 +630,31 @@ function mayWaitInPass(waitsUsed, cap = MAX_IN_PASS_WAITS) {
  * `conflict` are handed straight back to the paths that already handle them,
  * so there is exactly one place that decides whether something may merge.
  *
- * @returns {{ action: 'merge'|'refuse'|'conflict'|'update-branch'|'wait'|'poll-again', reason?: string }}
+ * `refusalCode` RIDES THROUGH, AND THAT IS LOAD-BEARING (review round 1 of
+ * task 86bbtqpxd). This function is the funnel BOTH in-pass waits go through
+ * — `waitForChecksInPass` spreads its answer straight to the caller — so
+ * dropping the code here left every refusal discovered while waiting
+ * unclassified. Two things followed, and both were worse than the bug this
+ * ticket set out to kill: the relay pass THREW (`classifyRefusal` has no
+ * default, by design) and died mid-pass, and the one path that supplied a
+ * fallback code relabelled genuinely terminal reasons — "the PR is CLOSED" —
+ * as transient, rebuilding the exact standing-approval lie on a fresh path.
+ *
+ * The rule this encodes: a gate object whose action is a refusal carries the
+ * code that classifies it, through every hand-off, unconditionally. Anything
+ * that rebuilds a gate object copies the code with it. (Written without the
+ * literal raise-site spelling on purpose: refusalClass.test.js COUNTS that
+ * string to prove every raise site is classified, and a comment quoting it
+ * would be an eleventh refusal that carries no code.)
+ *
+ * @returns {{ action: 'merge'|'refuse'|'conflict'|'update-branch'|'wait'|'poll-again', reason?: string, refusalCode?: string }}
  */
 function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS } = {}) {
   const action = String(gate?.action || '');
 
-  // Terminal answers go back to the existing paths untouched.
+  // Terminal answers go back to the existing paths untouched — code included.
   if (action === 'merge' || action === 'refuse' || action === 'conflict') {
-    return { action, reason: gate.reason };
+    return { action, reason: gate.reason, ...(gate.refusalCode ? { refusalCode: gate.refusalCode } : {}) };
   }
 
   // Behind main is also terminal: no amount of polling makes a branch catch
@@ -767,7 +784,7 @@ function markerKind(what) {
  * that would otherwise inherit the reassuring wording by accident.
  */
 function refusalNotice({ commentId, why, plainEnglish, refusalCode }) {
-  classifyRefusal(refusalCode);
+  const kind = classifyRefusal(refusalCode).kind;
   const terminal = speaksAsTerminal(refusalCode);
   const closing = terminal ? refusalNeeds(refusalCode) : APPROVAL_CARRIES_OVER;
   return {
@@ -775,8 +792,51 @@ function refusalNotice({ commentId, why, plainEnglish, refusalCode }) {
     actor: terminal ? 'agent-or-operator' : 'later-pass',
     refusalCode,
     terminal,
+    // `terminal` answers "may this promise the approval carries over?" and is
+    // deliberately true for BOTH 'terminal' and 'unknown'. `kind` is the
+    // three-way answer, and the bus post needs it: announcing a CANNOT-TELL
+    // as "no later pass will clear it" is a certainty the gate did not have,
+    // and it contradicted the ticket comment posted beside it (review round 1
+    // of task 86bbtqpxd). A caller that flattens the two says something the
+    // classification does not.
+    kind,
     body: `Merge not performed. ${plainEnglish}\n\nWhy: ${why}.\n\n${closing}\n\n(Automatic: your comment ${commentId} on this ticket was read as a merge authorization. Nothing on GitHub or this ticket was changed. — bus-relay merge step)`,
   };
+}
+
+/**
+ * The ONE LINE the bus hears about a refusal, keyed on the reason's class.
+ *
+ * THREE CLASSES, THREE SENTENCES (review round 1 of task 86bbtqpxd). The
+ * relay used to branch on `notice.terminal`, which is true of 'unknown' as
+ * well as 'terminal' — so a CANNOT-TELL refusal was announced here as "no
+ * later pass will clear it" while the ticket comment posted beside it
+ * correctly said it could not say. Two surfaces, one occurrence, contradicting
+ * each other, and the CERTAIN one was the wrong one: `blockedCannotTell`
+ * routinely does clear on the next pass. A gate that could not tell must never
+ * be quoted as though it had.
+ *
+ * It lives here, next to the body it accompanies, for the same reason the
+ * marker does: two places writing about one occurrence is two chances to drift,
+ * and the drift is always in the reassuring direction.
+ */
+function refusalBusLine({ label, url, why, kind }) {
+  const head = `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${url}): ${why}.`;
+  if (kind === 'terminal') {
+    return `${head} This reason is TERMINAL — no later pass will clear it and this step will not post about it again. It needs an agent session or Dane; the ticket comment says what. It is still Ready to launch.`;
+  }
+  if (kind === 'unknown') {
+    return `${head} This step CANNOT TELL whether a later pass would clear it, and it will not post about it again — so an agent session or Dane has to look. The ticket comment says what. It is still Ready to launch.`;
+  }
+  if (kind === 'transient') {
+    return `${head} Explanation posted on the ticket; it is still Ready to launch.`;
+  }
+  // No default sentence, for the same reason refusalClass has no default
+  // class: a line written for a class nobody declared would say whichever
+  // thing was cheapest to write.
+  throw new Error(
+    `refusalBusLine: unknown refusal class ${JSON.stringify(kind)} — every class in REFUSAL_CLASSES needs its own sentence`,
+  );
 }
 
 /**
@@ -1097,6 +1157,7 @@ module.exports = {
   markerKind,
   mayPromiseApproval,
   refusalNotice,
+  refusalBusLine,
   conflictHandOffNotice,
   mergedNotice,
   APPROVAL_CARRIES_OVER,

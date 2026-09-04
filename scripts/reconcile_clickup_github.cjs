@@ -316,6 +316,22 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
  * carry both. It is written FIRST, because it is the one that survives — if
  * the bus post then fails, the finding is still recorded where it belongs, and
  * the failure is reported rather than swallowed.
+ *
+ * THE TWO SURFACES DEDUP SEPARATELY, AND THAT IS THE WHOLE POINT (review round
+ * 1 of the same task). There was ONE key, checked before either post, so the
+ * moment the durable half was added it was already suppressed on every ticket
+ * that had ever been flagged to the bus — including 86bbqb08p, a live instance
+ * of exactly the case this comment exists for, whose key was already in
+ * `.git/reconciler-flags.json` from before the feature shipped. The finding
+ * would have stayed a bus line on that ticket forever, which is the condition
+ * being fixed, surviving the fix.
+ *
+ * Splitting the keys also makes each half RECOVERABLE. The single key was
+ * recorded when EITHER surface succeeded, so a ticket comment that threw while
+ * the bus post landed was never retried — reported, but not recoverable. Now
+ * each key is recorded only when its own surface actually carried the finding,
+ * so a failed half is tried again on the next run and a succeeded half is not
+ * repeated.
  */
 async function flag(key, message, ctx) {
   const { repaired, unchecked, postBus, commentOn, alreadyFlagged, recordFlagged, isLive, what, ticketComment } = ctx;
@@ -324,31 +340,46 @@ async function flag(key, message, ctx) {
     if (ticketComment) repaired.push(`[DRY RUN] ${what} — would also comment on task ${ticketComment.taskId} (the durable record)`);
     return;
   }
-  if (alreadyFlagged && alreadyFlagged.has(key)) {
-    // Already posted on an earlier run and nothing changed — not re-posted,
-    // and not silently dropped from the report either.
+
+  // The bus key is the ORIGINAL string, so runs from before the durable half
+  // existed keep suppressing the bus repeat exactly as they did. The ticket
+  // comment gets its own, which no earlier run can have written.
+  const busKey = key;
+  const commentKey = `${key}#ticket-comment`;
+  const wantsComment = Boolean(ticketComment && commentOn);
+  const busDone = Boolean(alreadyFlagged && alreadyFlagged.has(busKey));
+  const commentDone = !wantsComment || Boolean(alreadyFlagged && alreadyFlagged.has(commentKey));
+
+  if (busDone && commentDone) {
+    // Both surfaces carried it on an earlier run and nothing changed — not
+    // re-posted, and not silently dropped from the report either.
     repaired.push(`${what} — already flagged on an earlier run (not re-posted)`);
     return;
   }
-  let commented = false;
-  if (ticketComment && commentOn) {
+
+  if (wantsComment && !commentDone) {
     try {
       await commentOn(ticketComment.taskId, ticketComment.text);
-      commented = true;
+      recordFlagged(commentKey);
       repaired.push(`${what} — recorded on the ticket itself`);
     } catch (err) {
-      unchecked.push(`${what}: contradiction found but the ticket comment FAILED to post — ${err.message}`);
+      unchecked.push(`${what}: contradiction found but the ticket comment FAILED to post — ${err.message} (it will be tried again next run)`);
     }
   }
+
+  if (busDone) {
+    // The ticket comment was the outstanding half; say so rather than
+    // reporting a bus post that did not happen.
+    repaired.push(`${what} — already flagged to the bus on an earlier run (not re-posted)`);
+    return;
+  }
+
   try {
     await postBus(BUS_CHANNEL, `[reconciler] ${message}`);
-    // The key is recorded once EITHER surface carried the finding, so an
-    // unchanged drift is not re-announced on every scheduled run.
-    recordFlagged(key);
+    recordFlagged(busKey);
     repaired.push(`${what} — flagged to the bus`);
   } catch (err) {
-    if (commented) recordFlagged(key);
-    unchecked.push(`${what}: contradiction found but could not post to the bus — ${err.message}`);
+    unchecked.push(`${what}: contradiction found but could not post to the bus — ${err.message} (it will be tried again next run)`);
   }
 }
 

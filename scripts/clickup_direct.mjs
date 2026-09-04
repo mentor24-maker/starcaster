@@ -89,7 +89,7 @@ const {
 const { retryDecision } = clickupRetry;
 const {
   mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
-  refusalNotice, conflictHandOffNotice, mergedNotice,
+  refusalNotice, refusalBusLine, conflictHandOffNotice, mergedNotice,
 } = mergeOnComment;
 const {
   conflictTicketFiledComment, findConflictTicket, conflictTicketName,
@@ -1009,7 +1009,32 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     }
     console.error(`  MERGE REFUSED on ${label}: ${why}`);
     if (dryRun) return { outcome: 'would-refuse', reason: why };
-    const notice = refusalNotice({ commentId: decision.commentId, why, plainEnglish, refusalCode });
+
+    // AN UNCLASSIFIED CODE IS A BUG, AND A BUG MUST NOT TAKE THE PASS WITH IT
+    // (review round 1 of task 86bbtqpxd). `refusalNotice` throws on a code it
+    // cannot classify, which is right — there is no default, and a refusal
+    // must never inherit the reassuring wording by accident. But this function
+    // runs inside a loop over every watched ticket, `runMergeStep` had nothing
+    // catching it, and the throw therefore ended the whole relay pass: no
+    // comment here, no bus post, and every later ticket in that pass silently
+    // unrelayed. That is the same defect wearing different clothes.
+    //
+    // So the throw is CAUGHT and REPORTED — never softened. No ticket comment
+    // is invented, because inventing wording for a reason nothing could
+    // classify is how the lie gets back in; the operator's authorization is
+    // left unspent and unmarked, so the next pass tries again; and the finding
+    // goes to `unchecked` and the bus naming the code, because a code defect
+    // in the merge step is nobody's routine.
+    let notice;
+    try {
+      notice = refusalNotice({ commentId: decision.commentId, why, plainEnglish, refusalCode });
+    } catch (err) {
+      unchecked.push(`${task.id}: merge refused (${why}) but the reason could not be classified (${err.message}) — nothing was posted to the ticket, and this is a defect in the merge step, not in the PR`);
+      const bus = await postToBus(channel, `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. This step could not CLASSIFY that reason (code ${JSON.stringify(refusalCode)}), so it said nothing on the ticket rather than guess whether the approval still stands. That is a defect in the merge step itself — it needs an agent session. The ticket is still Ready to launch and the approval is unspent.`);
+      if (!bus.ok) reportBusFailure({ cosmetic: false, unchecked, busSkipped, line: `${task.id}: merge refusal could not be classified AND the bus post failed (${bus.why})` });
+      return { outcome: 'refused-unclassified', reason: why };
+    }
+
     const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
     if (!cOut.res.ok) {
       unchecked.push(`${task.id}: merge refused (${why}) but the explanation comment FAILED to post — the operator has not been told`);
@@ -1020,9 +1045,18 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // stops the repeat; what was missing is that the single post read like a
     // progress note. A refusal that can never clear is the end of the line,
     // and the line that reports it has to be the line somebody acts on.
-    const busLine = notice.terminal
-      ? `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. This reason is TERMINAL — no later pass will clear it and this step will not post about it again. It needs an agent session or Dane; the ticket comment says what. It is still Ready to launch.`
-      : `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. Explanation posted on the ticket; it is still Ready to launch.`;
+    //
+    // The sentence is chosen by the reason's CLASS, in `refusalBusLine` beside
+    // the body it accompanies — not by `notice.terminal`, which is true of the
+    // could-not-tell class as well and made this line announce a CANNOT-TELL
+    // as a certainty while the ticket comment beside it said the opposite
+    // (review round 1 of task 86bbtqpxd).
+    //
+    // (The class is named without its quoted spelling on purpose:
+    // conflictWork.test.js bans that literal anywhere in this function, to keep
+    // the retired two-bucket CONFLICT verdict from coming back. Different
+    // concept, same word.)
+    const busLine = refusalBusLine({ label, url: task.url, why, kind: notice.kind });
     const bus = await postToBus(channel, busLine);
     if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${task.id}: merge refusal explained on the ticket but the bus post failed (${bus.why})` });
     await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
@@ -1202,7 +1236,15 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       // there is no overlap, because it just did the merge. Dropping the
       // verdict here left `localVerdict` null, which the hand-off then had to
       // guess about. It is a finding; it travels.
-      gate = { action: after.action, reason: after.reason, localVerdict: local };
+      // CARRY THE REFUSAL CODE TOO (review round 1 of task 86bbtqpxd). If the
+      // fresh read refuses — checks going red after the catch-up push is the
+      // ORDINARY case — this object is what reaches `refuse()` at the bottom
+      // of the function. Rebuilding it without the code handed `refusalNotice`
+      // an unclassified reason, which throws by design, and `runMergeStep` was
+      // called with nothing catching it: no refusal comment, no bus post, and
+      // every remaining ticket in the pass never relayed. A gate object never
+      // loses its code as it is reassigned.
+      gate = { action: after.action, reason: after.reason, refusalCode: after.refusalCode, localVerdict: local };
       if (after.prJson) prJson = after.prJson;
     } else {
       // Carry WHY into the hand-off, so the reader learns whether it was a
@@ -1457,12 +1499,24 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       });
       const next = reviewGate.afterRerunDecision(after);
       if (next.action === 'refuse') {
-        // The re-run path can pass through githubGate's own answer, which
-        // carries its own code; only its OWN unresolved answer needs one here.
+        // The re-run path passes through githubGate's own answer, which
+        // carries its own code; `afterRerunDecision` supplies
+        // `reviewGateRerunUnresolved` for its OWN unresolved answer. Either
+        // way a code arrives, so there is nothing to default to.
+        //
+        // THERE USED TO BE A `|| reviewGateRerunUnresolved` HERE, AND IT WAS
+        // NOT A BELT — it was the whole answer (review round 1 of task
+        // 86bbtqpxd). `afterCatchUpDecision` stripped the code two frames
+        // earlier, so the fallback fired EVERY time, and it is classified
+        // transient: a PR read back as CLOSED during the wait rendered as
+        // "your approval is still standing ... it goes through on its own".
+        // That is the sentence and the situation from 86bbqw49y, rebuilt on a
+        // different path by the fix meant to remove it. A quiet default is
+        // also exactly what refusalClass.js forbids: there is NO DEFAULT.
         return refuse(
           next.reason,
           `PR #${pr.number} was not merged: its review check had to be re-run first, and the re-run did not clear it.`,
-          next.refusalCode || mergeOnComment.REFUSAL_CODES.reviewGateRerunUnresolved,
+          next.refusalCode,
         );
       }
       if (next.action === 'conflict' || next.action === 'wait') {
@@ -1479,7 +1533,10 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       // gate that said 'refuse' was refusing the stale red check that no
       // longer exists. Carry the fresh read forward so the refusal branch
       // below judges the PR as it is now, not as it was.
-      gate = { action: next.action, reason: next.reason };
+      // The code rides along for the same reason as the conflict path above:
+      // a gate object never loses it on a reassignment, whatever this
+      // particular branch's action happens to be today.
+      gate = { action: next.action, reason: next.reason, refusalCode: next.refusalCode };
       if (after.prJson) prJson = after.prJson;
     }
   }
@@ -3541,7 +3598,7 @@ if (cmd === 'whoami') {
   // cap x budget, which is what keeps a pass from becoming unbounded
   // and stops one stuck PR starving the rest (task 86bbk2fb5).
   const inPassBudget = { used: 0, cap: mergeOnComment.MAX_IN_PASS_WAITS };
-  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0, stalled: 0, armed: 0 };
+  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0, stalled: 0, armed: 0, threw: 0 };
   // Report what could not be checked rather than silently passing over it
   // (DOCTRINE 3.11) — a task this script could not read is a task whose
   // comments might be sitting unrelayed, not a clean zero.
@@ -3770,9 +3827,30 @@ if (cmd === 'whoami') {
       // pass (or one whose bus post failed) is still an authorization. Its
       // own marker, checked above, is what stops it firing twice.
       if (mergingAllowed && mergeEnabled(watch)) {
-        const m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, mergeRefusedAt, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget });
-        if (m.outcome === 'merged' || m.outcome === 'would-merge') merges.merged++;
+        // ONE TICKET'S CRASH MUST NOT END THE PASS (review round 1 of task
+        // 86bbtqpxd). This call was bare, and `runMergeStep` can throw —
+        // `refusalNotice` does so deliberately on a reason nothing classified.
+        // A throw here ended the whole relay: no refusal comment, no bus post,
+        // and every remaining ticket in the pass never looked at, which is a
+        // silence indistinguishable from a quiet week. The specific trigger is
+        // fixed above; this makes the CLASS survivable, and loudly — the
+        // finding goes to `unchecked`, which is reported and posted, and the
+        // pass carries on to the next ticket.
+        let m;
+        try {
+          m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, mergeRefusedAt, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget });
+        } catch (err) {
+          unchecked.push(`${t.id}: the merge step THREW (${err && err.message ? err.message : err}) — this ticket got no merge decision, nothing was posted on it, and its authorization is unspent. That is a defect in the merge step; it needs an agent session.`);
+          console.error(`  MERGE STEP THREW on "${t.name}" (${t.id}): ${err && err.stack ? err.stack : err}`);
+          m = { outcome: 'threw' };
+        }
+        if (m.outcome === 'threw') merges.threw++;
+        else if (m.outcome === 'merged' || m.outcome === 'would-merge') merges.merged++;
         else if (m.outcome === 'refused' || m.outcome === 'would-refuse') merges.refused++;
+        // A refusal whose reason could not be classified. Counted with the
+        // refusals so the pass summary cannot read as clean, and reported as
+        // its own line in `unchecked` by the refuse() path that raised it.
+        else if (m.outcome === 'refused-unclassified') merges.refused++;
         else if (m.outcome === 'handed-off' || m.outcome === 'would-hand-off') merges.handedOff++;
         // Re-derived the same answer as last pass and posted nothing. Counted
         // separately so a silent pass is legibly "still stuck", not "clean".
@@ -4039,19 +4117,30 @@ if (cmd === 'whoami') {
 
         if (decision.act === 'merge') {
           if (dryRun) { console.error(`  DRY RUN — would auto-merge PR #${pr.number} for ${label} (${decision.reason})`); lane.merged++; continue; }
-          const m = await runMergeStep({
-            task: t,
-            comments: cand.comments,
-            mergeHandled: new Set(),
-            mergeRefused: new Map(),
-            dryRun,
-            channel,
-            unchecked,
-            busSkipped,
-            stalledHandOffs,
-            inPassBudget,
-            lane: { name: 'A', decision, files: decision.eligibility.files },
-          });
+          // Same containment as the comment-driven call above: a throw here
+          // used to end the pass mid-lane, which is worse than any refusal it
+          // could have posted (review round 1 of task 86bbtqpxd).
+          let m;
+          try {
+            m = await runMergeStep({
+              task: t,
+              comments: cand.comments,
+              mergeHandled: new Set(),
+              mergeRefused: new Map(),
+              dryRun,
+              channel,
+              unchecked,
+              busSkipped,
+              stalledHandOffs,
+              inPassBudget,
+              lane: { name: 'A', decision, files: decision.eligibility.files },
+            });
+          } catch (err) {
+            unchecked.push(`${t.id}: Lane A reached the merge and the merge step THREW (${err && err.message ? err.message : err}) — PR #${pr.number} was NOT merged, nothing was posted on the ticket, and the announcement is still armed. That is a defect in the merge step; it needs an agent session.`);
+            console.error(`  MERGE STEP THREW in Lane A on ${label}: ${err && err.stack ? err.stack : err}`);
+            merges.threw++;
+            continue;
+          }
           if (m.outcome === 'merged') {
             lane.merged++;
             ledger = ledgerAfterMerge(ledger, {
@@ -4154,7 +4243,7 @@ if (cmd === 'whoami') {
     : '';
 
   const mergeLine = mergingAllowed
-    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.armed} handed to GitHub auto-merge, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
+    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.armed} handed to GitHub auto-merge, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass${merges.threw ? `, ${merges.threw} THREW (see could-not-be-checked below)` : ''}`
     : pauseState.paused
       ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
       : ', merging disabled (--no-merge)';

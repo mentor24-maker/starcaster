@@ -36,6 +36,25 @@ sitting in a column you have to move it out of — used to report it only in the
 group chat, where it scrolled past with everything else. It now also writes it
 on the ticket itself, once, where the next reader of that ticket cannot miss it.
 It still never moves the ticket for you: that column is yours.
+
+Review caught three things in the first version of this, all of the same shape:
+the label saying which kind of reason it is was being *dropped* somewhere
+between where it is decided and where the message is written. On one route that
+made the message fall back to the reassuring wording again — the exact bug,
+rebuilt. On another it stopped the hourly job dead partway through, so the rest
+of that run's tickets were never looked at, which is the same silence in
+different clothes. The label now travels with the answer everywhere, a mistake
+like it can no longer take the whole run down with it, and a reason the step
+genuinely *cannot* work out is now announced as "I cannot tell" rather than as a
+confident "this will never clear".
+
+The sweep's note on the ticket also had to be fixed to reach the tickets that
+already had the finding. It was sharing one "already said this" marker with the
+group-chat message, so on every ticket flagged before the note existed the note
+was suppressed before it was ever written once — including a real one sitting on
+the board. The two now keep separate markers, which also means either one
+failing gets retried instead of being quietly written off.
+
 ## 2026-09-03 — Overlay screens get their own written record (#558)
 
 An overlay screen is the layer of colour, gradient or picture that sits over a

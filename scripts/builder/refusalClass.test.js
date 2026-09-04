@@ -272,3 +272,191 @@ test('a TRANSIENT refusal goes quiet the same way — the dedup is not the defec
   assert.equal(second.act, 'ignore');
   assert.equal(second.refusalCode, REFUSAL_CODES.noReviewVerdict, 'even a quiet repeat carries its code');
 });
+
+// ---------- ROUND 2: the code has to SURVIVE the trip, not just be raised
+//
+// Review round 1 of this task found the classification correct and the
+// plumbing broken. `afterCatchUpDecision` is the funnel both in-pass waits go
+// through, and it rebuilt the gate object without the code — so every refusal
+// discovered while waiting arrived unclassified. Two consequences, both worse
+// than the original bug: `refusalNotice` threw and killed the whole relay
+// pass, and the one path that supplied a fallback code labelled genuinely
+// terminal reasons transient, rebuilding the standing-approval lie the fix
+// existed to remove. These tests follow a refusal all the way from the gate to
+// the rendered message.
+
+const {
+  afterCatchUpDecision,
+  IN_PASS_WAIT_MS,
+  refusalBusLine,
+} = require('./mergeOnComment.js');
+const reviewGate = require('./reviewGate.js');
+
+test('ROUND 2: afterCatchUpDecision carries the refusal code through', () => {
+  for (const [prJson, expected] of [
+    [{ state: 'CLOSED' }, REFUSAL_CODES.prNotOpen],
+    [{ state: 'MERGED' }, REFUSAL_CODES.prAlreadyMerged],
+    [{ state: 'OPEN', isDraft: true }, REFUSAL_CODES.prIsDraft],
+    [{
+      state: 'OPEN', mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN',
+      statusCheckRollup: [{ name: 'verify', status: 'COMPLETED', conclusion: 'FAILURE' }],
+    }, REFUSAL_CODES.checksRed],
+  ]) {
+    const gate = githubGate(prJson);
+    assert.equal(gate.action, 'refuse', 'fixture should refuse');
+    const next = afterCatchUpDecision({ gate, elapsedMs: 0, budgetMs: IN_PASS_WAIT_MS });
+    assert.equal(next.action, 'refuse');
+    assert.equal(next.refusalCode, expected,
+      `the code was dropped crossing afterCatchUpDecision — this is the round 1 defect (${expected})`);
+  }
+});
+
+test('ROUND 2: an unclassified refusal can no longer reach the operator by way of the wait', () => {
+  // The exact measured failure from the send-back: gate refuses, the code is
+  // stripped, refusalNotice throws, runMergeStep dies mid-pass.
+  const gate = githubGate({ state: 'CLOSED' });
+  const next = afterCatchUpDecision({ gate, elapsedMs: 0 });
+  assert.doesNotThrow(() => refusalNotice({
+    commentId: '900', why: next.reason, plainEnglish: 'x', refusalCode: next.refusalCode,
+  }), 'a refusal that came out of the wait must still be classifiable');
+});
+
+test('ROUND 2: a PR read back as CLOSED during the wait does NOT promise the approval carries over', () => {
+  // This is the 86bbqw49y sentence rebuilt on the review-gate re-run path: the
+  // stripped code meant the `|| reviewGateRerunUnresolved` fallback fired
+  // every time, and that code is classified TRANSIENT.
+  const afterWait = afterCatchUpDecision({ gate: githubGate({ state: 'CLOSED' }), elapsedMs: 0 });
+  const decided = reviewGate.afterRerunDecision(afterWait);
+  assert.equal(decided.action, 'refuse');
+  assert.equal(decided.refusalCode, REFUSAL_CODES.prNotOpen,
+    'the re-run path must pass githubGate\'s own code through, not relabel it');
+
+  const notice = refusalNotice({
+    commentId: '900', why: decided.reason, plainEnglish: 'x', refusalCode: decided.refusalCode,
+  });
+  assert.equal(notice.terminal, true);
+  assert.ok(!notice.body.includes(APPROVAL_CARRIES_OVER),
+    'a closed PR never reopens on its own — promising otherwise is the whole bug');
+  assert.ok(!/goes through on its own/.test(notice.body));
+});
+
+test('ROUND 2: the re-run path has no silent code fallback left in the relay', () => {
+  // A source scan, because the defect was a `||` default that read as a belt
+  // and was in fact the entire answer. refusalClass.js's own header forbids a
+  // default; this is the one place one had crept back in.
+  const relay = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+  const fallbacks = relay.match(/refusalCode\s*\|\|/g) || [];
+  assert.equal(fallbacks.length, 0,
+    `${fallbacks.length} place(s) in clickup_direct.mjs default a missing refusalCode — a reason nothing classified must fail loudly, never inherit a class`);
+});
+
+test('ROUND 2: every gate reassignment in the relay carries the code with it', () => {
+  // The two rebuilt gate objects are what reach `refuse(gate.reason, ...,
+  // gate.refusalCode)` at the bottom of runMergeStep. A rebuild that omits the
+  // code is the crash.
+  const relay = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+  const rebuilds = relay.match(/^\s*gate = \{[^}]*\}/gm) || [];
+  assert.ok(rebuilds.length >= 2, `expected the gate reassignments to be found; saw ${rebuilds.length}`);
+
+  let checked = 0;
+  for (const line of rebuilds) {
+    // `{ ...gate, ... }` keeps everything by construction.
+    if (line.includes('...gate')) continue;
+    // A rebuild that hard-codes a NON-refusal action (`action: 'conflict'`,
+    // `action: 'wait'`) has no code to carry — it is not a refusal and could
+    // not become one. The dangerous shape is the one that copies an action it
+    // has not read: `action: after.action` may be a refusal, and those are the
+    // two the round 1 review measured the code being lost on.
+    const literal = /action: '[a-z-]+'/.test(line);
+    if (literal) continue;
+    checked += 1;
+    assert.ok(/refusalCode/.test(line),
+      `a gate is rebuilt from an action it did not read, without carrying its refusalCode — ${line.trim()}`);
+  }
+  assert.ok(checked >= 2, `expected at least the two waits' gate rebuilds to be checked; saw ${checked}`);
+});
+
+// ---------- ROUND 2: 'unknown' is not 'terminal' on the bus
+
+test('ROUND 2: a CANNOT-TELL refusal is not announced as a certainty', () => {
+  // The bus post branched on `notice.terminal`, true for 'unknown' too, so it
+  // said "no later pass will clear it" beside a ticket comment that correctly
+  // said it could not say. `blockedCannotTell` routinely DOES clear.
+  const notice = noticeFor(REFUSAL_CODES.blockedCannotTell);
+  assert.equal(notice.kind, 'unknown', 'the notice must expose the three-way class, not just terminal/not');
+  assert.equal(notice.terminal, true, 'it still speaks as terminal — it may not promise the approval carries over');
+
+  const line = refusalBusLine({ label: 't', url: 'u', why: 'w', kind: notice.kind });
+  assert.ok(!/no later pass will clear it/.test(line),
+    'the gate could not tell; the bus may not assert what it could not tell');
+  assert.match(line, /CANNOT TELL/);
+  assert.match(line, /an agent session or Dane/, 'DOCTRINE §2.5 — name the actor');
+  assert.match(line, /will not post about it again/);
+});
+
+test('ROUND 2: each class gets its own bus sentence, and an unclassed one throws', () => {
+  const terminal = refusalBusLine({ label: 't', url: 'u', why: 'w', kind: 'terminal' });
+  const unknown = refusalBusLine({ label: 't', url: 'u', why: 'w', kind: 'unknown' });
+  const transient = refusalBusLine({ label: 't', url: 'u', why: 'w', kind: 'transient' });
+  assert.notEqual(terminal, unknown, 'terminal and unknown must not read the same — that was the defect');
+  assert.notEqual(unknown, transient);
+  assert.match(terminal, /TERMINAL/);
+  assert.ok(!/TERMINAL|CANNOT TELL/.test(transient), 'a transient refusal is ordinary news');
+
+  for (const kind of REFUSAL_CLASSES) {
+    assert.doesNotThrow(() => refusalBusLine({ label: 't', url: 'u', why: 'w', kind }),
+      `${kind} has no bus sentence`);
+  }
+  assert.throws(() => refusalBusLine({ label: 't', url: 'u', why: 'w', kind: 'made-up' }),
+    /unknown refusal class/);
+});
+
+test('ROUND 2: every notice exposes the class its code was given', () => {
+  for (const code of Object.values(REFUSAL_CODES)) {
+    assert.equal(noticeFor(code).kind, classifyRefusal(code).kind, `${code}: notice.kind must be the classification`);
+  }
+});
+
+// ---------- ROUND 2: a bug in the merge step must not take the PASS with it
+//
+// `classifyRefusal` throws by design — there is no default, and a refusal must
+// never inherit the reassuring wording by accident. But the relay called
+// `runMergeStep` bare, inside a loop over every watched ticket, so that throw
+// ended the whole pass: no refusal comment, no bus post, and every remaining
+// ticket never looked at. A silence indistinguishable from a quiet week, which
+// is the failure mode this entire ticket exists to remove.
+//
+// Source scans, because `scripts/clickup_direct.mjs` is a CLI script with no
+// exports — the same reason the raise-site scan above is a source scan.
+
+/** Is this offset inside a `try {` that opened shortly before it? */
+function guardedBy(src, index, window = 700) {
+  return src.slice(Math.max(0, index - window), index).includes('try {');
+}
+
+test('ROUND 2: every runMergeStep call is guarded, so one ticket cannot end the pass', () => {
+  const relay = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+  const calls = [...relay.matchAll(/await runMergeStep\(/g)];
+  assert.ok(calls.length >= 2, `expected both runMergeStep call sites; saw ${calls.length}`);
+  for (const m of calls) {
+    assert.ok(guardedBy(relay, m.index),
+      'runMergeStep is called with nothing catching a throw — a defect on one ticket would end the relay pass silently');
+  }
+});
+
+test('ROUND 2: rendering a refusal notice is guarded, and the guard invents no wording', () => {
+  const relay = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+  const calls = [...relay.matchAll(/= refusalNotice\(/g)];
+  assert.ok(calls.length >= 1, 'expected the relay to render a refusal notice');
+  for (const m of calls) {
+    assert.ok(guardedBy(relay, m.index),
+      'refusalNotice throws on an unclassified reason; rendering it unguarded is what killed the pass');
+  }
+  // The catch must report, not soften: no fallback code, and nothing posted to
+  // the ticket. A guard that supplied a class would be the silent default
+  // refusalClass.js forbids, reintroduced as error handling.
+  assert.match(relay, /could not be classified/,
+    'the guard must say out loud that the reason was unclassifiable');
+  assert.match(relay, /refused-unclassified/,
+    'and hand back an outcome the pass summary counts, so it cannot read as clean');
+});
