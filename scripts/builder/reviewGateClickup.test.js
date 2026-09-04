@@ -4,13 +4,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 /*
- * NO TEST IN THIS FILE MAY REACH THE REAL CLICKUP. One of them deliberately
- * uses the shared door's own transport to prove the requests are counted, and
- * the door reads its base URL once at load — so the base is pointed at an
- * unresolvable host HERE, before the require below, rather than being left to
- * whoever happens to run the suite. A test that quietly spends a request
- * against the company's one token is a test that rate-limits the thing it is
- * checking.
+ * NO TEST IN THIS FILE MAY REACH THE REAL CLICKUP. A test that quietly spends
+ * a request against the company's one token is a test that rate-limits the
+ * thing it is checking.
+ *
+ * This line is the FILE-level backstop, and it has to sit above the require
+ * because the door reads its base URL once at load. It covers any test added
+ * here later that forgets to think about it. The one test that exercises the
+ * default transport does not rely on it — it substitutes the transport
+ * outright, and says so where it does it — so this is belt and braces rather
+ * than the only guard.
  */
 process.env.CLICKUP_API_BASE = 'https://api.clickup.com.invalid-tld-for-this-test';
 
@@ -227,17 +230,59 @@ test('an empty comment list is NOT the same answer as an unreadable one', async 
  * And the point of the whole ticket: these requests must now be COUNTED. A
  * migration that kept every string identical but still bypassed the shared
  * door would pass every test above and change nothing that mattered.
+ *
+ * This is the only test that exercises the DEFAULT transport, so it is the
+ * only one that could reach the real ClickUp. TWO separate things stop it,
+ * and they are not redundant:
+ *
+ *   - The `CLICKUP_API_BASE` assignment at the top of this file. That is the
+ *     FILE-level backstop: it covers any future test here that forgets, and
+ *     it is why nothing in this file has ever spent a request against the
+ *     company's token. It leans on DNS refusing the name, though, and a
+ *     resolver that wildcards unknown names onto a captive portal would turn
+ *     that into a request to a stranger.
+ *   - The substitution below. That is what THIS test does. `clickupFetch`
+ *     resolves its transport from the ambient `fetch` at call time, so
+ *     replacing that exercises the real default path with no socket opened at
+ *     all — and it asserts strictly more than watching a counter move, because
+ *     it proves the shared door was the thing that ran the request rather than
+ *     something else that happened to increment.
+ *
+ * The substitute is restored in a `finally`. A leaked spy would silently mute
+ * every test that ran after this one, which is a worse failure than the one it
+ * is guarding against.
  */
 test('the default transport is the shared door, so these requests are counted', async () => {
   const { getBudget } = require('../lib/clickup.cjs');
   const before = getBudget().requests;
-  // No fetchImpl passed: it must reach for the real door. An unresolvable host
-  // is the cheapest real transport failure.
-  const out = await migrated.readTicketComments('t', {
-    token: 'tok',
-    // eslint-disable-next-line no-undefined
-    fetchImpl: undefined,
-  });
-  assert.equal(out.comments, null, 'an unreachable ClickUp reads as could-not-look');
+
+  const realFetch = globalThis.fetch;
+  const throughTheDoor = [];
+  globalThis.fetch = async (url) => {
+    throughTheDoor.push(String(url));
+    return { ok: false, status: 401, headers: { get: () => null }, text: async () => '{}' };
+  };
+
+  let out;
+  try {
+    // Still no fetchImpl: the reader has to reach for the real door.
+    out = await migrated.readTicketComments('t', {
+      token: 'tok',
+      // eslint-disable-next-line no-undefined
+      fetchImpl: undefined,
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  assert.equal(throughTheDoor.length, 1,
+    'the shared door ran this request — a reader that fetched for itself would never come through here');
+  assert.equal(throughTheDoor[0], `${migrated.API_BASE}/api/v2/task/t/comment`,
+    'and it ran the URL this reader asked for');
+  assert.equal(out.comments, null, 'a 401 reads as could-not-look, never as an empty trail');
   assert.equal(getBudget().requests, before + 1, 'the shared budget saw the attempt');
+
+  assert.equal(globalThis.fetch, realFetch,
+    'and the substitute is PUT BACK — a leaked spy would silently mute every test after this one, '
+    + 'so the restore is asserted rather than left as a comment nobody can fail');
 });

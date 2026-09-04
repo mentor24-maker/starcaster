@@ -58,6 +58,20 @@ reads is different. That difference is now written down as a test of its own,
 so it is a decision on the record rather than something a future reader has to
 rediscover by diffing.
 
+Review then flagged that the one test which uses the real connection was
+secretly calling ClickUp on every test run. We measured it rather than
+assuming, and it was not: the test file points the ClickUp address at a
+deliberately non-existent one before it starts, so the request goes nowhere.
+Recording that here because the mistake is an easy one and we made it too at
+first — running that code from a scratch file behaves differently from running
+it under its test, on purpose. The suggested fix was still worth doing for a
+different reason, so we did it. The test now hands the machinery a stand-in
+connection of its own, which means it depends on nothing outside the computer
+it runs on, and it proves more than it used to: not merely that *a* counter
+moved, but that the shared door itself was what carried the request. A version
+that quietly went around the door, with everything else about it correct, now
+fails. So does one that forgets to put the stand-in back afterwards.
+
 All four commands were photographed before and after: two are identical down
 to the byte, and the others differ only in their clocks and in which tickets
 happened to be moving at the time.
