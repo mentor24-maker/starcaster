@@ -106,21 +106,49 @@ function markerPath(gitCommonDir) {
 }
 
 /**
- * What one claim records.
+ * What one claim records, READING a marker back off disk.
  *
  * `at` IS read, by the scheduled reconcile, which has no other way to tell a
  * dead pass from a slow one (see LIVE_CLAIM_GRACE_MS). `pid` is not read by
  * anything and must not be: it belongs to the claim process, not the pass.
  * It stays because it is what turns a confusing file into a legible one when
  * somebody finds it by hand at 3am.
+ *
+ * THIS FUNCTION MUST NOT INVENT A DATE (found in review, 2026-09-04). It used
+ * to finish `at: at || new Date().toISOString()`, which is correct for a
+ * WRITE and catastrophic for a READ: every scheduled run is a fresh process,
+ * so a marker with no `at` was stamped with "now" on each pass and read as
+ * "claimed 0 min ago" forever. The ticket was left in "Building" every single
+ * run, for a week if need be, and the `undated` branch below — the one that
+ * exists to say COULD NOT TELL out loud — could never be reached through the
+ * real path. That is a silent guess standing exactly where the loud one was
+ * specified, and it disabled the backstop in the case the scheduled repair
+ * exists for (the runner dead, so no next pass to run the `pass` seat).
+ *
+ * The clock belongs at the WRITE site instead: `newClaimRecord` below.
  */
 function claimRecord({ task, skill, at, pid }) {
   return {
     task: String(task || ''),
     skill: String(skill || ''),
-    at: at || new Date().toISOString(),
+    at: at == null ? null : String(at),
     pid: Number.isFinite(Number(pid)) ? Number(pid) : null,
   };
+}
+
+/**
+ * What one claim records, WRITING it — the same shape, with the clock read
+ * once, here, at the moment the claim is actually made.
+ *
+ * Separate from `claimRecord` on purpose: those are two different jobs that
+ * shared one function and one default, and the default that a write needs is
+ * the one a read must never have. Keeping the stamp here means a marker on
+ * disk either carries the time it was claimed or carries nothing — and
+ * "nothing" reaches `undated` and says so, instead of being quietly refreshed
+ * into "just now" by whoever happens to read it.
+ */
+function newClaimRecord({ task, skill, pid, at = new Date().toISOString() }) {
+  return claimRecord({ task, skill, at, pid });
 }
 
 /**
@@ -173,8 +201,10 @@ function humanMs(ms) {
  *                this is what a pass that hit `ship` but died before clearing
  *                looks like, and it is not a fault.
  *   in-flight    SCHEDULED caller only: the ticket is in "Building" and the
- *                claim is younger than the grace, so a pass is very likely
- *                still on it. Leave it exactly where it is and say why.
+ *                last sign of life on it — the claim, or the last activity on
+ *                the ticket, whichever is newer — is younger than the grace,
+ *                so a pass is very likely still on it. Leave it exactly where
+ *                it is and say why.
  *   undated      SCHEDULED caller only: the ticket is in "Building" and the
  *                claim carries no readable date, so its age cannot be
  *                established. NOT a hand-back — "could not tell" is never a
@@ -192,6 +222,7 @@ function reconcileDecision({
   status,
   trigger = TRIGGER_PASS,
   nowMs = Date.now(),
+  lastActivityMs = null,
   graceMs = LIVE_CLAIM_GRACE_MS,
 } = {}) {
   if (!marker || !marker.found) return { action: 'nothing', reason: 'no pass left a claim behind' };
@@ -233,7 +264,32 @@ function reconcileDecision({
     };
   }
 
-  const age = Number(nowMs) - claimedAtMs;
+  // THE SAME CLOCK THE SWEEP USES, not just the same number (found in review,
+  // 2026-09-04). The grace is borrowed from `pipelinePause.STRANDED_AFTER_MS`,
+  // but that constant means "90 minutes of no activity ON THE TICKET"
+  // (`classifyTicket` measures `now - date_updated`), while the marker's `at`
+  // is written once at the claim and never refreshed. Borrowing the number
+  // without the measurement left the two free to disagree anyway: the `marker`
+  // and `stranded` steps of ONE `npm run repair` run could reach opposite
+  // conclusions about the same ticket, and a pass that was demonstrably alive
+  // at minute 91 — it had just commented — was judged dead.
+  //
+  // So the age is measured from the LATEST evidence of life: the claim, or the
+  // last thing that happened on the ticket, whichever is newer. The claim is
+  // the floor, so a caller that cannot supply the activity clock gets exactly
+  // the old behaviour rather than a worse one.
+  //
+  // It cuts the safe way. Ticket activity that is not the pass — Dane leaving
+  // a comment on a stranded ticket — defers the SCHEDULED repair by another
+  // grace, and that is the cheap direction: a stranded ticket somebody is
+  // typing on is not the silent case, and the next pass's `pass` seat still
+  // repairs it at once.
+  const activityMs = Number(lastActivityMs);
+  const lastSignMs = Number.isFinite(activityMs) ? Math.max(claimedAtMs, activityMs) : claimedAtMs;
+  const age = Number(nowMs) - lastSignMs;
+  const claimAge = Number(nowMs) - claimedAtMs;
+  const alsoActive = lastSignMs > claimedAtMs;
+
   // A claim stamped in the future is a clock disagreeing with itself, not
   // evidence of anything. It reads as young, which is the direction that
   // leaves work alone.
@@ -242,8 +298,10 @@ function reconcileDecision({
       action: 'in-flight',
       task,
       ageMs: age,
-      reason: `${task} was claimed ${humanMs(Math.max(age, 0))} ago by ${marker.record.skill || 'a loop'}, `
-        + `inside the ${humanMs(graceMs)} a pass may legitimately take — a pass is very likely still building it`,
+      claimAgeMs: claimAge,
+      reason: `${task} was claimed ${humanMs(Math.max(claimAge, 0))} ago by ${marker.record.skill || 'a loop'}`
+        + (alsoActive ? `, and something last happened on it ${humanMs(Math.max(age, 0))} ago` : '')
+        + `, inside the ${humanMs(graceMs)} a pass may legitimately take — a pass is very likely still building it`,
     };
   }
 
@@ -251,8 +309,44 @@ function reconcileDecision({
     action: 'handback',
     task,
     ageMs: age,
-    reason: `${task} is still "Building" ${humanMs(age)} after it was claimed, past the ${humanMs(graceMs)} `
+    claimAgeMs: claimAge,
+    reason: `${task} is still "Building" ${humanMs(claimAge)} after it was claimed`
+      + (alsoActive ? ` and ${humanMs(age)} after anything last happened on it` : '')
+      + `, past the ${humanMs(graceMs)} `
       + 'any pass has ever needed — nothing claims from Building, so it would sit there forever',
+  };
+}
+
+/**
+ * WHO ACTUALLY MOVED THE TICKET, and what to type to watch it happen again.
+ *
+ * The hand-back note used to say "the next loop-build pass" and print
+ * `npm run clickup -- pass-reconcile` whatever the seat, so a scheduled
+ * revocation credited a pass that never ran — `npm run repair` on the relay's
+ * idle wake did — and handed the reader a command that is a DIFFERENT PROGRAM:
+ * without `--scheduled` it is the pass seat, status-only, no grace at all.
+ *
+ * `sweptTicketNote`'s own comment block already names this class of thing —
+ * "a trail that names the wrong actor is the defect, not a wording preference"
+ * (DOCTRINE 2.5/2.6) — and records being fixed for it twice. This is the third,
+ * and it is a function this time so the two seats cannot drift apart again.
+ *
+ * The seat test is the SAFE one, matching `reconcileDecision`: only an exact
+ * `pass` gets the pass wording, because only an exact `pass` gets the pass
+ * decision. An unrecognised trigger is judged as scheduled, so it must be
+ * described as scheduled too — a note that disagrees with the branch that
+ * wrote it is the same defect one layer down.
+ */
+function handbackActor(trigger, { skill = '' } = {}) {
+  if (String(trigger) === TRIGGER_PASS) {
+    return {
+      by: `the next ${skill || 'loop'} pass`,
+      command: 'npm run clickup -- pass-reconcile',
+    };
+  }
+  return {
+    by: 'npm run repair (scheduled) on the relay\'s idle wake',
+    command: 'npm run clickup -- pass-reconcile --scheduled',
   };
 }
 
@@ -314,8 +408,10 @@ module.exports = {
   LIVE_CLAIM_GRACE_MS,
   markerPath,
   claimRecord,
+  newClaimRecord,
   readMarker,
   reconcileDecision,
+  handbackActor,
   reconcileMessage,
   reconcileExitCode,
 };

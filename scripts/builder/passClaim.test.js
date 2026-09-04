@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const pc = require('./passClaim.js');
@@ -109,18 +110,213 @@ test('the grace is BORROWED from the sweep, not a second number', () => {
 test('a claim with no readable date is NOT handed back, and says so', () => {
   // Acceptance criterion 3. The whole fail-safe direction in one branch: a
   // ticket repaired late is loud and visible; a ticket built twice is silent.
-  for (const at of [undefined, '', 'yesterday', null, 'NaN']) {
-    const d = pc.reconcileDecision({
-      marker: { found: true, record: { task: 'a1', skill: 'loop-build', at, pid: 1 } },
-      status: 'Building',
-      trigger: pc.TRIGGER_SCHEDULED,
-      nowMs: NOW,
-    });
-    assert.equal(d.action, 'undated', `at=${JSON.stringify(at)} must not authorise a move`);
+  //
+  // THROUGH `readMarker`, FROM REAL FILE TEXT (rewritten in review, 2026-09-04).
+  // The first version hand-built `marker.record`, which skipped the read path
+  // entirely — and the read path was manufacturing a date. Three of its five
+  // inputs (`undefined`, `''`, `null`) could not reach production in that
+  // shape at all, and the two that could came back stamped "now", so the
+  // branch under test was unreachable and the assertion could not fail. Any
+  // future edit here must keep the marker as TEXT ON DISK; the moment a test
+  // builds the record itself it stops testing the thing that broke.
+  const files = [
+    ['no "at" key at all', '{"task":"a1","skill":"loop-build","pid":1}'],
+    ['an empty "at"', '{"task":"a1","skill":"loop-build","at":"","pid":1}'],
+    ['a null "at"', '{"task":"a1","skill":"loop-build","at":null,"pid":1}'],
+    ['prose', '{"task":"a1","skill":"loop-build","at":"yesterday","pid":1}'],
+    ['the string NaN', '{"task":"a1","skill":"loop-build","at":"NaN","pid":1}'],
+  ];
+  for (const [what, text] of files) {
+    const marker = pc.readMarker('/x', { exists: () => true, readFile: () => text });
+    assert.equal(marker.record.task, 'a1', `${what}: still a legible claim on a1`);
+    const d = pc.reconcileDecision({ marker, status: 'Building', trigger: pc.TRIGGER_SCHEDULED, nowMs: NOW });
+    assert.equal(d.action, 'undated', `${what} must not authorise a move`);
     assert.equal(pc.reconcileExitCode({ action: d.action }), 2, '"could not tell" is never 0');
     assert.match(pc.reconcileMessage(d), /COULD NOT TELL/);
     assert.doesNotMatch(pc.reconcileMessage(d), /Handed back/);
   }
+});
+
+test('a dateless marker stays undated FOREVER — it is never refreshed by being read', () => {
+  // The defect this rewrite exists for. `claimRecord` finished
+  // `at: at || new Date().toISOString()`, so each fresh scheduled process
+  // stamped the dateless marker with its own "now" and read it back as
+  // "claimed 0 min ago". Run 1, run 48 and run 336 all said in-flight; the
+  // ticket was never handed back and the `undated` branch could not be
+  // reached, which is a SILENT guess standing where the loud one was
+  // specified — and it disabled the backstop in the one case the scheduled
+  // repair exists for (the runner dead, so no next pass to run the pass seat).
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'passclaim-'));
+  const file = path.join(dir, pc.MARKER_FILE);
+  try {
+    fs.writeFileSync(file, '{"task":"ABC123","skill":"loop-build","pid":999}\n');
+    // A week of half-hourly runs, each a fresh process with its own clock.
+    for (const nowMs of [NOW, NOW + 30 * MIN, NOW + 24 * 60 * MIN, NOW + 7 * 24 * 60 * MIN]) {
+      const d = pc.reconcileDecision({
+        marker: pc.readMarker(file),
+        status: 'Building',
+        trigger: pc.TRIGGER_SCHEDULED,
+        nowMs,
+      });
+      assert.equal(d.action, 'undated', `at ${nowMs} the run must still say it cannot tell`);
+      assert.equal(pc.reconcileExitCode({ action: d.action }), 2);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the WRITE stamps the clock and the READ preserves what it finds', () => {
+  // Two jobs that shared one function and one default, and the default a write
+  // needs is the one a read must never have. The obvious fix — deleting the
+  // default outright — breaks the write path instead: `writePassMarker` relied
+  // on it, so every marker would land dateless and every scheduled run would
+  // return exit 2 forever. Hence a separate write-side constructor.
+  assert.equal(pc.claimRecord({ task: 'a1', skill: 'loop-build' }).at, null,
+    'reading a marker with no date must not invent one');
+  assert.equal(pc.claimRecord({ task: 'a1', at: 'yesterday' }).at, 'yesterday',
+    'and must not tidy an unparseable one into a valid one either');
+
+  const stamped = pc.newClaimRecord({ task: 'a1', skill: 'loop-build', pid: 7 });
+  assert.ok(Number.isFinite(Date.parse(stamped.at)), 'a NEW claim always carries a readable date');
+  assert.equal(stamped.pid, 7);
+
+  // The round trip a live claim actually makes: written the way
+  // `writePassMarker` writes it, read back the way the reconcile reads it.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'passclaim-'));
+  const file = path.join(dir, pc.MARKER_FILE);
+  try {
+    fs.writeFileSync(file, `${JSON.stringify(pc.newClaimRecord({ task: 'a1', skill: 'loop-build', pid: 7 }))}\n`);
+    const d = pc.reconcileDecision({
+      marker: pc.readMarker(file),
+      status: 'Building',
+      trigger: pc.TRIGGER_SCHEDULED,
+      nowMs: Date.now(),
+    });
+    assert.equal(d.action, 'in-flight', 'a claim made just now is a live pass, not an undated marker');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the write site uses the stamping constructor, not the read one', () => {
+  // The whole of fix 1 is which of the two functions this one line calls.
+  const code = withoutComments(read('scripts/clickup_direct.mjs'));
+  const fn = code.slice(code.indexOf('function writePassMarker'), code.indexOf('/** Cleared whenever'));
+  assert.match(fn, /passClaim\.newClaimRecord\(\{ task, skill, pid: process\.pid \}\)/,
+    'the claim stamps `at` at the moment it is made');
+  assert.doesNotMatch(fn, /passClaim\.claimRecord\(/, 'the read-side normaliser must not write markers');
+});
+
+// ---------------------------------------------------------------------------
+// The hand-back note names the actor that actually ran (found in review,
+// 2026-09-04). Under `--scheduled` no pass ran — `npm run repair` on the
+// relay's idle wake did — and the printed command omitted the flag, which
+// makes it a DIFFERENT PROGRAM: the pass seat, status-only, no grace.
+// ---------------------------------------------------------------------------
+
+test('a scheduled hand-back credits npm run repair and prints the flag', () => {
+  const a = pc.handbackActor(pc.TRIGGER_SCHEDULED, { skill: 'loop-build' });
+  assert.match(a.by, /npm run repair/, 'the actor is the thing that ran');
+  assert.doesNotMatch(a.by, /pass/, 'and no pass ran at all');
+  assert.equal(a.command, 'npm run clickup -- pass-reconcile --scheduled');
+
+  const note = require('./pipelinePause.js').sweptTicketNote({
+    at: '2026-09-04T10:31:00Z', kind: 'a build', destination: 'Queued', why: 'nothing was pushed', ...a,
+  });
+  assert.match(note, /--scheduled/, 're-running it as written must give the same program');
+  assert.match(note, /npm run repair/);
+});
+
+test('a pass-seat hand-back is unchanged — the pass really did run', () => {
+  const a = pc.handbackActor(pc.TRIGGER_PASS, { skill: 'loop-build' });
+  assert.equal(a.by, 'the next loop-build pass');
+  assert.equal(a.command, 'npm run clickup -- pass-reconcile');
+  assert.doesNotMatch(a.command, /--scheduled/, 'the pass seat is the one WITHOUT the flag');
+});
+
+test('the note follows the DECISION, not a guess — an unknown seat reads as scheduled', () => {
+  // `reconcileDecision` sends anything that is not exactly `pass` down the
+  // scheduled branch, so the note must describe it as scheduled too. A note
+  // that disagrees with the branch that wrote it is the same defect one layer
+  // down: it names an actor that did not run.
+  for (const trigger of ['Pass', 'scheduledd', '', null, 0, {}, undefined]) {
+    const a = pc.handbackActor(trigger, { skill: 'loop-build' });
+    assert.match(a.command, /--scheduled/, `trigger=${JSON.stringify(trigger)} is judged as scheduled`);
+    assert.match(a.by, /npm run repair/);
+  }
+});
+
+test('the reconcile command hands the seat to the note', () => {
+  const code = withoutComments(read('scripts/clickup_direct.mjs'));
+  const cmd = code.slice(code.indexOf("} else if (cmd === 'pass-reconcile') {"), code.indexOf("} else if (cmd === 'wip-check')"));
+  assert.match(cmd, /\.\.\.passClaim\.handbackActor\(trigger, \{ skill: marker\.record\.skill \}\)/,
+    'so the wording cannot drift from the branch that decided it');
+  assert.doesNotMatch(cmd, /by: `the next/, 'no fixed actor string survives');
+  assert.doesNotMatch(cmd, /command: 'npm run clickup -- pass-reconcile'/, 'nor a fixed command');
+});
+
+// ---------------------------------------------------------------------------
+// The grace borrows the sweep's CLOCK as well as its number (found in review,
+// 2026-09-04). `classifyTicket` measures 90 minutes of no activity ON THE
+// TICKET; the marker's `at` is stamped once and never refreshed. Borrowing the
+// constant without the measurement left the `marker` and `stranded` steps of
+// one `npm run repair` run able to disagree about the same ticket.
+// ---------------------------------------------------------------------------
+
+test('a pass that is demonstrably alive at minute 91 is not called dead', () => {
+  // It claimed two hours ago and commented ten minutes ago — a build that
+  // posts its premise check mid-flight, which is the routine shape here.
+  const d = pc.reconcileDecision({
+    marker: found({ task: '86bbqb0ac', skill: 'loop-build', at: claimedAgo(2 * 60 * MIN) }),
+    status: 'Building',
+    trigger: pc.TRIGGER_SCHEDULED,
+    nowMs: NOW,
+    lastActivityMs: NOW - 10 * MIN,
+  });
+  assert.equal(d.action, 'in-flight', 'activity ten minutes old is evidence of life');
+  assert.match(d.reason, /2\.0 hours ago/, 'and the claim age is still named, not hidden');
+  assert.match(d.reason, /10 min/, 'alongside the activity that saved it');
+});
+
+test('activity older than the grace does not rescue a dead claim', () => {
+  const d = pc.reconcileDecision({
+    marker: found({ task: 'a1', skill: 'loop-build', at: claimedAgo(4 * 60 * MIN) }),
+    status: 'Building',
+    trigger: pc.TRIGGER_SCHEDULED,
+    nowMs: NOW,
+    lastActivityMs: NOW - 3 * 60 * MIN,
+  });
+  assert.equal(d.action, 'handback', 'nothing has touched it in three hours');
+  assert.match(d.reason, /4\.0 hours after it was claimed/);
+});
+
+test('the claim is the FLOOR — stale activity never ages a young claim', () => {
+  // `date_updated` can predate the marker (the claim wrote the status, then a
+  // slow clock, then this). Taking the newer of the two means a caller that
+  // supplies a stale or missing activity clock gets the old behaviour, never a
+  // worse one.
+  for (const lastActivityMs of [NOW - 10 * 60 * MIN, null, undefined, NaN, 'not a number']) {
+    const d = pc.reconcileDecision({
+      marker: found({ task: 'a1', at: claimedAgo(5 * MIN) }),
+      status: 'Building',
+      trigger: pc.TRIGGER_SCHEDULED,
+      nowMs: NOW,
+      lastActivityMs,
+    });
+    assert.equal(d.action, 'in-flight', `lastActivityMs=${JSON.stringify(lastActivityMs)} must not age the claim`);
+  }
+});
+
+test('the activity clock is the sweep\'s own field, read from the same response', () => {
+  const code = withoutComments(read('scripts/clickup_direct.mjs'));
+  const cmd = code.slice(code.indexOf("} else if (cmd === 'pass-reconcile') {"), code.indexOf("} else if (cmd === 'wip-check')"));
+  assert.match(cmd, /Number\(seen\.json\.date_updated\)/, 'the same field classifyTicket measures by');
+  assert.match(cmd, /reconcileDecision\(\{ marker, status, trigger, lastActivityMs \}\)/, 'and it reaches the decision');
+  // And it is read from the status response rather than a second call: a
+  // second fetch could see a different moment and disagree with the status.
+  assert.equal((cmd.match(/api\/v2\/task\/\$\{marker\.record\.task\}`\)/g) || []).length, 1,
+    'one read, one moment');
 });
 
 test('a claim stamped in the FUTURE reads as young, not as ancient', () => {
@@ -210,7 +406,7 @@ test('the SCHEDULED repair passes the flag — the whole fix is one argument', (
   const cmd = code.slice(code.indexOf("} else if (cmd === 'pass-reconcile') {"), code.indexOf("} else if (cmd === 'wip-check')"));
   assert.match(cmd, /flag\('scheduled'\) \? passClaim\.TRIGGER_SCHEDULED : passClaim\.TRIGGER_PASS/,
     'the flag selects the seat, and its ABSENCE is the pass seat — the preflight passes no flag');
-  assert.match(cmd, /reconcileDecision\(\{ marker, status, trigger \}\)/, 'and it reaches the decision');
+  assert.match(cmd, /reconcileDecision\(\{ marker, status, trigger,/, 'and it reaches the decision');
 });
 
 test('an in-flight or undated outcome never deletes the marker', () => {
