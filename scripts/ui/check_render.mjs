@@ -34,6 +34,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { BASE_URL, ensureBuildIsCurrent } from './app-driver.mjs';
+import { cannotTell, verdict, EXIT_FAIL, EXIT_CANNOT_TELL } from './harness-exit.mjs';
 import {
   RENDER_CONTRACTS,
   RENDER_DIFFERENTIALS,
@@ -55,12 +56,8 @@ let createEmptyModule;
 try {
   ({ createEmptyModule } = require(path.join(ROOT, 'lib/builder/template.js')));
 } catch {
-  console.error(
-    '\n[check:render] lib/builder/template.js is missing — it is a generated file\n' +
-    'and a fresh worktree does not have one.\n\n' +
-    'Run `npm run build:builder-template`.\n'
-  );
-  process.exit(2);
+  cannotTell('check:render',
+    'lib/builder/template.js is missing — it is a generated file and a fresh worktree\ndoes not have one.\n\nRun `npm run build:builder-template`.');
 }
 
 /** The preview page reads its document from here (BUILDER_PREVIEW_STORAGE_KEY). */
@@ -557,6 +554,26 @@ const notices = [];
 let measured = 0;
 let sweepsRun = 0;
 
+/*
+ * The failure report, in one place because two paths reach it: the baseline
+ * guard below, which stops the run before any contract is tried, and the tail
+ * of the sweep. One `process.exit(1)` in the file, so "a real failure exits 1"
+ * cannot drift apart between them.
+ */
+function reportFailures(list) {
+  console.error(`\n[check:render] FAILED — ${list.length} problem(s):\n`);
+  for (const f of list) console.error(`  ✗ ${f}`);
+  console.error(
+    '\nThese are read out of a real browser, so "the setting reaches the renderer" is not a\n' +
+    'counter-argument — what renders is what this measured. Each contract in\n' +
+    'scripts/ui/render-contracts.mjs carries the incident it guards; read the `why`.\n' +
+    '\nA differential failure means a control changed NOTHING a person could see. It does not\n' +
+    'mean the change is wrong when it passes: a difference proves something moved, never that\n' +
+    'it moved correctly. That judgement is still the operator\'s eye.\n'
+  );
+  process.exit(1);
+}
+
 try {
   const page = await context.newPage();
   await page.goto(`${BASE_URL}/builder-preview.html`, { waitUntil: 'domcontentloaded' });
@@ -593,12 +610,24 @@ try {
   await render(page, documentFor({ type: 'text', text: '<p>Baseline</p>', settings: {} }));
   const baseline = await sample(page, '.builder-preview-text', [], 0);
   if (!baseline.found) {
-    console.error(
-      '\n[check:render] The baseline page rendered no text module.\n' +
-      'Nothing below could be measured against it, so this is a failure rather than a pass.\n' +
-      'Either the preview surface changed or the bundle is stale — `npm run build:builder`.\n'
+    /*
+     * A 1, not a 2 — and getting this backwards is exactly the mistake this
+     * ticket is about, committed by its own first fix (review round 1).
+     *
+     * There are two reasons the baseline can fail to render: the bundle is
+     * stale, or the preview surface itself no longer works. Only the first is
+     * an instrument problem, and `ensureBuildIsCurrent` above has ALREADY
+     * caught that one and exited 2 before this line is reached. So what is
+     * left here is the code under test having broken the preview — a defect,
+     * and one that must print as a defect rather than as a broken instrument.
+     * Measured: break the preview renderer on purpose and this exits 1.
+     */
+    failures.push(
+      'baseline: the baseline page rendered no text module, so not one contract below could be ' +
+      'measured against it. The build is current (checked above), which leaves the preview surface ' +
+      'itself — components/builder-preview-page.tsx and the module registry it renders through.'
     );
-    process.exit(1);
+    reportFailures(failures);
   }
   const DEFAULT_VIEWPORT = page.viewportSize();
   for (const contract of RENDER_CONTRACTS) {
@@ -857,28 +886,26 @@ try {
   await browser.close();
 }
 
-if (!measured) {
-  console.error(
-    `\n[check:render] ${RENDER_CONTRACTS.length} contract(s) defined and NONE were measured.\n` +
-    'That is a failure, not a pass. Every assertion is vacuous on a page that did not render.\n'
-  );
-  process.exit(1);
-}
-
 for (const notice of notices) console.log(`[check:render] NOTE — ${notice}`);
 
-if (failures.length) {
-  console.error(`\n[check:render] FAILED — ${failures.length} problem(s):\n`);
-  for (const f of failures) console.error(`  ✗ ${f}`);
-  console.error(
-    '\nThese are read out of a real browser, so "the setting reaches the renderer" is not a\n' +
-    'counter-argument — what renders is what this measured. Each contract in\n' +
-    'scripts/ui/render-contracts.mjs carries the incident it guards; read the `why`.\n' +
-    '\nA differential failure means a control changed NOTHING a person could see. It does not\n' +
-    'mean the change is wrong when it passes: a difference proves something moved, never that\n' +
-    'it moved correctly. That judgement is still the operator\'s eye.\n'
-  );
-  process.exit(1);
+/*
+ * FAILURES FIRST, THEN THE REFUSAL — the order is the whole point.
+ *
+ * `verdict()` ranks a real failure above a could-not-tell, and this tail used
+ * to ask the two questions the other way round: the `!measured` guard ran
+ * first and exited 2. Every contract that fails R1 (`!result.found`) pushes a
+ * failure and `continue`s WITHOUT incrementing `measured` — so a change that
+ * broke all 41 contracts produced `failures = 41, measured = 0`, exited 2
+ * saying "not a failure of your change either", and printed none of them
+ * (review round 1, task 86bbt6hgx).
+ */
+const code = verdict({ failures: failures.length, blind: measured ? 0 : 1 });
+if (code === EXIT_FAIL) reportFailures(failures);
+if (code === EXIT_CANNOT_TELL) {
+  cannotTell('check:render',
+    `${RENDER_CONTRACTS.length} contract(s) defined and NONE were measured.\n` +
+    'Every assertion is vacuous on a page that did not render, so this is not a pass —\n' +
+    'and it is not a failure of your change either. Nothing was read.');
 }
 
 console.log(
