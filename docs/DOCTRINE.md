@@ -1982,6 +1982,86 @@ server does not send must render nothing, never `0`. Defaulting
 `livePostCount ?? 0` would have told the operator every tag on his blog was
 dead during a deploy.
 
+### 5.33 A check that could not run must not exit 0 — and must not exit 1 either
+
+The browser harnesses under `scripts/ui/` are the only gates CI cannot run, so
+their exit code is the whole of what a script, a log skim or an unattended pass
+ever sees. Two of them were observed on 2026-09-02 printing an excellent
+refusal and exiting **0**. `check:panels`'s own text says it best — *"without a
+project the builder renders an empty page and every assertion passes on zero
+panels, which is worse than failing"* — and then, at the time, it agreed with
+itself and exited 2 while three of its siblings did not.
+
+The audit (task 86bbt6hgx) found eight such paths. `check_screens` had four in
+one file: no fixture project (*"these checks are hollow"*), a project that
+would not activate (*"screens may render empty"*), a rate-limited run
+(*"treat everything above as unreliable"*), and measuring not one screen —
+all ending at `process.exitCode = failures.length ? 1 : 0`. Run with no project
+id against a live server it printed **"9 screen-width combination(s) checked,
+0 skipped, 0 failing"** and exited 0, which is byte-for-byte what a clean sweep
+prints. `check_nav_controls` collected every control whose fixture variant was
+missing, printed the list, and then never let it near the exit code — with all
+variants gone it would print *"OK — all 0 controls move the rendered page"*.
+
+**Three verdicts, one shared module** (`scripts/ui/harness-exit.mjs`):
+
+| exit | meaning |
+|---|---|
+| 0 | ran, and what it measured was correct |
+| 1 | ran, and what it measured was **wrong** — the code under test has a defect |
+| 2 | **could not take a reading** — says nothing about the code |
+
+Same scheme as `npm run throughput`, and the same answer `doctor:node` gives
+with CANNOT TELL rather than PASS.
+
+**The 1-vs-2 half matters as much as the 0-vs-2 half, and is easier to get
+wrong.** Four vacuity guards already exited 1, each with a sentence reading
+"that is a failure, not a pass" — correct when 1 was the only non-zero code
+available, and wrong now: an unseeded fixture, a stale build, a throttled
+server and a missing variant are all faults of the **instrument**. Reporting
+them as 1 sends whoever reads the log hunting a defect in code that may be
+perfect. The rule of thumb: *if the code under test could be flawless and this
+could still happen, it is a 2.*
+
+A real failure outranks a could-not-tell — a screen that overflowed its
+viewport overflowed it, whatever else about the run was hollow. A **pass**
+never does, because a pass over something nobody measured is the whole defect.
+
+**And the ranking is worth nothing unless the failures are counted FIRST.**
+The first version of this fix stated the rule above, encoded it in `verdict()`,
+wrote it down here — and then broke it in three places, because each harness
+called `cannotTell()` *above* its failure block. `cannotTell()` exits on the
+spot, so the refusal short-circuited and the real failures were never even
+printed. Measured on the review pass: break the preview renderer and
+`check_render` said `COULD NOT TAKE A READING` where `main` had correctly said
+`FAILED` — the fix introducing the exact mistake it was written to remove.
+Worse in the general case, `check_render` counts a contract as `measured` only
+*after* it renders, so a change breaking all 41 gave `failures = 41,
+measured = 0` and reported "not a failure of your change either".
+
+So: **compute the verdict, then act on it.** Never `if (blind) refuse()` above
+`if (failures) fail()` — the two guards read as independent and are not.
+`check_screens` is the model (`verdict({ failures, blind })` into a single
+`process.exitCode`), and `scripts/builder/harnessExitCodes.test.js` asserts on
+the *position* of those calls, because an assertion that merely proved both
+exist passes on the broken ordering.
+
+**A tool that never judges the code has no honest use for exit 1.**
+`check:shots` photographs two builds and files the pairs that differ, leaving
+the judgement to the operator's eye — so it cannot discover a defect, and its
+every stop (no shell on the control scene, the control differing from itself, a
+scene rendering nothing, ClickUp refusing the upload) is a broken camera. It
+answers 0 or 2, never 1. Where a stop genuinely *is* the change's fault — the
+preview surface no longer rendering — the gate that says so is `check:render`,
+with a real failure and a real 1.
+
+**Corollary, learned twice in one file: a source-scanning test must read the
+source with comments stripped.** These harnesses carry long comments quoting
+the very calls they replaced, so a test grepping raw source matches its own
+documentation. It bit the `stdio: 'ignore'` assertion, then the `process.exit(2)`
+one, then a `process.exit(1)` count that found two — the call, and the sentence
+saying there was only one.
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
@@ -2957,6 +3037,108 @@ an epic. It was a one-line bug report whose text already existed in the tracker.
 
 The repair is not to close the older ticket. It is to fold the finished half
 into it, leave the unfinished half visible, and say plainly which is which.
+
+### 6.20 A command handed to the operator is plain text — formatting silently breaks the match
+
+2026-09-03, 11:11pm. The auto-merge lane had latched itself off thirteen hours
+earlier and only a person can clear it. The operator was told, in a message that
+rendered the phrase in bold-and-backticks, to post `resume auto-merging` on the
+party line. He copied what he was given. ClickUp preserved the formatting, so
+what arrived was:
+
+```
+**`resume auto-merging`**
+```
+
+`switchCommand` matches "resume" against the WHOLE message, deliberately — a
+stop that fires when he only mentioned it costs a delay and one word to undo,
+while a resume that fires when he was talking ABOUT resuming costs an unwanted
+merge. That asymmetry is right and is not the defect. The defect is that the
+near-miss looked exactly like silence: nothing matched, nothing said so, and he
+reasonably believed the lane was back. It stayed off for another 35 minutes and
+was only found because he asked. His second attempt, typed as plain text,
+matched on the first try.
+
+Measured against the real matcher — it is forgiving about case, spacing, a
+hyphen and single backticks, and unforgiving about bold and about extra words:
+
+```
+"resume auto-merging"        -> resume      "**`resume auto-merging`**" -> null
+"Resume auto-merging"        -> resume      "please resume auto-merging" -> null
+"`resume auto-merging`"      -> resume      "resume auto-merge"          -> null
+```
+
+- **Never wrap a phrase he is meant to type in backticks, bold, or a fenced
+  block.** Put it on its own line as bare text, with nothing around it.
+- This is §6.12 pointed the other way. That rule says match what he TYPED
+  rather than what the tool stored; this one says do not make him type what the
+  tool will mangle. Both failures look like the operator getting it wrong.
+- The matcher saying "that did not take" is filed as 86bbuv99r — but no code fix
+  removes this rule, because the next command an agent hands over is a fresh
+  chance to format it.
+
+### 6.21 ClickUp's audit trail cannot name a machine actor — do not conclude from it
+
+2026-09-03, 11:57pm. A ticket in `Building` was closed to `Live` with no branch,
+no pull request, no tag and no comment. Two agent sessions spent twenty minutes
+looking for the actor. The ClickUp Activity feed said:
+
+> You changed status from Building to Live
+
+That sentence carried **no information in either direction**. Every script in
+this system authenticates with the operator's personal token, so the loops, both
+agent sessions, `pulse` and the review gate all appear in the feed as him. One
+session nearly accepted authorship of a write it had not made; the operator
+nearly accepted authorship of one he had not made either.
+
+The answer came from reading the code, not the trail: `npm run repair` runs
+`reconcile --live` unattended, `reconcile` matched a merged pull request that
+was mentioned in passing in a comment and belonged to a different ticket, and
+`AUTO_REPAIR_STATUSES` made the ticket eligible the moment it was claimed.
+Filed as 86bbuv66c.
+
+- **A status change attributed to Dane is evidence of nothing.** Treat it as
+  "some holder of the token", which is every actor in the system.
+- Machine COMMENTS already carry a `[machine]` stamp for exactly this reason
+  (§2.5). Status writes have no equivalent, so the only way to attribute one is
+  to read every code path that could have made it.
+- When an unexplained write appears, enumerate the WRITERS and check each one's
+  log, rather than reading the feed. The feed will name the operator every time.
+
+### 6.22 Measure a duration threshold within one cadence era
+
+2026-09-03. Choosing an alarm threshold for "this job has stopped working", the
+honest move was to measure how long real failures last rather than pick a round
+number — the ticket asked for exactly that, because a recency alarm had already
+been killed on this project for firing on eleven nights in fourteen.
+
+The log held 866 passes and 83 failures. It also held a **cadence change**: the
+job ran hourly until 2026-08-30 and every ten minutes after. Measured across
+that boundary, a four-pass blip from the hourly era reads as a *three-hour
+outage* and lands in the same population as a twenty-minute one, and any
+threshold drawn from the mixture fits neither era.
+
+Segmented to the ten-minute era — 687 passes — the separation was clean:
+
+```
+blips (1-2 consecutive failures)   36 runs   longest 21 min without a success
+real outages (3+)                   4 runs   shortest 36 min
+```
+
+Nothing between 21 and 36 minutes. That gap chose the threshold, and it
+contradicted the proposal in the ticket: sixty minutes would have caught two of
+the four real outages.
+
+- Before measuring durations out of a log, **check whether the thing being
+  measured changed rate inside the window.** Median gap between events, by day,
+  is a two-line check and it decides whether the rest of the analysis means
+  anything.
+- Prefer a threshold expressed as a multiple of each job's own interval to a
+  global constant, for the same reason: one number cannot serve a ten-minute job
+  and a weekly one.
+- Say which era the numbers come from when recording them. A future reader
+  re-measuring over the whole log will get a different answer and assume the
+  first was wrong.
 
 ## 7. Operator-facing gotchas
 

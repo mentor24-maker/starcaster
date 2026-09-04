@@ -69,12 +69,27 @@ const STEPS = Object.freeze([
     id: 'drift',
     // --check, not --live: same writes, plus the two disciplines a SCHEDULED
     // pass owes (task 86bbtqytq). It asks the pipeline switch before it reads
-    // anything, and its bus flags carry a 6h window that clears when the
+    // anything, and its flags carry a 6h window that clears when the
     // contradiction resolves. `--live` remains the by-hand shape.
     npmArgs: Object.freeze(['reconcile', '--', '--check']),
-    // reconcile dialect: 0 ran (its own output says clean/repaired/flagged),
-    // 3 declined because Dane has the deck, 2 could not ASK the switch, 1
-    // could not read the queue at all — nothing was checked.
+    // reconcile dialect: 0 ran and changed nothing, 3 declined because Dane
+    // has the deck, 4 ran and WROTE, 2 could not ASK the switch, 1 could not
+    // read the queue at all — nothing was checked.
+    //
+    // WHY 4 AND NOT 3 FOR "WROTE" (merged 2026-09-04). Two branches gave
+    // reconcile's exit 3 a meaning on the same day and the meanings were
+    // different: this one made it "Dane has the deck", #593 made it "this pass
+    // moved a ticket". Both were right about their own half and shipping both
+    // would have left one number meaning two things — a scheduled pass that
+    // closed a ticket would have been read as a pass that declined to run, and
+    // the REPAIRED it exists to announce would have printed PAUSED. That is
+    // the "keep both sides" resolution DOCTRINE 6.7 is about, and it does not
+    // announce itself: every gate stays green through it.
+    //
+    // 3 keeps the decline, because that is the repo-wide dialect every other
+    // actor already speaks — `node:owns`, `pipeline -- check`, `clickup claim`,
+    // the loop preflight — and reconcile's own stand-down cites it by name. The
+    // write gets 4, a number no reader of this file had a prior meaning for.
     //
     // 2 is the lane review round 1 found missing (2026-09-03). Reconcile used
     // to grade an unreadable switch as a pause, so a throttled or unauthorised
@@ -82,7 +97,16 @@ const STEPS = Object.freeze([
     // air, on a green board, with nothing raising a hand. `composeOutcome`
     // already had a cannot-tell lane and it was simply not reachable from
     // here.
-    reading: Object.freeze({ 0: 'clean', 3: 'paused', 2: 'cannot-tell', 1: 'cannot-tell' }),
+    //
+    // The 4 is not decoration either (2026-09-04, ticket 86bbuv66c). This step
+    // used to have a two-value dialect, and reconcile exited 0 whether it had
+    // moved a ticket or not — so the pass that wrongly closed a live urgent
+    // ticket printed "REPAIR: CLEAN". A watchdog that cannot report its own
+    // writes is narrating, not watching. `composeOutcome` maps 'repaired' to
+    // exit 0 with the word REPAIRED, so a pass that repaired still does not
+    // page — it is a change to report, not a failure. Found by session
+    // starcaster-3e.
+    reading: Object.freeze({ 0: 'clean', 3: 'paused', 4: 'repaired', 2: 'cannot-tell', 1: 'cannot-tell' }),
   }),
   Object.freeze({
     id: 'stranded',
