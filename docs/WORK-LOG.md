@@ -1,3 +1,35 @@
+## 2026-09-04 — The pipeline switch now records who handed the deck back, and on what word (#607)
+
+The build pipeline has a switch. When Dane needs the machines to stop — he is
+working on something by hand and does not want them claiming tickets underneath
+him — someone pauses it, and pausing already records *why*. Resuming recorded
+only who and when. So the one question worth asking afterwards — *on whose word
+did this start up again?* — could not be answered from the switch's own ticket
+at all.
+
+That is not a hypothetical. On 1 September the line was paused because Dane was
+fast-tracking a task by hand. At 2:33pm he wrote, in a different window, "I am
+finished (for now) with the other fast-track task." Nineteen seconds later that
+session resumed the pipeline. But finishing one task is not the same as saying
+"you can have the machines back", and he had not said it. Finding out what had
+actually happened meant digging a transcript off the disk of another session,
+because the ticket had nothing to say.
+
+Resuming now refuses unless whoever runs it pastes in Dane's actual words. The
+point is not really the record it leaves — it is the moment of typing: an agent
+that has to go and find the sentence discovers, right there, whether one exists.
+That 2:34pm session would have found that none did. An optional box would have
+been skipped by exactly the session that most needed to fill it in.
+
+It does not try to check that the words really are a quote, because nothing can
+check that, and a check that pretended to would be worse than none.
+
+Two smaller things came with it: the status command now prints the reason on a
+*running* line too, not only a paused one — so today it reads "why: (not
+recorded)" against that 1 September resume, which is the incident itself,
+finally visible where people already look. And who is allowed to resume has not
+changed one bit: still Dane's call alone.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
