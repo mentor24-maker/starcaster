@@ -1,3 +1,44 @@
+## 2026-09-04 — Every script that talks to ClickUp now goes through one door, so the budget is finally a real number (#592)
+
+ClickUp only allows us about a hundred requests a minute, and that allowance
+belongs to the *login*, not to any one script — one allowance shared by
+everything we run. Until yesterday six different pieces of our machinery each
+opened their own connection to ClickUp and none of them had any idea the
+others existed. So there was no way to ask the obvious question: how much of
+this minute's allowance have we already spent? On 3 September that cost us a
+day. One job was quietly burning 114 requests a minute against a hundred-a-minute
+allowance, got refused on every single pass, and the lane that merges finished
+work sat dead for 271 passes in a row before anybody noticed.
+
+Yesterday's ticket built the single shared door and moved the biggest script
+through it. This one moves the last four: the pause switch every loop asks
+before it starts, the hourly health check on the Mini, the gate that runs in
+GitHub on every pull request, and the piece that files a bug report when one
+comes in. From here the count is a count of *everything*, which is the only
+kind of budget worth having.
+
+One of those four had been invisible the whole time, and that is the part
+worth remembering. The bug-report forwarder never *looked* like it was calling
+ClickUp — it picked its connection up in a roundabout way, so the automatic
+check that hunts for stray connections read clean while the forwarder spent
+requests nobody was counting. There is now a second check that looks for that
+exact sleight of hand, and we deliberately broke it to watch it catch it.
+
+The riskiest piece was the gate that runs inside GitHub, because its ClickUp
+login has quietly expired on us before, and a gate that keeps answering while
+its login is dead is worse than one that stops. It also sat in a file that
+starts running the moment anything touches it, which meant nothing could test
+it — so what it does with a missing or dead login had never actually been
+checked by anything. We moved those calls somewhere testable and wrote that
+test **before** changing how they connect. It does not simply check for the
+right wording; it runs the *old* code alongside the new one and insists they
+give the same answer for a healthy reply, an expired login, a revoked one, a
+refusal, a garbled response and a ClickUp that cannot be reached at all.
+
+All four commands were photographed before and after: two are identical down
+to the byte, and the others differ only in their clocks and in which tickets
+happened to be moving at the time.
+
 ## 2026-09-03 — Four checks that said "I could not look at this" and then reported a pass (#584)
 
 Five of this project's checks work by opening a real web browser and looking at
