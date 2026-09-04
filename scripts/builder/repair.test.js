@@ -159,6 +159,31 @@ test('a drift step that stood down for the deck reads PAUSED, never CLEAN', () =
   assert.match(repair.renderStepLine(drift, 'paused', 'Dane has the deck'), /SKIP/);
 });
 
+test('BREAK-TEST: a drift step that could not ASK the switch reads CANNOT TELL, not PAUSED', () => {
+  // Review round 1 (2026-09-03). reconcile now exits 2 when the switch itself
+  // could not be read — a throttled ClickUp call, a rotated token. Before this
+  // lane existed, that arrived as exit 3 and the whole pass composed to
+  // `exit 0 / PAUSED`: the drift watchdog off the air, on a green board,
+  // indefinitely. Break it by deleting the `2:` entry from the drift dialect
+  // and this fails — `readStep` falls through to 'failed', which is loud but
+  // wrong, because nothing failed.
+  const drift = repair.STEPS.find((s) => s.id === 'drift');
+  assert.equal(repair.readStep(drift, 2), 'cannot-tell');
+  const outcome = repair.composeOutcome(['clean', 'cannot-tell', 'clean']);
+  assert.equal(outcome.word, 'CANNOT TELL');
+  assert.equal(outcome.code, 2, 'a blind watchdog must not exit 0');
+  assert.notEqual(repair.readStep(drift, 2), repair.readStep(drift, 3),
+    'the two non-zero switch answers must not collapse into one reading');
+});
+
+test('BREAK-TEST: no step may run without a deadline', () => {
+  // The runner had none, so a step that never returned pinned the relay's
+  // ten-minute wake and the next wake found it still there.
+  const io = read('scripts/repair.mjs');
+  assert.match(io, /timeout: STEP_TIMEOUT_MS/, 'the step spawn carries a deadline');
+  assert.match(io, /const STEP_TIMEOUT_MS = /);
+});
+
 test('a real finding still outranks a paused step', () => {
   assert.equal(repair.composeOutcome(['paused', 'findings']).code, 3);
   assert.equal(repair.composeOutcome(['paused', 'cannot-tell']).code, 2);

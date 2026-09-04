@@ -47,6 +47,30 @@ current log. Two tickets already own that problem.
 The third thing the ticket raised is not solved and is not claimed to be: all of
 this still reports to the bus, and the bus was not read. Saying so plainly is
 the honest half of the fix.
+
+Review sent this back once, and it was right to. The drift watchdog asks the
+pause switch by running it and reading the answer — but the switch has two ways
+of saying "no", and this code was hearing them as one. "Dane has the deck" and
+"I could not reach ClickUp to find out" both come back as the same refusal, on
+purpose, because both must lead to the same action: stand down. What they must
+never share is the sentence. The first version printed *"Dane has the deck"* for
+both, so a rotated token or a rate-limited read — and the relay is currently
+retrying against that limit thirty-six times a log — would have made the
+watchdog announce something about you that it had no way of knowing, then go
+quiet indefinitely while every board stayed green. That is the exact shape of
+failure this whole ticket was written to close, arriving through the check meant
+to close it.
+
+It now says "could not tell", does not mention you, and reports differently
+enough that the surrounding job reads the whole pass as CANNOT TELL rather than
+as a healthy paused one. The action is unchanged: it still stands down, which is
+the safe direction either way. Two other things came out of the same read — the
+switch call and every step of the repair job now have a time limit, so a call
+that never answers can no longer pin the ten-minute cycle with nothing to break
+it, and the request counter counts requests that were actually sent rather than
+attempts that never left the machine, which matters because that figure is the
+one being budgeted against.
+
 ## 2026-09-03 — Overlay screens get their own written record (#558)
 
 An overlay screen is the layer of colour, gradient or picture that sits over a

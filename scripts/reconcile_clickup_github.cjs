@@ -22,7 +22,10 @@
  *   - **It never asked the pipeline switch.** Every actor asks. This one moves
  *     tickets and posts to the bus, so running it while Dane has the deck is
  *     exactly the collision the switch exists to prevent. `--check` asks first
- *     and exits 3 without reading anything if he has it.
+ *     and reads nothing if he has it — exiting **3** when he genuinely has the
+ *     deck and **2** when the switch could not be asked at all. Same
+ *     stand-down, different words, because one of them is a decision and the
+ *     other is a blind spot (see `deckVerdict` below).
  *   - **Its suppression had no window and never cleared.** A contradiction
  *     posted once was struck off FOREVER — an alarm that fires once and then
  *     goes quiet is the failure the suppression was meant to prevent, arriving
@@ -71,6 +74,9 @@ const { listTasks, getTaskComments, moveTaskStatus, postBusMessage, requestsMade
  *  Bounded because the terminal set grows forever — see the scan below. */
 const TERMINAL_SCAN_MAX = 25;
 const { branchInventory, stampedTaskId, root } = require('./lib/repo_state.cjs');
+// The one grader for what `pipeline.mjs check --json` said. Plain CommonJS,
+// so a .cjs requires it directly — one reader of the switch, not a second.
+const digest = require('../lib/pulseDigest.js');
 
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
@@ -100,24 +106,79 @@ const check = process.argv.includes('--check');
 const live = check || process.argv.includes('--live');
 const quiet = process.argv.includes('--quiet');
 
+/** A switch read is one ClickUp call. Unbounded, a hung read hangs the
+ *  relay's ten-minute wake with nothing to break it; `pulse_publish.mjs`
+ *  passes the same deadline for the same reason. */
+const SWITCH_TIMEOUT_MS = 2 * 60 * 1000;
+
 /**
  * Has Dane taken the deck? Asked by RUNNING the one switch implementation
  * rather than reading the flag a second way here — two readers of a safety
  * flag are two flags, and they disagree quietly (stale_ready.mjs makes the
  * same call for the same reason).
  *
- * Fails safe in the switch's own direction: if it cannot be asked at all, that
- * counts as paused. Running while he has the deck collides with whatever he is
- * doing on it; declining when he does not costs one idle wake.
+ * THE SWITCH HAS TWO NON-ZERO ANSWERS AND THEY ARE NOT THE SAME NEWS (review
+ * round 1, 2026-09-03). `pipeline.mjs check` says so in its own comment: an
+ * unreadable switch exits 3 as well, because "we could not check" and "it is
+ * paused" must lead to the SAME behaviour **while never being described in
+ * the same words**. This function used to grade every non-zero exit as a
+ * pause, so a blind switch — a throttled ClickUp read, a rotated token —
+ * printed a false statement about what Dane was doing and took this watchdog
+ * off the air on a green board, indefinitely. That is the exact failure class
+ * this whole ticket exists to close, arriving through the check meant to
+ * close it.
+ *
+ * So: ask with `--json` and grade with the one grader, `pulseDigest`'s
+ * `switchVerdict` — not a second copy of the rules, and already break-tested
+ * where it lives. It returns `readable`, which is the distinction the exit
+ * code cannot carry.
+ *
+ * The ACTION is unchanged and still fails safe in the switch's own direction:
+ * unreadable stands down exactly as a pause does. Running while he has the
+ * deck collides with whatever he is doing on it; declining when he does not
+ * costs one idle wake. Only the words and the exit code differ.
  */
-function pipelinePaused() {
-  const out = require('child_process').spawnSync(
-    process.execPath, [path.join(root, 'scripts', 'pipeline.mjs'), 'check'], { encoding: 'utf8' },
+function deckVerdict(spawn = require('child_process').spawnSync) {
+  const out = spawn(
+    process.execPath,
+    [path.join(root, 'scripts', 'pipeline.mjs'), 'check', '--json'],
+    { encoding: 'utf8', timeout: SWITCH_TIMEOUT_MS },
   );
-  if (out.error) return { paused: true, why: `the pipeline switch could not be read (${out.error.message})` };
-  if (out.status === 0) return { paused: false, why: '' };
-  const said = String(out.stderr || out.stdout || '').trim().split('\n')[0];
-  return { paused: true, why: said || `the pipeline check exited ${out.status}` };
+  return digest.switchVerdict({ ...out, timeoutMs: SWITCH_TIMEOUT_MS });
+}
+
+/**
+ * What this pass SAYS and EXITS when it stands down, which is the whole point
+ * of the distinction above. Pure, exported and tested: a rule that only lives
+ * inside a `main()` is a rule nothing can break-test.
+ *
+ *   paused      exit 3 — a normal decline, the same dialect `node:owns` and
+ *               the preflight speak. Dane is named, because he is the reason.
+ *   unreadable  exit 2 — could not tell. Dane is NOT named and must not be:
+ *               nothing here knows what he is doing, and saying otherwise is
+ *               the lie that hid this. 2 is what `repair`'s drift step reads
+ *               as cannot-tell, so the whole pass composes to CANNOT TELL
+ *               instead of exiting 0 with the word PAUSED.
+ */
+function standDownReport(verdict) {
+  if (verdict.readable === false) {
+    return {
+      exit: 2,
+      lines: [
+        `[reconcile] COULD NOT TELL whether the pipeline is paused: ${verdict.why}`,
+        '[reconcile] Standing down, which is the safe direction — but this is not an all-clear '
+          + 'and it is not a decline: the switch could not be asked. Nothing was read, nothing '
+          + 'was moved, nothing was posted.',
+      ],
+    };
+  }
+  return {
+    exit: 3,
+    lines: [
+      `[reconcile] not running: ${verdict.why}`,
+      '[reconcile] Dane has the deck. Nothing was read, nothing was moved, nothing was posted.',
+    ],
+  };
 }
 
 function say(line) {
@@ -486,11 +547,11 @@ async function main() {
   // from under him. Exit 3 is the same "normal decline" dialect the preflight
   // and `node:owns` speak.
   if (check) {
-    const deck = pipelinePaused();
+    const deck = deckVerdict();
     if (deck.paused) {
-      console.log(`[reconcile] not running: ${deck.why}`);
-      console.log('[reconcile] Dane has the deck. Nothing was read, nothing was moved, nothing was posted.');
-      process.exit(3);
+      const stand = standDownReport(deck);
+      for (const line of stand.lines) console.log(line);
+      process.exit(stand.exit);
     }
   }
 
@@ -568,6 +629,9 @@ if (require.main === module) {
 
 module.exports = {
   checkMergedTasks,
+  deckVerdict,
+  standDownReport,
+  SWITCH_TIMEOUT_MS,
   checkStampedBranches,
   flagDue,
   flagKey,

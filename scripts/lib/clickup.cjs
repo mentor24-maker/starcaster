@@ -119,8 +119,12 @@ let requestCount = 0;
 const requestsMade = () => requestCount;
 
 async function callOnce(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {}) {
-  requestCount += 1;
+  // Counted AFTER the token check, never before: a missing token is a request
+  // that never left the machine, and the figure this counter feeds is a
+  // budget against ClickUp's rate limit. Counting attempts there would inflate
+  // exactly the number the ticket asked to be measured.
   requireToken();
+  requestCount += 1;
   let res;
   try {
     res = await fetch(`${API_BASE}${apiPath}`, {

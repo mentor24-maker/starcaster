@@ -73,9 +73,16 @@ const STEPS = Object.freeze([
     // contradiction resolves. `--live` remains the by-hand shape.
     npmArgs: Object.freeze(['reconcile', '--', '--check']),
     // reconcile dialect: 0 ran (its own output says clean/repaired/flagged),
-    // 3 declined because Dane has the deck, 1 could not read the queue at all
-    // — nothing was checked.
-    reading: Object.freeze({ 0: 'clean', 3: 'paused', 1: 'cannot-tell' }),
+    // 3 declined because Dane has the deck, 2 could not ASK the switch, 1
+    // could not read the queue at all — nothing was checked.
+    //
+    // 2 is the lane review round 1 found missing (2026-09-03). Reconcile used
+    // to grade an unreadable switch as a pause, so a throttled or unauthorised
+    // ClickUp read composed to exit 0 / PAUSED: the drift watchdog off the
+    // air, on a green board, with nothing raising a hand. `composeOutcome`
+    // already had a cannot-tell lane and it was simply not reachable from
+    // here.
+    reading: Object.freeze({ 0: 'clean', 3: 'paused', 2: 'cannot-tell', 1: 'cannot-tell' }),
   }),
   Object.freeze({
     id: 'stranded',

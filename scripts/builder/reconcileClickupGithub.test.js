@@ -10,6 +10,9 @@ const {
   checkStampedBranches,
   isTerminal,
   distinctPrs,
+  deckVerdict,
+  standDownReport,
+  SWITCH_TIMEOUT_MS,
 } = require('../reconcile_clickup_github.cjs');
 
 /**
@@ -555,10 +558,73 @@ test('BREAK-TEST: --check asks the pipeline switch BEFORE it reads or writes any
   // exactly the collision the switch exists to prevent (PR #432).
   const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
   assert.match(src, /pipeline\.mjs/, 'it must consult the one switch implementation, not read the flag twice');
-  const pauseAt = src.indexOf('const deck = pipelinePaused()');
+  const pauseAt = src.indexOf('const deck = deckVerdict()');
   const readAt = src.indexOf('await listTasks(LOOP_QUEUE_LIST');
   assert.ok(pauseAt > 0 && pauseAt < readAt, 'the switch is asked before the queue is read');
-  assert.match(src, /process\.exit\(3\)/, 'and a paused deck is a normal decline, not a failure');
+});
+
+// ── the switch's TWO non-zero answers (review round 1, 2026-09-03) ────────
+//
+// The whole ticket is about a check that could not run being reported as a
+// normal state. This pass shipped one of its own: every non-zero exit from the
+// switch was graded "Dane has the deck", so a throttled ClickUp read or a
+// rotated token printed a false statement about him and took the drift
+// watchdog off the air on a green board. The ACTION is right and unchanged —
+// stand down either way. The words and the exit code are the fix.
+
+test('a genuine pause is still a normal decline: exit 3, and it names Dane', () => {
+  const out = standDownReport({ paused: true, readable: true, why: 'Dane paused it at 6:12pm — "taking the deck"' });
+  assert.equal(out.exit, 3);
+  assert.ok(out.lines.join(' ').includes('Dane has the deck'));
+});
+
+test('BREAK-TEST: an UNREADABLE switch exits 2 and never says Dane has the deck', () => {
+  // Break it by folding unreadable back into paused (return the paused branch
+  // for both) and this fails on both counts.
+  const out = standDownReport({ paused: true, readable: false, why: 'CLICKUP_API_TOKEN is not set in this environment.' });
+  assert.equal(out.exit, 2, 'cannot-tell is exit 2, which is what repair reads as CANNOT TELL');
+  const said = out.lines.join(' ');
+  assert.ok(!/Dane/.test(said), 'nothing here knows what Dane is doing — saying so is the lie that hid this');
+  assert.match(said, /COULD NOT TELL/);
+  assert.match(said, /not an all-clear/);
+});
+
+test('BREAK-TEST: the two stand-downs never print the same sentence', () => {
+  const paused = standDownReport({ paused: true, readable: true, why: 'x' });
+  const blind = standDownReport({ paused: true, readable: false, why: 'x' });
+  assert.notEqual(paused.exit, blind.exit);
+  const shared = paused.lines.filter((l) => blind.lines.includes(l));
+  assert.deepEqual(shared, [], 'the switch itself requires these lead to the same behaviour in different words');
+});
+
+test('the verdict is graded by pulseDigest, not by a second reading of the exit code', () => {
+  // Unreadable: the switch answered with no parseable verdict line at all,
+  // which is what a missing token actually produces.
+  const blind = deckVerdict(() => ({ status: 2, stdout: '', stderr: 'CLICKUP_API_TOKEN is not set in this environment.' }));
+  assert.equal(blind.readable, false);
+  assert.equal(blind.paused, true, 'it still stands down — the safe direction is unchanged');
+
+  const paused = deckVerdict(() => ({ status: 3, stdout: JSON.stringify({ paused: true, certain: true, code: 3, message: 'The pipeline is PAUSED.' }) }));
+  assert.equal(paused.readable, true);
+  assert.equal(paused.paused, true);
+
+  const running = deckVerdict(() => ({ status: 0, stdout: JSON.stringify({ paused: false, certain: true, code: 0, message: 'The pipeline is RUNNING.' }) }));
+  assert.equal(running.paused, false);
+  assert.equal(running.readable, true);
+});
+
+test('BREAK-TEST: the switch read carries a deadline, so a hung switch cannot pin the relay wake', () => {
+  let opts = null;
+  deckVerdict((_bin, _args, o) => { opts = o; return { status: 0, stdout: '{"paused":false,"certain":true}' }; });
+  assert.equal(opts.timeout, SWITCH_TIMEOUT_MS);
+  assert.ok(SWITCH_TIMEOUT_MS > 0);
+});
+
+test('it asks with --json, because the exit code cannot carry the distinction', () => {
+  let args = null;
+  deckVerdict((_bin, a) => { args = a; return { status: 0, stdout: '{"paused":false,"certain":true}' }; });
+  assert.ok(args.includes('check') && args.includes('--json'),
+    'both non-zero answers exit 3 by contract; only --json says which');
 });
 
 test('--check IS the live shape — a scheduled watchdog that only proposed would fix nothing', () => {
