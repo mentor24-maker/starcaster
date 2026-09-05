@@ -1108,6 +1108,28 @@ export function BuilderNavigationModuleSettings({
                   rendersVia: RENDERS_VIA
                 }
               ],
+              [
+                {
+                  /*
+                   * Operator, 2026-09-03: *"I want a radius control for the
+                   * main menu item containers e.g. Pickleball. The radius
+                   * should only appear on the top side of the container,
+                   * which means the connection to the dropdown container
+                   * needs to account for that."*
+                   *
+                   * A NEW control rather than a change to Link Radius, and
+                   * off by default, because Link Radius is set on live tenant
+                   * menus and its meaning at rest must not move. This only
+                   * ever applies while that item's own dropdown is open.
+                   */
+                  key: "navLinkRadiusTopOnly",
+                  label: "Square bottom when open",
+                  width: "check",
+                  control: "checkbox",
+                  fallback: String(NAV_STYLE_DEFAULTS.linkRadiusTopOnly),
+                  rendersVia: RENDERS_VIA
+                }
+              ],
               // A7: the BOX shadow the bar casts, last on the axis (D9).
               // `defaultOn` because the bar had this shadow before anything could
               // switch it off — an absent setting has to keep meaning "on" or

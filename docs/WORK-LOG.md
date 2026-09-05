@@ -1,3 +1,31 @@
+## 2026-09-05 — A main menu item now joins up with its dropdown instead of floating above it (#615)
+
+When you hover a top menu item that has a dropdown — "Pickleball", for
+instance — the item and the panel underneath it read as two separate rounded
+pills stacked on top of each other, with a gap between them. This adds a
+checkbox to the Navigation module, **Square bottom when open**, which squares
+off the bottom two corners of the item and the top two corners of the panel
+while that dropdown is open, so the pair touch and read as one connected
+shape. Move the mouse away and the item is fully rounded again.
+
+It is off until you switch it on, so no client's menu changes on its own. The
+way that promise is kept is worth a line: with the box unticked the code sends
+the browser nothing new at all, and every new styling rule is written to fall
+back to exactly what it does today. So a menu nobody has touched is not merely
+"the same numbers" — it receives the identical instructions it received before
+this existed. Three tests check that, one of them by comparing the whole set
+of instructions before and against after.
+
+Menus that stack into a phone-style drawer are left alone deliberately. There
+the panel is an indented list rather than a card hanging off a bar, so there
+is nothing for a squared corner to join to, and squaring it would just look
+like a fault.
+
+One tool got a small upgrade along the way. The check that photographs what a
+module renders could only read a page sitting still, and this feature only
+exists while the mouse is on something — so it can now hover before it looks.
+Without that, the only proof available would have been a unit test and
+somebody's eye.
 ## 2026-09-04 — The pipeline switch now records who handed the deck back, and on what word (#607)
 
 The build pipeline has a switch. When Dane needs the machines to stop — he is

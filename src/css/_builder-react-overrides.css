@@ -1900,7 +1900,11 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .site-nav-mega-panel {
   position: absolute;
-  top: calc(100% + 6px);
+  /* The drop below the bar. A variable because "Square bottom when open"
+     has to close it: squaring the corners cannot make two shapes touch
+     across a 6px gap. 6px is what this has always been, so an untouched
+     menu is unmoved. */
+  top: calc(100% + var(--site-nav-mega-gap, 6px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 40;
@@ -2001,9 +2005,53 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   left: 0;
   right: 0;
   top: 50%;
-  bottom: calc(-1 * (7px + var(--site-nav-dropdown-border-width, 0px)));
+  /* Reach: the gap, plus 1px of cushion for the half-pixel sliver described
+     above. Derived from the gap rather than hardcoded at 7px so closing the
+     gap does not leave the cushion smearing 7px down over the panel's own
+     fill — with the gap at 0 this is a 1px seam cover, which is all it is
+     for. At the default 6px gap it computes to the same -7px as before. */
+  bottom: calc(-1 * (var(--site-nav-mega-gap, 6px) + 1px + var(--site-nav-dropdown-border-width, 0px)));
   z-index: -1;
   background: var(--site-nav-link-hover-bg, transparent);
+}
+
+/* ---------------------------------------------------------------------
+   SQUARE BOTTOM WHEN OPEN (navLinkRadiusTopOnly)
+
+   Operator, 2026-09-03: *"I want a radius control for the main menu item
+   containers e.g. Pickleball. The radius should only appear on the top side
+   of the container, which means the connection to the dropdown container
+   needs to account for that."*
+
+   An open item and the panel hanging under it were two rounded pills stacked
+   on top of each other. Squared bottom corners plus a squared panel top edge
+   (that half is on `.site-nav-dropdown-menu` in legacy.css, which is the ONE
+   rule both the builder and the published site read) make them one shape.
+
+   Nothing here is gated on a class: the fallback IS today's rendering, so
+   with the control off `--site-nav-link-radius-bottom` is absent and both
+   corners resolve to the ordinary link radius, exactly as before. That is
+   why getNavModuleStyle emits the variable only when the control is on.
+
+   Specificity: (0,3,0), one class more than `.builder-react-root
+   .site-nav-link`, which is what lets it win the bottom two corners while
+   leaving the top two to the ordinary rule.
+   --------------------------------------------------------------------- */
+.builder-react-root .site-nav-dropdown:hover > .site-nav-dropdown-trigger,
+.builder-react-root .site-nav-dropdown:focus-within > .site-nav-dropdown-trigger,
+.builder-react-root .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link {
+  border-bottom-left-radius: var(--site-nav-link-radius-bottom, var(--site-nav-link-radius, 18px));
+  border-bottom-right-radius: var(--site-nav-link-radius-bottom, var(--site-nav-link-radius, 18px));
+}
+
+/* A VERTICAL menu's sub-list is always open and always in flow — it is a
+   permanent indented accordion, not a panel hanging off a bar. Squaring on
+   hover there would flicker a corner for no reason, so it stands down.
+   (0,4,0) beats the rule above whatever the source order.) */
+.builder-react-root .site-nav--vertical .site-nav-dropdown:hover > .site-nav-dropdown-trigger,
+.builder-react-root .site-nav--vertical .site-nav-dropdown:focus-within > .site-nav-dropdown-trigger {
+  border-bottom-left-radius: var(--site-nav-link-radius, 18px);
+  border-bottom-right-radius: var(--site-nav-link-radius, 18px);
 }
 
 .builder-react-root .site-nav-mega-grid {
@@ -2274,6 +2322,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
     content: none;
   }
 
+  /* Same reasoning for "Square bottom when open": in the drawer the panel is
+     an in-flow, transparent, border-less accordion, so there is no second
+     shape to join to. A squared pill on its own reads as a bug, so the
+     ordinary link radius is restated here. */
+  .builder-react-root .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link {
+    border-bottom-left-radius: var(--site-nav-link-radius, 18px);
+    border-bottom-right-radius: var(--site-nav-link-radius, 18px);
+  }
+
   .builder-react-root .site-nav--mega-place-menu .site-nav-items {
     min-width: 0;
   }
@@ -2313,6 +2370,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-preview-device-mobile .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link::before,
 .builder-react-root .builder-preview-device-tablet .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link::before {
   content: none;
+}
+
+/* And the squaring, for the same reason as the media-query block above. */
+.builder-react-root .builder-preview-device-mobile .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link,
+.builder-react-root .builder-preview-device-tablet .site-nav-mega--open > .site-nav-mega-trigger > .site-nav-link {
+  border-bottom-left-radius: var(--site-nav-link-radius, 12px);
+  border-bottom-right-radius: var(--site-nav-link-radius, 12px);
 }
 
 .builder-react-root .builder-preview-device-mobile .site-nav--mega-place-menu .site-nav-items,
@@ -3867,6 +3931,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .site-nav {
     padding: var(--site-nav-padding, 6px);
     border-radius: var(--site-nav-radius, 20px);
+  }
+}
+
+/* The LIST dropdown becomes an in-flow accordion at 720px (legacy.css), so
+   "Square bottom when open" stands down there for the same reason the mega
+   drawer does above: nothing hangs off the item to join to. */
+@media (max-width: 720px) {
+  .builder-react-root .site-nav:not(.site-nav--vertical) .site-nav-dropdown:hover > .site-nav-dropdown-trigger,
+  .builder-react-root .site-nav:not(.site-nav--vertical) .site-nav-dropdown:focus-within > .site-nav-dropdown-trigger {
+    border-bottom-left-radius: var(--site-nav-link-radius, 18px);
+    border-bottom-right-radius: var(--site-nav-link-radius, 18px);
   }
 }
 
