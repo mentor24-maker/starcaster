@@ -1,3 +1,33 @@
+## 2026-09-04 — One list of tags instead of two, and each tag knows where it came from (#611)
+
+Starcaster had two separate lists of tags, and only one of them was ever being
+used. `messaging_tags` has held the real ones since March — 149 tags across two
+projects. The other, `asset_tags`, was created a few days ago alongside the
+Media Manager and never had a single tag written to it: zero rows, in every
+project. Dane asked for one list, with each tag recording where it came from,
+and the fact that there was nothing to move across is what made this a small
+change rather than a nervous one.
+
+So the Media Manager's tag list now lives in the same table as everything else,
+and a tag added through a client's own admin back-end is stamped as having come
+from there. A tag added in the Starcaster back-end behaves exactly as it did
+before — it simply does not claim an origin, which is the honest answer for it
+and for all 149 tags that existed before the stamp did.
+
+Two smaller things were worth getting right. The messaging side of Starcaster
+squeezes every tag into hashtag shape — it capitalises it and throws away
+anything past the third word — which is fine for "Junior Tennis" and wrong for
+a photo tagged "Center Court North Entrance". Photo tags keep what was typed,
+and there is now a test that fails if anyone quietly merges the two behaviours.
+And the old list had a rule the surviving one did not: one project cannot end
+up with "Courts" and "courts" as two separate entries. That rule came across
+with it, because a tag list that splits like that is useless within a month.
+
+The database needs one small change before the stamp can be stored, which is
+Dane's to apply. Nothing breaks if it is not applied straight away: a tag
+created in the meantime is still saved, and the code says out loud that it
+could not record where the tag came from rather than pretending it did.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
