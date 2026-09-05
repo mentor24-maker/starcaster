@@ -1003,7 +1003,15 @@ async function handle(req, res, pathname, method) {
 
   if (pathname === '/api/asset-tags' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
-    const result = await createAssetTag({ tag: body.tag ?? body.name }, scope);
+    // `source` is client-declared and validated against an allowlist in
+    // lib/messagingTagSource.js, for the same reason assets.source is: this
+    // endpoint is reachable from BOTH the Starcaster admin app and a tenant's
+    // own admin-media-manager module, so stamping by endpoint would label one
+    // as the other. An unrecognised value becomes '' (origin not recorded).
+    const result = await createAssetTag(
+      { tag: body.tag ?? body.name, source: body.source },
+      scope
+    );
     if (!result.ok) {
       return sendErr(res, result.status || 500, result.error, { code: 'VALIDATION_ERROR' }), true;
     }

@@ -5879,6 +5879,16 @@ function EventCalendarPreview({
 
 const MEDIA_MANAGER_SOURCE = "admin-media-manager";
 
+/**
+ * What a tag created HERE records as its origin. Deliberately not
+ * MEDIA_MANAGER_SOURCE: assets.source records which upload surface a file
+ * came through, while messaging_tags.source records which side of the
+ * platform created the tag — the question Dane asked ("flagged as having
+ * come from the Client Admin"). Validated server-side against the allowlist
+ * in lib/messagingTagSource.js; an unrecognised value stores as "".
+ */
+const CLIENT_ADMIN_TAG_SOURCE = "client-admin";
+
 /** Mirrors GALLERY_IMAGE_EXTENSIONS / GALLERY_VIDEO_EXTENSIONS. */
 const MEDIA_IMAGE_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,.svg";
 const MEDIA_VIDEO_ACCEPT = ".mp4,.mov,.m4v,.webm,.ogg";
@@ -5907,7 +5917,7 @@ type MediaAsset = {
 
 type MediaUploadProgress = { name: string; index: number; total: number };
 
-type MediaTag = { id: number; tag: string };
+type MediaTag = { id: number; tag: string; source?: string };
 
 type MediaCategory = { id: number; assetType: string; category: string };
 
@@ -6078,7 +6088,7 @@ function MediaManagerPreview({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
-        body: JSON.stringify({ tag })
+        body: JSON.stringify({ tag, source: CLIENT_ADMIN_TAG_SOURCE })
       });
       const d = await res.json().catch(() => null);
       // 200 means it already existed, 201 means it is new. Both are success —

@@ -42,9 +42,36 @@ There is one gallery, not two.
 |---|---|---|
 | The file | `assets` (`asset_name`, `asset_type`, `location`, `size`, `aspect`, `category`, `tags`) | pre-existing |
 | How it arrived | `assets.source` | `docs/SQL/assets_source_column.sql`, 2026-09-01 |
-| The project's tag list | `asset_tags` | `docs/SQL/asset_tags_setup.sql`, 2026-09-01 |
+| The project's tag list | `messaging_tags` | `docs/SQL/asset_tags_setup.sql`, 2026-09-01; folded into `messaging_tags` 2026-09-04 by `docs/SQL/messaging_tags_source.sql` |
 | The project's categories | `asset_categories` | pre-existing |
 | Aspect | `assets.aspect` — `wide` / `square` / `tall`, per the check constraint | pre-existing |
+
+### One tag table, and every tag knows where it came from
+
+Until 2026-09-04 there were two tag registries: `messaging_tags`, written by
+the Starcaster back-end and in use since March, and `asset_tags`, created with
+the Media Manager and **never written to** — 0 rows in production, across every
+project. Dane asked for one table, and there being no data to migrate is what
+made the switch small rather than risky.
+
+`lib/assetTagsStore.js` now reads and writes `messaging_tags`. A tag created
+through a client's own admin back-end carries `source = 'client-admin'`; a tag
+created in the Starcaster back-end leaves the column alone, and `''` reads as
+"origin not recorded" — the truth for all 149 rows that predate it.
+
+**Two stores still share the table on purpose.** `lib/messagingTagsStore.js`
+runs every tag through `normalizeMessagingTag`, which title-cases and keeps at
+most THREE words. That is right for a hashtag and wrong for a media tag:
+"Center Court North Entrance" would come back as "Center Court North". Media
+tags keep the casing the admin typed and are only trimmed. A test asserts the
+two vocabularies really do differ, so nobody merges the stores without noticing.
+
+One consequence worth knowing: the Media Manager's tag picker now offers the
+project's **whole** tag list, including tags created in the Starcaster
+back-end. That is what "one tag table" means, and it is the point.
+
+`asset_tags` is not dropped yet — that is a separate SQL file, run once this is
+live and its 0-row count has been re-confirmed at that moment.
 
 ### `assets.source` is client-declared, not stamped per endpoint
 
