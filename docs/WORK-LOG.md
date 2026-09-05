@@ -1,3 +1,37 @@
+## 2026-09-05 — The sweep that called a half-built ticket empty (#624)
+
+When a build session dies partway through, its ticket is left sitting in
+"Building" with nothing working on it. A tidy-up pass called the sweep finds
+those and puts them back in the queue so somebody can pick them up again.
+
+Before it moves one, it asks a question: was anything actually built for this?
+The only way it could answer was to check GitHub for a pull request — and a
+pull request only exists once the work has been pushed. So a ticket somebody
+had built two thirds of, in a folder on their machine, with nothing pushed
+yet, looked exactly the same to it as a ticket nobody had ever started. It
+said "nothing has been built for it" and sent both back to the queue.
+
+That happened on 3 September. About two thirds of a piece of work was sitting
+in a folder on the MacBook — seven changed files — and the ticket was returned
+to the line as though it were untouched. Nothing was deleted; the folder is
+still there. What was lost is the connection between the two: the ticket no
+longer pointed at the work, and the next person to pick it up would have built
+the whole thing again from scratch.
+
+The sweep now goes and looks first. Every branch created for a ticket carries
+that ticket's number, so it checks each machine for one, and counts it as work
+in progress if there are unsaved changes in the folder or commits that have not
+gone anywhere yet. If it finds work, it leaves the ticket alone and prints
+where the work is — which machine, which folder, which branch — so you can walk
+straight to it. If it cannot reach one of the machines to look (a laptop asleep,
+say), it says so and still leaves the ticket alone, rather than guessing. And
+if every machine answers and none of them has anything, it does exactly what it
+did before.
+
+The last part matters as much as the first. A safety check that never lets
+anything through is its own kind of broken, so all four behaviours were tested
+by deliberately removing the fix and watching the right test fail.
+
 ## 2026-09-05 — The switch that quietly ignored him three times (#621)
 
 Automatic merging can be switched off, and it is switched back on by posting
