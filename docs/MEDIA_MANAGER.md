@@ -75,17 +75,29 @@ Court North", and Messaging > Tags prefills its edit form from that value and
 PATCHes `tag` back on save — so an admin opening a media tag merely to change
 its topic permanently rewrote the shared row to the truncation, no longer
 matching the strings on `assets.tags`. `lib/messagingTagsStore.js` names the
-two halves `authoredText` (coining, create only) and `storedText` (reading and
-updating, which trim and collapse whitespace and nothing else). If you find
-yourself reaching for the coining rule anywhere but a Messaging create, that is
-the bug growing back.
+two halves `authoredText` (coining) and `storedText` (reading, updating, and
+copying — trim and collapse whitespace, nothing else).
 
-A consequence of the three-word rule worth knowing: Messaging's **Clone Tag**
-button cannot simply append " Copy", because on a three-word tag that fourth
-word is dropped again and the clone collides with the tag it was cloned from.
-The clone therefore asks the store for a name that is free (`uniquify`), which
-numbers it inside the three words — "Center Court North2" — and the toast says
-what the clone was actually called.
+**And "a create" is not the test. "Is Messaging AUTHORING this name?" is.**
+Those two read as the same question and are not, which is how the same defect
+came back a third time. Messaging's **Clone Tag** goes through create, so it
+coined — and since consolidation the row it is cloning may be a media tag of
+more than three words. Cloning "Center Court North Entrance" therefore created
+"Center Court North": three words, no " Copy" in it, `source ''` so it read as
+a Starcaster back-end tag, matching no string on `assets.tags` — a new,
+unrelated row, reported as a successful copy. Numbering could not have caught
+it either, because the truncation was not taken, so nothing looked like a
+collision.
+
+A clone COPIES a name that is already in the table, so it keeps it as stored
+and numbers it if it is taken: "Center Court North Entrance Copy", then
+"... Copy 2". It says so with `clone: true` on the request, and the toast
+reports the name it actually got, because that is not always the one asked for.
+Only the Add form coins, and only the Add form gets a 409 on a duplicate —
+there the duplicate IS the admin's mistake.
+
+If you find yourself reaching for the coining rule anywhere but an admin typing
+a new tag into Messaging, that is the bug growing back.
 
 One consequence worth knowing: the Media Manager's tag picker now offers the
 project's **whole** tag list, including tags created in the Starcaster

@@ -397,10 +397,9 @@ test('the refusal says WHY, including when the vocabulary caused the clash', () 
 // ── Both stores read the same table, so they read the same amount of it ──
 
 test('the two stores share one row cap, because they share one table', () => {
-  // listAssetTags capped at 1000 while listMessagingTags used 5000. Past 1000
-  // tags the Media Manager's idempotency lookup stops finding existing tags —
-  // it filters the list rather than querying lower(tag) — and the picker
-  // silently shows a short list.
+  // listAssetTags capped at 1000 while listMessagingTags used 5000, so the
+  // Media Manager's picker showed a shorter list than Messaging did for the
+  // same table — the two lists coming back by another route.
   assert.match(read('lib/assetTagsStore.js'), /limit=5000/);
   assert.doesNotMatch(read('lib/assetTagsStore.js'), /limit=1000/);
   assert.match(read('lib/messagingTagsStore.js'), /Math\.min\(Number\(limit\) \|\| 5000, 5000\)/);
@@ -412,7 +411,12 @@ test('the two stores share one row cap, because they share one table', () => {
 // the bug round 1 caused, a guarantee nothing delivered, a raw constraint dump
 // still reachable on the media side, and a button that could only ever fail.
 
-const { uniqueAuthoredTag, tagKey: messagingTagKey } = require('../../lib/messagingTagsStore');
+const {
+  uniqueClonedTag,
+  tagLikePattern,
+  tagKey: messagingTagKey,
+} = require('../../lib/messagingTagsStore');
+const { isDuplicateRefusal } = require('../../lib/importDuplicateSkip');
 
 test('the Media Manager doc no longer teaches the round-1 bug', () => {
   // docs/MEDIA_MANAGER.md said "runs EVERY tag through normalizeMessagingTag",
@@ -478,73 +482,176 @@ test('the media store translates a duplicate refusal too, not just Messaging', (
     'both inserts in createAssetTag must be covered');
 });
 
-// ── Clone Tag could only ever fail on a three-word tag ────────────────────
+// ── Round 4: Clone Tag coined a new name instead of copying one ──────────
+//
+// Consolidation is what put a >3-word tag in front of that button for the
+// first time: before it, Messaging could only ever coin a three-word tag, so
+// `authoredText` had nothing to truncate. Cloning the media tag
+// "Center Court North Entrance" created "Center Court North" — a row that is
+// not a copy of anything — and reported success.
 
-test('a clone of a three-word tag gets a name that is actually free', () => {
-  // "Clone Tag" sends "<tag> Copy". A messaging tag keeps at most three words,
-  // so the fourth is dropped and the clone comes out identical to its original
-  // — 409, every time, forever. No name the button could send would be free.
-  const taken = new Set(['center court north']);
-  const cloned = uniqueAuthoredTag('Center Court North', taken);
-  assert.equal(cloned, 'Center Court North2');
-  assert.notEqual(messagingTagKey(cloned), 'center court north');
-});
+test('cloning a long tag keeps the original name, it does not coin a new one', () => {
+  // THE test that fails on the round-3 code: there the clone went through
+  // authoredText and the result was three words with the original nowhere in
+  // it. A clone's name must still contain the tag it was cloned from.
+  const original = 'Center Court North Entrance';
+  const asked = `${original} Copy`;
 
-test('a clone name survives the vocabulary unchanged, or it could collide again', () => {
-  // This is the property that makes a candidate safe to insert: authoredText
-  // must hand it straight back. A candidate the coining rule reshapes could be
-  // reshaped INTO a name that is taken.
-  const cases = [
-    ['Courts', new Set(['courts'])],
-    ['Courts Copy', new Set(['courts copy'])],
-    ['Center Court North', new Set(['center court north'])],
-    ['Center Court North2', new Set(['center court north2'])],
-  ];
-  for (const [base, taken] of cases) {
-    const candidate = uniqueAuthoredTag(base, taken);
-    assert.ok(candidate, `a free name must be found for "${base}"`);
-    assert.equal(authoredText(candidate), candidate,
-      `"${candidate}" must survive the messaging vocabulary unchanged`);
-    assert.ok(candidate.split(' ').length <= 3, `"${candidate}" must fit in three words`);
-  }
+  const first = uniqueClonedTag(asked, new Set());
+  assert.equal(first, 'Center Court North Entrance Copy');
+  assert.ok(first.includes(original), 'a clone must still contain the tag it copied');
+  assert.notEqual(messagingTagKey(first), messagingTagKey(original));
+
+  // And numbered, not re-coined, once that name is taken too.
+  const second = uniqueClonedTag(asked, new Set([messagingTagKey(asked)]));
+  assert.equal(second, 'Center Court North Entrance Copy 2');
+  assert.ok(second.includes(original), 'the numbered clone must contain it as well');
 });
 
 test('the counter climbs until it finds a gap, and gives up rather than looping', () => {
   const taken = new Set(['courts copy', 'courts copy 2', 'courts copy 3']);
-  assert.equal(uniqueAuthoredTag('Courts Copy', taken), 'Courts Copy 4');
+  assert.equal(uniqueClonedTag('Courts Copy', taken), 'Courts Copy 4');
 
   // A name that is not taken is returned untouched — no gratuitous numbering.
-  assert.equal(uniqueAuthoredTag('Courts Copy', new Set()), 'Courts Copy');
+  assert.equal(uniqueClonedTag('Courts Copy', new Set()), 'Courts Copy');
 
   // Everything taken: return '' so the caller refuses with the ordinary
   // sentence, rather than spinning or inserting a duplicate.
   const all = new Set(['a b c']);
-  for (let n = 2; n <= 50; n += 1) all.add(`a b c${n}`);
-  assert.equal(uniqueAuthoredTag('A B C', all), '');
-  assert.equal(uniqueAuthoredTag('', new Set()), '');
+  for (let n = 2; n <= 50; n += 1) all.add(`a b c ${n}`);
+  assert.equal(uniqueClonedTag('A B C', all), '');
+  assert.equal(uniqueClonedTag('', new Set()), '');
 });
 
-test('only the clone asks to be numbered — the Add form still gets a sentence', () => {
-  // A duplicate typed into the Add form IS the admin's mistake, and silently
-  // numbering it would create a near-identical tag they did not ask for. The
-  // clone has no mistake in it, which is why it is the one that opts in.
+test('the doc no longer teaches "a create" as the test — round 3 came from that', () => {
+  // Round 2 corrected the doc to say the vocabulary applies "on CREATE in
+  // Messaging, and nowhere else", which is true and was still the belief that
+  // produced round 3: Clone Tag IS a create, so it coined. The question the
+  // doc has to leave a reader with is whether Messaging is AUTHORING the name.
+  const doc = read('docs/MEDIA_MANAGER.md');
+  assert.match(doc, /"a create" is not the test/i,
+    'the doc must say that being a create is not what decides it');
+  assert.match(doc, /A clone COPIES a name that is already in the table/,
+    'and say what a clone does instead');
+  assert.match(doc, /`clone: true`/, 'naming the flag that carries it');
+  assert.doesNotMatch(doc, /uniquify/,
+    'the retired flag must not be left in the doc as the way to do this');
+  assert.doesNotMatch(doc, /"Center Court North2"/,
+    'nor the round-2 name shape it no longer produces');
+});
+
+test('a clone is a COPY, so the coining rule is not applied to it', () => {
+  // The whole defect in one assertion pair: create must branch on `clone`, and
+  // the clone branch must reach storedText rather than authoredText.
   const store = read('lib/messagingTagsStore.js');
   const create = store.slice(store.indexOf('async function createMessagingTag'),
     store.indexOf('async function getMessagingTag'));
-  assert.match(create, /input\?\.uniquify/, 'create must honour an explicit request to be numbered');
-  assert.match(create, /if \(!input\?\.uniquify\)[\s\S]{0,200}status: 409/,
-    'and refuse with 409 when it was not asked for');
-  assert.match(create, /uniqueAuthoredTag\(tag, taken\)/, 'the free name comes from the tested helper');
+  assert.match(create, /const isClone = Boolean\(input\?\.clone\)/,
+    'create must know whether it is copying or coining');
+  assert.match(create, /isClone \? storedText\(input\?\.tag, 240\) : authoredText\(input\?\.tag, 240\)/,
+    'a clone keeps the stored text; only the Add form is coined');
+  assert.match(create, /freeClonedTagName\(tag, scope\)/, 'the free name comes from the tested helper');
   assert.match(create, /tag: finalTag/, 'and it is the name that gets INSERTED');
 
+  // The Add form still gets a sentence: there a duplicate IS the mistake.
+  assert.match(create, /if \(!isClone\)[\s\S]{0,200}status: 409/,
+    'a duplicate that is not a clone is still refused with 409');
+});
+
+test('only the clone opts out of coining — the Add form still gets a sentence', () => {
   const ui = read('public/js/messaging.js');
   const clone = ui.slice(ui.indexOf("'clone', 'Clone Tag'"), ui.indexOf("'delete', 'Delete Tag'"));
-  assert.match(clone, /uniquify: true/, 'Clone Tag must ask for a free name');
+  assert.match(clone, /clone: true/, 'Clone Tag must declare itself a copy');
+  assert.doesNotMatch(clone, /uniquify/,
+    'the old flag asked to be numbered but still let the name be coined');
   assert.match(clone, /cloned as "\$\{savedName\}"/,
     'and report the name it actually got — it is not always the one asked for');
 
   // The Add form must NOT opt in.
   const addForm = ui.slice(ui.indexOf('async function submitTagCreate'),
     ui.indexOf('async function submitTagCreate') + 1500);
-  assert.doesNotMatch(addForm, /uniquify/, 'the Add form keeps the 409');
+  assert.doesNotMatch(addForm, /clone: true/, 'the Add form keeps the 409');
 });
+
+// ── One create must not read the whole table ─────────────────────────────
+
+test('the uniqueness lookup asks for the row, not for all 5000 rows', () => {
+  // createMessagingTag opened with a full listMessagingTags(5000) — and both
+  // importers call it inside a per-tag loop, having already loaded that same
+  // list. An import creating 600 tags made 600 full-table reads inside one
+  // serverless invocation, which is the shape that froze canonical
+  // propagation part-way through on 2026-08-16.
+  const store = read('lib/messagingTagsStore.js');
+  const find = store.slice(store.indexOf('async function findMessagingTagByName'),
+    store.indexOf('async function freeClonedTagName'));
+  assert.match(find, /queryMessagingTagRows\(tagLikePattern\(tag\), scope\)/,
+    'the lookup must query the row');
+  assert.doesNotMatch(find, /listMessagingTags/,
+    'and must not list the table to find one row');
+
+  // The clone's numbered family is one filtered read too, not another full list.
+  const free = store.slice(store.indexOf('async function freeClonedTagName'),
+    store.indexOf('async function createMessagingTag'));
+  assert.match(free, /queryMessagingTagRows\(`\$\{tagLikePattern\(base\)\}\*`, scope\)/);
+  assert.doesNotMatch(free, /listMessagingTags/);
+
+  // The media side asks the same way, off the same shared pattern builder —
+  // one table, one rule, no second copy to drift.
+  const media = read('lib/assetTagsStore.js');
+  const mediaFind = media.slice(media.indexOf('async function findAssetTagByName'),
+    media.indexOf('async function existingAfterDuplicate'));
+  assert.match(mediaFind, /tag=ilike\./, 'the media lookup must query the row too');
+  assert.doesNotMatch(mediaFind, /listAssetTags/, 'not filter the whole registry');
+  assert.match(media, /tagLikePattern/, 'and it must share the messaging pattern builder');
+});
+
+test('a tag carrying a LIKE wildcard still matches only itself', () => {
+  // % and _ are wildcards and \ is the escape character, so an unescaped
+  // pattern would make "50_off" match "500off" — a lookup that reports a
+  // duplicate the project does not have.
+  assert.equal(tagLikePattern('50_off'), '50\\_off');
+  assert.equal(tagLikePattern('100% Courts'), '100\\% Courts');
+  assert.equal(tagLikePattern('a\\b'), 'a\\\\b');
+  // Ordinary tags are left completely alone.
+  assert.equal(tagLikePattern('Center Court North Entrance'), 'Center Court North Entrance');
+  // And it collapses like storedText does, so the pattern matches the stored row.
+  assert.equal(tagLikePattern('  Center   Court  '), 'Center Court');
+});
+
+// ── A duplicate is a skip, not an error ──────────────────────────────────
+
+test('a create refused as already-present is a skip; a real failure is not', () => {
+  assert.equal(isDuplicateRefusal({ ok: false, status: 409 }), true);
+  assert.equal(isDuplicateRefusal({ ok: false, status: 500 }), false,
+    'a run that could not reach the database is NOT "already present"');
+  assert.equal(isDuplicateRefusal({ ok: false, status: 400 }), false);
+  assert.equal(isDuplicateRefusal({ ok: true, status: 409 }), false);
+  assert.equal(isDuplicateRefusal(null), false);
+});
+
+test('a forced re-import where everything exists reports 200, not 500', () => {
+  // `force` exists to bypass the importer's own dedupe set, so a forced re-run
+  // asks for every existing tag again. Once messaging_tags has its unique
+  // index every one of those comes back 409 — and both importers put those in
+  // `errors`, so runWebPageToTagImport returned a hard 500 with a duplicate
+  // message and runGenericTextToTextImport reported failure even on a run
+  // that HAD created new rows.
+  for (const file of ['lib/webPageTagImport.js', 'lib/assetFieldImport.js']) {
+    const src = read(file);
+    assert.match(src, /require\('\.\/importDuplicateSkip'\)/,
+      `${file} must use the shared predicate, not a second copy that can drift`);
+    assert.match(src, /isDuplicateRefusal\(result\)/, `${file} must recognise the refusal`);
+    assert.match(src, /skipped \+= 1/, `${file} must count it as a skip`);
+    assert.match(src, /created, skipped, errors/,
+      `${file} must report the skip count it now keeps`);
+  }
+
+  // And the errors path is still reachable for a real failure — a run that
+  // could not write must never read as a run where everything already existed.
+  const generic = read('lib/assetFieldImport.js');
+  const helper = generic.slice(generic.indexOf('const record = (result, dup, sourceId)'),
+    generic.indexOf('for (const candidate of candidates)'));
+  assert.match(helper, /errors\.push\(\{ sourceId, error: result\.error \|\| 'Create failed' \}\)/,
+    'anything that is not a duplicate is still an error');
+});
+

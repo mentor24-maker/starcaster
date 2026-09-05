@@ -28,10 +28,34 @@ in Messaging names the copy by adding the word "Copy" on the end — but a
 messaging tag is only ever allowed three words, so on a tag that already had
 three, that fourth word was thrown straight back away and the copy came out
 with exactly the same name as the original. The list refuses two tags with the
-same name, so the button could never once succeed. It now asks for a name that
-is free and numbers the copy instead — "Center Court North" becomes "Center
-Court North2" — and the confirmation message says the name it actually used,
-because it is not always the one you would expect.
+same name, so the button could never once succeed. It now understands that a
+copy is not a new tag being invented: it keeps the name exactly as it is
+stored, adds "Copy", and puts a number on the end if that is taken too. The
+confirmation message says the name it actually used, because it is not always
+the one you would expect.
+
+A third round of review caught the same button doing something worse than
+failing. Now that photo tags and messaging tags share one list, a photo tag of
+more than three words sits in Messaging with a Clone button next to it — and
+the button was still treating the copy as a brand new tag, so it ran the
+three-word rule over it. Cloning "Center Court North Entrance" quietly created
+a tag called "Center Court North": not a copy of anything, no "Copy" in the
+name, matching none of the photos, and reported as a success. The fix is the
+distinction the code had been missing all along — inventing a tag and copying
+one are different acts, and only the first gets the three-word rule. There is
+now a test that drives the real code against a stand-in database and fails if
+a copy ever comes back without the original name inside it.
+
+Two quieter things went with it. Adding a tag used to read the project's entire
+tag list first, every single time, just to check the name was not taken — and
+two of the bulk import tools do that in a loop, so importing six hundred tags
+meant six hundred full reads of the table. That is the shape that has silently
+cut long jobs off half way before. It now asks the database for the one tag it
+cares about. And re-running an import with "force" on, where everything already
+exists, used to report a hard failure: every tag came back "already there", and
+"already there" was being counted as an error. For an import, a tag that
+already exists is the job being done, so it is counted as skipped now, and a
+genuine failure still counts as one.
 
 The database needs one small change before the stamp can be stored, which is
 Dane's to apply. Nothing breaks if it is not applied straight away: a tag
