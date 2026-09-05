@@ -632,10 +632,20 @@ function sweptTicketPhrase(entry, { applied = true } = {}) {
  * `checked` (was the queue examined at all) have to come from the caller: what
  * was LEFT BEHIND is structurally invisible to a function that is only ever
  * shown what was taken. `why` names the reason nothing was checked.
+ *
+ * A FOURTH CAUSE, added 2026-09-04 (task 86bbur9tk): `preserved` — tickets the
+ * sweep examined and deliberately did NOT move, because a build for them is
+ * still sitting in a worktree, or because a machine could not be looked at.
+ * That is a correct outcome, not a failed write, so it cannot go in `left`;
+ * and no move happened, so it cannot go in `swept`. Left out of the sentence
+ * entirely it would produce "No stranded tickets needed unsticking." over a
+ * ticket the same run had just refused to touch — the exact contradicting
+ * pair this function already carries two scars from.
  */
-function sweptSummary(swept = [], { checked = true, left = 0, why = '', applied = true } = {}) {
+function sweptSummary(swept = [], { checked = true, left = 0, why = '', applied = true, preserved = [] } = {}) {
   const rows = Array.isArray(swept) ? swept : [];
   const stuck = Number.isFinite(left) && left > 0 ? Math.trunc(left) : 0;
+  const kept = preservedSummary(preserved);
 
   if (!checked) {
     return `Whether anything is stranded was NOT checked${why ? ` — ${why}` : ''}.`
@@ -656,17 +666,44 @@ function sweptSummary(swept = [], { checked = true, left = 0, why = '', applied 
   // (`resume` reporting nothing to do and doing nothing being the other half).
   if (!applied) {
     const nothingChanged = 'Nothing has been changed — add `--apply` to do it.';
-    return unstuck
-      ? `${unstuck} ${nothingChanged}`
+    const dry = [unstuck, kept].filter(Boolean).join(' ');
+    return dry
+      ? `${dry} ${nothingChanged}`
       : 'No stranded tickets need unsticking.';
   }
 
-  if (!stuck) return unstuck || 'No stranded tickets needed unsticking.';
+  if (!stuck) return [unstuck, kept].filter(Boolean).join(' ') || 'No stranded tickets needed unsticking.';
 
   const stillStranded = `${stuck} stranded ticket${stuck === 1 ? '' : 's'} could NOT be unstuck`
     + ` and ${stuck === 1 ? 'is' : 'are'} STILL stranded.`
     + ' Run `npm run pipeline -- status` to see which.';
-  return unstuck ? `${unstuck} ${stillStranded}` : stillStranded;
+  return [unstuck, kept, stillStranded].filter(Boolean).join(' ');
+}
+
+/**
+ * The half-sentence for tickets the sweep left alone ON PURPOSE.
+ *
+ * The two reasons are said separately because they need different things from
+ * the reader: half-built work wants finishing (or handing back deliberately),
+ * a blind spot wants somebody to go and look. Collapsing them into "N left
+ * alone" would tell nobody which.
+ */
+function preservedSummary(preserved = []) {
+  const rows = (Array.isArray(preserved) ? preserved : []).filter(Boolean);
+  if (!rows.length) return '';
+  const ids = (v) => rows.filter((r) => r.verdict === v).map((r) => r.id);
+  const halfBuilt = ids('work');
+  const blind = rows.filter((r) => r.verdict !== 'work').map((r) => r.id);
+  const parts = [];
+  if (halfBuilt.length) {
+    parts.push(`${halfBuilt.length} ticket${halfBuilt.length === 1 ? ' was' : 's were'} left in "Building" because a half-finished build for `
+      + `${halfBuilt.length === 1 ? 'it is' : 'them is'} still on a machine: ${halfBuilt.join(', ')}.`);
+  }
+  if (blind.length) {
+    parts.push(`${blind.length} ticket${blind.length === 1 ? '' : 's'} could NOT be judged — a machine could not be looked at, so `
+      + `${blind.length === 1 ? 'it was' : 'they were'} left exactly where they are: ${blind.join(', ')}.`);
+  }
+  return parts.join(' ');
 }
 
 /**
@@ -689,10 +726,16 @@ function sweptSummary(swept = [], { checked = true, left = 0, why = '', applied 
  * `found` is how many stranded tickets were SEEN, which is what separates a
  * dry run with work to do from a dry run with none.
  */
-function sweepExitCode({ checked = true, left = 0, found = 0, applied = true } = {}) {
+function sweepExitCode({ checked = true, left = 0, found = 0, applied = true, preserved = [] } = {}) {
   if (!checked) return 2;
   if (Number(left) > 0) return 1;
   if (!applied && Number(found) > 0) return 3;
+  // Stranded work was FOUND and deliberately not acted on (task 86bbur9tk) —
+  // which is what 3 already means here. A half-built ticket left in "Building"
+  // and a ticket nobody could look at both need a decision from somebody, and
+  // exiting 0 would tell the caller the deck is clear when two tickets are
+  // still sitting on it.
+  if ((Array.isArray(preserved) ? preserved.length : Number(preserved) || 0) > 0) return 3;
   return 0;
 }
 
@@ -704,12 +747,12 @@ function sweepExitCode({ checked = true, left = 0, found = 0, applied = true } =
  * left stranded." on the same empty list — so the bus heard an all-clear the
  * terminal had already contradicted. One sentence, one source.
  */
-function resumedMessage({ by, pausedForMs, swept = [], checked = true, left = 0, why = '' } = {}) {
+function resumedMessage({ by, pausedForMs, swept = [], checked = true, left = 0, why = '', preserved = [] } = {}) {
   const mins = Number.isFinite(pausedForMs) ? Math.round(pausedForMs / 60000) : null;
   return '[CC-starcaster] The build pipeline is RUNNING again' +
     (by ? `, resumed by ${by}` : '') +
     (mins != null ? ` after ${mins} min paused` : '') + '.' +
-    `\n${sweptSummary(swept, { checked, left, why })}`;
+    `\n${sweptSummary(swept, { checked, left, why, preserved })}`;
 }
 
 /**
@@ -965,6 +1008,7 @@ module.exports = {
   resumedMessage,
   sweptTicketPhrase,
   sweptSummary,
+  preservedSummary,
   sweepExitCode,
   strandedBuildDestination,
   sweptTicketNote,

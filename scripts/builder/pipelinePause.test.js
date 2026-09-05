@@ -1476,3 +1476,49 @@ test('a non-numeric status is printed as the reason it is, not as "HTTP ?"', () 
   assert.equal(store.whyOf({ res: { ok: false, status: 503 } }), 'HTTP 503');
   assert.equal(store.whyOf({ res: { ok: false, status: 0 } }), 'HTTP ?');
 });
+
+// ── a ticket the sweep deliberately did NOT move (task 86bbur9tk) ──────────
+
+test('a preserved ticket is neither an all-clear nor a failure', () => {
+  // The fourth cause of an empty `swept` list. Half-built work left in
+  // "Building" is a CORRECT outcome, so it cannot be counted as a failed
+  // write — and no move happened, so it cannot be counted as unstuck. Left
+  // out of the sentence altogether it produces "No stranded tickets needed
+  // unsticking." over a ticket the same run just refused to touch, which is
+  // the contradicting pair this summary already carries two scars from.
+  const preserved = [{ id: '86bbAAA', verdict: 'work' }, { id: '86bbBBB', verdict: 'cannot-tell' }];
+  const said = pause.sweptSummary([], { checked: true, left: 0, preserved });
+  assert.doesNotMatch(said, /No stranded tickets needed unsticking/,
+    'an all-clear over a ticket that was deliberately left alone is the bug');
+  assert.match(said, /86bbAAA/);
+  assert.match(said, /86bbBBB/);
+  assert.match(said, /still on a machine/, 'half-built work must say what is holding it');
+  assert.match(said, /could NOT be judged/, 'a blind spot must not read like half-built work');
+});
+
+test('preserved work exits 3 — found and deliberately not acted on', () => {
+  // 3 is already what this command means by "stranded work found, nothing
+  // done about it". Exiting 0 would tell a caller the deck is clear while two
+  // tickets are still sitting on it.
+  assert.equal(pause.sweepExitCode({ checked: true, left: 0, found: 1, applied: true, preserved: [{ id: 'x', verdict: 'work' }] }), 3);
+  // …and it still outranks nothing: a real failure is still a 1, an unread
+  // queue is still a 2.
+  assert.equal(pause.sweepExitCode({ checked: true, left: 1, applied: true, preserved: [{ id: 'x', verdict: 'work' }] }), 1);
+  assert.equal(pause.sweepExitCode({ checked: false, applied: true, preserved: [{ id: 'x', verdict: 'work' }] }), 2);
+  assert.equal(pause.sweepExitCode({ checked: true, left: 0, found: 0, applied: true, preserved: [] }), 0);
+});
+
+test('the party line hears about preserved tickets too, in the same words', () => {
+  const preserved = [{ id: '86bbAAA', verdict: 'work' }];
+  const bus = pause.resumedMessage({ by: 'a pass', swept: [], checked: true, left: 0, preserved });
+  assert.match(bus, /86bbAAA/, 'the bus must not be told an all-clear the terminal contradicts');
+  assert.ok(bus.includes(pause.sweptSummary([], { checked: true, left: 0, preserved })),
+    'one sentence, one source');
+});
+
+test('the dry run says what it WOULD have left alone, without claiming it acted', () => {
+  const preserved = [{ id: '86bbAAA', verdict: 'work' }];
+  const dry = pause.sweptSummary([], { checked: true, left: 0, preserved, applied: false });
+  assert.match(dry, /86bbAAA/);
+  assert.match(dry, /Nothing has been changed/);
+});
