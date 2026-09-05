@@ -799,7 +799,7 @@ function digestBody({ entries = [], sinceLabel = 'the last day', clockLabel } = 
  * (lib/nodeRoles.js), so one machine's file is the whole record.
  */
 function emptyLedger() {
-  return { version: 1, merges: [], switch: null, disabled: null, lastDigestAt: 0, everMerged: null };
+  return { version: 1, merges: [], switch: null, disabled: null, lastDigestAt: 0, everMerged: null, cannotTell: {} };
 }
 
 /** Normalize whatever came off disk into a ledger, without throwing. */
@@ -823,7 +823,87 @@ function asLedger(raw) {
         lastPr: raw.everMerged.lastPr == null ? null : raw.everMerged.lastPr,
       }
       : null,
+    // The per-ticket CANNOT TELL runs the merge step's bound is counted in
+    // (2026-09-04, task 86bbuvd50). SEE THE WARNING ON asCannotTellRuns: this
+    // whitelist is why the key has to be named here at all.
+    cannotTell: asCannotTellRuns(raw.cannotTell),
   };
+}
+
+/**
+ * Normalize the stored CANNOT TELL runs: `{ [ticketId]: { pr, headSha, reason,
+ * rewordings, firstSeenAt, passes, escalatedAt } }`.
+ *
+ * THE WHITELIST IS PER FIELD, NOT ONLY PER KEY, and review round 1 of task
+ * 86bbuvd50 is why that sentence is here: `headSha` is what identifies the
+ * block now, so a field dropped in this object is a run that can never be
+ * recognised as continuing — the counter resets every pass, the alarm never
+ * fires, and every in-memory test still passes. Exactly the trap one floor
+ * down. The round-trip test in autoMergeLedgerFile.test.js checks the whole
+ * record, field by field, for this reason.
+ *
+ * WHY THIS FUNCTION IS THE WHOLE POINT OF THE TICKET'S SECOND HALF.
+ * `asLedger` above does not merge what came off disk — it REBUILDS the ledger
+ * from a fixed list of keys, so a key nobody named here is silently dropped on
+ * every single read. The counter would therefore reset every pass, the bound
+ * would never be reached, and every test would still pass, because every test
+ * would be handing the decision function a `prev` it built in memory. The
+ * round-trip test in autoMergeLedgerFile.test.js is the one that would have
+ * caught it, which is why it exists.
+ *
+ * Values are passed through rather than coerced. `cannotTellRun` already
+ * refuses a timestamp that is not a positive finite number — coercing here
+ * would turn a null into a 0, and 0 is finite, which is precisely the corrupt
+ * record that made the first draft escalate instantly.
+ */
+function asCannotTellRuns(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [taskId, run] of Object.entries(raw)) {
+    if (!taskId || !run || typeof run !== 'object' || Array.isArray(run)) continue;
+    out[taskId] = {
+      pr: run.pr == null ? null : run.pr,
+      headSha: run.headSha == null ? null : run.headSha,
+      reason: String(run.reason || ''),
+      rewordings: run.rewordings,
+      firstSeenAt: run.firstSeenAt,
+      passes: run.passes,
+      escalatedAt: run.escalatedAt == null ? null : run.escalatedAt,
+    };
+  }
+  return out;
+}
+
+/**
+ * Store this pass's CANNOT TELL run for one ticket, or DELETE it when the
+ * verdict cleared (`next` is null).
+ *
+ * Deleting rather than storing an empty record is criterion 5 — "a verdict
+ * that clears leaves no residue" — and it is also what keeps the map small
+ * without a pruner: an entry only survives while a ticket is actively stuck.
+ * The one leak left is a ticket that vanishes from the watch mid-block (it
+ * changed status, or its PR closed), which strands one ~150-byte record. That
+ * is deliberately NOT pruned by age: a time-based sweep would delete the
+ * `escalatedAt` of a still-stuck ticket and let the alarm fire again, which is
+ * the "escalate exactly once" rule failing in the noisy direction.
+ */
+function ledgerAfterCannotTell(ledger, taskId, next) {
+  const l = asLedger(ledger);
+  if (!taskId) return l;
+  const runs = { ...l.cannotTell };
+  if (!next) delete runs[taskId];
+  else {
+    runs[taskId] = {
+      pr: next.pr == null ? null : next.pr,
+      headSha: next.headSha == null ? null : next.headSha,
+      reason: String(next.reason || ''),
+      rewordings: next.rewordings,
+      firstSeenAt: next.firstSeenAt,
+      passes: next.passes,
+      escalatedAt: next.escalatedAt == null ? null : next.escalatedAt,
+    };
+  }
+  return { ...l, cannotTell: runs };
 }
 
 /**
@@ -1011,6 +1091,8 @@ module.exports = {
   // ledger
   emptyLedger,
   asLedger,
+  asCannotTellRuns,
+  ledgerAfterCannotTell,
   pruneMerges,
   ledgerAfterMerge,
   ledgerAfterSwitch,
