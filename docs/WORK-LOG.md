@@ -1,3 +1,30 @@
+## 2026-09-05 — The switch that quietly ignored him three times (#621)
+
+Automatic merging can be switched off, and it is switched back on by posting
+one exact line: `resume auto-merging`. The wording has to be the whole message
+and nothing else, on purpose — if it fired whenever the phrase merely came up
+in conversation, the machines would merge something nobody had agreed to.
+
+What went wrong is what happened when Dane got *close*. Nothing at all. On
+3 September he posted the line with bold and backticks around it, copied from a
+card an agent had written for him. It matched nothing, nobody said so, and he
+spent the next thirty-five minutes believing merging was back on. He did the
+same thing twice more on 5 September — at 6:47pm and 8:58pm — while an urgent
+piece of work sat parked waiting for exactly that switch. Three tries, no
+answer to any of them, because a near miss and a message nobody read looked
+identical from where he was sitting.
+
+Now a message that was clearly *meant* to be the switch gets a reply: nothing
+changed, here is what actually arrived, and here is the line to copy — as plain
+text on its own, so the reply cannot hand him another dud.
+
+Rehearsing the fix turned up a second problem underneath it. The system worked
+out which party-line messages were Dane's by keeping a list of the signatures
+the machines sign with, and the list had gone out of date: three signatures in
+daily use were missing from it, so those posts were being read as *his own
+words* on the one channel where the off switch is listened for. It now
+recognises the family of signatures rather than a list of them.
+
 ## 2026-09-05 — Merges no longer knock each other back to the start (#616)
 
 Before a pull request can go live, GitHub insists it has the very latest work
