@@ -47,6 +47,329 @@ The third was smaller and more dangerous: if a ticket's record pointed at an
 older, finished pull request while a newer one was still open, it would have
 closed the ticket over live work. It now stops and says the two records
 disagree, rather than picking one.
+## 2026-09-05 — The safety brake on the SQL hand-off check now actually works (#609)
+
+When an agent finishes a turn, two automatic checks read what it was about to
+say. One of them refuses the turn if the work added a SQL file you need to run
+and the reply forgot to hand it to you properly. Any check that can refuse
+needs a limit — it gives up after three tries, because a check that can refuse
+forever can lock a conversation shut, which is worse than the thing it was
+guarding against.
+
+That limit works by keeping a small count on disk. If the count cannot be
+saved, it reads as zero every single time, and "three tries" quietly becomes
+unlimited. The ticket said this happened in the folders we actually work in,
+and it used to — but that had already been fixed before this task started. What
+had not been fixed was the same failure arriving a different way: the place the
+count is saved can exist and still refuse to accept the file, because the disk
+is full or the folder is read-only. Tested by deliberately making that folder
+read-only, the check refused six turns out of six and would have kept going.
+
+Two things changed. The count now has a second place to go if the first one
+will not take it — and, more importantly, the check will only refuse a turn if
+it managed to save the count somewhere. If it cannot keep score, it lets the
+turn end rather than refusing with no limit. Separately, it now respects the
+signal the system itself sends to say "this turn has already been blocked
+once", which is a second, independent brake, so neither one failing on its own
+can wedge a session.
+
+That last part came back for a second round, because the first attempt at it
+had the order wrong. The signal saying "this turn has already been blocked
+once" arrives on exactly the turn where the agent supplies the missing
+hand-off — that is what a continuation *is*. The check was stepping aside the
+instant it saw the signal, before reading the reply, so it never noticed that
+the hand-off it had asked for was sitting right there. It then demanded the
+same file again on the next turn, and the one after, spending its whole
+three-try limit on SQL you already had — and once that limit was spent, a
+genuinely new SQL file added later in the same session went through unnoticed.
+That is the check failing at the one job it exists for. It now reads the reply
+and records what was handed off first, and only then steps aside. The other
+check can step aside immediately, and still does, because it remembers nothing
+between turns and so has nothing to lose by skipping one.
+
+Two of the things the ticket asked for turned out to be wrong, and they were
+corrected on the ticket before any code was written rather than built as
+written. One of them asked this check to keep refusing when the `git` tool is
+unavailable — but this check works out whether there is SQL to hand off *by
+asking git*, so without it, it has no idea whether there is anything to
+complain about. Refusing there would be refusing for no reason. It stands aside
+instead.
+
+Every fix was proved by breaking it on purpose and watching the specific test
+for it fail. That also turned up a flaw in the new tests themselves: they left
+a file behind, so running the test suite a second time failed for reasons that
+had nothing to do with the code. They clean up after themselves now, and three
+runs in a row pass.
+## 2026-09-05 — One list of tags instead of two, and each tag knows where it came from (#611)
+
+Starcaster had two separate lists of tags, and only one of them was ever being
+used. `messaging_tags` has held the real ones since March — 149 tags across two
+projects. The other, `asset_tags`, was created a few days ago alongside the
+Media Manager and never had a single tag written to it: zero rows, in every
+project. Dane asked for one list, with each tag recording where it came from,
+and the fact that there was nothing to move across is what made this a small
+change rather than a nervous one.
+
+So the Media Manager's tag list now lives in the same table as everything else,
+and a tag added through a client's own admin back-end is stamped as having come
+from there. A tag added in the Starcaster back-end behaves exactly as it did
+before — it simply does not claim an origin, which is the honest answer for it
+and for all 149 tags that existed before the stamp did.
+
+Two smaller things were worth getting right. The messaging side of Starcaster
+squeezes every tag into hashtag shape — it capitalises it and throws away
+anything past the third word — which is fine for "Junior Tennis" and wrong for
+a photo tagged "Center Court North Entrance". Photo tags keep what was typed,
+and there is now a test that fails if anyone quietly merges the two behaviours.
+And the old list had a rule the surviving one did not: one project cannot end
+up with "Courts" and "courts" as two separate entries. That rule came across
+with it, because a tag list that splits like that is useless within a month.
+
+One button had been quietly impossible to use, and this fixed it. "Clone Tag"
+in Messaging names the copy by adding the word "Copy" on the end — but a
+messaging tag is only ever allowed three words, so on a tag that already had
+three, that fourth word was thrown straight back away and the copy came out
+with exactly the same name as the original. The list refuses two tags with the
+same name, so the button could never once succeed. It now understands that a
+copy is not a new tag being invented: it keeps the name exactly as it is
+stored, adds "Copy", and puts a number on the end if that is taken too. The
+confirmation message says the name it actually used, because it is not always
+the one you would expect.
+
+A third round of review caught the same button doing something worse than
+failing. Now that photo tags and messaging tags share one list, a photo tag of
+more than three words sits in Messaging with a Clone button next to it — and
+the button was still treating the copy as a brand new tag, so it ran the
+three-word rule over it. Cloning "Center Court North Entrance" quietly created
+a tag called "Center Court North": not a copy of anything, no "Copy" in the
+name, matching none of the photos, and reported as a success. The fix is the
+distinction the code had been missing all along — inventing a tag and copying
+one are different acts, and only the first gets the three-word rule. There is
+now a test that drives the real code against a stand-in database and fails if
+a copy ever comes back without the original name inside it.
+
+Two quieter things went with it. Adding a tag used to read the project's entire
+tag list first, every single time, just to check the name was not taken — and
+two of the bulk import tools do that in a loop, so importing six hundred tags
+meant six hundred full reads of the table. That is the shape that has silently
+cut long jobs off half way before. It now asks the database for the one tag it
+cares about. And re-running an import with "force" on, where everything already
+exists, used to report a hard failure: every tag came back "already there", and
+"already there" was being counted as an error. For an import, a tag that
+already exists is the job being done, so it is counted as skipped now, and a
+genuine failure still counts as one.
+
+The database needs one small change before the stamp can be stored, which is
+Dane's to apply. Nothing breaks if it is not applied straight away: a tag
+created in the meantime is still saved, and the screen now says plainly that
+it could not record where the tag came from rather than reporting a silent
+success. That warning existed in the code from the start but nothing passed it
+on to anyone, so a tag added before the database change would have been stored
+unmarked for good with nobody any the wiser.
+
+Review caught two things before this went live, both of them at the new join
+between the two lists. The first: a photo tag was being kept in full when it
+was saved but shortened again every time it was *read*, so "Center Court North
+Entrance" showed up in the Messaging tag list as "Center Court North". That was
+worse than it looked, because opening that tag in Messaging to change its topic
+filled the name box with the shortened version and saved it back — so a tidy-up
+that had nothing to do with the name would have quietly renamed the tag for
+good, and it would no longer have matched the photos filed under it. The
+shortening now happens in one place only: when Messaging creates a brand new
+tag of its own. Reading a tag, and saving one, leave the name exactly as it is.
+
+The second: once Dane applies the database change, a project cannot have the
+same tag twice. The Media Manager already handled that gracefully, but
+Messaging did not — it would have shown the raw database complaint,
+`duplicate key value violates unique constraint "idx_messaging_tags_project_tag"`,
+in a little pop-up. It now says which tag already exists and, where the
+shortening rule is what caused the clash, says that too — which matters for the
+Clone button, since cloning "Junior Tennis Camp" sends "Junior Tennis Camp
+Copy", the fourth word is dropped again, and it lands right back on the tag it
+was cloned from. Renaming a tag onto an existing one gets the same sentence;
+saving a tag without renaming it is untouched.
+## 2026-09-04 — When a connection breaks, the screen now says what actually broke (#612)
+
+The Connections screen shows one card per social account a client has hooked
+up. A card turns amber when something has gone wrong with that account, and
+that part has worked for a while. What it said, though, was always one of four
+canned sentences — "the platform refused it", and nothing more.
+
+Meanwhile a background check was quietly working out the real reason and
+writing it down: this Bluesky handle now signs in as a different account, this
+permission expires tomorrow, this one was withdrawn. Nothing ever read it.
+Every one of those specific findings arrived at the client as the same vague
+line. The card now shows the real reason, and still tells them what to do
+about it.
+
+The second half is a client pressing Connect and being turned down — an
+Instagram account that is still a personal account, say. Instagram explains
+exactly what to change, that explanation was already being carried back to the
+screen, and the screen was throwing it away: the client landed back on
+Connections with no idea why nothing had happened. Now the explanation appears
+right under that platform's card, in Instagram's own words, with Connect still
+there to press once they have fixed it. Reload the page and it is gone, the
+way a message you have already read should be.
+
+Worth recording how one of these was found: every automated test passed while
+the screen showed nothing at all. The message was being read a fraction of a
+second too late, after another part of the app had already wiped it off the
+address bar. Only opening the page in a real browser caught it.
+
+A review then caught what showing the real reason had opened up. That reason is
+whatever the platform last told us, and platforms do not always answer in
+sentences — when a gateway is having a bad day it answers with a whole web page
+of error markup, and one of ours passes that straight through. A client's card
+would have read "<!DOCTYPE html><html><head><title>502 Bad Gateway</title>…
+Reconnect to fix it." A real explanation still comes through word for word; one
+that is markup, or far too long to be a sentence, now falls back to the plain
+canned line instead. Wrong-but-readable beats a page of code every time.
+
+Two smaller things went in alongside it. If the list of accounts failed to load
+in the moment right after a client was turned down, the explanation was shown
+nowhere at all — and it had already been cleared off the address bar, so it was
+gone for good. It now appears at the top of the panel when there is no card to
+put it on. And the list of things the screen tidies out of the address bar had
+drifted out of step with what actually gets put there.
+
+A second review round then found the same page of error markup arriving by the
+other door. The guard had been fitted to the amber card — the one that reads a
+reason we stored earlier — but a client turned down at the moment they press
+Connect gets their reason handed over on the way back to the screen, and that
+path had no guard at all. Measured in a real browser, the Facebook Page card
+read "<!DOCTYPE html>…502 Bad Gateway…" in amber. It is the same rule now, kept
+in one place both halves read from, and applied where the server hands the text
+to the browser — so the markup never reaches the address bar either. A platform
+that answers in real sentences is still quoted word for word. And a very long
+web address inside one of those sentences now wraps inside the card instead of
+pushing it wider than the screen.
+
+A third round then caught the fix breaking the thing it was protecting. "Far
+too long to be a sentence" needs a number, and the number chosen was measured
+honestly — against the background check's own wording, which never runs past
+189 characters. It was then quietly reused on the other door, where the
+sentences are much longer, because Instagram's explanation ends by naming the
+client's own account and Page: *"…The account we found is
+@delraybeachtennisctr on your Page "Delray Beach Tennis Center & Swim and
+Racquet Club"."* Ordinary names push that past the limit, so the very sentence
+this whole piece of work exists to deliver was being thrown away and replaced
+with "Instagram refused the connection" — no hint that the answer is to switch
+the account type in the Instagram app. Two other refusals had it worse: the
+one about a missing Page permission went over the limit for *any* client whose
+Page has a name at all.
+
+So each of the two doors now carries its own limit, measured against the
+sentences that actually come through it, with the worst case written down
+beside it. And the check refuses to run at all unless it is told which door it
+is on — no more inheriting a number that was measured somewhere else, which is
+the mistake itself rather than the symptom.
+## 2026-09-04 — Background jobs get out of your way on ClickUp (#605)
+
+ClickUp lets our whole company make about a hundred requests a minute — one
+allowance shared by every automatic job on the Mac Mini and by whatever session
+you happen to be talking to. Until now nothing knew that. Each program counted
+only its own requests, so a background job could truthfully report "I have only
+used 97" and still be refused, because four other programs had been spending at
+the same time. That is what took the relay down on 3 September.
+
+Your decision that day was that background jobs get out of the way — "you are
+never blocked by a background job" — and this is that, made mechanical. Every
+program on a machine now writes what it spends into one small shared file, so
+they can all see each other. A background job stops once the minute's budget is
+down to the last 25 requests, says out loud what it did not get to, and does
+not pretend it finished. A session you are talking to never stops, even at the
+very last request.
+
+The 25 was measured rather than picked: a new command reads the relay's own log
+— 854 real passes over ten days — and five real interactive commands run back
+to back inside one minute turned out to cost six requests in total. So the
+reserve is four times the busiest interactive minute actually observed. The
+cost is stated too, rather than discovered later: about one relay pass in six
+will now stop early and finish on the next one instead of running the budget
+down to single digits.
+
+One honest limit, written into the code so nobody mistakes it for a promise:
+this works within a single machine. The Mini and the MacBook spend against the
+same ClickUp allowance and share no files, so this makes collisions rarer, not
+impossible.
+## 2026-09-04 — A merge that gets stuck now says so once, instead of forever (#606)
+
+When you say "merge" on a ticket, a background job picks it up and tries. If
+GitHub gives an answer it cannot make sense of, that job says so in its log and
+tries again on the next pass, ten minutes later. Sometimes it can never make
+sense of the answer, and the job would repeat itself in exactly the same words
+forever — five identical passes over fifty minutes on 4 September, while you
+had said "merge" nearly an hour earlier and had to ask what was happening.
+Nothing counted the repeats and nothing ever said "this is the fifth time",
+so a block that would never clear on its own looked precisely like one about
+to clear on the next try.
+
+Now it keeps count. If the same unresolvable answer comes back for ninety
+minutes, you get one message — on the ticket and on the party line — saying how
+long it has been stuck, how many tries that was, exactly what the answer said,
+and which machine is telling you. Then it goes quiet until something actually
+changes. It does not nag, and when the block clears it forgets it ever
+happened, so the next one starts from zero.
+
+The ninety minutes was measured, not guessed. Every stuck run in the job's own
+history was listed: the ones that sorted themselves out took up to 54 minutes,
+and the ones that needed somebody to step in took 2 hours or more. Nothing at
+all sits in between, and ninety minutes sits in that empty gap — late enough
+that an ordinary wait never trips it, early enough that a real block does not
+sit unmentioned for half a day.
+
+Half of this shipped a few hours earlier (#604) and deliberately stopped short:
+the part that remembers the count between tries sat behind a trap that would
+have made it forget every time, silently, with every test still passing. That
+trap is closed here, and the test that would have caught it is in place.
+
+A review pass then caught a third version of the same problem, and it is worth
+knowing because it is the sort of thing that only shows up against real data.
+The job decided "this is still the same block I was counting" by comparing the
+sentence GitHub gave it — and GitHub has two different ways of saying it cannot
+tell, and swaps between them. Every swap looked like a brand new problem, so
+the clock went back to zero and ninety minutes was never reached. Replayed
+against the job's own log from that day, it would have spoken up about one of
+the three genuinely stuck merges and stayed silent on the other two, including
+the very one this work was written about.
+
+It now recognises a stuck merge by which pull request and which version of the
+code it is stuck on, rather than by the words GitHub happens to choose. The
+message still quotes what GitHub said most recently, and says how many times it
+changed its mind. The same review turned up two smaller gaps, both closed here:
+merges the system approves on its own were not being counted at all, and a
+ticket with no pending merge instruction was being read as "the problem went
+away". The proof is a test that replays all four of the stuck merges from that
+day, pass by pass, at the real ten-minute spacing — the three that needed a
+person get exactly one message each, and the one that sorted itself out in
+under an hour stays quiet.
+
+A second review pass then found that the whole thing was still silent in
+practice, and the reason is worth writing down because it is a trap anybody
+could fall into. The job decided whether an answer counted as "GitHub cannot
+tell me" by looking for those words in the sentence — and a change that shipped
+earlier the same day had reworded that sentence and taken the words out. So the
+counter was watching for a phrase the system had stopped saying. It was worse
+than simply not counting: an answer that did not match was treated as "the
+problem has gone away", which wiped the clock every time. Replayed against the
+real log, the version that had already passed every check and gone green spoke
+up about none of the three genuinely stuck merges.
+
+The fix stops reading the sentence at all. The part of the system that works
+out what GitHub said now labels its own answer — "I got a real reading" or "I
+could not tell" — and the counter reads the label. Wording can change freely
+from now on without unhooking anything. A check on the source itself refuses
+any future answer that does not carry a label, which is the check that would
+have caught this the day the rewording landed, and the replay test now builds
+its examples by asking the real code what it says today rather than by quoting
+what a log said in September. Replayed that way, all three stuck merges get
+exactly one message and all six that sorted themselves out stay quiet.
+
+One more small thing was fixed alongside it: when the system catches a branch
+up by itself, it was recording the version of the code from just before that
+push rather than just after, so the very next try thought it was looking at a
+new problem and started the ninety minutes over. That happened once per
+catch-up, and catch-ups are now routine.
 
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
