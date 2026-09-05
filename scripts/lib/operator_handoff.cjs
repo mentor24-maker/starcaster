@@ -159,7 +159,8 @@ function stripEnvPrefix(line) {
  * The worry about widening it is false positives on pasted OUTPUT, so it was
  * measured rather than argued -- and the measurement has to say WHICH
  * POPULATION it read, because the first one did not (DOCTRINE §3.11).
- * Re-measured 2026-09-01 over all 1,615 transcripts in this project, 11,325
+ * Re-measured 2026-09-01 over all 1,615 transcripts in the MAC-MINI's store
+ * (transcripts are per-machine, so that is the population), 11,325
  * assistant messages: every-line scanning flagged 151, first-line scanning
  * flagged the same 151, zero newly refused. (Control first: on the three
  * synthetic shapes above the two rules disagree 3/3, so the instrument can
@@ -169,7 +170,8 @@ function stripEnvPrefix(line) {
  * The reading's REACH is the caveat. All 151 are in `sdk-cli` sessions, which
  * isInteractive() deliberately exempts -- so "zero newly refused" was measured
  * almost entirely where this hook never looks. In `cli`, the only class it can
- * fire in, zero of 884 messages flag under either rule. Both numbers are
+ * fire in, zero of 884 messages flag under either rule -- mac-mini only, the
+ * same store. Both numbers are
  * honest and neither is a licence: the every-line rule is barely exercised by
  * the historical record, so it rests on the synthetic control above, not on a
  * population reading.
@@ -295,13 +297,21 @@ function lastAssistantTurn(transcriptPath) {
  * Only `cli` fires the wire.
  *
  * `cli` DOES NOT MEAN A PERSON IS READING, and an earlier draft of this
- * comment said it did. Measured across all 1,615 transcripts in this project
- * on 2026-09-01: there is exactly ONE `cli` session in the whole history, and
- * it is a `/loop 30m loop-build` Dane typed at his own terminal on 23 August
- * that then ran unattended until 30 August -- seven days, 10,083 records. So
- * the single session class this hook can fire in is, on the evidence, an
- * unattended loop lane: precisely the case the fail-open design is written
- * against.
+ * comment said it did. Measured ON THE MAC-MINI -- transcripts are stored per
+ * machine, so a count of them names a machine or it names nothing -- across
+ * all 1,781 starcaster transcripts on 2026-09-04: exactly ONE is `cli` and
+ * 1,780 are `sdk-cli`. That one is a `/loop 30m loop-build` Dane typed at his
+ * own terminal on 23 August that then ran unattended until 3 September --
+ * eleven days, 10,085 records. So on the mini the single session class this
+ * hook can fire in is, on the evidence, an unattended loop lane: precisely the
+ * case the fail-open design is written against.
+ *
+ * WHETHER IT FIRES IN DANE'S OWN SESSIONS IS NOT KNOWN. He works interactively
+ * on the macbook-pro, whose store this machine cannot read (ssh refused, port
+ * 22 closed, measured 2026-09-04). The mini is the loop box; the only thing he
+ * starts at a terminal here is a loop. So do not read the numbers above as
+ * "the wire is inert for Dane" -- that conclusion has been drawn once already
+ * and it is not established. Task 86bbt7n2h carries the macbook-pro reading.
  *
  * That is survivable rather than fine, and only because of two brakes: three
  * refusals in a session and the wire stands down (see

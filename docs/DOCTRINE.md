@@ -2464,14 +2464,16 @@ Four things it deliberately does **not** do, each for a reason:
   never looked at. Widening it risks false positives on pasted *output*, so it
   was measured rather than argued — and **the measurement has to name the
   population it read**, which the first version of this paragraph did not
-  (§3.11). Re-measured 2026-09-01 over all 1,615 transcripts in this project,
-  11,325 assistant messages: every-line scanning flagged 151, first-line
+  (§3.11). Re-measured 2026-09-01 over all 1,615 transcripts **in the
+  mac-mini's store** — transcripts are per-machine, so that is the population,
+  not "the project" — 11,325 assistant messages: every-line scanning flagged 151, first-line
   scanning flagged the same 151, zero newly refused, while a control on three
   synthetic two-line blocks disagreed 3/3, so the two rules can still tell each
   other apart.
   **The reach of that reading is the caveat.** All 151 flagged messages are in
   `sdk-cli` sessions — which this hook deliberately exempts. In `cli`, the only
-  class it can fire in, **zero of 884** messages flag under either rule. So
+  class it can fire in, **zero of 884** messages flag under either rule — again,
+  the mac-mini's store only. So
   "zero newly refused" was measured almost entirely where the hook never looks.
   Both numbers are honest; neither is a licence. The every-line rule is barely
   exercised by the historical record, so it rests on the synthetic control, not
@@ -2487,15 +2489,35 @@ Four things it deliberately does **not** do, each for a reason:
   loops run with `entrypoint: "sdk-cli"` and report to a ticket; only `cli`
   can trip the wire, and the two are genuinely distinguishable rather than
   scoped away by assumption.
-  What `cli` actually means is narrower than its name. Measured across all
-  1,615 transcripts in this project on 2026-09-01: there is exactly **one**
-  `cli` session in the entire history, and it is a `/loop 30m loop-build` Dane
-  typed at his own terminal on 23 August that then ran **unattended until 30
-  August** — seven days, 10,083 records. So the single session class this hook
+  What `cli` actually means is narrower than its name — **and the reading that
+  established that is one machine's.** Claude transcripts are stored per
+  machine; there is no shared store, so any count of them names a machine or it
+  names nothing (§3.11). Measured on the **mac-mini**, the loop box, across all
+  1,781 starcaster transcripts on 2026-09-04: exactly **one** is `cli` and
+  1,780 are `sdk-cli`. That one is a `/loop 30m loop-build` Dane typed at his
+  own terminal on 23 August that then ran **unattended until 3 September** —
+  eleven days, 10,085 records. So on the mini the single session class this hook
   can fire in is, on the evidence, an unattended loop lane: precisely the case
   the fail-open design below is written against. That is survivable rather than
   fine, and it is survivable only because of the two brakes. Do not remove
   either one on the theory that a human is there to notice.
+  (An earlier version of this paragraph said 1,615 transcripts, "the entire
+  history", and "until 30 August". The reach was wrong — it was one machine —
+  and so was the end date; that session ran four days longer than stated.)
+
+  **Does this wire fire in DANE'S OWN sessions? Nobody knows yet — treat it as
+  CANNOT TELL, not as armed and not as inert.** The mini reading cannot answer
+  it: the only thing he ever starts at a terminal on the loop box is a loop, so
+  a store that is 1,780/1,781 headless says almost nothing about his real
+  interactive work, which happens on the **macbook-pro**. That machine's store
+  is unreadable from here — it refuses ssh on port 22 (Remote Login off), and
+  measured 2026-09-04 there is no other route to it. A code-review pass has
+  already drawn the wrong conclusion from this gap once, deciding the hook
+  "exempts every session Dane reads" and is therefore inert; that is not
+  established either, because the `cli` sessions that do exist are ones he
+  personally typed. The two counts wanted are the transcript total and the
+  `entrypoint: "cli"` total under `~/.claude/projects/*starcaster*/` on the
+  macbook-pro. Task 86bbt7n2h carries them.
 - **It fails OPEN, and it has two independent brakes.** This is the opposite
   of the pipeline switch's fail-safe (§6.8) and the asymmetry really is
   reversed: a wrong refusal wedges a turn and can strand an unattended pass in
