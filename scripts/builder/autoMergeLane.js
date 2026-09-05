@@ -47,6 +47,7 @@ const {
   isReviewPassed,
   findPullRequest,
 } = require('./mergeOnComment');
+const { isMachineComment } = require('./machineComment');
 
 // ── Criterion 1: which files may ride in this lane ───────────────────────────
 
@@ -599,8 +600,25 @@ function laneADecision({
     // comment, not a keyword. If he is talking about it, the machine stops.
     // A "false" objection costs him one word; a missed objection costs an
     // unwanted merge, so the asymmetry runs this way on purpose.
+    //
+    // BUT A MACHINE COMMENT IS NOT HIM (2026-09-04, task 86bbv8nvy). The loops
+    // post under Dane's token, so EVERY card a script writes comes back from
+    // the API stamped with his user id — including this lane's own
+    // announcement and the stuck-merge escalation. Asking the user id alone
+    // read the pipeline talking to itself as him objecting, and cancelled a
+    // merge he had authorized with the words "you commented on this ticket",
+    // which he had not. `isMachineComment` is the one reader for that
+    // question (scripts/builder/machineComment.js); a second definition here
+    // would be a second thing to keep in step.
+    //
+    // THE ASYMMETRY IS UNCHANGED, and this is the whole safety argument: only
+    // a comment POSITIVELY recognised as machine-written is discounted.
+    // Anything unclassifiable — an unstamped comment, an unreadable body, a
+    // format nobody has seen — is still his, and still cancels.
     const objection = all.find(
-      (c) => Number(c.user && c.user.id) === Number(operatorId) && commentDate(c) > marker.at,
+      (c) => Number(c.user && c.user.id) === Number(operatorId)
+        && commentDate(c) > marker.at
+        && !isMachineComment(c.comment_text),
     );
     if (objection) {
       return {
