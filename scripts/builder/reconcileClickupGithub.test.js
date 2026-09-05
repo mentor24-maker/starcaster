@@ -7,13 +7,24 @@ const path = require('node:path');
 
 const {
   checkMergedTasks,
+  checkClaimableTasks,
+  claimableCandidates,
   checkStampedBranches,
   isTerminal,
+  isInFlight,
+  isClaimable,
+  isReworkStatus,
+  newestCommentAt,
+  reopenBlock,
   deckVerdict,
   standDownReport,
   SWITCH_TIMEOUT_MS,
   closureNote,
+  AUTO_REPAIR_STATUSES,
+  OPERATOR_STATUSES,
+  CLAIMABLE_STATUSES,
 } = require('../reconcile_clickup_github.cjs');
+const loopStatuses = require('./loopStatuses.js');
 
 /**
  * Charter Q2 — the reconciler. Every dependency (`gh pr view`, ClickUp reads/
@@ -49,6 +60,15 @@ const comments = (...c) => async () => c.map((text, i) => ({
 
 /** The shape `clickup pr-opened` writes — the only shape that decides anything. */
 const trail = (n) => `PR opened: https://github.com/org/repo/pull/${n}`;
+
+/**
+ * A merge time AFTER every comment `comments()` above manufactures (they start
+ * at 1_700_000_000_000, which is 2023-11-14). Load-bearing since review round 1
+ * of 86bbt3wzk: the claimable close is blocked when the ticket has been spoken
+ * on SINCE the merge, so a fixture with no merge time — or one older than its
+ * own comments — is a fixture that never reaches the code it means to test.
+ */
+const MERGED_AFTER_COMMENTS = '2026-09-01T00:00:00.000Z';
 
 // ── checkMergedTasks ─────────────────────────────────────────────────────
 
@@ -1014,4 +1034,552 @@ test('the counter is the ONE DOOR\'s, so a pass counts what the door actually sp
   assert.doesNotMatch(src, /requestCount \+= 1/, 'a second, private counter is exactly what was merged away');
   assert.equal(clickup.requestsMade(), clickup.getBudget().requests,
     'and they agree at runtime, not only in the source');
+});
+
+
+// ── the status taxonomy: the property that would have caught this ──────────
+//
+// Acceptance criterion 5 of task 86bbt3wzk, and the actual requirement of it.
+// The bug was not that a scan was wrong; it was that `Queued` and `Rework`
+// belonged to NO set, so both scans skipped them and neither said so. Three
+// hand-maintained name lists in one file made that a matter of remembering.
+// Now all four are derived from `loopStatuses`, and this pins the invariant
+// that makes derivation worth anything.
+
+test('every Loop Queue status belongs to exactly one of the reconciler\'s four sets', () => {
+  const membership = (display) => {
+    const s = display.toLowerCase();
+    const t = { id: 'x', name: 'x', status: { status: s } };
+    return [
+      ['auto-repair', AUTO_REPAIR_STATUSES.has(s)],
+      ['operator', OPERATOR_STATUSES.has(s)],
+      ['claimable', CLAIMABLE_STATUSES.has(s)],
+      ['terminal', isTerminal(t)],
+    ].filter(([, hit]) => hit).map(([n]) => n);
+  };
+
+  for (const display of loopStatuses.STAGE_ORDER) {
+    const sets = membership(display);
+    assert.equal(
+      sets.length, 1,
+      `"${display}" is in ${sets.length} of the four sets (${sets.join(', ') || 'NONE'}). `
+      + 'A status in no set is skipped by every scan and reported by none — that is the 86bbt3wzk bug. '
+      + 'A status in two would be acted on twice.'
+    );
+  }
+
+  // And the ladder this iterates is the real one, not a stale copy: if a status
+  // is added to DISPLAY without reaching STAGE_ORDER, the loop above would
+  // silently stop covering it.
+  assert.deepEqual(
+    [...loopStatuses.STAGE_ORDER].map((d) => d.toLowerCase()).sort(),
+    Object.keys(loopStatuses.DISPLAY).sort(),
+    'STAGE_ORDER and DISPLAY must name the same seven statuses'
+  );
+});
+
+test('the sets are DERIVED from loopStatuses, not re-listed here', () => {
+  // The preferred means of criterion 5. A future edit that pastes the names
+  // back into this file passes the test above and reintroduces exactly the
+  // drift that caused the bug, so the source is checked too.
+  const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
+  assert.match(src, /AUTO_REPAIR_STATUSES = new Set\(loopStatuses\.IN_PROGRESS_STATUSES\)/);
+  assert.match(src, /OPERATOR_STATUSES = new Set\(loopStatuses\.OPERATOR_HELD_STATUSES\)/);
+  assert.match(src, /CLAIMABLE_STATUSES = new Set\(loopStatuses\.CLAIMABLE_BY_BUILD\)/);
+  assert.match(src, /loopStatuses\.TERMINAL_STATUSES\.includes\(/);
+});
+
+test('a claimable ticket is claimable and NOT in-flight or terminal — the gap, stated', () => {
+  for (const s of loopStatuses.CLAIMABLE_BY_BUILD) {
+    const t = task('t', 'n', s);
+    assert.equal(isClaimable(t), true, `${s} must be claimable`);
+    assert.equal(isInFlight(t), false, `${s} must not read as in-flight`);
+    assert.equal(isTerminal(t), false, `${s} must not read as terminal`);
+  }
+});
+
+// ── the third scan ─────────────────────────────────────────────────────────
+
+/** The index shape `gh pr list --json number,state,body,url` returns. */
+const indexed = (number, taskId, state = 'OPEN') => ({
+  number,
+  state,
+  url: `https://github.com/org/repo/pull/${number}`,
+  body: `Fixes things.\n\nhttps://app.clickup.com/t/${taskId}\n`,
+});
+
+test('claimableCandidates nominates only the ids it was asked about', () => {
+  const prs = [indexed(1, 'aaa'), indexed(2, 'bbb'), indexed(3, 'aaa'), { body: null }, null];
+  const byTicket = claimableCandidates(prs, ['aaa', 'ZZZ']);
+  assert.deepEqual([...byTicket.keys()], ['aaa']);
+  assert.deepEqual(byTicket.get('aaa').map((p) => p.number), [1, 3]);
+  assert.equal(byTicket.has('bbb'), false, 'bbb is not claimable, so it is not a candidate');
+});
+
+test('claimableCandidates matches case-insensitively, both directions', () => {
+  const byTicket = claimableCandidates(
+    [{ number: 9, body: 'https://app.clickup.com/t/86BBT3WZK' }],
+    ['  86bbt3wzk  ']
+  );
+  assert.deepEqual([...byTicket.keys()], ['86bbt3wzk']);
+});
+
+test('CLAIMABLE + OPEN PR: flagged to the bus AND onto the ticket, and never moved', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const bus = [];
+  const ticketComments = [];
+  let moves = 0;
+  await checkClaimableTasks([task('t1', 'Panel sweep 8/15', 'queued')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(449, 't1')],
+    getComments: comments(trail(449)),
+    prState: () => ({ state: 'OPEN' }),
+    updateStatus: () => { moves += 1; },
+    postBus: async (_c, m) => { bus.push(m); },
+    commentOn: async (id, text) => { ticketComments.push({ id, text }); },
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(moves, 0, 'a claimable ticket with an open PR is a decision, not a bookkeeping slip');
+  assert.equal(bus.length, 1);
+  assert.match(bus[0], /is "queued" — a status loop-build CLAIMS FROM — but its own PR #449 is still OPEN/);
+  assert.equal(ticketComments.length, 1, 'the durable half lands on the ticket the next claimer reads');
+  assert.equal(ticketComments[0].id, 't1');
+  assert.match(ticketComments[0].text, /build-start --task t1/);
+  assert.equal(clean.length, 0, 'this is drift, not clean');
+});
+
+test('CLAIMABLE + OPEN PR in dry run: proposed, nothing sent, nothing moved', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  let writes = 0;
+  await checkClaimableTasks([task('t1', 'Panel sweep 8/15', 'queued')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(449, 't1')],
+    getComments: comments(trail(449)),
+    prState: () => ({ state: 'OPEN' }),
+    updateStatus: () => { writes += 1; },
+    postBus: async () => { writes += 1; },
+    commentOn: async () => { writes += 1; },
+    isLive: false,
+    log: () => {},
+  });
+  assert.equal(writes, 0, 'a dry run writes nothing at all');
+  assert.ok(repaired.some((l) => l.startsWith('[DRY RUN]')));
+});
+
+test('CLAIMABLE + MERGED PR: moved to Live under --live, with the closure note FIRST', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const order = [];
+  let wrote = 0;
+  await checkClaimableTasks([task('t1', 'Shipped already', 'queued')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(500, 't1', 'MERGED')],
+    getComments: comments(trail(500)),
+    prState: () => ({ state: 'MERGED', mergedAt: '2026-09-01T00:00:00Z' }),
+    commentOn: () => { order.push('comment'); },
+    updateStatus: (id, status) => { order.push(`status:${id}:${status}`); },
+    onWrite: () => { wrote += 1; },
+    postBus: async () => { throw new Error('a merged repair posts no bus line'); },
+    isLive: true,
+    log: () => {},
+  });
+  assert.deepEqual(order, ['comment', 'status:t1:Live'], 'the explanation is written before the close');
+  assert.equal(wrote, 1, 'a live write must reach onWrite, or the pass exits like one that changed nothing');
+  assert.ok(repaired.some((l) => /moved to Live/.test(l)));
+});
+
+test('CLAIMABLE + MERGED PR: a closure note that cannot post means NO move', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  let moves = 0;
+  await checkClaimableTasks([task('t1', 'Shipped already', 'queued')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(500, 't1', 'MERGED')],
+    getComments: comments(trail(500)),
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AFTER_COMMENTS }),
+    commentOn: () => { throw new Error('ClickUp said no'); },
+    updateStatus: () => { moves += 1; },
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(moves, 0, 'an unexplained close is the failure this gate exists to prevent');
+  assert.equal(repaired.length, 0);
+  assert.ok(unchecked.some((l) => /NOT moved to Live/.test(l)));
+});
+
+test('CLAIMABLE + MERGED PR in dry run: says it would move, moves nothing', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  let writes = 0;
+  await checkClaimableTasks([task('t1', 'Shipped already', 'queued')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(500, 't1', 'MERGED')],
+    getComments: comments(trail(500)),
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AFTER_COMMENTS }),
+    commentOn: () => { writes += 1; },
+    updateStatus: () => { writes += 1; },
+    isLive: false,
+    log: () => {},
+  });
+  assert.equal(writes, 0);
+  assert.ok(repaired.some((l) => /\[DRY RUN\].*would move to Live/.test(l)));
+});
+
+test('CLAIMABLE + CLOSED-unmerged PR is CLEAN — an abandoned branch is the system working', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  await checkClaimableTasks([task('t1', 'Abandoned', 'rework')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(7, 't1', 'CLOSED')],
+    getComments: comments(trail(7)),
+    prState: () => ({ state: 'CLOSED' }),
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(repaired.length, 0);
+  assert.equal(unchecked.length, 0);
+  assert.ok(clean.some((l) => /closed unmerged/.test(l)));
+});
+
+// ── criterion 4: what could NOT be read never reads as clean ───────────────
+
+test('an unreadable PR index puts the WHOLE claimable set in "could not check"', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  await checkClaimableTasks(
+    [task('t1', 'a', 'queued'), task('t2', 'b', 'rework')],
+    clean, repaired, unchecked,
+    { prIndex: () => null, isLive: true, log: () => {} }
+  );
+  assert.equal(clean.length, 0, 'nothing was checked, so nothing is clean');
+  assert.equal(repaired.length, 0);
+  assert.equal(unchecked.length, 1);
+  assert.match(unchecked[0], /2 claimable task\(s\).*could not be read/);
+});
+
+test('unreadable comments on a nominated ticket land in "could not check"', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  await checkClaimableTasks([task('t1', 'a', 'queued')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(1, 't1')],
+    getComments: async () => { throw new Error('rate limited'); },
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(clean.length, 0);
+  assert.match(unchecked[0], /comments could not be read — rate limited/);
+});
+
+test('an unreadable PR state lands in "could not check", never in clean', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  await checkClaimableTasks([task('t1', 'a', 'queued')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(1, 't1')],
+    getComments: comments(trail(1)),
+    prState: () => null,
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(clean.length, 0);
+  assert.match(unchecked[0], /state of PR #1 could not be read/);
+});
+
+test('a nominated ticket with no PR-opened trail is unchecked, not judged', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  await checkClaimableTasks([task('t1', 'a', 'queued')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(1, 't1')],
+    getComments: comments('some chatter, no trail'),
+    prState: () => { throw new Error('the trail decides, so GitHub is never asked'); },
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(clean.length, 0);
+  assert.equal(repaired.length, 0);
+  assert.match(unchecked[0], /carries no `PR opened:` trail/);
+});
+
+test('claimable tickets no PR names are reported as not directly read — one line, not N', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  await checkClaimableTasks(
+    [task('t1', 'a', 'queued'), task('t2', 'b', 'queued'), task('t3', 'c', 'rework')],
+    clean, repaired, unchecked,
+    {
+      prIndex: () => [indexed(1, 't1')],
+      getComments: comments(trail(1)),
+      prState: () => ({ state: 'OPEN' }),
+      postBus: async () => {},
+      commentOn: async () => {},
+      isLive: true,
+      log: () => {},
+    }
+  );
+  const line = unchecked.find((l) => /not read directly/.test(l));
+  assert.ok(line, 'the honest edge of the cheap index must be stated');
+  assert.match(line, /^2 claimable task\(s\)/);
+});
+
+/** An index whose merged half was bounded, with the given window floor. */
+function windowed(list, startIso) {
+  Object.defineProperty(list, 'mergedWindowStart', {
+    value: startIso === null ? null : Date.parse(startIso),
+    enumerable: false,
+  });
+  return list;
+}
+const AUG_1 = Date.parse('2026-08-01T00:00:00Z');
+const SEP_1 = Date.parse('2026-09-01T00:00:00Z');
+
+test('a claimable ticket OLDER than the merged window is reported as possibly missed', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const old = { ...task('t1', 'ancient', 'queued'), date_created: String(AUG_1) };
+  await checkClaimableTasks([old], clean, repaired, unchecked, {
+    prIndex: () => windowed([], '2026-09-01T00:00:00Z'),
+    indexLimit: 3,
+    isLive: true,
+    log: () => {},
+  });
+  assert.ok(unchecked.some((l) => /older than the 3 merged pull requests read.*window starts 2026-09-01/.test(l)),
+    `expected a window line, got: ${JSON.stringify(unchecked)}`);
+});
+
+test('a claimable ticket INSIDE the merged window is not — the line self-silences', async () => {
+  // The first version said "the index hit its limit" whenever it read `limit`
+  // rows, which is true on every run against 607 merges. An honest "could not
+  // check" line that fires unconditionally is wallpaper, so the bound reports
+  // only when a ticket's answer could actually lie outside the window.
+  const { clean, repaired, unchecked } = buckets();
+  const recent = { ...task('t1', 'fresh', 'queued'), date_created: String(SEP_1 + 86400000) };
+  await checkClaimableTasks([recent], clean, repaired, unchecked, {
+    prIndex: () => windowed([], '2026-09-01T00:00:00Z'),
+    indexLimit: 3,
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(unchecked.filter((l) => /older than the/.test(l)).length, 0);
+});
+
+test('an UNbounded merged half never reports a window at all', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const old = { ...task('t1', 'ancient', 'queued'), date_created: String(AUG_1) };
+  await checkClaimableTasks([old], clean, repaired, unchecked, {
+    prIndex: () => windowed([], null),
+    indexLimit: 3,
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(unchecked.filter((l) => /older than the/.test(l)).length, 0,
+    'null means the window covered every merge there is — a different statement from a floor');
+});
+
+test('a ticket already nominated is never counted as possibly missed', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const old = { ...task('t1', 'ancient', 'queued'), date_created: String(AUG_1) };
+  await checkClaimableTasks([old], clean, repaired, unchecked, {
+    prIndex: () => windowed([indexed(1, 't1')], '2026-09-01T00:00:00Z'),
+    getComments: comments(trail(1)),
+    prState: () => ({ state: 'OPEN' }),
+    postBus: async () => {},
+    commentOn: async () => {},
+    indexLimit: 3,
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(unchecked.filter((l) => /older than the/.test(l)).length, 0,
+    'its PR was found; the window cannot have hidden it');
+});
+
+test('the real index asks for open PRs unbounded and merged PRs bounded', () => {
+  // The asymmetry is the decision; a shared `--state all --limit` would restore
+  // the truncate-every-run behaviour without failing anything above.
+  const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
+  assert.match(src, /ask\(\['--state', 'open', '--limit', '1000'\]\)/);
+  assert.match(src, /ask\(\['--state', 'merged', '--limit', String\(limit\)\]\)/);
+  assert.doesNotMatch(src, /'--state', 'all'/, "one 'all' query is what truncated on every run");
+});
+
+test('if EITHER half of the index fails, the whole index fails', () => {
+  // Half an index reported as a whole one is the false all-clear this ticket is
+  // about, one level down: the open half succeeding while the merged half
+  // throws would silently answer "no claimable ticket has a merged PR".
+  const { ghPrIndex } = require('../reconcile_clickup_github.cjs');
+  const realExec = require('child_process').execFileSync;
+  assert.equal(typeof ghPrIndex, 'function');
+  // The concat is inside one try; a throw from either `ask` returns null.
+  const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
+  const body = src.slice(src.indexOf('function ghPrIndex'), src.indexOf('function claimableCandidates'));
+  assert.equal((body.match(/try \{/g) || []).length, 1, 'one try around both halves, not one each');
+  assert.match(body, /catch \{\s*return null;/);
+  assert.ok(realExec, 'sanity');
+});
+
+test('no claimable tickets: the scan says so and asks GitHub nothing', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  await checkClaimableTasks([task('t1', 'a', 'in review')], clean, repaired, unchecked, {
+    prIndex: () => { throw new Error('must not be called'); },
+    isLive: true,
+    log: () => {},
+  });
+  assert.deepEqual([clean, repaired, unchecked], [[], [], []]);
+});
+
+test('the third scan is actually WIRED INTO the pass, not merely exported', () => {
+  // The scan could be perfect and never run. `checkMergedTasks` and
+  // `checkStampedBranches` are both called from main(); this one must be too.
+  const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
+  assert.match(src, /await checkClaimableTasks\(tasks, clean, repaired, unchecked, deps\);/,
+    'main() must run the third scan, with the same deps the other two get');
+});
+
+// ── review round 1: the verdict split, the reopen guard, the stale trail ────
+//
+// Three findings, all of them about the scan being CONFIDENTLY WRONG rather
+// than blind: it called every send-back drift, it undid a deliberate reopen
+// every half hour, and it closed a ticket over a pull request that was still
+// open. The tests below are the property each fix asserts; each was
+// break-tested by reverting its fix and watching the named test fail.
+
+test('REWORK + OPEN PR is CLEAN — that is the defined state of every send-back', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  let writes = 0;
+  await checkClaimableTasks([task('t1', 'Sent back twice', 'rework')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(607, 't1')],
+    getComments: comments(trail(607)),
+    prState: () => ({ state: 'OPEN' }),
+    updateStatus: () => { writes += 1; },
+    postBus: async () => { writes += 1; },
+    commentOn: async () => { writes += 1; },
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(writes, 0, 'a healthy send-back must not raise an alarm or leave a permanent comment');
+  assert.equal(repaired.length, 0);
+  assert.equal(unchecked.length, 0);
+  assert.ok(clean.some((l) => /a send-back keeps its branch and its PR/.test(l)),
+    'and the clean line has to SAY why, or the next reader re-files this as a bug');
+});
+
+test('QUEUED + OPEN PR still flags — that half was right and must not be lost', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const bus = [];
+  await checkClaimableTasks([task('t1', 'Never started, apparently', 'queued')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(449, 't1')],
+    getComments: comments(trail(449)),
+    prState: () => ({ state: 'OPEN' }),
+    postBus: async (_c, m) => { bus.push(m); },
+    commentOn: async () => {},
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(bus.length, 1, 'a Queued ticket advertises as unstarted — that IS the duplicate-build shape');
+  assert.equal(clean.length, 0);
+});
+
+test('the two tiers get DIFFERENT verdicts on identical facts — the split is the fix', async () => {
+  const run = async (status) => {
+    const b = buckets();
+    await checkClaimableTasks([task('t1', 'same facts', status)], b.clean, b.repaired, b.unchecked, {
+      prIndex: () => [indexed(11, 't1')],
+      getComments: comments(trail(11)),
+      prState: () => ({ state: 'OPEN' }),
+      postBus: async () => {},
+      commentOn: async () => {},
+      isLive: true,
+      log: () => {},
+    });
+    return b;
+  };
+  const rework = await run('rework');
+  const queued = await run('queued');
+  assert.equal(rework.clean.length, 1);
+  assert.equal(queued.clean.length, 0);
+  assert.equal(rework.repaired.length, 0);
+  assert.ok(queued.repaired.length > 0, 'the flag lands in `repaired` as the action it took');
+});
+
+test('isReworkStatus reads the ONE status module, so the split cannot drift', () => {
+  assert.equal(isReworkStatus(loopStatuses.REWORK), true);
+  assert.equal(isReworkStatus('  ReWork '), true);
+  assert.equal(isReworkStatus(loopStatuses.QUEUED), false);
+  assert.equal(isReworkStatus(''), false);
+  assert.equal(isReworkStatus(null), false);
+});
+
+test('a REOPENED ticket is not re-closed — the closure note asks for exactly this', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  let moves = 0;
+  await checkClaimableTasks([task('t1', 'Closed too early', 'queued')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(500, 't1', 'MERGED')],
+    // oldest -> newest: the trail, this job's own closure note, then the reopen
+    getComments: async () => [
+      { id: 'c1', date: '1700000000000', comment_text: trail(500) },
+      { id: 'c2', date: String(Date.parse('2026-09-01T01:00:00Z')), comment_text: 'Closed to Live by reconcile' },
+      { id: 'c3', date: String(Date.parse('2026-09-02T09:00:00Z')), comment_text: 'That was wrong — reopening, the trail names the wrong PR.' },
+    ],
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AFTER_COMMENTS }),
+    commentOn: () => { moves += 1; },
+    updateStatus: () => { moves += 1; },
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(moves, 0, 'closing it again undoes the reopen every 30 minutes, forever');
+  assert.equal(repaired.length, 0);
+  assert.ok(unchecked.some((l) => /POSTDATES the merge/.test(l)),
+    'and it is reported as could-not-tell, never as clean');
+});
+
+test('the reopen guard is silent on the drift it EXISTS to repair', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const order = [];
+  await checkClaimableTasks([task('t1', 'Genuinely shipped', 'queued')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(500, 't1', 'MERGED')],
+    getComments: comments(trail(500)),   // every comment predates the merge
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AFTER_COMMENTS }),
+    commentOn: () => { order.push('comment'); },
+    updateStatus: (id, st) => { order.push(`status:${id}:${st}`); },
+    isLive: true,
+    log: () => {},
+  });
+  assert.deepEqual(order, ['comment', 'status:t1:Live'],
+    'a guard that also blocks the normal case is a repair half that never fires');
+});
+
+test('reopenBlock: a merge with no readable time is CANNOT TELL, never a licence to close', () => {
+  const spoke = [{ date: '1700000000000' }];
+  assert.equal(reopenBlock({ comments: spoke, mergedAt: '2026-09-01T00:00:00Z' }), null);
+  assert.match(String(reopenBlock({ comments: spoke, mergedAt: null })), /gave no merge time/);
+  assert.match(String(reopenBlock({ comments: spoke, mergedAt: 'not a date' })), /gave no merge time/);
+  assert.match(String(reopenBlock({ comments: [], mergedAt: '2026-09-01T00:00:00Z' })), /readable date/);
+});
+
+test('newestCommentAt takes the MAX, not the last — comment order is not guaranteed', () => {
+  assert.equal(newestCommentAt([{ date: '30' }, { date: '10' }, { date: '20' }]), 30);
+  assert.equal(newestCommentAt([{ date: 'nonsense' }, { date: null }]), 0);
+  assert.equal(newestCommentAt(null), 0);
+});
+
+test('a merged trail PR does NOT close the ticket while a nominating PR is still OPEN', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  let moves = 0;
+  await checkClaimableTasks([task('t1', 'Round two, no trail written', 'queued')], clean, repaired, unchecked, {
+    // the index sees BOTH: the merged round one, and the open round two whose
+    // `pr-opened` line was never written
+    prIndex: () => [indexed(601, 't1', 'OPEN'), indexed(500, 't1', 'MERGED')],
+    getComments: comments(trail(500)),
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AFTER_COMMENTS }),
+    commentOn: () => { moves += 1; },
+    updateStatus: () => { moves += 1; },
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(moves, 0, 'closing here buries a pull request that is still in flight');
+  assert.equal(repaired.length, 0);
+  assert.equal(clean.length, 0);
+  const line = unchecked.find((l) => /still OPEN/.test(l));
+  assert.ok(line, 'it lands in could-not-check');
+  assert.match(line, /#601/, 'naming the open PR');
+  assert.match(line, /PR #500 is MERGED/, 'and the merged one it would have closed on');
+});
+
+test('the stale-trail guard does not fire when every nominating PR is merged', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  let closed = false;
+  await checkClaimableTasks([task('t1', 'Shipped', 'rework')], clean, repaired, unchecked, {
+    prIndex: () => [indexed(500, 't1', 'MERGED'), indexed(499, 't1', 'CLOSED')],
+    getComments: comments(trail(500)),
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AFTER_COMMENTS }),
+    commentOn: () => {},
+    updateStatus: () => { closed = true; },
+    isLive: true,
+    log: () => {},
+  });
+  assert.equal(closed, true, 'a merged Rework ticket IS drift — the MERGED half was never split');
+  assert.equal(unchecked.length, 0);
 });

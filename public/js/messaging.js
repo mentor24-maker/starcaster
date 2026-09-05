@@ -1553,8 +1553,10 @@ App.messaging = (function () {
     };
   }
 
+  // Returns the created item's envelope. Most callers ignore it; the tag clone
+  // reads it back, because the name it asked for is not always the name it got.
   async function cloneMessagingItem(endpoint, payload) {
-    await api(endpoint, {
+    return api(endpoint, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -7983,12 +7985,27 @@ App.messaging = (function () {
       });
       const cloneBtn = App.makeIconButton('clone', 'Clone Tag', async function () {
         try {
-          await cloneMessagingItem('/api/messaging/tags', {
+          // `clone: true` tells the server this is a COPY of a row already in
+          // the table, not Messaging coining a new tag. Two things follow from
+          // it, and both are needed. The name is kept as stored rather than
+          // squeezed into hashtag shape — since the Media Manager writes to the
+          // same table, this row may be "Center Court North Entrance", and
+          // coining that created an unrelated "Center Court North" and called
+          // it a copy. And a name already taken is numbered rather than
+          // refused, because a clone has no mistake in it. The server may
+          // therefore hand back a different name from the one asked for, which
+          // is why the toast reports the one it got.
+          const created = await cloneMessagingItem('/api/messaging/tags', {
             tag: `${String(item.tag || '').trim()} Copy`.trim(),
             topic: String(item.topic || item.category || '').trim(),
             importance: normalizeTagImportance(item.importance),
+            clone: true,
           });
-          notify('Messaging tag cloned');
+          const saved = created?.tag || created?.data || null;
+          const savedName = String(saved?.tag || '').trim();
+          notify(savedName
+            ? `Messaging tag cloned as "${savedName}"`
+            : 'Messaging tag cloned');
           await refreshMessagingTags();
         } catch (err) {
           notify(err.message, true);
