@@ -56,7 +56,7 @@ const verifySweep = require('../lib/connections/verifySweep');
  * rule had been written here, where the first defect was. One definition, two
  * requires, so tuning either one tunes both.
  */
-const { MAX_CAUSE_LENGTH, readsAsClientProse } = require('../lib/connections/clientProse');
+const { CAUSE_LIMITS, readsAsClientProse } = require('../lib/connections/clientProse');
 
 const PREFIX = '/api/connections';
 
@@ -154,7 +154,7 @@ function attentionSentence(row) {
   // The fitness test runs on the STORED text, before asSentence capitalises it
   // and closes it — dressing a 502 page as a sentence first and then measuring
   // the result would be testing our own punctuation, not what was recorded.
-  const cause = readsAsClientProse(row?.lastError) ? asSentence(row?.lastError) : '';
+  const cause = readsAsClientProse(row?.lastError, 'stored') ? asSentence(row?.lastError) : '';
   if (cause) {
     const action = ATTENTION_ACTIONS[status] || 'Reconnect to fix it.';
     return `${cause} ${action}`;
@@ -662,7 +662,7 @@ module.exports = {
   CARD_STATES,
   ATTENTION_REASONS,
   AUTH_KIND_FIELDS,
-  MAX_CAUSE_LENGTH,
+  CAUSE_LIMITS,
   cardStateFor,
   readsAsClientProse,
   attentionSentence,

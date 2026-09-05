@@ -384,7 +384,10 @@ test('an amber card carries the recorded cause, not a generic line', async () =>
  */
 test('a cause that is not client prose falls back to the generic sentence', async () => {
   const h = withRoute();
-  const { attentionSentence, ATTENTION_REASONS, readsAsClientProse, MAX_CAUSE_LENGTH } = h.route;
+  const { attentionSentence, ATTENTION_REASONS, readsAsClientProse, CAUSE_LIMITS } = h.route;
+  // Every direct call below is on the STORED path — that is what attentionSentence
+  // reads. Naming it is required since round 3; see lib/connections/clientProse.js.
+  const STORED = CAUSE_LIMITS.stored;
 
   // What facebookPage.js really stores when a gateway answers instead of Meta.
   const gateway502 = '<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head>'
@@ -401,7 +404,7 @@ test('a cause that is not client prose falls back to the generic sentence', asyn
 
   // A short tag is markup too. Length alone would let this one straight through.
   assert.equal(
-    readsAsClientProse('<p>refused</p>'),
+    readsAsClientProse('<p>refused</p>', 'stored'),
     false,
     'a tag is markup at any length'
   );
@@ -409,7 +412,7 @@ test('a cause that is not client prose falls back to the generic sentence', asyn
   // Too long to be a sentence on a card: a body that happens to carry no tags
   // (a stack trace, a JSON dump, a plain-text error page) is still not prose.
   const wall = `the platform refused this connection. ${'diagnostic detail '.repeat(40)}`;
-  assert.ok(wall.length > MAX_CAUSE_LENGTH, 'the fixture has to actually exceed the limit');
+  assert.ok(wall.length > STORED, 'the fixture has to actually exceed the limit');
   assert.equal(
     attentionSentence({ status: 'revoked', lastError: wall, hasAccessToken: true }),
     ATTENTION_REASONS.revoked,
@@ -436,7 +439,7 @@ test('a cause that is not client prose falls back to the generic sentence', asyn
     'the grant has < 24 hours left before it stops working',
   ];
   for (const cause of realProse) {
-    assert.equal(readsAsClientProse(cause), true, `real prose must pass the gate: ${cause}`);
+    assert.equal(readsAsClientProse(cause, 'stored'), true, `real prose must pass the gate: ${cause}`);
     const card = attentionSentence({ status: 'error', lastError: cause, hasAccessToken: true });
     assert.notEqual(card, ATTENTION_REASONS.error, `it must not fall back: ${cause}`);
     // Passed through unedited apart from the first letter and a closing stop.
@@ -445,8 +448,8 @@ test('a cause that is not client prose falls back to the generic sentence', asyn
 
   // Exactly at the limit is prose; one character over is not. Pinned so the
   // boundary is a decision rather than whatever the comparison happened to be.
-  assert.equal(readsAsClientProse('a'.repeat(MAX_CAUSE_LENGTH)), true, 'the limit itself passes');
-  assert.equal(readsAsClientProse('a'.repeat(MAX_CAUSE_LENGTH + 1)), false, 'one over does not');
+  assert.equal(readsAsClientProse('a'.repeat(STORED), 'stored'), true, 'the limit itself passes');
+  assert.equal(readsAsClientProse('a'.repeat(STORED + 1), 'stored'), false, 'one over does not');
 });
 
 test('a card never carries a token, and never describes one', async (t) => {

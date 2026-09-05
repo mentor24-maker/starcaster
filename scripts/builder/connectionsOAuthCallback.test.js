@@ -37,7 +37,7 @@ const connectionOpsPath = require.resolve('../../lib/connectionOpsStore.js');
 
 const { signOAuthState, buildOAuthState } = require('../../lib/metaOAuthState.js');
 const instagram = require('../../lib/connections/adapters/instagram.js');
-const { readsAsClientProse, MAX_CAUSE_LENGTH } = require('../../lib/connections/clientProse.js');
+const { readsAsClientProse, CAUSE_LIMITS } = require('../../lib/connections/clientProse.js');
 
 const SCOPE = { projectId: 'proj_a', userId: 'user_1' };
 
@@ -303,16 +303,16 @@ test('a refused Instagram account is carried back verbatim, and nothing is store
  *
  * because `fetchJson` falls back to the whole response body when it will not
  * parse as JSON, and nothing between there and the browser asked whether the
- * result was a sentence. The page measured 165 characters — INSIDE
- * MAX_CAUSE_LENGTH — so the length half of the test would have let it through
- * and the markup half is what catches it. That is asserted below rather than
+ * result was a sentence. The page measured 165 characters — INSIDE the limit on
+ * either path — so the length half of the test would have let it through and
+ * the markup half is what catches it. That is asserted below rather than
  * described, because it is the reason both halves exist.
  */
 test('a gateway error page never reaches the client — the generic line goes instead', async () => {
   const gatewayPage = '<!DOCTYPE html>\n<html>\n<head><title>502 Bad Gateway</title></head>\n'
     + '<body>\n<center><h1>502 Bad Gateway</h1></center>\n<hr><center>nginx/1.18.0</center>\n'
     + '</body>\n</html>';
-  assert.ok(gatewayPage.length < MAX_CAUSE_LENGTH,
+  assert.ok(gatewayPage.length < CAUSE_LIMITS.connect,
     'the fixture has to be SHORT, or this passes for the wrong reason — length, not markup');
 
   const res = await callCallback({
@@ -340,6 +340,180 @@ test('a gateway error page never reaches the client — the generic line goes in
 });
 
 /**
+ * Round 3 of review: the limit that closed round 2 was measured on the WRONG PATH.
+ *
+ * Round 2 fixed the gateway page by putting `readsAsClientProse` in front of
+ * every `connect_error`. The predicate it reused carried one length limit, 300,
+ * and that 300 was honestly measured — against the verify SWEEP's longest
+ * sentence (189 characters). Nobody re-measured it against the CONNECT path,
+ * where `instagram.js` composes a fixed message and then appends the client's
+ * OWN account and Page names to it. Ordinary names push it past 300, so the
+ * sentence the whole slice exists to deliver was replaced by "Instagram refused
+ * the connection" — acceptance criterion 5 broken by the fix for criterion 5.
+ *
+ * Every case below is driven through the real callback route, and every fixture
+ * uses a real client's names at ordinary length rather than the short ones the
+ * older tests happen to use ("@richpersonal" on "Rich's Page" composes to 261
+ * and squeaks under 300, which is exactly why nothing caught this).
+ *
+ * Each asserts TWO things, and the first is what makes the test able to fail:
+ * that the composed sentence really is longer than the old shared limit, and
+ * that it survives to the client verbatim anyway.
+ */
+const OLD_SHARED_LIMIT = 300;
+
+/** A real client's names, at the length real names run to. */
+const REAL_HANDLE = 'delraybeachtennisctr';                                  // 20 chars
+const REAL_PAGE = 'Delray Beach Tennis Center & Swim and Racquet Club';      // 49 chars
+const OTHER_PAGE = 'Brandon Marinoff Photography';
+
+test('an ordinary Instagram refusal reaches the client whole — it is longer than the sweep ever composes', async () => {
+  const cases = [
+    {
+      what: 'a personal account, named with the Page it hangs off',
+      pages: [{
+        id: '90',
+        name: REAL_PAGE,
+        access_token: 'page-token',
+        connected_instagram_account: { id: '17900000000000001', username: REAL_HANDLE },
+      }],
+      expected: `${instagram.MESSAGES.personal} The account we found is `
+        + `@${REAL_HANDLE} on your Page "${REAL_PAGE}".`,
+      // The one sentence routes/engage.js calls the point of the slice: it names
+      // the account type as the thing to change, in the Instagram app.
+      mustSay: /Settings, Account type and tools/,
+    },
+    {
+      what: 'no Page linked, listing the Pages we looked at',
+      pages: [
+        { id: '91', name: REAL_PAGE, access_token: 'page-token' },
+        { id: '92', name: OTHER_PAGE, access_token: 'page-token-2' },
+      ],
+      expected: `${instagram.MESSAGES.notLinked} We looked at your Pages `
+        + `"${REAL_PAGE}", "${OTHER_PAGE}".`,
+      mustSay: /Sharing to other apps/,
+    },
+    {
+      // Worse than either of the two above and missed by round 3's own report:
+      // noPageToken is 281 characters BEFORE the locator, so it went over 300
+      // for every client whose Page has a name at all — even a one-letter one.
+      what: 'a Page whose permission is missing, named',
+      pages: [{
+        id: '',
+        name: REAL_PAGE,
+        access_token: '',
+        instagram_business_account: { id: '17841400000000009', username: 'delraytennis' },
+      }],
+      expected: `${instagram.MESSAGES.noPageToken} The Page we found is "${REAL_PAGE}".`,
+      mustSay: /leave every Facebook Page permission ticked/,
+    },
+  ];
+
+  for (const c of cases) {
+    assert.ok(
+      c.expected.length > OLD_SHARED_LIMIT,
+      `${c.what}: the fixture must exceed the old shared limit or this test cannot fail `
+      + `(${c.expected.length} chars)`
+    );
+    assert.ok(
+      c.expected.length <= CAUSE_LIMITS.connect,
+      `${c.what}: ${c.expected.length} chars is over the connect limit — re-measure it`
+    );
+
+    const res = await callCallback({
+      state: stateFor('instagram'),
+      replies: metaReplies(c.pages),
+    });
+
+    assert.equal(res.status, 302, c.what);
+    const q = params(res.location);
+    assert.equal(q.get('connect_oauth'), 'error', c.what);
+
+    const shown = q.get('connect_error') || '';
+    assert.equal(shown, c.expected, `${c.what}: the adapter's own sentence must arrive whole`);
+    assert.notEqual(
+      shown,
+      'Instagram refused the connection',
+      `${c.what}: the generic fallback replaced the sentence — the limit is measured on the wrong path`
+    );
+    assert.match(shown, c.mustSay, `${c.what}: the actionable half was lost`);
+
+    // Still a refusal, and still not a failure: nothing is stored, so the card
+    // stays not-connected with Connect offered.
+    assert.deepEqual(res.stored, [], `${c.what}: a refusal must store nothing at all`);
+  }
+});
+
+/**
+ * The connect path's limit is a decision with a stated worst case, not a sample.
+ *
+ * Round 3 asked for the worst case to be recorded the way the sweep's 189 is.
+ * `instagram.js` notLinked has no fixed ceiling — it lists EVERY Page a client
+ * manages — so what is pinned here is the stated design ceiling and what it
+ * buys, in the same shape as the comment in lib/connections/clientProse.js.
+ * If someone lowers `connect` towards the old 300, this says which real
+ * sentences that would start dropping.
+ */
+test('the connect limit clears what the adapters can actually compose', () => {
+  const bounded = [
+    // The longest sentence with a FIXED ceiling anywhere on the connect path.
+    ['x.js notConfigured', 470],
+    ['instagram noPageToken + a 75-char Page name', 381],
+    ['instagram personal + a 30-char handle and a 75-char Page', 343],
+  ];
+  for (const [what, measured] of bounded) {
+    assert.ok(
+      CAUSE_LIMITS.connect >= measured,
+      `${what} composes to ${measured} and the connect limit is ${CAUSE_LIMITS.connect}`
+    );
+  }
+
+  // The unbounded branch, stated rather than proved: notLinked grows 79
+  // characters per Page at Facebook's 75-character name limit.
+  const notLinkedAt = (pageCount, nameLength) => {
+    const names = Array.from({ length: pageCount }, () => 'p'.repeat(nameLength));
+    const where = ` We looked at ${pageCount === 1 ? 'your Page' : 'your Pages'} `
+      + `${names.map((n) => `"${n}"`).join(', ')}.`;
+    return `${instagram.MESSAGES.notLinked}${where}`.length;
+  };
+  assert.equal(notLinkedAt(9, 75), 958, 'nine Pages at Facebook maximum');
+  assert.ok(readsAsClientProse('a'.repeat(notLinkedAt(9, 75)), 'connect'),
+    'nine Pages at Facebook maximum must still reach the client');
+  assert.equal(notLinkedAt(10, 75), 1037, 'ten Pages at Facebook maximum');
+  assert.ok(!readsAsClientProse('a'.repeat(notLinkedAt(10, 75)), 'connect'),
+    'past the stated ceiling it falls back — documented, not silent');
+  assert.ok(readsAsClientProse('a'.repeat(notLinkedAt(20, 25)), 'connect'),
+    'twenty Pages at a realistic name length is well inside it');
+
+  // The sweep's own limit did not move: nothing about that path changed, and
+  // widening it would weaken a backstop nothing needed widened.
+  assert.equal(CAUSE_LIMITS.stored, 300, 'the sweep path was re-measured by nobody, so it holds');
+});
+
+/**
+ * The limit cannot be inherited by accident again.
+ *
+ * This is the structural half of round 3's fix. The defect was not that 300 was
+ * small; it was that a value measured for one path silently applied to another.
+ * A default parameter would be that same mistake written as a language feature,
+ * so there is none — a caller that does not name its path gets a loud throw on
+ * the first run rather than a quietly wrong limit in front of a client.
+ */
+test('a caller must say which path it is on — no limit is inherited by default', () => {
+  assert.throws(() => readsAsClientProse('an ordinary sentence'), /which path it is on/,
+    'a missing path fell back to a limit instead of refusing');
+  assert.throws(() => readsAsClientProse('an ordinary sentence', 'sweep'), /which path it is on/,
+    'a misspelled path fell back to a limit instead of refusing');
+
+  // And the two paths really are different numbers, or none of the above bites.
+  assert.notEqual(CAUSE_LIMITS.connect, CAUSE_LIMITS.stored,
+    'the two paths share one number again — round 3 is back');
+  const betweenTheTwo = 'a'.repeat(CAUSE_LIMITS.stored + 1);
+  assert.equal(readsAsClientProse(betweenTheTwo, 'stored'), false);
+  assert.equal(readsAsClientProse(betweenTheTwo, 'connect'), true);
+});
+
+/**
  * The predicate is ONE definition, not two that agree today.
  *
  * The rule was written inside routes/connections.js for round 1 and the second
@@ -352,7 +526,7 @@ test('both halves of the slice share one fitness test, not a copy of it', () => 
   const route = require('../../routes/connections.js');
   assert.equal(route.readsAsClientProse, readsAsClientProse,
     'routes/connections.js has its own copy of the predicate again');
-  assert.equal(route.MAX_CAUSE_LENGTH, MAX_CAUSE_LENGTH,
+  assert.equal(route.CAUSE_LIMITS, CAUSE_LIMITS,
     'the two halves disagree about how long a sentence may be');
 });
 

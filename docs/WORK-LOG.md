@@ -54,6 +54,26 @@ that answers in real sentences is still quoted word for word. And a very long
 web address inside one of those sentences now wraps inside the card instead of
 pushing it wider than the screen.
 
+A third round then caught the fix breaking the thing it was protecting. "Far
+too long to be a sentence" needs a number, and the number chosen was measured
+honestly — against the background check's own wording, which never runs past
+189 characters. It was then quietly reused on the other door, where the
+sentences are much longer, because Instagram's explanation ends by naming the
+client's own account and Page: *"…The account we found is
+@delraybeachtennisctr on your Page "Delray Beach Tennis Center & Swim and
+Racquet Club"."* Ordinary names push that past the limit, so the very sentence
+this whole piece of work exists to deliver was being thrown away and replaced
+with "Instagram refused the connection" — no hint that the answer is to switch
+the account type in the Instagram app. Two other refusals had it worse: the
+one about a missing Page permission went over the limit for *any* client whose
+Page has a name at all.
+
+So each of the two doors now carries its own limit, measured against the
+sentences that actually come through it, with the worst case written down
+beside it. And the check refuses to run at all unless it is told which door it
+is on — no more inheriting a number that was measured somewhere else, which is
+the mistake itself rather than the symptom.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually

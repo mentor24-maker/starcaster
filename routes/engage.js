@@ -1562,8 +1562,10 @@ function settingsOAuthReturnUrl(origin, params = {}) {
  * `completeConnectionsOAuth` puts that into `connect_error`. Measured with a
  * 502 stubbed at the adapter, the Facebook Page card read
  * "<!DOCTYPE html>\n<html>\n<head><title>502 Bad Gateway</title>…" in amber.
- * Note it was 165 characters — inside MAX_CAUSE_LENGTH, so length would not
- * have caught it; the markup test is what does.
+ * Note it was 165 characters — inside the length limit on either path, so
+ * length would not have caught it; the markup test is what does. That is why
+ * round 3's fix could raise the connect limit to 1000 without weakening this:
+ * the two halves catch different things, and this is the markup half's case.
  *
  * ── Why the gate is HERE and not in the panel ──────────────────────────────
  *
@@ -1590,7 +1592,7 @@ function clientSafeConnectParams(params) {
     || 'This platform';
 
   const error = safeText(out.connect_error);
-  if (error && !readsAsClientProse(error)) {
+  if (error && !readsAsClientProse(error, 'connect')) {
     out.connect_error = `${displayName} refused the connection`;
   }
 
@@ -1598,7 +1600,7 @@ function clientSafeConnectParams(params) {
   // detail a client did not have. Machinery in that slot is worth less than
   // nothing, so it is dropped rather than replaced.
   const notice = safeText(out.connect_notice);
-  if (notice && !readsAsClientProse(notice)) {
+  if (notice && !readsAsClientProse(notice, 'connect')) {
     out.connect_notice = '';
   }
 
