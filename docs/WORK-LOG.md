@@ -26,6 +26,56 @@ turn, so it can still interrupt one waiting change. Making the fast track wait
 behind the machines is Dane's call, not a decision to slip in quietly, so it
 has been written up separately.
 
+## 2026-09-05 — The panel layout checker could not fail on the panel it had just checked (#613)
+
+`check:panels` is the check that looks at the admin panels in a real browser
+and says whether the labels and fields line up. It is the one check the
+automated system cannot run for itself, because it needs a browser — so it
+only ever runs when somebody runs it, and the rule for trusting it is to break
+the layout on purpose first and watch it go red.
+
+On 3 September somebody did that on the Trigger panel and it stayed green
+through two deliberate breaks, including undoing the exact fix that had just
+shipped for that panel. A check that cannot fail is worse than no check,
+because its green gets quoted as proof.
+
+It turned out the checker had already measured the problem and was throwing
+the number away. It asked whether a label's column was too narrow — a cramped
+label is the thing the rule was written against — and never asked whether one
+was too wide. With the fix undone, the word "Trigger" was sitting in a column
+more than seven times wider than the word: 362 pixels of dead space, which is
+exactly the gap the original ticket was about. There was a second reason too:
+three of the four Trigger blocks only show one row, and most of the other
+tests work by comparing rows to each other, so with one row there is nothing
+to disagree with.
+
+This adds a ceiling on that dead space, set from measurements rather than
+picked: every correctly-built block in the app sits at exactly 40 pixels, the
+loosest legitimate block anywhere is 133, and the fault is 362 — so the
+ceiling is 140. It compares a block against itself, so it works on a one-row
+block too. The checker also now says how many blocks only showed one row, on
+good runs as well as bad, so its final tally can never again be read as a
+verdict over comparisons that never happened.
+
+Review sent the first attempt back, and it was right to: the new test was the
+same shape as the fault it was written for. Some of these panels put two
+label-and-field pairs side by side on one row — five of the ten in the test
+page do — and the new ceiling looked at the whole block at once. So a
+correct left-hand column set the number, and a wrong right-hand column was
+invisible. The measurement now runs on each column separately, from a single
+shared definition of what a column is, so the "too wide" test and the "too
+narrow" test can never again be asking about different things. Proved by
+making only the right-hand column wrong: this version goes red on it, the
+first version stayed green on exactly the same break. Two smaller repairs
+went in with it — the one-row tally was being added up once per screen width,
+so it read 9 when the real answer was 3, and a comment claimed the tally
+printed on every run while the code printed nothing when it was zero.
+
+Proven the way the ticket asked: putting the original fault back now produces
+12 failures across all four panels at all three screen widths, and taking it
+out again goes green. The new rule is also plain enough to be tested without a
+browser, so for the first time a piece of this check runs in CI on every pull
+request.
 ## 2026-09-05 — A new page keeps the template you chose (#614)
 
 Making a brand new page in the Builder, you could pick a Template and a Theme,
