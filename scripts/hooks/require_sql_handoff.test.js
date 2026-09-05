@@ -25,8 +25,25 @@ const {
  * with real JSON and asserts it actually refuses.
  */
 
+/**
+ * Every scratch directory this suite creates, swept in test.after().
+ *
+ * `fs.mkdtempSync` makes a real directory in a MACHINE-WIDE temp dir and
+ * nothing removes it, so each run left four behind and they accumulated: 1,997
+ * `sqlhandoff-*` repos on the mini as of 2026-09-05, plus 41 each of the
+ * others. The state FILES were already cleaned up (see FALLBACK_STATE_FILES);
+ * the directories holding them were not, which is the same oversight one level
+ * up.
+ */
+const SCRATCH_DIRS = [];
+function scratchDir(prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  SCRATCH_DIRS.push(dir);
+  return dir;
+}
+
 function makeRepo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sqlhandoff-'));
+  const dir = scratchDir('sqlhandoff-');
   const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
   git('init', '-b', 'main');
   git('config', 'user.email', 'test@example.com');
@@ -84,6 +101,11 @@ function runHook(dir, { message = '', sessionId = 's1', stopHookActive, env } = 
  * run two red, no code changed in between.
  *
  * Registered for cleanup so the suite does not litter the machine either.
+ *
+ * Any test that can reach the fallback at all needs one of these. Since the
+ * read merges every candidate rather than stopping at the first that parses
+ * (see openState), a fixed id shared with a leftover tmpdir file would be read
+ * back on every turn, not only when the git dir refuses the write.
  */
 const FALLBACK_STATE_FILES = [];
 let sidCounter = 0;
@@ -97,11 +119,17 @@ test.after(() => {
   for (const file of FALLBACK_STATE_FILES) {
     try { fs.rmSync(file, { force: true }); } catch { /* best effort */ }
   }
+  for (const dir of SCRATCH_DIRS) {
+    // A test that chmods a git dir restores it in its own `finally`; this is
+    // only the sweep, so a directory it still cannot enter is left alone
+    // rather than failing the run at the very end.
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
 });
 
 /** A PATH carrying node but no git — the mini's bare-PATH condition. */
 function pathWithoutGit() {
-  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'nogit-bin-'));
+  const bin = scratchDir('nogit-bin-');
   fs.symlinkSync(process.execPath, path.join(bin, 'node'));
   return { ...process.env, SKIP_SQL_HANDOFF: '', PATH: bin };
 }
@@ -399,7 +427,7 @@ test('refuses NOTHING when nowhere is writable — no count, no refusal', () => 
   addSql(wt);
   const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: wt, encoding: 'utf8' }).trim();
   fs.chmodSync(gitDir, 0o500);
-  const sealed = fs.mkdtempSync(path.join(os.tmpdir(), 'sealed-'));
+  const sealed = scratchDir('sealed-');
   fs.chmodSync(sealed, 0o500);
   try {
     const env = { ...process.env, SKIP_SQL_HANDOFF: '', TMPDIR: sealed };
@@ -411,6 +439,86 @@ test('refuses NOTHING when nowhere is writable — no count, no refusal', () => 
   } finally {
     fs.chmodSync(gitDir, 0o700);
     fs.chmodSync(sealed, 0o700);
+  }
+});
+
+test('a state file that goes read-only MID-SESSION still stands down', () => {
+  // THE FREEZE. The read returned the first candidate that PARSED and the
+  // write returned the first that ACCEPTED A WRITE, so once a state file
+  // existed in the git dir and then lost write permission -- readable still,
+  // and the directory itself still writable -- it shadowed the fallback for
+  // good. Every write landed in tmpdir; every read came back from the stale
+  // git-dir copy at 2; `refusals` never reached 3.
+  //
+  // Measured 2026-09-05 on 9351ae64, twelve turns: 2,2,2,2,2,2,2,2,2,2,2,2.
+  //
+  // Note the chmod is on the FILE, not the directory. Chmod 500 on the git dir
+  // does NOT reproduce this -- directory write permission is needed to create
+  // or unlink a file, not to rewrite one that already exists, so the git-dir
+  // write keeps succeeding and the fallback is never reached at all. A first
+  // reproduction attempt did exactly that and came back clean.
+  const wt = makeWorktree();
+  addSql(wt);
+  const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: wt, encoding: 'utf8' }).trim();
+  const sessionId = fallbackSid('frozen');
+  const stateFile = path.join(gitDir, `sql-handoff-${sessionId}.json`);
+
+  const codes = [runHook(wt, { message: 'nope', sessionId }).code];
+  codes.push(runHook(wt, { message: 'nope', sessionId }).code);
+
+  assert.equal(
+    JSON.parse(fs.readFileSync(stateFile, 'utf8')).refusals,
+    2,
+    'precondition: the git dir must have taken two writes, or there is nothing to freeze'
+  );
+  fs.chmodSync(stateFile, 0o400);
+
+  try {
+    for (let i = 0; i < 3; i++) codes.push(runHook(wt, { message: 'nope', sessionId }).code);
+    assert.deepEqual(
+      codes,
+      [2, 2, 2, 0, 0],
+      'a stale readable copy must not shadow the count the fallback is now carrying'
+    );
+    assert.equal(
+      JSON.parse(fs.readFileSync(stateFile, 'utf8')).refusals,
+      2,
+      'and the frozen copy must genuinely still say 2 — otherwise the write got in and this proves nothing'
+    );
+  } finally {
+    fs.chmodSync(stateFile, 0o600); // or the scratch dir cannot be cleaned up
+  }
+});
+
+test('a hand-off arriving after the state file froze is recorded, not re-demanded', () => {
+  // The other half of the same read. `handedOff` lives in the same file, so a
+  // file the operator has already been given was demanded again on every turn
+  // for the rest of the session: the turn carrying the block wrote it to the
+  // fallback and the next read went straight back to the stale git-dir copy.
+  //
+  // Measured on 9351ae64 across the three turns below: 0,2,2.
+  const wt = makeWorktree();
+  const file = addSql(wt);
+  const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: wt, encoding: 'utf8' }).trim();
+  const sessionId = fallbackSid('frozenhandoff');
+  const stateFile = path.join(gitDir, `sql-handoff-${sessionId}.json`);
+
+  assert.equal(runHook(wt, { message: 'nope', sessionId }).code, 2);
+  fs.chmodSync(stateFile, 0o400);
+
+  try {
+    const codes = [
+      runHook(wt, { message: renderBlock('add-revisions', file), sessionId }).code,
+      runHook(wt, { message: 'Anything else?', sessionId }).code,
+      runHook(wt, { message: 'Nor here.', sessionId }).code,
+    ];
+    assert.deepEqual(
+      codes,
+      [0, 0, 0],
+      're-demanding a file the operator already has is the other half of the frozen read'
+    );
+  } finally {
+    fs.chmodSync(stateFile, 0o600);
   }
 });
 
@@ -470,7 +578,7 @@ test('with git off PATH it stands ASIDE — 0,0,0, not 2,2,2', () => {
 });
 
 test('with the cwd outside any git repo it stands aside', () => {
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'norepo-'));
+  const outside = scratchDir('norepo-');
   const codes = [];
   for (let i = 0; i < 5; i++) codes.push(runHook(outside, { message: 'nope', sessionId: 'norepo' }).code);
   assert.deepEqual(codes, [0, 0, 0, 0, 0]);
