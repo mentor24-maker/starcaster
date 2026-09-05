@@ -274,3 +274,134 @@ test('a tenant admin may manage their own tags', () => {
   assert.equal(reach('/api/asset-tags', 'POST'), true);
   assert.equal(reach('/api/asset-tags/12', 'DELETE'), true);
 });
+
+// ── Round 2: the seam between the two vocabularies ───────────────────────
+//
+// Everything above is about the consolidation being correct. These are about
+// the two defects review found once it WAS correct — both of them at the point
+// where the Media Manager and Messaging now read and write the same rows.
+
+const {
+  authoredText,
+  storedText,
+  rowToMessagingTag,
+  buildTagPatch,
+  isDuplicateTag,
+  duplicateTagMessage,
+} = require('../../lib/messagingTagsStore');
+
+test('a media tag is not truncated on the way OUT of the messaging store', () => {
+  // The defect: rowToMessagingTag ran every row through normalizeMessagingTag,
+  // so a four-word media tag came back as three words. Display was the small
+  // half of it; see the next test for the half that rewrote the database.
+  const stored = 'Center Court North Entrance';
+  assert.equal(
+    rowToMessagingTag({ id: 1, tag: stored }).tag,
+    stored,
+    'the messaging vocabulary must not be applied when READING a shared row'
+  );
+});
+
+test('opening a media tag in Messaging and saving it leaves the tag alone', () => {
+  // This is the whole bug, end to end and in order: the row is read, the edit
+  // form prefills `tag` from what it read (public/js/messaging.js
+  // openMessagingTagEditForm), and saving PATCHes that value straight back. If
+  // either end normalizes, an admin who opened the tag to change its TOPIC
+  // silently rewrites the shared row to a truncation that no longer matches
+  // the strings on assets.tags.
+  const stored = 'Center Court North Entrance';
+  const prefilled = rowToMessagingTag({ id: 1, tag: stored }).tag;
+  const written = buildTagPatch({ tag: prefilled }).patch.tag;
+  assert.equal(written, stored, 'a round trip through the edit form must be lossless');
+});
+
+test('the messaging vocabulary still applies when Messaging COINS a tag', () => {
+  // The fix is a narrowing, not a removal. Three words and title case is right
+  // for a hashtag, and lib/webPageTagImport.js + lib/assetFieldImport.js both
+  // rely on it. If this ever stops shaping a NEW tag, those importers change
+  // behaviour too.
+  assert.equal(authoredText('center court north entrance'), 'Center Court North');
+  assert.equal(storedText('center court north entrance'), 'center court north entrance');
+});
+
+test('storedText only trims and collapses — it never reshapes', () => {
+  assert.equal(storedText('  Center   Court  '), 'Center Court');
+  assert.equal(storedText('lower case stays lower'), 'lower case stays lower');
+  assert.equal(storedText(undefined), '');
+});
+
+// ── A duplicate is a sentence, not a constraint dump ─────────────────────
+
+test('createMessagingTag asks the uniqueness question BEFORE the index does', () => {
+  // idx_messaging_tags_project_tag lands with docs/SQL/messaging_tags_source.sql.
+  // Until round 2 there was no check here at all, so the moment Dane applied
+  // the migration — the one step this ticket hands to him — Messaging > Tags
+  // would have started putting the raw constraint name in a toast.
+  const store = read('lib/messagingTagsStore.js');
+  const start = store.indexOf('async function createMessagingTag');
+  assert.ok(start > 0, 'createMessagingTag must exist');
+  const body = store.slice(start, store.indexOf('async function getMessagingTag'));
+  const check = body.indexOf('findMessagingTagByName');
+  const insert = body.indexOf("method: 'POST'");
+  assert.ok(check > 0, 'create must look for an existing tag');
+  assert.ok(check < insert, 'the lookup must run BEFORE the insert, not after it fails');
+  assert.match(body, /status: 409/, 'a duplicate must be refused as a conflict');
+});
+
+test('renaming onto an existing tag is refused the same way, excluding itself', () => {
+  // The same index, one verb over. Excluding the row being edited matters:
+  // without it, saving a tag whose name did not change reports the tag as a
+  // duplicate of itself.
+  const store = read('lib/messagingTagsStore.js');
+  const start = store.indexOf('async function updateMessagingTag');
+  const body = store.slice(start, store.indexOf('async function deleteMessagingTag'));
+  assert.match(body, /findMessagingTagByName/, 'update must check for a clash too');
+  assert.match(body, /Number\(r\.id\) !== tagId/, 'the row being edited must be excluded');
+});
+
+test('a duplicate refusal is recognised, and nothing else is', () => {
+  // Landmine 15 again, in the other direction: widening this would swallow a
+  // permission or RLS refusal and report it as "that tag already exists".
+  assert.equal(isDuplicateTag({
+    ok: false,
+    error: 'duplicate key value violates unique constraint "idx_messaging_tags_project_tag"',
+  }), true);
+
+  assert.equal(isDuplicateTag({ ok: true }), false);
+  assert.equal(isDuplicateTag(null), false);
+  assert.equal(isDuplicateTag({ ok: false, error: 'permission denied for table messaging_tags' }), false);
+  assert.equal(isDuplicateTag({ ok: false, error: 'new row violates row-level security policy' }), false);
+  assert.equal(isDuplicateTag({
+    ok: false,
+    error: "Could not find the 'source' column of 'messaging_tags' in the schema cache",
+  }), false, 'a missing column is a different problem with a different fix');
+});
+
+test('the refusal says WHY, including when the vocabulary caused the clash', () => {
+  // Landmine 17. "Clone Tag" appends " Copy"; for a three-word tag the fourth
+  // word is dropped again, so the clone collides with the tag it was cloned
+  // from. Without the second half of this message that reads as the button
+  // being broken.
+  const shortened = duplicateTagMessage('Awareness Tag Name Copy', 'Awareness Tag Name');
+  assert.match(shortened, /already has a tag called "Awareness Tag Name"/);
+  assert.match(shortened, /becomes "Awareness Tag Name"/, 'it must name what the tag became');
+  assert.match(shortened, /at most three words/, 'and why it became that');
+
+  // When nothing was reshaped, the explanation would be a lie, so it is absent.
+  const plain = duplicateTagMessage('awareness', 'Awareness');
+  assert.match(plain, /already has a tag called "Awareness"/);
+  assert.doesNotMatch(plain, /three words/, 'do not explain a shortening that did not happen');
+  assert.match(plain, /without regard to capitals/, 'say why "awareness" clashed with "Awareness"');
+});
+
+// ── Both stores read the same table, so they read the same amount of it ──
+
+test('the two stores share one row cap, because they share one table', () => {
+  // listAssetTags capped at 1000 while listMessagingTags used 5000. Past 1000
+  // tags the Media Manager's idempotency lookup stops finding existing tags —
+  // it filters the list rather than querying lower(tag) — and the picker
+  // silently shows a short list.
+  assert.match(read('lib/assetTagsStore.js'), /limit=5000/);
+  assert.doesNotMatch(read('lib/assetTagsStore.js'), /limit=1000/);
+  assert.match(read('lib/messagingTagsStore.js'), /Math\.min\(Number\(limit\) \|\| 5000, 5000\)/);
+});

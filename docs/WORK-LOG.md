@@ -1,4 +1,4 @@
-## 2026-09-04 — One list of tags instead of two, and each tag knows where it came from (#611)
+## 2026-09-05 — One list of tags instead of two, and each tag knows where it came from (#611)
 
 Starcaster had two separate lists of tags, and only one of them was ever being
 used. `messaging_tags` has held the real ones since March — 149 tags across two
@@ -27,6 +27,28 @@ The database needs one small change before the stamp can be stored, which is
 Dane's to apply. Nothing breaks if it is not applied straight away: a tag
 created in the meantime is still saved, and the code says out loud that it
 could not record where the tag came from rather than pretending it did.
+
+Review caught two things before this went live, both of them at the new join
+between the two lists. The first: a photo tag was being kept in full when it
+was saved but shortened again every time it was *read*, so "Center Court North
+Entrance" showed up in the Messaging tag list as "Center Court North". That was
+worse than it looked, because opening that tag in Messaging to change its topic
+filled the name box with the shortened version and saved it back — so a tidy-up
+that had nothing to do with the name would have quietly renamed the tag for
+good, and it would no longer have matched the photos filed under it. The
+shortening now happens in one place only: when Messaging creates a brand new
+tag of its own. Reading a tag, and saving one, leave the name exactly as it is.
+
+The second: once Dane applies the database change, a project cannot have the
+same tag twice. The Media Manager already handled that gracefully, but
+Messaging did not — it would have shown the raw database complaint,
+`duplicate key value violates unique constraint "idx_messaging_tags_project_tag"`,
+in a little pop-up. It now says which tag already exists and, where the
+shortening rule is what caused the clash, says that too — which matters for the
+Clone button, since cloning "Junior Tennis Camp" sends "Junior Tennis Camp
+Copy", the fourth word is dropped again, and it lands right back on the tag it
+was cloned from. Renaming a tag onto an existing one gets the same sentence;
+saving a tag without renaming it is untouched.
 
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
