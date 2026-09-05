@@ -489,3 +489,61 @@ test('a half-written state file does not silently reset the counter', () => {
   for (let i = 0; i < 5; i++) codes.push(runHook(wt, { message: 'nope', sessionId: 'junk' }).code);
   assert.deepEqual(codes, [2, 2, 2, 0, 0], 'a junk file must not become an unbounded refusal loop');
 });
+
+test('a hand-off arriving on a CONTINUATION turn is still recorded', () => {
+  // The regression that sent PR #609 back to Rework on 2026-09-05.
+  //
+  // The stop_hook_active exit was placed at the very top of main(), before the
+  // block that reads the reply and records what it handed off. But a
+  // continuation turn is exactly where the hand-off arrives: the hook refuses,
+  // the agent adds the block, and THAT turn carries the flag. So the reply that
+  // solved the problem was never read, `handedOff` never persisted, and the
+  // hook re-demanded the same file on every ordinary turn afterwards --
+  // spending its whole three-refusal brake on SQL the operator already had.
+  //
+  // Measured on the branch with the exit at the top: 2,0,2,0,2,0.
+  // Measured on main at 03340bba, which had no exit at all:  2,0,0,0,0,0.
+  //
+  // The flag must suppress the REFUSAL, not the LEARNING.
+  const wt = makeWorktree();
+  const file = addSql(wt);
+  const block = renderBlock('add-revisions', file);
+
+  const codes = [
+    runHook(wt, { message: 'nope', sessionId: 'contlearn' }).code,
+    runHook(wt, { message: block, sessionId: 'contlearn', stopHookActive: true }).code,
+    runHook(wt, { message: 'Anything else?', sessionId: 'contlearn' }).code,
+    runHook(wt, { message: block, sessionId: 'contlearn', stopHookActive: true }).code,
+    runHook(wt, { message: 'Still nothing to hand off.', sessionId: 'contlearn' }).code,
+    runHook(wt, { message: 'Nor here.', sessionId: 'contlearn' }).code,
+  ];
+
+  assert.deepEqual(
+    codes,
+    [2, 0, 0, 0, 0, 0],
+    'the block arrived on t2 — re-demanding it on t3 means the continuation threw the reply away'
+  );
+});
+
+test('the brake survives an ordinary hand-off, so a LATER new file is still caught', () => {
+  // The consequence of the test above, and the reason it is a defect rather
+  // than a nuisance: with the hand-off never recorded, three ordinary turns
+  // exhaust the brake, and a brand new SQL file committed afterwards -- never
+  // handed off, precisely what this hook exists for -- is missed in silence.
+  //
+  // Measured on the branch: 0 (MISSED). On main: 2 (caught).
+  const wt = makeWorktree();
+  const first = addSql(wt, 'add_first.sql');
+  const block = renderBlock('add-revisions', first);
+
+  runHook(wt, { message: 'nope', sessionId: 'brakeleft' });
+  runHook(wt, { message: block, sessionId: 'brakeleft', stopHookActive: true });
+  runHook(wt, { message: 'next turn', sessionId: 'brakeleft' });
+  runHook(wt, { message: 'and another', sessionId: 'brakeleft' });
+
+  addSql(wt, 'add_second.sql');
+  const result = runHook(wt, { message: 'here you go', sessionId: 'brakeleft' });
+
+  assert.equal(result.code, 2, 'a new, never-handed-off SQL file must still be caught');
+  assert.match(result.stderr, /add_second\.sql/, 'and it must name the file that is outstanding');
+});

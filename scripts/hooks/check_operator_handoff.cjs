@@ -130,6 +130,14 @@ function main(input) {
   // on a continuation BOTH hooks stand down together, so a second problem is
   // reported on a later turn or not at all. Still the safe direction -- a miss,
   // not a wedge.
+  //
+  // WHERE the two hooks differ, and why this one may exit at the very top: it
+  // keeps no state between turns. It judges the message text and nothing else,
+  // so a continuation it never reads costs it nothing. The SQL hook carries
+  // `handedOff` across the session, and a continuation is exactly where the
+  // hand-off block arrives -- so its stand-down sits AFTER the reply is read
+  // and recorded, not before. Placing it here by analogy is the defect that
+  // sent PR #609 back on 2026-09-05.
   if (payload && payload.stop_hook_active) process.exit(0);
 
   // Only the main agent's Stop event. A subagent's reply is read by this

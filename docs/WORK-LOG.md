@@ -1,4 +1,4 @@
-## 2026-09-04 — The safety brake on the SQL hand-off check now actually works (#609)
+## 2026-09-05 — The safety brake on the SQL hand-off check now actually works (#609)
 
 When an agent finishes a turn, two automatic checks read what it was about to
 say. One of them refuses the turn if the work added a SQL file you need to run
@@ -23,6 +23,20 @@ turn end rather than refusing with no limit. Separately, it now respects the
 signal the system itself sends to say "this turn has already been blocked
 once", which is a second, independent brake, so neither one failing on its own
 can wedge a session.
+
+That last part came back for a second round, because the first attempt at it
+had the order wrong. The signal saying "this turn has already been blocked
+once" arrives on exactly the turn where the agent supplies the missing
+hand-off — that is what a continuation *is*. The check was stepping aside the
+instant it saw the signal, before reading the reply, so it never noticed that
+the hand-off it had asked for was sitting right there. It then demanded the
+same file again on the next turn, and the one after, spending its whole
+three-try limit on SQL you already had — and once that limit was spent, a
+genuinely new SQL file added later in the same session went through unnoticed.
+That is the check failing at the one job it exists for. It now reads the reply
+and records what was handed off first, and only then steps aside. The other
+check can step aside immediately, and still does, because it remembers nothing
+between turns and so has nothing to lose by skipping one.
 
 Two of the things the ticket asked for turned out to be wrong, and they were
 corrected on the ticket before any code was written rather than built as

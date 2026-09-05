@@ -28,6 +28,13 @@
  * outright. Two limits, so neither one failing alone can wedge the session. A
  * hook that can wedge a conversation shut is worse than the miss it prevents.
  *
+ * The flag stands the REFUSAL down; it does not stand the READING down, and
+ * the order is load-bearing. A continuation turn is where the hand-off block
+ * arrives, so a hook that exits before reading the reply throws away the very
+ * turn that solved it -- see the comment at the check itself for the six turns
+ * that measured it. The sibling hook has no such ordering to get wrong,
+ * because it keeps no state between turns.
+ *
  * The refusal counter depends on the state file actually being written, and
  * that has failed twice for two different reasons:
  *
@@ -139,19 +146,6 @@ function main(input) {
     process.exit(0); // unparseable — never wedge the session
   }
 
-  // The harness's OWN infinite-loop guard: it sets this when the turn is
-  // continuing because a Stop hook already blocked it once. Honouring it is
-  // what makes the refusal counter the SECOND brake rather than the only one,
-  // so neither failing alone can wedge the session.
-  //
-  // This also settles the asymmetry recorded at check_operator_handoff.cjs:124.
-  // That hook has honoured the flag all along and this one did not, so whenever
-  // this one blocked first, the next Stop carried the flag, the sibling exited
-  // immediately, and a reply with BOTH problems only ever got the SQL
-  // complaint. Both hooks now stand down together on a continuation, which is
-  // the safe direction for the same reason it was there: a miss, not a wedge.
-  if (payload?.stop_hook_active) process.exit(0);
-
   const cwd = String(payload?.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd());
   const root = repoRoot(cwd);
   if (!root) process.exit(0);
@@ -189,6 +183,39 @@ function main(input) {
 
   const outstanding = sqlFiles.filter((sql) => !state.handedOff.includes(sql));
   if (!outstanding.length) {
+    writeState(files, state);
+    process.exit(0);
+  }
+
+  // The harness's OWN infinite-loop guard: it sets this when the turn is
+  // continuing because a Stop hook already blocked it once. Honouring it is
+  // what makes the refusal counter the SECOND brake rather than the only one,
+  // so neither failing alone can wedge the session.
+  //
+  // IT SUPPRESSES THE REFUSAL, NOT THE LEARNING, AND THAT IS WHY IT IS HERE
+  // RATHER THAN AT THE TOP OF main(). A continuation turn is exactly where the
+  // hand-off arrives -- this hook refuses, the agent adds the block, and THAT
+  // turn carries the flag. Exiting before the loop above reads the reply threw
+  // the solving turn away: `handedOff` never persisted, the same file was
+  // re-demanded on every ordinary turn after it, and the whole three-refusal
+  // brake was spent on SQL the operator already had. Measured over the six-turn
+  // dance, 2026-09-05: 2,0,2,0,2,0 with the exit at the top, against 2,0,0,0,0,0
+  // with it here. A new SQL file committed afterwards was then missed in
+  // silence, which is this hook failing at its actual job.
+  //
+  // check_operator_handoff.cjs can exit at the top and does, because it keeps
+  // no per-file state -- it judges message text and nothing else, so a
+  // continuation costs it nothing. This one carries `handedOff` and has
+  // something to lose.
+  //
+  // This ordering also settles the asymmetry recorded at
+  // check_operator_handoff.cjs:124. That hook has honoured the flag all along
+  // and this one did not, so whenever this one blocked first, the next Stop
+  // carried the flag, the sibling exited immediately, and a reply with BOTH
+  // problems only ever got the SQL complaint. Both hooks now stand down
+  // together on a continuation, which is the safe direction for the same reason
+  // it was there: a miss, not a wedge.
+  if (payload?.stop_hook_active) {
     writeState(files, state);
     process.exit(0);
   }
