@@ -5879,6 +5879,16 @@ function EventCalendarPreview({
 
 const MEDIA_MANAGER_SOURCE = "admin-media-manager";
 
+/**
+ * What a tag created HERE records as its origin. Deliberately not
+ * MEDIA_MANAGER_SOURCE: assets.source records which upload surface a file
+ * came through, while messaging_tags.source records which side of the
+ * platform created the tag — the question Dane asked ("flagged as having
+ * come from the Client Admin"). Validated server-side against the allowlist
+ * in lib/messagingTagSource.js; an unrecognised value stores as "".
+ */
+const CLIENT_ADMIN_TAG_SOURCE = "client-admin";
+
 /** Mirrors GALLERY_IMAGE_EXTENSIONS / GALLERY_VIDEO_EXTENSIONS. */
 const MEDIA_IMAGE_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,.svg";
 const MEDIA_VIDEO_ACCEPT = ".mp4,.mov,.m4v,.webm,.ogg";
@@ -5907,7 +5917,7 @@ type MediaAsset = {
 
 type MediaUploadProgress = { name: string; index: number; total: number };
 
-type MediaTag = { id: number; tag: string };
+type MediaTag = { id: number; tag: string; source?: string };
 
 type MediaCategory = { id: number; assetType: string; category: string };
 
@@ -5983,6 +5993,9 @@ function MediaManagerPreview({
   const [projectCategories, setProjectCategories] = useState<string[]>([]);
   const [filters, setFilters] = useState<MediaFilters>(EMPTY_MEDIA_FILTERS);
   const [tagTarget, setTagTarget] = useState<MediaAsset | null>(null);
+  // Said inside the tag modal only, and cleared every time it opens — the
+  // shared status line renders behind the modal, where nobody would see it.
+  const [tagNotice, setTagNotice] = useState("");
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -6056,6 +6069,7 @@ function MediaManagerPreview({
     setTagDraft(Array.isArray(asset.tags) ? [...asset.tags] : []);
     setNewTag("");
     setErrorMsg("");
+    setTagNotice("");
     loadProjectTags();
   }
 
@@ -6078,7 +6092,7 @@ function MediaManagerPreview({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
-        body: JSON.stringify({ tag })
+        body: JSON.stringify({ tag, source: CLIENT_ADMIN_TAG_SOURCE })
       });
       const d = await res.json().catch(() => null);
       // 200 means it already existed, 201 means it is new. Both are success —
@@ -6086,6 +6100,15 @@ function MediaManagerPreview({
       if (!res.ok) throw new Error(readApiErrorMessage(d, "Failed to add tag."));
       const saved = (d?.tag ?? d?.data) as MediaTag | undefined;
       const name = normalizeMediaTag(saved?.tag || tag);
+      // The tag saved, but this site's tag list is not recording WHERE tags
+      // come from yet — the database column is still to be added. Said out
+      // loud because the alternative is a plain success on a tag that is
+      // stored unflagged for good, with nothing anywhere to show for it.
+      setTagNotice(
+        (d as { meta?: { sourceRecorded?: boolean } })?.meta?.sourceRecorded === false
+          ? `Tag "${name}" was added, but it is not recorded as coming from this admin — a Starcaster setup step is still outstanding.`
+          : ""
+      );
       setNewTag("");
       loadProjectTags();
       setTagDraft((prev) => (
@@ -6549,6 +6572,7 @@ function MediaManagerPreview({
               </button>
             </div>
 
+            {tagNotice ? <div className="builder-media-manager-status">{tagNotice}</div> : null}
             {errorMsg ? <div className="builder-media-manager-error">{errorMsg}</div> : null}
 
             <div className="builder-media-manager-confirm-actions">

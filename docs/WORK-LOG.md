@@ -48,6 +48,94 @@ Proven the way the ticket asked: putting the original fault back now produces
 out again goes green. The new rule is also plain enough to be tested without a
 browser, so for the first time a piece of this check runs in CI on every pull
 request.
+## 2026-09-05 — One list of tags instead of two, and each tag knows where it came from (#611)
+
+Starcaster had two separate lists of tags, and only one of them was ever being
+used. `messaging_tags` has held the real ones since March — 149 tags across two
+projects. The other, `asset_tags`, was created a few days ago alongside the
+Media Manager and never had a single tag written to it: zero rows, in every
+project. Dane asked for one list, with each tag recording where it came from,
+and the fact that there was nothing to move across is what made this a small
+change rather than a nervous one.
+
+So the Media Manager's tag list now lives in the same table as everything else,
+and a tag added through a client's own admin back-end is stamped as having come
+from there. A tag added in the Starcaster back-end behaves exactly as it did
+before — it simply does not claim an origin, which is the honest answer for it
+and for all 149 tags that existed before the stamp did.
+
+Two smaller things were worth getting right. The messaging side of Starcaster
+squeezes every tag into hashtag shape — it capitalises it and throws away
+anything past the third word — which is fine for "Junior Tennis" and wrong for
+a photo tagged "Center Court North Entrance". Photo tags keep what was typed,
+and there is now a test that fails if anyone quietly merges the two behaviours.
+And the old list had a rule the surviving one did not: one project cannot end
+up with "Courts" and "courts" as two separate entries. That rule came across
+with it, because a tag list that splits like that is useless within a month.
+
+One button had been quietly impossible to use, and this fixed it. "Clone Tag"
+in Messaging names the copy by adding the word "Copy" on the end — but a
+messaging tag is only ever allowed three words, so on a tag that already had
+three, that fourth word was thrown straight back away and the copy came out
+with exactly the same name as the original. The list refuses two tags with the
+same name, so the button could never once succeed. It now understands that a
+copy is not a new tag being invented: it keeps the name exactly as it is
+stored, adds "Copy", and puts a number on the end if that is taken too. The
+confirmation message says the name it actually used, because it is not always
+the one you would expect.
+
+A third round of review caught the same button doing something worse than
+failing. Now that photo tags and messaging tags share one list, a photo tag of
+more than three words sits in Messaging with a Clone button next to it — and
+the button was still treating the copy as a brand new tag, so it ran the
+three-word rule over it. Cloning "Center Court North Entrance" quietly created
+a tag called "Center Court North": not a copy of anything, no "Copy" in the
+name, matching none of the photos, and reported as a success. The fix is the
+distinction the code had been missing all along — inventing a tag and copying
+one are different acts, and only the first gets the three-word rule. There is
+now a test that drives the real code against a stand-in database and fails if
+a copy ever comes back without the original name inside it.
+
+Two quieter things went with it. Adding a tag used to read the project's entire
+tag list first, every single time, just to check the name was not taken — and
+two of the bulk import tools do that in a loop, so importing six hundred tags
+meant six hundred full reads of the table. That is the shape that has silently
+cut long jobs off half way before. It now asks the database for the one tag it
+cares about. And re-running an import with "force" on, where everything already
+exists, used to report a hard failure: every tag came back "already there", and
+"already there" was being counted as an error. For an import, a tag that
+already exists is the job being done, so it is counted as skipped now, and a
+genuine failure still counts as one.
+
+The database needs one small change before the stamp can be stored, which is
+Dane's to apply. Nothing breaks if it is not applied straight away: a tag
+created in the meantime is still saved, and the screen now says plainly that
+it could not record where the tag came from rather than reporting a silent
+success. That warning existed in the code from the start but nothing passed it
+on to anyone, so a tag added before the database change would have been stored
+unmarked for good with nobody any the wiser.
+
+Review caught two things before this went live, both of them at the new join
+between the two lists. The first: a photo tag was being kept in full when it
+was saved but shortened again every time it was *read*, so "Center Court North
+Entrance" showed up in the Messaging tag list as "Center Court North". That was
+worse than it looked, because opening that tag in Messaging to change its topic
+filled the name box with the shortened version and saved it back — so a tidy-up
+that had nothing to do with the name would have quietly renamed the tag for
+good, and it would no longer have matched the photos filed under it. The
+shortening now happens in one place only: when Messaging creates a brand new
+tag of its own. Reading a tag, and saving one, leave the name exactly as it is.
+
+The second: once Dane applies the database change, a project cannot have the
+same tag twice. The Media Manager already handled that gracefully, but
+Messaging did not — it would have shown the raw database complaint,
+`duplicate key value violates unique constraint "idx_messaging_tags_project_tag"`,
+in a little pop-up. It now says which tag already exists and, where the
+shortening rule is what caused the clash, says that too — which matters for the
+Clone button, since cloning "Junior Tennis Camp" sends "Junior Tennis Camp
+Copy", the fourth word is dropped again, and it lands right back on the tag it
+was cloned from. Renaming a tag onto an existing one gets the same sentence;
+saving a tag without renaming it is untouched.
 ## 2026-09-04 — When a connection breaks, the screen now says what actually broke (#612)
 
 The Connections screen shows one card per social account a client has hooked
