@@ -148,8 +148,55 @@ function humanDuration(ms) {
   return `${(n / 86400000).toFixed(1)} days`;
 }
 
+/**
+ * WHAT COUNTS AS A LINE BREAK IS THE PARSER'S LIST, NOT A GUESS. `FIELD_RE`
+ * below ends in `(.*)$`, and in JavaScript `.` matches every character EXCEPT
+ * these four — LF, CR, U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR.
+ * Each one therefore ends a line for the READER exactly as `\n` does, so the
+ * writer's idea of a line break has to be the same set. Shut only `\n` and a
+ * value can carry a break the writer cannot see and the reader acts on.
+ *
+ * That is not theoretical: round 2 of this ticket collapsed `\n` alone, which
+ * left the other three failing WORSE than the bug it fixed. They passed the
+ * gate, and their `why:` line then matched no field at all — so the resume
+ * succeeded, echoed the operator's words back to the caller as confirmation,
+ * and recorded no reason whatsoever. `status` printed `why: (not recorded)`,
+ * which is the 2026-09-01 incident exactly, reached through the guard written
+ * to prevent it.
+ *
+ * The two shapes are derived from ONE source because two literals are two
+ * definitions and they drift the first time one is edited — the same reason
+ * the writer and the reader live in this one file. `\s` already covers all
+ * four, so the surrounding runs absorb blank lines and indentation.
+ */
+const LINE_BREAK = /[\n\r\u2028\u2029]/;
+const LINE_BREAK_RUN = new RegExp(`\\s*${LINE_BREAK.source}\\s*`, 'g');
+
+/**
+ * ONE LINE PER FIELD IS THE WIRE FORMAT, so a value carrying a line break
+ * cannot be written as-is: the parser reads the next line as a new field,
+ * which loses everything after the break and — where the continuation happens
+ * to start `by:`, `node:`, `at:` or `why:` — silently OVERWRITES that field.
+ * A resume record naming the wrong resumer is the exact failure this whole
+ * ticket exists to make impossible, so the collapse happens here, in the one
+ * place every record is built, rather than at each caller.
+ *
+ * Whitespace only: no word is dropped, and runs of blank lines and indentation
+ * become a single space so the line reads the way the sentence was typed.
+ * `resume` refuses a `--why` carrying any of them outright before reaching
+ * this (see `resumeAuthorization`), because for a QUOTE the honest move is to
+ * ask the caller to reflow it rather than to reflow it for them; this is the
+ * backstop that keeps every other record — pause, the nag — from being
+ * corruptible the same way.
+ */
+function flattenValue(value) {
+  return String(value).replace(LINE_BREAK_RUN, ' ').trim();
+}
+
 function line(label, value) {
-  return value == null || value === '' ? null : `${label}: ${value}`;
+  if (value == null || value === '') return null;
+  const flat = flattenValue(value);
+  return flat === '' ? null : `${label}: ${flat}`;
 }
 
 /**
@@ -791,18 +838,102 @@ function numericOption(argv, name, fallback) {
  * announced on the party line, so a resume nobody authorized is visible within
  * minutes rather than never. Prevention where it is possible, evidence where
  * it is not (DOCTRINE §3.11).
+ *
+ * THAT EVIDENCE WAS MISSING UNTIL NOW, which is what `--why` fixes (2026-09-01,
+ * task 86bbrqa5j). A resume recorded who and when and nothing else, so the one
+ * question worth asking afterwards — on whose word? — could not be answered
+ * from the switch ticket at all. On 2026-09-01 the line was paused for a
+ * hand-driven fast-track; at 2:33pm Dane wrote "I am finished (for now) with
+ * the other fast-track task", and nineteen seconds later a different session
+ * resumed. That sentence retires the pause's stated REASON; it is not "hand
+ * the deck back", and he had not authorized it. Establishing that meant
+ * reading another session's transcript off disk.
+ *
+ * The flag is REQUIRED, and the requirement — not the audit trail — is the
+ * mechanism. An agent that must paste the operator's own words has to go find
+ * those words, and the 2:34pm session would have discovered at that moment
+ * that no such sentence existed. An OPTIONAL field would have been skipped by
+ * exactly the session that most needed to fill it in.
+ *
+ * What it deliberately does NOT do is check that the text really is a quote.
+ * That is not detectable, and a check that pretended to would be worse than
+ * none — it would licence the claim it cannot verify. Requiring the field is
+ * the whole of it.
  */
-function resumeAuthorization({ operatorAsked } = {}) {
-  if (operatorAsked) return { allowed: true, message: 'Resuming on the operator\'s say-so (--operator-asked). Recorded on the switch and announced on the party line.' };
+function resumeAuthorization({ operatorAsked, why } = {}) {
+  if (!operatorAsked) {
+    return {
+      allowed: false,
+      code: 2,
+      message:
+        'Refusing to resume: only the operator takes the pipeline off pause.\n' +
+        'An agent may pause the line — that is a safety move anyone should be able to make — but it may not\n' +
+        'hand the deck back, because only the person working on it knows whether he is finished.\n' +
+        'If Dane has said to resume, re-run with --operator-asked. That claim is recorded on the switch ticket\n' +
+        'with this machine\'s name and announced on the party line, so it is checkable afterwards.',
+    };
+  }
+
+  // The second half of the same claim, and it is refused separately so the
+  // message can name the one thing that is missing. Whitespace is not an
+  // answer: `--why "   "` is the shape a session reaches for when it has no
+  // sentence to paste, which is precisely the case this exists to catch.
+  if (!String(why || '').trim()) {
+    return {
+      allowed: false,
+      code: 1,
+      message:
+        'Refusing to resume: --operator-asked was given, but not --why.\n' +
+        'Saying the operator asked is a claim no script can check. What makes it checkable later is his own\n' +
+        'words, written onto the switch ticket beside it — so `resume` will not run without them.\n\n' +
+        '  npm run pipeline -- resume --operator-asked --why "<paste what Dane actually said>"\n\n' +
+        'Quote him, do not summarise him. If you cannot find a sentence to paste, that is the answer:\n' +
+        'nobody has handed the deck back, and the pipeline stays paused. Nothing has been written.',
+    };
+  }
+
+  // A record keeps ONE LINE PER FIELD, so a quote that spans lines cannot be
+  // stored as it was typed. What it costs depends on which break it carries,
+  // and both outcomes are measured in the tests rather than reasoned about:
+  // after an LF or CRLF everything past the first break is lost and a
+  // continuation beginning `by:` replaces the name of whoever resumed, while a
+  // bare CR, U+2028 or U+2029 stops the `why:` line matching FIELD_RE at all,
+  // so the reason vanishes ENTIRELY while the resume reports success. A
+  // half-sentence presented on the switch ticket as the operator's words is
+  // worse than none, because nothing on the ticket says a half was dropped —
+  // and no sentence at all, on a resume that said it recorded one, is worse
+  // again.
+  //
+  // The class is LINE_BREAK, shared with the serializer, so the gate and the
+  // format can never disagree about what a line break is. Testing `\n` alone —
+  // which is what round 2 did — leaves the three that fail open.
+  //
+  // It REFUSES rather than reflowing, for the same reason the flag is required
+  // at all: his words are the evidence, and a script that quietly rewrites the
+  // evidence is not evidence. Reflowing it is one keystroke for the caller and
+  // a visible choice; doing it for them is invisible. (`line()` still collapses
+  // line breaks when building any record — that is the backstop for every other
+  // caller, not a licence for this one.)
+  if (LINE_BREAK.test(String(why))) {
+    return {
+      allowed: false,
+      code: 1,
+      message:
+        'Refusing to resume: --why spans more than one line.\n' +
+        'The switch record keeps one line per field, so a quote broken across lines cannot be stored as typed:\n' +
+        'at best only the first line survives, a second line starting "by:" would overwrite the name of whoever\n' +
+        'resumed, and some line breaks drop the reason altogether while the resume still reports success. Either\n' +
+        'way the ticket would show a half-quote — or none — with nothing to say anything was lost.\n\n' +
+        '  npm run pipeline -- resume --operator-asked --why "<his words, reflowed onto one line>"\n\n' +
+        'Keep every word he said; just join the lines with spaces. Nothing has been written.',
+    };
+  }
+
   return {
-    allowed: false,
-    code: 2,
+    allowed: true,
     message:
-      'Refusing to resume: only the operator takes the pipeline off pause.\n' +
-      'An agent may pause the line — that is a safety move anyone should be able to make — but it may not\n' +
-      'hand the deck back, because only the person working on it knows whether he is finished.\n' +
-      'If Dane has said to resume, re-run with --operator-asked. That claim is recorded on the switch ticket\n' +
-      'with this machine\'s name and announced on the party line, so it is checkable afterwards.',
+      'Resuming on the operator\'s say-so (--operator-asked). Recorded on the switch and announced on the party line.\n' +
+      `  on his word: ${String(why).trim()}`,
   };
 }
 

@@ -42,9 +42,69 @@ There is one gallery, not two.
 |---|---|---|
 | The file | `assets` (`asset_name`, `asset_type`, `location`, `size`, `aspect`, `category`, `tags`) | pre-existing |
 | How it arrived | `assets.source` | `docs/SQL/assets_source_column.sql`, 2026-09-01 |
-| The project's tag list | `asset_tags` | `docs/SQL/asset_tags_setup.sql`, 2026-09-01 |
+| The project's tag list | `messaging_tags` | `docs/SQL/asset_tags_setup.sql`, 2026-09-01; folded into `messaging_tags` 2026-09-04 by `docs/SQL/messaging_tags_source.sql` |
 | The project's categories | `asset_categories` | pre-existing |
 | Aspect | `assets.aspect` — `wide` / `square` / `tall`, per the check constraint | pre-existing |
+
+### One tag table, and every tag knows where it came from
+
+Until 2026-09-04 there were two tag registries: `messaging_tags`, written by
+the Starcaster back-end and in use since March, and `asset_tags`, created with
+the Media Manager and **never written to** — 0 rows in production, across every
+project. Dane asked for one table, and there being no data to migrate is what
+made the switch small rather than risky.
+
+`lib/assetTagsStore.js` now reads and writes `messaging_tags`. A tag created
+through a client's own admin back-end carries `source = 'client-admin'`; a tag
+created in the Starcaster back-end leaves the column alone, and `''` reads as
+"origin not recorded" — the truth for all 149 rows that predate it.
+
+**Two stores still share the table on purpose.** Messaging COINS a tag through
+`normalizeMessagingTag`, which title-cases it and keeps at most THREE words.
+That is right for a hashtag and wrong for a media tag: "Center Court North
+Entrance" would be coined as "Center Court North". Media tags keep the casing
+the admin typed and are only trimmed. A test asserts the two vocabularies
+really do differ, so nobody merges the stores without noticing.
+
+**That vocabulary applies on CREATE in Messaging, and nowhere else** — not on
+the way out of the table, and not on an update. This is the correction that
+matters, because the first version of the consolidation got it wrong and the
+bug it caused is the one to avoid reintroducing: `rowToMessagingTag` ran every
+row it READ through the coining rule, so a media tag came back out as "Center
+Court North", and Messaging > Tags prefills its edit form from that value and
+PATCHes `tag` back on save — so an admin opening a media tag merely to change
+its topic permanently rewrote the shared row to the truncation, no longer
+matching the strings on `assets.tags`. `lib/messagingTagsStore.js` names the
+two halves `authoredText` (coining) and `storedText` (reading, updating, and
+copying — trim and collapse whitespace, nothing else).
+
+**And "a create" is not the test. "Is Messaging AUTHORING this name?" is.**
+Those two read as the same question and are not, which is how the same defect
+came back a third time. Messaging's **Clone Tag** goes through create, so it
+coined — and since consolidation the row it is cloning may be a media tag of
+more than three words. Cloning "Center Court North Entrance" therefore created
+"Center Court North": three words, no " Copy" in it, `source ''` so it read as
+a Starcaster back-end tag, matching no string on `assets.tags` — a new,
+unrelated row, reported as a successful copy. Numbering could not have caught
+it either, because the truncation was not taken, so nothing looked like a
+collision.
+
+A clone COPIES a name that is already in the table, so it keeps it as stored
+and numbers it if it is taken: "Center Court North Entrance Copy", then
+"... Copy 2". It says so with `clone: true` on the request, and the toast
+reports the name it actually got, because that is not always the one asked for.
+Only the Add form coins, and only the Add form gets a 409 on a duplicate —
+there the duplicate IS the admin's mistake.
+
+If you find yourself reaching for the coining rule anywhere but an admin typing
+a new tag into Messaging, that is the bug growing back.
+
+One consequence worth knowing: the Media Manager's tag picker now offers the
+project's **whole** tag list, including tags created in the Starcaster
+back-end. That is what "one tag table" means, and it is the point.
+
+`asset_tags` is not dropped yet — that is a separate SQL file, run once this is
+live and its 0-row count has been re-confirmed at that moment.
 
 ### `assets.source` is client-declared, not stamped per endpoint
 
