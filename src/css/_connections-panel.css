@@ -126,6 +126,41 @@
   outline-offset: 2px;
 }
 
+/* What the last connect attempt said, in the provider's own words.
+
+   Deliberately NOT alarm styling. A refused connect stored nothing: the client's
+   account is not broken, the card is still in its not-connected state, and
+   Connect is still the right thing to press once they have fixed whatever the
+   sentence names. Red here would say "something failed at our end" about a
+   platform politely declining, and the two need different faces.
+
+   The tint is the same amber the needs-attention card wears, so the screen has
+   one vocabulary for "read this" rather than a second colour nobody has learnt.
+   The left rule is what tells the two apart at a glance: the CARD's rule runs
+   the full height and describes a stored state, this one is a single indented
+   line about a moment that has passed. */
+.connections-card-notice,
+.connections-panel-notice {
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--status-warn);
+  border-radius: 0 var(--radius-input) var(--radius-input) 0;
+  background: var(--status-warn-bg);
+  color: var(--status-warn-ink);
+  font-size: var(--text-sm);
+  /* A platform's own sentence can carry a URL, and providers do return them.
+     A single unbroken token has no space to wrap at, so without this it pushes
+     the card wider than the grid column instead of wrapping inside it — the
+     CRUD width rule (docs/UI_RULES.md T0) applied to a line of prose we did not
+     write and cannot shorten. `overflow-wrap` breaks only what will not fit,
+     leaving ordinary words alone; `break-word` is the fallback for engines that
+     do not take `anywhere`. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.connections-panel-notice { margin-top: var(--space-5); }
+
 .connections-card-accounts {
   display: flex;
   align-items: center;
