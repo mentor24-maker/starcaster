@@ -34,6 +34,113 @@ Proven the way the ticket asked: putting the original fault back now produces
 out again goes green. The new rule is also plain enough to be tested without a
 browser, so for the first time a piece of this check runs in CI on every pull
 request.
+## 2026-09-04 — Background jobs get out of your way on ClickUp (#605)
+
+ClickUp lets our whole company make about a hundred requests a minute — one
+allowance shared by every automatic job on the Mac Mini and by whatever session
+you happen to be talking to. Until now nothing knew that. Each program counted
+only its own requests, so a background job could truthfully report "I have only
+used 97" and still be refused, because four other programs had been spending at
+the same time. That is what took the relay down on 3 September.
+
+Your decision that day was that background jobs get out of the way — "you are
+never blocked by a background job" — and this is that, made mechanical. Every
+program on a machine now writes what it spends into one small shared file, so
+they can all see each other. A background job stops once the minute's budget is
+down to the last 25 requests, says out loud what it did not get to, and does
+not pretend it finished. A session you are talking to never stops, even at the
+very last request.
+
+The 25 was measured rather than picked: a new command reads the relay's own log
+— 854 real passes over ten days — and five real interactive commands run back
+to back inside one minute turned out to cost six requests in total. So the
+reserve is four times the busiest interactive minute actually observed. The
+cost is stated too, rather than discovered later: about one relay pass in six
+will now stop early and finish on the next one instead of running the budget
+down to single digits.
+
+One honest limit, written into the code so nobody mistakes it for a promise:
+this works within a single machine. The Mini and the MacBook spend against the
+same ClickUp allowance and share no files, so this makes collisions rarer, not
+impossible.
+## 2026-09-04 — A merge that gets stuck now says so once, instead of forever (#606)
+
+When you say "merge" on a ticket, a background job picks it up and tries. If
+GitHub gives an answer it cannot make sense of, that job says so in its log and
+tries again on the next pass, ten minutes later. Sometimes it can never make
+sense of the answer, and the job would repeat itself in exactly the same words
+forever — five identical passes over fifty minutes on 4 September, while you
+had said "merge" nearly an hour earlier and had to ask what was happening.
+Nothing counted the repeats and nothing ever said "this is the fifth time",
+so a block that would never clear on its own looked precisely like one about
+to clear on the next try.
+
+Now it keeps count. If the same unresolvable answer comes back for ninety
+minutes, you get one message — on the ticket and on the party line — saying how
+long it has been stuck, how many tries that was, exactly what the answer said,
+and which machine is telling you. Then it goes quiet until something actually
+changes. It does not nag, and when the block clears it forgets it ever
+happened, so the next one starts from zero.
+
+The ninety minutes was measured, not guessed. Every stuck run in the job's own
+history was listed: the ones that sorted themselves out took up to 54 minutes,
+and the ones that needed somebody to step in took 2 hours or more. Nothing at
+all sits in between, and ninety minutes sits in that empty gap — late enough
+that an ordinary wait never trips it, early enough that a real block does not
+sit unmentioned for half a day.
+
+Half of this shipped a few hours earlier (#604) and deliberately stopped short:
+the part that remembers the count between tries sat behind a trap that would
+have made it forget every time, silently, with every test still passing. That
+trap is closed here, and the test that would have caught it is in place.
+
+A review pass then caught a third version of the same problem, and it is worth
+knowing because it is the sort of thing that only shows up against real data.
+The job decided "this is still the same block I was counting" by comparing the
+sentence GitHub gave it — and GitHub has two different ways of saying it cannot
+tell, and swaps between them. Every swap looked like a brand new problem, so
+the clock went back to zero and ninety minutes was never reached. Replayed
+against the job's own log from that day, it would have spoken up about one of
+the three genuinely stuck merges and stayed silent on the other two, including
+the very one this work was written about.
+
+It now recognises a stuck merge by which pull request and which version of the
+code it is stuck on, rather than by the words GitHub happens to choose. The
+message still quotes what GitHub said most recently, and says how many times it
+changed its mind. The same review turned up two smaller gaps, both closed here:
+merges the system approves on its own were not being counted at all, and a
+ticket with no pending merge instruction was being read as "the problem went
+away". The proof is a test that replays all four of the stuck merges from that
+day, pass by pass, at the real ten-minute spacing — the three that needed a
+person get exactly one message each, and the one that sorted itself out in
+under an hour stays quiet.
+
+A second review pass then found that the whole thing was still silent in
+practice, and the reason is worth writing down because it is a trap anybody
+could fall into. The job decided whether an answer counted as "GitHub cannot
+tell me" by looking for those words in the sentence — and a change that shipped
+earlier the same day had reworded that sentence and taken the words out. So the
+counter was watching for a phrase the system had stopped saying. It was worse
+than simply not counting: an answer that did not match was treated as "the
+problem has gone away", which wiped the clock every time. Replayed against the
+real log, the version that had already passed every check and gone green spoke
+up about none of the three genuinely stuck merges.
+
+The fix stops reading the sentence at all. The part of the system that works
+out what GitHub said now labels its own answer — "I got a real reading" or "I
+could not tell" — and the counter reads the label. Wording can change freely
+from now on without unhooking anything. A check on the source itself refuses
+any future answer that does not carry a label, which is the check that would
+have caught this the day the rewording landed, and the replay test now builds
+its examples by asking the real code what it says today rather than by quoting
+what a log said in September. Replayed that way, all three stuck merges get
+exactly one message and all six that sorted themselves out stay quiet.
+
+One more small thing was fixed alongside it: when the system catches a branch
+up by itself, it was recording the version of the code from just before that
+push rather than just after, so the very next try thought it was looking at a
+new problem and started the ninety minutes over. That happened once per
+catch-up, and catch-ups are now routine.
 
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 

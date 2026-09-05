@@ -23,6 +23,8 @@
 
 const path = require('path');
 const { retryDecision } = require('../builder/clickupRetry.js');
+const ledger = require('./clickupLedger.cjs');
+const { callerKind } = require('./clickupCaller.cjs');
 const { execFileSync } = require('child_process');
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
@@ -112,26 +114,73 @@ const budget = {
  * transport is used — the counter measures the ATTEMPT, and a caller cannot
  * opt out of being counted by supplying its own `fetch`.
  */
-async function clickupFetch(url, init = {}, { fetchImpl = fetch } = {}) {
+async function clickupFetch(url, init = {}, { fetchImpl = fetch, env = process.env, now = Date.now } = {}) {
+  // THE RESERVE, ENFORCED AT THE DOOR (2026-09-04, task 86bbugd8j).
+  //
+  // Scheduled jobs are expected to stop at their own loop boundaries, where a
+  // stop is legible and the pass can still print what it did not reach. This
+  // is the BACKSTOP behind that: a job that never checks, or checks and then
+  // keeps going, still cannot spend the budget an interactive session needs.
+  //
+  // It refuses rather than throws, because this function's contract is that it
+  // never throws — a rejection escaping here once uncapped the build loop
+  // (task 86bbm4zwd). `yielded` is a THIRD outcome alongside a response and a
+  // transport error, and both call sites handle it by name. An interactive
+  // caller can never reach this branch.
+  //
+  // ONLY REAL CLICKUP TRAFFIC touches the machine's ledger. `api.clickup.com`
+  // is the only host that spends the token, and a request to anything else —
+  // a stand-in server, a deliberately-invalid host in a test — has not spent
+  // it. Without this, running `npm run test:builder` on the Mini would write
+  // requests into the same ledger the live relay reads a second later, and a
+  // test run could make a real scheduled job yield. The door's OWN counter
+  // still counts every attempt: it answers "what did this pass cost", which is
+  // a different question from "what has been taken from the token".
+  const who = callerKind({ env });
+  const verdict = spendsClickUpBudget(url)
+    ? ledger.shouldYield({ kind: who.kind, now: now(), env })
+    : { yield: false, why: 'not a request to api.clickup.com — nothing of the token is spent' };
+  if (verdict.yield) {
+    return { res: null, json: null, text: null, transportError: null, yielded: { ...verdict, caller: who } };
+  }
   budget.requests += 1;
   let res;
   try {
     res = await fetchImpl(url, init);
   } catch (err) {
-    return { res: null, json: null, text: null, transportError: err };
+    // Counted on this machine's ledger even though it never arrived: the
+    // attempt is what the budget is spent by, and under-counting is the
+    // unsafe direction.
+    if (spendsClickUpBudget(url)) ledger.record({ now: now(), env, kind: who.kind });
+    return { res: null, json: null, text: null, transportError: err, yielded: null };
   }
   recordLimits(res);
+  if (spendsClickUpBudget(url)) {
+    ledger.record({
+      now: now(),
+      env,
+      kind: who.kind,
+      rem: budget.remaining,
+      reset: budget.resetSeconds,
+      limit: budget.limit,
+    });
+  }
   let text;
   try {
     text = await res.text();
   } catch (err) {
     // The body can fail mid-stream after a perfectly good set of headers — a
     // dropped connection reads as a rejection here, not at the line above.
-    return { res, json: null, text: null, transportError: err };
+    return { res, json: null, text: null, transportError: err, yielded: null };
   }
   let json = null;
   try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
-  return { res, json, text, transportError: null };
+  return { res, json, text, transportError: null, yielded: null };
+}
+
+/** Is this URL the thing that actually spends the company's one ClickUp token? */
+function spendsClickUpBudget(url) {
+  try { return new URL(String(url)).host === 'api.clickup.com'; } catch { return false; }
 }
 
 /** Keep the live rate-limit state instead of printing it and throwing it away.
@@ -236,6 +285,22 @@ async function call(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {})
  */
 const requestsMade = () => budget.requests;
 
+/**
+ * A scheduled job stopping at the reserve, as an error a caller can recognise.
+ *
+ * A distinct type rather than a string match: `report_job_failure.mjs` and the
+ * loop lanes need to tell "the budget ran out and I stopped on purpose" from
+ * "ClickUp broke". They are different events with different fixes, and a
+ * yield that reads as a failure sends the next reader hunting for an outage.
+ */
+class ClickUpReserveYield extends Error {
+  constructor(message, details) {
+    super(message);
+    this.name = 'ClickUpReserveYield';
+    this.yielded = details || null;
+  }
+}
+
 async function callOnce(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {}) {
   requireToken();
   // Through the one door. This file's contract is to THROW on a transport
@@ -250,6 +315,12 @@ async function callOnce(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } =
     // still streaming.
     signal: AbortSignal.timeout(timeoutMs),
   });
+  if (out.yielded) {
+    throw new ClickUpReserveYield(
+      `ClickUp ${method} ${apiPath} was not sent: ${out.yielded.why}`,
+      out.yielded,
+    );
+  }
   if (out.transportError) {
     const where = out.res ? `${method} ${apiPath} (reading the response body)` : `${method} ${apiPath}`;
     throw new Error(timeoutAwareMessage(out.transportError, where, timeoutMs));
@@ -485,6 +556,11 @@ module.exports = {
   // The one door, and the budget it keeps (task 86bbugcdb).
   clickupFetch,
   getBudget,
+  // The reserve (task 86bbugd8j): the ledger, who is asking, and the error a
+  // scheduled job gets when it stops.
+  ledger,
+  callerKind,
+  ClickUpReserveYield,
   COMMENT_PAGE_SIZE,
   HTTP_TIMEOUT_MS,
   SHELL_TIMEOUT_MS,
