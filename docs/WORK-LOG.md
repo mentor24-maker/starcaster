@@ -1,3 +1,52 @@
+## 2026-09-04 — The drift check had a blind spot the size of the whole queue (#608)
+
+`npm run reconcile` is the housekeeper that compares the ClickUp board against
+what is really on GitHub, and says when the two have drifted apart. It sorted
+every ticket into one of two piles — "being worked on" and "finished" — and
+checked each pile for a different kind of mismatch.
+
+The queue itself was in neither pile. A ticket that is waiting to be picked up,
+or that has been sent back for rework, fell straight through the gap: not
+reported as a problem, not even reported as "I could not check this one". The
+run finished, said everything was clean, and meant nothing of the sort.
+
+The case that matters is a ticket sitting in the queue that has *already been
+built*. It looks untouched, so the next build session can pick it up and build
+the same thing a second time, on a second branch, fighting the first — which is
+exactly the collision that cost a whole day's work back in August. The one
+safety check that would catch it could not see those tickets at all.
+
+The housekeeper now checks the queue too. If the ticket's pull request is still
+open, it says so loudly and writes a note on the ticket itself, where the next
+session to pick it up cannot miss it — but it changes nothing, because only a
+reader can tell whether the ticket is stale or the branch is. If the pull
+request has already merged, the work is live and the ticket is closed out
+properly. If the branch was abandoned, that is fine and it says so.
+
+On its very first real run it found two live examples, one of each kind. And
+the list of statuses is now kept in one place instead of three, with a test
+that fails if a new status is ever added and forgotten — which is precisely how
+this hole opened in the first place.
+
+Review sent the first version back, and three things changed. The alarm was
+firing on tickets that were perfectly healthy: a ticket sent back for rework is
+*supposed* to still have its branch and its pull request open — that is what a
+send-back is — so the housekeeper was going to raise a false alarm on every one
+of them, forever. It now treats the two kinds of waiting ticket differently. A
+ticket nobody has started that already has a branch is still a real problem and
+still gets said out loud; a ticket sent back for more work is reported as
+normal, and the report says why.
+
+The second problem was a loop. The note the housekeeper leaves when it closes a
+ticket tells the reader "if this is wrong, reopen the ticket and say so on it" —
+but reopening puts the ticket right back into the pile it had just started
+closing, so the next run half an hour later would close it again, and again.
+It now leaves alone any ticket somebody has spoken on since the work merged.
+
+The third was smaller and more dangerous: if a ticket's record pointed at an
+older, finished pull request while a newer one was still open, it would have
+closed the ticket over live work. It now stops and says the two records
+disagree, rather than picking one.
 ## 2026-09-05 — The safety brake on the SQL hand-off check now actually works (#609)
 
 When an agent finishes a turn, two automatic checks read what it was about to
