@@ -46,10 +46,16 @@
  *     the git dir chmod 500: the hook refused six turns out of six, and would
  *     have refused six hundred. Same wedge, different cause.
  *
- * So the counter now has somewhere to fall back to, and -- the part that
- * actually closes it -- A REFUSAL IS ONLY ISSUED IF THE COUNT LANDED. A hook
- * that cannot count its own refusals has no brake, and the honest response to
- * that is to let the turn end, not to refuse forever.
+ *   - WHICH ONE: the fallback was reached by the write and not by the read, so
+ *     a state file that stayed readable while losing write permission shadowed
+ *     it forever. Measured 2026-09-05: twelve turns, twelve refusals. Same
+ *     wedge again, this time through the repair. See openState().
+ *
+ * So the counter now has somewhere to fall back to, one place that decides
+ * where that is for both halves, and -- the part that actually closes it -- A
+ * REFUSAL IS ONLY ISSUED IF THE COUNT LANDED. A hook that cannot count its own
+ * refusals has no brake, and the honest response to that is to let the turn
+ * end, not to refuse forever.
  *
  * Escape hatch: SKIP_SQL_HANDOFF=1 (say so and why, per CLAUDE.md).
  */
@@ -92,48 +98,78 @@ function stateFiles(root, sessionId) {
 }
 
 /**
- * Read from the first candidate that actually has state. Scanning in the same
- * order it writes is what keeps the two halves together: if the git dir is
- * readable but not writable, the write lands in tmpdir, and the next turn finds
- * nothing in the git dir and picks it up from there.
+ * This session's state, and the one way to write it back.
+ *
+ * READ AND WRITE LIVE IN ONE FUNCTION BECAUSE THEY USED TO DISAGREE, AND THE
+ * DISAGREEMENT FROZE THE COUNTER. Both halves scanned the same candidate list
+ * and stopped on different conditions: the read returned the first file that
+ * PARSED, the write returned the first that ACCEPTED A WRITE. So a state file
+ * in the git dir that stayed readable while losing write permission shadowed
+ * the fallback forever -- every write landed in tmpdir, every read came back
+ * from the stale git-dir copy, and `refusals` never moved. The stand-down
+ * could never fire, which is the exact wedge the counter exists to prevent,
+ * arriving through the counter. Measured 2026-09-05 on 9351ae64: twelve turns,
+ * twelve refusals, and a file already handed off re-demanded on every turn
+ * after the freeze because `handedOff` was lost the same way.
+ *
+ * THE READ MERGES EVERY CANDIDATE; THE WRITE TAKES THE FIRST THAT ACCEPTS.
+ * That is what makes them agree. There is deliberately no single
+ * "authoritative" file: whichever candidate the write reaches, the read is
+ * looking at it, so a copy left behind somewhere else can never shadow a newer
+ * one. Refusals take the HIGHEST count seen and `handedOff` takes the union,
+ * both of which only ever move one way -- so the brake can be spent but never
+ * refunded, and a file the operator already has is never demanded again.
+ *
+ * The sibling `check_operator_handoff.cjs` pairs its read and write per
+ * candidate inside one loop, and that is sound there because it carries a
+ * counter and nothing else. Doing the same here would restart the count at the
+ * moment the git dir stops accepting writes -- git-dir copy says 2, unwritable,
+ * so it falls to an empty tmpdir and refuses three MORE times. Five refusals
+ * from a three-refusal brake is quieter than a freeze and still wrong.
  *
  * Shapes are coerced rather than trusted -- a truncated or half-written file
  * parses to something with no `refusals`, and `undefined >= 3` is false, which
  * is the counter silently reading zero all over again.
  */
-function readState(files) {
-  for (const file of files) {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-      return {
-        handedOff: Array.isArray(parsed?.handedOff) ? parsed.handedOff : [],
-        refusals: Number.isFinite(parsed?.refusals) ? parsed.refusals : 0,
-      };
-    } catch {
-      // Not here, or unreadable -- try the next place.
-    }
-  }
-  return { handedOff: [], refusals: 0 };
-}
+function openState(files) {
+  const state = { handedOff: [], refusals: 0 };
 
-/**
- * Returns whether the state landed ANYWHERE. The caller must check it before
- * refusing: this used to swallow the failure and return nothing, and that one
- * missing boolean is the whole of the wedge described in the header. A write
- * that never lands means `refusals` reads 0 next turn, so the stand-down can
- * never fire, and `handedOff` never persists, so a file already handed off is
- * re-demanded for the rest of the session.
- */
-function writeState(files, state) {
   for (const file of files) {
+    let parsed;
     try {
-      fs.writeFileSync(file, JSON.stringify(state));
-      return true;
+      parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
     } catch {
-      // Unwritable -- try the next place rather than losing the count.
+      continue; // Not here, or unreadable -- a later candidate may still have it.
     }
+    const handedOff = Array.isArray(parsed?.handedOff) ? parsed.handedOff : [];
+    for (const sql of handedOff) {
+      if (typeof sql === 'string' && !state.handedOff.includes(sql)) state.handedOff.push(sql);
+    }
+    const refusals = Number.isFinite(parsed?.refusals) ? parsed.refusals : 0;
+    if (refusals > state.refusals) state.refusals = refusals;
   }
-  return false;
+
+  /**
+   * Returns whether the state landed ANYWHERE. The caller must check it before
+   * refusing: this used to swallow the failure and return nothing, and that one
+   * missing boolean is the whole of the wedge described in the header. A write
+   * that never lands means `refusals` reads 0 next turn, so the stand-down can
+   * never fire, and `handedOff` never persists, so a file already handed off is
+   * re-demanded for the rest of the session.
+   */
+  const save = () => {
+    for (const file of files) {
+      try {
+        fs.writeFileSync(file, JSON.stringify(state));
+        return true;
+      } catch {
+        // Unwritable -- try the next place rather than losing the count.
+      }
+    }
+    return false;
+  };
+
+  return { state, save };
 }
 
 function main(input) {
@@ -170,7 +206,7 @@ function main(input) {
   const files = stateFiles(root, payload?.session_id);
   if (!files.length) process.exit(0);
 
-  const state = readState(files);
+  const { state, save } = openState(files);
 
   const message = String(payload?.last_assistant_message || '');
 
@@ -183,7 +219,7 @@ function main(input) {
 
   const outstanding = sqlFiles.filter((sql) => !state.handedOff.includes(sql));
   if (!outstanding.length) {
-    writeState(files, state);
+    save();
     process.exit(0);
   }
 
@@ -216,13 +252,13 @@ function main(input) {
   // together on a continuation, which is the safe direction for the same reason
   // it was there: a miss, not a wedge.
   if (payload?.stop_hook_active) {
-    writeState(files, state);
+    save();
     process.exit(0);
   }
 
   if (state.refusals >= MAX_REFUSALS) {
     // Stepped aside deliberately: a wedged conversation is worse than a miss.
-    writeState(files, state);
+    save();
     process.exit(0);
   }
 
@@ -231,7 +267,7 @@ function main(input) {
   // would refuse again, and the one after that, with no limit -- which is the
   // exact wedge the counter exists to prevent, arriving through the counter.
   state.refusals += 1;
-  if (!writeState(files, state)) process.exit(0);
+  if (!save()) process.exit(0);
 
   const pushed = isPushed(root);
   const lines = [
