@@ -133,10 +133,30 @@ const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 // moves. A merged PR is meaningful against BOTH; the difference is the action.
 const AUTO_REPAIR_STATUSES = new Set(loopStatuses.IN_PROGRESS_STATUSES);
 
-/** Which machine is writing. Never thrown from: a name is a nicety, not a gate. */
-const NODE_NAME = (() => {
-  try { return thisNode() || 'an unnamed machine'; } catch { return 'an unnamed machine'; }
-})();
+const UNNAMED_MACHINE = 'an unnamed machine';
+
+/**
+ * Which machine is writing. Never thrown from: a name is a nicety, not a gate.
+ *
+ * `thisNode()` answers with a RECORD — `{name, source, file, raw}` — not a
+ * string, and this used to keep the whole record. So every ticket the
+ * reconciler closed was told it had been closed on `[object Object]` (live on
+ * 86bbv1qp9, closed 2026-09-05). The closure note is the only explanation a
+ * human gets for a machine moving their ticket to a terminal status, and the
+ * machine name is its accountability half — *which box did this to my ticket?*
+ *
+ * It takes the reader as an argument so a test can drive the SHAPE, not just
+ * the happy value: a record with no name, a bare string, a thrower. The shape
+ * is what went wrong, so the shape is what has to be pinned.
+ */
+function nodeName(readNode = thisNode) {
+  let node;
+  try { node = readNode(); } catch { return UNNAMED_MACHINE; }
+  const name = typeof node === 'string' ? node : (node && node.name);
+  return String(name == null ? '' : name).trim() || UNNAMED_MACHINE;
+}
+
+const NODE_NAME = nodeName();
 const OPERATOR_STATUSES = new Set(loopStatuses.OPERATOR_HELD_STATUSES);
 
 /**
@@ -1381,4 +1401,6 @@ module.exports = {
   CLAIMABLE_STATUSES,
   TERMINAL_STATUS_TO_SET,
   closureNote,
+  nodeName,
+  NODE_NAME,
 };
