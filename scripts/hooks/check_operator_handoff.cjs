@@ -121,14 +121,15 @@ function main(input) {
   // what keeps the refusal counter from being the only brake in the system --
   // two independent limits, so neither one failing can wedge the session.
   //
-  // KNOWN CONSEQUENCE, not a bug to fix here: require_sql_handoff.cjs is the
-  // other Stop hook in the same settings array and does NOT honour this flag.
-  // When it blocks first, the next Stop carries stop_hook_active and this hook
-  // exits right here -- so a reply with BOTH problems only ever gets the SQL
-  // complaint, and the hand-off is reported on a later turn or not at all.
-  // That is the price of the fail-open brake above, and it is the safe
-  // direction (a miss, not a wedge). The next reader should not have to
-  // rediscover it.
+  // Both Stop hooks honour it as of 2026-09-04 (task 86bbt7mxe).
+  // require_sql_handoff.cjs -- the other hook in the same settings array -- did
+  // not, and this comment used to record the consequence as permanent: when it
+  // blocked first, the next Stop carried the flag, this hook exited right here,
+  // and a reply with BOTH problems only ever got the SQL complaint. That is
+  // closed. What remains true is the ordering it implies, and it is deliberate:
+  // on a continuation BOTH hooks stand down together, so a second problem is
+  // reported on a later turn or not at all. Still the safe direction -- a miss,
+  // not a wedge.
   if (payload && payload.stop_hook_active) process.exit(0);
 
   // Only the main agent's Stop event. A subagent's reply is read by this
