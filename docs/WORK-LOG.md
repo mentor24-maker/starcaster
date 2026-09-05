@@ -1,3 +1,78 @@
+## 2026-09-04 — When a connection breaks, the screen now says what actually broke (#612)
+
+The Connections screen shows one card per social account a client has hooked
+up. A card turns amber when something has gone wrong with that account, and
+that part has worked for a while. What it said, though, was always one of four
+canned sentences — "the platform refused it", and nothing more.
+
+Meanwhile a background check was quietly working out the real reason and
+writing it down: this Bluesky handle now signs in as a different account, this
+permission expires tomorrow, this one was withdrawn. Nothing ever read it.
+Every one of those specific findings arrived at the client as the same vague
+line. The card now shows the real reason, and still tells them what to do
+about it.
+
+The second half is a client pressing Connect and being turned down — an
+Instagram account that is still a personal account, say. Instagram explains
+exactly what to change, that explanation was already being carried back to the
+screen, and the screen was throwing it away: the client landed back on
+Connections with no idea why nothing had happened. Now the explanation appears
+right under that platform's card, in Instagram's own words, with Connect still
+there to press once they have fixed it. Reload the page and it is gone, the
+way a message you have already read should be.
+
+Worth recording how one of these was found: every automated test passed while
+the screen showed nothing at all. The message was being read a fraction of a
+second too late, after another part of the app had already wiped it off the
+address bar. Only opening the page in a real browser caught it.
+
+A review then caught what showing the real reason had opened up. That reason is
+whatever the platform last told us, and platforms do not always answer in
+sentences — when a gateway is having a bad day it answers with a whole web page
+of error markup, and one of ours passes that straight through. A client's card
+would have read "<!DOCTYPE html><html><head><title>502 Bad Gateway</title>…
+Reconnect to fix it." A real explanation still comes through word for word; one
+that is markup, or far too long to be a sentence, now falls back to the plain
+canned line instead. Wrong-but-readable beats a page of code every time.
+
+Two smaller things went in alongside it. If the list of accounts failed to load
+in the moment right after a client was turned down, the explanation was shown
+nowhere at all — and it had already been cleared off the address bar, so it was
+gone for good. It now appears at the top of the panel when there is no card to
+put it on. And the list of things the screen tidies out of the address bar had
+drifted out of step with what actually gets put there.
+
+A second review round then found the same page of error markup arriving by the
+other door. The guard had been fitted to the amber card — the one that reads a
+reason we stored earlier — but a client turned down at the moment they press
+Connect gets their reason handed over on the way back to the screen, and that
+path had no guard at all. Measured in a real browser, the Facebook Page card
+read "<!DOCTYPE html>…502 Bad Gateway…" in amber. It is the same rule now, kept
+in one place both halves read from, and applied where the server hands the text
+to the browser — so the markup never reaches the address bar either. A platform
+that answers in real sentences is still quoted word for word. And a very long
+web address inside one of those sentences now wraps inside the card instead of
+pushing it wider than the screen.
+
+A third round then caught the fix breaking the thing it was protecting. "Far
+too long to be a sentence" needs a number, and the number chosen was measured
+honestly — against the background check's own wording, which never runs past
+189 characters. It was then quietly reused on the other door, where the
+sentences are much longer, because Instagram's explanation ends by naming the
+client's own account and Page: *"…The account we found is
+@delraybeachtennisctr on your Page "Delray Beach Tennis Center & Swim and
+Racquet Club"."* Ordinary names push that past the limit, so the very sentence
+this whole piece of work exists to deliver was being thrown away and replaced
+with "Instagram refused the connection" — no hint that the answer is to switch
+the account type in the Instagram app. Two other refusals had it worse: the
+one about a missing Page permission went over the limit for *any* client whose
+Page has a name at all.
+
+So each of the two doors now carries its own limit, measured against the
+sentences that actually come through it, with the worst case written down
+beside it. And the check refuses to run at all unless it is told which door it
+is on — no more inheriting a number that was measured somewhere else, which is
+the mistake itself rather than the symptom.
 ## 2026-09-04 — Background jobs get out of your way on ClickUp (#605)
 
 ClickUp lets our whole company make about a hundred requests a minute — one

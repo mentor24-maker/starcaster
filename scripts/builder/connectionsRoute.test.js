@@ -287,6 +287,171 @@ test('the four card states are decided from what is actually stored', async (t) 
   assert.ok(cards.get('bluesky').reason.length > 20, 'the reason is a sentence, not a status word');
 });
 
+/**
+ * The amber card says what the SWEEP found, not one of four generic lines.
+ * Connections 6b of 7 (86bbu50mb).
+ *
+ * The verify sweep exists to learn why a connection stopped working and write
+ * it down — a drifted Bluesky handle names the account it now signs in as, an
+ * unrenewed grant names the deadline it passed. `verifySweep.js` says as much
+ * where it marks a row expiring: "the card goes amber with the sentence below
+ * under it". It did not. The route read `status` alone and printed a line from
+ * a four-entry map, so every cause the sweep recorded arrived at the client as
+ * the same sentence and `last_error` was written by one slice and read by
+ * nobody.
+ *
+ * These pin `attentionSentence` directly rather than through a stored row,
+ * because the sentence is the deliverable and a round trip would only prove the
+ * store still round-trips.
+ */
+test('an amber card carries the recorded cause, not a generic line', async () => {
+  const h = withRoute();
+  const { attentionSentence } = h.route;
+
+  // The sweep's own sentence for a drifted Bluesky handle, verbatim from
+  // outcomeFor() in lib/connections/verifySweep.js.
+  const drift = 'the handle now signs in as a different account (it was saved as delray.bsky.social.)';
+  const shown = attentionSentence({ status: 'error', lastError: drift, hasAccessToken: true });
+  assert.ok(
+    shown.includes('handle now signs in as a different account'),
+    `the recorded cause has to survive to the card, got: ${shown}`
+  );
+  assert.ok(
+    shown.includes('delray.bsky.social'),
+    'the account the sweep named is the one fact a client can act on'
+  );
+  // And it still says what to DO. A cause with no next step is a fault report.
+  assert.ok(shown.includes('Reconnect'), `the card still says how to fix it, got: ${shown}`);
+
+  // A fragment is opened and closed as a sentence — presentation only. No other
+  // character may change, or the panel is substituting our wording for the
+  // platform's (acceptance criterion 5).
+  assert.ok(shown.startsWith('The handle now signs in'), `capitalised, got: ${shown}`);
+  assert.ok(
+    shown.includes('(it was saved as delray.bsky.social.) Reconnect'),
+    'the stored text is passed through unedited apart from its first letter'
+  );
+
+  // Each status keeps its own instruction, so "about to stop" and "has expired"
+  // do not both read as the same emergency.
+  assert.ok(
+    attentionSentence({ status: 'expiring', lastError: 'it expires tomorrow', hasAccessToken: true })
+      .includes('keep posting'),
+    'an expiring connection is asked to be renewed, not restored'
+  );
+  assert.ok(
+    attentionSentence({ status: 'revoked', lastError: 'permission was withdrawn', hasAccessToken: true })
+      .includes('restore'),
+    'a revoked one is asked to be restored'
+  );
+
+  // Nothing recorded — a status changed by hand, or a row from before the sweep
+  // existed — still gets a full sentence rather than an empty card.
+  const generic = attentionSentence({ status: 'expired', lastError: '', hasAccessToken: true });
+  assert.match(generic, /expired/i);
+  assert.ok(generic.length > 20, 'the fallback is still a sentence');
+
+  // Our own storage being incomplete outranks whatever a platform last said:
+  // the resolver skips a token-less row, so no amount of provider detail
+  // changes what the client has to do about it.
+  assert.match(
+    attentionSentence({ status: 'error', lastError: 'the platform refused it', hasAccessToken: false }),
+    /stored permission is incomplete/i
+  );
+
+  // An unknown status is not a blank card. `CONNECTION_STATUSES` can grow, and
+  // a card that says nothing is indistinguishable from a broken screen.
+  const unknown = attentionSentence({ status: 'something-new', lastError: '', hasAccessToken: true });
+  assert.ok(unknown.length > 20, `an unknown status still gets a sentence, got: ${unknown}`);
+});
+
+/**
+ * A recorded cause is shown only when it is something a client can read.
+ *
+ * The send-back that produced this test, 2026-09-05: `last_error` is whatever
+ * `verifyResult.error` held, and `lib/connections/adapters/facebookPage.js:95`
+ * falls back to the ENTIRE raw response body when it is not JSON. A gateway 502
+ * is an HTML page, so a client's card read
+ * "<!DOCTYPE html><html><head><title>502 Bad Gateway</title>… Reconnect to fix
+ * it." — internal text on the surface a client reads to decide whether their
+ * account works, which is landmine 16 and what the ticket's own Risk line calls
+ * the whole failure.
+ *
+ * The fix is a fitness test on the STORED text, not a rewrite of it: a cause
+ * either comes through untouched or is dropped for the generic line. Acceptance
+ * criterion 5 is not weakened — real prose still arrives verbatim, which the
+ * test above pins.
+ */
+test('a cause that is not client prose falls back to the generic sentence', async () => {
+  const h = withRoute();
+  const { attentionSentence, ATTENTION_REASONS, readsAsClientProse, CAUSE_LIMITS } = h.route;
+  // Every direct call below is on the STORED path — that is what attentionSentence
+  // reads. Naming it is required since round 3; see lib/connections/clientProse.js.
+  const STORED = CAUSE_LIMITS.stored;
+
+  // What facebookPage.js really stores when a gateway answers instead of Meta.
+  const gateway502 = '<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head>'
+    + '<body bgcolor="white"><center><h1>502 Bad Gateway</h1></center><hr>'
+    + '<center>nginx/1.18.0</center></body></html>';
+  const shown = attentionSentence({ status: 'error', lastError: gateway502, hasAccessToken: true });
+  assert.doesNotMatch(shown, /</, `no markup may reach a client's card, got: ${shown}`);
+  assert.doesNotMatch(shown, /DOCTYPE|nginx|502/i, `nor its contents, got: ${shown}`);
+  assert.equal(
+    shown,
+    ATTENTION_REASONS.error,
+    'it falls back to the generic line that already existed — wrong-but-readable beats markup'
+  );
+
+  // A short tag is markup too. Length alone would let this one straight through.
+  assert.equal(
+    readsAsClientProse('<p>refused</p>', 'stored'),
+    false,
+    'a tag is markup at any length'
+  );
+
+  // Too long to be a sentence on a card: a body that happens to carry no tags
+  // (a stack trace, a JSON dump, a plain-text error page) is still not prose.
+  const wall = `the platform refused this connection. ${'diagnostic detail '.repeat(40)}`;
+  assert.ok(wall.length > STORED, 'the fixture has to actually exceed the limit');
+  assert.equal(
+    attentionSentence({ status: 'revoked', lastError: wall, hasAccessToken: true }),
+    ATTENTION_REASONS.revoked,
+    'a wall of text is dropped for the generic line'
+  );
+
+  // ── The other side of the gate, which is the half that can silently over-reach.
+  // Every one of these is prose the sweep or an adapter really writes, and each
+  // must survive untouched. A gate that quietly widened until it swallowed real
+  // causes would put us back where slice 6b started, with every card generic.
+  const realProse = [
+    // verifySweep.js, the identity-drift sentence at its longest — two full
+    // Bluesky handles — which is the longest legitimate cause measured (189).
+    'This connection was saved as delray-beach-tennis-center.bsky.social and now authenticates as '
+      + 'some-other-handle.bsky.social. Until it is connected again, posts would go to the wrong account.',
+    // The 409 composition, adapter sentence plus the stored account.
+    'this app password now signs in as Delray Tennis, not the account it was saved for. '
+      + '(it was saved as delray.bsky.social.)',
+    // facebookPage.js, when Meta DOES answer in JSON.
+    'No Facebook Pages found for this account. Confirm you manage at least one Page and '
+      + 'granted Page permissions.',
+    // A cause carrying arithmetic. "<" alone is not markup, and a gate that
+    // treated it as such would drop a real sentence.
+    'the grant has < 24 hours left before it stops working',
+  ];
+  for (const cause of realProse) {
+    assert.equal(readsAsClientProse(cause, 'stored'), true, `real prose must pass the gate: ${cause}`);
+    const card = attentionSentence({ status: 'error', lastError: cause, hasAccessToken: true });
+    assert.notEqual(card, ATTENTION_REASONS.error, `it must not fall back: ${cause}`);
+    // Passed through unedited apart from the first letter and a closing stop.
+    assert.ok(card.includes(cause.slice(1, 60)), `verbatim, got: ${card}`);
+  }
+
+  // Exactly at the limit is prose; one character over is not. Pinned so the
+  // boundary is a decision rather than whatever the comparison happened to be.
+  assert.equal(readsAsClientProse('a'.repeat(STORED), 'stored'), true, 'the limit itself passes');
+  assert.equal(readsAsClientProse('a'.repeat(STORED + 1), 'stored'), false, 'one over does not');
+});
+
 test('a card never carries a token, and never describes one', async (t) => {
   const h = withRoute();
   t.after(h.restore);
