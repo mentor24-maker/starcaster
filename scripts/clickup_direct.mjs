@@ -657,6 +657,7 @@ function listOpenPullRequests(repo) {
 function capProbe({ repo } = {}) {
   return wipCap.probeCap({
     cap: wipCap.resolveCap(process.env),
+    operatorCap: wipCap.resolveOperatorCap(process.env),
     listOpenPrs: async () => listOpenPullRequests(repo),
     readTicketStatuses: async () => {
       // fatal:false is REQUIRED — see fetchAllTasks. With the default, a
@@ -1232,6 +1233,83 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         localVerdict: cross.known
           ? { code: branchCatchUp.CODES.REAL_CONFLICT, reason: `git merge-tree reports a conflict merging ${cross.base} into ${cross.head}` }
           : { code: branchCatchUp.CODES.FETCH_FAILED, reason: cross.why || 'the git cross-check could not be taken' },
+      };
+    }
+  }
+
+  // GITHUB SAYS IT CONFLICTS, GIT SAYS IT DOES NOT — DO THE CATCH-UP, DO NOT
+  // ONLY REPORT IT (2026-09-04, task 86bbuvcwc). Declining to claim a
+  // conflict on a disagreement is right and stays. What was missing is that
+  // the disagreement has a KNOWN remedy, so answering `wait` promised a
+  // change that was never coming: on PR #585 this printed five times over
+  // fifty minutes — "auto-merge is armed, GitHub lands it" — while GitHub's
+  // own auto-merge refused to land a pull request GitHub had flagged. Dane
+  // had said "merge" and nothing at all was going to happen.
+  //
+  // NOT `gh pr update-branch`, which is the arm below: GitHub refuses it on a
+  // PR it has called CONFLICTING. The local catch-up is the remedy that was
+  // actually measured — merging origin/main in and pushing flipped GitHub to
+  // MERGEABLE within seconds, and the armed merge then landed it.
+  //
+  // The variable below is deliberately NOT named `local`. conflictWork.test.js
+  // locates the conflict hand-off's own catch-up by searching this file for
+  // its exact declaration and slicing forward from the FIRST hit; an earlier
+  // copy of that spelling — in code or in a comment quoting it — would make
+  // the assertion silently measure this block instead of the one it guards.
+  // The same warning already sits on that statement. Do not spell it out.
+  if (gate.action === 'catch-up-locally') {
+    if (dryRun) {
+      console.error(`  DRY RUN — would merge main into ${prJson.headRefName} here and push it, then re-read PR #${pr.number}: ${gate.reason}`);
+      return { outcome: 'would-catch-up-disagreement', pr: pr.number, reason: gate.reason };
+    }
+    const caughtUp = branchCatchUp.catchUpBranchLocally({ repo, branch: prJson.headRefName });
+    if (caughtUp.ok) {
+      console.error(`  ${label}: CAUGHT UP after a GitHub/git disagreement — ${caughtUp.reason}`);
+      // A BRANCH CAUGHT UP AUTOMATICALLY IS NOT A SILENT WRITE (the identical
+      // reason as 86bbuv66c). This machine just pushed a merge commit to a
+      // branch on its own initiative; if the only record is a log line on one
+      // machine, nobody reading the ticket can tell where the commit came
+      // from. It is said in the same breath as the wait.
+      const said = await call('POST', `/api/v2/task/${task.id}/comment`, {
+        comment_text: `**Branch caught up automatically.** GitHub reported PR #${pr.number} as conflicting while git merged it cleanly — GitHub's precomputed mergeability does not apply the \`union\` merge driver that resolves \`docs/WORK-LOG.md\`, so a branch can read as conflicting while it is not. This machine merged \`main\` into \`${prJson.headRefName}\` and pushed it: an ordinary merge commit, never a force-push, so the branch only gained history. The checks are re-running now. Your approval still stands — you do not have to say "merge" again.`,
+      });
+      if (!said.res.ok) unchecked.push(`${task.id}: PR #${pr.number} was caught up automatically, but the comment saying so FAILED to post — the push has no record on the ticket`);
+      const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
+      if (after.action === 'wait' || after.action === 'update-branch' || after.action === 'catch-up-locally') {
+        console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
+        return { outcome: 'waiting', reason: after.reason };
+      }
+      // The verdict and the refusal code travel, for the same reason they do
+      // on the conflict path: this machine performed the merge, so it holds
+      // the strongest evidence there is about whether anything overlaps, and
+      // a gate object never loses its code on a reassignment.
+      gate = { action: after.action, reason: after.reason, refusalCode: after.refusalCode, localVerdict: caughtUp };
+      if (after.prJson) prJson = after.prJson;
+    } else if (caughtUp.code === branchCatchUp.CODES.REAL_CONFLICT) {
+      // THE OTHER DIRECTION, AND IT IS THE ONE THAT MUST NOT BE SKIPPED. A
+      // real merge is a stronger reading than `merge-tree`, and it says the
+      // branches genuinely overlap — so this goes to the hand-off, exactly as
+      // it did before. A fix that only ever caught up would push merge
+      // commits onto branches that really do conflict.
+      console.error(`  ${label}: the catch-up found a REAL conflict — ${caughtUp.reason}`);
+      // No `localVerdict` is attached on purpose: the hand-off block below owns
+      // that vocabulary, and letting it take its own reading keeps ONE place
+      // deciding what a conflict verdict says. It costs a second local merge
+      // that reaches the same answer and pushes nothing — a real conflict
+      // aborts — which is cheap next to two ways of describing one finding.
+      gate = {
+        action: 'conflict',
+        reason: `the branch conflicts with newer work on main — GitHub said so, and the catch-up merge agrees (${caughtUp.reason})`,
+      };
+    } else {
+      // The remedy could not be applied at all — a failed fetch, a lost push
+      // race, the wrong checkout. That is neither a conflict nor a pass, so
+      // it stays a wait and names what could not be settled (DOCTRINE 3.11).
+      // The next pass tries again.
+      console.error(`  ${label}: the catch-up could not be performed — ${caughtUp.reason}`);
+      gate = {
+        action: 'wait',
+        reason: `${gate.reason}. That catch-up could NOT be performed this pass (${caughtUp.reason}), so the branch is still flagged and the next pass tries again`,
       };
     }
   }

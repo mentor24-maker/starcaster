@@ -1000,15 +1000,18 @@ test('the relay waits after BOTH catch-up paths, and merges the same way', () =>
   // — 180s against a ~6 minute CI run, on a branch main invalidates every 20
   // minutes. It now falls through to the arming path, which hands the PR to
   // GitHub and returns, so the merge no longer depends on a pass being awake
-  // at the right moment. The two that remain must still wait: the local
-  // false-conflict catch-up, and the stale review-gate re-run, which has to
-  // see a NEW answer appear before anything may act on it.
+  // at the right moment.
   //
-  // What this guard is about is unchanged — neither remaining path may leave a
+  // THREE since 2026-09-04 (task 86bbuvcwc). The GitHub-says-conflict /
+  // git-says-clean disagreement now performs the local catch-up instead of
+  // only reporting it, and a path that pushes must wait on the CI that push
+  // restarts — for the same reason the other two do.
+  //
+  // What this guard is about is unchanged — no path that pushes may leave a
   // PR for a whole relay interval for no reason.
   const awaited = (src.match(/await waitForChecksInPass\(/g) || []).length;
-  assert.equal(awaited, 2,
-    `expected exactly 2 awaited calls — the local false-conflict catch-up and the stale review-gate re-run — found ${awaited}`);
+  assert.equal(awaited, 3,
+    `expected exactly 3 awaited calls — the local false-conflict catch-up, the GitHub/git disagreement catch-up, and the stale review-gate re-run — found ${awaited}`);
 
   // And the path that stopped waiting must ARM instead, not simply give up.
   // BREAK-TEST: delete the fall-through assignment and this fails.
@@ -1283,7 +1286,6 @@ const DIRTY_PR = {
 test('GitHub says DIRTY and git merges cleanly: no conflict is asserted', () => {
   const g = githubGate(DIRTY_PR, { gitCrossCheck: { known: true, conflicts: false, base: 'origin/main', head: '7e990d13' } });
   assert.notEqual(g.action, 'conflict');
-  assert.equal(g.action, 'wait');
   assert.ok(!/the branch conflicts with newer work on main/.test(g.reason),
     'the false sentence from 2026-09-03 must not be reachable when git disagrees');
 });
@@ -1291,11 +1293,93 @@ test('GitHub says DIRTY and git merges cleanly: no conflict is asserted', () => 
 test('...and the disagreement names what each source said', () => {
   const g = githubGate(DIRTY_PR, { gitCrossCheck: { known: true, conflicts: false, base: 'origin/main', head: '7e990d13' } });
   assert.equal(g.disagreement, true);
-  assert.match(g.reason, /CANNOT TELL/);
   assert.match(g.reason, /GitHub reports/, 'it must say what GitHub said');
   assert.match(g.reason, /git merges/, 'and what git said');
   assert.match(g.reason, /origin\/main/);
   assert.match(g.reason, /7e990d13/);
+});
+
+/*
+ * ...AND THEN IT DOES SOMETHING ABOUT IT (2026-09-04, task 86bbuvcwc).
+ *
+ * Declining to claim a conflict was right and is untouched above. What was
+ * missing is that this disagreement has a KNOWN remedy, so answering `wait`
+ * promised a change that was never coming. Measured on PR #585: every check
+ * green, `git merge-tree --write-tree` exit 0, GitHub `CONFLICTING`, and the
+ * relay printing "auto-merge is armed, GitHub lands it" five times over fifty
+ * minutes — while GitHub's own auto-merge refuses to land a PR it has
+ * flagged. Dane had said "merge". Nothing was going to happen.
+ *
+ * The one confirmed cause is `docs/WORK-LOG.md merge=union`: git honours that
+ * driver and so does a merge GitHub PERFORMS, but the mergeability GitHub
+ * PRECOMPUTES does not. Merging main in and pushing flipped GitHub to
+ * MERGEABLE within seconds and the armed merge landed it.
+ */
+test('the disagreement asks for the catch-up, it does not merely report it', () => {
+  const g = githubGate(DIRTY_PR, { gitCrossCheck: { known: true, conflicts: false, base: 'origin/main', head: '7e990d13' } });
+  assert.equal(g.action, 'catch-up-locally',
+    'a disagreement with a known remedy must ask for the remedy, not for another look');
+  assert.ok(!/CANNOT TELL/.test(g.reason),
+    'it is no longer a could-not-tell: the relay knows exactly what to do about it');
+  assert.match(g.reason, /merges .*into the branch and pushes/,
+    'and the reason must say what is about to be done to the branch');
+});
+
+test('BREAK-TEST both readings: only GitHub-conflicting AND git-clean asks for a catch-up', () => {
+  // The pair of injected readings is the whole decision. Flip either one and
+  // the answer must change — a fix that only ever caught up would push merge
+  // commits onto branches that genuinely conflict.
+  const bothConflict = githubGate(DIRTY_PR, { gitCrossCheck: { known: true, conflicts: true, base: 'origin/main', head: 'abc12345' } });
+  assert.equal(bothConflict.action, 'conflict',
+    'GitHub CONFLICTING + git CONFLICTING is a real conflict and must still refuse');
+  assert.match(bothConflict.reason, /GitHub and git agree/);
+
+  const cannotAsk = githubGate(DIRTY_PR, { gitCrossCheck: { known: false, why: 'could not fetch the branch' } });
+  assert.equal(cannotAsk.action, 'conflict',
+    'a cross-check that could not be taken is not permission to push to the branch');
+
+  // DIRTY_PR's rollup is shaped for the conflict branch, which returns before
+  // the checks are ever read; a PR that gets PAST that branch needs a real
+  // completed check or it reads as still-running.
+  const githubHappy = githubGate({
+    ...DIRTY_PR,
+    mergeable: 'MERGEABLE',
+    mergeStateStatus: 'CLEAN',
+    statusCheckRollup: [{ name: 'verify', status: 'COMPLETED', conclusion: 'SUCCESS' }],
+  }, { gitCrossCheck: { known: true, conflicts: false, base: 'origin/main', head: '7e990d13' } });
+  assert.equal(githubHappy.action, 'merge',
+    'a PR GitHub is happy with must never be pushed to on the strength of a cross-check');
+});
+
+test('a branch needing the local catch-up is TERMINAL to an in-pass wait, never polled out', () => {
+  // Same reasoning as `update-branch`: no amount of polling makes a branch
+  // catch itself up, so waiting out the budget on it can only end in a
+  // wrong-reason answer — "CI was still running" about a branch whose CI was
+  // fine.
+  const gate = githubGate(DIRTY_PR, { gitCrossCheck: { known: true, conflicts: false, base: 'origin/main', head: '7e990d13' } });
+  const next = afterCatchUpDecision({ gate, elapsedMs: 0, budgetMs: 999_999 });
+  assert.equal(next.action, 'catch-up-locally', 'it must go straight back to the caller that owns the remedy');
+  assert.equal(next.disagreement, true, 'and keep saying which finding it came from');
+  assert.ok(next.reason, 'and say why');
+});
+
+test('the relay performs the catch-up on the disagreement, and says so on the ticket', () => {
+  const src = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '../clickup_direct.mjs'), 'utf8');
+
+  const from = src.indexOf("if (gate.action === 'catch-up-locally') {");
+  assert.ok(from > -1, 'the relay must handle the action the gate now returns');
+  const block = src.slice(from, src.indexOf("if (gate.action === 'update-branch') {", from));
+
+  assert.match(block, /branchCatchUp\.catchUpBranchLocally\(/,
+    'it must actually perform the catch-up, not only report the disagreement');
+  assert.match(block, /comment_text:/,
+    'a branch caught up automatically is not a silent write — it is announced on the ticket');
+  assert.match(block, /CODES\.REAL_CONFLICT/,
+    'and a catch-up that finds a REAL conflict must still hand off');
+  assert.match(block, /if \(dryRun\)/,
+    'a dry run must never push anything');
+  assert.ok(!/--force/.test(block), 'it never force-pushes');
 });
 
 test('a GENUINE conflict still hands off, and is still never resolved by the script', () => {
@@ -1326,6 +1410,149 @@ test('a cross-check that FAILED is reported as failed, not as clean', () => {
 test('DIRTY without CONFLICTING is treated the same way — it is the same computation', () => {
   const pr = { ...DIRTY_PR, mergeable: 'MERGEABLE', mergeStateStatus: 'DIRTY' };
   const g = githubGate(pr, { gitCrossCheck: { known: true, conflicts: false, base: 'origin/main', head: 'aa11bb22' } });
-  assert.equal(g.action, 'wait');
+  assert.equal(g.action, 'catch-up-locally');
   assert.match(g.reason, /DIRTY/);
+});
+
+// Imported as a namespace rather than destructured: these tests assert on the
+// module's own exported constant as well as its function, and reading the
+// source file back is part of pinning the measurement.
+const mergeOnComment = require('./mergeOnComment.js');
+const fs = require('node:fs');
+const path = require('node:path');
+
+// ── The CANNOT TELL bound (2026-09-04, task 86bbuvd50) ───────────────────────
+//
+// THE BUG. A CANNOT TELL is a correct verdict, and the relay repeated it every
+// ten minutes forever while saying "the next pass asks again". On 2026-09-04
+// three pull requests each sat that way for over two hours — #596, #592 and
+// #563 — and each needed an agent session to catch the branch up. A permanent
+// block was indistinguishable from a momentary one, and one of them latched the
+// whole auto-merge lane off.
+//
+// The threshold is MEASURED; the table and the empty 54m..2h07m gap it came
+// from are on CANNOT_TELL_STALE_MS.
+
+const CT = { isCannotTell: true, verdict: 'GITHUB AND GIT DISAGREE — CANNOT TELL' };
+const T0 = 1_700_000_000_000;
+const MIN = 60_000;
+
+test('a fresh cannot-tell starts a run and does NOT escalate', () => {
+  const out = mergeOnComment.cannotTellRun({ prev: null, ...CT, now: T0 });
+  assert.equal(out.state, 'new');
+  assert.equal(out.escalate, false, 'the first sighting is an ordinary wait, not an alarm');
+  assert.equal(out.next.passes, 1);
+  assert.equal(out.next.firstSeenAt, T0);
+  assert.equal(out.next.escalatedAt, null);
+});
+
+test('an ordinary wobble under the threshold never escalates', () => {
+  // The direction that matters most: a bound that fires early turns every
+  // ordinary wait into an alarm and teaches everyone to ignore it. The longest
+  // run that EVER cleared on its own was 54 minutes, so 54 must stay silent.
+  let prev = null;
+  for (const mins of [0, 10, 20, 30, 40, 54]) {
+    const out = mergeOnComment.cannotTellRun({ prev, ...CT, now: T0 + mins * MIN });
+    assert.equal(out.escalate, false, `escalated at ${mins}m — the measured self-clearing ceiling is 54m`);
+    prev = out.next;
+  }
+});
+
+test('past the threshold it escalates exactly once, then goes quiet', () => {
+  // The ticket's own acceptance criterion: "a sixth, seventh and eighth
+  // identical pass produce no further post".
+  let prev = mergeOnComment.cannotTellRun({ prev: null, ...CT, now: T0 }).next;
+  const at = mergeOnComment.cannotTellRun({ prev, ...CT, now: T0 + 95 * MIN });
+  assert.equal(at.state, 'escalate');
+  assert.equal(at.escalate, true);
+  assert.match(at.reason, /1h 35m/, 'it must say how long, in the operator\'s units');
+  assert.match(at.reason, /GITHUB AND GIT DISAGREE/, 'and quote the verdict verbatim');
+  assert.match(at.reason, /nothing was merged, refused or cancelled/i,
+    'it must say it changed no merge decision — the ticket\'s non-goal, stated where a reader sees it');
+  assert.ok(at.next.escalatedAt, 'the escalation must be recorded, or it repeats forever');
+
+  let prev2 = at.next;
+  for (const mins of [105, 115, 125, 200, 600]) {
+    const later = mergeOnComment.cannotTellRun({ prev: prev2, ...CT, now: T0 + mins * MIN });
+    assert.equal(later.escalate, false, `posted again at ${mins}m — one escalation, then silence`);
+    assert.equal(later.state, 'quiet');
+    prev2 = later.next;
+  }
+});
+
+test('a CHANGED verdict resets the clock and may escalate on its own merits', () => {
+  const first = mergeOnComment.cannotTellRun({ prev: null, ...CT, now: T0 });
+  const changed = mergeOnComment.cannotTellRun({
+    prev: first.next, isCannotTell: true,
+    verdict: 'CANNOT TELL yet — GitHub is still computing', now: T0 + 200 * MIN,
+  });
+  assert.equal(changed.state, 'new', 'a different wall is a different fact');
+  assert.equal(changed.escalate, false);
+  assert.equal(changed.next.firstSeenAt, T0 + 200 * MIN, 'the clock restarts from the change');
+  assert.equal(changed.next.passes, 1);
+
+  const later = mergeOnComment.cannotTellRun({
+    prev: changed.next, isCannotTell: true,
+    verdict: 'CANNOT TELL yet — GitHub is still computing', now: T0 + 300 * MIN,
+  });
+  assert.equal(later.escalate, true, 'the new run escalates on its own merits');
+});
+
+test('a verdict that clears leaves NO residue', () => {
+  const escalated = mergeOnComment.cannotTellRun({
+    prev: { reason: CT.verdict, firstSeenAt: T0, passes: 9, escalatedAt: T0 + 95 * MIN },
+    ...CT, now: T0 + 120 * MIN,
+  });
+  assert.equal(escalated.state, 'quiet');
+
+  const cleared = mergeOnComment.cannotTellRun({
+    prev: escalated.next, isCannotTell: false, verdict: '', now: T0 + 130 * MIN,
+  });
+  assert.equal(cleared.state, 'clear');
+  assert.equal(cleared.next, null, 'a resolved block must not leave the next one half-way to an alarm');
+  assert.equal(cleared.escalate, false);
+
+  const fresh = mergeOnComment.cannotTellRun({ prev: cleared.next, ...CT, now: T0 + 140 * MIN });
+  assert.equal(fresh.escalate, false, 'the next block starts from zero');
+  assert.equal(fresh.next.passes, 1);
+});
+
+test('an unreadable stored timestamp restarts the clock rather than disabling the alarm', () => {
+  // Reading a missing timestamp as "just started, forever" makes the alarm
+  // unreachable — this ticket's own bug one level up, and the exact defect
+  // task 86bbu60ax found in the claim reader the same day.
+  for (const bad of [undefined, null, 'not-a-date', NaN]) {
+    const out = mergeOnComment.cannotTellRun({
+      prev: { reason: CT.verdict, firstSeenAt: bad, passes: 4, escalatedAt: null },
+      ...CT, now: T0,
+    });
+    assert.equal(out.state, 'new', `firstSeenAt ${String(bad)} must restart, not stall`);
+    assert.equal(out.next.firstSeenAt, T0);
+    assert.equal(out.next.escalatedAt, null, 'and must stay reachable on a later pass');
+  }
+});
+
+test('the threshold sits in the measured gap, and the measurement is written down', () => {
+  // The number is load-bearing and was picked from real data. If someone
+  // changes it, they must move it deliberately and re-measure.
+  assert.equal(mergeOnComment.CANNOT_TELL_STALE_MS, 90 * 60 * 1000);
+  const src = fs.readFileSync(path.join(__dirname, 'mergeOnComment.js'), 'utf8');
+  assert.match(src, /86bbugcpa\s+16 lines/, 'the measured table must stay beside the constant');
+  assert.match(src, /Nothing sits between 54 minutes and 2h07m/,
+    'the gap that chose the threshold is the justification and must not be deleted');
+  assert.match(src, /DO NOT UNIFY THIS WITH/,
+    'the coincidence with the stranded clock must stay flagged, or someone will tidy them into one');
+});
+
+test('the bound never changes a merge decision — the ticket\'s non-goals', () => {
+  // It must not claim a conflict, refuse a merge, or cancel auto-merge. The
+  // function returns a report and a stored counter, and nothing else.
+  const out = mergeOnComment.cannotTellRun({
+    prev: { reason: CT.verdict, firstSeenAt: T0, passes: 9, escalatedAt: null },
+    ...CT, now: T0 + 200 * MIN,
+  });
+  assert.equal(out.escalate, true);
+  for (const key of ['action', 'refuse', 'conflict', 'cancel', 'merge']) {
+    assert.ok(!(key in out), `cannotTellRun returned "${key}" — it must not influence the merge decision`);
+  }
 });

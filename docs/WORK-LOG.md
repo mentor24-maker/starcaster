@@ -48,6 +48,342 @@ One more thing was measured and is not fixed here: the original lane has never
 once armed. In 573 passes since 23 August it considered 640 tickets, announced
 nothing and merged nothing. That is recorded on the ticket and needs its own
 look.
+## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
+
+Until now, when Starcaster posted to X on a client's behalf, the post actually
+went out through Starcaster's own X account. There was one set of X keys for
+the whole platform, and no way to sign in as anybody else. This adds the
+missing half: a client presses Connect on the Connections screen, approves it
+on X's own screen, and from then on their posts go out as them.
+
+Dane's own X posting is untouched and keeps working exactly as before. A
+client with no X connection still goes out the old way, on the same code, so
+nothing that works today can stop working because of this.
+
+The reason this was more than "add another platform" is that X has two
+completely different ways of signing in, and the one Starcaster already used
+cannot represent anybody but the account it was set up with. So the second way
+had to be built alongside it, and the two now have to coexist without ever
+getting muddled — a post signed with half of one and half of the other belongs
+to nobody, X rejects it, and the error names neither account. The code makes
+that mixture impossible to build rather than merely unlikely.
+
+One small thing that turns out to matter a lot: an X permission expires after
+about two hours. The renewal machinery built last week could never actually
+renew one, and it needed two separate things to be able to: the value it
+renews *with*, and the deadline that tells it when to bother. Neither had
+anywhere to travel. Facebook and Instagram never noticed, since their
+permissions do not expire.
+
+Both are carried now. The first was fixed in the original round of this work;
+the second was caught in review, and it was the one that mattered more,
+because it failed *silently*. Everything looked right — the permission saved,
+the card went green, the renewal check ran on schedule and reported success —
+and it renewed nothing, because it had never been told when the permission
+runs out and read that silence as "this one lasts forever". A client's posts
+would have started failing an afternoon later with nothing anywhere saying
+why. A permission that arrives without the means to renew itself is also now
+refused outright rather than saved, for the same reason.
+
+Two smaller things were corrected alongside it. When X refuses a client's post
+for want of permission, the message used to send whoever was reading it off to
+Starcaster's own developer settings to change a key that has nothing to do
+with that client — it now names the connection that actually needs redoing.
+And image posting is flagged, in the code, as unproven: it goes through an
+address X has announced it is retiring, nothing here can test it without a
+live X account, and it was carrying a comment that claimed otherwise.
+
+Before any of this can be switched on, X's developer site has to issue two new
+values and be told the address to send clients back to. Until that is done the
+Connect button says so in plain English, and says which two values it means —
+they are easy to confuse with the ones already saved.
+
+One last thing came out of storing that deadline, and it was hiding in a shared
+piece of plumbing rather than in anything to do with X. Every stored date passes
+a check that refuses impossible times — hour 25, minute 61, the 30th of
+February. That check was reading the seconds wrongly. Clocks in this system
+record time down to the millisecond, so the seconds arrive as something like
+"59.096", and the check compared that against 59 and decided a second which does
+not exist had been supplied. It was right about 60. It was wrong about every
+fraction of the 59th, which is one ordinary second in every sixty.
+
+Nothing had met it before, because no part of the connection code stored a real
+deadline until this work. Now every X connection stores one — so a client who
+happened to press Connect in the last second of a minute would have been told
+their account could not be saved, with a reason nobody could act on, roughly one
+attempt in sixty. It also explains a test that had been failing at random. The
+check now reads the whole seconds and ignores the fraction, so 60 is still
+refused and 59.999 is correctly a real time.
+
+Review then found the thing all of that had made reachable, and it was the
+worst kind: it looked like success. Storing the deadline was right, but two
+places treated "past its deadline" as "dead" when what it actually means is
+"nobody has renewed it yet". A client's X permission lasts about two hours. Any
+project that went an afternoon without posting was past that, and from then on
+every post it sent went out on Starcaster's own X account instead — with the
+card still green, nothing written to any log, and the whole point of this work
+quietly reversed. The renewal machinery was sitting right there and worked
+perfectly; nothing ever asked it, because it only ran on permissions that had
+NOT yet run out, which is exactly backwards.
+
+The second place was the scheduled health check, and it made the first one
+permanent. On finding a lapsed permission it wrote it off as dead without
+trying to renew it — so once the check had been past, that account was
+finished for good rather than until the next renewal.
+
+Both now try renewing first and only give up if the renewal genuinely fails,
+in which case they say which account and why. A permission the client or X
+actually withdrew is still refused outright: only the clock is recoverable, and
+no amount of renewing overrules somebody taking a permission back.
+
+One trap had to be avoided on the way. The act of renewing a permission also
+marks that account as the most recently touched — and "most recently touched"
+is how Starcaster decides which of a client's accounts to post from. That is
+right when the renewal happens because a post is about to go out. It would be
+badly wrong on a schedule: a client with two X accounts would find their posts
+drifting onto whichever one the health check happened to renew last, on a
+timer, with nothing visibly wrong. The scheduled renewal is marked not to
+re-elect. The test proving it does that had to be rewritten once — the first
+version could not actually fail, because everything in a test happens inside
+the same millisecond and the ordering it was checking held by accident.
+
+Finally, the note about image posting being unproven moved out of the code and
+onto the card the client actually reads, and a sign-in route that could never
+have completed an X connection — it dropped one of the two values the sign-in
+needs — was fixed. Nothing visible was broken by that second one, because the
+live screen uses a different route, but a route that looks like it works is
+worse than one that is missing.
+
+A third round of checking found the same accident arriving through yet another
+door, and this time the answer was to close the room rather than the door.
+
+The door: if X could not be reached at the moment a client's permission needed
+renewing — a momentary outage, a slow answer, a busy signal — the system wrote
+that permission down as dead. Not "not renewed yet". Dead. And "dead" is a
+verdict it never revisits, deliberately, because a client who takes their
+permission back must not have it quietly renewed. So one bad second at X ended
+the connection for good, the client's own permission still perfectly valid, and
+every post from then on went out on Dane's account with the card still green.
+The distinction that was missing is an ordinary one: X saying "no" is an answer,
+and X not answering at all is not. Only the first is written down as final now.
+The second says so on the card and is tried again on the next post.
+
+The room: for every other platform, the account Starcaster falls back to is
+Starcaster's own — wrong, but institutional. For X it is Dane's personal
+account. Three rounds of review each found a different route by which a
+client's post could end up there, and each was closed individually. So the rule
+is now stated once, at the exit itself: if a project has its own X connection
+and it cannot be used right now, the post does not go out at all, for any
+reason — including a reason nobody has thought of yet. It fails loudly, says
+which account and why, and can be retried. A project with no X connection is
+untouched and still posts the old way, which is Dane's own posting and the one
+thing that must not change.
+
+Two smaller repairs went with it. A permission already past its deadline whose
+stored value could not be read was leaving a green card on a connection the
+clock had plainly condemned; it now goes amber and says why, without being
+written off, because failing to read our own records is our fault and not a
+verdict about the client. And the client identifier is now sent on the three
+calls to X that identify Starcaster as an application — X's own published
+examples include it, leaving it out would fail every client sign-in, and adding
+it costs nothing if it turns out to be optional. That one is unproven against
+the live service, as everything about X here still is.
+
+Something was also wrong with the tests themselves, and it is worth recording
+because it made a whole class of checking worthless. The test scaffolding
+rebuilt its fake database for each test but let one module keep talking to the
+previous one — so any test asking "what did this actually write down?" was
+reading an abandoned copy. No test had ever asked that question, so nothing
+noticed. The reproduction for the fault above is the first one that had to, and
+it passed on its own and failed alongside the others until the scaffolding was
+fixed.
+## 2026-09-04 — A pull request that could never merge, saying it was about to (#597)
+
+Every task adds one line to the top of the work log, so any two jobs running at
+once always bump into each other there. Years ago we told git "on that one file,
+just keep both entries" — and git does exactly that. The trouble is that GitHub
+answers two different questions about merging, and only one of them respects
+that instruction. When GitHub actually performs a merge, it obeys. But the little
+"can this be merged?" badge GitHub works out in advance and shows on the pull
+request does not — so a branch that merges perfectly can wear a red CONFLICTING
+badge.
+
+That badge is not just cosmetic. GitHub refuses to auto-merge anything it has
+badged, so the pull request stops dead: every check green, the merge armed, and
+nothing happening. That is what happened to #585 yesterday. You had said
+`merge`. The relay checked, correctly noticed that GitHub and git disagreed,
+declined to call it a conflict — and then told you five times over fifty minutes
+that auto-merge was armed and would land it. It was never going to.
+
+Two changes. The note in the settings file that claimed GitHub honours the
+instruction everywhere now says which question gets which answer. And the relay
+now performs the fix instead of describing it: when GitHub says conflicting and
+git says clean, it merges `main` into the branch and pushes, which clears the
+badge in seconds — exactly what clearing #585 by hand did. It writes a note on
+the ticket when it does, because a machine pushing to your branch on its own
+initiative should never be silent. If the merge turns out to genuinely conflict,
+it aborts and hands off untouched, and it never force-pushes.
+
+## 2026-09-04 — Every script that talks to ClickUp now goes through one door, so the budget is finally a real number (#592)
+
+ClickUp only allows us about a hundred requests a minute, and that allowance
+belongs to the *login*, not to any one script — one allowance shared by
+everything we run. Until yesterday six different pieces of our machinery each
+opened their own connection to ClickUp and none of them had any idea the
+others existed. So there was no way to ask the obvious question: how much of
+this minute's allowance have we already spent? On 3 September that cost us a
+day. One job was quietly burning 114 requests a minute against a hundred-a-minute
+allowance, got refused on every single pass, and the lane that merges finished
+work sat dead for 271 passes in a row before anybody noticed.
+
+Yesterday's ticket built the single shared door and moved the biggest script
+through it. This one moves the last four: the pause switch every loop asks
+before it starts, the hourly health check on the Mini, the gate that runs in
+GitHub on every pull request, and the piece that files a bug report when one
+comes in. From here the count is a count of *everything*, which is the only
+kind of budget worth having.
+
+One of those four had been invisible the whole time, and that is the part
+worth remembering. The bug-report forwarder never *looked* like it was calling
+ClickUp — it picked its connection up in a roundabout way, so the automatic
+check that hunts for stray connections read clean while the forwarder spent
+requests nobody was counting. There is now a second check that looks for that
+sleight of hand, and we deliberately broke it to watch it catch it.
+
+The first version of that second check only recognised *one way of writing*
+the trick, while the note above it told the next reader that the whole trick
+was covered. Review caught it, and that overclaim was the real defect: a guard
+that says more than it does is worse than no guard, because the next person
+trusts the sentence and stops looking. It got better at this three times over,
+and each round the note above it still promised a little more than the check
+below it delivered.
+
+So this entry is not going to make that promise a fourth time. The check now
+recognises several more ways of writing the trick, each one named and
+separately proved catchable, and it decides which files to inspect by looking
+for ClickUp itself rather than for a variable name that three unrelated files
+happen to share. What it does **not** do is guarantee that no second door
+exists anywhere in the repo, and review found three specific ways past it that
+still work. Dane's call was to ship the migration — which is the valuable half,
+and is correct — and to book the guard's remaining holes as work of their own
+rather than spend a fifth round on them. That is ticket 86bbuzq5f, and the
+probes review used to find each hole are already written down there as the
+things it has to make fail.
+
+The lesson underneath four rounds of this is worth keeping: we were trying to
+prove a rule about the *whole repo* by searching the text of the code for
+patterns, and English sentences describing a rule will always outrun the
+patterns that look for it. Whether that check should keep scanning the text at
+all, or should instead watch the running program and object the moment a
+request goes out the wrong way, is the open question on that ticket.
+
+The riskiest piece was the gate that runs inside GitHub, because its ClickUp
+login has quietly expired on us before, and a gate that keeps answering while
+its login is dead is worse than one that stops. It also sat in a file that
+starts running the moment anything touches it, which meant nothing could test
+it — so what it does with a missing or dead login had never actually been
+checked by anything. We moved those calls somewhere testable and wrote that
+test **before** changing how they connect. It does not simply check for the
+right wording; it runs the *old* code alongside the new one and insists they
+give the same answer for a healthy reply, an expired login, a revoked one, a
+refusal, and a ClickUp that cannot be reached at all.
+
+There is exactly one case where the two do *not* agree, and this entry claimed
+otherwise until review checked. When ClickUp answers normally but sends back
+something that is not readable at all, the old code called it "ClickUp is
+unreachable" — which is the one thing it definitely was not; it answered. The
+new wording describes the reply that actually arrived. Nothing downstream
+changes: the gate says "cannot tell" either way, and only the sentence a human
+reads is different. That difference is now written down as a test of its own,
+so it is a decision on the record rather than something a future reader has to
+rediscover by diffing.
+
+Review then flagged that the one test which uses the real connection was
+secretly calling ClickUp on every test run. We measured it rather than
+assuming, and it was not: the test file points the ClickUp address at a
+deliberately non-existent one before it starts, so the request goes nowhere.
+Recording that here because the mistake is an easy one and we made it too at
+first — running that code from a scratch file behaves differently from running
+it under its test, on purpose. The suggested fix was still worth doing for a
+different reason, so we did it. The test now hands the machinery a stand-in
+connection of its own, which means it depends on nothing outside the computer
+it runs on, and it proves more than it used to: not merely that *a* counter
+moved, but that the shared door itself was what carried the request. A version
+that quietly went around the door, with everything else about it correct, now
+fails. So does one that forgets to put the stand-in back afterwards.
+
+All four commands were photographed before and after: two are identical down
+to the byte, and the others differ only in their clocks and in which tickets
+happened to be moving at the time.
+
+Review sent it back once more, and this time the finding held up. The check
+that hunts for stray connections to ClickUp was only opening **two** of the
+codebase's folders, while the note beside it told the next reader that every
+ClickUp request in the whole codebase was accounted for. We proved it by
+measurement rather than by reading: we wrote an obvious stray connection into
+two of the folders it never opens, ran the check, and it reported all clear —
+twelve checks, twelve passes. One of those folders is not hypothetical; it is
+where the live request path that files a bug report actually lives, which is
+one of the very things this ticket moved. The check now starts at the top of
+the codebase and walks all of it, skipping a short list of folders that each
+say in writing why they are skipped — the code that runs in a visitor's
+browser (which cannot use the shared door at all, and must never carry our
+login), retired code that nothing runs, and other people's code.
+
+The more useful half is a check on the check. Everything here could already
+prove it was able to *spot* a stray connection; nothing proved it was ever
+*looking at the file*. A guard can go blind in either direction, and a guard
+that has quietly stopped opening a folder looks exactly like a codebase with
+nothing wrong in it. So it now fails outright if it stops reaching any folder
+that has code in it today, naming which one went missing, and it fails if the
+skip list ever names a folder that no longer exists — because that entry would
+be silently excusing whatever folder later took the name.
+
+One more sentence had stopped being true. The note at the top of one file told
+the next reader to hand it a stand-in connection under a name the code does not
+accept. Nothing would have gone wrong loudly: an unrecognised name is ignored
+in silence, so their stand-in would simply never run and the real login would
+be used instead — inside GitHub, on every pull request, while their test
+reported success. That is the third time this one ticket has been sent back for
+a sentence sitting beside a check that no longer matched it, so rather than
+just correcting the sentence we made it fail on its own: a test now reads the
+note and the code together, and complains if the note names anything the code
+will not take.
+## 2026-09-04 — The Pages list stops claiming every page uses the same template (#598)
+
+On Builder: Pages, the Template column said "Standard Right-Form" on every
+single row, and the Template dropdown above it listed "Standard Right-Form"
+five times over. Neither was true, and both came from the same mistake.
+
+A page carries two template-ish values that mean different things. One is a
+leftover layout name the server makes up from the page's own web address, and
+it names no template at all. The other records which saved template the page
+was actually built from. The screen was reading the first one — and the code
+that turns a value into a name ends with "…or if you don't recognise it, give
+me the first template in the list". The first template in the list is Standard
+Right-Form. So every value it could not recognise came out wearing that name,
+on every row. The dropdown then added one entry per unrecognised page, each
+labelled through the same guess, which is where the five identical entries
+came from.
+
+The column now reads the value that actually means something, and the code
+behind it never guesses: it gives the template's real name, or says "No
+template" when a page genuinely has none, or says "Unknown template" and shows
+the value when something is set that names nothing. That last case is a real
+data problem and should look like one rather than hiding behind a plausible
+name. The dropdown is rebuilt from real templates only.
+
+Two problems turned up only because the screen was opened and used rather than
+just read. The same list of options was also filling the bulk-edit dropdown,
+which *writes* to pages — so it could have offered "No template" as something
+to save onto them. And real template names are longer than the fake one had
+been, so a long one ran straight across the neighbouring column and made the
+web addresses unreadable; it now shortens with the same word-boundary
+cropping the other columns already use, with the full name on hover.
+
+Checked against the live database first, because the whole change depends on
+that second value existing there: it does, and 116 of the 136 pages have one.
+Nothing about the database was changed.
 
 ## 2026-09-04 — A job that has stopped working now says so within hours, not the next day (#596)
 

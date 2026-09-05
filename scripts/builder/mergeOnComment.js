@@ -442,9 +442,12 @@ function unmetProtectionRule(pr) {
  * What to do with the PR itself, given `gh pr view --json
  * state,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup`.
  *
- *   'merge'         — go
- *   'update-branch' — behind main; catch it up, then re-run the gate
- *   'conflict'      — hand it to an agent session; a script never resolves conflicts
+ *   'merge'            — go
+ *   'update-branch'    — behind main; catch it up via GitHub, then re-run the gate
+ *   'catch-up-locally' — GitHub says it conflicts and git says it does not;
+ *                        merge main in HERE and push (GitHub's own
+ *                        `update-branch` refuses on a PR it has flagged)
+ *   'conflict'         — hand it to an agent session; a script never resolves conflicts
  *   'wait'          — checks still running; say nothing, try next pass
  *   'refuse'        — terminal; comment on the ticket and stop
  *
@@ -500,10 +503,29 @@ function githubGate(pr, { gitCrossCheck = null } = {}) {
   if (mergeable === 'CONFLICTING' || mergeStateStatus === 'DIRTY') {
     const cc = gitCrossCheck;
     if (cc && cc.known && cc.conflicts === false) {
+      // THE DISAGREEMENT HAS A KNOWN REMEDY, SO REPORTING IT IS NOT ENOUGH
+      // (2026-09-04, task 86bbuvcwc). This used to answer `wait` — no
+      // conflict claimed, ask again next pass — which is right about the
+      // conflict and wrong about what happens next. Nothing was going to
+      // change on its own: measured on PR #585, this exact line was printed
+      // five times over fifty minutes, saying auto-merge would land a pull
+      // request GitHub had flagged and therefore would not land.
+      //
+      // One confirmed cause is `docs/WORK-LOG.md merge=union`. Git honours
+      // that driver and so does a merge GitHub PERFORMS, but the mergeability
+      // GitHub PRECOMPUTES does not — so a union-only difference reads as
+      // CONFLICTING for as long as the branch stays behind. That is not
+      // asserted as THE cause here, because this function does not know it:
+      // it is one measured instance of the general shape.
+      //
+      // What IS general is the remedy, and it was measured on the same PR —
+      // merging main in and pushing flipped GitHub to MERGEABLE within
+      // seconds. So the answer is the local catch-up, not GitHub's
+      // `update-branch` (which refuses on a PR it has called CONFLICTING).
       return {
-        action: 'wait',
+        action: 'catch-up-locally',
         disagreement: true,
-        reason: `CANNOT TELL — GitHub reports this branch as ${mergeable === 'CONFLICTING' ? 'CONFLICTING' : 'DIRTY'}, but git merges ${cc.base || 'main'} into ${cc.head || 'the branch'} cleanly (merge-tree exit 0). The two sources disagree, so no conflict is claimed; the next pass asks again`,
+        reason: `GitHub reports this branch as ${mergeable === 'CONFLICTING' ? 'CONFLICTING' : 'DIRTY'}, but git merges ${cc.base || 'main'} into ${cc.head || 'the branch'} cleanly (merge-tree exit 0). The two sources disagree, so no conflict is claimed — this machine merges ${cc.base || 'main'} into the branch and pushes, which is what cleared the identical reading on PR #585`,
       };
     }
     if (cc && cc.known && cc.conflicts === true) {
@@ -707,7 +729,7 @@ function mayWaitInPass(waitsUsed, cap = MAX_IN_PASS_WAITS) {
  * string to prove every raise site is classified, and a comment quoting it
  * would be an eleventh refusal that carries no code.)
  *
- * @returns {{ action: 'merge'|'refuse'|'conflict'|'update-branch'|'wait'|'poll-again', reason?: string, refusalCode?: string }}
+ * @returns {{ action: 'merge'|'refuse'|'conflict'|'update-branch'|'catch-up-locally'|'wait'|'poll-again', reason?: string, refusalCode?: string }}
  */
 function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS } = {}) {
   const action = String(gate?.action || '');
@@ -724,6 +746,18 @@ function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS 
   // the next pass, where the catch-up path already lives.
   if (action === 'update-branch') {
     return { action, reason: gate.reason || 'the branch fell behind main while waiting' };
+  }
+
+  // Same reasoning, different remedy (task 86bbuvcwc). A branch GitHub has
+  // flagged as CONFLICTING while git calls it clean does not un-flag itself
+  // either, so polling it out can only end in a wrong-reason answer. It goes
+  // back terminal, to the caller that owns the local catch-up.
+  if (action === 'catch-up-locally') {
+    return {
+      action,
+      disagreement: true,
+      reason: gate.reason || 'GitHub and git disagree about whether this branch conflicts',
+    };
   }
 
   // Anything else means "not resolved yet". Out of budget is a WAIT — the
@@ -1186,6 +1220,137 @@ function mergedElsewhereNotice({ commentId, pr, mergedAt, armed }) {
   };
 }
 
+
+/**
+ * How long one unchanging CANNOT TELL may repeat before somebody is told.
+ *
+ * MEASURED, NOT CHOSEN (2026-09-04, task 86bbuvd50 — and the ticket asked for
+ * this explicitly, because the 2026-09-02 recency-alarm proposal died of a
+ * number picked from a single incident).
+ *
+ * Every `MERGE WAITING ... CANNOT TELL` line in the relay's own launchd log,
+ * grouped by ticket, first sighting to last:
+ *
+ *   86bbugcpa   16 lines   09:23 -> 12:02   2h39m   an agent session unstuck it
+ *   86bbuvcwc   16 lines   09:55 -> 12:33   2h38m   an agent session unstuck it
+ *   86bbpz1hu   13 lines   10:37 -> 12:44   2h07m   an agent session unstuck it
+ *   86bbtqpxd    6 lines   23:56 -> 00:50     54m   cleared on its own
+ *   86bbpz1gd    4 lines   14:20 -> 15:04     44m   cleared on its own
+ *   86bbugzep    2 lines   16:04 -> 16:44     40m   cleared on its own
+ *   86bbugeda    2 lines   08:40 -> 08:50     10m   cleared on its own
+ *   86bbqz7rg    1 line                        —    cleared on its own
+ *   86bbjt1b0    1 line                        —    cleared on its own
+ *
+ * **Nothing sits between 54 minutes and 2h07m.** That empty gap chose the
+ * threshold, the same way DOCTRINE 6.22's did. Ninety minutes is above every
+ * run that has ever resolved itself and below every run that has ever needed
+ * hands, with roughly half an hour of margin on each side.
+ *
+ * MEASURED IN TIME, NOT IN PASSES, and that is deliberate. A ticket only
+ * produces a line on passes where the relay actually looks at it — 86bbugzep's
+ * two lines span forty minutes, not twenty — so a pass count is not a clock.
+ * The count is still reported, because it is what a reader wants to see; it is
+ * simply not what the decision turns on.
+ *
+ * DO NOT UNIFY THIS WITH `pipelinePause.STRANDED_AFTER_MS`, which is also 90
+ * minutes. The equality is a coincidence of two independent measurements: that
+ * one bounds how long a BUILD PASS may legitimately take, this one bounds how
+ * long GitHub may legitimately be undecided. They will move for different
+ * reasons, and a future reader tidying them into one constant would couple two
+ * unrelated clocks — the drift failure this repo already carries three
+ * comments about.
+ */
+const CANNOT_TELL_STALE_MS = 90 * 60 * 1000;
+
+/**
+ * Should this repeated CANNOT TELL be escalated, and has it already been?
+ *
+ * PURE. The caller owns reading and writing `prev` (the per-PR ledger entry);
+ * this only decides. That split is why the quiet-after-escalating rule can be
+ * tested without a ledger, a relay pass or a clock.
+ *
+ * WHAT THIS DOES NOT DO (the ticket's non-goals, restated where they can be
+ * violated): it never claims a conflict, never refuses a merge and never
+ * cancels auto-merge. CANNOT TELL is a CORRECT verdict — only its silence was
+ * wrong. Every branch below returns the same `verdict` it was handed.
+ *
+ * @param {object|null} prev   the stored run: { reason, firstSeenAt, passes, escalatedAt }
+ * @param {string} verdict     this pass's reason text, verbatim ('' if not a cannot-tell)
+ * @param {boolean} isCannotTell  whether this pass's verdict is a cannot-tell at all
+ * @returns {{ state:'clear'|'new'|'holding'|'escalate'|'quiet', next:object|null, escalate:boolean, reason?:string }}
+ */
+function cannotTellRun({ prev, verdict, isCannotTell, now = Date.now(), thresholdMs = CANNOT_TELL_STALE_MS } = {}) {
+  // Not a cannot-tell this pass — the block is over, whatever it was. Returning
+  // `next: null` is what leaves NO RESIDUE: a resolved wobble must not make the
+  // next unrelated block start half-way to an alarm.
+  if (!isCannotTell) return { state: 'clear', next: null, escalate: false };
+
+  const reason = String(verdict || '').trim();
+  const previous = prev && typeof prev === 'object' ? prev : null;
+
+  // A DIFFERENT cannot-tell is a different fact, so the clock restarts and the
+  // new run may escalate later on its own merits. Comparing the reason text is
+  // what makes "still the same wall" different from "a new wall every pass".
+  if (!previous || String(previous.reason || '') !== reason) {
+    return {
+      state: 'new',
+      next: { reason, firstSeenAt: now, passes: 1, escalatedAt: null },
+      escalate: false,
+    };
+  }
+
+  // A POSITIVE FINITE NUMBER, nothing looser. `Number(null)` is 0 and 0 is
+  // finite, so a plain `Number.isFinite` check would read a null timestamp as
+  // the epoch — making heldMs about 56 years and escalating instantly on a
+  // corrupt record. The test for this caught it; the noisy direction is as
+  // wrong as the silent one.
+  const rawFirst = previous.firstSeenAt;
+  const firstSeenAt = typeof rawFirst === 'number' && Number.isFinite(rawFirst) && rawFirst > 0
+    ? rawFirst
+    : NaN;
+  const passes = Number(previous.passes || 0) + 1;
+
+  // An unreadable stored timestamp is NOT read as "just started" — that would
+  // make the alarm unreachable forever, which is this ticket's own bug wearing
+  // a different hat (and exactly what task 86bbu60ax found in the claim reader
+  // on 2026-09-04). It restarts the clock and says so by leaving escalatedAt
+  // null, so the next pass can still get there.
+  if (!Number.isFinite(firstSeenAt)) {
+    return {
+      state: 'new',
+      next: { reason, firstSeenAt: now, passes: 1, escalatedAt: null },
+      escalate: false,
+    };
+  }
+
+  const heldMs = Number(now) - firstSeenAt;
+  const carried = { reason, firstSeenAt, passes, escalatedAt: previous.escalatedAt || null };
+
+  // ESCALATED ALREADY — the whole point of the bound. It stays silent until the
+  // verdict changes or clears, both of which are handled above. Without this
+  // branch the fix would post every ten minutes forever, which is the failure
+  // REPORTING-NEEDS-A-READER clause 2 names: one noisy escalation beats 820
+  // silent ones, and N escalations beat neither.
+  if (previous.escalatedAt) return { state: 'quiet', next: carried, escalate: false };
+
+  if (heldMs < Number(thresholdMs)) return { state: 'holding', next: carried, escalate: false };
+
+  const hours = Math.floor(heldMs / 3_600_000);
+  const mins = Math.round((heldMs % 3_600_000) / 60_000);
+  const held = hours ? `${hours}h ${mins}m` : `${mins}m`;
+  return {
+    state: 'escalate',
+    next: { ...carried, escalatedAt: now },
+    escalate: true,
+    heldMs,
+    reason:
+      `This pull request has answered the same way for ${held} across ${passes} pass(es) and has not moved: `
+      + `"${reason}" — a verdict that repeats without changing is not a momentary wobble, and nothing on `
+      + 'this side will say so again until it changes or clears. It needs an agent session or Dane to look. '
+      + 'Nothing was merged, refused or cancelled by this message.',
+  };
+}
+
 module.exports = {
   REFUSAL_CODES: R,
   classifyRefusal,
@@ -1193,6 +1358,8 @@ module.exports = {
   refusalNeeds,
   IN_PASS_WAIT_MS,
   AUTO_MERGE_STALE_MS,
+  CANNOT_TELL_STALE_MS,
+  cannotTellRun,
   autoMergeDecision,
   autoMergeArmedTooLong,
   mergedElsewhereNotice,

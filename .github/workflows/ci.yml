@@ -4,6 +4,26 @@ on:
   pull_request:
   push:
     branches: [main]
+  # A MERGE QUEUE DOES NOT TEST THE PULL REQUEST BRANCH (2026-09-04, task
+  # 86bbv1qp9). It builds a temporary `merge_group` ref — this branch stacked
+  # on top of everything already queued ahead of it — and waits for the
+  # REQUIRED CHECKS TO REPORT ON THAT REF. A workflow that does not listen for
+  # the event never starts, so the queue waits forever for a check that will
+  # never run, and every merge stops. Silently: each individual pull request
+  # still shows a full row of green ticks from its own `pull_request` run.
+  #
+  # So this trigger goes in FIRST, on its own, and is proved working before a
+  # queue is switched on anywhere. Removing it later without also turning the
+  # queue off takes the merge lane from slow to completely dead, which is why
+  # `mergeQueueTriggers.test.js` fails if it disappears.
+  #
+  # The cost is that `verify` runs twice for a change that goes through the
+  # queue — once on the pull request, once in the group. That is the point
+  # rather than waste: the second run is the only one that tests the code as
+  # it will actually land, which is exactly what `strict: true` branch
+  # protection has always been asking for and what every hand-driven catch-up
+  # merge was doing by hand.
+  merge_group:
 
 env:
   # Skip the browser download during `npm ci` — Playwright would otherwise
