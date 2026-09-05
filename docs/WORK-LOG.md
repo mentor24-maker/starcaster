@@ -48,6 +48,217 @@ Proven the way the ticket asked: putting the original fault back now produces
 out again goes green. The new rule is also plain enough to be tested without a
 browser, so for the first time a piece of this check runs in CI on every pull
 request.
+## 2026-09-05 — A new page keeps the template you chose (#614)
+
+Making a brand new page in the Builder, you could pick a Template and a Theme,
+press Save, and be told it saved — and the Template would come back empty while
+the Theme stuck. Setting it a second time worked, so it looked like the first
+save just did not take.
+
+It was not the save. The part of the server that creates a page keeps a list of
+which fields it is allowed to store, and the template was never added to that
+list. The Builder was sending it every time; the server quietly dropped it and
+still answered "created". The Theme survived because the Theme was on the list,
+and the second attempt worked because editing an existing page runs through
+different code that does know about the field.
+
+The field is stored now. That list also moved out of the middle of the request
+handler into its own named piece of code with tests on it, because a list
+buried inside a route is one nothing can check — which is how a field went
+missing in the first place without anyone noticing. Two smaller things came
+with it: the Page Details panel now re-reads the template back off the saved
+page rather than showing what you typed, and a fallback deep in the storage
+code that could drop the template while reporting success now says out loud
+when it fires.
+## 2026-09-05 — A main menu item now joins up with its dropdown instead of floating above it (#615)
+
+When you hover a top menu item that has a dropdown — "Pickleball", for
+instance — the item and the panel underneath it read as two separate rounded
+pills stacked on top of each other, with a gap between them. This adds a
+checkbox to the Navigation module, **Square bottom when open**, which squares
+off the bottom two corners of the item and the top two corners of the panel
+while that dropdown is open, so the pair touch and read as one connected
+shape. Move the mouse away and the item is fully rounded again.
+
+It is off until you switch it on, so no client's menu changes on its own. The
+way that promise is kept is worth a line: with the box unticked the code sends
+the browser nothing new at all, and every new styling rule is written to fall
+back to exactly what it does today. So a menu nobody has touched is not merely
+"the same numbers" — it receives the identical instructions it received before
+this existed. Three tests check that, one of them by comparing the whole set
+of instructions before and against after.
+
+Menus that stack into a phone-style drawer are left alone deliberately. There
+the panel is an indented list rather than a card hanging off a bar, so there
+is nothing for a squared corner to join to, and squaring it would just look
+like a fault.
+
+One tool got a small upgrade along the way. The check that photographs what a
+module renders could only read a page sitting still, and this feature only
+exists while the mouse is on something — so it can now hover before it looks.
+Without that, the only proof available would have been a unit test and
+somebody's eye.
+## 2026-09-04 — The pipeline switch now records who handed the deck back, and on what word (#607)
+
+The build pipeline has a switch. When Dane needs the machines to stop — he is
+working on something by hand and does not want them claiming tickets underneath
+him — someone pauses it, and pausing already records *why*. Resuming recorded
+only who and when. So the one question worth asking afterwards — *on whose word
+did this start up again?* — could not be answered from the switch's own ticket
+at all.
+
+That is not a hypothetical. On 1 September the line was paused because Dane was
+fast-tracking a task by hand. At 2:33pm he wrote, in a different window, "I am
+finished (for now) with the other fast-track task." Nineteen seconds later that
+session resumed the pipeline. But finishing one task is not the same as saying
+"you can have the machines back", and he had not said it. Finding out what had
+actually happened meant digging a transcript off the disk of another session,
+because the ticket had nothing to say.
+
+Resuming now refuses unless whoever runs it pastes in Dane's actual words. The
+point is not really the record it leaves — it is the moment of typing: an agent
+that has to go and find the sentence discovers, right there, whether one exists.
+That 2:34pm session would have found that none did. An optional box would have
+been skipped by exactly the session that most needed to fill it in.
+
+It does not try to check that the words really are a quote, because nothing can
+check that, and a check that pretended to would be worse than none.
+
+Two smaller things came with it: the status command now prints the reason on a
+*running* line too, not only a paused one — so today it reads "why: (not
+recorded)" against that 1 September resume, which is the incident itself,
+finally visible where people already look. And who is allowed to resume has not
+changed one bit: still Dane's call alone.
+
+Review caught one thing before this went out, and it was the thing the whole
+change is about. The switch's record keeps one line per fact, so a quote typed
+across two lines was being stored as its first line only — the rest silently
+dropped, with nothing on the ticket to say a half was missing. A half-sentence
+presented as Dane's words is worse than no quote at all. Worse still, if the
+second line happened to begin "by:", it replaced the name of whoever resumed,
+so the record could credit somebody who did nothing. His real sentences run to
+more than one line routinely — the one from 1 September does.
+
+Resume now refuses a quote that spans lines and asks for it joined onto one,
+rather than quietly reflowing it: his words are the evidence here, and a script
+that rewrites the evidence without saying so is not evidence. Underneath that,
+the record-writing itself was patched so no reason of any kind — a pause's as
+much as a resume's — can ever be cut in half or overwrite another fact.
+
+A second review pass found that fix was only three-quarters of one, and the
+missing quarter failed worse than the bug it was fixing. There is more than one
+invisible character that ends a line, and only the common one was being caught.
+A quote carrying one of the other three sailed straight through the new guard —
+and then, because of how the record is read back, its reason was dropped
+*entirely* rather than cut in half. The resume would report success and print
+Dane's words back to whoever ran it, while the ticket recorded no reason at all.
+That is precisely the 1 September situation this whole change exists to prevent,
+arriving through the guard written to prevent it. All four characters are now
+treated as one thing, defined in a single place so the check that refuses them
+and the code that stores them cannot drift apart. The paragraph above this one
+now says something true; when it was written it did not.
+## 2026-09-04 — The drift check had a blind spot the size of the whole queue (#608)
+
+`npm run reconcile` is the housekeeper that compares the ClickUp board against
+what is really on GitHub, and says when the two have drifted apart. It sorted
+every ticket into one of two piles — "being worked on" and "finished" — and
+checked each pile for a different kind of mismatch.
+
+The queue itself was in neither pile. A ticket that is waiting to be picked up,
+or that has been sent back for rework, fell straight through the gap: not
+reported as a problem, not even reported as "I could not check this one". The
+run finished, said everything was clean, and meant nothing of the sort.
+
+The case that matters is a ticket sitting in the queue that has *already been
+built*. It looks untouched, so the next build session can pick it up and build
+the same thing a second time, on a second branch, fighting the first — which is
+exactly the collision that cost a whole day's work back in August. The one
+safety check that would catch it could not see those tickets at all.
+
+The housekeeper now checks the queue too. If the ticket's pull request is still
+open, it says so loudly and writes a note on the ticket itself, where the next
+session to pick it up cannot miss it — but it changes nothing, because only a
+reader can tell whether the ticket is stale or the branch is. If the pull
+request has already merged, the work is live and the ticket is closed out
+properly. If the branch was abandoned, that is fine and it says so.
+
+On its very first real run it found two live examples, one of each kind. And
+the list of statuses is now kept in one place instead of three, with a test
+that fails if a new status is ever added and forgotten — which is precisely how
+this hole opened in the first place.
+
+Review sent the first version back, and three things changed. The alarm was
+firing on tickets that were perfectly healthy: a ticket sent back for rework is
+*supposed* to still have its branch and its pull request open — that is what a
+send-back is — so the housekeeper was going to raise a false alarm on every one
+of them, forever. It now treats the two kinds of waiting ticket differently. A
+ticket nobody has started that already has a branch is still a real problem and
+still gets said out loud; a ticket sent back for more work is reported as
+normal, and the report says why.
+
+The second problem was a loop. The note the housekeeper leaves when it closes a
+ticket tells the reader "if this is wrong, reopen the ticket and say so on it" —
+but reopening puts the ticket right back into the pile it had just started
+closing, so the next run half an hour later would close it again, and again.
+It now leaves alone any ticket somebody has spoken on since the work merged.
+
+The third was smaller and more dangerous: if a ticket's record pointed at an
+older, finished pull request while a newer one was still open, it would have
+closed the ticket over live work. It now stops and says the two records
+disagree, rather than picking one.
+## 2026-09-05 — The safety brake on the SQL hand-off check now actually works (#609)
+
+When an agent finishes a turn, two automatic checks read what it was about to
+say. One of them refuses the turn if the work added a SQL file you need to run
+and the reply forgot to hand it to you properly. Any check that can refuse
+needs a limit — it gives up after three tries, because a check that can refuse
+forever can lock a conversation shut, which is worse than the thing it was
+guarding against.
+
+That limit works by keeping a small count on disk. If the count cannot be
+saved, it reads as zero every single time, and "three tries" quietly becomes
+unlimited. The ticket said this happened in the folders we actually work in,
+and it used to — but that had already been fixed before this task started. What
+had not been fixed was the same failure arriving a different way: the place the
+count is saved can exist and still refuse to accept the file, because the disk
+is full or the folder is read-only. Tested by deliberately making that folder
+read-only, the check refused six turns out of six and would have kept going.
+
+Two things changed. The count now has a second place to go if the first one
+will not take it — and, more importantly, the check will only refuse a turn if
+it managed to save the count somewhere. If it cannot keep score, it lets the
+turn end rather than refusing with no limit. Separately, it now respects the
+signal the system itself sends to say "this turn has already been blocked
+once", which is a second, independent brake, so neither one failing on its own
+can wedge a session.
+
+That last part came back for a second round, because the first attempt at it
+had the order wrong. The signal saying "this turn has already been blocked
+once" arrives on exactly the turn where the agent supplies the missing
+hand-off — that is what a continuation *is*. The check was stepping aside the
+instant it saw the signal, before reading the reply, so it never noticed that
+the hand-off it had asked for was sitting right there. It then demanded the
+same file again on the next turn, and the one after, spending its whole
+three-try limit on SQL you already had — and once that limit was spent, a
+genuinely new SQL file added later in the same session went through unnoticed.
+That is the check failing at the one job it exists for. It now reads the reply
+and records what was handed off first, and only then steps aside. The other
+check can step aside immediately, and still does, because it remembers nothing
+between turns and so has nothing to lose by skipping one.
+
+Two of the things the ticket asked for turned out to be wrong, and they were
+corrected on the ticket before any code was written rather than built as
+written. One of them asked this check to keep refusing when the `git` tool is
+unavailable — but this check works out whether there is SQL to hand off *by
+asking git*, so without it, it has no idea whether there is anything to
+complain about. Refusing there would be refusing for no reason. It stands aside
+instead.
+
+Every fix was proved by breaking it on purpose and watching the specific test
+for it fail. That also turned up a flaw in the new tests themselves: they left
+a file behind, so running the test suite a second time failed for reasons that
+had nothing to do with the code. They clean up after themselves now, and three
+runs in a row pass.
 ## 2026-09-05 — One list of tags instead of two, and each tag knows where it came from (#611)
 
 Starcaster had two separate lists of tags, and only one of them was ever being

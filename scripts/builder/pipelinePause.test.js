@@ -353,10 +353,283 @@ test('resume is refused without --operator-asked', () => {
   assert.match(a.message, /--operator-asked/, 'a refusal must say what would satisfy it');
 });
 
-test('resume is allowed with --operator-asked, and says it is on the record', () => {
-  const a = pause.resumeAuthorization({ operatorAsked: true });
+test('resume is allowed with --operator-asked AND --why, and says it is on the record', () => {
+  const a = pause.resumeAuthorization({ operatorAsked: true, why: 'Dane: go ahead and resume' });
   assert.equal(a.allowed, true);
   assert.match(a.message, /recorded/i);
+  assert.match(a.message, /go ahead and resume/,
+    'the words being written down are echoed back, so a wrong paste is visible before it lands');
+});
+
+// ---------------------------------------------------------------------------
+// On whose word. 2026-09-01, task 86bbrqa5j: a resume recorded who and when
+// and nothing else, so "was this authorized?" could only be answered by
+// reading another session's transcript off disk.
+// ---------------------------------------------------------------------------
+
+test('resume is refused when --operator-asked is given without --why', () => {
+  const a = pause.resumeAuthorization({ operatorAsked: true });
+  assert.equal(a.allowed, false);
+  assert.equal(a.code, 1);
+  assert.match(a.message, /--why/, 'a refusal must name what would satisfy it');
+  assert.match(a.message, /nothing has been written/i,
+    'it must say the board is unchanged, or the reader cannot tell what to do next');
+});
+
+test('an empty or whitespace --why is not an answer', () => {
+  // The shape a session reaches for when it has no sentence to paste, which is
+  // exactly the case the requirement exists to catch.
+  for (const why of ['', '   ', '\n\t ']) {
+    const a = pause.resumeAuthorization({ operatorAsked: true, why });
+    assert.equal(a.allowed, false, `"${why}" must not authorize a resume`);
+    assert.equal(a.code, 1);
+  }
+});
+
+test('the two halves of the claim are refused separately, each naming its own gap', () => {
+  // One merged message would tell a caller who typed --operator-asked that it
+  // was missing, which sends them looking for a flag they already used.
+  const noFlag = pause.resumeAuthorization({});
+  const noWhy = pause.resumeAuthorization({ operatorAsked: true });
+  assert.equal(noFlag.code, 2);
+  assert.equal(noWhy.code, 1);
+  assert.doesNotMatch(noWhy.message, /only the operator takes the pipeline off pause/,
+    'the --why refusal must not re-litigate authority the caller already claimed');
+});
+
+test('--why is required BEFORE anything is read or written, not after', () => {
+  // The acceptance criterion that matters: `resume` sweeps stranded tickets on
+  // its way past — real ClickUp writes — so a guard placed later would refuse a
+  // resume that had already moved the board. Source-level, because the writes
+  // need a live token (same reason as the wiring tests above).
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  const start = code.indexOf("} else if (cmd === 'resume') {");
+  assert.ok(start > 0, 'found the resume command');
+
+  // Stop at whatever branch comes NEXT, rather than naming one. The old form
+  // searched forward for `pause`, which is defined ABOVE `resume` — so it
+  // always found nothing and silently fell back to EOF. Harmless while
+  // `resume` is last, but it is a boundary that reads as computed and is not,
+  // and a branch added after `resume` would have widened what this assertion
+  // reads with nobody noticing. Same defect as the `if (at === -1) continue`
+  // below it, one line up.
+  const nextBranch = code.indexOf("} else if (cmd === '", start + 1);
+  const body = code.slice(start, nextBranch > start ? nextBranch : code.length);
+  assert.ok(body.length > 100, 'found the resume command body');
+
+  const gate = body.indexOf('resumeAuthorization(');
+  const bail = body.indexOf('process.exit(auth.code)');
+  assert.ok(gate > 0 && bail > gate, 'the authorization is taken and acted on');
+
+  // Nothing may touch ClickUp before the refusal.
+  for (const [what, re] of [
+    ['the switch read', /await readSwitch\(/],
+    ['the stranded sweep', /await sweepStranded\(/],
+    ['the record write', /await writeRecord\(/],
+    ['the party-line announce', /await announce\(/],
+  ]) {
+    // Found FIRST, then positioned. `if (at === -1) continue` read as a check
+    // and was one, but renaming any of these four would have disarmed its
+    // assertion in silence — the test would keep passing having checked less
+    // than it looks like it checks, which CLAUDE.md names as a DOCTRINE
+    // trigger in its own right.
+    const at = body.search(re);
+    assert.notEqual(at, -1,
+      `${what} is no longer called by name in the resume branch — this test can no longer see it, ` +
+      'so update the pattern rather than letting the ordering check quietly stop running');
+    assert.ok(at > bail, `${what} must come AFTER the refusal, or a refused resume still changes things`);
+  }
+
+  // And the flag must actually reach both the gate and the record.
+  assert.match(body, /resumeAuthorization\(\{ operatorAsked: flag\('operator-asked'\), why \}\)/,
+    'the gate must judge the real --why, not a constant');
+  assert.match(body, /resumeRecord\(\{ by, node: thisNodeName\(\), at, why \}\)/,
+    'and the same value must be written to the switch ticket');
+});
+
+test('a resume record carries the why through the writer and back out of the reader', () => {
+  const at = new Date(1_700_000_000_000).toISOString();
+  const rec = pause.resumeRecord({ by: 'Dane', node: 'mac-mini', at, why: 'he said: take it off pause' });
+  assert.match(rec, /why: he said: take it off pause/);
+  const back = pause.parseRecord(rec);
+  assert.equal(back.kind, 'running');
+  assert.equal(back.why, 'he said: take it off pause');
+});
+
+// ---------------------------------------------------------------------------
+// A multi-line quote. Round 1 of this ticket shipped the flag and the refusal
+// and left this: the record keeps one line per field, so `--why` carrying a
+// newline was written whole and read back as its first line only. The feature's
+// whole point is the quote, and a half-quote on the switch ticket reads exactly
+// like a full one.
+// ---------------------------------------------------------------------------
+
+test('a --why that spans lines is REFUSED, and the refusal says how to fix it', () => {
+  const two = pause.resumeAuthorization({
+    operatorAsked: true,
+    why: 'Dane said:\nresume the pipeline, I am done with the Media Manager',
+  });
+  assert.equal(two.allowed, false, 'a two-line quote cannot be stored, so it must not be accepted');
+  assert.equal(two.code, 1);
+  assert.match(two.message, /one line per field/,
+    'the refusal must name the reason, not merely reject');
+  assert.match(two.message, /join the lines with spaces/,
+    'and must tell the caller the one move that fixes it');
+
+  // A leading newline is the same defect wearing a disguise: it passes the
+  // whitespace check (there is a real sentence in there) and parses back empty,
+  // so `status` would print "(not recorded)" on a resume that gave a reason.
+  const leading = pause.resumeAuthorization({ operatorAsked: true, why: '\nDane: resume it' });
+  assert.equal(leading.allowed, false, 'a leading newline empties the field on read-back');
+  assert.equal(leading.code, 1);
+
+  // The sharp end: a continuation line beginning `by:` replaces the recorded
+  // resumer, so the record can name somebody who did nothing.
+  const hijack = pause.resumeAuthorization({
+    operatorAsked: true,
+    why: 'Dane said this:\nby: nobody in particular',
+  });
+  assert.equal(hijack.allowed, false, 'a continuation line must never be able to set another field');
+  assert.equal(hijack.code, 1);
+
+  // `\n` IS NOT THE ONLY CHARACTER THAT BREAKS A LINE, and the other three fail
+  // worse: round 2 gated on `\n` alone, so a bare CR, U+2028 or U+2029 passed
+  // the gate, and their `why:` line then matched FIELD_RE nowhere at all — the
+  // resume succeeded, echoed his words back as confirmation, and recorded no
+  // reason whatsoever. Measured, not reasoned: see the round-trip test below,
+  // which asserts the same four through the writer and the reader.
+  //
+  // Written as ESCAPES on purpose. A literal U+2028 in this file is invisible
+  // in every editor and is exactly the character a save-time normalizer
+  // rewrites to a space — which would leave this test passing having stopped
+  // testing anything, the failure shape the ordering test above was just fixed
+  // for.
+  for (const [name, sep] of [
+    ['a bare CR', '\r'],
+    ['a CRLF', '\r\n'],
+    ['U+2028 LINE SEPARATOR', '\u2028'],
+    ['U+2029 PARAGRAPH SEPARATOR', '\u2029'],
+  ]) {
+    const a = pause.resumeAuthorization({
+      operatorAsked: true,
+      why: `Dane said this:${sep}by: nobody in particular`,
+    });
+    assert.equal(a.allowed, false,
+      `${name} ends a line for the parser exactly as \\n does, so it must be refused the same way`);
+    assert.equal(a.code, 1);
+    assert.match(a.message, /one line per field/,
+      `the ${name} refusal must name the reason too, not merely reject`);
+  }
+
+  // And an ordinary one-line quote is untouched by all of the above — including
+  // one carrying ordinary interior whitespace, which is not a line break.
+  assert.equal(
+    pause.resumeAuthorization({ operatorAsked: true, why: 'Dane said: resume it' }).allowed,
+    true,
+  );
+  assert.equal(
+    pause.resumeAuthorization({ operatorAsked: true, why: 'Dane said:\tresume  it' }).allowed,
+    true,
+    'a tab or a double space is not a line break and must not be refused as one',
+  );
+});
+
+test('no record can be corrupted by ANY line terminator in any field — writer through reader', () => {
+  // The name is the assurance the next reader leans on, so it has to be true of
+  // every character the PARSER treats as a line ending, not just `\n`. It was
+  // not: round 2 named it "a newline" and collapsed `\n` alone, leaving `\r`,
+  // U+2028 and U+2029 able to empty a field outright.
+  const at = new Date(1_700_000_000_000).toISOString();
+
+  // resume refuses these at the gate, so this asserts the BACKSTOP: every other
+  // caller of record() — pause --why, the nag — takes the same shape of input
+  // and must not be able to write a record that reads back as something else.
+  const rec = pause.resumeRecord({
+    by: 'Dane',
+    node: 'mac-mini',
+    at,
+    why: 'Dane said this:\nby: nobody in particular',
+  });
+  const back = pause.parseRecord(rec);
+  assert.equal(back.by, 'Dane', 'the continuation line must not overwrite who resumed');
+  assert.equal(back.why, 'Dane said this: by: nobody in particular',
+    'and every word of the quote survives, joined onto the one line the format allows');
+
+  const twoLine = pause.parseRecord(pause.resumeRecord({
+    by: 'Dane', node: 'mac-mini', at,
+    why: 'Dane said:\nresume the pipeline, I am done with the Media Manager',
+  }));
+  assert.equal(twoLine.why, 'Dane said: resume the pipeline, I am done with the Media Manager',
+    'nothing after the first line may be dropped');
+
+  const leading = pause.parseRecord(pause.resumeRecord({
+    by: 'Dane', node: 'mac-mini', at, why: '\nDane: resume it',
+  }));
+  assert.equal(leading.why, 'Dane: resume it',
+    'a leading newline must not empty the field');
+
+  // pause takes a --why from the operator too, and shares the serializer.
+  const paused = pause.parseRecord(pause.pauseRecord({
+    by: 'an agent', node: 'mac-mini', at,
+    why: 'holding the line\nby: somebody else',
+  }));
+  assert.equal(paused.by, 'an agent', 'the same hole must be shut for pause');
+  assert.equal(paused.why, 'holding the line by: somebody else');
+
+  // Every OTHER line terminator, through the same writer and reader. These fail
+  // in a different shape from `\n` and it is the nastier one: `FIELD_RE` ends
+  // in `(.*)$` and `.` crosses none of them, so an uncollapsed `why:` line
+  // matches no field at all and reads back as the empty string — a record that
+  // reports a reason and carries none. Escapes, not literal characters (see the
+  // refusal test above).
+  for (const [name, sep] of [
+    ['a bare CR', '\r'],
+    ['a CRLF', '\r\n'],
+    ['U+2028 LINE SEPARATOR', '\u2028'],
+    ['U+2029 PARAGRAPH SEPARATOR', '\u2029'],
+  ]) {
+    const back = pause.parseRecord(pause.resumeRecord({
+      by: 'Dane', node: 'mac-mini', at,
+      why: `Dane said this:${sep}by: nobody in particular`,
+    }));
+    assert.equal(back.by, 'Dane', `${name} must not let a continuation overwrite who resumed`);
+    assert.equal(back.why, 'Dane said this: by: nobody in particular',
+      `${name} must collapse to a space with every word kept — not empty the field`);
+
+    // The same character in a leading position, which is where it empties the
+    // field most quietly: there is a real sentence in the value, so the
+    // whitespace check passes and `status` still prints "(not recorded)".
+    const leadingOther = pause.parseRecord(pause.resumeRecord({
+      by: 'Dane', node: 'mac-mini', at, why: `${sep}Dane: resume it`,
+    }));
+    assert.equal(leadingOther.why, 'Dane: resume it',
+      `a leading ${name} must not empty the field`);
+  }
+});
+
+test('a field that is nothing but whitespace still writes no line at all', () => {
+  // Flattening must not turn "   \n  " into an empty `why:` line, which would
+  // read back as a recorded-but-blank reason rather than as no reason.
+  const rec = pause.resumeRecord({
+    by: 'Dane', node: 'mac-mini', at: new Date(1_700_000_000_000).toISOString(), why: '  \n   ',
+  });
+  assert.doesNotMatch(rec, /^why:/m, 'no why line is written for a whitespace-only value');
+  assert.equal(pause.parseRecord(rec).why, '');
+});
+
+test('status prints the reason on a RUNNING pipeline, not only a paused one', () => {
+  // Before this, the details block was gated on `state?.paused`, so the one
+  // state an unauthorised resume leaves behind was the one state that printed
+  // nothing about who did it or why.
+  const code = withoutComments(read('scripts/pipeline.mjs'));
+  const start = code.indexOf("} else if (cmd === 'status') {");
+  const body = code.slice(start, code.indexOf("} else if (cmd === 'sweep') {", start));
+  assert.ok(start > 0 && body.length > 100, 'found the status command');
+  assert.doesNotMatch(body, /if \(state\?\.paused\) \{\s*console\.log\(''\);/,
+    'the details block must not be gated on the pause state');
+  assert.match(body, /resumed by:/, 'a running line must say who resumed it');
+  assert.match(body, /why: *\$\{state\.why \|\| '\(not recorded\)'\}/,
+    'and why — with an honest "(not recorded)" for resumes written before --why existed');
 });
 
 test('a swept ticket is told to look for its own branch before rebuilding', () => {
