@@ -310,6 +310,73 @@ function isClaimable(task) {
   return CLAIMABLE_STATUSES.has((task.status?.status || '').toLowerCase());
 }
 
+/** Is this the send-back tier? Asked by name, from the one status module, so
+ *  the verdict split below cannot drift from what `Rework` means elsewhere. */
+function isReworkStatus(status) {
+  return String(status || '').trim().toLowerCase() === loopStatuses.REWORK;
+}
+
+/**
+ * When the ticket was last spoken on, in epoch ms — 0 when nothing on it
+ * carries a usable date.
+ *
+ * Load-bearing for the reopen guard below: ClickUp comment `date` arrives as
+ * a numeric string, and a comment with no readable date must not be allowed
+ * to read as "old", which would silently re-enable the close it exists to
+ * prevent.
+ */
+function newestCommentAt(comments) {
+  let newest = 0;
+  for (const c of Array.isArray(comments) ? comments : []) {
+    const n = Number(c && c.date);
+    if (Number.isFinite(n) && n > newest) newest = n;
+  }
+  return newest;
+}
+
+/**
+ * MAY this scan close a claimable ticket whose trail PR merged? `null` = yes;
+ * a string = no, and the string says why.
+ *
+ * WHY THIS GATE EXISTS (review round 1). Repair-to-Live used to be confined to
+ * `Building` / `In review`. Reaching `Queued` and `Rework` put it in direct
+ * conflict with the instruction its own `closureNote` gives the reader: "If
+ * that is wrong, the trail is wrong ... Reopen the ticket and say so on it."
+ * Reopening means moving the ticket into a claimable status — which is now
+ * precisely the set this scan closes, on the next `npm run repair` wake, every
+ * 30 minutes, with a fresh comment each time (repairs carry no suppression
+ * window; `alreadyFlagged` gates `flag()` only). Those two statuses were the
+ * safe harbour that made the note's own instruction work.
+ *
+ * The signal is the one the reopener leaves: a word on the ticket AFTER the
+ * work merged. Nothing that merges normally speaks after the merge — the
+ * `PR opened:` trail and any review notes all predate it — so this stays
+ * silent on the drift case it is meant to repair, and fires on the shape where
+ * a human (or the closure note plus a reply to it) has been there since.
+ *
+ * It reports rather than repairs, and it never flags: a bus alarm here would
+ * announce a deliberate act as a contradiction, which is fix 1's mistake in
+ * the other tier.
+ */
+function reopenBlock({ comments, mergedAt }) {
+  const merged = Date.parse(mergedAt || '');
+  if (!Number.isFinite(merged)) {
+    return 'GitHub reports it merged but gave no merge time, so nothing here can tell whether the ticket '
+      + 'was deliberately reopened after the merge';
+  }
+  const spoke = newestCommentAt(comments);
+  if (!spoke) {
+    return 'no comment on the ticket carries a readable date, so nothing here can tell whether it was '
+      + 'deliberately reopened after the merge';
+  }
+  if (spoke > merged) {
+    return `the newest comment on it (${new Date(spoke).toISOString()}) POSTDATES the merge `
+      + `(${new Date(merged).toISOString()}) — a reopen is exactly what the closure note asks for, and `
+      + 'closing it again would undo it every 30 minutes';
+  }
+  return null;
+}
+
 /** null means "could not tell" — never treated as a real answer. */
 function ghPrState(owner, repoName, number) {
   try {
@@ -895,6 +962,34 @@ async function checkClaimableTasks(tasks, clean, repaired, unchecked, deps = {})
     recordExamined(String(task.id));
 
     if (pr.state === 'OPEN') {
+      // REWORK + AN OPEN PR IS THE HEALTHY STATE, NOT DRIFT (review round 1).
+      //
+      // `loop-build/SKILL.md`: "Rework is a send-back: a ticket that already
+      // has a branch, an open PR and review notes on it", and "A `Rework`
+      // ticket keeps its branch ... push to the SAME PR". So every ticket
+      // review has ever sent back wears exactly this shape, and the first
+      // version of this scan raised a bus alarm and a permanent ticket
+      // comment on all of them. The live dry run caught it doing so on
+      // 86bbrqa5j, a textbook two-round send-back with nothing wrong with it.
+      //
+      // The duplicate-build danger this scan exists to prevent is real for
+      // `Queued` — the ticket advertises as unstarted, which is what happened
+      // to 86bbjt1b4 — and does not exist for `Rework`: `build-start` exits 3
+      // on an existing branch and the next pass continues the same PR.
+      //
+      // An alarm that fires on a healthy state is the same defect as the
+      // truncation line that fired unconditionally, one section over: it is
+      // wallpaper within one pass of being written, and this one leaves a
+      // permanent comment on the ticket as well. So the tier decides the
+      // verdict. The MERGED half below is genuine drift for both tiers and is
+      // deliberately NOT split.
+      if (isReworkStatus(status)) {
+        clean.push(
+          `${label}: "${status}" with ${prName} still open${multi} — a send-back keeps its branch and its `
+          + 'PR, so that is the defined state of every ticket review hands back, not drift'
+        );
+        continue;
+      }
       await flag(
         flagKey('open-pr-under-claimable', task.id, authoritative.number),
         `${label} is "${status}" — a status loop-build CLAIMS FROM — but its own ${prName} is still OPEN${multi}. `
@@ -929,6 +1024,34 @@ async function checkClaimableTasks(tasks, clean, repaired, unchecked, deps = {})
     }
 
     if (pr.state === 'MERGED') {
+      // THE TRAIL SAYS MERGED AND THE INDEX SAYS A PR IS STILL OPEN (review
+      // round 1, finding 3). `authoritative` is the ticket's own newest trail
+      // PR; `nominated` is every PR in this repo whose BODY names the ticket.
+      // If a nominating PR is OPEN while the trail's newest is merged, the
+      // trail is stale — a second round was built and `pr-opened` never wrote
+      // its line — and closing on the older merge buries work still in flight.
+      // That is the one thing this scan must never do, and the fact is already
+      // in hand: no extra call, just the array that nominated the ticket.
+      const stillOpen = nominated.filter((p) => String(p?.state || '').toUpperCase() === 'OPEN');
+      if (stillOpen.length) {
+        unchecked.push(
+          `${label}: its trail's newest PR ${prName} is MERGED, but ${stillOpen.map((p) => `#${p.number}`).join(', ')} `
+          + `names this ticket and is still OPEN — the trail and the index disagree about which pull request is `
+          + 'this ticket\'s current work, so nothing is moved (`npm run clickup -- pr-opened` writes the missing trail)'
+        );
+        continue;
+      }
+
+      // A DELIBERATE REOPEN IS NOT DRIFT (review round 1, finding 2).
+      const blocked = reopenBlock({ comments, mergedAt: pr.mergedAt });
+      if (blocked) {
+        unchecked.push(
+          `${label}: claimable ("${status}") while ${prName} is merged, but ${blocked} — NOT moved to `
+          + `${TERMINAL_STATUS_TO_SET}`
+        );
+        continue;
+      }
+
       if (isLive) {
         // Same order as the in-flight path, for the same reason: the record
         // comes first and it GATES the move. An unexplained close is the
@@ -1249,6 +1372,9 @@ module.exports = {
   isInFlight,
   isTerminal,
   isClaimable,
+  isReworkStatus,
+  newestCommentAt,
+  reopenBlock,
   ghPrState,
   AUTO_REPAIR_STATUSES,
   OPERATOR_STATUSES,

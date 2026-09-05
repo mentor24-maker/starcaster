@@ -28,6 +28,26 @@ the list of statuses is now kept in one place instead of three, with a test
 that fails if a new status is ever added and forgotten — which is precisely how
 this hole opened in the first place.
 
+Review sent the first version back, and three things changed. The alarm was
+firing on tickets that were perfectly healthy: a ticket sent back for rework is
+*supposed* to still have its branch and its pull request open — that is what a
+send-back is — so the housekeeper was going to raise a false alarm on every one
+of them, forever. It now treats the two kinds of waiting ticket differently. A
+ticket nobody has started that already has a branch is still a real problem and
+still gets said out loud; a ticket sent back for more work is reported as
+normal, and the report says why.
+
+The second problem was a loop. The note the housekeeper leaves when it closes a
+ticket tells the reader "if this is wrong, reopen the ticket and say so on it" —
+but reopening puts the ticket right back into the pile it had just started
+closing, so the next run half an hour later would close it again, and again.
+It now leaves alone any ticket somebody has spoken on since the work merged.
+
+The third was smaller and more dangerous: if a ticket's record pointed at an
+older, finished pull request while a newer one was still open, it would have
+closed the ticket over live work. It now stops and says the two records
+disagree, rather than picking one.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
