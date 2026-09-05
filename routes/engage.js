@@ -24,6 +24,7 @@ const { stageCampaignVideoForBuffer } = require('../lib/bufferVideoStaging');
 const metaClients = require('../lib/metaClients');
 const metaOAuth = require('../lib/metaOAuth');
 const connectionsRegistry = require('../lib/connections/registry');
+const { readsAsClientProse } = require('../lib/connections/clientProse');
 const { storeAccounts } = require('../lib/connections/completeConnection');
 const { verifyOAuthState } = require('../lib/metaOAuthState');
 const projectSocialCredentialsStore = require('../lib/projectSocialCredentialsStore');
@@ -1547,6 +1548,64 @@ function settingsOAuthReturnUrl(origin, params = {}) {
 }
 
 /**
+ * THE ONE GATE ON WHAT A REFUSAL IS ALLOWED TO SAY TO A CLIENT.
+ *
+ * Connections 6b of 7 (86bbu50mb), review round 2. Round 1 stopped a raw 502
+ * HTML page reaching an amber card through the STORED cause. The identical page
+ * was still reaching a client through the CARRIED one, and by the same route:
+ *
+ *     exchange() -> completeOAuthCodeExchange() -> exchangeCodeForToken()
+ *                -> fetchJson()   (lib/connections/adapters/facebookPage.js)
+ *
+ * `fetchJson` falls back to the entire raw response body when it will not parse
+ * as JSON, `contract.normalize` passes `result.error` straight through, and
+ * `completeConnectionsOAuth` puts that into `connect_error`. Measured with a
+ * 502 stubbed at the adapter, the Facebook Page card read
+ * "<!DOCTYPE html>\n<html>\n<head><title>502 Bad Gateway</title>…" in amber.
+ * Note it was 165 characters — inside MAX_CAUSE_LENGTH, so length would not
+ * have caught it; the markup test is what does.
+ *
+ * ── Why the gate is HERE and not in the panel ──────────────────────────────
+ *
+ * Eight sites in this file set `connect_error`, in two different functions, and
+ * one of them (the X callback) forwards `error_description` written by the
+ * platform — text from outside our code entirely. Gating each site is eight
+ * chances to forget, and forgetting one is exactly how this defect survived
+ * round 1. Every one of them goes through `connectionsReturnUrl`, so this is
+ * the single point where the server hands text to a browser, which makes it the
+ * mirror of round 1's fix: that one sits in the route that SERVES the stored
+ * cause, this one in the code that SERVES the carried cause. It also means the
+ * markup never enters the URL at all — not the address bar, not history, not an
+ * access log of the redirect — which a gate in the client could not achieve.
+ *
+ * It does not weaken acceptance criterion 5. A real adapter sentence still
+ * arrives untouched; a cause either comes through verbatim or is dropped for
+ * the generic line, and nothing is ever reworded.
+ */
+function clientSafeConnectParams(params) {
+  const out = { ...(params || {}) };
+  const provider = safeText(out.connect_provider);
+  const displayName = connectionsRegistry.getEntry(provider)?.displayName
+    || provider
+    || 'This platform';
+
+  const error = safeText(out.connect_error);
+  if (error && !readsAsClientProse(error)) {
+    out.connect_error = `${displayName} refused the connection`;
+  }
+
+  // A milder notice has no generic line to fall back to — it exists to add
+  // detail a client did not have. Machinery in that slot is worth less than
+  // nothing, so it is dropped rather than replaced.
+  const notice = safeText(out.connect_notice);
+  if (notice && !readsAsClientProse(notice)) {
+    out.connect_notice = '';
+  }
+
+  return out;
+}
+
+/**
  * Where the browser lands after a CONNECTIONS-screen sign-in, as opposed to the
  * operator's own APIs page above. Connections 5 of 7 (86bbpz1gk).
  *
@@ -1566,7 +1625,7 @@ function settingsOAuthReturnUrl(origin, params = {}) {
 function connectionsReturnUrl(origin, params = {}) {
   const base = `${String(origin || '').replace(/\/+$/, '')}/#page=settingsConnectionsPage`;
   const query = new URLSearchParams();
-  Object.entries(params || {}).forEach(([key, value]) => {
+  Object.entries(clientSafeConnectParams(params)).forEach(([key, value]) => {
     const text = safeText(value);
     if (text) query.set(key, text);
   });

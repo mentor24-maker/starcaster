@@ -42,6 +42,18 @@ gone for good. It now appears at the top of the panel when there is no card to
 put it on. And the list of things the screen tidies out of the address bar had
 drifted out of step with what actually gets put there.
 
+A second review round then found the same page of error markup arriving by the
+other door. The guard had been fitted to the amber card — the one that reads a
+reason we stored earlier — but a client turned down at the moment they press
+Connect gets their reason handed over on the way back to the screen, and that
+path had no guard at all. Measured in a real browser, the Facebook Page card
+read "<!DOCTYPE html>…502 Bad Gateway…" in amber. It is the same rule now, kept
+in one place both halves read from, and applied where the server hands the text
+to the browser — so the markup never reaches the address bar either. A platform
+that answers in real sentences is still quoted word for word. And a very long
+web address inside one of those sentences now wraps inside the card instead of
+pushing it wider than the screen.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually

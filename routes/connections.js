@@ -45,6 +45,18 @@ const projectConnectionsStore = require('../lib/projectConnectionsStore');
 const projectSocialCredentialsStore = require('../lib/projectSocialCredentialsStore');
 const { makeActive, storeAccounts } = require('../lib/connections/completeConnection');
 const verifySweep = require('../lib/connections/verifySweep');
+/**
+ * The fitness test for a cause a client will read, and the limit behind it.
+ *
+ * Both live in lib/connections/clientProse.js because the OTHER half of this
+ * slice needs the identical rule on a different path — `connect_error` on the
+ * return URL after a refused connect, in routes/engage.js. Round 1 of review
+ * caught a raw 502 page reaching a card through the stored cause below; round 2
+ * caught the same page reaching a client through the carried one, because the
+ * rule had been written here, where the first defect was. One definition, two
+ * requires, so tuning either one tunes both.
+ */
+const { MAX_CAUSE_LENGTH, readsAsClientProse } = require('../lib/connections/clientProse');
 
 const PREFIX = '/api/connections';
 
@@ -114,51 +126,6 @@ function asSentence(text) {
   // full stop outside the bracket. Caught by its own test rather than by a
   // client reading "…bsky.social.). Reconnect to fix it."
   return /[.!?][)\]"'\u201d\u2019]?$/.test(opened) ? opened : `${opened}.`;
-}
-
-/**
- * The longest a recorded cause may be and still be a sentence on a card.
- *
- * Measured, not guessed. The longest prose the sweep itself composes is the
- * identity-drift sentence with two full Bluesky handles in it — 189 characters
- * ("This connection was saved as delray-beach-tennis-center.bsky.social and now
- * authenticates as …"). The 409 branch then appends "(it was saved as X.)" to
- * an adapter's own sentence, which is shorter. 300 clears every one of those
- * with room to spare, and a raw gateway error page — the thing this exists to
- * stop — is thousands.
- */
-const MAX_CAUSE_LENGTH = 300;
-
-/**
- * Is this recorded cause something a client can actually read off a card?
- *
- * `last_error` is not always prose. It is whatever `verifyResult.error` held,
- * and two adapters demonstrably put machinery in there: `facebookPage.js` falls
- * back to the ENTIRE raw response body when it is not JSON, which for a gateway
- * 502 is an HTML page, and a client's card then reads
- * "<!DOCTYPE html><html><head><title>502 Bad Gateway</title>… Reconnect to fix
- * it." That is landmine 16 — internal text on a surface a client reads — and it
- * is what sent this ticket back on 2026-09-05.
- *
- * The test is about what the text IS, not about what it says. Rewriting a cause
- * we do not like would be substituting our wording for the platform's, which
- * acceptance criterion 5 forbids; so a cause either comes through untouched or
- * is dropped entirely for the generic line that already exists. There is no
- * middle setting where we edit it.
- *
- * Two structural disqualifications, both of which real prose passes:
- *   markup   — a tag or a doctype, which no sentence written for a client has
- *   length   — longer than any sentence the sweep composes (see above)
- */
-function readsAsClientProse(text) {
-  const trimmed = safeText(text).trim();
-  if (!trimmed) return false;
-  if (trimmed.length > MAX_CAUSE_LENGTH) return false;
-  // A doctype, or an opening/closing tag. Deliberately narrow: a bare "<" or a
-  // stray ">" is arithmetic or an arrow and appears in ordinary prose, so only
-  // "<" immediately followed by a letter, "/" or "!" counts as markup.
-  if (/<[a-zA-Z!/]/.test(trimmed)) return false;
-  return true;
 }
 
 /**

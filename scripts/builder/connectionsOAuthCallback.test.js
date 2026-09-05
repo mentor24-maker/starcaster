@@ -37,6 +37,7 @@ const connectionOpsPath = require.resolve('../../lib/connectionOpsStore.js');
 
 const { signOAuthState, buildOAuthState } = require('../../lib/metaOAuthState.js');
 const instagram = require('../../lib/connections/adapters/instagram.js');
+const { readsAsClientProse, MAX_CAUSE_LENGTH } = require('../../lib/connections/clientProse.js');
 
 const SCOPE = { projectId: 'proj_a', userId: 'user_1' };
 
@@ -288,6 +289,71 @@ test('a refused Instagram account is carried back verbatim, and nothing is store
     'Meta jargon, or ours, reached the client');
 
   assert.deepEqual(res.stored, [], 'a refusal must store nothing at all');
+});
+
+/**
+ * The other direction, and it is the one that sent this ticket back twice.
+ *
+ * Round 1 of review found a raw 502 HTML page rendering on an amber card and it
+ * was fixed on the STORED path. Round 2 measured the identical page arriving on
+ * the CONNECT path, in a real browser, on the Facebook Page card:
+ *
+ *     text:  "<!DOCTYPE html>\n<html>\n<head><title>502 Bad Gateway</title>…"
+ *     color: rgb(180,83,9) on rgb(254,243,199)
+ *
+ * because `fetchJson` falls back to the whole response body when it will not
+ * parse as JSON, and nothing between there and the browser asked whether the
+ * result was a sentence. The page measured 165 characters — INSIDE
+ * MAX_CAUSE_LENGTH — so the length half of the test would have let it through
+ * and the markup half is what catches it. That is asserted below rather than
+ * described, because it is the reason both halves exist.
+ */
+test('a gateway error page never reaches the client — the generic line goes instead', async () => {
+  const gatewayPage = '<!DOCTYPE html>\n<html>\n<head><title>502 Bad Gateway</title></head>\n'
+    + '<body>\n<center><h1>502 Bad Gateway</h1></center>\n<hr><center>nginx/1.18.0</center>\n'
+    + '</body>\n</html>';
+  assert.ok(gatewayPage.length < MAX_CAUSE_LENGTH,
+    'the fixture has to be SHORT, or this passes for the wrong reason — length, not markup');
+
+  const res = await callCallback({
+    state: stateFor('instagram'),
+    replies: [{ status: 502, body: gatewayPage }],
+  });
+
+  assert.equal(res.status, 302);
+  assert.ok(res.location.includes('#page=settingsConnectionsPage'), res.location);
+
+  const q = params(res.location);
+  assert.equal(q.get('connect_oauth'), 'error');
+  const shown = q.get('connect_error') || '';
+  assert.ok(!/<[a-zA-Z!/]/.test(shown), `markup reached the client: ${shown}`);
+  assert.ok(!/502|nginx|Bad Gateway|DOCTYPE/i.test(shown),
+    `the gateway's own page reached the client: ${shown}`);
+  assert.equal(shown, 'Instagram refused the connection',
+    'the fallback names the platform the client pressed Connect on');
+
+  // The URL itself, not only the parsed value — the gate is at the producer
+  // precisely so the page never enters the address bar or a redirect log.
+  assert.ok(!res.location.includes('DOCTYPE'), 'the page travelled in the URL');
+
+  assert.deepEqual(res.stored, [], 'a refusal must store nothing at all');
+});
+
+/**
+ * The predicate is ONE definition, not two that agree today.
+ *
+ * The rule was written inside routes/connections.js for round 1 and the second
+ * caller needed it for round 2. A copy would pass every test in the repo on the
+ * day it was made and drift the first time either side was tuned — which is the
+ * shape of the original defect, one path fixed and one not. This pins that both
+ * callers hold the same function object.
+ */
+test('both halves of the slice share one fitness test, not a copy of it', () => {
+  const route = require('../../routes/connections.js');
+  assert.equal(route.readsAsClientProse, readsAsClientProse,
+    'routes/connections.js has its own copy of the predicate again');
+  assert.equal(route.MAX_CAUSE_LENGTH, MAX_CAUSE_LENGTH,
+    'the two halves disagree about how long a sentence may be');
 });
 
 // ---------------------------------------------------------------------------
