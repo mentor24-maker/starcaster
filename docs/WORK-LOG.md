@@ -61,6 +61,42 @@ and the boundary quietly moved. That file is now off-limits to automatic
 merging alongside the door it sits behind. The condition Dane attached to his
 answer caught a real crossing within a day of being written, which is exactly
 what he said it was for.
+
+A second postscript, on 5 September, and it says the same thing twice. Catching
+the branch up again — a second day of waiting, a second batch of other people's
+finished work to absorb — the same check went red again, on two more files.
+Nobody moved the boundary this time either. The same shared ClickUp helper now
+hands off two more decisions: one file holds this machine's spending budget
+against ClickUp's limit, and another decides whether this process is a scheduled
+background job or a session Dane is talking to. Between them they can silence
+every automatic message the pipeline sends, including the lane's own
+announcements and the stop switch — and they sit on the same path from the live
+server that caught the first one. Both are now off-limits to automatic merging.
+Three crossings in two catch-up merges, none of them anybody's mistake: this is
+simply what a boundary drawn by folder does over time, and the reason Dane's
+condition was the right condition.
+
+The other half of this day's work is bookkeeping that is not optional. The
+ratified company doctrine still says this second lane is "not shipped" and still
+lists the shared library folder — the one Dane deliberately excluded — as part of
+it. The pipeline's own engineering notes carry a rule saying that when the two
+disagree, the doctrine wins and the notes are what to fix. Left alone, that rule
+would have instructed the next reader to undo Dane's decision. So the
+disagreement is now written down at that exact rule, in a box that says plainly
+which way it goes and why, and a proposal to amend the doctrine has been filed in
+the vault for Dane to ratify. It asks for four things: record his ruling and the
+reason for the exclusion; state that the protection around the merge machinery
+covers its code and not just its tests; require a check behind any boundary drawn
+by folder; and — the substantive one — change the condition holding this lane
+back so that it stops the lane from *merging* rather than from *existing*. The
+concern behind that condition is right and survives untouched: the older lane has
+still never completed a single announce-wait-merge cycle, so nothing has yet
+shown the objection window works. But holding the code on a branch is not what
+makes that safe. It is the same hold, paid for in repeated catch-up merges, and
+it hides the hold from the switch where everyone looks for it. Dane's answer on
+5 September was to clear the latch and keep the hold, which is exactly that
+distinction.
+
 ## 2026-09-04 — The pipeline switch now records who handed the deck back, and on what word (#607)
 
 The build pipeline has a switch. When Dane needs the machines to stop — he is

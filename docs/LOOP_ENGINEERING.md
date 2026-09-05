@@ -1490,6 +1490,46 @@ during the wait it means *cannot see*, and cannot-see is not a pass.
 document is binding; this section is how it is wired up here. If the two ever
 disagree, the vault is right and this file is the thing to fix.
 
+> ### THEY DISAGREE RIGHT NOW — read this before you widen anything
+>
+> As of **2026-09-04** this file and the vault say two different things about
+> Lane B, and by the precedence rule you have just read, the vault wins — which
+> would instruct you to undo a decision Dane made on purpose. So the divergence
+> is written down here, at the rule, rather than left for someone to discover:
+>
+> | | The ratified vault, 2026-08-24 | Dane's ruling, 2026-09-04 (task 86bbuzyra) |
+> |---|---|---|
+> | Lane B's status | **"not shipped"** | ship it |
+> | Lane B's file set | `lib/`, `scripts/`, tooling | `scripts/`, `docs/`, tests — **`lib/` excluded** |
+>
+> **Do not "fix this file to match the vault."** The vault text predates the
+> measurement that forced the question (nine merges in a night, none of them
+> Lane A's, seven hours of a ten-hour night with no merge at all) and predates
+> his answer. `lib/` is excluded for a reason he gave himself and which is still
+> true: `server.js` requires it directly, so a bad merge there reaches a
+> client's site with nobody in the path. Widening Lane B back to `lib/` is a
+> regression, and two independent mechanisms will stop you —
+> `npm run check:automerge-reach` and six named tests in
+> `scripts/builder/autoMergeLane.test.js`.
+>
+> **The vault text is also load-bearing in the other direction, and it is not
+> satisfied.** It withholds Lane B until Lane A's run has shown the objection
+> window and the digest actually work, and that run has produced no
+> observations: 2026-08-23 12:36 → 2026-09-04 10:16, 573 relay passes, 640
+> tickets considered, `announced=0 in window=0 auto-merged=0 cancelled=0`. Lane
+> A armed for the first time on 2026-09-04 (PR #592) and did not land, latching
+> the whole lane off. So **this code is built and merged, and Lane B stays
+> switched off in practice until Lane A completes one clean announce → wait →
+> merge cycle.** That is Dane's own instruction, 2026-09-05: *"1"* — clear the
+> latch, keep the hold.
+>
+> **Status of the repair:** a proposal to amend the vault document — mark Lane B
+> ruled, record the `lib/` exclusion and its reason, and state the
+> Lane-A-must-arm-once precondition as an operating gate rather than a shipping
+> gate — is filed at vault `doctrine/_proposals/AUTO-MERGE-LANE-B.md`
+> (2026-09-05). **Only Dane ratifies it.** Until he does, this box is the record,
+> and the vault's Lane B rows are superseded by his ruling above.
+
 ### What it is, in one paragraph
 
 Merge-on-comment already removed the *hands* from merging: you say "merge" and

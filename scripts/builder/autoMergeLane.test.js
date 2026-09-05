@@ -968,6 +968,37 @@ test('the retry policy inside the one ClickUp door is governance too', () => {
   assert.equal(r.blockedBy, 'scripts/builder/clickupRetry.js');
 });
 
+test('the spend policy inside the one ClickUp door is governance too', () => {
+  // The SECOND crossing the reach check caught, one catch-up merge after the
+  // first (2026-09-05). scripts/lib/clickup.cjs delegates *whether a call may
+  // be made at all* to two files that landed with #592: clickupLedger.cjs
+  // holds the machine-local spend budget and the reserve scheduled jobs leave
+  // alone, and clickupCaller.cjs decides which kind of caller this process is.
+  // Between them they can silence every automated ClickUp write on the machine
+  // — the stop switch, the review gate and this lane's own announcements
+  // included — so a change there changes every automated write at once, which
+  // is the sentence that made the door itself governance.
+  //
+  // Reached from the server by the same path the retry policy is:
+  // routes/publicSite.js -> lib/bugReportForward.js -> lib/clickupForward.js
+  // -> scripts/lib/clickup.cjs -> {clickupLedger,clickupCaller}.cjs.
+  for (const f of [
+    'scripts/lib/clickupLedger.cjs',
+    'scripts/lib/clickupCaller.cjs',
+    'scripts/builder/clickupLedger.test.js',
+    'scripts/builder/clickupCaller.test.js',
+  ]) {
+    assert.ok(governanceReason(f), `${f} governs every automated ClickUp write`);
+    assert.equal(laneEligibility([f]).eligible, false, `${f} must never auto-merge`);
+  }
+  // And each refuses the whole PR, not just itself.
+  for (const f of ['scripts/lib/clickupLedger.cjs', 'scripts/lib/clickupCaller.cjs']) {
+    const mixed = laneEligibility(['scripts/builder/loopNote.js', f]);
+    assert.equal(mixed.eligible, false);
+    assert.equal(mixed.blockedBy, f);
+  }
+});
+
 test('git hooks and shell runners are governance, though neither is a .js file', () => {
   // Doctrine criterion 4 names GIT HOOKS outright, and they live under
   // scripts/git-hooks/ with no extension at all — so no stem rule would ever

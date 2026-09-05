@@ -191,6 +191,20 @@ const GOVERNANCE_STEMS = [
   // which put an auto-mergeable file on a live path. This is exactly the
   // silent expiry Dane's condition asked the check to catch, and it caught it.
   'clickupRetry',
+  // The spend policy inside that same door, found by the same check on the
+  // NEXT catch-up merge (2026-09-05). `scripts/lib/clickup.cjs` delegates
+  // *whether a call may be made at all* to these two: `clickupLedger` holds
+  // the machine-local budget and the reserve scheduled jobs leave alone, and
+  // `clickupCaller` decides which kind of caller this process is. Between
+  // them they can silence every automated ClickUp write on the machine — the
+  // stop switch, the review gate and this lane's own announcements included —
+  // and they are reached from the server by the same path the retry policy is
+  // (routes/publicSite.js -> lib/bugReportForward.js -> lib/clickupForward.js
+  // -> scripts/lib/clickup.cjs). Two catch-ups, two crossings: the boundary
+  // moves whenever somebody refactors behind that door, which is precisely
+  // what Dane's condition predicted and why the check runs on every PR.
+  'clickupLedger',
+  'clickupCaller',
 ];
 
 /**
