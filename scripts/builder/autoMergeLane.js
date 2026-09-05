@@ -335,6 +335,62 @@ function switchCommand(text) {
 }
 
 /**
+ * The other half of a strict matcher: a message that ALMOST said resume.
+ *
+ * The strictness above is right and this does not touch it (task 86bbuv99r's
+ * first non-goal). What it fixes is that a near-miss and silence are the same
+ * event from where Dane sits. On 2026-09-03 at 11:11pm he posted the resume
+ * phrase wrapped in bold and backticks, believed the lane was back, and found
+ * out 35 minutes later only because he asked. It happened again on 2026-09-05
+ * at 8:58pm, on the same phrase, in the same wrapper, while an urgent ticket
+ * was parked waiting for exactly that resume — twice is the pattern, and both
+ * times the lane's answer to a message it did not understand was nothing at
+ * all.
+ *
+ * "Nearly" is defined narrowly and on purpose: the normalised message CONTAINS
+ * the resume phrase but is not equal to it. Anything that DID match is not a
+ * near miss (it took effect, so there is nothing to say), and anything that
+ * never mentions the phrase is not one either — that second half is the noise
+ * failure this could turn into, and it is pinned by its own test.
+ *
+ * Note what this deliberately cannot do: it cannot resume the lane. It says
+ * what to type. Acting on a guess about what he meant is the unwanted merge
+ * the whole-message rule exists to prevent.
+ *
+ * @returns {null|{phrase: string, saw: string}}
+ */
+function nearMissResume(text) {
+  // Anything the matcher understood is not a near miss — resume OR stop.
+  // Asking the real matcher, rather than re-deriving its rules here, is what
+  // keeps the two from drifting apart: a future change to what counts as a
+  // match silences this automatically, in the right direction.
+  if (switchCommand(text)) return null;
+  const norm = normalizeCommand(text).replace(/auto[\s-]?merging/g, 'auto-merging');
+  if (!norm.includes(SWITCH_RESUME)) return null;
+  return { phrase: SWITCH_RESUME, saw: String(text || '').trim().slice(0, 200) };
+}
+
+/**
+ * What the party line is told about a near miss.
+ *
+ * THE PHRASE IS PLAIN TEXT, WITH NOTHING AROUND IT, and that is the whole
+ * point of the message rather than a formatting preference. The wrapper he
+ * copied on 2026-09-03 came from an agent's own card, which had rendered the
+ * command in bold and backticks; a notice that repeats the mistake it is
+ * reporting hands him another line that will not take. Both offenders are
+ * markdown, so the phrase gets its own line and no decoration at all.
+ */
+function nearMissNotice({ where = 'on the party line', saw = '' } = {}) {
+  const quoted = saw ? `\n\nWhat came through, exactly as ClickUp stored it:\n\n    ${saw}\n` : '\n';
+  return `[CC-starcaster bus-relay] THAT DID NOT TAKE — a message ${where} looks like it meant to resume auto-merging, and it did not match. Nothing has changed; the lane is in whatever state it was already in.${quoted}
+The resume phrase has to be the WHOLE message, as plain text. Bold, backticks or an extra word around it and it is swallowed. Type or paste exactly this line, on its own, with no formatting:
+
+resume auto-merging
+
+(Only "resume" is strict. "stop auto-merging" is matched anywhere in a sentence, so a stop is never lost this way.)`;
+}
+
+/**
  * The switch's state, from every source that can carry it.
  *
  * @param {object}   opts
@@ -799,7 +855,7 @@ function digestBody({ entries = [], sinceLabel = 'the last day', clockLabel } = 
  * (lib/nodeRoles.js), so one machine's file is the whole record.
  */
 function emptyLedger() {
-  return { version: 1, merges: [], switch: null, disabled: null, lastDigestAt: 0, everMerged: null, cannotTell: {} };
+  return { version: 1, merges: [], switch: null, disabled: null, lastDigestAt: 0, everMerged: null, cannotTell: {}, nearMisses: [] };
 }
 
 /** Normalize whatever came off disk into a ledger, without throwing. */
@@ -827,6 +883,9 @@ function asLedger(raw) {
     // (2026-09-04, task 86bbuvd50). SEE THE WARNING ON asCannotTellRuns: this
     // whitelist is why the key has to be named here at all.
     cannotTell: asCannotTellRuns(raw.cannotTell),
+    // Which near misses have already been answered. Ids only — the message
+    // itself is on the party line and does not need a second copy here.
+    nearMisses: asNearMisses(raw.nearMisses),
   };
 }
 
@@ -872,6 +931,51 @@ function asCannotTellRuns(raw) {
     };
   }
   return out;
+}
+
+/** How many answered near misses the ledger remembers. Enough that a message
+ *  cannot come back around after a quiet week; small enough that the file
+ *  stays a file. */
+const NEAR_MISS_MEMORY = 50;
+
+/** Normalize the answered-near-miss list off disk, without throwing. */
+function asNearMisses(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((x) => String(x)).filter(Boolean).slice(-NEAR_MISS_MEMORY);
+}
+
+/**
+ * Which of this pass's near misses have not been answered yet.
+ *
+ * A pass re-reads the same party-line messages every ten minutes, so without
+ * this the notice would fire on every pass for as long as the message stayed
+ * in view — the "chatty notice" failure named in the ticket's own risk line,
+ * which is the one way this fix could be worse than the silence it replaces.
+ * Dedup is by the message's own id, never by its text: he can legitimately
+ * make the same near miss twice, and the second one needs answering too.
+ */
+function newNearMisses({ candidates = [], ledger = null } = {}) {
+  const seen = new Set(asLedger(ledger).nearMisses);
+  const out = [];
+  const takenThisPass = new Set();
+  for (const c of candidates) {
+    const id = c && c.id == null ? '' : String(c.id);
+    // No id means no way to remember it was answered, so answering it would
+    // repeat forever. Silence is the lesser failure of those two.
+    if (!id || seen.has(id) || takenThisPass.has(id)) continue;
+    takenThisPass.add(id);
+    out.push(c);
+  }
+  return out;
+}
+
+/** Remember that these near misses have been answered. */
+function ledgerAfterNearMiss(ledger, ids = []) {
+  const l = asLedger(ledger);
+  const add = (Array.isArray(ids) ? ids : [ids]).map((x) => String(x)).filter(Boolean);
+  if (!add.length) return l;
+  const merged = [...l.nearMisses.filter((x) => !add.includes(x)), ...add];
+  return { ...l, nearMisses: merged.slice(-NEAR_MISS_MEMORY) };
 }
 
 /**
@@ -1069,6 +1173,11 @@ module.exports = {
   SWITCH_STOP,
   SWITCH_RESUME,
   switchCommand,
+  nearMissResume,
+  nearMissNotice,
+  NEAR_MISS_MEMORY,
+  newNearMisses,
+  ledgerAfterNearMiss,
   killSwitchState,
   // cap
   CAP_PER_HOUR,
