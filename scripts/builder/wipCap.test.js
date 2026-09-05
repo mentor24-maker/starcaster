@@ -45,7 +45,12 @@ test('at or above the cap it declines, and says the count, the cap and why', () 
   assert.equal(out.openCount, 21);
   assert.match(out.message, /21 PR\(s\) open/);
   assert.match(out.message, /cap 5/);
-  assert.match(out.message, /merge side is the bottleneck/);
+  // WITHOUT TICKET STATUSES IT CANNOT TELL which stage holds the slots, and
+  // must say so rather than assert one (2026-09-05, task 86bbvh285). The
+  // sentence it replaced — "the merge side is the bottleneck" — named a cause
+  // this path has no reading for at all.
+  assert.match(out.message, /could NOT be determined/);
+  assert.doesNotMatch(out.message, /bottleneck/, 'a path with no statuses named a cause anyway');
   assert.match(out.message, /not a failure/, 'it must not read as an error');
 });
 
@@ -395,7 +400,45 @@ test('a genuinely full pipeline still caps', () => {
   assert.equal(d.code, 3);
   assert.equal(d.limitHit, 'wip', 'five machine-held PRs is the BUILD cap, not the operator ceiling');
   assert.match(d.message, /5 building or in review \(cap 5\)/);
-  assert.match(d.message, /the merge side is the bottleneck/);
+  // IT NAMES WHAT IT MEASURED, not a cause (task 86bbvh285). All five are in
+  // review here, so a message blaming the merge side would send the reader to
+  // the one lane that is not involved — which is exactly what happened on
+  // 2026-09-05, when merges were landing in nine minutes and review was the
+  // stage that had stalled.
+  assert.match(d.message, /the slots are held by 0 building, 5 in review/);
+  assert.doesNotMatch(d.message, /bottleneck/);
+});
+
+test('the decline names the SPLIT of the slots, not just the total', () => {
+  // Two builds and three reviews. A reader has to be able to tell which stage
+  // to go and look at; "5 building or in review" alone cannot say.
+  const prs = [1, 2, 3, 4, 5].map((n) => pr(n, `t${n}`));
+  const byId = {
+    t1: 'Building', t2: 'Building', t3: 'In review', t4: 'In review', t5: 'In review',
+  };
+  const d = wipDecision({
+    prs, cap: 5, ticketStatusById: byId,
+    // Keep the two builds FRESH, or the stranded discount takes them out of
+    // the count and this measures something else entirely.
+    nowMs: Date.now(), strandedAfterMs: 60 * 60 * 1000,
+  });
+  assert.equal(d.limitHit, 'wip');
+  assert.equal(d.building, 2);
+  assert.equal(d.reviewing, 3);
+  assert.match(d.message, /the slots are held by 2 building, 3 in review/);
+});
+
+test('BREAK-TEST: the split is a PARTITION of the in-progress count', () => {
+  // building + reviewing must equal inProgress. If a third in-progress status
+  // is ever added to the taxonomy and not handled here, the phrase says so
+  // rather than under-reporting — a total that stops adding up to the cap is
+  // how a partition quietly stops being one.
+  const prs = [1, 2, 3].map((n) => pr(n, `t${n}`));
+  const byId = { t1: 'Building', t2: 'In review', t3: 'In review' };
+  const d = wipDecision({
+    prs, cap: 5, ticketStatusById: byId, nowMs: Date.now(), strandedAfterMs: 60 * 60 * 1000,
+  });
+  assert.equal(d.building + d.reviewing, d.inProgress, 'the split lost a pull request');
 });
 
 test('no ticket statuses at all falls back to the OLD, stricter counting', () => {
@@ -873,10 +916,11 @@ test('the operator ceiling still bounds the pile, and says so DIFFERENTLY', () =
   assert.equal(d.limitHit, 'operator', 'the two limits are told apart, not merged');
   assert.match(d.message, /OPERATOR CEILING reached/);
   assert.match(d.message, /his inbox is full/);
-  // The old sentence would be a LIE here: the machines are idle and the queue
-  // is deep. A reader who cannot tell the two declines apart cannot act.
-  assert.doesNotMatch(d.message, /the merge side is the bottleneck/,
-    'blaming the merge side when Dane is the one who must act sends the reader to the wrong place');
+  // Naming the build stages would be a LIE here: the machines are idle and the
+  // queue is deep. A reader who cannot tell the two declines apart cannot act.
+  assert.doesNotMatch(d.message, /the slots are held by/,
+    'pointing at the build stages when Dane is the one who must act sends the reader to the wrong place');
+  assert.doesNotMatch(d.message, /bottleneck/);
 });
 
 test('the two limits are independent — a full inbox does not borrow build slots', () => {
