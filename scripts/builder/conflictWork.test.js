@@ -798,8 +798,12 @@ test('A CLEAN CATCH-UP CARRIES ITS VERDICT — GitHub disagreeing does not erase
   // reason and after the same kind of incident: the rebuilt gate is what
   // reaches `refuse()`, and a field dropped on the way is a finding this
   // machine made and then threw away. BOTH must travel.
-  assert.match(block, /gate = \{ action: after\.action, reason: after\.reason, refusalCode: after\.refusalCode, localVerdict: local \};/,
-    'the CLEAN verdict and the refusal code must both travel with the gate');
+  // `cannotTell` joined them in review round 2 of task 86bbuvd50, for the
+  // third time and the same reason: the rebuilt gate is what the CANNOT TELL
+  // bound classifies, and a field dropped here takes the bound back to never
+  // firing. THREE must travel.
+  assert.match(block, /gate = \{ action: after\.action, cannotTell: Boolean\(after\.cannotTell\), reason: after\.reason, refusalCode: after\.refusalCode, localVerdict: local \};/,
+    'the CLEAN verdict, the refusal code and the cannot-tell classification must all travel with the gate');
   assert.ok(!/gate = \{ action: after\.action, reason: after\.reason \};\n\s*if \(after\.prJson\) prJson = after\.prJson;\n\s*\} else \{/.test(SCRIPT),
     'the verdict-dropping form must not come back');
 });
