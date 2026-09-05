@@ -48,6 +48,20 @@ One more thing was measured and is not fixed here: the original lane has never
 once armed. In 573 passes since 23 August it considered 640 tickets, announced
 nothing and merged nothing. That is recorded on the ticket and needs its own
 look.
+
+A postscript, and it is the best possible advertisement for the check Dane
+asked for. This work sat on its branch for a day while he considered whether to
+switch it on. Catching the branch up with everything that had landed
+meanwhile, that new check went red straight away: the shared ClickUp helper
+that arrived in the meantime is loaded, through three steps, by the live web
+server — and it in turn loads a small file deciding how long to wait before
+retrying a failed call. That file was automatically mergeable, and it was now
+running on a live path. Nobody did anything wrong; two reasonable changes met
+and the boundary quietly moved. That file is now off-limits to automatic
+merging alongside the door it sits behind. The condition Dane attached to his
+answer caught a real crossing within a day of being written, which is exactly
+what he said it was for.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually

@@ -939,10 +939,33 @@ test('the merge machinery is governance as SOURCE, not only as tests', () => {
     'scripts/review_gate.mjs',
     'scripts/pipeline.mjs',
     'scripts/lib/clickup.cjs',
+    'scripts/builder/clickupRetry.js',
   ]) {
     assert.ok(governanceReason(f), `${f} is machinery that governs machines`);
     assert.equal(laneEligibility([f]).eligible, false, `${f} must never auto-merge`);
   }
+});
+
+test('the retry policy inside the one ClickUp door is governance too', () => {
+  // scripts/lib/clickup.cjs is governance because a change there changes every
+  // automated write at once. It delegates when-to-wait-and-retry wholesale to
+  // clickupRetry.js, so that file decides the same thing and must be blocked
+  // with it — otherwise the door is guarded and its lock is not.
+  //
+  // This is not hypothetical. check:automerge-reach failed on 2026-09-05, on
+  // the first catch-up merge after the shared client landed (#592): the client
+  // is reachable from the server (routes/publicSite.js ->
+  // lib/bugReportForward.js -> lib/clickupForward.js -> scripts/lib/clickup.cjs
+  // -> scripts/builder/clickupRetry.js), which put an auto-mergeable file on a
+  // live path. Blocking it as governance is the remedy that check names.
+  for (const f of ['scripts/builder/clickupRetry.js', 'scripts/builder/clickupRetry.test.js']) {
+    assert.ok(governanceReason(f), `${f} governs every automated ClickUp write`);
+    assert.equal(laneEligibility([f]).eligible, false, `${f} must never auto-merge`);
+  }
+  // And it must refuse the whole PR, not just itself.
+  const r = laneEligibility(['scripts/builder/loopNote.js', 'scripts/builder/clickupRetry.js']);
+  assert.equal(r.eligible, false);
+  assert.equal(r.blockedBy, 'scripts/builder/clickupRetry.js');
 });
 
 test('git hooks and shell runners are governance, though neither is a .js file', () => {

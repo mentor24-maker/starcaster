@@ -181,6 +181,16 @@ const GOVERNANCE_STEMS = [
   'clickup_direct',
   'pipeline',
   'repair',
+  // The retry/backoff policy INSIDE that one door. `scripts/lib/clickup.cjs`
+  // is already governance because "a change there changes every automated
+  // write at once" — and it delegates the whole when-to-wait-and-retry
+  // decision to this file, so the same sentence is true of it. Found by
+  // `check:automerge-reach` on 2026-09-05, the first catch-up merge after the
+  // shared client landed (#592): the client is reached from the server via
+  // routes/publicSite.js -> lib/bugReportForward.js -> lib/clickupForward.js,
+  // which put an auto-mergeable file on a live path. This is exactly the
+  // silent expiry Dane's condition asked the check to catch, and it caught it.
+  'clickupRetry',
 ];
 
 /**
