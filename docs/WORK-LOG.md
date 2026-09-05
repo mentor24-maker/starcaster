@@ -1,3 +1,31 @@
+## 2026-09-04 — When a connection breaks, the screen now says what actually broke (#612)
+
+The Connections screen shows one card per social account a client has hooked
+up. A card turns amber when something has gone wrong with that account, and
+that part has worked for a while. What it said, though, was always one of four
+canned sentences — "the platform refused it", and nothing more.
+
+Meanwhile a background check was quietly working out the real reason and
+writing it down: this Bluesky handle now signs in as a different account, this
+permission expires tomorrow, this one was withdrawn. Nothing ever read it.
+Every one of those specific findings arrived at the client as the same vague
+line. The card now shows the real reason, and still tells them what to do
+about it.
+
+The second half is a client pressing Connect and being turned down — an
+Instagram account that is still a personal account, say. Instagram explains
+exactly what to change, that explanation was already being carried back to the
+screen, and the screen was throwing it away: the client landed back on
+Connections with no idea why nothing had happened. Now the explanation appears
+right under that platform's card, in Instagram's own words, with Connect still
+there to press once they have fixed it. Reload the page and it is gone, the
+way a message you have already read should be.
+
+Worth recording how one of these was found: every automated test passed while
+the screen showed nothing at all. The message was being read a fraction of a
+second too late, after another part of the app had already wiped it off the
+address bar. Only opening the page in a real browser caught it.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
