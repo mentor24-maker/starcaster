@@ -20,6 +20,8 @@ const {
   standDownReport,
   SWITCH_TIMEOUT_MS,
   closureNote,
+  nodeName,
+  NODE_NAME,
   AUTO_REPAIR_STATUSES,
   OPERATOR_STATUSES,
   CLAIMABLE_STATUSES,
@@ -619,6 +621,69 @@ test('closureNote names the actor, the machine, the PR and its merge time', () =
   assert.match(note, /https:\/\/github\.com\/org\/repo\/pull\/42/);
   assert.match(note, /2026-09-04T03:06:41Z/);
   assert.match(note, /not his word/, 'a machine write must never read as the operator');
+});
+
+/**
+ * THE MACHINE NAME (2026-09-05, task 86bbvcr0k).
+ *
+ * `thisNode()` returns a record, not a string, and this file used to keep the
+ * whole record — so every ticket the reconciler closed was told it was closed
+ * on `[object Object]`. Live on 86bbv1qp9.
+ *
+ * These drive the SHAPE rather than the value. A test that only asserted
+ * "mac-mini" would pass on this machine and say nothing about the next change
+ * to `thisNode()`'s return type, which is the thing that broke.
+ */
+test('nodeName reads the name out of the record thisNode actually returns', () => {
+  assert.equal(
+    nodeName(() => ({ name: 'mac-mini', source: 'file', file: '/x', raw: 'mac-mini' })),
+    'mac-mini',
+  );
+  assert.equal(nodeName(() => 'macbook-pro'), 'macbook-pro', 'a bare string still works');
+});
+
+test('nodeName falls back rather than rendering a non-name', () => {
+  const fallback = 'an unnamed machine';
+  assert.equal(nodeName(() => ({ source: 'hostname', raw: '' })), fallback, 'record with no name');
+  assert.equal(nodeName(() => ({ name: '' })), fallback, 'empty name');
+  assert.equal(nodeName(() => ({ name: '   ' })), fallback, 'whitespace name');
+  assert.equal(nodeName(() => ({ name: null })), fallback, 'null name');
+  assert.equal(nodeName(() => null), fallback, 'no node at all');
+  assert.equal(nodeName(() => { throw new Error('no identity file'); }), fallback, 'a thrower');
+});
+
+test('no shape thisNode can return renders as [object Object] or undefined', () => {
+  const shapes = [
+    () => ({ name: 'mac-mini', source: 'file', file: '/x', raw: 'mac-mini' }),
+    () => ({ name: 'macbook-pro' }),
+    () => ({ source: 'hostname' }),
+    () => ({}),
+    () => 'mac-mini',
+    () => null,
+    () => undefined,
+    () => { throw new Error('unreadable'); },
+  ];
+  for (const readNode of shapes) {
+    const name = nodeName(readNode);
+    assert.equal(typeof name, 'string');
+    assert.ok(name.trim().length > 0, 'a blank name reads as a broken note too');
+    assert.doesNotMatch(name, /\[object Object\]|undefined|null/);
+  }
+});
+
+test('the closure note names a real machine — never [object Object]', () => {
+  const note = closureNote({
+    prName: 'PR #42',
+    prUrl: 'https://github.com/org/repo/pull/42',
+    mergedAt: '2026-09-04T03:06:41Z',
+  });
+  assert.doesNotMatch(note, /\[object Object\]/, 'this is what shipped to 86bbv1qp9');
+  assert.doesNotMatch(note, / on (undefined|null|)\./);
+  assert.match(
+    note,
+    new RegExp(`on ${NODE_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`),
+    'and it is the name this machine actually answers to',
+  );
 });
 
 test('isTerminal: type wins, name is the fallback', () => {
