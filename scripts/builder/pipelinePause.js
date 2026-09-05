@@ -148,8 +148,31 @@ function humanDuration(ms) {
   return `${(n / 86400000).toFixed(1)} days`;
 }
 
+/**
+ * ONE LINE PER FIELD IS THE WIRE FORMAT, so a value carrying a newline cannot
+ * be written as-is: the parser reads the second line as a new field, which
+ * loses everything after the break and — where the continuation happens to
+ * start `by:`, `node:`, `at:` or `why:` — silently OVERWRITES that field. A
+ * resume record naming the wrong resumer is the exact failure this whole
+ * ticket exists to make impossible, so the collapse happens here, in the one
+ * place every record is built, rather than at each caller.
+ *
+ * Whitespace only: no word is dropped, and runs of blank lines and indentation
+ * become a single space so the line reads the way the sentence was typed.
+ * `resume` refuses a multi-line `--why` outright before reaching this (see
+ * `resumeAuthorization`), because for a QUOTE the honest move is to ask the
+ * caller to reflow it rather than to reflow it for them; this is the backstop
+ * that keeps every other record — pause, the nag — from being corruptible the
+ * same way.
+ */
+function flattenValue(value) {
+  return String(value).replace(/\s*\n\s*/g, ' ').trim();
+}
+
 function line(label, value) {
-  return value == null || value === '' ? null : `${label}: ${value}`;
+  if (value == null || value === '') return null;
+  const flat = flattenValue(value);
+  return flat === '' ? null : `${label}: ${flat}`;
 }
 
 /**
@@ -842,6 +865,34 @@ function resumeAuthorization({ operatorAsked, why } = {}) {
         '  npm run pipeline -- resume --operator-asked --why "<paste what Dane actually said>"\n\n' +
         'Quote him, do not summarise him. If you cannot find a sentence to paste, that is the answer:\n' +
         'nobody has handed the deck back, and the pipeline stays paused. Nothing has been written.',
+    };
+  }
+
+  // A record keeps ONE LINE PER FIELD, so a quote that spans lines cannot be
+  // stored as it was typed: everything after the first break is lost, and a
+  // continuation beginning `by:` replaces the name of whoever resumed. That is
+  // measurable, not theoretical — round-tripped through resumeRecord and
+  // parseRecord in the tests. A half-sentence presented on the switch ticket as
+  // the operator's words is worse than none, because nothing on the ticket says
+  // a half was dropped.
+  //
+  // It REFUSES rather than reflowing, for the same reason the flag is required
+  // at all: his words are the evidence, and a script that quietly rewrites the
+  // evidence is not evidence. Reflowing it is one keystroke for the caller and
+  // a visible choice; doing it for them is invisible. (`line()` still collapses
+  // newlines when building any record — that is the backstop for every other
+  // caller, not a licence for this one.)
+  if (/\n/.test(String(why))) {
+    return {
+      allowed: false,
+      code: 1,
+      message:
+        'Refusing to resume: --why spans more than one line.\n' +
+        'The switch record keeps one line per field, so only the first line of a multi-line quote would be\n' +
+        'stored — and a second line starting "by:" would overwrite the name of whoever resumed. Either way the\n' +
+        'ticket would show a half-quote with nothing to say a half was dropped.\n\n' +
+        '  npm run pipeline -- resume --operator-asked --why "<his words, reflowed onto one line>"\n\n' +
+        'Keep every word he said; just join the lines with spaces. Nothing has been written.',
     };
   }
 

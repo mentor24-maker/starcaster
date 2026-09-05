@@ -7,7 +7,8 @@
  *   npm run pipeline -- pause [--now] [--why "…"] stop new claims, wait for work in flight to finish
  *   npm run pipeline -- resume --operator-asked --why "…"
  *                                               hand the deck back, and sweep up anything stranded.
- *                                               --why is REQUIRED and takes Dane's own words, quoted.
+ *                                               --why is REQUIRED and takes Dane's own words, quoted,
+ *                                               on ONE line (the record keeps one line per field).
  *
  * THE `--` IS NOT OPTIONAL. Without it npm swallows every `--flag` before this
  * script ever sees it: `resume --operator-asked` is then refused for missing
@@ -109,6 +110,9 @@ function usage(code = 2) {
   console.error('                                  the line but may not un-pause the operator\'s deck. Refused without --why');
   console.error('                                  too: paste what Dane actually said, quoted, so the switch ticket can');
   console.error('                                  answer "on whose word?" later without reading a session transcript.');
+  console.error('                                  That quote must be ONE line — the record keeps one line per field, so a');
+  console.error('                                  second line would be dropped and one starting "by:" would overwrite who');
+  console.error('                                  resumed. Keep every word; join the lines with spaces.');
   console.error('                                  Sweeps tickets that');
   console.error('                                  were stranded mid-pass, with a note: a half-built build goes to Rework, an');
   console.error('                                  unstarted one to Queued, and a review is released where it stands so its');

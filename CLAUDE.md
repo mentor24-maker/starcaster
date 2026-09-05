@@ -506,7 +506,8 @@ npm run pipeline -- status                    is it running? if not, since when,
 npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
 npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
 npm run pipeline -- resume --operator-asked --why "<his words>"   hand the deck back (Dane's call,
-                                              never an agent's). --why is required: quote him.
+                                              never an agent's). --why is required: quote him,
+                                              on ONE line — a record keeps one line per field.
 ```
 
 **Type the `--`.** It is not decoration: without it npm swallows every `--flag`
@@ -527,6 +528,15 @@ have discovered at that moment that no such sentence existed. If you cannot
 find one to paste, that IS the answer — nobody handed the deck back.
 `npm run pipeline -- status` now prints the reason on a RUNNING line too, so an
 unauthorised resume is visible where everyone already looks.
+
+**Quote him on ONE line.** A switch record keeps one line per field, so a
+`--why` that spans lines used to be written whole and read back as its first
+line only — a half-sentence shown on the ticket as his words, with nothing to
+say a half was dropped — and a second line beginning `by:` overwrote the name
+of whoever resumed. `resume` refuses a multi-line `--why` now and says so;
+keep every word and join the lines with spaces. It refuses rather than
+reflowing for you, because his words are the evidence and a script that
+quietly rewrites the evidence is not evidence.
 
 **Every actor asks, not just the loops.** A pause only the loops respected
 would not have prevented the collision it was written for — the session that

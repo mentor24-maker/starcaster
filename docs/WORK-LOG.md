@@ -30,6 +30,21 @@ recorded)" against that 1 September resume, which is the incident itself,
 finally visible where people already look. And who is allowed to resume has not
 changed one bit: still Dane's call alone.
 
+Review caught one thing before this went out, and it was the thing the whole
+change is about. The switch's record keeps one line per fact, so a quote typed
+across two lines was being stored as its first line only — the rest silently
+dropped, with nothing on the ticket to say a half was missing. A half-sentence
+presented as Dane's words is worse than no quote at all. Worse still, if the
+second line happened to begin "by:", it replaced the name of whoever resumed,
+so the record could credit somebody who did nothing. His real sentences run to
+more than one line routinely — the one from 1 September does.
+
+Resume now refuses a quote that spans lines and asks for it joined onto one,
+rather than quietly reflowing it: his words are the evidence here, and a script
+that rewrites the evidence without saying so is not evidence. Underneath that,
+the record-writing itself was patched so no reason of any kind — a pause's as
+much as a resume's — can ever be cut in half or overwrite another fact.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually

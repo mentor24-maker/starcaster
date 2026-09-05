@@ -420,8 +420,15 @@ test('--why is required BEFORE anything is read or written, not after', () => {
     ['the record write', /await writeRecord\(/],
     ['the party-line announce', /await announce\(/],
   ]) {
+    // Found FIRST, then positioned. `if (at === -1) continue` read as a check
+    // and was one, but renaming any of these four would have disarmed its
+    // assertion in silence — the test would keep passing having checked less
+    // than it looks like it checks, which CLAUDE.md names as a DOCTRINE
+    // trigger in its own right.
     const at = body.search(re);
-    if (at === -1) continue;
+    assert.notEqual(at, -1,
+      `${what} is no longer called by name in the resume branch — this test can no longer see it, ` +
+      'so update the pattern rather than letting the ordering check quietly stop running');
     assert.ok(at > bail, `${what} must come AFTER the refusal, or a refused resume still changes things`);
   }
 
@@ -439,6 +446,98 @@ test('a resume record carries the why through the writer and back out of the rea
   const back = pause.parseRecord(rec);
   assert.equal(back.kind, 'running');
   assert.equal(back.why, 'he said: take it off pause');
+});
+
+// ---------------------------------------------------------------------------
+// A multi-line quote. Round 1 of this ticket shipped the flag and the refusal
+// and left this: the record keeps one line per field, so `--why` carrying a
+// newline was written whole and read back as its first line only. The feature's
+// whole point is the quote, and a half-quote on the switch ticket reads exactly
+// like a full one.
+// ---------------------------------------------------------------------------
+
+test('a --why that spans lines is REFUSED, and the refusal says how to fix it', () => {
+  const two = pause.resumeAuthorization({
+    operatorAsked: true,
+    why: 'Dane said:\nresume the pipeline, I am done with the Media Manager',
+  });
+  assert.equal(two.allowed, false, 'a two-line quote cannot be stored, so it must not be accepted');
+  assert.equal(two.code, 1);
+  assert.match(two.message, /one line per field/,
+    'the refusal must name the reason, not merely reject');
+  assert.match(two.message, /join the lines with spaces/,
+    'and must tell the caller the one move that fixes it');
+
+  // A leading newline is the same defect wearing a disguise: it passes the
+  // whitespace check (there is a real sentence in there) and parses back empty,
+  // so `status` would print "(not recorded)" on a resume that gave a reason.
+  const leading = pause.resumeAuthorization({ operatorAsked: true, why: '\nDane: resume it' });
+  assert.equal(leading.allowed, false, 'a leading newline empties the field on read-back');
+  assert.equal(leading.code, 1);
+
+  // The sharp end: a continuation line beginning `by:` replaces the recorded
+  // resumer, so the record can name somebody who did nothing.
+  const hijack = pause.resumeAuthorization({
+    operatorAsked: true,
+    why: 'Dane said this:\nby: nobody in particular',
+  });
+  assert.equal(hijack.allowed, false, 'a continuation line must never be able to set another field');
+  assert.equal(hijack.code, 1);
+
+  // And an ordinary one-line quote is untouched by all of the above.
+  assert.equal(
+    pause.resumeAuthorization({ operatorAsked: true, why: 'Dane said: resume it' }).allowed,
+    true,
+  );
+});
+
+test('no record can be corrupted by a newline in any field — writer through reader', () => {
+  const at = new Date(1_700_000_000_000).toISOString();
+
+  // resume refuses these at the gate, so this asserts the BACKSTOP: every other
+  // caller of record() — pause --why, the nag — takes the same shape of input
+  // and must not be able to write a record that reads back as something else.
+  const rec = pause.resumeRecord({
+    by: 'Dane',
+    node: 'mac-mini',
+    at,
+    why: 'Dane said this:\nby: nobody in particular',
+  });
+  const back = pause.parseRecord(rec);
+  assert.equal(back.by, 'Dane', 'the continuation line must not overwrite who resumed');
+  assert.equal(back.why, 'Dane said this: by: nobody in particular',
+    'and every word of the quote survives, joined onto the one line the format allows');
+
+  const twoLine = pause.parseRecord(pause.resumeRecord({
+    by: 'Dane', node: 'mac-mini', at,
+    why: 'Dane said:\nresume the pipeline, I am done with the Media Manager',
+  }));
+  assert.equal(twoLine.why, 'Dane said: resume the pipeline, I am done with the Media Manager',
+    'nothing after the first line may be dropped');
+
+  const leading = pause.parseRecord(pause.resumeRecord({
+    by: 'Dane', node: 'mac-mini', at, why: '\nDane: resume it',
+  }));
+  assert.equal(leading.why, 'Dane: resume it',
+    'a leading newline must not empty the field');
+
+  // pause takes a --why from the operator too, and shares the serializer.
+  const paused = pause.parseRecord(pause.pauseRecord({
+    by: 'an agent', node: 'mac-mini', at,
+    why: 'holding the line\nby: somebody else',
+  }));
+  assert.equal(paused.by, 'an agent', 'the same hole must be shut for pause');
+  assert.equal(paused.why, 'holding the line by: somebody else');
+});
+
+test('a field that is nothing but whitespace still writes no line at all', () => {
+  // Flattening must not turn "   \n  " into an empty `why:` line, which would
+  // read back as a recorded-but-blank reason rather than as no reason.
+  const rec = pause.resumeRecord({
+    by: 'Dane', node: 'mac-mini', at: new Date(1_700_000_000_000).toISOString(), why: '  \n   ',
+  });
+  assert.doesNotMatch(rec, /^why:/m, 'no why line is written for a whitespace-only value');
+  assert.equal(pause.parseRecord(rec).why, '');
 });
 
 test('status prints the reason on a RUNNING pipeline, not only a paused one', () => {
