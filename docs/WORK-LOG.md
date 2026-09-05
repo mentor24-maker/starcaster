@@ -1,3 +1,43 @@
+## 2026-09-04 — The safety brake on the SQL hand-off check now actually works (#609)
+
+When an agent finishes a turn, two automatic checks read what it was about to
+say. One of them refuses the turn if the work added a SQL file you need to run
+and the reply forgot to hand it to you properly. Any check that can refuse
+needs a limit — it gives up after three tries, because a check that can refuse
+forever can lock a conversation shut, which is worse than the thing it was
+guarding against.
+
+That limit works by keeping a small count on disk. If the count cannot be
+saved, it reads as zero every single time, and "three tries" quietly becomes
+unlimited. The ticket said this happened in the folders we actually work in,
+and it used to — but that had already been fixed before this task started. What
+had not been fixed was the same failure arriving a different way: the place the
+count is saved can exist and still refuse to accept the file, because the disk
+is full or the folder is read-only. Tested by deliberately making that folder
+read-only, the check refused six turns out of six and would have kept going.
+
+Two things changed. The count now has a second place to go if the first one
+will not take it — and, more importantly, the check will only refuse a turn if
+it managed to save the count somewhere. If it cannot keep score, it lets the
+turn end rather than refusing with no limit. Separately, it now respects the
+signal the system itself sends to say "this turn has already been blocked
+once", which is a second, independent brake, so neither one failing on its own
+can wedge a session.
+
+Two of the things the ticket asked for turned out to be wrong, and they were
+corrected on the ticket before any code was written rather than built as
+written. One of them asked this check to keep refusing when the `git` tool is
+unavailable — but this check works out whether there is SQL to hand off *by
+asking git*, so without it, it has no idea whether there is anything to
+complain about. Refusing there would be refusing for no reason. It stands aside
+instead.
+
+Every fix was proved by breaking it on purpose and watching the specific test
+for it fail. That also turned up a flaw in the new tests themselves: they left
+a file behind, so running the test suite a second time failed for reasons that
+had nothing to do with the code. They clean up after themselves now, and three
+runs in a row pass.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
