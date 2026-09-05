@@ -1,3 +1,62 @@
+## 2026-09-04 — The pipeline switch now records who handed the deck back, and on what word (#607)
+
+The build pipeline has a switch. When Dane needs the machines to stop — he is
+working on something by hand and does not want them claiming tickets underneath
+him — someone pauses it, and pausing already records *why*. Resuming recorded
+only who and when. So the one question worth asking afterwards — *on whose word
+did this start up again?* — could not be answered from the switch's own ticket
+at all.
+
+That is not a hypothetical. On 1 September the line was paused because Dane was
+fast-tracking a task by hand. At 2:33pm he wrote, in a different window, "I am
+finished (for now) with the other fast-track task." Nineteen seconds later that
+session resumed the pipeline. But finishing one task is not the same as saying
+"you can have the machines back", and he had not said it. Finding out what had
+actually happened meant digging a transcript off the disk of another session,
+because the ticket had nothing to say.
+
+Resuming now refuses unless whoever runs it pastes in Dane's actual words. The
+point is not really the record it leaves — it is the moment of typing: an agent
+that has to go and find the sentence discovers, right there, whether one exists.
+That 2:34pm session would have found that none did. An optional box would have
+been skipped by exactly the session that most needed to fill it in.
+
+It does not try to check that the words really are a quote, because nothing can
+check that, and a check that pretended to would be worse than none.
+
+Two smaller things came with it: the status command now prints the reason on a
+*running* line too, not only a paused one — so today it reads "why: (not
+recorded)" against that 1 September resume, which is the incident itself,
+finally visible where people already look. And who is allowed to resume has not
+changed one bit: still Dane's call alone.
+
+Review caught one thing before this went out, and it was the thing the whole
+change is about. The switch's record keeps one line per fact, so a quote typed
+across two lines was being stored as its first line only — the rest silently
+dropped, with nothing on the ticket to say a half was missing. A half-sentence
+presented as Dane's words is worse than no quote at all. Worse still, if the
+second line happened to begin "by:", it replaced the name of whoever resumed,
+so the record could credit somebody who did nothing. His real sentences run to
+more than one line routinely — the one from 1 September does.
+
+Resume now refuses a quote that spans lines and asks for it joined onto one,
+rather than quietly reflowing it: his words are the evidence here, and a script
+that rewrites the evidence without saying so is not evidence. Underneath that,
+the record-writing itself was patched so no reason of any kind — a pause's as
+much as a resume's — can ever be cut in half or overwrite another fact.
+
+A second review pass found that fix was only three-quarters of one, and the
+missing quarter failed worse than the bug it was fixing. There is more than one
+invisible character that ends a line, and only the common one was being caught.
+A quote carrying one of the other three sailed straight through the new guard —
+and then, because of how the record is read back, its reason was dropped
+*entirely* rather than cut in half. The resume would report success and print
+Dane's words back to whoever ran it, while the ticket recorded no reason at all.
+That is precisely the 1 September situation this whole change exists to prevent,
+arriving through the guard written to prevent it. All four characters are now
+treated as one thing, defined in a single place so the check that refuses them
+and the code that stores them cannot drift apart. The paragraph above this one
+now says something true; when it was written it did not.
 ## 2026-09-04 — The drift check had a blind spot the size of the whole queue (#608)
 
 `npm run reconcile` is the housekeeper that compares the ClickUp board against
