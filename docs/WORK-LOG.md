@@ -65,6 +65,29 @@ because you have none or because the list would not load, and each page now
 costs one database read fewer, which on a 43-page selection is 43 fewer round
 trips inside a function that has run out of time before.
 
+Review sent it back a third time, and it was the same defect wearing a third
+face — this time on the run where *nothing had gone wrong*. All of the
+sentences this feature shows you live in one small file that the page loads
+separately. If that file does not arrive — a bad deploy, a cached miss, a
+browser blocking it — then the code that writes the message crashes. It was
+crashing *inside* the block whose job is to catch a failed request, so a run in
+which every page moved and every page was confirmed reported a raw programming
+error followed by "some pages may already have been changed" and, once again, a
+recommendation to Restore All. The worst possible advice at the calmest possible
+moment. Two things changed: the message is now built after the request is
+finished with, so a problem writing the message can no longer be mistaken for a
+problem with the change; and all three places that reach for that file now go
+through one guarded door with a plain sentence to fall back on — one that tells
+you the change ran, tells you where to look, and never recommends the big undo.
+Measured in a real browser with the file blocked, before and after.
+
+Two smaller ones went in with it. A bulk template change now appears in Page
+History as "Template changed by <your name>" rather than as an ordinary edit by
+nobody, which matters because that entry is the per-page undo for this exact
+operation. And the check that confirms your archive exists was loading every
+page in the project to do it — 138 page layouts pulled across to answer a
+yes-or-no question, right before the write that has run out of time before.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
