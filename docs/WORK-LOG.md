@@ -29,6 +29,20 @@ block too. The checker also now says how many blocks only showed one row, on
 good runs as well as bad, so its final tally can never again be read as a
 verdict over comparisons that never happened.
 
+Review sent the first attempt back, and it was right to: the new test was the
+same shape as the fault it was written for. Some of these panels put two
+label-and-field pairs side by side on one row — five of the ten in the test
+page do — and the new ceiling looked at the whole block at once. So a
+correct left-hand column set the number, and a wrong right-hand column was
+invisible. The measurement now runs on each column separately, from a single
+shared definition of what a column is, so the "too wide" test and the "too
+narrow" test can never again be asking about different things. Proved by
+making only the right-hand column wrong: this version goes red on it, the
+first version stayed green on exactly the same break. Two smaller repairs
+went in with it — the one-row tally was being added up once per screen width,
+so it read 9 when the real answer was 3, and a comment claimed the tally
+printed on every run while the code printed nothing when it was zero.
+
 Proven the way the ticket asked: putting the original fault back now produces
 12 failures across all four panels at all three screen widths, and taking it
 out again goes green. The new rule is also plain enough to be tested without a
