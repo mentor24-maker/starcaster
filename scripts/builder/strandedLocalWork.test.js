@@ -27,6 +27,14 @@ const work = require('./strandedLocalWork.js');
 
 const TASK = '86bbur9tk';
 
+// STRING-ONLY FIXTURE PATHS. The tests below that use these never touch the
+// filesystem — they assert the shell text the probe BUILDS — so the path only
+// has to be absolute and outside any real home. Writing a literal
+// somebody's real home directory here would be a machine-specific path, which
+// `check_conventions` blocks and NODES principle P1 forbids.
+const FIXTURE_HOME = '/fixture-home';
+const FIXTURE_REPO = `${FIXTURE_HOME}/WebApps/starcaster`;
+
 function git(cwd, ...args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 }
@@ -232,8 +240,14 @@ test('a remote path is this one re-rooted at $HOME — never this machine\'s abs
   const here = work.repoPathOn({ machine: 'mac-mini', hereId: 'mac-mini', repoHome: `${home}/WebApps/starcaster`, homedir: home });
   assert.equal(here.path, `${home}/WebApps/starcaster`);
   assert.equal(here.remote, false);
+  assert.equal(here.homeRelative, false);
   const there = work.repoPathOn({ machine: 'macbook-pro', hereId: 'mac-mini', repoHome: `${home}/WebApps/starcaster`, homedir: home });
-  assert.equal(there.path, '$HOME/WebApps/starcaster');
+  // RELATIVE, with the flag that says so. Round 1 returned the assembled
+  // string '$HOME/WebApps/starcaster', which reads like a path and was quoted
+  // like one, so `$HOME` never expanded on the far side.
+  assert.equal(there.path, 'WebApps/starcaster');
+  assert.equal(there.homeRelative, true);
+  assert.equal(there.display, '$HOME/WebApps/starcaster');
 });
 
 test('a checkout outside the home directory cannot be located on another machine, and says so', () => {
@@ -276,7 +290,7 @@ test('the sweep asks for local work before returning a build to Queued', () => {
   // `workInProgressFor(` anywhere in the file and stayed green when the call
   // inside the sweep was replaced with a hard-coded "nothing found" — the
   // function was still defined, just never asked. (Found by break-testing.)
-  assert.match(code, /const local = reviewing \|\| plan\.status !== 'Queued'/,
+  assert.match(code, /const local = reviewing \|\| provisional\.status !== 'Queued'/,
     'the probe is asked only where the PR lookup asserts an ABSENCE');
   assert.match(code, /:\s*workInProgressFor\(queue\.tasks/,
     'the sweep must actually ask the probe, not assume an answer');
@@ -285,4 +299,238 @@ test('the sweep asks for local work before returning a build to Queued', () => {
   // per machine (remoteProbe rule 1), not once per stranded ticket.
   assert.match(code, /const probe = workProbe\(\);[\s\S]*for \(const s of stranded\)/,
     'the ssh probe must be created ONCE, outside the per-ticket loop');
+});
+
+// ── THE REMOTE PATH ──────────────────────────────────────────────────────
+//
+// Round 1 shipped with the whole remote half broken, and every test stayed
+// green, because every fixture injected a `shell` that ran /bin/sh HERE — so
+// the string a remote machine would actually receive was never executed by
+// anything. These tests run it, with a foreign `HOME`, which is precisely the
+// difference between the two seats.
+
+/**
+ * A repo laid out the way a checkout is on a real machine: under a home
+ * directory, at the same relative path both machines use. `home` is handed to
+ * the probe as HOME, which is exactly what a remote login shell would do.
+ */
+function makeRepoUnderHome() {
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'stranded-home-')));
+  const bare = path.join(home, 'origin.git');
+  const clone = path.join(home, 'WebApps', 'starcaster');
+  fs.mkdirSync(bare);
+  git(bare, 'init', '--bare', '--initial-branch=main', '.');
+  fs.mkdirSync(clone, { recursive: true });
+  git(clone, 'init', '--initial-branch=main', '.');
+  git(clone, 'config', 'user.email', 'test@example.com');
+  git(clone, 'config', 'user.name', 'Test');
+  fs.writeFileSync(path.join(clone, 'README.md'), 'hello\n');
+  git(clone, 'add', '.');
+  git(clone, 'commit', '-m', 'first');
+  git(clone, 'remote', 'add', 'origin', bare);
+  git(clone, 'push', '-u', 'origin', 'main');
+  return { home, clone, rel: 'WebApps/starcaster' };
+}
+
+/** Run a script the way a REMOTE login shell would: another machine's HOME. */
+function runAsRemote(script, home) {
+  return execFileSync('/bin/sh', ['-c', script], { encoding: 'utf8', env: { ...process.env, HOME: home } });
+}
+
+test('the string a REMOTE machine receives finds the repo — $HOME must expand THERE', () => {
+  const { home, clone, rel } = makeRepoUnderHome();
+  const wt = path.join(home, 'wt-remote');
+  git(clone, 'worktree', 'add', wt, '-b', 'remote-branch');
+  git(clone, 'config', 'branch.remote-branch.clickup-task', TASK);
+  fs.writeFileSync(path.join(wt, 'dirty.txt'), 'x\n');
+
+  const where = work.repoPathOn({ machine: 'macbook-pro', hereId: 'mac-mini', repoHome: clone, homedir: home });
+  const script = work.probeScript({ repoPath: where.path, taskId: TASK, homeRelative: where.homeRelative });
+  const parsed = work.parseProbe(runAsRemote(script, home));
+
+  // The exact failure of round 1: NO-REPO for a repo that is right there.
+  assert.equal(parsed.noRepo, false, 'the remote probe must find the checkout, not report NO-REPO');
+  assert.equal(parsed.branches.length, 1);
+  assert.equal(parsed.branches[0].branch, 'remote-branch');
+  assert.ok(parsed.branches[0].dirty > 0);
+  assert.equal(rel, 'WebApps/starcaster');
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('a NO-REPO from a remote machine is still a real answer when the repo really is absent', () => {
+  const { home, clone } = makeRepoUnderHome();
+  fs.rmSync(clone, { recursive: true, force: true });
+  const where = work.repoPathOn({ machine: 'macbook-pro', hereId: 'mac-mini', repoHome: path.join(home, 'WebApps', 'starcaster'), homedir: home });
+  const script = work.probeScript({ repoPath: where.path, taskId: TASK, homeRelative: where.homeRelative });
+  const verdict = work.machineVerdict({ machine: 'macbook-pro', ran: true, out: runAsRemote(script, home) });
+  assert.equal(verdict.seen, true, 'a genuinely absent checkout is an ANSWER — this is what keeps `none` reachable');
+  assert.deepEqual(verdict.work, []);
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('the two seats quote the path differently, and only the remote one leaves $HOME to the shell', () => {
+  const local = work.probeScript({ repoPath: FIXTURE_REPO, taskId: TASK });
+  assert.equal(local.split('\n')[0], `R='${FIXTURE_REPO}'`);
+  const remote = work.probeScript({ repoPath: 'WebApps/starcaster', taskId: TASK, homeRelative: true });
+  assert.match(remote.split('\n')[0], /^R="\$HOME"\/'WebApps\/starcaster'$/,
+    '$HOME must be OUTSIDE the single quotes or the far shell cannot expand it');
+});
+
+test('findWorkInProgress hands a routed remote machine the home-relative script', () => {
+  let seen = null;
+  work.findWorkInProgress({
+    taskId: TASK,
+    repoHome: FIXTURE_REPO,
+    homedir: FIXTURE_HOME,
+    nodes: ['mac-mini'],
+    hereId: 'macbook-pro',
+    routedMachines: ['mac-mini'],
+    routesKnown: true,
+    shell: (machine, script) => { seen = script; return { ran: true, out: `${work.PROBE_DONE}\n` }; },
+  });
+  assert.ok(seen, 'the routed machine must actually be asked');
+  assert.match(seen.split('\n')[0], /^R="\$HOME"\/'WebApps\/starcaster'$/);
+});
+
+// ── NO SSH ROUTE IS NOT A FAILED READING ─────────────────────────────────
+
+test('criterion 3, IN THE SHIPPED CONFIGURATION — the real node list and the real inventory still answer "none"', () => {
+  // THE TEST ROUND 1 DID NOT HAVE, and the reason it shipped broken. Its
+  // criterion-3 test was handed a one-machine node list; the shipped sweep
+  // walks nodeRoles.KNOWN_NODES, which contains a machine with no ssh route
+  // from the Mini — so in production every stranded build answered
+  // `cannot-tell` and none could ever be unstuck. This test uses the real
+  // list and the real inventory so that gap cannot reopen.
+  const { clone, root } = makeRepo();          // nothing stamped here
+  const nodeRoles = require('../../lib/nodeRoles.js');
+  const routes = work.sshRoutedMachines(
+    fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'ecosystem', 'inventory.yaml'), 'utf8'));
+  assert.equal(routes.known, true, 'the committed inventory must be readable');
+
+  const verdict = work.findWorkInProgress({
+    taskId: TASK,
+    repoHome: clone,
+    homedir: path.dirname(clone),
+    nodes: nodeRoles.KNOWN_NODES,
+    hereId: 'mac-mini',
+    routedMachines: routes.machines,
+    routesKnown: true,
+    shell: shellHere(clone),
+  });
+  assert.equal(verdict.verdict, 'none', 'the sweep must still be able to move a genuinely unbuilt ticket');
+  assert.ok(verdict.unlooked.length > 0, '…while naming the seat it could not look at');
+  assert.match(verdict.unlooked[0].why, /no ssh route/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a machine with no ssh route is never ssh\'d at all', () => {
+  const asked = [];
+  work.findWorkInProgress({
+    taskId: TASK,
+    repoHome: FIXTURE_REPO,
+    homedir: FIXTURE_HOME,
+    nodes: ['mac-mini', 'macbook-pro'],
+    hereId: 'mac-mini',
+    routedMachines: ['mac-mini'],
+    routesKnown: true,
+    shell: (machine) => { asked.push(machine); return { ran: true, out: `${work.PROBE_DONE}\n` }; },
+  });
+  assert.deepEqual(asked, ['mac-mini'], 'only this machine — the unrouted one must not cost an ssh timeout');
+});
+
+test('a ROUTED machine that does not answer is still CANNOT TELL — criterion 4 survives the containment', () => {
+  const verdict = work.findWorkInProgress({
+    taskId: TASK,
+    repoHome: FIXTURE_REPO,
+    homedir: FIXTURE_HOME,
+    nodes: ['macbook-pro', 'mac-mini'],
+    hereId: 'macbook-pro',
+    routedMachines: ['mac-mini'],
+    routesKnown: true,
+    shell: (machine) => (machine === 'mac-mini'
+      ? { ran: false, why: 'ssh "mac-mini" did not answer — asleep, off this network, or key not set up; not treated as drift' }
+      : { ran: true, out: `${work.PROBE_DONE}\n` }),
+  });
+  assert.equal(verdict.verdict, 'cannot-tell');
+  assert.equal(verdict.unseen[0].machine, 'mac-mini');
+  assert.deepEqual(verdict.unlooked, [], 'a machine that HAS a route and went quiet is a failed reading, not a missing route');
+});
+
+test('an unreadable inventory means every machine is TRIED, never that none is', () => {
+  const asked = [];
+  const verdict = work.findWorkInProgress({
+    taskId: TASK,
+    repoHome: FIXTURE_REPO,
+    homedir: FIXTURE_HOME,
+    nodes: ['mac-mini', 'macbook-pro'],
+    hereId: 'mac-mini',
+    routedMachines: [],
+    routesKnown: false,
+    shell: (machine) => {
+      asked.push(machine);
+      return machine === 'mac-mini' ? { ran: true, out: `${work.PROBE_DONE}\n` } : { ran: false, why: 'no answer' };
+    },
+  });
+  assert.deepEqual(asked, ['mac-mini', 'macbook-pro']);
+  assert.equal(verdict.verdict, 'cannot-tell', 'failing towards not moving things');
+});
+
+test('the route reader takes only machines the inventory gives an ssh probe', () => {
+  const yaml = [
+    'objects:',
+    '  - id: a', '    kind: machine', '    probe: ssh',
+    '  - id: b', '    kind: machine', '    probe: hostname',
+    '  - id: c', '    kind: repo', '    probe: ssh',
+  ].join('\n');
+  assert.deepEqual(work.sshRoutedMachines(yaml), { known: true, machines: ['a'] });
+  assert.equal(work.sshRoutedMachines(':\n  - [').known, false);
+  assert.equal(work.sshRoutedMachines('').known, false);
+});
+
+// ── patch equivalence, not commit count ──────────────────────────────────
+
+test('a squash-merged branch is NOT work — `git cherry`, not `rev-list --count`', () => {
+  const { clone, root } = makeRepo();
+  git(clone, 'checkout', '-b', 'feature');
+  fs.writeFileSync(path.join(clone, 'feature.txt'), 'the change\n');
+  git(clone, 'add', '.');
+  git(clone, 'commit', '-m', 'the feature');
+  git(clone, 'config', 'branch.feature.clickup-task', TASK);
+  // Squash-merge it, exactly as GitHub does, and push that to origin/main.
+  git(clone, 'checkout', 'main');
+  git(clone, 'merge', '--squash', 'feature');
+  git(clone, 'commit', '-m', 'the feature (#999)');
+  git(clone, 'push', 'origin', 'main');
+  git(clone, 'checkout', 'feature');
+
+  const parsed = probe(clone);
+  assert.equal(parsed.branches.length, 1, 'the stamped branch is still found');
+  assert.equal(parsed.branches[0].ahead, 0,
+    'its patch is already on main — counting commits would pin this ticket in "Building" forever');
+  assert.equal(work.branchHasWork(parsed.branches[0]), false);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a branch whose commits are genuinely NOT on main is still work', () => {
+  const { clone, root } = makeRepo();
+  git(clone, 'checkout', '-b', 'unshipped');
+  fs.writeFileSync(path.join(clone, 'new.txt'), 'never merged\n');
+  git(clone, 'add', '.');
+  git(clone, 'commit', '-m', 'unshipped work');
+  git(clone, 'config', 'branch.unshipped.clickup-task', TASK);
+
+  const parsed = probe(clone);
+  assert.equal(parsed.branches[0].ahead, 1);
+  assert.equal(work.branchHasWork(parsed.branches[0]), true);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a ticket left alone names EVERY seat that was not looked at, both kinds', () => {
+  const line = work.preservedLine({
+    id: '86bbAAA', name: 'a ticket', verdict: 'cannot-tell',
+    unseen: [{ machine: 'mac-mini', why: 'ssh "mac-mini" did not answer' }],
+    unlooked: [{ machine: 'macbook-pro', why: 'no ssh route to it is declared' }],
+  });
+  assert.match(line, /mac-mini/);
+  assert.match(line, /macbook-pro/, 'a routeless seat does not force the verdict, but it was still not looked at');
 });

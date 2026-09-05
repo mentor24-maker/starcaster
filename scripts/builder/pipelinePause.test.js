@@ -1520,5 +1520,65 @@ test('the dry run says what it WOULD have left alone, without claiming it acted'
   const preserved = [{ id: '86bbAAA', verdict: 'work' }];
   const dry = pause.sweptSummary([], { checked: true, left: 0, preserved, applied: false });
   assert.match(dry, /86bbAAA/);
-  assert.match(dry, /Nothing has been changed/);
+  // `--apply` IS NOT OFFERED OVER A PRESERVED TICKET (round-1 review of task
+  // 86bbur9tk, finding 5). It would not move it — refusing to move it is the
+  // entire point — so the offer was a sentence contradicting the one before
+  // it, which is the pair this function already carries two scars from.
+  assert.doesNotMatch(dry, /add `--apply` to do it/,
+    '`--apply` would not move a preserved ticket, so it must not be offered as if it would');
+  assert.match(dry, /would not move that one either/);
+});
+
+test('the dry run still offers `--apply` for the tickets it WOULD move, alongside the ones it would not', () => {
+  const dry = pause.sweptSummary(
+    [{ id: '86bbEEE', kind: 'a build', destination: 'Queued' }],
+    { checked: true, left: 0, preserved: [{ id: '86bbAAA', verdict: 'work' }], applied: false },
+  );
+  assert.match(dry, /86bbEEE/);
+  assert.match(dry, /add `--apply` to do it/, 'there IS something --apply would move here');
+  assert.match(dry, /86bbAAA/, '…and the preserved one is still named');
+});
+
+test('preserved sentences read as English in the singular as well as the plural', () => {
+  // "1 ticket ... so it was left exactly where they are" reached a live run
+  // and the bus verbatim (round-1 review, finding 6). This string goes to the
+  // terminal, the scheduled repair report and the party line unedited.
+  const oneBlind = pause.preservedSummary([{ id: '86bbCCC', verdict: 'cannot-tell' }]);
+  assert.match(oneBlind, /it was left exactly where it is/);
+  assert.doesNotMatch(oneBlind, /they are/);
+  const manyBlind = pause.preservedSummary([{ id: 'a', verdict: 'cannot-tell' }, { id: 'b', verdict: 'cannot-tell' }]);
+  assert.match(manyBlind, /they were left exactly where they are/);
+
+  const oneWork = pause.preservedSummary([{ id: '86bbAAA', verdict: 'work' }]);
+  assert.match(oneWork, /1 ticket was left in "Building" because a half-finished build for it is/);
+  const manyWork = pause.preservedSummary([{ id: 'a', verdict: 'work' }, { id: 'b', verdict: 'work' }]);
+  assert.match(manyWork, /2 tickets were left in "Building" because half-finished builds for them are/);
+});
+
+test('a seat that could not be looked at goes INSIDE the sentence that asserts the absence', () => {
+  // The move goes ahead — a machine with no ssh route is a permanent blind
+  // spot, and freezing on it disables the sweep's real job (round-1 review,
+  // finding 2). What must not survive is the flat "nothing has been built".
+  const plain = pause.strandedBuildDestination('fresh');
+  assert.equal(plain.status, 'Queued');
+  assert.equal(plain.why, 'nothing has been built for it that a new branch would duplicate');
+
+  const qualified = pause.strandedBuildDestination('fresh', { unlookedSeats: 'macbook-pro (no ssh route)' });
+  assert.equal(qualified.status, 'Queued', 'the sweep must still do its real job');
+  assert.match(qualified.why, /macbook-pro/, 'the seat it could not see is named');
+  assert.match(qualified.why, /rather than a certainty/);
+  assert.doesNotMatch(qualified.why, /^nothing has been built for it that a new branch would duplicate$/,
+    'the false confident sentence is the whole defect this ticket exists to remove');
+
+  // The other two destinations are unaffected: they already have a PR to
+  // reason from, so nothing is being asserted absent.
+  assert.equal(pause.strandedBuildDestination('continue', { unlookedSeats: 'macbook-pro (x)' }).status, 'Rework');
+  assert.doesNotMatch(pause.strandedBuildDestination('continue', { unlookedSeats: 'macbook-pro (x)' }).why, /macbook-pro/);
+});
+
+test('the hand-back note a ticket receives carries the caveat, not just the terminal', () => {
+  const plan = pause.strandedBuildDestination('fresh', { unlookedSeats: 'macbook-pro (no ssh route)' });
+  const note = pause.sweptTicketNote({ kind: 'a build', destination: plan.status, why: plan.why, command: 'npm run pipeline -- sweep --apply' });
+  assert.match(note, /macbook-pro/, 'the next builder reads the caveat where they read the instruction');
+  assert.match(note, /check there before rebuilding/);
 });

@@ -39,22 +39,54 @@
  * wherever it runs — the Mini owns the loops, the MacBook is where a
  * fast-track session usually sits. A sweep that only looked at its own disk
  * would answer "nothing was built" for every ticket built on the other
- * machine, which is the incident above exactly. So every known node is asked,
- * over SSH via `remoteProbe` (one connection per machine, login shell, short
- * timeout), and a machine that does not answer is UNSEEN rather than empty.
+ * machine, which is the incident above exactly. So every node that HAS an ssh
+ * route is asked, via `remoteProbe` (one connection per machine, login shell,
+ * short timeout), and a routed machine that does not answer is UNSEEN rather
+ * than empty.
  *
  * THE THREE VERDICTS, and why there are three:
  *
  *   work         a stamped branch with uncommitted changes or unpushed
  *                commits was found. The ticket is half-built: leave it alone.
- *   none         every known machine was asked and answered, and none of them
- *                has anything. This is the sweep's real job and it must keep
- *                working — a guard that never lets anything through is the
- *                mirror-image defect, and this repo has shipped that one.
- *   cannot-tell  at least one machine could not be looked at (asleep, no key,
+ *   none         every machine that could be asked was asked and answered,
+ *                and none of them has anything. This is the sweep's real job
+ *                and it must keep working — a guard that never lets anything
+ *                through is the mirror-image defect, and this repo has
+ *                shipped that one.
+ *   cannot-tell  a machine that SHOULD have answered did not (asleep, no key,
  *                git unreadable there). "I did not look" is not "there is
  *                nothing there" (DOCTRINE 3.11). The ticket is reported with
  *                the command to look by hand, and NOT moved.
+ *
+ * A FOURTH MACHINE STATE, AND IT IS NOT A VERDICT — `unrouted` (round-1
+ * review, 2026-09-05). Some machines have no ssh route at all: the inventory
+ * declares the Mini reachable "key-based, from the MacBook", one direction
+ * only, and `macbook-pro` carries `probe: hostname`. From the Mini — the
+ * machine that owns the loops and actually runs the sweep — `ssh macbook-pro`
+ * exits 255, "could not resolve hostname".
+ *
+ * Round 1 folded that into `cannot-tell`, and the result was a sweep that
+ * could never move ANYTHING from the only seat it runs on: acceptance
+ * criterion 3 failing in production, the mirror-image defect arriving through
+ * the node list instead of through `combineVerdicts`. So the two are separated,
+ * because they are genuinely different facts:
+ *
+ *   unseen    a machine we had every reason to expect an answer from, and did
+ *             not get one. A reading was attempted and failed. TRANSIENT —
+ *             the next sweep may well succeed. → cannot-tell, do not move.
+ *   unrouted  a machine there is no way to ask from here, and there was never
+ *             going to be. PERMANENT, and known in advance. Waiting for it is
+ *             waiting forever.
+ *
+ * An `unrouted` machine does NOT freeze the verdict. The sweep answers from
+ * what it could genuinely see, and every sentence it writes — the terminal
+ * line, the ticket note, the bus — NAMES the seat that was never looked at.
+ * That is the honest reading of this ticket's complaint, which was never
+ * "move fewer tickets": it was that the sweep asserted an absence it had not
+ * checked. A qualified true sentence is not that. The residual risk (a build
+ * sitting on the unroutable machine is still duplicated) is real, visible on
+ * the ticket, and closed by giving the seat a route — not by a sweep that
+ * stops working.
  *
  * WHAT IT DELIBERATELY DOES NOT DO. It never pushes, commits, or otherwise
  * touches the work it finds. Recovering a half-finished build is a decision,
@@ -92,12 +124,53 @@ const PROBE_GIT_FAILED = 'GIT-FAILED';
  * parser never has to guess which lines are its own. Tab-separated because a
  * worktree path may contain spaces and a branch name may not contain a tab.
  *
- * `|| echo 0` on the rev-list guards a checkout with no `origin/main` — a
- * fresh clone mid-fetch, or a repo whose default branch is named otherwise.
- * Zero there is honest: it means "no commits I can prove are beyond main",
- * and the uncommitted-changes half of the test still stands on its own.
+ * `homeRelative` IS THE WHOLE REMOTE PATH PROBLEM, and getting it wrong was
+ * silent (found in review, round 1, 2026-09-05). Another machine's checkout
+ * sits under ITS home directory, which only that machine can resolve — so the
+ * path has to arrive as `$HOME/<rel>` and be expanded THERE. Single-quoting it
+ * the way the local absolute path is quoted stops that expansion dead:
+ *
+ *     R='$HOME/WebApps/starcaster'        <- literal; `[ -e "$R/.git" ]` is false
+ *
+ * and the probe then answers `NO-REPO`, which `machineVerdict` treats as a real
+ * answer (`seen: true`) rather than a blind spot. Measured on the Mini against
+ * a path that DOES exist: `"NO-REPO\nPROBE-DONE\n"`. So every remote machine
+ * reported confidently empty, `combineVerdicts` answered `none`, and a
+ * half-built ticket went back to `Queued` — this ticket's own incident, from
+ * the other seat, with the guard installed and silent.
+ *
+ * The two seats therefore quote differently, on purpose:
+ *
+ *     R='<abs>/WebApps/starcaster'    local — absolute, fully quoted
+ *     R="$HOME"/'WebApps/starcaster'  remote — expanded on the far side
+ *
+ * The literal half stays single-quoted in both, so a path with spaces still
+ * survives; only `$HOME` is left to the shell that knows what it means.
+ *
+ * COMMITS ARE COUNTED WITH `git cherry`, NOT `rev-list --count` (finding 3,
+ * same review). This repo squash-merges, so a merged branch that still carries
+ * its stamp is `ahead > 0` forever by commit count and would pin its ticket in
+ * "Building" with nobody able to clear it. `git cherry` compares patch ids,
+ * which is what CLAUDE.md names as the only correct test here and what
+ * `scripts/lib/repo_state.cjs` uses as its first signal.
+ *
+ * It is only that FIRST signal, and the difference is stated rather than
+ * papered over: `repo_state` follows cherry with a content probe and a GitHub
+ * lookup, because a squash of N >= 2 commits matches none of the N patch ids.
+ * Neither of those is reachable from a `sh` one-liner on a machine we can only
+ * talk to down an ssh pipe. The residual is over-reporting — a multi-commit
+ * branch already merged reads as work — and that direction is the safe one
+ * here: the ticket is left in "Building" and named in the sweep's output every
+ * run, with the branch and the command to settle it, rather than silently
+ * handed to a second builder.
+ *
+ * A count of zero also comes back when there is no `origin/main` to compare
+ * against (a fresh clone mid-fetch, a repo whose default branch is named
+ * otherwise, or a checkout that has not fetched in a while). Zero is honest
+ * there: it means "no commits I can prove are beyond main", and the
+ * uncommitted-changes half of the test still stands on its own.
  */
-function probeScript({ repoPath, taskId }) {
+function probeScript({ repoPath, taskId, homeRelative = false }) {
   const repo = String(repoPath || '');
   const task = String(taskId || '');
   if (!repo || !task) throw new Error('probeScript needs both repoPath and taskId');
@@ -105,7 +178,7 @@ function probeScript({ repoPath, taskId }) {
   // ours (a config path and a ClickUp id), never operator input.
   const q = (s) => `'${s.replace(/'/g, `'\\''`)}'`;
   return [
-    `R=${q(repo)}`,
+    `R=${homeRelative ? `"$HOME"/${q(repo)}` : q(repo)}`,
     `T=${q(task)}`,
     `if [ ! -e "$R/.git" ]; then echo ${PROBE_NO_REPO}; echo ${PROBE_DONE}; exit 0; fi`,
     `if ! git -C "$R" rev-parse --git-dir >/dev/null 2>&1; then echo ${PROBE_GIT_FAILED}; echo ${PROBE_DONE}; exit 0; fi`,
@@ -116,7 +189,8 @@ function probeScript({ repoPath, taskId }) {
     `  wt=$(git -C "$R" worktree list --porcelain 2>/dev/null | awk -v want="refs/heads/$b" '$1=="worktree"{p=substr($0,10)} $1=="branch" && $2==want {print p; exit}')`,
     `  dirty=0`,
     `  if [ -n "$wt" ] && [ -d "$wt" ]; then dirty=$(git -C "$wt" status --porcelain 2>/dev/null | grep -c . || true); fi`,
-    `  ahead=$(git -C "$R" rev-list --count "origin/main..refs/heads/$b" 2>/dev/null || echo 0)`,
+    `  ahead=$(git -C "$R" cherry origin/main "refs/heads/$b" 2>/dev/null | grep -c '^+' || true)`,
+    `  [ -n "$ahead" ] || ahead=0`,
     `  printf 'BRANCH\\t%s\\t%s\\t%s\\t%s\\n' "$b" "$dirty" "$ahead" "$wt"`,
     `done`,
     `echo ${PROBE_DONE}`,
@@ -172,7 +246,11 @@ function describeBranchWork(b) {
  * unseen would make the sweep permanently unable to return anything, which is
  * the failure this fix must not introduce.
  */
-function machineVerdict({ machine, ran, why, out }) {
+function machineVerdict({ machine, ran, why, out, unrouted = false }) {
+  // No way to ask, and there never was. Distinct from `seen: false` on purpose
+  // — see the header. `seen` stays false because nothing was looked at; the
+  // `unrouted` flag is what stops it counting as a failed reading.
+  if (unrouted) return { machine, seen: false, unrouted: true, why: String(why || 'no ssh route to it is declared, so it cannot be looked at from here'), work: [] };
   // `remoteProbe` ends an unreachable-host reason with "; not treated as
   // drift" — precise where it was written (the ecosystem drift check) and
   // meaningless here, where nothing is measuring drift. The reason itself is
@@ -204,14 +282,21 @@ function machineVerdict({ machine, ran, why, out }) {
  * holding work, the answer is `work` whether or not another machine was
  * unreachable — the ticket is half-built either way and the sweep's only job
  * is to stop moving it.
+ *
+ * `unseen` and `unlooked` are kept apart all the way out (round-1 review), and
+ * only `unseen` can force `cannot-tell`. An `unrouted` machine is reported in
+ * `unlooked` on EVERY verdict including `none`, because the caller has to be
+ * able to say which seat it could not see even when it is going ahead with the
+ * move. Collapsing them here is what made the sweep unable to move anything.
  */
 function combineVerdicts(rows = []) {
   const machines = Array.isArray(rows) ? rows : [];
+  const unseen = machines.filter((m) => !m.seen && !m.unrouted);
+  const unlooked = machines.filter((m) => m.unrouted);
   const work = machines.flatMap((m) => m.work || []);
-  if (work.length) return { verdict: 'work', work, unseen: machines.filter((m) => !m.seen) };
-  const unseen = machines.filter((m) => !m.seen);
-  if (unseen.length) return { verdict: 'cannot-tell', work: [], unseen };
-  return { verdict: 'none', work: [], unseen: [] };
+  if (work.length) return { verdict: 'work', work, unseen, unlooked };
+  if (unseen.length) return { verdict: 'cannot-tell', work: [], unseen, unlooked };
+  return { verdict: 'none', work: [], unseen: [], unlooked };
 }
 
 /**
@@ -221,39 +306,118 @@ function combineVerdicts(rows = []) {
  * exactly right. On another machine it is not: the checkouts sit under each
  * machine's own home directory, and `repoHome` can only speak for this one
  * (NODES P1 — no committed artifact names a machine). So a remote path is the
- * local one re-rooted at `$HOME`, and a repo that does NOT live under this
- * home cannot be located remotely at all — which is stated as a blind spot,
- * never guessed at.
+ * local one re-rooted at that machine's own `$HOME`, and a repo that does NOT
+ * live under this home cannot be located remotely at all — which is stated as
+ * a blind spot, never guessed at.
+ *
+ * A REMOTE PATH COMES BACK RELATIVE, and `homeRelative` says so. Returning the
+ * assembled string `$HOME/WebApps/starcaster` is what made round 1 wrong: it
+ * reads like a path, so it was quoted like a path, and `$HOME` never expanded
+ * (see `probeScript`). Handing back the two halves separately means the caller
+ * cannot make that mistake without noticing — `homeRelative: true` has no
+ * meaning unless something acts on it. `display` is the assembled form, for
+ * messages only.
  */
 function repoPathOn({ machine, hereId, repoHome, homedir = os.homedir() }) {
-  if (machine === hereId) return { path: repoHome, remote: false };
+  if (machine === hereId) return { path: repoHome, remote: false, homeRelative: false, display: repoHome };
   const rel = path.relative(homedir, repoHome);
   if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
-    return { path: '', remote: true, why: `this repo's checkout (${repoHome}) is not under a home directory, so its path on another machine cannot be derived` };
+    return { path: '', remote: true, homeRelative: false, why: `this repo's checkout (${repoHome}) is not under a home directory, so its path on another machine cannot be derived` };
   }
-  return { path: `$HOME/${rel.split(path.sep).join('/')}`, remote: true };
+  const posix = rel.split(path.sep).join('/');
+  return { path: posix, remote: true, homeRelative: true, display: `$HOME/${posix}` };
 }
 
 /**
- * Ask every known machine whether it is holding work for this ticket.
+ * Which machines does the ecosystem inventory claim an SSH route to?
+ *
+ * WHY THIS IS ASKED AT ALL (finding 2 of the round-1 review, 2026-09-05).
+ * Round 1 walked `nodeRoles.KNOWN_NODES` and ssh'd every entry. There is no
+ * route from the Mini to the MacBook — `docs/ecosystem/inventory.yaml` says so
+ * itself, `macbook-pro` is `probe: hostname` while `mac-mini` is `probe: ssh
+ * (key-based, from the MacBook)`, one direction only — so on the Mini, which
+ * is the machine that owns the loops and actually runs the sweep, EVERY
+ * stranded build answered `cannot-tell` and none could ever be unstuck.
+ * Measured there: `ssh macbook-pro` exits 255, "could not resolve hostname".
+ *
+ * That is acceptance criterion 3 failing in production ("the fix must not
+ * disable the sweep's real job") — the mirror-image defect this ticket names,
+ * arrived at through the node list rather than through `combineVerdicts`. The
+ * unit test passed because it was handed a one-machine node list; the shipped
+ * sweep never gets that list.
+ *
+ * `check_ecosystem_drift.cjs` already draws this line (`m.probe === 'ssh'`)
+ * and this reads the same field of the same file, so the two cannot come to
+ * different conclusions about which machines are reachable.
+ *
+ * AN UNREADABLE INVENTORY MEANS EVERY MACHINE IS ROUTED, not none. A missing
+ * or malformed file must not silently convert a fleet into "nothing to look
+ * at"; treating every machine as routed sends it down the ssh path, where a
+ * failure becomes an honest `cannot-tell` and the ticket is left alone. Fail
+ * towards not moving things.
+ */
+function sshRoutedMachines(inventoryText, { parseYaml } = {}) {
+  const parse = parseYaml || require('js-yaml').load;
+  let doc;
+  try {
+    doc = parse(String(inventoryText || ''));
+  } catch {
+    return { known: false, machines: [] };
+  }
+  const objects = Array.isArray(doc?.objects) ? doc.objects : null;
+  if (!objects) return { known: false, machines: [] };
+  return {
+    known: true,
+    machines: objects.filter((o) => o?.kind === 'machine' && o?.probe === 'ssh').map((o) => String(o.id)),
+  };
+}
+
+/**
+ * Ask every machine that CAN be asked whether it is holding work for this
+ * ticket.
+ *
+ * `routedMachines` is the list from `sshRoutedMachines`; a remote machine
+ * outside it is never ssh'd at all. Round 1 ssh'd every entry in
+ * `nodeRoles.KNOWN_NODES` and paid a 255 for the one with no route, on every
+ * ticket, forever. `routesKnown: false` (an unreadable inventory) means every
+ * machine is tried — failing towards not moving things, never towards a fleet
+ * that reads as nothing to look at.
  *
  * @param {object}   opts
- * @param {string}   opts.taskId    the ClickUp id stamped on the branch
- * @param {string}   opts.repoHome  this machine's checkout of the task's repo
- * @param {string[]} opts.nodes     every known machine (lib/nodeRoles.KNOWN_NODES)
- * @param {string}   opts.hereId    which of them we are standing on
- * @param {Function} opts.shell     remoteProbe executor's `shell(machine, cmd)`
+ * @param {string}   opts.taskId          the ClickUp id stamped on the branch
+ * @param {string}   opts.repoHome        this machine's checkout of the task's repo
+ * @param {string[]} opts.nodes           every known machine (lib/nodeRoles.KNOWN_NODES)
+ * @param {string}   opts.hereId          which of them we are standing on
+ * @param {Function} opts.shell           remoteProbe executor's `shell(machine, cmd)`
+ * @param {string[]} [opts.routedMachines] machines the inventory gives an ssh route
+ * @param {boolean}  [opts.routesKnown]    was the inventory readable at all?
  * @param {number}   [opts.timeoutMs]
  */
-function findWorkInProgress({ taskId, repoHome, nodes = [], hereId, shell, homedir = os.homedir(), timeoutMs = 20000 }) {
+function findWorkInProgress({
+  taskId, repoHome, nodes = [], hereId, shell,
+  routedMachines = [], routesKnown = false,
+  homedir = os.homedir(), timeoutMs = 20000,
+}) {
+  const routed = new Set(routedMachines || []);
   const rows = [];
   for (const machine of nodes) {
     const where = repoPathOn({ machine, hereId, repoHome, homedir });
+    // No route declared to this machine — not a failed reading, a seat that
+    // was never reachable from here. Asked BEFORE the path check so the
+    // reported reason is the one that actually stops us.
+    if (where.remote && routesKnown && !routed.has(machine)) {
+      rows.push(machineVerdict({
+        machine,
+        unrouted: true,
+        why: 'no ssh route to it is declared in docs/ecosystem/inventory.yaml, so it cannot be looked at from this machine',
+      }));
+      continue;
+    }
     if (!where.path) {
       rows.push({ machine, seen: false, why: where.why, work: [] });
       continue;
     }
-    const script = probeScript({ repoPath: where.path, taskId });
+    const script = probeScript({ repoPath: where.path, taskId, homeRelative: where.homeRelative });
     let res;
     try {
       res = shell(machine, script, timeoutMs);
@@ -266,6 +430,19 @@ function findWorkInProgress({ taskId, repoHome, nodes = [], hereId, shell, homed
     rows.push(machineVerdict({ machine, ran: res?.ran !== false, why: res?.why, out: res?.out }));
   }
   return combineVerdicts(rows);
+}
+
+/**
+ * The seats the sweep could not look at, as one clause for a sentence that is
+ * going ahead anyway.
+ *
+ * Exported and shared so the terminal line, the ticket note and the bus
+ * message cannot end up describing the blind spot three different ways.
+ */
+function describeUnlooked(unlooked = []) {
+  const rows = (Array.isArray(unlooked) ? unlooked : []).filter(Boolean);
+  if (!rows.length) return '';
+  return rows.map((m) => `${m.machine} (${m.why})`).join('; ');
 }
 
 /**
@@ -289,7 +466,7 @@ function describeWork(work = []) {
  * the rule `npm run repair` already follows): a ticket reported as unjudgeable
  * with no way to settle it is a line nobody can act on, so it gets skimmed.
  */
-function preservedLine({ id, name, verdict, work = [], unseen = [], age = '' }) {
+function preservedLine({ id, name, verdict, work = [], unseen = [], unlooked = [], age = '' }) {
   const who = `${id}${name ? ` ("${name}")` : ''}`;
   if (verdict === 'work') {
     return `  ${who} is NOT being returned to the claim line — a build is half-finished for it${age}: `
@@ -297,7 +474,12 @@ function preservedLine({ id, name, verdict, work = [], unseen = [], age = '' }) 
       + 'Finish it there, or hand the ticket back yourself with '
       + `\`npm run clickup -- status --task ${id} --status "Rework"\`.`;
   }
-  const blind = unseen.map((m) => `${m.machine} (${m.why})`).join('; ');
+  // BOTH KINDS OF BLIND SPOT, on a ticket that is being left alone. The
+  // verdict is driven by `unseen` — a routeless machine never forces
+  // cannot-tell — but once we are not moving the ticket anyway, a reader
+  // going to look by hand needs every seat that was not looked at, not just
+  // the ones that failed to answer.
+  const blind = [...unseen, ...unlooked].map((m) => `${m.machine} (${m.why})`).join('; ');
   return `  ${who} CANNOT TELL whether anything was built for it${age} — ${blind}. `
     + 'Left exactly where it is rather than moved on a reading nobody took. '
     + `Look on that machine with \`git config --get-regexp 'clickup-task' | grep ${id}\`, `
@@ -316,7 +498,9 @@ module.exports = {
   machineVerdict,
   combineVerdicts,
   repoPathOn,
+  sshRoutedMachines,
   findWorkInProgress,
   describeWork,
+  describeUnlooked,
   preservedLine,
 };

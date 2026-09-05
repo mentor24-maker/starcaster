@@ -37,6 +37,9 @@
 
 import { setTimeout as sleep } from 'node:timers/promises';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import pipelinePause from './builder/pipelinePause.js';
 import buildStart from './builder/buildStart.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
@@ -49,6 +52,11 @@ import clickupLib from './lib/clickup.cjs';
 
 const { clickupFetch, getBudget } = clickupLib;
 
+// This file's own checkout, derived rather than written down — the inventory
+// it reads below travels with the repo, and a literal path is an assumption
+// that fails on every machine but the one it was typed on (NODES P1).
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
 const {
   SWITCH_TASK_NAME, STRANDED_AFTER_MS,
   pauseRecord, resumeRecord, readTrail, pauseVerdict,
@@ -58,7 +66,7 @@ const {
   strandedBuildDestination,
 } = pipelinePause;
 const { resolveBuildStart, prLookupArgs } = buildStart;
-const { findWorkInProgress, preservedLine } = strandedLocalWork;
+const { findWorkInProgress, preservedLine, describeUnlooked, sshRoutedMachines } = strandedLocalWork;
 // The switch is READ in exactly one place, shared with bus-relay, so the two
 // can never hold different ideas of where the flag is or what counts as
 // unreadable (pipelinePauseStore.js says why that matters).
@@ -249,7 +257,19 @@ function runLocal(cmd, args, timeoutMs = 8000) {
 function workProbe() {
   const here = thisNodeName();
   const exec = remoteProbe.createExecutor({ run: runLocal, hereId: here });
-  return { here, shell: exec.shell };
+  // WHICH MACHINES CAN BE ASKED AT ALL, read once per sweep from the same
+  // field of the same file `check_ecosystem_drift.cjs` reads (round-1 review
+  // of task 86bbur9tk). Without this the sweep ssh'd a machine with no route
+  // — 255, every ticket, every run — and reported the whole queue as
+  // unjudgeable from the one seat that runs it.
+  let routes = { known: false, machines: [] };
+  try {
+    routes = sshRoutedMachines(readFileSync(path.join(REPO_ROOT, 'docs', 'ecosystem', 'inventory.yaml'), 'utf8'));
+  } catch {
+    // Unreadable inventory -> every machine is tried, and an ssh failure
+    // becomes an honest cannot-tell. Fail towards not moving things.
+  }
+  return { here, shell: exec.shell, routedMachines: routes.machines, routesKnown: routes.known };
 }
 
 /**
@@ -280,6 +300,8 @@ function workInProgressFor(task, probe) {
     nodes: nodeRoles.KNOWN_NODES,
     hereId: probe.here,
     shell: probe.shell,
+    routedMachines: probe.routedMachines,
+    routesKnown: probe.routesKnown,
   });
 }
 
@@ -456,7 +478,12 @@ async function sweepStranded({ by, queue, apply = false, strandedAfterMs = STRAN
       // is a trail that contradicts the board, and the trail is the only thing
       // the next pass reads. Reviews skip it: they never move.
       const dest = reviewing ? { action: 'n/a' } : await buildStartFor(s.id);
-      const plan = reviewing ? null : strandedBuildDestination(dest.action);
+      // The destination WITHOUT the local-work reading yet — it is only needed
+      // here to decide whether the reading is worth taking (a ticket heading
+      // for Rework already has a PR, so nothing is being asserted absent).
+      // The plan that is actually USED is rebuilt below, once the reading is
+      // in, so its sentence can carry which seats went unlooked-at.
+      const provisional = reviewing ? null : strandedBuildDestination(dest.action);
       // HOW STALE, on every line. The sweep can now be run at any moment
       // rather than only out of a pause, so its reader has to be able to tell
       // a ticket dead since midnight from one a hand-driven session claimed 91
@@ -480,14 +507,22 @@ async function sweepStranded({ by, queue, apply = false, strandedAfterMs = STRAN
       //                say which, with the command to settle it by hand.
       //   none         every machine answered and none holds anything. The
       //                sweep's real job, unchanged.
-      const local = reviewing || plan.status !== 'Queued'
-        ? { verdict: 'none', work: [], unseen: [] }
+      const local = reviewing || provisional.status !== 'Queued'
+        ? { verdict: 'none', work: [], unseen: [], unlooked: [] }
         : workInProgressFor(queue.tasks?.find((t) => String(t.id) === s.id) || { id: s.id }, probe);
       if (local.verdict !== 'none') {
-        console.error(preservedLine({ id: s.id, name: s.name, verdict: local.verdict, work: local.work, unseen: local.unseen, age }));
+        console.error(preservedLine({ id: s.id, name: s.name, verdict: local.verdict, work: local.work, unseen: local.unseen, unlooked: local.unlooked, age }));
         preserved.push({ id: s.id, kind: s.kind, verdict: local.verdict });
         continue;
       }
+
+      // GOING AHEAD, AND SAYING WHAT IT COULD NOT SEE. A machine with no ssh
+      // route from here is a permanent blind spot, not a failed reading, so it
+      // does not stop the move — but it goes into the sentence, the ticket note
+      // and the terminal line, because the defect this ticket names is a sweep
+      // asserting an absence it never checked.
+      const unlookedSeats = describeUnlooked(local.unlooked);
+      const plan = reviewing ? null : strandedBuildDestination(dest.action, { unlookedSeats });
 
       // A DRY RUN STOPS HERE, having written nothing. It still does the full
       // `build-start` lookup above, because "where would this go" is the whole
