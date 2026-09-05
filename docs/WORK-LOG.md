@@ -1,3 +1,40 @@
+## 2026-09-05 — The panel layout checker could not fail on the panel it had just checked (#613)
+
+`check:panels` is the check that looks at the admin panels in a real browser
+and says whether the labels and fields line up. It is the one check the
+automated system cannot run for itself, because it needs a browser — so it
+only ever runs when somebody runs it, and the rule for trusting it is to break
+the layout on purpose first and watch it go red.
+
+On 3 September somebody did that on the Trigger panel and it stayed green
+through two deliberate breaks, including undoing the exact fix that had just
+shipped for that panel. A check that cannot fail is worse than no check,
+because its green gets quoted as proof.
+
+It turned out the checker had already measured the problem and was throwing
+the number away. It asked whether a label's column was too narrow — a cramped
+label is the thing the rule was written against — and never asked whether one
+was too wide. With the fix undone, the word "Trigger" was sitting in a column
+more than seven times wider than the word: 362 pixels of dead space, which is
+exactly the gap the original ticket was about. There was a second reason too:
+three of the four Trigger blocks only show one row, and most of the other
+tests work by comparing rows to each other, so with one row there is nothing
+to disagree with.
+
+This adds a ceiling on that dead space, set from measurements rather than
+picked: every correctly-built block in the app sits at exactly 40 pixels, the
+loosest legitimate block anywhere is 133, and the fault is 362 — so the
+ceiling is 140. It compares a block against itself, so it works on a one-row
+block too. The checker also now says how many blocks only showed one row, on
+good runs as well as bad, so its final tally can never again be read as a
+verdict over comparisons that never happened.
+
+Proven the way the ticket asked: putting the original fault back now produces
+12 failures across all four panels at all three screen widths, and taking it
+out again goes green. The new rule is also plain enough to be tested without a
+browser, so for the first time a piece of this check runs in CI on every pull
+request.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
