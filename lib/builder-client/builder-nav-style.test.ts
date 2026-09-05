@@ -9,7 +9,8 @@ import {
   getNavTextShadow,
   getNavUnderline,
   isNavMegaMenu,
-  showsNavDropdownArrow
+  showsNavDropdownArrow,
+  squaresNavBottomWhenOpen
 } from "@/lib/builder-nav-style";
 
 const style = (settings: Record<string, string> = {}) =>
@@ -454,5 +455,74 @@ describe("the toggle pull-back var (--site-nav-link-padding-right)", () => {
 describe("the bar padding shorthand", () => {
   it("keeps the operator's bottom side in place", () => {
     expect(style({ navPaddingBottom: "7" })["--site-nav-padding"]).toBe("8px 8px 7px 8px");
+  });
+});
+
+describe('"Square bottom when open" (navLinkRadiusTopOnly)', () => {
+  /*
+   * The safety argument for this control is that an untouched menu emits the
+   * same SET of variables it emitted before the control existed — not merely
+   * the same numbers. Every CSS rule reading one of these spells today's
+   * value as its own fallback, so an absent variable is today's rendering.
+   */
+  const NEW_VARS = [
+    "--site-nav-link-radius-bottom",
+    "--site-nav-dropdown-radius-top",
+    "--site-nav-mega-gap"
+  ];
+
+  it("emits none of them when the setting is absent — no live tenant menu moves", () => {
+    const vars = style();
+    for (const name of NEW_VARS) expect(vars[name]).toBeUndefined();
+  });
+
+  it("emits none of them when the setting is explicitly off", () => {
+    const vars = style({ navLinkRadiusTopOnly: "false" });
+    for (const name of NEW_VARS) expect(vars[name]).toBeUndefined();
+  });
+
+  it("squares the item's bottom corners, the list panel's top corners and the mega gap when on", () => {
+    const vars = style({ navLinkRadiusTopOnly: "true" });
+
+    expect(vars["--site-nav-link-radius-bottom"]).toBe("0px");
+    expect(vars["--site-nav-dropdown-radius-top"]).toBe("0px");
+    // Corners cannot join two shapes across a gap, so the mega drop closes too.
+    expect(vars["--site-nav-mega-gap"]).toBe("0px");
+  });
+
+  it("accepts the legacy 'on' truthy the shared checkbox control writes", () => {
+    expect(style({ navLinkRadiusTopOnly: "on" })["--site-nav-link-radius-bottom"]).toBe("0px");
+  });
+
+  it("leaves Link Radius alone in both directions — it is a NEW control, not a change to that one", () => {
+    const off = style({ navBorderRadius: "30" });
+    const on = style({ navBorderRadius: "30", navLinkRadiusTopOnly: "true" });
+
+    expect(off["--site-nav-link-radius"]).toBe("30px");
+    expect(on["--site-nav-link-radius"]).toBe("30px");
+  });
+
+  it("changes nothing else about an otherwise identical menu", () => {
+    // The strongest form of the guarantee: diff the whole object, so a
+    // variable added here by accident fails rather than going unnoticed.
+    const off = style({ navBorderRadius: "30", navDropdownRadius: "20" });
+    const on = style({ navBorderRadius: "30", navDropdownRadius: "20", navLinkRadiusTopOnly: "true" });
+
+    const added = Object.keys(on).filter((key) => !(key in off));
+    expect(added.sort()).toEqual([...NEW_VARS].sort());
+
+    for (const key of Object.keys(off)) expect(on[key]).toBe(off[key]);
+  });
+
+  it("reads the setting through one function, so the panel and the renderer cannot disagree", () => {
+    expect(squaresNavBottomWhenOpen({})).toBe(false);
+    expect(squaresNavBottomWhenOpen({ navLinkRadiusTopOnly: "true" })).toBe(true);
+    expect(squaresNavBottomWhenOpen({ navLinkRadiusTopOnly: "false" })).toBe(false);
+    // Junk falls back to off — the safe direction for every live menu.
+    expect(squaresNavBottomWhenOpen({ navLinkRadiusTopOnly: "yes please" })).toBe(false);
+  });
+
+  it("keeps the default off, which is what the CSS fallbacks assume", () => {
+    expect(NAV_STYLE_DEFAULTS.linkRadiusTopOnly).toBe(false);
   });
 });
