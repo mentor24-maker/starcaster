@@ -195,13 +195,16 @@
                     <option value="unset">Unset</option>
                   </select>
                 </th>
-                <!-- Spans Published + Updated + Actions: the three bulk
-                     buttons need ~230px and the Actions column is 7.5rem,
-                     so confining them to it pushed the table off-screen. -->
+                <!-- Spans Published + Updated + Actions: the four bulk
+                     buttons need more than the 7.5rem Actions column, and
+                     confining them to it pushed the table off-screen. The
+                     .crud-bulk-actions-row flex wraps to a second line rather
+                     than widening the table (UI_RULES T0). -->
                 <th class="crud-bulk-actions" colspan="3">
                   <div class="crud-bulk-actions-row">
                     <button id="builderPagesBulkPublishBtn" class="btn" type="button" disabled>Publish</button>
                     <button id="builderPagesBulkArchiveBtn" class="btn" type="button" disabled>Archive</button>
+                    <button id="builderPagesBulkChangeTemplateBtn" class="btn" type="button" disabled>Change Template</button>
                     <button id="builderPagesBulkDeleteBtn" class="btn btn-danger" type="button" disabled>Delete</button>
                   </div>
                 </th>
@@ -264,6 +267,26 @@
           </table>
         </div>
       </section>
+
+      <!-- Bulk template change. Two steps in one dialog on purpose: the picker
+           and the consequence, so the number of pages and the words "will be
+           replaced" are on screen at the moment the button is pressed. -->
+      <dialog id="builderPagesChangeTemplateDialog" class="builder-nested-modal-dialog">
+        <div class="builder-nested-modal-body" style="padding:1.5rem;max-width:520px;">
+          <div class="page-heading-row" style="margin-bottom:1rem;">
+            <h3 style="margin:0;">Change Template</h3>
+            <button type="button" class="btn" id="builderPagesChangeTemplateCancelBtn">Cancel</button>
+          </div>
+          <p id="builderPagesChangeTemplateCount"></p>
+          <label for="builderPagesChangeTemplateSelect">Move them onto</label>
+          <select id="builderPagesChangeTemplateSelect" style="width:100%;margin-top:.35rem;"></select>
+          <p id="builderPagesChangeTemplateWarning" style="margin-top:1rem;"></p>
+          <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.25rem;">
+            <button type="button" class="btn" id="builderPagesChangeTemplateCancelBtn2">Cancel</button>
+            <button type="button" class="btn btn-primary" id="builderPagesChangeTemplateConfirmBtn">Change Template</button>
+          </div>
+        </div>
+      </dialog>
 
       <dialog id="builderRestorePageConfirmDialog" class="builder-nested-modal-dialog">
         <div class="builder-nested-modal-body" style="padding:1.5rem;max-width:480px;">

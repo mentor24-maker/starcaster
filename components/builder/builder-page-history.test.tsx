@@ -323,3 +323,30 @@ describe("BuilderPageHistory — day grouping", () => {
     expect(keyWarnings).toEqual([]);
   });
 });
+
+/**
+ * A bulk template change re-pours the page, so its revision holds the only
+ * copy of the layout it replaced. Banked as `save` — which is what it was
+ * until 2026-09-05 — it read in Page History as an ordinary hand edit, so the
+ * one row the operator most needs to find after a 43-page bulk change looked
+ * exactly like the forty-three ordinary saves around it.
+ */
+describe("BuilderPageHistory — a bulk template change is not an ordinary edit", () => {
+  const TEMPLATE_ROW: BuilderPageRevision = {
+    ...SAVE_ROW,
+    id: "rev-3",
+    reason: "template",
+    savedByName: "Dane Christensen",
+  };
+
+  it("says the template was changed, and names who changed it", async () => {
+    await openWith({ revisions: [TEMPLATE_ROW] });
+    expect(container?.textContent).toContain("Template changed by Dane Christensen");
+    expect(container?.textContent).not.toContain("Edited by Dane Christensen");
+  });
+
+  it("with no author recorded it still says what the change was", async () => {
+    await openWith({ revisions: [{ ...TEMPLATE_ROW, savedByName: "" }] });
+    expect(container?.textContent).toContain("Template changed");
+  });
+});

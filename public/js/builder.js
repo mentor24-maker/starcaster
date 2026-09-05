@@ -509,6 +509,12 @@ App.builder = (function () {
   let savedModuleClasses = [];
   let savedPages = [];
   let savedPageTemplates = [];
+  // WHY the list is empty. `loadSavedPageTemplates` swallows every failure into
+  // an empty array, so "this project has no page templates" and "the request to
+  // fetch them fell over" were the same picture — and the dialog stated the
+  // first as fact, sending the operator off to create templates he already has
+  // (landmine 17). Empty string means the last load succeeded.
+  let savedPageTemplatesError = '';
   let savedThemes = [];
   let modularPageTemplateDraft = null;
   let draggedNewPageSectionLayout = '';
@@ -4260,12 +4266,300 @@ App.builder = (function () {
     }
   }
 
+  // ── Bulk template change ────────────────────────────────────────────────
+  //
+  // The destination list is NOT the Template filter's list. That list is built
+  // for reading and carries three things this write surface cannot accept:
+  // the project's EMAIL templates (builder_page_templates holds both kinds —
+  // 20 of 32 rows in the production copy are email), the starter templates
+  // (whose layouts are assembled here in the browser by
+  // buildStarterModularLayoutSections, so the server cannot resolve one), and
+  // the built-in stub, which the server declares with an EMPTY layout — moving
+  // pages onto it would delete their content rather than change their template.
+  //
+  // getUnifiedModularPageTemplates().saved is the same source the single-page
+  // picker trusts: real, saved, modular page templates, newest first.
+  function getBulkTemplateChangeOptions() {
+    return getUnifiedModularPageTemplates().saved
+      // A template with NO sections is excluded, and this is not belt-and-
+      // braces for the server's identical rule — the page-templates endpoint
+      // INJECTS a built-in stub declared with an empty layout into this very
+      // list, so without this line the fixture project's only offer is the one
+      // destination the server refuses. Applying it would not change a
+      // template; it would delete the content of every selected page.
+      .filter((template) => Array.isArray(template.layoutSections) && template.layoutSections.length)
+      .map((template) => ({
+        value: String(template.id),
+        label: safeText(template.name) || `Template ${template.id}`,
+      }));
+  }
+
+  // Is this page being served to visitors RIGHT NOW? Published and not
+  // private is the whole test: a page with no published snapshot falls back to
+  // its draft on the public site, so a re-poured draft is live immediately.
+  function pageIsLiveOnPublicSite(item) {
+    if (!item || typeof item !== 'object') return false;
+    return pageIsPublished(item) && pageVisibilityState(item) !== 'private';
+  }
+
+  function countLiveSelectedPages() {
+    let live = 0;
+    selectedPageIds.forEach((id) => {
+      const item = savedPages.find((page) => safeText(page && page.id) === safeText(id));
+      if (pageIsLiveOnPublicSite(item)) live += 1;
+    });
+    return live;
+  }
+
+  function openBulkChangeTemplateDialog() {
+    const dialog = byId('builderPagesChangeTemplateDialog');
+    const select = byId('builderPagesChangeTemplateSelect');
+    const countEl = byId('builderPagesChangeTemplateCount');
+    const warningEl = byId('builderPagesChangeTemplateWarning');
+    const confirmBtn = byId('builderPagesChangeTemplateConfirmBtn');
+    if (!dialog || !select || !countEl || !warningEl) return;
+
+    const n = selectedPageIds.size;
+    countEl.textContent = `${n} page${n === 1 ? '' : 's'} selected.`;
+
+    const options = getBulkTemplateChangeOptions();
+    setSelectOptions(select, options, 'Choose a template…');
+    // An empty list is a state, not a failure, and it has to say which — a
+    // dialog with an empty dropdown and no explanation reads as broken.
+    if (!options.length) {
+      // An empty list is a state, and WHICH state matters: "you have none" is
+      // an instruction, "I could not fetch them" is a retry. Telling a project
+      // with thirty templates that it has none is the same defect as item 4 —
+      // a could-not-tell rendered as a definite answer.
+      warningEl.textContent = savedPageTemplatesError
+        ? `Could not load this project's page templates, so this list is empty for a reason that is not "you have none" — the request said: ${savedPageTemplatesError}. Close this and try again.`
+        : 'This project has no saved page templates yet, so there is nothing to move these pages onto. Save a page as a template first.';
+      if (confirmBtn) confirmBtn.disabled = true;
+    } else {
+      // WHERE the pages are, named with the count rather than implied. A page
+      // with no published snapshot is served straight from its draft
+      // (routes/publicSite.js), so on a project that has never published the
+      // re-pour is on the tenant's public domain the moment this finishes —
+      // there is no publish step between here and the visitor.
+      const live = countLiveSelectedPages();
+      const liveNote = live
+        ? ` ${live} of these ${live === 1 ? 'pages is' : 'pages are'} live on the public site, so a visitor sees the new layout as soon as this finishes — there is no separate publish step.`
+        : '';
+      warningEl.textContent = `The sections on these pages will be REPLACED with the chosen template’s layout. Each page keeps its own background and theme.${liveNote} An archive of all your pages is saved first, and Restore All on that archive undoes this — along with any other page edits made after it was taken.`;
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
+    if (confirmBtn) confirmBtn.textContent = 'Change Template';
+    dialog.showModal();
+  }
+
+  // EVERY sentence this operation shows the operator is worded in
+  // /shared/bulkTemplateOutcome.js, which the admin shell loads as its own
+  // <script> tag (src/layout.html). If that one file 404s or fails to parse,
+  // App.bulkTemplateOutcome is undefined and every call through it is a
+  // TypeError — thrown from inside the very handlers that are supposed to be
+  // telling the operator what happened.
+  //
+  // Round 3 guarded ONE of the three call sites. The success report was not
+  // one of them: it sat inside the write's try, so a missing module turned a
+  // run in which every page moved and verified into "some pages may already
+  // have been changed … Restore All from Archives" — a destructive action
+  // recommended after nothing went wrong. The pre-flight catch was not
+  // guarded either, and there the TypeError escaped as an unhandled rejection
+  // and the operator got no message at all.
+  //
+  // So the module is reached HERE and nowhere else, and each caller supplies
+  // the plain sentence to fall back to. Those fallbacks are deliberately dull:
+  // they never claim damage that did not happen and never recommend Restore
+  // All, which rolls the whole project back to the archive point and takes any
+  // unrelated edit made since with it.
+  // scripts/builder/bulkTemplateGuard.test.js fails if a call site is ever
+  // added outside this function.
+  function sayBulkTemplate(fnName, args, fallbackMessage) {
+    const outcomes = App.bulkTemplateOutcome;
+    const describe = outcomes && outcomes[fnName];
+    if (typeof describe !== 'function') return { message: fallbackMessage, isError: true };
+    return describe(args);
+  }
+
+  // Archive first, then change. The order is the whole safety of this
+  // operation: it re-pours every selected page, which is what emptied 35
+  // sections off the Delray home page on 2026-08-14.
+  //
+  // The archive is not best-effort. If it fails, nothing is written and the
+  // failure is what the operator is told. The server refuses the change
+  // without a real snapshot id too — a guard that only lives in the browser is
+  // not a guard.
+  async function runBulkChangeTemplate() {
+    const select = byId('builderPagesChangeTemplateSelect');
+    const confirmBtn = byId('builderPagesChangeTemplateConfirmBtn');
+    const dialog = byId('builderPagesChangeTemplateDialog');
+    const ids = Array.from(selectedPageIds);
+    const pageTemplateId = safeText(select && select.value);
+
+    if (!ids.length) { notify('Select at least one page first', true); return; }
+    if (!pageTemplateId) { notify('Choose a template first', true); return; }
+
+    const templateName = getPagesTableTemplateLabel(pageTemplateId);
+
+    // ASK FIRST, ARCHIVE SECOND. The archive is a complete copy of every page
+    // in the project, and the server can still refuse this change after it is
+    // taken — the template may be an email template, have no sections, or have
+    // been deleted since the dropdown was filled. Archiving first left one of
+    // those refusals with a full archive behind it that undid nothing, on a
+    // list the operator is told to restore from; two refusals in a row push
+    // the real archives off the end of it.
+    //
+    // This endpoint writes nothing, whatever happens to it.
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Checking…'; }
+    try {
+      await api('/api/builder/landing-pages/bulk-set-template/check', {
+        method: 'POST',
+        body: JSON.stringify({ pageIds: ids, pageTemplateId }),
+      });
+    } catch (err) {
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Change Template'; }
+      // Definite whichever way this went: the check endpoint cannot write,
+      // so even a request that died half way through it changed nothing and
+      // took no archive. That is why the fallback may say so outright.
+      notify(sayBulkTemplate(
+        'describeBulkTemplateFailure',
+        {
+          error: err && err.message,
+          status: err && err.status,
+          wroteNothing: true,
+          archiveTaken: false,
+        },
+        `${(err && err.message) || 'The check failed'}. Nothing was changed and no archive was taken.`,
+      ).message, true);
+      return;
+    }
+
+    if (confirmBtn) confirmBtn.textContent = 'Archiving…';
+
+    let snapshotId = '';
+    try {
+      // The label names the REASON, not the contents: the snapshot endpoint
+      // ignores the pages it is sent and archives all of them, so "3 pages"
+      // here would read as an archive holding three.
+      const label = `Before changing the template on ${ids.length} page${ids.length === 1 ? '' : 's'} — ${new Date().toLocaleString()}`;
+      const archive = await api('/api/builder/page-snapshots', {
+        method: 'POST',
+        body: JSON.stringify({ label }),
+      });
+      snapshotId = safeText(archive && archive.snapshot && archive.snapshot.id);
+      if (!snapshotId) throw new Error('The archive did not come back with an id');
+    } catch (err) {
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Change Template'; }
+      notify(`Could not save an archive, so nothing was changed: ${err.message || 'archive failed'}`, true);
+      return;
+    }
+
+    if (confirmBtn) confirmBtn.textContent = 'Changing…';
+    // Read WHERE the pages are before the reload, off the rows the operator was
+    // actually looking at. Changing a template does not touch a publish flag,
+    // so this is the same answer either side of the refresh — but taking it
+    // here means the report still knows it when the reload is the thing that
+    // fell over.
+    const liveIds = new Set();
+    ids.forEach((id) => {
+      const item = savedPages.find((page) => safeText(page && page.id) === safeText(id));
+      if (pageIsLiveOnPublicSite(item)) liveIds.add(safeText(id));
+    });
+
+    // THE TRY HOLDS THE REQUEST AND NOTHING ELSE.
+    //
+    // Reporting used to sit inside it, and its catch says "some pages may
+    // already have been changed … Restore All from Archives". So any throw
+    // while WORDING a clean run was caught and read out as a possible
+    // disaster: with /shared/bulkTemplateOutcome.js missing, a run in which
+    // every page moved and verified showed the operator a raw TypeError
+    // followed by a recommendation to roll the whole project back. A report is
+    // not part of the operation it reports on, and it must not be able to
+    // rewrite that operation's verdict.
+    let result = null;
+    let interrupted = null;
+    try {
+      result = await api('/api/builder/landing-pages/bulk-set-template', {
+        method: 'POST',
+        body: JSON.stringify({ pageIds: ids, pageTemplateId, snapshotId }),
+      });
+    } catch (err) {
+      interrupted = err || new Error('The request failed');
+    }
+
+    // The table is reloaded either way: after a death it is the only way the
+    // screen stops being a lie, and after a refusal it costs a read and shows
+    // the same values.
+    if (dialog) dialog.close();
+    await refreshPagesTableAfterBulkChange();
+
+    if (interrupted) {
+      // TWO COMPLETELY DIFFERENT EVENTS ARRIVE HERE, and the fork between them
+      // is made in public/shared/ where a test can reach it. A structured
+      // refusal carries an HTTP status (App.api attaches it) and means the
+      // route decided before writing a page; anything else means the request
+      // died and pages may already be re-poured. Running both through the
+      // interruption sentence told the operator "nothing was changed" and "some
+      // pages may already have been changed" in one breath, then pointed him at
+      // Restore All — which rolls the whole project back — in response to a
+      // no-op.
+      //
+      // The fallback cannot make that fork, so it makes no claim either way:
+      // it says where to look and that the archive exists, which is true of
+      // both, and recommends nothing destructive.
+      notify(sayBulkTemplate(
+        'describeBulkTemplateFailure',
+        {
+          error: interrupted && interrupted.message,
+          status: interrupted && interrupted.status,
+          liveCount: liveIds.size,
+          archiveTaken: true,
+        },
+        `${(interrupted && interrupted.message) || 'The request failed'}. The list has been reloaded — check the Template column to see what changed. Archives holds the archive taken just before this run.`,
+      ).message, true);
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Change Template'; }
+      return;
+    }
+
+    const rows = (Array.isArray(result && result.results) ? result.results : []).map((row) => ({
+      ...(row && typeof row === 'object' ? row : {}),
+      isLive: liveIds.has(safeText(row && row.id)),
+    }));
+
+    // The three verdicts are counted and worded in public/shared/, where a
+    // test can reach them. Branching over them here is what produced "41 of
+    // 43 moved; 2 failed" on a run that ALSO had two unconfirmed pages —
+    // the read-back warning vanished and those two were counted as moved.
+    const outcome = sayBulkTemplate(
+      'describeBulkTemplateOutcome',
+      { rows, templateName },
+      'The change ran and the server answered, but this screen could not load the file that words the result, so it cannot say how each page fared. Check the Template column. Archives holds the archive taken just before this run.',
+    );
+    notify(outcome.message, outcome.isError);
+  }
+
+  // Reloading is itself a call that can fail, and it runs on the path where
+  // something has ALREADY gone wrong. A throw here would replace the
+  // "some pages may have changed" message with a load error, which is the
+  // quieter of the two and not the one the operator needs.
+  async function refreshPagesTableAfterBulkChange() {
+    try {
+      await loadSavedPages();
+      renderPagesTable();
+      syncLandingPageTableControls();
+    } catch (_) {
+      // Left deliberately silent: the caller says what happened.
+    }
+  }
+
   async function loadSavedPageTemplates() {
     try {
       const result = await api('/api/builder/page-templates');
       savedPageTemplates = Array.isArray(result.pageTemplates) ? result.pageTemplates : [];
-    } catch (_) {
+      savedPageTemplatesError = '';
+    } catch (err) {
       savedPageTemplates = [];
+      savedPageTemplatesError = safeText(err && err.message) || 'the request failed';
     }
   }
 
@@ -8447,6 +8741,8 @@ App.builder = (function () {
     if (bulkArchiveBtn2) bulkArchiveBtn2.disabled = !selectedPageIds.size;
     const bulkPublishBtn = byId('builderPagesBulkPublishBtn');
     if (bulkPublishBtn) bulkPublishBtn.disabled = !selectedPageIds.size;
+    const bulkChangeTemplateBtn = byId('builderPagesBulkChangeTemplateBtn');
+    if (bulkChangeTemplateBtn) bulkChangeTemplateBtn.disabled = !selectedPageIds.size;
   }
 
   function pageIsPublished(item) {
@@ -13896,6 +14192,26 @@ App.builder = (function () {
           landingPageBulkArchiveBtn.textContent = 'Archive';
         }
       });
+    }
+
+    const landingPageBulkChangeTemplateBtn = byId('builderPagesBulkChangeTemplateBtn');
+    if (landingPageBulkChangeTemplateBtn && !landingPageBulkChangeTemplateBtn.dataset.bound) {
+      landingPageBulkChangeTemplateBtn.dataset.bound = '1';
+      landingPageBulkChangeTemplateBtn.addEventListener('click', () => {
+        if (!selectedPageIds.size) { notify('Select at least one page first', true); return; }
+        openBulkChangeTemplateDialog();
+      });
+    }
+    ['builderPagesChangeTemplateCancelBtn', 'builderPagesChangeTemplateCancelBtn2'].forEach((id) => {
+      const cancelBtn = byId(id);
+      if (!cancelBtn || cancelBtn.dataset.bound) return;
+      cancelBtn.dataset.bound = '1';
+      cancelBtn.addEventListener('click', () => byId('builderPagesChangeTemplateDialog')?.close());
+    });
+    const changeTemplateConfirmBtn = byId('builderPagesChangeTemplateConfirmBtn');
+    if (changeTemplateConfirmBtn && !changeTemplateConfirmBtn.dataset.bound) {
+      changeTemplateConfirmBtn.dataset.bound = '1';
+      changeTemplateConfirmBtn.addEventListener('click', () => runBulkChangeTemplate());
     }
 
     const archiveRestoreAllBtn = byId('builderPageArchiveRestoreAllBtn');

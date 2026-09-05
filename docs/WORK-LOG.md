@@ -1,3 +1,93 @@
+## 2026-09-04 — Move a whole batch of pages onto a different template in one go (#602)
+
+Builder: Pages now has a fourth button above the table — **Change Template**.
+Filter the list down to one template, tick the box at the top-left of the table
+to select everything showing, pick a new template, and all of those pages move
+onto it at once. Each one is rebuilt with the new template's layout, which is
+what you asked for when this was specced: not just relabelling the pages, but
+actually re-pouring them.
+
+That is a destructive thing to do to a page — it is the same operation that
+emptied 35 sections off the Delray home page back in August — so two things
+happen automatically and cannot be switched off. First, an archive of your
+pages is saved *before* a single page is touched; if that archive cannot be
+saved, nothing changes at all and it tells you so. Second, every page is read
+back after it is written and the message tells you how many came back correct,
+rather than trusting that the save worked. Undo is the Archives button: open
+the archive it just made and click Restore All. One caveat the dialog now
+states plainly — that archive holds *all* your pages, so restoring it also
+rolls back any other page edits made after it was taken.
+
+The list of templates you can move pages onto is deliberately shorter than the
+one in the filter dropdown at the top of the column. The filter is for looking;
+this is for writing. Three kinds of entry in that filter would have destroyed
+pages rather than re-templated them: a built-in placeholder that has no layout
+at all, the "starter" templates whose layouts only exist inside the browser,
+and your email templates, which are not page layouts. The picker offers your
+real, saved page templates and nothing else, and if a project has none it says
+so instead of showing you an empty box.
+
+Review sent this back once, and it was right to. The dangerous half — the
+archive, the re-pour, the read-back — was sound, but the layer that *tells you
+what happened* was not, in four ways. If the request died half way through, the
+table kept showing the old template names while the pages underneath had
+already been rewritten; it now reloads the list and says plainly that some
+pages may have moved and some may not. If some pages failed *and* some could
+not be confirmed in the same run, the "could not be confirmed" warning vanished
+entirely and those pages were counted as moved; all three numbers are now
+always reported. The warning told you to check the pages "before publishing",
+which invents a step that does not exist — a page with no published copy is
+served straight to visitors, so the dialog now names how many of the pages you
+have selected are live on the public site right now (38 of 43, in the Delray
+project). And an archive lookup that merely *failed* used to tell you that you
+had not taken an archive at all, sending you off to make one that already
+existed; only a genuine "not found" says that now.
+
+Review sent it back a second time, at the same layer, and the headline one was
+a beauty: when the server flatly *refused* the change — "no archive with that
+id, nothing was changed" — the app pasted its own "the request failed part-way,
+so some pages may already have been changed" onto the end and then pointed you
+at Restore All. One message saying both things at once, recommending the
+biggest undo in the app in response to something that had changed nothing.
+Those are two different events and the app could not tell them apart; it can
+now, and when the server refuses you get the server's sentence and nothing
+else. Second: the archive was being taken *before* the server checked whether
+the change was allowed, so a refusal left a full copy of all 138 pages sitting
+in Archives having undone nothing — two of those in a row and your real
+archives fall off the end of the list you are being told to restore from. The
+app now asks first and archives second, and if a refusal does slip through
+after the archive was taken it says so, so the extra entry is not a mystery.
+Third, and smallest to say but not to read: with exactly one page unconfirmed
+the warning read "they is live on the public site". Three more were taken while
+in there — a database error that merely *looked* like a bad archive id no
+longer reads as one, an empty template list now says whether it is empty
+because you have none or because the list would not load, and each page now
+costs one database read fewer, which on a 43-page selection is 43 fewer round
+trips inside a function that has run out of time before.
+
+Review sent it back a third time, and it was the same defect wearing a third
+face — this time on the run where *nothing had gone wrong*. All of the
+sentences this feature shows you live in one small file that the page loads
+separately. If that file does not arrive — a bad deploy, a cached miss, a
+browser blocking it — then the code that writes the message crashes. It was
+crashing *inside* the block whose job is to catch a failed request, so a run in
+which every page moved and every page was confirmed reported a raw programming
+error followed by "some pages may already have been changed" and, once again, a
+recommendation to Restore All. The worst possible advice at the calmest possible
+moment. Two things changed: the message is now built after the request is
+finished with, so a problem writing the message can no longer be mistaken for a
+problem with the change; and all three places that reach for that file now go
+through one guarded door with a plain sentence to fall back on — one that tells
+you the change ran, tells you where to look, and never recommends the big undo.
+Measured in a real browser with the file blocked, before and after.
+
+Two smaller ones went in with it. A bulk template change now appears in Page
+History as "Template changed by <your name>" rather than as an ordinary edit by
+nobody, which matters because that entry is the per-page undo for this exact
+operation. And the check that confirms your archive exists was loading every
+page in the project to do it — 138 page layouts pulled across to answer a
+yes-or-no question, right before the write that has run out of time before.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually

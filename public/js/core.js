@@ -758,6 +758,14 @@ App.api = async function api(path, options = {}) {
       // Upstream 401s (e.g. X API Unauthorized on publish) must not clear the app session.
     }
     const jsErr = new Error(String(text).trim());
+    // The HTTP status of a STRUCTURED refusal. Its presence is the signal: the
+    // server answered a JSON error envelope, so it decided — as opposed to the
+    // throws above, which carry no status because the request died or came
+    // back as something this app cannot read at all. A caller that cannot tell
+    // those apart narrates a flat refusal as "the request failed part-way, so
+    // some pages may already have been changed", which is a definite answer
+    // rendered as a could-not-tell (bulk template change, 2026-09-04).
+    jsErr.status = res.status;
     if (typeof err === 'object' && err !== null && err.details) {
       jsErr.details = err.details;
     }

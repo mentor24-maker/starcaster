@@ -125,6 +125,8 @@ const {
   deletePage,
   propagateCanonicalSection,
   bulkSetPublished,
+  bulkSetPageTemplate,
+  checkBulkSetPageTemplate,
 } = require('../lib/builderPagesStore');
 // Sections and modules share ONE propagation engine since Sync 7/7. The
 // section entry point is re-exported by the pages store above for the callers
@@ -134,6 +136,7 @@ const { populateTitlesInSections } = require('../lib/populateModuleTitles');
 const {
   listPageSnapshots,
   getPageSnapshot,
+  pageSnapshotExists,
   createPageSnapshot,
   deletePageSnapshot,
 } = require('../lib/builderPageSnapshotsStore');
@@ -302,6 +305,89 @@ function findAcquiredPageMatch(builderName, acquiredPages) {
   return { exact: null, partials };
 }
 
+/**
+ * Read and check a bulk template-change request.
+ *
+ * Pulled out of the route so the archive-first rule is testable without
+ * standing up a request: it is the only undo this operation has. The action
+ * re-pours every selected page — the operator chose that on 2026-09-01 having
+ * been shown the 2026-08-14 incident where the same operation emptied 35
+ * sections off the live Delray home page — so a missing archive must refuse
+ * the whole call rather than change pages and hope.
+ *
+ * `snapshotId` is required HERE, on the server, and not only in the browser
+ * that is supposed to take the archive first. A guard that lives only in the
+ * client is not a guard: a stale bundle, a retried request or a direct API
+ * call all arrive with no archive behind them.
+ */
+function readBulkSetTemplateRequest(body) {
+  const source = body && typeof body === 'object' ? body : {};
+  const pageIds = Array.isArray(source.pageIds) ? source.pageIds : [];
+  const pageTemplateId = String(source.pageTemplateId ?? source.page_template_id ?? '').trim();
+  const snapshotId = String(source.snapshotId ?? source.snapshot_id ?? '').trim();
+
+  if (!pageIds.length) return { ok: false, status: 400, error: 'pageIds is required' };
+  if (!pageTemplateId) return { ok: false, status: 400, error: 'pageTemplateId is required' };
+  if (!snapshotId) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'snapshotId is required — take an archive before changing templates in bulk',
+    };
+  }
+  return { ok: true, pageIds, pageTemplateId, snapshotId };
+}
+
+/**
+ * The archive lookup failed. WHICH failure was it?
+ *
+ * "There is no such archive" and "I could not find out whether there is such
+ * an archive" are different answers, and only the first one means the operator
+ * did something wrong. The first version of this route rendered both — plus a
+ * 500 from the snapshots table, a timeout and an RLS refusal — as the single
+ * string `No archive with id "X" — take an archive first`, which sends the
+ * operator off to create an archive that already exists and hides the real
+ * cause. That is a "could not tell" rendered as a definite answer, which is
+ * the one thing this repo's diagnostics are not allowed to do.
+ *
+ * Nothing was written in any of these cases; only the sentence differs.
+ */
+function describeArchiveCheckFailure(snapshotId, lookup) {
+  const id = String(snapshotId ?? '').trim();
+  const result = lookup && typeof lookup === 'object' ? lookup : {};
+  const status = Number(result.status) || 0;
+  const detail = String(result.error || '').trim();
+
+  // Definite: the archive is not there.
+  if (status === 404) {
+    return {
+      status: 400,
+      error: `No archive with id "${id}" — nothing was changed. Take an archive first.`,
+    };
+  }
+
+  // Definite: what was sent is not an archive id at all — and the CODE is what
+  // says so, not the status. getPageSnapshot tags its own refusal
+  // `INVALID_SNAPSHOT_ID`; every other 400 reaching here came back raw from
+  // PostgREST, which answers 400 for a malformed scope filter or a column that
+  // moved. Reading the bare status turned all of those into this definite,
+  // actionable, wrong sentence — the exact defect this function documents
+  // itself as fixing, one layer down.
+  if (status === 400 && String(result.code || '') === 'INVALID_SNAPSHOT_ID') {
+    return {
+      status: 400,
+      error: `"${id}" is not an archive id — nothing was changed. Take an archive first.`,
+    };
+  }
+
+  // Everything else is a failure to LOOK, not a finding. Name what came back,
+  // and say plainly that this is not the same as having no archive.
+  return {
+    status: status || 500,
+    error: `Could not check whether archive "${id}" exists, so nothing was changed. The archive lookup answered ${status || 'no status'}${detail ? `: ${detail}` : ''}. This is not the same as having no archive — try again.`,
+  };
+}
+
 async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
   const scope = requestProjectScope(req);
@@ -426,6 +512,58 @@ async function handle(req, res, pathname, method) {
     const result = await bulkSetPublished(pageIds, isPublished !== false, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not update pages'), true;
     return sendOk(res, 200, result.data, { results: result.data }), true;
+  }
+
+  // Move a whole selection of pages onto one page template, replacing each
+  // page's sections with that template's.
+  //
+  // `snapshotId` is REQUIRED and is checked before a single page is touched.
+  // The archive is the only undo this operation has — the operator chose the
+  // destructive re-pour on 2026-09-01 having been shown the 2026-08-14 incident
+  // where it emptied 35 sections off a live page — and a guard that lives only
+  // in the browser is not a guard: a stale bundle, a retried request or a
+  // direct API call all reach this route with no archive behind them.
+  // WOULD this change be refused? Asked before the browser takes an archive.
+  //
+  // A separate path rather than a flag on the route below, deliberately: a
+  // `validateOnly` flag on the write endpoint is one misread boolean away from
+  // skipping the archive-first guard, which is the only undo this operation
+  // has. This path cannot write no matter what it is sent, and the path below
+  // still demands a snapshotId from everybody.
+  if (pathname === '/api/builder/landing-pages/bulk-set-template/check' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const pageIds = Array.isArray(body?.pageIds) ? body.pageIds : [];
+    const pageTemplateId = String(body?.pageTemplateId ?? body?.page_template_id ?? '').trim();
+    const check = await checkBulkSetPageTemplate(pageIds, pageTemplateId, scope);
+    if (!check.ok) return sendErr(res, check.status || 500, check.error || 'Could not check the template change'), true;
+    return sendOk(res, 200, check.data, check.data), true;
+  }
+
+  if (pathname === '/api/builder/landing-pages/bulk-set-template' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const request = readBulkSetTemplateRequest(body);
+    if (!request.ok) return sendErr(res, request.status, request.error), true;
+    const { pageIds, pageTemplateId, snapshotId } = request;
+    // EXISTS, not "fetch it": the snapshot's `pages` blob holds every page
+    // layout in the project, and this guard only needs to know the row is
+    // there. Loading it cost a full read and deserialize immediately before
+    // the write loop, in the invocation least able to afford one.
+    const snapshot = await pageSnapshotExists(snapshotId, scope);
+    if (!snapshot.ok) {
+      const refusal = describeArchiveCheckFailure(snapshotId, snapshot);
+      return sendErr(res, refusal.status, refusal.error), true;
+    }
+    // WHO asked for it. Without the actor every revision this banks records no
+    // author, so Page History cannot tell a 43-page bulk re-pour from him
+    // hand-editing each page.
+    const result = await bulkSetPageTemplate(pageIds, pageTemplateId, scope, { actor: actorFrom(req) });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not change the template'), true;
+    return sendOk(
+      res,
+      200,
+      result.data,
+      { results: result.data, templateName: result.templateName, verifiedCount: result.verifiedCount },
+    ), true;
   }
 
   if (pathname === '/api/builder/landing-pages' && requestMethod === 'POST') {
@@ -2235,4 +2373,13 @@ const manifest = {
 
 // buildLandingPagePatch is exported for the same reason it is dangerous: it
 // is a whitelist, and a field missing from it is dropped with a 200 OK.
-module.exports = { handle, manifest, buildLandingPagePatch };
+module.exports = {
+  handle,
+  manifest,
+  buildLandingPagePatch,
+  // Exported for scripts/builder/bulkSetPageTemplate.test.js: the archive-first
+  // rule is the only undo a bulk re-pour has, so it is tested directly rather
+  // than inferred from a request that has to be stood up first.
+  readBulkSetTemplateRequest,
+  describeArchiveCheckFailure,
+};
