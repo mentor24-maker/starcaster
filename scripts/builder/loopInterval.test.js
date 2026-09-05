@@ -106,50 +106,127 @@ test('a failed read is not a reading: it leaves the hysteresis state untouched',
 // Hysteresis (acceptance criterion 4)
 // ---------------------------------------------------------------------------
 
-test('BREAK-TEST HYSTERESIS: ONE deep reading does not shorten the interval', () => {
-  // A burst of 12 tickets arrives. The queue may be drained again before the
-  // loop even wakes, so one reading must not flip the cadence for the night.
+// The asymmetry INVERTED on 2026-09-05 (task 86bbvh285): shortening is now
+// immediate and lengthening is what waits for two consecutive readings. The
+// tests below are written in pairs on purpose — every one that proves the new
+// rule fires has a partner proving the guard it replaced still holds in the
+// other direction. A version that simply adopted every proposal at once would
+// pass half of them and reintroduce the thrash the original rule existed for.
+
+test('SHORTENING IS IMMEDIATE — one deep reading drops the cadence', () => {
+  // Four tickets are visibly claimable and the loop is asleep for an hour.
+  // Waking sooner than a wrong reading deserved costs one pass; refusing to
+  // wake costs an hour of a pipeline that cannot claim past the WIP cap.
   const first = li.decideInterval({ depth: 12, state: null, fallbackSeconds: 3600 });
-  assert.equal(first.seconds, 3600, 'a single deep reading shortened the interval — hysteresis is gone');
-  assert.equal(first.held, true);
-  assert.match(first.reason, /one reading does not \(two consecutive do\)/);
-  // It must, however, REMEMBER the reading, or the second one can never fire.
+  assert.equal(first.seconds, 900, 'a deep reading did not shorten the interval');
+  assert.equal(first.held, false);
+  assert.match(first.reason, /shortening on the first reading that asks for it/);
+  assert.equal(first.state.interval, 900);
   assert.equal(first.state.lastProposed, 900);
-  assert.equal(first.state.interval, 3600);
 });
 
-test('TWO consecutive deep readings do shorten it', () => {
-  const first = li.decideInterval({ depth: 12, state: null, fallbackSeconds: 3600 });
-  const second = li.decideInterval({ depth: 12, state: first.state, fallbackSeconds: 3600 });
-  assert.equal(second.seconds, 900);
+test('BREAK-TEST: ONE quiet reading does NOT lengthen the interval', () => {
+  // The partner of the test above, and the anti-thrash property the original
+  // hysteresis was written for — moved to the direction where being wrong is
+  // expensive. A queue that empties for one pass and refills must not cost an
+  // hour of sleep.
+  const fast = { interval: 900, lastProposed: 900 };
+  const quiet = li.decideInterval({ depth: 0, state: fast, fallbackSeconds: 3600 });
+  assert.equal(quiet.seconds, 900, 'one quiet reading lengthened the cadence — the guard is gone');
+  assert.equal(quiet.held, true);
+  assert.match(quiet.reason, /one quiet reading does not \(two consecutive do\)/);
+  // It must REMEMBER the reading, or the second one can never fire.
+  assert.equal(quiet.state.interval, 900);
+  assert.equal(quiet.state.lastProposed, 3600);
+});
+
+test('TWO consecutive quiet readings do lengthen it', () => {
+  const fast = { interval: 900, lastProposed: 900 };
+  const first = li.decideInterval({ depth: 0, state: fast, fallbackSeconds: 3600 });
+  const second = li.decideInterval({ depth: 0, state: first.state, fallbackSeconds: 3600 });
+  assert.equal(second.seconds, 3600);
   assert.equal(second.held, false);
-  assert.match(second.reason, /second consecutive short reading/);
+  assert.match(second.reason, /second consecutive quiet reading/);
 });
 
-test('a burst followed by an empty queue leaves the cadence where it was', () => {
-  const burst = li.decideInterval({ depth: 12, state: null, fallbackSeconds: 3600 });
-  const quiet = li.decideInterval({ depth: 0, state: burst.state, fallbackSeconds: 3600 });
-  assert.equal(quiet.seconds, 3600, 'the burst leaked through into the cadence');
-});
-
-test('shortening adopts the LATEST reading, not the more excited older one', () => {
-  // 12 claimable then 2 claimable: both want shorter than the hour, so the
-  // cadence moves — but to 1800, the fresher truth, not to 900.
-  const first = li.decideInterval({ depth: 12, state: null, fallbackSeconds: 3600 });
+test('lengthening adopts the LATEST reading, not the quieter older one', () => {
+  // Empty, then two claimable: both want longer than 900, so the cadence
+  // moves — but to 1800, the fresher truth, not all the way to the hour.
+  const fast = { interval: 900, lastProposed: 900 };
+  const first = li.decideInterval({ depth: 0, state: fast, fallbackSeconds: 3600 });
   const second = li.decideInterval({ depth: 2, state: first.state, fallbackSeconds: 3600 });
   assert.equal(second.seconds, 1800);
+  assert.equal(second.held, false);
 });
 
-test('LENGTHENING IS IMMEDIATE — erring toward less spend never waits', () => {
-  const fast = { interval: 900, lastProposed: 900 };
-  const now = li.decideInterval({ depth: 0, state: fast, fallbackSeconds: 3600 });
-  assert.equal(now.seconds, 3600);
-  assert.equal(now.held, false);
-  // One rung is a lengthening too.
-  assert.equal(li.decideInterval({ depth: 2, state: fast, fallbackSeconds: 3600 }).seconds, 1800);
+test('THE OSCILLATING QUEUE CONVERGES DOWNWARD (acceptance criterion 3)', () => {
+  // The stored state named on the ticket: {"interval":3600,"lastProposed":1800}
+  // with the next proposal at 900. Each review pass removes a ticket from the
+  // claimable set, so the reading drifts between rows of the curve and the
+  // proposals alternate.
+  //
+  // WHY THE OLD RULE COULD NOT COPE, precisely — it is not the "two identical
+  // readings" the ticket describes, and the difference matters to anyone
+  // editing this. The old comparison was directional too, but against the
+  // interval IN FORCE, which a held pass does not move; an intervening reading
+  // that is not shorter than that interval is adopted and overwrites
+  // `lastProposed` with itself, discarding the short reading entirely. See the
+  // measured ratchet in the test below, which is the same defect caught on
+  // real log lines.
+  //
+  // Depths chosen to land on the alternating rows: 2 -> 1800, 12 -> 900.
+  let state = { interval: 3600, lastProposed: 1800 };
+  const seen = [];
+  for (const depth of [12, 2, 12, 2, 12]) {
+    const d = li.decideInterval({ depth, state, fallbackSeconds: 3600 });
+    seen.push(d.seconds);
+    state = d.state;
+  }
+  // 900 at once; then 1800 wants LONGER, so it holds at 900; then 900 again;
+  // and so on. It never returns to the hour, which is the whole point.
+  assert.deepEqual(seen, [900, 900, 900, 900, 900]);
+  assert.ok(
+    seen.every((s) => s <= 1800),
+    'the oscillating queue climbed back toward the hour — this is the 2026-09-05 stall',
+  );
 });
 
-test('a steady queue is stable — the interval does not oscillate', () => {
+test('THE MEASURED RATCHET: a 4-deep reading must not be discarded', () => {
+  // Real log lines, ~/loop-logs/loop-review.log on the Mini, 2026-09-05:
+  //
+  //   00:26  4 claimable -> 900s proposed, HELD at 1800s
+  //   01:05  3 claimable -> 1800s adopted, and the 900 reading thrown away
+  //   01:44  2 claimable -> 1800s.   02:24  1 claimable -> 1800s.
+  //
+  // The queue reached the curve's deepest row and the cadence never went
+  // there. Under the new rule the 4-deep reading is acted on at 00:26, which
+  // is the only pass that could have used it.
+  let state = { interval: 1800, lastProposed: 1800 };
+  const seen = [];
+  for (const depth of [4, 3, 2, 1]) {
+    const d = li.decideInterval({ depth, state, fallbackSeconds: 3600 });
+    seen.push(d.seconds);
+    state = d.state;
+  }
+  assert.equal(seen[0], 900, 'the 4-deep reading was held and then discarded — this is the 2026-09-05 ratchet');
+  // The queue then genuinely thins out, so lengthening back is correct — but
+  // it still takes two consecutive readings to do it.
+  assert.deepEqual(seen, [900, 900, 1800, 1800]);
+});
+
+test('BREAK-TEST: an oscillation cannot lengthen by accident either', () => {
+  // The mirror of the case above. Alternating proposals must not RAISE the
+  // cadence one rung at a time while work keeps arriving: 1800 wants longer
+  // than 900 and is never seconded, because the 900 reading between them
+  // resets the direction.
+  let state = { interval: 900, lastProposed: 900 };
+  for (const depth of [2, 12, 2, 12, 2, 12]) {
+    state = li.decideInterval({ depth, state, fallbackSeconds: 3600 }).state;
+  }
+  assert.equal(state.interval, 900, 'an alternating queue crept the cadence upward');
+});
+
+test('a steady deep queue is stable — the interval does not oscillate', () => {
   let state = null;
   const seen = [];
   for (let i = 0; i < 5; i += 1) {
@@ -157,7 +234,19 @@ test('a steady queue is stable — the interval does not oscillate', () => {
     seen.push(d.seconds);
     state = d.state;
   }
-  assert.deepEqual(seen, [3600, 900, 900, 900, 900]);
+  assert.deepEqual(seen, [900, 900, 900, 900, 900]);
+});
+
+test('a steady EMPTY queue settles at the hour and stays there', () => {
+  let state = { interval: 900, lastProposed: 900 };
+  const seen = [];
+  for (let i = 0; i < 5; i += 1) {
+    const d = li.decideInterval({ depth: 0, state, fallbackSeconds: 3600 });
+    seen.push(d.seconds);
+    state = d.state;
+  }
+  // One held pass, then the hour, and no drift afterwards.
+  assert.deepEqual(seen, [900, 3600, 3600, 3600, 3600]);
 });
 
 test('a corrupt or hand-edited state file cannot push the interval below the floor', () => {
@@ -165,22 +254,33 @@ test('a corrupt or hand-edited state file cannot push the interval below the flo
   assert.ok(d.seconds >= li.FLOOR_SECONDS, 'a doctored state file got under the floor');
 });
 
-test('BREAK-TEST: a state file reading {"interval": null} does NOT switch hysteresis off', () => {
-  // Review round 1 found this: null clamped to 900, so "current" was already
-  // the floor, every proposal was >= it, and one deep reading shortened the
-  // cadence at once. AC4 says one reading must hold.
+test('BREAK-TEST: a state file reading {"interval": null} still reads as the HOUR, not the floor', () => {
+  // Review round 1 (2026-08-29) found that `null` clamped to 900, so the
+  // cadence in force read as the floor. Under the inverted rule that is no
+  // longer a way to sneak a shortening through — shortening is allowed now —
+  // but it is still wrong, and now it is wrong in the OTHER direction: a
+  // cadence that reads as 900 makes every quiet reading a lengthening, which
+  // is the direction that waits. A junk state must read as the fallback hour.
   for (const junk of [{ interval: null }, { interval: '' }, { interval: [] }, { interval: false }]) {
-    const d = li.decideInterval({ depth: 12, state: junk, fallbackSeconds: 3600 });
-    assert.equal(d.seconds, 3600, `state ${JSON.stringify(junk)} let one deep reading through`);
-    assert.equal(d.held, true);
+    const d = li.decideInterval({ depth: 0, state: junk, fallbackSeconds: 3600 });
+    assert.equal(d.seconds, 3600, `state ${JSON.stringify(junk)} did not read as the configured hour`);
+    assert.equal(d.held, false, 'a junk state made a depth-0 reading look like a lengthening');
   }
 });
 
 test('with no state, the cadence in force is the runner argument, not the proposal', () => {
   // The first pass must follow the SAME rule as every later pass rather than
-  // skipping the guard exactly when nothing is known yet.
-  const d = li.decideInterval({ depth: 99, state: null, fallbackSeconds: 1800 });
-  assert.equal(d.seconds, 1800);
+  // being a special case. With a deep queue that now means it shortens at
+  // once — but only DOWN to the curve's answer, and the runner's configured
+  // interval is what it is measured against.
+  const deep = li.decideInterval({ depth: 99, state: null, fallbackSeconds: 1800 });
+  assert.equal(deep.seconds, 900);
+  // And with nothing to do, the configured 1800 is what holds: the proposal
+  // (3600) is LONGER, which needs a second reading. If "no state" were read as
+  // "no cadence in force", this would jump straight to the hour.
+  const empty = li.decideInterval({ depth: 0, state: null, fallbackSeconds: 1800 });
+  assert.equal(empty.seconds, 1800);
+  assert.equal(empty.held, true);
 });
 
 // ---------------------------------------------------------------------------
@@ -473,6 +573,13 @@ test('the honest reason survives hysteresis, in both of its sentences', () => {
   const held = li.decideInterval({ depth: 0, state: { interval: 900, lastProposed: 900 }, fallbackSeconds: 3600, blockedNote: note });
   assert.match(held.reason, /work-in-progress cap is full/);
   assert.ok(!/nothing to do/.test(held.reason));
+  // And the sentence on the pass that ACTS. A blocked note only ever arrives
+  // at depth 0, which proposes the longest interval, so the two wrappers it
+  // can reach are the held one above and the second-consecutive lengthening.
+  const acted = li.decideInterval({ depth: 0, state: held.state, fallbackSeconds: 3600, blockedNote: note });
+  assert.equal(acted.seconds, 3600);
+  assert.match(acted.reason, /work-in-progress cap is full/);
+  assert.ok(!/nothing to do/.test(acted.reason));
 });
 
 test('a blocked note is ignored when there IS claimable work', () => {
