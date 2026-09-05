@@ -58,7 +58,7 @@ import loopNoteLib from './builder/loopNote.js';
 const { loopNote, heartbeatNote } = loopNoteLib;
 import { spawnSync } from 'node:child_process';
 import clickupLib from './lib/clickup.cjs';
-const { clickupFetch } = clickupLib;
+const { clickupFetch, ledger: clickupLedger, callerKind } = clickupLib;
 import busRelayPlan from './builder/busRelayPlan.js';
 import clickupRetry from './builder/clickupRetry.js';
 import mergeOnComment from './builder/mergeOnComment.js';
@@ -323,11 +323,70 @@ async function callOnce(method, path, body) {
     headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
     body: sendBody ? JSON.stringify(sendBody) : undefined,
   });
+  // THE RESERVE (task 86bbugd8j). A scheduled job that has reached the reserve
+  // is not having a network problem and must not be dressed up as one — HTTP 0
+  // prints network advice, which would send the next reader to the wrong
+  // place entirely. `yielded()` says what actually happened and stops the
+  // command with its own exit code.
+  if (out.yielded) return yieldedResult(out.yielded);
   if (out.transportError) return unreachable(out.transportError);
   return { res: out.res, json: out.json, text: out.text };
 }
 
-function die(label, { res, json, text }) {
+/**
+ * The shape a yielded request travels in.
+ *
+ * The same trick `unreachable()` plays, and for the same reason: every call
+ * site in this 4,500-line file is written around `{ res, json, text }`, so a
+ * new outcome has to arrive in that shape or a hundred call sites need
+ * editing. Status 0 is already taken by "never left the machine"; 429 is
+ * ClickUp refusing. YIELDED is us refusing, and `die()` gives it its own
+ * explanation and its own exit code.
+ */
+/**
+ * A STRING, not a number, and that is the whole point.
+ *
+ * Eighteen places in this file format a failure as `HTTP ${res.status}`. With
+ * a numeric sentinel every one of them printed `HTTP -1`, which is not an HTTP
+ * status, means nothing to a reader, and sends them looking for a network
+ * fault — the exact thing DOCTRINE 2.2 is about. As a string, those same
+ * eighteen messages say what actually happened without any of them being
+ * edited. Every numeric comparison in this file (`!== 429`, `=== 401`,
+ * `=== 404`, `=== 0`) keeps behaving correctly, because a string equals none
+ * of them: a yield is not retried and not mistaken for an auth problem.
+ */
+const YIELDED_STATUS = 'YIELDED (the ClickUp reserve)';
+function yieldedResult(yielded) {
+  return {
+    res: { ok: false, status: YIELDED_STATUS, headers: { get: () => null } },
+    json: null,
+    text: yielded.why,
+    yielded,
+  };
+}
+
+/**
+ * Exit 7 means "I stopped on purpose at the ClickUp reserve", and it is not
+ * 1. A scheduled job that yields has NOT done its work — so it must not exit 0
+ * (the ticket's Non-goal) — but it also has not failed, and reporting it as a
+ * failure would put a ClickUp outage on the bus every time the budget got
+ * tight. A code of its own lets `run_bus_relay.sh` tell the two apart.
+ */
+const EXIT_YIELDED = 7;
+
+function die(label, { res, json, text, yielded }) {
+  if (yielded || res.status === YIELDED_STATUS) {
+    const why = (yielded && yielded.why) || text;
+    console.error(`\n${label} STOPPED — the ClickUp reserve, not a failure.`);
+    console.error(why);
+    console.error('\nWhat this means: this is a scheduled job, and the ClickUp budget for this minute');
+    console.error('is down to the reserve kept for the sessions Dane is actually talking to. The job');
+    console.error('stopped instead of spending it. Nothing is half-done that was not already half-done;');
+    console.error('the next scheduled pass picks up where this one stopped.');
+    console.error('To run this by hand anyway, from a session Dane is in, run it WITHOUT');
+    console.error('STARCASTER_CALLER=scheduled — interactive callers never yield.');
+    process.exit(EXIT_YIELDED);
+  }
   console.error(`\n${label} FAILED — HTTP ${res.status}`);
   console.error(json?.err || json?.error || text.slice(0, 500));
   // Say what to do in terms of the thing the operator touches (DOCTRINE 2.2).
@@ -3907,7 +3966,31 @@ if (cmd === 'whoami') {
     marks = {};
   }
 
+  // THE RESERVE, CHECKED WHERE A STOP IS LEGIBLE (task 86bbugd8j).
+  //
+  // The one door will refuse a request outright once this pass is past the
+  // reserve, and that refusal exits mid-flight — no summary, no verdict, no
+  // list of what went unread. That is the backstop, not the plan. The plan is
+  // to stop BETWEEN units of work, so the pass still prints what it did not
+  // reach, which is the whole difference between "the relay stopped" and "the
+  // relay went quiet" (2026-09-03, sixteen hours).
+  let yieldedAt = null;
+  const reserveGate = () => {
+    if (yieldedAt) return yieldedAt;
+    const gate = clickupLedger.shouldYield({ kind: callerKind().kind });
+    if (gate.yield) yieldedAt = gate;
+    return gate.yield ? gate : null;
+  };
+
   for (const watch of watches) {
+    const stopped = reserveGate();
+    if (stopped) {
+      const why = `stopped at the ClickUp reserve — ${stopped.why}`;
+      unchecked.push(`${watch.label}: not read at all (${why})`);
+      sweeps.push({ label: watch.label, merge: mergeEnabled(watch), complete: false, why });
+      console.error(`${watch.label}: NOT READ — ${why}`);
+      continue;
+    }
     // fatal:false so a list this pass could not READ becomes an INCOMPLETE
     // verdict rather than process.exit(1) three lines in. Dying here is how a
     // 429 on the first list left the second one — the merge-capable one —
@@ -3937,7 +4020,21 @@ if (cmd === 'whoami') {
     console.error(`${watch.label}: ${open.length} open task(s) of ${tasks.length} total in list ${watch.list} (statuses: ${watch.statuses.join(', ')})`);
     console.error(`  reading comments on ${open.length} of ${inStatus.length} in-status ticket(s) — ${picked.reason}${picked.skipped ? `; ${picked.skipped} unchanged since the last completed pass` : ''}`);
 
-    for (const t of open) {
+    for (let i = 0; i < open.length; i += 1) {
+      const t = open[i];
+      const stoppedHere = reserveGate();
+      if (stoppedHere) {
+        // Mid-list. Name the WHOLE remainder, not just the ticket we happened
+        // to stop on — "1 ticket unread" and "37 tickets unread" call for very
+        // different reactions, and only one of them is true. The list is then
+        // INCOMPLETE, so the high-water mark below is not advanced and the
+        // next pass re-reads everything this one did not get to rather than
+        // skipping it as "unchanged".
+        const left = open.length - i;
+        unchecked.push(`${watch.label}: ${left} of ${open.length} ticket(s) not read — stopped at the ClickUp reserve (${stoppedHere.why})`);
+        console.error(`  STOPPED at the reserve with ${left} ticket(s) unread on this list`);
+        break;
+      }
       const commentsOut = await call('GET', `/api/v2/task/${t.id}/comment`);
       if (!commentsOut.res.ok) { unchecked.push(`${t.id} (${t.name}): could not read comments`); continue; }
       // Authorship is id AND marker (task 86bbqx2xe) — the rule lives in
@@ -4700,6 +4797,16 @@ if (cmd === 'whoami') {
   // sweep was incomplete or anything at all went unverified. Dropping the
   // second half would have been a silent regression in the quiet direction,
   // which is the one that costs.
+  // A pass that STOPPED AT THE RESERVE gets its own code, ahead of the generic
+  // failure code. It has not done its work — so never 0 (the ticket's Non-goal)
+  // — but it has not failed either, and `run_bus_relay.sh` has to tell those
+  // apart or a tight budget posts a ClickUp outage to the bus every ten
+  // minutes.
+  if (yieldedAt) {
+    console.error(`\nThis pass STOPPED AT THE CLICKUP RESERVE. ${yieldedAt.why}`);
+    console.error('It did not finish; the lists and tickets it did not reach are named above.');
+    process.exit(EXIT_YIELDED);
+  }
   process.exit(verdict.exitCode || (unchecked.length ? 1 : 0));
 
 } else if (cmd === 'loop-note') {
