@@ -1,3 +1,31 @@
+## 2026-09-05 — Merges no longer knock each other back to the start (#616)
+
+Before a pull request can go live, GitHub insists it has the very latest work
+in it. That sounds sensible, and it is — but it means every merge that lands
+makes every other waiting change out of date, and throws away the tests that
+had just passed on it. So when several merges happened close together they kept
+knocking each other back to the beginning, and each one had to be tested all
+over again. Nothing looked broken while it happened: every single step reported
+success, so it just felt slow.
+
+On the night of 3 September a merge Dane approved at 11:25pm did not go live
+until 11:49pm, and the whole twenty-four minutes went on re-running tests that
+had already passed.
+
+The fix is a queue of one. Only a single change at a time is allowed to be on
+its way to going live; the others simply wait their turn, untouched, so nothing
+resets them. Each change is now tested exactly once no matter how many are
+lined up behind it — with eight waiting, the last one used to need eight rounds
+of testing and now needs one.
+
+Two things worth knowing. It was checked first whether that "must have the
+latest work" rule was GitHub's own or something we had chosen ourselves; it is
+GitHub's, and it protects something real, so it was left alone. And one gap is
+left open deliberately: the fast-track lane still merges without taking its
+turn, so it can still interrupt one waiting change. Making the fast track wait
+behind the machines is Dane's call, not a decision to slip in quietly, so it
+has been written up separately.
+
 ## 2026-09-05 — The panel layout checker could not fail on the panel it had just checked (#613)
 
 `check:panels` is the check that looks at the admin panels in a real browser
