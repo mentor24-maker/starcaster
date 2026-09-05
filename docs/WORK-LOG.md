@@ -1,3 +1,29 @@
+## 2026-09-05 — Every ticket the reconciler closed was told '[object Object]' did it (#619)
+
+When the automatic reconciler notices that a ticket's work has already been
+merged and shipped, it moves the ticket to `Live` and leaves a note on it
+explaining what happened and which machine did it. That note is the only
+explanation you get for a machine touching your ticket — so it matters that it
+reads like a sentence.
+
+It did not. Where the machine's name should have been, every one of those notes
+said `[object Object]`. The most recent was on 5 September. The cause is the
+kind of thing that is invisible until you see it once: the function that answers
+"which machine am I?" hands back a small bundle of facts about the machine — its
+name, where that name came from, which file it was read out of — and the
+reconciler was dropping the whole bundle into the sentence instead of pulling
+the name out of it. When you put a bundle of facts where a word belongs,
+JavaScript writes the words "object Object" in square brackets and carries on
+without complaining.
+
+The evidence half of the note — the pull request link and the merge time — was
+always right, so nothing was ever closed for the wrong reason. But a note that
+reads like broken software undermines the one instruction it carries ("Reopen
+the ticket and say so on it"), and that instruction is what a newer safeguard
+relies on. Fixed, along with tests that pin the shape rather than the wording:
+if that bundle of facts ever changes form again, the tests go red here rather
+than the sentence going wrong on Dane's board.
+
 ## 2026-09-05 — The panel layout checker could not fail on the panel it had just checked (#613)
 
 `check:panels` is the check that looks at the admin panels in a real browser
