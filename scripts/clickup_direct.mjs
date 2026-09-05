@@ -77,6 +77,8 @@ import passClaim from './builder/passClaim.js';
 import loopStatuses from './builder/loopStatuses.js';
 import autoMergeLane from './builder/autoMergeLane.js';
 import autoMergeLedgerFile from './builder/autoMergeLedgerFile.js';
+import mergeWindowLease from './builder/mergeWindowLease.js';
+import mergeWindowLeaseFile from './builder/mergeWindowLeaseFile.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
 import sendBackRounds from './builder/sendBackRounds.js';
 import pipelinePause from './builder/pipelinePause.js';
@@ -1127,7 +1129,15 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // is true of a red check and false of an already-merged PR — and
   // `refusalNotice` throws on a code it cannot classify, so a new refusal
   // reason cannot reach him wearing the reassuring wording by default.
+  // Assigned for real once the pull request is known (below). A refusal ends
+  // this pull request's flight, so it has to give the MERGE WINDOW back — a red
+  // check holding the queue until the 45-minute bound expires would be the
+  // livelock wearing its own fix's clothes (task 86bbuv9jt). Declared here
+  // because `refuse` is defined before the PR is read and called only after.
+  let releaseMergeWindow = () => {};
+
   const refuse = async (why, plainEnglish, refusalCode) => {
+    releaseMergeWindow('the merge was refused');
     if (lane) return { outcome: 'lane-cancel', reason: why };
     if (alreadySaid(why)) {
       console.error(`  MERGE REFUSED (unchanged, nothing posted) on ${label}: ${why}`);
@@ -1229,6 +1239,41 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
 
   const pr = decision.pr;
   const repo = `${pr.owner}/${pr.repo}`;
+
+  // ── The merge window, plumbing half (2026-09-05, task 86bbuv9jt) ──────────
+  //
+  // Branch protection on this repo is `strict: true`, so every merge puts every
+  // other open branch BEHIND and restarts its checks. When merges arrive faster
+  // than a branch can be caught up and re-verified, nothing converges — the
+  // queue livelocks while every actor reports success at every step. The remedy
+  // is serialisation: ONE pull request may be in the window at a time, and
+  // everything that moves main takes it first.
+  //
+  // Every decision is in scripts/builder/mergeWindowLease.js, where it is
+  // break-tested without a GitHub, a disk or a clock. Only the IO is here.
+  let holdsMergeWindow = false;
+
+  // Give the window back. Deliberately NOT guarded on `holdsMergeWindow`: the
+  // already-merged path below runs in a LATER pass than the one that took the
+  // window, and that is the ordinary way an armed merge ends. `releaseWindow`
+  // refuses to clear a hold belonging to another pull request, so calling this
+  // when we hold nothing is a no-op rather than a way to hand the window out
+  // twice.
+  releaseMergeWindow = (why) => {
+    // Nor may a dry run RELEASE one — the worse half of the same bug, because
+    // the window it would free belongs to a real pass that is mid-flight.
+    if (dryRun) { holdsMergeWindow = false; return; }
+    const read = mergeWindowLeaseFile.readLeaseFile(mergeWindowLeaseFile.leasePath());
+    const rel = mergeWindowLease.releaseWindow({ read, repo, pr: pr.number });
+    holdsMergeWindow = false;
+    if (!rel.changed) return;
+    const saved = mergeWindowLeaseFile.saveLeaseIfReadable(read, rel.lease);
+    if (!saved.ok) {
+      unchecked.push(`${task.id}: PR #${pr.number} left the merge window (${why}) but releasing it FAILED (${saved.why}) — every other merge is held until the bound clears it, which needs an agent session`);
+      return;
+    }
+    console.error(`  MERGE WINDOW released by PR #${pr.number} — ${why}`);
+  };
   // `reviewDecision` is here so a BLOCKED merge can name the rule that is
   // unmet instead of guessing at one (task 86bbrg9v0). Without it the gate
   // still answers, but it answers CANNOT TELL.
@@ -1280,6 +1325,12 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     }
     const mergedAt = new Date().toISOString();
     const record = mergeOnComment.mergedElsewhereNotice({ commentId: authorizingComment, pr, mergedAt, armed: wasArmed });
+    // THE ORDINARY ENDING OF AN ARMED MERGE, and therefore the ordinary way
+    // the merge window is given back: the pass that armed this pull request
+    // ended long before GitHub landed it, so nothing else has released the
+    // hold. `releaseWindow` only clears a hold naming THIS pull request, so a
+    // merge performed outside the window costs nothing here.
+    releaseMergeWindow('it is already merged');
     console.error(`  ALREADY MERGED PR #${pr.number} for ${label} — recording it and moving the ticket to Live`);
     await recordMergedTicket(record, pr);
     const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGED: ${label} — PR #${pr.number} is merged into main (${wasArmed ? "GitHub's auto-merge, armed by this relay on Dane's word" : 'merged outside this relay'}), ticket set to Live. main auto-deploys.\n\n${pr.url}`);
@@ -1298,6 +1349,66 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   }
 
   let gate = githubGate(prJson);
+
+  /**
+   * Ask for the merge window before doing anything that moves main.
+   *
+   * The lease is READ FRESH on every claim rather than once per pass, because
+   * an earlier ticket in this same pass may have taken the window a moment ago
+   * and a cached read would hand it out twice.
+   */
+  const claimMergeWindow = (action) => {
+    if (holdsMergeWindow || !mergeWindowLease.needsMergeWindow(action)) return { ok: true };
+    const read = mergeWindowLeaseFile.readLeaseFile(mergeWindowLeaseFile.leasePath());
+    const now = new Date().toISOString();
+    const d = mergeWindowLease.windowDecision({ read, repo, pr: pr.number, now });
+    if (d.action === 'blocked') return { ok: false, reason: d.reason, cannotTell: Boolean(d.cannotTell) };
+    if (d.action === 'proceed') { holdsMergeWindow = true; return { ok: true }; }
+
+    // A DRY RUN MAY NOT TAKE THE WINDOW. Caught by running one: the pass
+    // printed "MERGE WINDOW taken by PR #613" and wrote the file, on a run
+    // whose whole promise is that it changes nothing — and a stolen window is
+    // not a cosmetic write, it stops every real merge on this machine until the
+    // bound expires. The DECISION above still runs, so a dry run still reports
+    // a window it would have been blocked by, which is the half worth seeing.
+    if (dryRun) {
+      console.error(`  DRY RUN — would take the merge window for PR #${pr.number} (${d.reason})`);
+      holdsMergeWindow = true;
+      return { ok: true };
+    }
+    const next = mergeWindowLease.takeWindow({
+      read, repo, pr: pr.number, task: task.id, branch: prJson.headRefName, headSha: prJson.headRefOid, now,
+    });
+    // RECORDED BEFORE THE ACTION, NEVER AFTER. A pass that dies between taking
+    // the window and pushing must leave it HELD: a crash quietly letting the
+    // next branch in is exactly the livelock, arriving through its own fix. The
+    // 45-minute bound is what clears a hold nobody ever released.
+    const saved = mergeWindowLeaseFile.saveLeaseIfReadable(read, next);
+    if (!saved.ok) {
+      return {
+        ok: false,
+        cannotTell: true,
+        reason: `the merge window is free, but taking it could not be RECORDED (${saved.why}) — acting without a record is how two branches end up in it at once, so nothing was done to main; the next pass asks again`,
+      };
+    }
+    if (d.expired) {
+      unchecked.push(`${task.id}: PR #${d.expired.pr} held the merge window past its bound without landing, so PR #${pr.number} has taken it over — that pull request is stuck and needs an agent session`);
+    }
+    holdsMergeWindow = true;
+    console.error(`  MERGE WINDOW taken by PR #${pr.number} for ${label}`);
+    return { ok: true };
+  };
+
+  /**
+   * One place that turns a blocked window into this pass's answer. It is a
+   * WAIT, never a refusal: nothing is wrong with this pull request, another one
+   * is simply ahead of it, so there is no comment to post and no authorization
+   * to spend. The next pass takes it from the top.
+   */
+  const mergeWindowWait = (blocked) => {
+    console.error(`  MERGE WAITING on ${label}: ${blocked.reason}`);
+    return { outcome: 'waiting', reason: blocked.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.verdictCannotTell(blocked) };
+  };
 
   // GitHub said the branch conflicts. Ask git before believing it — one
   // asynchronous reading is not a settled fact (task 86bbupfgn), and the
@@ -1352,6 +1463,8 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // the assertion silently measure this block instead of the one it guards.
   // The same warning already sits on that statement. Do not spell it out.
   if (gate.action === 'catch-up-locally') {
+    const win = claimMergeWindow('catch-up-locally');
+    if (!win.ok) return mergeWindowWait(win);
     if (dryRun) {
       console.error(`  DRY RUN — would merge main into ${prJson.headRefName} here and push it, then re-read PR #${pr.number}: ${gate.reason}`);
       return { outcome: 'would-catch-up-disagreement', pr: pr.number, reason: gate.reason };
@@ -1441,6 +1554,8 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // GitHub lands it the instant the checks go green, instead of the merge
     // depending on a ten-minute pass happening to find the PR green before
     // main moved again. Arming is confirmed to survive the catch-up push.
+    const win = claimMergeWindow('update-branch');
+    if (!win.ok) return mergeWindowWait(win);
     if (dryRun) {
       console.error(`  DRY RUN — would update PR #${pr.number} from main, then wait for CI`);
       return { outcome: 'would-update-branch', pr: pr.number };
@@ -1482,6 +1597,12 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // branch is pushed so CI re-runs; anything else — including "could not
   // tell" — falls straight through to the hand-off below, unchanged.
   if (gate.action === 'conflict' && !dryRun) {
+    // This pushes too, so it is a main move in waiting and takes the window
+    // like the others. A blocked window here is a WAIT, not a hand-off: filing
+    // a conflict ticket for a branch nobody has tried to catch up yet would be
+    // asserting an overlap this pass never checked.
+    const winC = claimMergeWindow('catch-up-locally');
+    if (!winC.ok) return mergeWindowWait(winC);
     const local = branchCatchUp.catchUpBranchLocally({ repo, branch: prJson.headRefName });
     if (local.ok) {
       console.error(`  ${label}: GitHub reported a conflict, but ${local.reason}`);
@@ -1522,6 +1643,11 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // pass that runs after someone fixes the branch merges it on his original
   // word — which is what the comment promised all along.
   if (gate.action === 'conflict') {
+    // The flight is over: resolving a conflict is an agent session's job on a
+    // human clock, and holding the merge window through that would stop every
+    // other merge until the bound expired. The window goes back now; this pull
+    // request asks for it again once somebody has fixed the branch.
+    releaseMergeWindow('it was handed off as a conflict');
     // What the local attempt found, in the operator's terms. "It really does
     // overlap" and "I could not check" are different problems with different
     // fixes, and reading one as the other is how a machine problem gets
@@ -1830,6 +1956,15 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     });
 
     if (auto.action === 'arm' || auto.action === 'disarm') {
+      // ARMING IS A MAIN MOVE, just a deferred one — GitHub lands the pull
+      // request the instant its checks go green, with nobody here awake for
+      // it. Two armed pull requests therefore reset each other exactly as two
+      // merged ones would, so arming takes the window and holds it until the
+      // merge lands. DISARMING is the opposite and needs no window.
+      if (auto.action === 'arm') {
+        const win = claimMergeWindow('arm');
+        if (!win.ok) return mergeWindowWait(win);
+      }
       if (dryRun) {
         console.error(`  DRY RUN — would ${auto.action} auto-merge on PR #${pr.number}: ${auto.reason}`);
         return { outcome: auto.action === 'arm' ? 'would-arm-auto-merge' : 'would-disarm-auto-merge', pr: pr.number, reason: auto.reason };
@@ -1862,6 +1997,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       } else if (confirmed !== wanted) {
         unchecked.push(`${task.id}: PR #${pr.number} — auto-merge ${auto.action} reported success but reading it back says otherwise (armed=${confirmed})`);
       }
+      if (auto.action === 'disarm') releaseMergeWindow('auto-merge was disarmed, so GitHub is no longer holding this one');
       console.error(`  AUTO-MERGE ${auto.action.toUpperCase()}ED on ${label}: ${auto.reason}`);
       return { outcome: auto.action === 'arm' ? 'auto-merge-armed' : 'auto-merge-disarmed', pr: pr.number, reason: auto.reason };
     }
@@ -1874,6 +2010,12 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   if (gate.action === 'refuse') {
     return refuse(gate.reason, `PR #${pr.number} is not in a state that can be merged safely.`, gate.refusalCode);
   }
+
+  // The last main move, and the only one that is instantaneous. It still takes
+  // the window: merging while another branch is mid-flight is precisely what
+  // puts that branch BEHIND and restarts its checks.
+  const winM = claimMergeWindow('merge');
+  if (!winM.ok) return mergeWindowWait(winM);
 
   if (dryRun) {
     console.error(`  DRY RUN — would merge PR #${pr.number} (${gate.reason}) and set ${label} to Live`);
@@ -1888,6 +2030,11 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     return refuse(`the merge command itself failed (${merged.stderr.slice(0, 300)})`, `PR #${pr.number} could not be merged.`, mergeOnComment.REFUSAL_CODES.mergeCommandFailed);
   }
   const mergedAt = new Date().toISOString();
+  // Released BEFORE the bookkeeping below, which is several ClickUp writes and
+  // a bus post. main has already moved; holding the window through that would
+  // idle the next merge for no reason, and a failure in the bookkeeping must
+  // not leave the queue stopped.
+  releaseMergeWindow('it merged');
   console.error(`  MERGED PR #${pr.number} for ${label}`);
 
   // Marker first, now that the irreversible thing has happened: if the next
@@ -1936,6 +2083,65 @@ function ledgerPath() {
 /** The ledger's IO lives in autoMergeLedgerFile.js so it can be tested;
  *  these two only supply the path. */
 function readLedger() { return readLedgerFile(ledgerPath()); }
+
+/**
+ * THE PRIMARY RELEASE OF THE MERGE WINDOW (2026-09-05, task 86bbuv9jt), run
+ * once at the top of every pass.
+ *
+ * The pass that arms a pull request ends long before GitHub lands it, so the
+ * hold outlives the session that took it — by design, because that is exactly
+ * the interval during which nobody else may move main. What frees it is this:
+ * ask GitHub what became of each holder, and let go the moment it is MERGED or
+ * CLOSED. Without it the 45-minute bound would be the ONLY release, and a
+ * queue that merges one pull request every 45 minutes is the stall this whole
+ * change exists to remove.
+ *
+ * Everything it decides is `mergeWindowLease.releaseSettled`'s, including the
+ * bound and the fail-safe. This only reads GitHub and writes the file.
+ */
+function releaseSettledMergeWindows({ unchecked = [], dryRun = false } = {}) {
+  const read = mergeWindowLeaseFile.readLeaseFile(mergeWindowLeaseFile.leasePath());
+  if (!read.ok) {
+    // Not a quiet skip. An unreadable window stops every merge on this machine
+    // (windowDecision treats it as held), so it has to be said out loud rather
+    // than discovered as a mysteriously idle queue.
+    // `read.why` already names the file and the parse error, so wrapping it in
+    // another "could not be read" reads as two separate failures.
+    unchecked.push(`${read.why} — no merge will proceed on this machine until it is fixed by hand: ${read.file || '(path unknown)'}`);
+    return;
+  }
+  for (const { repo, holder } of mergeWindowLease.heldRepos(read)) {
+    const view = gh(['pr', 'view', String(holder.pr), '--repo', repo, '--json', 'state']);
+    let state = '';
+    if (view.ok) {
+      try { state = String(JSON.parse(view.stdout).state || ''); } catch { state = ''; }
+    }
+    // A read that failed leaves `state` empty, and releaseSettled keeps the
+    // hold for it — "I could not check" is not "it is gone" (DOCTRINE 3.11).
+    const settled = mergeWindowLease.releaseSettled({ read, repo, state, now: new Date().toISOString() });
+    if (!settled.changed) {
+      if (!state) unchecked.push(`${repo}: could not read PR #${holder.pr}'s state, so the merge window stays held and no other merge on that repo will proceed this pass`);
+      continue;
+    }
+    if (dryRun) {
+      console.error(`  DRY RUN — would free the merge window: ${settled.reason}`);
+      continue;
+    }
+    const saved = mergeWindowLeaseFile.saveLeaseIfReadable(read, settled.lease);
+    if (!saved.ok) {
+      unchecked.push(`${repo}: PR #${holder.pr} is out of the merge window (${settled.reason}) but the window could not be written (${saved.why}) — merges on that repo stay stopped`);
+      continue;
+    }
+    console.error(`  MERGE WINDOW: ${settled.reason}`);
+    // Taken over rather than finished is a finding, not a routine — the holder
+    // never landed and nothing else is watching it.
+    if (!/is (MERGED|CLOSED)\b/.test(settled.reason)) unchecked.push(`${repo}: ${settled.reason}`);
+    // The file changed under our earlier read, so later claims in this pass
+    // must not act on the stale one. They re-read; this only keeps the local
+    // copy honest for the rest of this loop.
+    read.lease = settled.lease;
+  }
+}
 
 /**
  * The kill switch's other half: the party line. A read failure here is NOT a
@@ -3912,6 +4118,13 @@ if (cmd === 'whoami') {
   // write returned 400 for sixteen hours and the whole pipeline stopped
   // behind it, though every answer was sitting on its ticket the entire time.
   const busSkipped = [];
+
+  // Free the merge window of anything that has already landed, BEFORE any
+  // ticket is looked at — otherwise the first ticket of the pass is measured
+  // against a holder that merged twenty minutes ago and is told to wait for it.
+  // Below `unchecked` on purpose: it reports through it, and reading a window
+  // this pass cannot then report on is worse than not reading it.
+  if (mergingAllowed) releaseSettledMergeWindows({ unchecked, dryRun });
   // Tickets already receipted THIS pass, mapped to whether that receipt was
   // read back successfully. One acknowledgement per ticket, not one per
   // comment — three answers during an outage otherwise leave three identical
