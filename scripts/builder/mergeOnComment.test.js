@@ -1015,7 +1015,7 @@ test('the relay waits after BOTH catch-up paths, and merges the same way', () =>
 
   // And the path that stopped waiting must ARM instead, not simply give up.
   // BREAK-TEST: delete the fall-through assignment and this fails.
-  assert.match(src, /gate = \{ action: 'wait', reason: 'the branch was caught up with main and its checks are re-running' \}/,
+  assert.match(src, /gate = \{ action: 'wait', cannotTell: false, reason: 'the branch was caught up with main and its checks are re-running' \}/,
     'the GitHub catch-up must fall through to the arming path, not return');
   assert.match(src, /'--auto', '--squash', '--delete-branch'/,
     'the arming path must actually arm GitHub auto-merge');
@@ -1623,8 +1623,52 @@ test('an unreadable stored timestamp restarts the clock rather than disabling th
  * self-clearing run has ever come to the 90-minute threshold, so it is the
  * real-data guard on the noisy direction.
  */
-const CONFLICTING = 'CANNOT TELL — GitHub reports this branch as CONFLICTING, but git merges origin/main '
-  + 'into 4dd9729b cleanly (merge-tree exit 0). The two sources disagree, so no conflict is claimed';
+/**
+ * THE FIXTURE IS DERIVED FROM `githubGate`, NEVER TYPED OUT (review round 2 of
+ * task 86bbuvd50). The first version of this replay pasted the wordings out of
+ * the relay log, and PR #597 had already changed one of them in the code —
+ * so the test proved the decision function correct about a population
+ * production no longer produces, while the real thing said nothing for two and
+ * a half hours. Asking the gate means a future rewording moves the fixture
+ * with it, and a change in CLASSIFICATION fails this test instead of hiding.
+ *
+ * The two readings are the two GitHub actually gives inside a stuck block:
+ * CONFLICTING while git merges it cleanly (84 of the 106 classifiable lines in
+ * the measured log) and mergeability still being computed (the other 22).
+ * `SETTLED` is an ordinary CI wait — a reading that WAS taken — which is what
+ * ends a block.
+ */
+const gateVerdict = (pr, opts) => githubGate(pr, opts);
+const DISAGREEING = gateVerdict(
+  { state: 'OPEN', isDraft: false, mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY', statusCheckRollup: [] },
+  { gitCrossCheck: { known: true, conflicts: false, base: 'origin/main', head: '4dd9729b' } },
+);
+const STILL_COMPUTING = gateVerdict(
+  { state: 'OPEN', isDraft: false, mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN', statusCheckRollup: [] },
+);
+const SETTLED = gateVerdict(
+  { state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED', reviewDecision: 'REVIEW_REQUIRED',
+    statusCheckRollup: [{ name: 'verify', status: 'IN_PROGRESS' }] },
+);
+
+test('the two verdicts the replay is built from are the ones the log actually holds', () => {
+  // If either of these stops being what production emits, the replay below is
+  // measuring something else and this says so first.
+  assert.equal(DISAGREEING.action, 'catch-up-locally');
+  assert.match(DISAGREEING.reason, /GitHub reports this branch as CONFLICTING, but git merges/);
+  assert.equal(mergeOnComment.verdictCannotTell(DISAGREEING), true,
+    'the dominant verdict must classify as a cannot-tell — it is 84 of the 106 measured lines');
+  assert.equal(STILL_COMPUTING.action, 'wait');
+  assert.equal(mergeOnComment.verdictCannotTell(STILL_COMPUTING), true);
+  assert.equal(SETTLED.action, 'wait');
+  assert.equal(mergeOnComment.verdictCannotTell(SETTLED), false,
+    'a routine CI wait is a reading, and counting it would widen the measured population');
+  // THE DEFECT ITSELF, pinned. PR #597 deleted the `CANNOT TELL — ` prefix
+  // from the dominant verdict, which silently unhooked the prose-matching
+  // classifier this replaced. The classification must NOT depend on it.
+  assert.ok(!/CANNOT TELL/.test(DISAGREEING.reason),
+    'the dominant verdict no longer carries the marker — that is the whole defect, and it must stay pinned here');
+});
 const REAL_BLOCKS = [
   // The ONE block the prose grain did catch, and this row says why: its first
   // twelve passes are the same wording, so the old clock survived to 90m. The
@@ -1647,19 +1691,19 @@ test('REPLAYED OVER THE REAL RELAY LOG: every block that needed hands escalates 
     let prev = null;
     const posts = [];
     for (const [mins, wording] of block.passes) {
-      const verdict = wording === null ? 'checks still running: verify, Vercel'
-        : (wording === 1 ? CONFLICTING : COMPUTING);
+      const gate = wording === null ? SETTLED : (wording === 1 ? DISAGREEING : STILL_COMPUTING);
+      const verdict = gate.reason;
       const run = mergeOnComment.cannotTellRun({
         prev,
         verdict,
-        isCannotTell: mergeOnComment.readsAsCannotTell(verdict),
+        isCannotTell: mergeOnComment.verdictCannotTell(gate),
         // Production reads the commit out of `gh pr view --json headRefOid`,
         // so it is known on EVERY pass — including the "still computing" ones,
         // whose prose does not mention it.
         identity: { pr: block.pr, headSha: block.sha },
         now: T0 + mins * MIN,
       });
-      if (run.escalate) posts.push({ mins, reason: run.reason });
+      if (run.escalate) posts.push({ mins, reason: run.reason, quoted: verdict });
       prev = run.next;
     }
     assert.equal(posts.length, block.escalations,
@@ -1667,7 +1711,11 @@ test('REPLAYED OVER THE REAL RELAY LOG: every block that needed hands escalates 
     if (block.escalations) {
       assert.ok(posts[0].mins >= 90, `${block.ticket} escalated at ${posts[0].mins}m — before the threshold`);
       assert.ok(posts[0].mins <= 130, `${block.ticket} took ${posts[0].mins}m to speak — far past the threshold`);
-      assert.match(posts[0].reason, /CANNOT TELL/, 'and quote the verdict it is stuck on, verbatim');
+      // VERBATIM, and the string comes from the GATE rather than from this
+      // file — so the message must quote whatever wording production emits
+      // today, not the one the log happened to hold in September.
+      assert.ok(posts[0].reason.includes(posts[0].quoted),
+        `${block.ticket}: the message must quote the verdict it is stuck on, verbatim`);
       // The message must not CLAIM a verbatim repeat where the log shows a
       // reworded one — a reader opening that log would catch it out.
       if (block.rewordedBySpeaking) {
@@ -1712,23 +1760,134 @@ test('the bound never changes a merge decision — the ticket\'s non-goals', () 
 // it, so the loop was still unbounded in production. These are the tests that
 // stop that shipping inert a second time.
 
-test('readsAsCannotTell selects the population the threshold was measured on', () => {
-  assert.equal(mergeOnComment.readsAsCannotTell('CANNOT TELL — GitHub and git disagree'), true);
-  assert.equal(mergeOnComment.readsAsCannotTell(
-    'CANNOT TELL — GitHub reported a merge state this gate does not know how to read'), true);
-  // Ordinary waits are NOT cannot-tells. A threshold measured on one
-  // population and applied to a wider one is the calibration error the ticket
-  // named — an alarm on every routine six-minute CI wait teaches everyone to
-  // ignore it, which is the silent failure wearing a louder coat.
-  assert.equal(mergeOnComment.readsAsCannotTell('the checks are still running'), false);
-  assert.equal(mergeOnComment.readsAsCannotTell(
-    'the review gate is stale but this pass has no wait budget left — the next pass re-runs it'), false);
-  for (const empty of [null, undefined, '', 0]) {
-    assert.equal(mergeOnComment.readsAsCannotTell(empty), false, `${String(empty)} is not a verdict`);
+test('verdictCannotTell asks the VERDICT, never its prose', () => {
+  assert.equal(mergeOnComment.verdictCannotTell({ action: 'wait', cannotTell: true, reason: 'anything at all' }), true);
+  assert.equal(mergeOnComment.verdictCannotTell({ action: 'wait', cannotTell: false, reason: 'anything at all' }), false);
+  // THE ROUND-2 DEFECT, stated as an assertion. A verdict whose sentence
+  // shouts CANNOT TELL but whose classification says otherwise is classified
+  // by the field — and, the direction that actually bit, a verdict that
+  // classifies as a cannot-tell while its sentence never says so is counted.
+  assert.equal(mergeOnComment.verdictCannotTell(
+    { action: 'refuse', cannotTell: false, reason: 'CANNOT TELL — a sentence that lies about itself' }), false);
+  assert.equal(mergeOnComment.verdictCannotTell(
+    { action: 'catch-up-locally', cannotTell: true, reason: 'GitHub reports this branch as CONFLICTING, but git merges it cleanly' }), true);
+  // An UNDECLARED field is not a cannot-tell, which is silent by
+  // construction — `Boolean(undefined)` is `false`. That is exactly why the
+  // source assertion below exists rather than a runtime throw: a relay pass
+  // must not crash over a missing field, so the gate is held at the source.
+  for (const nothing of [null, undefined, {}, { action: 'wait' }, 0, '']) {
+    assert.equal(mergeOnComment.verdictCannotTell(nothing), false, `${JSON.stringify(nothing)} declares nothing`);
   }
-  // Lower case is not the marker. The dialect is shouted on purpose across
-  // this repo, and matching loosely would catch the prose ABOUT cannot-tells.
-  assert.equal(mergeOnComment.readsAsCannotTell('this gate cannot tell which check failed'), false);
+});
+
+test('EVERY githubGate return declares cannotTell — the assertion that would have caught #597', () => {
+  // The classification lives where the verdict is MADE. A new branch of the
+  // gate that forgets the field would not be a syntax error and no
+  // behavioural test would catch it (`Boolean(undefined)` is false, so it
+  // would simply never be counted) — which is precisely how PR #597 unhooked
+  // 84 of the 106 measured lines by rewording a sentence.
+  const src = fs.readFileSync(path.join(__dirname, 'mergeOnComment.js'), 'utf8');
+  const start = src.indexOf('function githubGate(');
+  assert.ok(start > 0, 'githubGate must be findable in the source');
+  const end = src.indexOf('\n}\n', src.indexOf('unreadableMergeState', start));
+  assert.ok(end > start, 'the end of githubGate must be findable');
+  const body = src.slice(start, end);
+
+  // Every `return {` in the function, with the object literal that follows it.
+  const returns = [];
+  let i = body.indexOf('return {');
+  while (i !== -1) {
+    let depth = 0;
+    let j = body.indexOf('{', i);
+    const from = j;
+    for (; j < body.length; j += 1) {
+      if (body[j] === '{') depth += 1;
+      else if (body[j] === '}') { depth -= 1; if (depth === 0) break; }
+    }
+    returns.push(body.slice(from, j + 1));
+    i = body.indexOf('return {', j);
+  }
+  assert.ok(returns.length >= 17,
+    `only ${returns.length} returns found in githubGate — the scan is not seeing the function`);
+  for (const literal of returns) {
+    assert.match(literal, /\bcannotTell: (true|false)\b/,
+      'a githubGate return that leaves the cannot-tell question unanswered:\n  '
+      + `${literal.replace(/\s+/g, ' ').slice(0, 160)}`);
+  }
+});
+
+test('the gate classifies the real population, and nothing wider', () => {
+  const open = { state: 'OPEN', isDraft: false, statusCheckRollup: [{ name: 'verify', status: 'COMPLETED', conclusion: 'SUCCESS' }] };
+  const cannotTells = [
+    // The two the threshold was measured on.
+    [githubGate({ ...open, mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' },
+      { gitCrossCheck: { known: true, conflicts: false, base: 'origin/main', head: 'aa11' } }), 'GitHub and git disagree'],
+    [githubGate({ ...open, mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN' }), 'mergeability still computing'],
+    // Terminal refusals that could not name what they saw. They never reach
+    // the bound — a refusal is not a wait that repeats — but the field says
+    // what was read, not what happens next.
+    [githubGate({ ...open, mergeable: 'MERGEABLE', mergeStateStatus: 'UNSTABLE' }), 'UNSTABLE with every check green'],
+    [githubGate({ ...open, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED' }), 'BLOCKED with no rule named'],
+    [githubGate({ ...open, mergeable: 'MERGEABLE', mergeStateStatus: 'WHAT_IS_THIS' }), 'a merge state the gate cannot read'],
+  ];
+  for (const [gate, what] of cannotTells) {
+    assert.equal(mergeOnComment.verdictCannotTell(gate), true, `${what} must classify as a cannot-tell`);
+  }
+
+  // AND NOTHING WIDER. A threshold measured on one population and applied to
+  // a larger one is the calibration error the ticket named in the loud
+  // direction: an alarm on every routine six-minute CI wait teaches everyone
+  // to ignore it, which is the silent failure wearing a louder coat.
+  const readings = [
+    [githubGate({ ...open, mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN' }), 'a mergeable PR'],
+    [githubGate({ ...open, mergeable: 'MERGEABLE', mergeStateStatus: 'BEHIND' }), 'behind main'],
+    [githubGate({ ...open, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED', reviewDecision: 'REVIEW_REQUIRED' }), 'a named protection rule'],
+    [githubGate({ ...open, statusCheckRollup: [{ name: 'verify', status: 'IN_PROGRESS' }], mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED' }), 'checks still running'],
+    [githubGate({ ...open, statusCheckRollup: [{ name: 'verify', status: 'COMPLETED', conclusion: 'FAILURE' }], mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED' }), 'checks red'],
+    [githubGate({ ...open, statusCheckRollup: [], mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN' }), 'no checks at all'],
+    [githubGate({ ...open, mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' },
+      { gitCrossCheck: { known: true, conflicts: true, base: 'origin/main', head: 'aa11' } }), 'a conflict both sources agree on'],
+    [githubGate({ state: 'MERGED' }), 'already merged'],
+    [githubGate({ state: 'CLOSED' }), 'closed'],
+    [githubGate({ state: 'OPEN', isDraft: true }), 'a draft'],
+    [githubGate({ ...open, mergeable: 'MERGEABLE', mergeStateStatus: 'DRAFT' }), 'GitHub still says draft'],
+  ];
+  for (const [gate, what] of readings) {
+    assert.equal(mergeOnComment.verdictCannotTell(gate), false, `${what} IS a reading and must not be counted`);
+  }
+});
+
+test('a verdict carried through afterCatchUpDecision keeps its classification', () => {
+  // A FIELD DROPPED ON A REASSIGNMENT is how the 86bbtqpxd refusal-code
+  // defect worked — silently, with every test still passing. The same shape
+  // applies here, and on this path it would take the bound straight back to
+  // never firing.
+  const disagreeing = githubGate(
+    { state: 'OPEN', isDraft: false, mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY', statusCheckRollup: [] },
+    { gitCrossCheck: { known: true, conflicts: false, base: 'origin/main', head: 'aa11' } },
+  );
+  const carried = mergeOnComment.afterCatchUpDecision({ gate: disagreeing, elapsedMs: 0, budgetMs: 1000 });
+  assert.equal(carried.action, 'catch-up-locally');
+  assert.equal(mergeOnComment.verdictCannotTell(carried), true,
+    'the disagreement must survive the in-pass wait, or every catch-up path stops counting');
+
+  // Running out of budget does not turn an unreadable PR into a readable one.
+  const timedOut = mergeOnComment.afterCatchUpDecision({
+    gate: githubGate({ state: 'OPEN', isDraft: false, mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN', statusCheckRollup: [] }),
+    elapsedMs: 999_999,
+    budgetMs: 1000,
+  });
+  assert.equal(timedOut.action, 'wait');
+  assert.equal(mergeOnComment.verdictCannotTell(timedOut), true);
+
+  // ...and an ordinary CI wait that times out is still an ordinary wait.
+  const ordinary = mergeOnComment.afterCatchUpDecision({
+    gate: githubGate({ state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED',
+      statusCheckRollup: [{ name: 'verify', status: 'IN_PROGRESS' }] }),
+    elapsedMs: 999_999,
+    budgetMs: 1000,
+  });
+  assert.equal(mergeOnComment.verdictCannotTell(ordinary), false);
 });
 
 test('the escalation says the four things the ticket asked for', () => {
@@ -1811,14 +1970,55 @@ test('EVERY waiting verdict the merge step returns answers the cannot-tell quest
     // "unknown", which continues whatever run is stored, so the bound would
     // silently key on the wrong thing instead of failing.
     assert.ok(/headSha:/.test(line), `a waiting return that does not name its head commit:\n  ${line.trim()}`);
+    // AND IT MAY NOT CLASSIFY BY PROSE (review round 2). The whole defect was
+    // a substring match on a sentence the code had stopped saying. The only
+    // three forms allowed here are the verdict's own field, a literal the
+    // author had to type deliberately, and `true` from a path that KNOWS no
+    // reading was taken.
+    assert.ok(/cannotTell: (mergeOnComment\.verdictCannotTell\(|true\b|false\b)/.test(line),
+      `a waiting return that classifies by something other than the verdict:\n  ${line.trim()}`);
   }
+  assert.ok(!/readsAsCannotTell/.test(RELAY_SRC),
+    'the prose-matching classifier must not come back — it is what made the bound silent in production');
+});
+
+test('a waiting return after a PUSH reads the FRESH head commit, not the stale one', () => {
+  // Review round 2, finding 3. `prJson` was read BEFORE the catch-up push, so
+  // its commit is one behind the branch that now exists — and the next pass
+  // would see a "different" block and restart the ninety-minute clock, once
+  // per catch-up. With PR #597 performing catch-ups routinely, that alone
+  // would keep the bound out of reach.
+  //
+  // BREAK-TEST: put `prJson.headRefOid` back on either post-push wait and
+  // this fails.
+  const pushed = RELAY_SRC.split('\n').filter((l) => l.includes("outcome: 'waiting'") && /reason: (after|next)\.reason/.test(l));
+  assert.equal(pushed.length, 3,
+    `expected the three waits that follow a fresh read, found ${pushed.length}`);
+  for (const line of pushed) {
+    assert.ok(/headSha: headShaOf\(after, prJson\)/.test(line),
+      `a wait after a fresh read that stores the STALE commit:\n  ${line.trim()}`);
+  }
+  // And the helper must actually prefer the fresh read, not merely exist.
+  const from = RELAY_SRC.indexOf('function headShaOf(');
+  assert.ok(from > 0, 'headShaOf must exist');
+  const body = RELAY_SRC.slice(from, RELAY_SRC.indexOf('\n}', from));
+  assert.match(body, /fresh && fresh\.prJson && fresh\.prJson\.headRefOid/,
+    'it must read the commit off the FRESH read first');
+  assert.match(body, /\|\| null/, 'and answer null rather than guessing when neither read has it');
 });
 
 test('the relay asks GitHub for the head commit at all', () => {
   // The identity is only as good as the field it is read from. `headRefOid`
   // missing from the --json list makes every reading's SHA undefined, which
   // fails SILENTLY into "unknown" and takes the fix back to the prose grain.
-  assert.match(RELAY_SRC, /headRefOid/, 'the merge step must read the head commit from gh pr view');
+  // MATCHED ON THE FIELD LIST, not on the file. The first version of this
+  // assertion looked for `headRefOid` anywhere in the source and passed
+  // happily with the field deleted from the --json request, because seven
+  // `prJson.headRefOid` reads still mentioned it — an assertion that could
+  // not fail, found by break-testing it.
+  const fieldList = (RELAY_SRC.match(/const fields = '([^']+)'/) || [])[1] || '';
+  assert.ok(fieldList.split(',').includes('headRefOid'),
+    `gh pr view is not asked for headRefOid, so every reading's commit is undefined: ${fieldList}`);
   assert.match(RELAY_SRC, /identity: \{ pr: reading\.pr, headSha: reading\.headSha \}/,
     'and hand it to the bound as the block identity');
 });

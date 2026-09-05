@@ -964,9 +964,33 @@ async function fileConflictTicket({ task, pr, branch, localVerdict, commentId, u
  * the "keep waiting" condition; it can never widen "may merge", because the
  * gate it composes with is still this one.
  */
+/**
+ * The head commit that identifies a stuck block, preferring the FRESHEST read.
+ *
+ * `waitForChecksInPass` re-reads the PR and returns that read as `prJson`; the
+ * caller's own `prJson` was taken before the catch-up push, so its commit is
+ * one behind the branch that now exists. Handing the stale one to the CANNOT
+ * TELL bound makes the next pass see a different commit, call it a different
+ * block and restart the ninety-minute clock — once per catch-up (review round
+ * 2 of task 86bbuvd50). With PR #597 performing catch-ups routinely that is
+ * not a rare race.
+ *
+ * `null` rather than a guess when neither read has it: an unknown commit is a
+ * WILDCARD to `sameCannotTellBlock`, never a difference, so an unreadable pass
+ * continues the run instead of resetting it.
+ */
+function headShaOf(fresh, fallback) {
+  const f = fresh && fresh.prJson && fresh.prJson.headRefOid;
+  if (f) return f;
+  return (fallback && fallback.headRefOid) || null;
+}
+
 async function waitForChecksInPass({ pr, repo, label, fields, budget, gateOf = githubGate }) {
   if (!budget || !mergeOnComment.mayWaitInPass(budget.used, budget.cap)) {
-    return { action: 'wait', reason: 'the in-pass wait cap for this run is already spent' };
+    // NOT a cannot-tell. The cap is this pass's own scheduling limit, not a
+    // fact about the pull request — the same reasoning the review-gate budget
+    // wait below is written on.
+    return { action: 'wait', cannotTell: false, reason: 'the in-pass wait cap for this run is already spent' };
   }
   budget.used += 1;
 
@@ -978,10 +1002,12 @@ async function waitForChecksInPass({ pr, repo, label, fields, budget, gateOf = g
     await new Promise((resolve) => setTimeout(resolve, mergeOnComment.IN_PASS_POLL_MS));
 
     const again = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
-    if (!again.ok) return { action: 'wait', reason: 'could not re-read the PR while waiting' };
+    // Both of these KNOW no reading was taken — the ticket's own "a
+    // rate-limited read" — so they declare it rather than being classified.
+    if (!again.ok) return { action: 'wait', cannotTell: true, reason: 'could not re-read the PR while waiting' };
     let json;
     try { json = JSON.parse(again.stdout); } catch {
-      return { action: 'wait', reason: 'gh returned unparseable JSON while waiting' };
+      return { action: 'wait', cannotTell: true, reason: 'gh returned unparseable JSON while waiting' };
     }
 
     const next = mergeOnComment.afterCatchUpDecision({
@@ -1163,7 +1189,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // and try again next pass rather than guessing in either direction.
     unchecked.push(`${task.id}: could not read PR #${pr.number} from GitHub (${view.stderr.slice(0, 200)}) — merge authorization still pending`);
     console.error(`  MERGE WAITING on ${label}: could not read PR #${pr.number}`);
-    // `cannotTell: true` WITHOUT ASKING readsAsCannotTell: this path KNOWS no
+    // `cannotTell: true` DECLARED, not classified: this path KNOWS no
     // reading was taken — it is the ticket's own "a rate-limited read" — while
     // its reason text predates the marker that predicate looks for.
     return { outcome: 'waiting', reason: 'could not read the PR', pr: pr.number, prUrl: pr.url, headSha: null, cannotTell: true };
@@ -1286,13 +1312,19 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
       if (after.action === 'wait' || after.action === 'update-branch' || after.action === 'catch-up-locally') {
         console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
-        return { outcome: 'waiting', reason: after.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(after.reason) };
+        // THE FRESH COMMIT, NOT THE STALE ONE (review round 2 of task
+        // 86bbuvd50). `prJson` was read BEFORE the catch-up push above, so its
+        // head commit is one behind the branch that now exists — and the next
+        // pass would read a "different" block and restart the ninety-minute
+        // clock, once per catch-up. With #597 performing catch-ups routinely
+        // that is not a rare case.
+        return { outcome: 'waiting', reason: after.reason, pr: pr.number, prUrl: pr.url, headSha: headShaOf(after, prJson), cannotTell: mergeOnComment.verdictCannotTell(after) };
       }
       // The verdict and the refusal code travel, for the same reason they do
       // on the conflict path: this machine performed the merge, so it holds
       // the strongest evidence there is about whether anything overlaps, and
       // a gate object never loses its code on a reassignment.
-      gate = { action: after.action, reason: after.reason, refusalCode: after.refusalCode, localVerdict: caughtUp };
+      gate = { action: after.action, cannotTell: Boolean(after.cannotTell), reason: after.reason, refusalCode: after.refusalCode, localVerdict: caughtUp };
       if (after.prJson) prJson = after.prJson;
     } else if (caughtUp.code === branchCatchUp.CODES.REAL_CONFLICT) {
       // THE OTHER DIRECTION, AND IT IS THE ONE THAT MUST NOT BE SKIPPED. A
@@ -1308,6 +1340,8 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       // aborts — which is cheap next to two ways of describing one finding.
       gate = {
         action: 'conflict',
+        // Two sources agree, so this is a reading, not the absence of one.
+        cannotTell: false,
         reason: `the branch conflicts with newer work on main — GitHub said so, and the catch-up merge agrees (${caughtUp.reason})`,
       };
     } else {
@@ -1318,6 +1352,11 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       console.error(`  ${label}: the catch-up could not be performed — ${caughtUp.reason}`);
       gate = {
         action: 'wait',
+        // STILL A CANNOT TELL, and this is the path that repeats. GitHub's
+        // flag stands, git contradicts it, and the remedy did not run — so
+        // nothing was settled and the next pass asks the same question. This
+        // is the verdict the ninety-minute bound exists to notice.
+        cannotTell: true,
         reason: `${gate.reason}. That catch-up could NOT be performed this pass (${caughtUp.reason}), so the branch is still flagged and the next pass tries again`,
       };
     }
@@ -1351,7 +1390,10 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     if (!upd.ok) {
       // update-branch fails on a genuine conflict too — treat that as the
       // conflict hand-off rather than retrying it forever.
-      gate = { action: 'conflict', reason: `the branch could not be caught up with main (${upd.stderr.slice(0, 200)})` };
+      // A reading WAS taken — GitHub said BEHIND — and it is the remedy that
+      // failed, so this is a definite hand-off rather than an unanswered
+      // question.
+      gate = { action: 'conflict', cannotTell: false, reason: `the branch could not be caught up with main (${upd.stderr.slice(0, 200)})` };
     } else {
       // The push restarted CI, so the checks just read no longer describe the
       // branch. This used to hold the pass open for 180s hoping to see the
@@ -1362,7 +1404,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       //
       // The staleness question below still gets asked first, and that is the
       // point of falling through rather than arming here.
-      gate = { action: 'wait', reason: 'the branch was caught up with main and its checks are re-running' };
+      gate = { action: 'wait', cannotTell: false, reason: 'the branch was caught up with main and its checks are re-running' };
       const reread = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
       if (reread.ok) {
         try { prJson = JSON.parse(reread.stdout); } catch { /* keep the pre-push read; the gate above is already 'wait' */ }
@@ -1387,7 +1429,9 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
       if (after.action === 'wait' || after.action === 'update-branch') {
         console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
-        return { outcome: 'waiting', reason: after.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(after.reason) };
+        // Same as the catch-up path above: this branch was pushed a moment
+        // ago, so the fresh read's commit is the one that identifies the block.
+        return { outcome: 'waiting', reason: after.reason, pr: pr.number, prUrl: pr.url, headSha: headShaOf(after, prJson), cannotTell: mergeOnComment.verdictCannotTell(after) };
       }
       // CARRY THE CLEAN VERDICT (review round 2). If GitHub STILL says
       // conflict after a catch-up that merged and pushed, that is the textbook
@@ -1403,7 +1447,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       // called with nothing catching it: no refusal comment, no bus post, and
       // every remaining ticket in the pass never relayed. A gate object never
       // loses its code as it is reassigned.
-      gate = { action: after.action, reason: after.reason, refusalCode: after.refusalCode, localVerdict: local };
+      gate = { action: after.action, cannotTell: Boolean(after.cannotTell), reason: after.reason, refusalCode: after.refusalCode, localVerdict: local };
       if (after.prJson) prJson = after.prJson;
     } else {
       // Carry WHY into the hand-off, so the reader learns whether it was a
@@ -1612,7 +1656,10 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   if (prOpenForWork) {
     if (staleness.state === 'pending') {
       console.error(`  MERGE WAITING on ${label}: ${staleness.reason}`);
-      return { outcome: 'waiting', reason: staleness.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(staleness.reason) };
+      // A READING WAS TAKEN: the review gate is running and will answer. Not
+      // a cannot-tell, and counting it would put an ordinary check run inside
+      // a bound measured on GitHub refusing to answer at all.
+      return { outcome: 'waiting', reason: staleness.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: false };
     }
     if (staleness.state === 'stale') {
       if (dryRun) {
@@ -1628,7 +1675,8 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       if (!inPassBudget || !mergeOnComment.mayWaitInPass(inPassBudget.used, inPassBudget.cap)) {
         const why = `the review gate is stale (${staleness.reason}) but this pass has no wait budget left — the next pass re-runs it`;
         console.error(`  MERGE WAITING on ${label}: ${why}`);
-        return { outcome: 'waiting', reason: why, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(why) };
+        // This pass's own scheduling limit, not a fact about the PR.
+        return { outcome: 'waiting', reason: why, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: false };
       }
 
       const cannotRerun = (why) => refuse(
@@ -1685,7 +1733,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         // paths know how to explain themselves to the operator and this one
         // does not.
         console.error(`  MERGE WAITING on ${label}: ${next.reason} (found while re-running the review gate)`);
-        return { outcome: 'waiting', reason: next.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(next.reason) };
+        return { outcome: 'waiting', reason: next.reason, pr: pr.number, prUrl: pr.url, headSha: headShaOf(after, prJson), cannotTell: mergeOnComment.verdictCannotTell(next) };
       }
       console.error(`  ${label}: the re-run of the review gate came back clean — ${next.reason}`);
       // The re-run rewrote the answer the rest of this function acts on: the
@@ -1695,7 +1743,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       // The code rides along for the same reason as the conflict path above:
       // a gate object never loses it on a reassignment, whatever this
       // particular branch's action happens to be today.
-      gate = { action: next.action, reason: next.reason, refusalCode: next.refusalCode };
+      gate = { action: next.action, cannotTell: Boolean(next.cannotTell), reason: next.reason, refusalCode: next.refusalCode };
       if (after.prJson) prJson = after.prJson;
     }
   }
@@ -1738,7 +1786,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         // treadmill back with nothing to show it.
         unchecked.push(`${task.id}: could not ${auto.action} auto-merge on PR #${pr.number} (${ran.stderr.slice(0, 200)}) — the merge falls back to the next pass`);
         console.error(`  MERGE WAITING on ${label}: could not ${auto.action} auto-merge — ${gate.reason}`);
-        return { outcome: 'waiting', reason: gate.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(gate.reason) };
+        return { outcome: 'waiting', reason: gate.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.verdictCannotTell(gate) };
       }
 
       // READ IT BACK. `gh` exiting 0 is not evidence that GitHub is holding
@@ -1761,7 +1809,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
 
     const why = auto.action === 'already-armed' ? `${gate.reason} — auto-merge is armed, GitHub lands it` : gate.reason;
     console.error(`  MERGE WAITING on ${label}: ${why}`);
-    return { outcome: 'waiting', reason: why, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.readsAsCannotTell(why) };
+    return { outcome: 'waiting', reason: why, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.verdictCannotTell(gate) };
   }
 
   if (gate.action === 'refuse') {

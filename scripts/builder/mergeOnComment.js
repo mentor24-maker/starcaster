@@ -465,13 +465,25 @@ function unmetProtectionRule(pr) {
  * GitHub's answer does not determine the cause, the reason says CANNOT TELL
  * and names what it saw (DOCTRINE 3.11) — never a pass, and never a plausible
  * reason, for a question that could not be answered.
+ *
+ * EVERY RETURN DECLARES `cannotTell`, TRUE OR FALSE (review round 2 of task
+ * 86bbuvd50). It answers one question — did this pass take a reading of the
+ * pull request at all, or is the verdict the absence of one? — and it is what
+ * the repeat bound counts, because the SENTENCE cannot be trusted to carry
+ * that meaning. PR #597 reworded the dominant cannot-tell and deleted the
+ * `CANNOT TELL` marker from it, which silently unhooked 84 of the 108
+ * measured lines from a bound that read the prose. Omitting the field on a
+ * new branch is not a syntax error and no behavioural test would catch it
+ * (`Boolean(undefined)` is `false`, so it would simply never be counted), so
+ * a source assertion in mergeOnComment.test.js fails on any return here that
+ * leaves the question unanswered.
  */
 function githubGate(pr, { gitCrossCheck = null } = {}) {
   const state = String((pr && pr.state) || '').toUpperCase();
-  if (state === 'MERGED') return { action: 'refuse', refusalCode: R.prAlreadyMerged, reason: 'the PR is already merged' };
-  if (state !== 'OPEN') return { action: 'refuse', refusalCode: R.prNotOpen, reason: `the PR is ${state || 'in an unknown state'}, not open` };
+  if (state === 'MERGED') return { action: 'refuse', cannotTell: false, refusalCode: R.prAlreadyMerged, reason: 'the PR is already merged' };
+  if (state !== 'OPEN') return { action: 'refuse', cannotTell: false, refusalCode: R.prNotOpen, reason: `the PR is ${state || 'in an unknown state'}, not open` };
 
-  if (pr.isDraft) return { action: 'refuse', refusalCode: R.prIsDraft, reason: 'the PR is still a draft' };
+  if (pr.isDraft) return { action: 'refuse', cannotTell: false, refusalCode: R.prIsDraft, reason: 'the PR is still a draft' };
 
   const mergeable = String(pr.mergeable || '').toUpperCase();
   const mergeStateStatus = String(pr.mergeStateStatus || '').toUpperCase();
@@ -525,12 +537,22 @@ function githubGate(pr, { gitCrossCheck = null } = {}) {
       return {
         action: 'catch-up-locally',
         disagreement: true,
+        // NO READING WAS TAKEN. Two sources contradict each other about the
+        // same branch, so this verdict is not an answer — it is the absence
+        // of one, and asking again next pass can legitimately say something
+        // different. It is 84 of the 108 lines the bound's threshold was
+        // measured on, and until review round 2 of task 86bbuvd50 it was
+        // classified by looking for `CANNOT TELL` in the sentence below —
+        // which PR #597 had already deleted from it.
+        cannotTell: true,
         reason: `GitHub reports this branch as ${mergeable === 'CONFLICTING' ? 'CONFLICTING' : 'DIRTY'}, but git merges ${cc.base || 'main'} into ${cc.head || 'the branch'} cleanly (merge-tree exit 0). The two sources disagree, so no conflict is claimed — this machine merges ${cc.base || 'main'} into the branch and pushes, which is what cleared the identical reading on PR #585`,
       };
     }
     if (cc && cc.known && cc.conflicts === true) {
       return {
         action: 'conflict',
+        // Both sources agree: this IS a reading, and a definite one.
+        cannotTell: false,
         reason: 'the branch conflicts with newer work on main — GitHub and git agree',
       };
     }
@@ -541,6 +563,11 @@ function githubGate(pr, { gitCrossCheck = null } = {}) {
     return {
       action: 'conflict',
       needsGitCrossCheck: true,
+      // Honestly a cannot-tell — GitHub said CONFLICTING and nothing
+      // confirmed it. It never reaches the repeat bound, because a conflict
+      // hand-off is terminal rather than a wait that repeats, but the field
+      // states what was read rather than what happens next.
+      cannotTell: true,
       reason: `GitHub reports this branch as ${mergeable === 'CONFLICTING' ? 'CONFLICTING' : 'DIRTY'}${cc && cc.why ? `, and git could not be consulted (${cc.why})` : ', and this pass did not cross-check it against git'} — treated as a conflict because an unconfirmed conflict is still not something to merge`,
     };
   }
@@ -551,28 +578,36 @@ function githubGate(pr, { gitCrossCheck = null } = {}) {
   if (mergeable === 'UNKNOWN' || mergeStateStatus === 'UNKNOWN') {
     return {
       action: 'wait',
+      // The other 22 of the 108 measured lines.
+      cannotTell: true,
       reason: 'CANNOT TELL yet — GitHub is still computing whether the branch merges cleanly; the next pass asks again',
     };
   }
 
   const checks = checkState(pr.statusCheckRollup);
   if (checks.failed.length) {
-    return { action: 'refuse', refusalCode: R.checksRed, reason: `checks are red: ${checks.failed.join(', ')}` };
+    return { action: 'refuse', cannotTell: false, refusalCode: R.checksRed, reason: `checks are red: ${checks.failed.join(', ')}` };
   }
   if (checks.pending.length) {
-    return { action: 'wait', reason: `checks still running: ${checks.pending.join(', ')}` };
+    // A READING WAS TAKEN and it is "not yet". CI here takes about six
+    // minutes; counting it toward a ninety-minute bound measured on a
+    // narrower population would turn every ordinary wait into an alarm, which
+    // is the calibration error task 86bbuvd50 warned about in the loud
+    // direction.
+    return { action: 'wait', cannotTell: false, reason: `checks still running: ${checks.pending.join(', ')}` };
   }
   // A PR with no checks at all is not a green PR — it is a PR nothing
   // verified. main is protected on the "verify" check precisely so this
   // cannot ship unchecked.
   if (!checks.total) {
-    return { action: 'refuse', refusalCode: R.noChecksAtAll, reason: 'the PR reports no checks at all — nothing verified this branch' };
+    return { action: 'refuse', cannotTell: false, refusalCode: R.noChecksAtAll, reason: 'the PR reports no checks at all — nothing verified this branch' };
   }
 
   // Behind main: the machine's own job, and it does it this pass.
   if (mergeStateStatus === 'BEHIND') {
     return {
       action: 'update-branch',
+      cannotTell: false,
       reason: 'the branch is behind main — this machine catches it up and the checks re-run',
     };
   }
@@ -584,6 +619,7 @@ function githubGate(pr, { gitCrossCheck = null } = {}) {
   if (mergeStateStatus === 'UNSTABLE') {
     return {
       action: 'refuse',
+      cannotTell: true,
       refusalCode: R.unstableCannotTell,
       reason: 'CANNOT TELL — GitHub reports a check on this branch is not passing, but every check this gate can read is green, so it cannot name which one; read the PR\'s checks on GitHub',
     };
@@ -592,7 +628,7 @@ function githubGate(pr, { gitCrossCheck = null } = {}) {
   if (mergeStateStatus === 'BLOCKED') {
     const rule = unmetProtectionRule(pr);
     if (rule) {
-      return { action: 'refuse', refusalCode: R.blockedByNamedRule, reason: `GitHub is holding the merge because ${rule}` };
+      return { action: 'refuse', cannotTell: false, refusalCode: R.blockedByNamedRule, reason: `GitHub is holding the merge because ${rule}` };
     }
     // The #487 sentence used to live here, and it was a guess wearing a
     // fact's clothes. GitHub reports BLOCKED for any unsatisfied protection
@@ -600,17 +636,18 @@ function githubGate(pr, { gitCrossCheck = null } = {}) {
     // neither, so neither may be named back.
     return {
       action: 'refuse',
+      cannotTell: true,
       refusalCode: R.blockedCannotTell,
       reason: 'CANNOT TELL which rule — GitHub reports the merge is blocked while every check this gate can read is green, and it did not name the rule. It is not necessarily a missing review: a conflict GitHub has not finished recomputing reads exactly like this, so re-read the PR before acting on it',
     };
   }
 
   if (mergeStateStatus === 'DRAFT') {
-    return { action: 'refuse', refusalCode: R.githubReportsDraft, reason: 'GitHub still reports the PR as a draft' };
+    return { action: 'refuse', cannotTell: false, refusalCode: R.githubReportsDraft, reason: 'GitHub still reports the PR as a draft' };
   }
 
   if (mergeStateStatus === 'CLEAN' || mergeStateStatus === 'HAS_HOOKS') {
-    return { action: 'merge', reason: `open, ${checks.total} check(s) green, no conflicts` };
+    return { action: 'merge', cannotTell: false, reason: `open, ${checks.total} check(s) green, no conflicts` };
   }
 
   // Not one of the eight values this gate knows how to read. The old code
@@ -619,6 +656,7 @@ function githubGate(pr, { gitCrossCheck = null } = {}) {
   // evidence.
   return {
     action: 'refuse',
+    cannotTell: true,
     refusalCode: R.unreadableMergeState,
     reason: `CANNOT TELL — GitHub reported a merge state this gate does not know how to read (${mergeStateStatus ? `mergeStateStatus "${mergeStateStatus}"` : 'no mergeStateStatus at all'}, mergeable "${mergeable || 'absent'}")`,
   };
@@ -736,7 +774,7 @@ function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS 
 
   // Terminal answers go back to the existing paths untouched — code included.
   if (action === 'merge' || action === 'refuse' || action === 'conflict') {
-    return { action, reason: gate.reason, ...(gate.refusalCode ? { refusalCode: gate.refusalCode } : {}) };
+    return { action, cannotTell: Boolean(gate.cannotTell), reason: gate.reason, ...(gate.refusalCode ? { refusalCode: gate.refusalCode } : {}) };
   }
 
   // Behind main is also terminal: no amount of polling makes a branch catch
@@ -745,7 +783,7 @@ function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS 
   // in review, 2026-08-30, task 86bbmk7pv). Ending the wait here hands it to
   // the next pass, where the catch-up path already lives.
   if (action === 'update-branch') {
-    return { action, reason: gate.reason || 'the branch fell behind main while waiting' };
+    return { action, cannotTell: Boolean(gate.cannotTell), reason: gate.reason || 'the branch fell behind main while waiting' };
   }
 
   // Same reasoning, different remedy (task 86bbuvcwc). A branch GitHub has
@@ -756,6 +794,7 @@ function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS 
     return {
       action,
       disagreement: true,
+      cannotTell: Boolean(gate.cannotTell),
       reason: gate.reason || 'GitHub and git disagree about whether this branch conflicts',
     };
   }
@@ -765,11 +804,16 @@ function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS 
   if (Number(elapsedMs) >= Number(budgetMs)) {
     return {
       action: 'wait',
+      // THE VERDICT'S CLASSIFICATION SURVIVES THE TIMEOUT. Running out of
+      // budget does not turn a pull request GitHub cannot read into one it
+      // can — if the last gate reading was a cannot-tell, this is still one,
+      // whatever the sentence below says about CI.
+      cannotTell: Boolean(gate && gate.cannotTell),
       reason: `CI was still running after ${Math.round(Number(budgetMs) / 1000)}s; the next pass will pick it up`,
     };
   }
 
-  return { action: 'poll-again', reason: gate?.reason || 'checks still running' };
+  return { action: 'poll-again', cannotTell: Boolean(gate && gate.cannotTell), reason: gate?.reason || 'checks still running' };
 }
 
 /**
@@ -1276,6 +1320,10 @@ const CANNOT_TELL_STALE_MS = 90 * 60 * 1000;
  *   CANNOT TELL yet — GitHub is still computing whether the branch merges
  *   cleanly; the next pass asks again
  *
+ * (Those are the wordings AS LOGGED. PR #597 has since dropped the
+ * `CANNOT TELL — ` prefix from the first one — which is what review round 2
+ * caught, and why `verdictCannotTell` no longer reads any of this prose.)
+ *
  * and 86bbpz1hu alternated eight times in thirteen passes — its longest
  * unbroken streak of one wording was about thirty minutes, so the clock reset
  * long before ninety was ever reached. Both wordings are the same fact:
@@ -1414,27 +1462,44 @@ function cannotTellRun({ prev, verdict, isCannotTell, identity = {}, now = Date.
 }
 
 /**
- * Does this waiting verdict READ as a cannot-tell?
+ * Did this verdict take a reading of the pull request at all?
  *
- * The bound is calibrated on a measured population — every
- * `MERGE WAITING ... CANNOT TELL` line in the relay's launchd log (see
- * CANNOT_TELL_STALE_MS) — and this predicate is what selects that same
- * population at runtime. Matching the marker rather than the prose around it
- * is deliberate: the reasons get reworded constantly (three tickets reworded
- * one of them in a fortnight), and a threshold measured on one population and
- * applied to a wider one is the calibration error the ticket warned about in
- * both directions.
+ * ASKED OF THE VERDICT, NEVER OF ITS PROSE (review round 2 of task
+ * 86bbuvd50). This used to test `/CANNOT TELL/` against the reason SENTENCE,
+ * and it was already broken on the day it shipped: PR #597 — merged to main
+ * before the branch that carried it — deleted the `CANNOT TELL — ` prefix
+ * from the dominant verdict and changed its action to `catch-up-locally`.
  *
- * TWO CALLERS PASS `true` WITHOUT ASKING THIS, and they are right to: the
- * failed `gh pr view` and the unparseable-JSON paths KNOW no reading was taken
- * — that is the ticket's own "a rate-limited read" — while their reason text
- * predates the marker. Where the code knows, the code says so; where only the
- * verdict knows, this asks it. What no caller may do is leave the question
- * unanswered, which is why every `outcome: 'waiting'` return is checked by a
- * source assertion in the test file.
+ * 84 of the 106 classifiable lines in the measured log stopped classifying,
+ * and the failure was worse than under-counting. An unclassified pass reads
+ * as `clear`, which DELETES the stored run — so every CONFLICTING pass wiped
+ * the clock the "still computing" passes had built up, and the longest
+ * unbroken run of the one surviving wording is about thirty minutes. Ninety
+ * was unreachable. The bound merged green, passed every gate, and said
+ * nothing on the exact incident it was written for.
+ *
+ * So the classification is declared where the verdict is MADE — every
+ * `githubGate` return carries `cannotTell` explicitly, and a source assertion
+ * fails on any that omits it. That assertion would have failed on the day
+ * #597 landed. A future rewording cannot unhook the bound again, because no
+ * wording is read.
+ *
+ * THE POPULATION IS UNCHANGED, deliberately. The verdicts marked true are the
+ * same two the ninety-minute threshold was measured on — GitHub-says-
+ * CONFLICTING-while-git-says-clean (84 lines) and GitHub-is-still-computing
+ * (22) — plus the paths that could not reach GitHub at all, which is the
+ * ticket's own "a rate-limited read". A routine six-minute CI wait is a
+ * reading, and counting it would be a threshold measured on one population
+ * applied to a wider one: the calibration error the ticket warned about,
+ * wearing a louder coat.
+ *
+ * Callers that KNOW no reading was taken — a failed `gh pr view`, unparseable
+ * JSON — pass `cannotTell: true` directly rather than through here. What no
+ * caller may do is leave the question unanswered, which is why every
+ * `outcome: 'waiting'` return is checked by a source assertion too.
  */
-function readsAsCannotTell(reason) {
-  return /CANNOT TELL/.test(String(reason == null ? '' : reason));
+function verdictCannotTell(verdict) {
+  return Boolean(verdict && verdict.cannotTell);
 }
 
 /**
@@ -1487,7 +1552,7 @@ module.exports = {
   CANNOT_TELL_STALE_MS,
   cannotTellRun,
   sameCannotTellBlock,
-  readsAsCannotTell,
+  verdictCannotTell,
   cannotTellEscalation,
   autoMergeDecision,
   autoMergeArmedTooLong,

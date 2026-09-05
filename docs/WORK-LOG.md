@@ -50,6 +50,33 @@ day, pass by pass, at the real ten-minute spacing — the three that needed a
 person get exactly one message each, and the one that sorted itself out in
 under an hour stays quiet.
 
+A second review pass then found that the whole thing was still silent in
+practice, and the reason is worth writing down because it is a trap anybody
+could fall into. The job decided whether an answer counted as "GitHub cannot
+tell me" by looking for those words in the sentence — and a change that shipped
+earlier the same day had reworded that sentence and taken the words out. So the
+counter was watching for a phrase the system had stopped saying. It was worse
+than simply not counting: an answer that did not match was treated as "the
+problem has gone away", which wiped the clock every time. Replayed against the
+real log, the version that had already passed every check and gone green spoke
+up about none of the three genuinely stuck merges.
+
+The fix stops reading the sentence at all. The part of the system that works
+out what GitHub said now labels its own answer — "I got a real reading" or "I
+could not tell" — and the counter reads the label. Wording can change freely
+from now on without unhooking anything. A check on the source itself refuses
+any future answer that does not carry a label, which is the check that would
+have caught this the day the rewording landed, and the replay test now builds
+its examples by asking the real code what it says today rather than by quoting
+what a log said in September. Replayed that way, all three stuck merges get
+exactly one message and all six that sorted themselves out stay quiet.
+
+One more small thing was fixed alongside it: when the system catches a branch
+up by itself, it was recording the version of the code from just before that
+push rather than just after, so the very next try thought it was looking at a
+new problem and started the ninety minutes over. That happened once per
+catch-up, and catch-ups are now routine.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
