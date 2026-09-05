@@ -1,3 +1,41 @@
+## 2026-09-05 — A ticket you had already said "merge" to sat there waiting for you anyway (#617)
+
+Two of the seven columns on the Loop Queue board belong to you: `Needs your
+input` and `Ready to launch`. Nothing automatic is allowed to move a ticket out
+of either one, and that rule is right — a machine tidying away a ticket that was
+holding a question you had not seen yet would erase the question.
+
+But the rule was being applied by looking only at which column the ticket was
+in, and the column is not really the question. The real question is *is there
+still a decision of Dane's outstanding?* On the morning of 4 September there
+was not: you commented `merge` on a ticket at 8:15, the work went live at 8:57,
+and at 9:00 the ticket was still sitting in `Ready to launch` as though it were
+waiting on you. It was not waiting on anything. Your instruction had been given
+and carried out. The ticket was just stale paperwork by then — and finished work
+parked in one of your columns does not show up on the list of what shipped.
+
+So the tidy-up job can now close exactly one shape of ticket by itself, and only
+when all three of these are true: the ticket is in `Ready to launch`, its pull
+request really did merge, and your own `merge` comment is on the ticket from
+*before* the merge. Miss any one of them and nothing changes — it flags it and
+leaves it alone, exactly as before, and now says which of the three was missing.
+`Needs your input` is never touched at all, whatever merged, because an
+unanswered question is the whole reason the rule exists.
+
+Three things were tightened beyond what was asked for, all of them about not
+closing something on a word that was not really yours. It reads your merge
+command out of the comments rather than guessing from the column or from who is
+assigned. It checks the comment was actually typed by you and not written by one
+of the loops, which all post under your login. And it ignores a `merge` you gave
+before the last review verdict — that one approved an earlier attempt that was
+sent back and rebuilt, so it is a word about work that no longer exists. The
+close is also guarded: if you move the ticket yourself while the job is thinking,
+your move wins.
+
+Every one of those guards was tested by taking it out and watching a named test
+go red, and the note the job leaves on the ticket says whose instruction it
+acted on, when you gave it, and which pull request carried it out — so the claim
+can be checked rather than taken on trust.
 ## 2026-09-05 — Merges no longer knock each other back to the start (#616)
 
 Before a pull request can go live, GitHub insists it has the very latest work
