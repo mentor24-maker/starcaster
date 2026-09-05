@@ -1017,10 +1017,17 @@ async function handle(req, res, pathname, method) {
     }
     const created = Array.isArray(result.data) ? result.data[0] : result.data;
     const tag = rowToAssetTag(created);
+    // The tag saved, but the store could not record WHERE it came from, because
+    // docs/SQL/messaging_tags_source.sql is not applied to this database yet.
+    // Say so on the response: without this the API answers a plain success the
+    // caller cannot tell apart, and every client-admin tag created between this
+    // shipping and the migration being run is stored unflagged, permanently,
+    // with nothing but a server log line to show for it.
+    const meta = result.sourceRecorded === false ? { sourceRecorded: false } : {};
     // 200 when it already existed, 201 when it is new — the caller can treat
     // both as success, and the distinction is honest rather than a fake
     // "created" on a row that was already there.
-    return sendOk(res, result.existed ? 200 : 201, tag, { tag }), true;
+    return sendOk(res, result.existed ? 200 : 201, tag, { tag }, meta), true;
   }
 
   const assetTagIdMatch = normalizedPath.match(/^\/api\/asset-tags\/(\d+)$/);

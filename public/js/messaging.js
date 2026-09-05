@@ -1553,8 +1553,10 @@ App.messaging = (function () {
     };
   }
 
+  // Returns the created item's envelope. Most callers ignore it; the tag clone
+  // reads it back, because the name it asked for is not always the name it got.
   async function cloneMessagingItem(endpoint, payload) {
-    await api(endpoint, {
+    return api(endpoint, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -7983,12 +7985,23 @@ App.messaging = (function () {
       });
       const cloneBtn = App.makeIconButton('clone', 'Clone Tag', async function () {
         try {
-          await cloneMessagingItem('/api/messaging/tags', {
+          // `uniquify` asks the server for a name that is FREE. Appending
+          // " Copy" is only a preference: a messaging tag keeps at most three
+          // words, so on a three-word tag the fourth is dropped and the clone
+          // would collide with its own original every time. The server numbers
+          // it inside the three words instead, which is why the name it hands
+          // back is the one worth reporting rather than the one asked for.
+          const created = await cloneMessagingItem('/api/messaging/tags', {
             tag: `${String(item.tag || '').trim()} Copy`.trim(),
             topic: String(item.topic || item.category || '').trim(),
             importance: normalizeTagImportance(item.importance),
+            uniquify: true,
           });
-          notify('Messaging tag cloned');
+          const saved = created?.tag || created?.data || null;
+          const savedName = String(saved?.tag || '').trim();
+          notify(savedName
+            ? `Messaging tag cloned as "${savedName}"`
+            : 'Messaging tag cloned');
           await refreshMessagingTags();
         } catch (err) {
           notify(err.message, true);

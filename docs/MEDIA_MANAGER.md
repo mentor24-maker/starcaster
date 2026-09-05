@@ -59,12 +59,33 @@ through a client's own admin back-end carries `source = 'client-admin'`; a tag
 created in the Starcaster back-end leaves the column alone, and `''` reads as
 "origin not recorded" — the truth for all 149 rows that predate it.
 
-**Two stores still share the table on purpose.** `lib/messagingTagsStore.js`
-runs every tag through `normalizeMessagingTag`, which title-cases and keeps at
-most THREE words. That is right for a hashtag and wrong for a media tag:
-"Center Court North Entrance" would come back as "Center Court North". Media
-tags keep the casing the admin typed and are only trimmed. A test asserts the
-two vocabularies really do differ, so nobody merges the stores without noticing.
+**Two stores still share the table on purpose.** Messaging COINS a tag through
+`normalizeMessagingTag`, which title-cases it and keeps at most THREE words.
+That is right for a hashtag and wrong for a media tag: "Center Court North
+Entrance" would be coined as "Center Court North". Media tags keep the casing
+the admin typed and are only trimmed. A test asserts the two vocabularies
+really do differ, so nobody merges the stores without noticing.
+
+**That vocabulary applies on CREATE in Messaging, and nowhere else** — not on
+the way out of the table, and not on an update. This is the correction that
+matters, because the first version of the consolidation got it wrong and the
+bug it caused is the one to avoid reintroducing: `rowToMessagingTag` ran every
+row it READ through the coining rule, so a media tag came back out as "Center
+Court North", and Messaging > Tags prefills its edit form from that value and
+PATCHes `tag` back on save — so an admin opening a media tag merely to change
+its topic permanently rewrote the shared row to the truncation, no longer
+matching the strings on `assets.tags`. `lib/messagingTagsStore.js` names the
+two halves `authoredText` (coining, create only) and `storedText` (reading and
+updating, which trim and collapse whitespace and nothing else). If you find
+yourself reaching for the coining rule anywhere but a Messaging create, that is
+the bug growing back.
+
+A consequence of the three-word rule worth knowing: Messaging's **Clone Tag**
+button cannot simply append " Copy", because on a three-word tag that fourth
+word is dropped again and the clone collides with the tag it was cloned from.
+The clone therefore asks the store for a name that is free (`uniquify`), which
+numbers it inside the three words — "Center Court North2" — and the toast says
+what the clone was actually called.
 
 One consequence worth knowing: the Media Manager's tag picker now offers the
 project's **whole** tag list, including tags created in the Starcaster

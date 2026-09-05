@@ -23,10 +23,23 @@ And the old list had a rule the surviving one did not: one project cannot end
 up with "Courts" and "courts" as two separate entries. That rule came across
 with it, because a tag list that splits like that is useless within a month.
 
+One button had been quietly impossible to use, and this fixed it. "Clone Tag"
+in Messaging names the copy by adding the word "Copy" on the end — but a
+messaging tag is only ever allowed three words, so on a tag that already had
+three, that fourth word was thrown straight back away and the copy came out
+with exactly the same name as the original. The list refuses two tags with the
+same name, so the button could never once succeed. It now asks for a name that
+is free and numbers the copy instead — "Center Court North" becomes "Center
+Court North2" — and the confirmation message says the name it actually used,
+because it is not always the one you would expect.
+
 The database needs one small change before the stamp can be stored, which is
 Dane's to apply. Nothing breaks if it is not applied straight away: a tag
-created in the meantime is still saved, and the code says out loud that it
-could not record where the tag came from rather than pretending it did.
+created in the meantime is still saved, and the screen now says plainly that
+it could not record where the tag came from rather than reporting a silent
+success. That warning existed in the code from the start but nothing passed it
+on to anyone, so a tag added before the database change would have been stored
+unmarked for good with nobody any the wiser.
 
 Review caught two things before this went live, both of them at the new join
 between the two lists. The first: a photo tag was being kept in full when it

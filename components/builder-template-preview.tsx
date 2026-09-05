@@ -5993,6 +5993,9 @@ function MediaManagerPreview({
   const [projectCategories, setProjectCategories] = useState<string[]>([]);
   const [filters, setFilters] = useState<MediaFilters>(EMPTY_MEDIA_FILTERS);
   const [tagTarget, setTagTarget] = useState<MediaAsset | null>(null);
+  // Said inside the tag modal only, and cleared every time it opens — the
+  // shared status line renders behind the modal, where nobody would see it.
+  const [tagNotice, setTagNotice] = useState("");
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -6066,6 +6069,7 @@ function MediaManagerPreview({
     setTagDraft(Array.isArray(asset.tags) ? [...asset.tags] : []);
     setNewTag("");
     setErrorMsg("");
+    setTagNotice("");
     loadProjectTags();
   }
 
@@ -6096,6 +6100,15 @@ function MediaManagerPreview({
       if (!res.ok) throw new Error(readApiErrorMessage(d, "Failed to add tag."));
       const saved = (d?.tag ?? d?.data) as MediaTag | undefined;
       const name = normalizeMediaTag(saved?.tag || tag);
+      // The tag saved, but this site's tag list is not recording WHERE tags
+      // come from yet — the database column is still to be added. Said out
+      // loud because the alternative is a plain success on a tag that is
+      // stored unflagged for good, with nothing anywhere to show for it.
+      setTagNotice(
+        (d as { meta?: { sourceRecorded?: boolean } })?.meta?.sourceRecorded === false
+          ? `Tag "${name}" was added, but it is not recorded as coming from this admin — a Starcaster setup step is still outstanding.`
+          : ""
+      );
       setNewTag("");
       loadProjectTags();
       setTagDraft((prev) => (
@@ -6559,6 +6572,7 @@ function MediaManagerPreview({
               </button>
             </div>
 
+            {tagNotice ? <div className="builder-media-manager-status">{tagNotice}</div> : null}
             {errorMsg ? <div className="builder-media-manager-error">{errorMsg}</div> : null}
 
             <div className="builder-media-manager-confirm-actions">

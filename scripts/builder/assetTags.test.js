@@ -405,3 +405,146 @@ test('the two stores share one row cap, because they share one table', () => {
   assert.doesNotMatch(read('lib/assetTagsStore.js'), /limit=1000/);
   assert.match(read('lib/messagingTagsStore.js'), /Math\.min\(Number\(limit\) \|\| 5000, 5000\)/);
 });
+
+// ── Round 3: what the second review found ────────────────────────────────
+//
+// Four things, none of them the consolidation itself: a doc that still taught
+// the bug round 1 caused, a guarantee nothing delivered, a raw constraint dump
+// still reachable on the media side, and a button that could only ever fail.
+
+const { uniqueAuthoredTag, tagKey: messagingTagKey } = require('../../lib/messagingTagsStore');
+
+test('the Media Manager doc no longer teaches the round-1 bug', () => {
+  // docs/MEDIA_MANAGER.md said "runs EVERY tag through normalizeMessagingTag",
+  // which is the exact belief that put the coining rule on the read path and
+  // truncated media tags. The next reader who followed it would put it back.
+  const doc = read('docs/MEDIA_MANAGER.md');
+  assert.doesNotMatch(
+    doc,
+    /runs every tag through `normalizeMessagingTag`/i,
+    'the doc must not say the vocabulary applies to every tag'
+  );
+  assert.match(doc, /applies on CREATE in Messaging, and nowhere else/,
+    'it must say WHERE the vocabulary applies');
+  assert.match(doc, /not on\s+the way out of the table, and not on an update/i,
+    'and where it deliberately does not');
+});
+
+test('the API says when the origin flag did NOT land', () => {
+  // The store returned `sourceRecorded: false` and nothing read it, so the API
+  // answered a plain success. Between this shipping and Dane applying
+  // docs/SQL/messaging_tags_source.sql, every client-admin tag is stored
+  // unflagged — permanently, behind a 201 the caller cannot tell apart.
+  const route = read('routes/assets.js');
+  const start = route.indexOf("pathname === '/api/asset-tags' && requestMethod === 'POST'");
+  assert.ok(start > 0, 'the POST route must exist');
+  const body = route.slice(start, start + 2000);
+  assert.match(body, /result\.sourceRecorded === false/,
+    'the route must read the flag the store sets');
+  assert.match(body, /sourceRecorded: false/,
+    'and put it on the response');
+
+  // And the modal must render it, or surfacing it changed nothing anyone sees.
+  const ui = read('components/builder-template-preview.tsx');
+  assert.match(ui, /meta\?\.sourceRecorded === false/,
+    'the tag modal must read the flag off the response');
+  assert.match(ui, /\{tagNotice \? <div className="builder-media-manager-status">/,
+    'and render it INSIDE the modal — the shared status line sits behind it');
+});
+
+test('the media store translates a duplicate refusal too, not just Messaging', () => {
+  // createMessagingTag got isDuplicateTag in round 2 and createAssetTag did
+  // not, so once idx_messaging_tags_project_tag exists a create that loses the
+  // race against the pre-check dumps the constraint name into a tenant's modal
+  // — and breaks this store's own documented contract that add and reuse are
+  // one action.
+  const store = read('lib/assetTagsStore.js');
+  assert.match(store, /require\('\.\/messagingTagsStore'\)/,
+    'it must use the SAME predicate, not a second copy that can drift');
+  const start = store.indexOf('async function existingAfterDuplicate');
+  assert.ok(start > 0, 'the media store must have a duplicate path at all');
+  const body = store.slice(start, store.indexOf('async function createAssetTag'));
+  assert.match(body, /isDuplicateTag\(res\)/, 'narrow: only the uniqueness refusal');
+  assert.match(body, /findAssetTagByName/, 'it must look the winning row back up');
+  assert.match(body, /existed: true/, 'and hand it back as a reuse, like the pre-check does');
+  assert.match(body, /if \(!rows\.length\) return null/,
+    'an empty lookup is NOT a duplicate — return the refusal untouched');
+
+  // Both the flagged insert and the bare fallback insert have to go through it,
+  // or one of the two paths still dumps a constraint name.
+  const create = store.slice(store.indexOf('async function createAssetTag'),
+    store.indexOf('async function deleteAssetTag'));
+  assert.equal((create.match(/existingAfterDuplicate\(/g) || []).length, 2,
+    'both inserts in createAssetTag must be covered');
+});
+
+// ── Clone Tag could only ever fail on a three-word tag ────────────────────
+
+test('a clone of a three-word tag gets a name that is actually free', () => {
+  // "Clone Tag" sends "<tag> Copy". A messaging tag keeps at most three words,
+  // so the fourth is dropped and the clone comes out identical to its original
+  // — 409, every time, forever. No name the button could send would be free.
+  const taken = new Set(['center court north']);
+  const cloned = uniqueAuthoredTag('Center Court North', taken);
+  assert.equal(cloned, 'Center Court North2');
+  assert.notEqual(messagingTagKey(cloned), 'center court north');
+});
+
+test('a clone name survives the vocabulary unchanged, or it could collide again', () => {
+  // This is the property that makes a candidate safe to insert: authoredText
+  // must hand it straight back. A candidate the coining rule reshapes could be
+  // reshaped INTO a name that is taken.
+  const cases = [
+    ['Courts', new Set(['courts'])],
+    ['Courts Copy', new Set(['courts copy'])],
+    ['Center Court North', new Set(['center court north'])],
+    ['Center Court North2', new Set(['center court north2'])],
+  ];
+  for (const [base, taken] of cases) {
+    const candidate = uniqueAuthoredTag(base, taken);
+    assert.ok(candidate, `a free name must be found for "${base}"`);
+    assert.equal(authoredText(candidate), candidate,
+      `"${candidate}" must survive the messaging vocabulary unchanged`);
+    assert.ok(candidate.split(' ').length <= 3, `"${candidate}" must fit in three words`);
+  }
+});
+
+test('the counter climbs until it finds a gap, and gives up rather than looping', () => {
+  const taken = new Set(['courts copy', 'courts copy 2', 'courts copy 3']);
+  assert.equal(uniqueAuthoredTag('Courts Copy', taken), 'Courts Copy 4');
+
+  // A name that is not taken is returned untouched — no gratuitous numbering.
+  assert.equal(uniqueAuthoredTag('Courts Copy', new Set()), 'Courts Copy');
+
+  // Everything taken: return '' so the caller refuses with the ordinary
+  // sentence, rather than spinning or inserting a duplicate.
+  const all = new Set(['a b c']);
+  for (let n = 2; n <= 50; n += 1) all.add(`a b c${n}`);
+  assert.equal(uniqueAuthoredTag('A B C', all), '');
+  assert.equal(uniqueAuthoredTag('', new Set()), '');
+});
+
+test('only the clone asks to be numbered — the Add form still gets a sentence', () => {
+  // A duplicate typed into the Add form IS the admin's mistake, and silently
+  // numbering it would create a near-identical tag they did not ask for. The
+  // clone has no mistake in it, which is why it is the one that opts in.
+  const store = read('lib/messagingTagsStore.js');
+  const create = store.slice(store.indexOf('async function createMessagingTag'),
+    store.indexOf('async function getMessagingTag'));
+  assert.match(create, /input\?\.uniquify/, 'create must honour an explicit request to be numbered');
+  assert.match(create, /if \(!input\?\.uniquify\)[\s\S]{0,200}status: 409/,
+    'and refuse with 409 when it was not asked for');
+  assert.match(create, /uniqueAuthoredTag\(tag, taken\)/, 'the free name comes from the tested helper');
+  assert.match(create, /tag: finalTag/, 'and it is the name that gets INSERTED');
+
+  const ui = read('public/js/messaging.js');
+  const clone = ui.slice(ui.indexOf("'clone', 'Clone Tag'"), ui.indexOf("'delete', 'Delete Tag'"));
+  assert.match(clone, /uniquify: true/, 'Clone Tag must ask for a free name');
+  assert.match(clone, /cloned as "\$\{savedName\}"/,
+    'and report the name it actually got — it is not always the one asked for');
+
+  // The Add form must NOT opt in.
+  const addForm = ui.slice(ui.indexOf('async function submitTagCreate'),
+    ui.indexOf('async function submitTagCreate') + 1500);
+  assert.doesNotMatch(addForm, /uniquify/, 'the Add form keeps the 409');
+});
