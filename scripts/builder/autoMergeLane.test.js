@@ -41,6 +41,8 @@ const {
   mergesSince,
 } = require('./autoMergeLane');
 
+const { MACHINE_MARKER_LINE, stampMachineComment } = require('./machineComment');
+
 /**
  * Task 86bbkw2au — Lane A. Canon: vault doctrine/AUTO-MERGE-LANES.md.
  *
@@ -69,6 +71,13 @@ const comment = (text, { at = T0, user = 7, id } = {}) => ({
 });
 
 const fromDane = (text, at) => comment(text, { at, user: OPERATOR });
+/**
+ * A machine comment AS THE API HANDS IT BACK: stamped, and carrying Dane's own
+ * user id, because the loops post under his token. `comment(..., { user: 7 })`
+ * is not this shape and never was — which is exactly why every test passed
+ * while the lane cancelled real merges (task 86bbv8nvy).
+ */
+const fromMachine = (text, at) => comment(stampMachineComment(text), { at, user: OPERATOR });
 const prComment = (n, at) => comment(`PR opened: https://github.com/mentor24-maker/starcaster/pull/${n}`, { at });
 const reviewPass = (at) => comment('REVIEW: PASSED (checked out, gates green)', { at });
 const reviewFail = (at) => comment('REVIEW: sent back to Queued — the test does not fail when broken', { at });
@@ -512,12 +521,65 @@ test('only HIS comments object, and only ones inside the window', () => {
     status: 'Ready to launch', comments: machine, operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
   }).act, 'merge');
 
+  // AND THE SAME COMMENT AS IT REALLY ARRIVES — stamped, under Dane's own user
+  // id, because the loops post with his token (task 86bbv8nvy). The line above
+  // passes on a user id no machine comment actually carries, so it could never
+  // have caught this; this one is the assertion that fails without the filter.
+  const stamped = readyTicket({
+    extra: [armed(42, T0 + 10), fromMachine('[CC-starcaster] Review PASSED — gates green', T0 + 20)],
+  });
+  assert.equal(laneADecision({
+    status: 'Ready to launch', comments: stamped, operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
+  }).act, 'merge', 'a stamped machine comment under his token is the pipeline, not him');
+
   // His comment from BEFORE the announcement is not an objection to it — the
   // announcement came after and gave him a fresh hour.
   const before = readyTicket({ extra: [fromDane('looks good', T0 + 5), armed(42, T0 + 10)] });
   assert.equal(laneADecision({
     status: 'Ready to launch', comments: before, operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
   }).act, 'merge');
+});
+
+test('the machine filter narrows the objection test and nothing else', () => {
+  // Break-test 1 — drop `!isMachineComment(...)` from laneADecision and the
+  // stamped-comment assertion above turns into a cancel.
+  //
+  // Break-test 2 — make the filter swallow everything (`() => true`) and BOTH
+  // halves of this test fail: his plain word stops cancelling, and so does the
+  // comment nobody can classify. That is the direction that would merge
+  // something he objected to, so it gets its own named assertions.
+  const base = {
+    status: 'Ready to launch', operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
+  };
+
+  // His own word, in the window, unstamped: cancels, exactly as before.
+  const his = readyTicket({ extra: [armed(42, T0 + 10), fromDane('hold off on this one', T0 + 20)] });
+  const d = laneADecision({ ...base, comments: his });
+  assert.equal(d.act, 'cancel', 'his real comment must still cancel');
+  assert.match(d.reason, /you commented/);
+
+  // He QUOTES a machine card and adds his own words. The marker lands
+  // mid-text rather than last, so it reads as his — which is the direction
+  // machineComment.js chose on purpose, and it is the safe one here too.
+  const quoting = readyTicket({
+    extra: [armed(42, T0 + 10), fromDane(`${MACHINE_MARKER_LINE}\n\nwait, why is this merging?`, T0 + 20)],
+  });
+  assert.equal(laneADecision({ ...base, comments: quoting }).act, 'cancel',
+    'his words after a pasted marker are still his words');
+
+  // An UNCLASSIFIABLE comment under his id still objects. No stamp, no legacy
+  // prefix, nothing to recognise — so the lane must assume him and stop.
+  const unknown = readyTicket({ extra: [armed(42, T0 + 10), fromDane('?', T0 + 20)] });
+  assert.equal(laneADecision({ ...base, comments: unknown }).act, 'cancel',
+    'an unrecognised comment is still an objection — the asymmetry is preserved');
+
+  // An unreadable body is the same case: `isMachineComment(undefined)` is
+  // false by design, so it counts as his rather than being discounted.
+  const unreadable = readyTicket({
+    extra: [armed(42, T0 + 10), { id: '9001', date: String(T0 + 20), user: { id: OPERATOR } }],
+  });
+  assert.equal(laneADecision({ ...base, comments: unreadable }).act, 'cancel',
+    'a comment whose text could not be read is not proof a machine wrote it');
 });
 
 test('cancelling is terminal — no re-announcement without a FRESH review pass', () => {
