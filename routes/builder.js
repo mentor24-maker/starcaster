@@ -16,6 +16,77 @@ function deriveTemplateId(body, name, { unique = false } = {}) {
 }
 
 /**
+ * Build the createPage input for POST /api/builder/landing-pages.
+ *
+ * This is a WHITELIST, exactly like buildLandingPagePatch, and it fails the
+ * same silent way: a field the editor sends and this does not name is dropped
+ * here, the route still answers 201, and the setting reads back empty on the
+ * page that was just created. `pageTemplateId` was missing from this list from
+ * the day the field shipped -- the editor posted it on every create, the
+ * server never wrote it, and setting the template a SECOND time (a PATCH,
+ * which does name it) worked, so the bug looked like "the first save doesn't
+ * take".
+ *
+ * Split out of the handler so a test can hold it. A create input assembled
+ * inline inside a route is a list nothing can check.
+ */
+function buildLandingPageCreateInput(body, name) {
+  // Unconditional derivation is correct HERE, unlike the patch above. A new
+  // row needs some legacy template_id, and deriveTemplateId already returns
+  // body.templateId untouched when the caller states one -- so nothing the
+  // caller said is overwritten. The patch path has to refuse because it would
+  // rewrite an EXISTING template_id from the page's title on every save.
+  const templateId = deriveTemplateId(body, name, { unique: true });
+
+  return {
+    name,
+    templateKind: body.templateKind || body.template_kind,
+    templateId,
+    slug: body.slug,
+    isPublished: body.isPublished ?? body.is_published,
+    isPrivate: body.isPrivate ?? body.is_private,
+    searchPriority: body.searchPriority ?? body.search_priority,
+    primaryColor: String(body.primaryColor || '').trim(),
+    backgroundColor: String(body.backgroundColor || '').trim(),
+    accentColor: String(body.accentColor || '').trim(),
+    formId: String(body.formId || '').trim(),
+    leadMagnetId: String(body.leadMagnetId || '').trim(),
+    headlineId: String(body.headlineId || '').trim(),
+    pitchId: String(body.pitchId || '').trim(),
+    ctaId: String(body.ctaId || '').trim(),
+    websiteBannerImageId: String(body.websiteBannerImageId || '').trim(),
+    backgroundImageId: String(body.backgroundImageId || '').trim(),
+    featureImageId: String(body.featureImageId || '').trim(),
+    highlightImageId: String(body.highlightImageId || '').trim(),
+    featureHeadlineId: String(body.featureHeadlineId || '').trim(),
+    featureSubheadingId: String(body.featureSubheadingId || '').trim(),
+    featureTitle: String(body.featureTitle || '').trim(),
+    featureCopy: String(body.featureCopy || '').trim(),
+    highlightHeadlineId: String(body.highlightHeadlineId || '').trim(),
+    highlightPitchId: String(body.highlightPitchId || '').trim(),
+    highlightTitle: String(body.highlightTitle || '').trim(),
+    highlightCopy: String(body.highlightCopy || '').trim(),
+    bodyHeadlineId: String(body.bodyHeadlineId || '').trim(),
+    bodySubheadingId: String(body.bodySubheadingId || '').trim(),
+    bodyPitchId: String(body.bodyPitchId || '').trim(),
+    logoWideId: String(body.logoWideId || '').trim(),
+    logoSquareId: String(body.logoSquareId || '').trim(),
+    themeId: String(body.themeId || '').trim(),
+    // Which page template this page was created FROM -- distinct from
+    // templateId above, which is a legacy layout name. Empty is a real value
+    // ("no template"), and the store writes it as NULL, which is the state 93
+    // production pages were already in when the column was added.
+    pageTemplateId: String(body.pageTemplateId ?? body.page_template_id ?? '').trim(),
+    pageBackground: body.pageBackground || body.page_background,
+    theme: body.theme,
+    layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
+      ? (body.layoutSections || body.layout_sections)
+      : [],
+    contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
+  };
+}
+
+/**
  * Who is making this request, for the page-revision audit trail.
  *
  * The dispatcher puts a platform session on req.authUser, and a tenant
@@ -433,49 +504,8 @@ async function handle(req, res, pathname, method) {
     const name = String(body.name || '').trim();
 
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    const templateId = deriveTemplateId(body, name, { unique: true });
 
-    const result = await createPage({
-      name,
-      templateKind: body.templateKind || body.template_kind,
-      templateId,
-      slug: body.slug,
-      isPublished: body.isPublished ?? body.is_published,
-      isPrivate: body.isPrivate ?? body.is_private,
-      searchPriority: body.searchPriority ?? body.search_priority,
-      primaryColor: String(body.primaryColor || '').trim(),
-      backgroundColor: String(body.backgroundColor || '').trim(),
-      accentColor: String(body.accentColor || '').trim(),
-      formId: String(body.formId || '').trim(),
-      leadMagnetId: String(body.leadMagnetId || '').trim(),
-      headlineId: String(body.headlineId || '').trim(),
-      pitchId: String(body.pitchId || '').trim(),
-      ctaId: String(body.ctaId || '').trim(),
-      websiteBannerImageId: String(body.websiteBannerImageId || '').trim(),
-      backgroundImageId: String(body.backgroundImageId || '').trim(),
-      featureImageId: String(body.featureImageId || '').trim(),
-      highlightImageId: String(body.highlightImageId || '').trim(),
-      featureHeadlineId: String(body.featureHeadlineId || '').trim(),
-      featureSubheadingId: String(body.featureSubheadingId || '').trim(),
-      featureTitle: String(body.featureTitle || '').trim(),
-      featureCopy: String(body.featureCopy || '').trim(),
-      highlightHeadlineId: String(body.highlightHeadlineId || '').trim(),
-      highlightPitchId: String(body.highlightPitchId || '').trim(),
-      highlightTitle: String(body.highlightTitle || '').trim(),
-      highlightCopy: String(body.highlightCopy || '').trim(),
-      bodyHeadlineId: String(body.bodyHeadlineId || '').trim(),
-      bodySubheadingId: String(body.bodySubheadingId || '').trim(),
-      bodyPitchId: String(body.bodyPitchId || '').trim(),
-      logoWideId: String(body.logoWideId || '').trim(),
-      logoSquareId: String(body.logoSquareId || '').trim(),
-      themeId: String(body.themeId || '').trim(),
-      pageBackground: body.pageBackground || body.page_background,
-      theme: body.theme,
-      layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
-        ? (body.layoutSections || body.layout_sections)
-        : [],
-      contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
-    }, scope);
+    const result = await createPage(buildLandingPageCreateInput(body, name), scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create page'), true;
     return sendOk(res, 201, result.data, { page: result.data }), true;
   }
@@ -2233,6 +2263,8 @@ const manifest = {
   prefixes: ['/api/builder', '/api/develop'],
 };
 
-// buildLandingPagePatch is exported for the same reason it is dangerous: it
-// is a whitelist, and a field missing from it is dropped with a 200 OK.
-module.exports = { handle, manifest, buildLandingPagePatch };
+// Both whitelists are exported for the same reason they are dangerous: a field
+// missing from either one is dropped and the route still answers OK. The patch
+// list loses it on an update; the create list loses it on the page's very
+// first save, which reads as "the setting didn't take the first time".
+module.exports = { handle, manifest, buildLandingPagePatch, buildLandingPageCreateInput };

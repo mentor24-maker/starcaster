@@ -1,3 +1,25 @@
+## 2026-09-05 — A new page keeps the template you chose (#614)
+
+Making a brand new page in the Builder, you could pick a Template and a Theme,
+press Save, and be told it saved — and the Template would come back empty while
+the Theme stuck. Setting it a second time worked, so it looked like the first
+save just did not take.
+
+It was not the save. The part of the server that creates a page keeps a list of
+which fields it is allowed to store, and the template was never added to that
+list. The Builder was sending it every time; the server quietly dropped it and
+still answered "created". The Theme survived because the Theme was on the list,
+and the second attempt worked because editing an existing page runs through
+different code that does know about the field.
+
+The field is stored now. That list also moved out of the middle of the request
+handler into its own named piece of code with tests on it, because a list
+buried inside a route is one nothing can check — which is how a field went
+missing in the first place without anyone noticing. Two smaller things came
+with it: the Page Details panel now re-reads the template back off the saved
+page rather than showing what you typed, and a fallback deep in the storage
+code that could drop the template while reporting success now says out loud
+when it fires.
 ## 2026-09-05 — A main menu item now joins up with its dropdown instead of floating above it (#615)
 
 When you hover a top menu item that has a dropdown — "Pickleball", for
