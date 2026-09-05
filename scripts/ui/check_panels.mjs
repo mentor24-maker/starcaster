@@ -42,6 +42,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
+import { assertManagerRoom, countUncomparableManagers } from './lattice-room.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const { cannotTell, verdict, EXIT_FAIL, EXIT_CANNOT_TELL } = await import('./harness-exit.mjs');
@@ -491,6 +492,20 @@ function assertLattice(panels, width) {
 
     if (!allFields.length) continue;
 
+    /*
+     * THE OTHER HALF OF THE ROOM RULE — the track can also be too WIDE.
+     *
+     * Everything below this line compares fields to EACH OTHER, so a block
+     * whose every row shares the same wrong geometry agrees with itself
+     * perfectly, and a block rendering a single row has nothing to compare at
+     * all. Both were true of the Trigger panel on 2026-09-03, which is how two
+     * deliberate breaks of the defect PR #449 had just fixed came back green.
+     * This one is a property of the field set rather than a comparison, so it
+     * still bites at n=1. `scripts/ui/lattice-room.mjs` carries the mechanism
+     * and the measurements the ceiling was derived from.
+     */
+    failures.push(...assertManagerRoom(panel, width));
+
     // W0 is per COLUMN. A group that puts two label/field pairs on a row
     // (L6a — the Feature Cards manager) therefore has two columns inside it,
     // and each is held to the rule on its own. Bucketing is by the label's
@@ -789,6 +804,21 @@ const allFailures = [];
 let panelsSeen = 0;
 let cardsSeen = 0;
 let columnGridsSeen = 0;
+/*
+ * Declared managers that rendered a SINGLE label/field pair.
+ *
+ * Counted and reported, never failed. A one-row manager can be entirely
+ * correct — the Trigger block on any module that is not Confetti has exactly
+ * one row and there is nothing to seed that would give it a second — but the
+ * four comparative assertions (label widths, label-text offsets, field
+ * offsets, field widths) are all `new Set(...).length > 1` tests, so on such a
+ * block they cannot fail. Saying so is the difference between a count and a
+ * verdict, and on 2026-09-03 that difference cost a reviewer a round: a green
+ * run over the Trigger panel was reported as proof the layout was right when
+ * most of what the reader assumes was checked had never been able to fail
+ * (task 86bbufmdt).
+ */
+let uncomparableManagers = 0;
 
 for (const width of WIDTHS) {
   const { browser, page } = await launch({ width, height: 1400, headless: true });
@@ -806,6 +836,7 @@ for (const width of WIDTHS) {
     const panels = measure(page, NON_STRETCH);
     const measured = await panels;
     panelsSeen += measured.length;
+    uncomparableManagers += countUncomparableManagers(measured);
     allFailures.push(...assertLattice(measured, width));
     // W9 runs at every width on purpose: a ceiling is only interesting on the
     // wide end, and 1440 alone would let a 1600px-only overflow through.
@@ -869,6 +900,13 @@ if (code === EXIT_FAIL) {
       blind.map((b) => `  • ${b.split('\n')[0]}`).join('\n') + '\n'
     );
   }
+  if (uncomparableManagers) {
+    console.error(
+      `\nAlso: ${uncomparableManagers} declared manager(s) rendered a single label/field pair,\n`
+      + 'so the comparative assertions could not fail on them. There may be more problems\n'
+      + 'there that nothing above was able to see.\n'
+    );
+  }
   console.error(
     '\nW0: one label width and one field width per panel. The two numbers live in\n' +
     'src/css/_variables.css (--builder-field-label-w / --builder-field-control-w).\n' +
@@ -884,3 +922,20 @@ console.log(
   `[check:panels] OK — W0 and W9 hold across ${panelsSeen} panel(s) `
   + `and ${columnGridsSeen} titled-column manager(s) at ${WIDTHS.join('/')}px.`
 );
+
+/*
+ * WHAT THE COUNT ABOVE IS WORTH. A pass is only evidence about assertions that
+ * could have failed, and on a one-row manager four of the six cannot. Printed
+ * on every green run, not only when it is non-zero, so the reader is never
+ * left inferring it from silence.
+ */
+if (uncomparableManagers) {
+  console.log(
+    `[check:panels] NOTE — ${uncomparableManagers} declared manager(s) rendered a single `
+    + 'label/field pair, so the four comparative assertions (label widths, label-text\n'
+    + '  offsets, field offsets, field widths) had nothing to compare and could not fail on\n'
+    + '  them. The per-field assertions — label room floor and ceiling, the cropped-word\n'
+    + '  check, and control-right-of-label — did run. Seed a second row in\n'
+    + '  scripts/ui/seed_fixture.mjs if that block should be compared too.'
+  );
+}
