@@ -109,6 +109,7 @@ const {
 // what lives out here is the network and the file, nothing else.
 const {
   laneADecision, laneAEligibility, laneGate, killSwitchState, switchCommand,
+  nearMissResume, nearMissNotice, newNearMisses, ledgerAfterNearMiss,
   rateCapState, selfDisableState, announcementNotice, cancellationNotice,
   digestDue, digestBody, digestSince, WINDOW_MS,
   ledgerAfterMerge, ledgerAfterSwitch, ledgerAfterDisable, ledgerAfterLatchNag,
@@ -2162,6 +2163,11 @@ async function readBusSwitchSignals(channel) {
     return { readable: false, signals: [], why: 'the party line answered, but not in a shape this relay recognises as a message list' };
   }
   const signals = [];
+  // A message that ALMOST said resume. Collected here rather than in a second
+  // pass over the same list because the filters below — his id, and not a
+  // machine's words — are the same two, and a near-miss notice answering an
+  // agent's own post quoting the phrase would be the lane talking to itself.
+  const nearMisses = [];
   for (const m of messages) {
     // Only HIS words. An agent post quoting the phrase is a machine talking to
     // itself, and a bus full of agents discussing the kill switch would hold
@@ -2179,8 +2185,17 @@ async function readBusSwitchSignals(channel) {
     if (isMachineComment(body)) continue;
     const kind = switchCommand(body);
     if (kind) signals.push({ kind, at: Number(new Date(m.date ?? m.created_at ?? 0)) || 0, where: 'on the party line' });
+    const miss = nearMissResume(body);
+    if (miss) {
+      nearMisses.push({
+        id: String(m.id ?? m.message_id ?? ''),
+        at: Number(new Date(m.date ?? m.created_at ?? 0)) || 0,
+        where: 'on the party line',
+        saw: miss.saw,
+      });
+    }
   }
-  return { readable: true, signals };
+  return { readable: true, signals, nearMisses };
 }
 
 /** Is main's most recent build red? The second self-disable trigger (condition 4). */
@@ -4142,6 +4157,9 @@ if (cmd === 'whoami') {
   // is not final until every ticket has been through — so a lane that ran
   // inline would be judging a half-finished account of its own reliability.
   const laneSwitchSignals = [];
+  // Near misses seen this pass, from either surface. Answered once each, at
+  // the same place the switch is decided — see the block that posts them.
+  const laneNearMisses = [];
   const laneCandidates = [];
   // Every merge-step reading taken this pass, so the CANNOT TELL bound can be
   // counted after the loop, where the auto-merge ledger is read and written
@@ -4263,6 +4281,15 @@ if (cmd === 'whoami') {
       for (const c of fromOperator) {
         const kind = switchCommand(c.comment_text);
         if (kind) laneSwitchSignals.push({ kind, at: Number(c.date) || 0, where: `on task ${t.id}` });
+        const miss = nearMissResume(c.comment_text);
+        if (miss) {
+          laneNearMisses.push({
+            id: `comment-${c.id}`,
+            at: Number(c.date) || 0,
+            where: `on task ${t.id}`,
+            saw: miss.saw,
+          });
+        }
       }
 
       // Comments relayed on THIS run, for THIS task. This is the handback
@@ -4645,6 +4672,41 @@ if (cmd === 'whoami') {
     const readable = busSw.readable && led.ok;
     if (!busSw.readable) busSkipped.push(`the kill switch could not be read from the party line (${busSw.why}) — auto-merge is OFF this pass`);
     if (!led.ok) unchecked.push(led.why);
+
+    // A message that ALMOST said resume gets an answer. It changes nothing
+    // about the switch — it cannot, and must not — it only breaks the silence
+    // that made a near miss and an unread message the same event (task
+    // 86bbuv99r). Answered once each, remembered in the ledger, because this
+    // list is re-read every ten minutes for as long as the message is in view.
+    const nearMissCandidates = [...(busSw.nearMisses || []), ...laneNearMisses];
+    // An unreadable ledger cannot remember that a notice was sent, and
+    // `saveLedgerIfReadable` will refuse the write, so posting here would
+    // repeat the same notice every ten minutes for as long as the message
+    // stayed in view. Staying quiet is the lesser of those two — and the read
+    // failure itself is already in `unchecked` from the line above.
+    const freshNearMisses = led.ok
+      ? newNearMisses({ candidates: nearMissCandidates, ledger })
+      : [];
+    if (!led.ok && nearMissCandidates.length) {
+      unchecked.push(`${nearMissCandidates.length} message(s) nearly said "resume auto-merging" and could not be answered — the auto-merge ledger is unreadable, so there is no way to answer each one once`);
+    }
+    for (const miss of freshNearMisses) {
+      const line = nearMissNotice({ where: miss.where, saw: miss.saw });
+      if (dryRun) {
+        console.error(`  DRY RUN — would post to the bus: a near-miss notice for the message ${miss.where}`);
+        continue;
+      }
+      const posted = await postToBus(channel, line);
+      if (!posted.ok) {
+        // NOT recorded when the post failed, so the next pass tries again. The
+        // ledger stamp means "he was told", and stamping an undelivered notice
+        // would spend the one answer this message gets on nothing.
+        reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `a near-miss switch notice for the message ${miss.where} could not be posted (${posted.why}) — it will be tried again next pass` });
+        continue;
+      }
+      ledger = ledgerAfterNearMiss(ledger, [miss.id]);
+      console.error(`  NEAR MISS answered: a message ${miss.where} nearly said "resume auto-merging" and did not match`);
+    }
 
     const liveSignals = [...busSw.signals, ...laneSwitchSignals];
     // Remember a stop the moment it is seen. A pass only reads OPEN tickets,

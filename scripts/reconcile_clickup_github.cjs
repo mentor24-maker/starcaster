@@ -105,7 +105,21 @@ const {
   requestsMade,
 } = require('./lib/clickup.cjs');
 const { thisNode } = require('../lib/nodeRoles.js');
-const { findPullRequests } = require('./builder/mergeOnComment.js');
+// The merge path's own readers, never re-implemented here. `findPullRequests`
+// answers "which PR is this ticket's"; the four below answer "did Dane
+// authorize this merge, and when" — the same question the merge step asks, so
+// the reconciler cannot reach a more permissive answer than the step that
+// actually merges (86bbv05ay).
+const {
+  findPullRequests,
+  isMergeCommand,
+  isReviewVerdict,
+  normalizeCommand,
+  commentDate,
+} = require('./builder/mergeOnComment.js');
+// Every loop posts under Dane's token, so his user id alone does not prove he
+// wrote a comment. This is the other half of that test (86bbqx2xe).
+const { isMachineComment } = require('./builder/machineComment.js');
 // The Loop Queue's status ladder, defined ONCE (scripts/builder/loopStatuses.js).
 // This file used to hand-maintain its own name lists; see the comment on
 // CLAIMABLE_STATUSES below for what that cost.
@@ -126,6 +140,10 @@ const digest = require('../lib/pulseDigest.js');
 
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
+
+/** Dane's ClickUp user id — the same default and the same override every other
+ *  reader of his word uses (`stale_ready.mjs`, `pulse.cjs`). */
+const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
 
 // The status ladder, by ROLE — not a hand-copied name list per concern.
 // Auto-repair: the machine may move these on its own. Operator: only Dane
@@ -375,6 +393,184 @@ function reopenBlock({ comments, mergedAt }) {
       + 'closing it again would undo it every 30 minutes';
   }
   return null;
+}
+
+/**
+ * THE ONE PREDICATE: may this pass close a ticket that is parked on Dane?
+ *
+ * (2026-09-05, task 86bbv05ay.) The refusal above this — operator statuses are
+ * flagged, never moved — is right, and it was refusing on the STATUS ALONE.
+ * Status is not the question. The question is *does a decision of his still
+ * exist?*, and on 86bbugeda it did not: he commented `merge` at 8:15am, PR #596
+ * merged at 8:57am, and at 9:00am the ticket still sat in `Ready to launch`
+ * with nothing left for any human to decide. Moving that ticket does not bury a
+ * handoff. It COMPLETES one — the handoff was consumed by the merge.
+ *
+ * Three conditions, ALL of them, or nothing changes and today's flag stands:
+ *
+ *   1. The ticket is in `Ready to launch`. `Needs your input` is NEVER in
+ *      scope, in any case, ever — an unanswered question is the thing the
+ *      refusal exists for, and a merged PR does not answer it.
+ *   2. Its pull request is MERGED, with a merge time this pass can read. No
+ *      merge time means no ordering, and without ordering condition 3 cannot
+ *      be evaluated at all — so it is a cannot-tell, which is a refusal.
+ *   3. Dane's OWN merge command is on the ticket, and the merge came AFTER it.
+ *
+ * WHY IT IS ONE FUNCTION AND NOT THREE `if`s IN THE REPAIR PATH (AC1). This
+ * decides a destructive, unattended write — closing a ticket. A rule spread
+ * through a call path can only be tested by driving the whole path, which is
+ * how the near-misses go untested; a rule with a name can be handed the exact
+ * shape that must be refused. Every near-miss below is a test.
+ *
+ * HOW CONDITION 3 IS READ, AND THE THREE WAYS IT REFUSES.
+ *
+ *   - **By comment, never by status or assignee** (AC2). Status is what we are
+ *     already distrusting; an assignee says who was asked, not what he said.
+ *     The only evidence that an instruction exists is the instruction.
+ *   - **His user id, and not a machine wearing it.** Every loop posts under
+ *     Dane's own token, so `user.id === OPERATOR_ID` is true of comments no
+ *     human ever saw (`machineComment.js` carries that incident). Both halves
+ *     are required. A machine cannot authorize its own close.
+ *     The marker filter is REDUNDANT TODAY and kept deliberately: a stamped
+ *     comment is already rejected by the whole-comment rule below, because the
+ *     marker line means the comment is no longer only the word. Its test says
+ *     so out loud rather than posing as a break-test it cannot be. It stays
+ *     because this is the repo's one authorship test and every other reader of
+ *     his word applies it — being the single exception is how the next reader
+ *     concludes the id alone is enough.
+ *   - **The whole comment must BE the command.** `isMergeCommand` is the merge
+ *     path's own parser, so "do not merge this yet" is not an authorization
+ *     here for exactly the reason it is not one there. One definition of the
+ *     operator's word, not a second, looser one.
+ *
+ * AND IT MUST BE THIS ROUND'S WORD. A merge command that predates the newest
+ * review verdict authorized an EARLIER round — the merge step refuses it on
+ * that ground, and `liveApprovalAt` measures its clock the same way. Without
+ * this, a ticket approved in round 1, sent back, rebuilt, and merged under a
+ * new PR would be closed on a word he said about work that no longer exists.
+ * That is the "too permissive" failure the ticket names, and it would look
+ * exactly like the feature working.
+ *
+ * THE OLDEST QUALIFYING COMMAND WINS, not the newest — the same rule
+ * `liveApprovalAt` uses. If he says "merge", is ignored, and says it again,
+ * the instruction was given the first time, and the evidence line should say
+ * so rather than crediting the repeat he should not have had to type.
+ *
+ * @returns {{mayClose: boolean, why: string, approval: object|null}} — `why`
+ *   is written to be quoted, in both directions: on a refusal it is the reason
+ *   the flag reports, and on a pass it is the sentence the closure note keeps.
+ */
+function operatorCloseVerdict({ status, comments, mergedAt, operatorId = OPERATOR_ID }) {
+  const s = String(status || '').trim().toLowerCase();
+  if (s !== loopStatuses.READY_TO_LAUNCH) {
+    return {
+      mayClose: false,
+      why: `it sits in "${status}", not "${loopStatuses.DISPLAY[loopStatuses.READY_TO_LAUNCH]}" — `
+        + 'only that one status can hold an instruction a merge is able to complete',
+      approval: null,
+    };
+  }
+
+  const merged = Date.parse(mergedAt || '');
+  if (!Number.isFinite(merged)) {
+    return {
+      mayClose: false,
+      why: 'GitHub reports it merged but gave no merge time, so nothing here can tell whether his '
+        + 'instruction came before the merge or after it',
+      approval: null,
+    };
+  }
+
+  const all = Array.isArray(comments) ? comments : [];
+
+  // This round's line in the sand. 0 when the ticket carries no verdict at all,
+  // which lets a hand-shipped ticket qualify on his word alone.
+  const verdictAt = all
+    .filter((c) => isReviewVerdict(c && c.comment_text))
+    .reduce((newest, c) => Math.max(newest, commentDate(c)), 0);
+
+  const approvals = all
+    .filter((c) => Number(c && c.user && c.user.id) === Number(operatorId))
+    .filter((c) => !isMachineComment(c && c.comment_text))
+    .filter((c) => isMergeCommand(c && c.comment_text))
+    .filter((c) => commentDate(c) > 0)
+    .sort((a, b) => commentDate(a) - commentDate(b));
+
+  if (approvals.length === 0) {
+    return {
+      mayClose: false,
+      why: 'no merge command from Dane is on this ticket at all — a PR that merged by some other '
+        + 'route is exactly the case that wants a human eye',
+      approval: null,
+    };
+  }
+
+  const live = approvals.filter((c) => commentDate(c) >= verdictAt);
+  if (live.length === 0) {
+    return {
+      mayClose: false,
+      why: 'his merge command predates the newest review verdict on this ticket, so it authorized an '
+        + 'earlier round of the work and not the one that merged',
+      approval: null,
+    };
+  }
+
+  const carried = live.filter((c) => commentDate(c) <= merged);
+  if (carried.length === 0) {
+    const at = commentDate(live[0]);
+    return {
+      mayClose: false,
+      why: `his merge command (${new Date(at).toISOString()}) POSTDATES the merge `
+        + `(${new Date(merged).toISOString()}) — it is a word about what happens next, not the `
+        + 'instruction this merge carried out',
+      approval: null,
+    };
+  }
+
+  const authorization = carried[0];
+  const at = commentDate(authorization);
+  return {
+    mayClose: true,
+    why: `Dane commented "${normalizeCommand(authorization.comment_text)}" at `
+      + `${new Date(at).toISOString()}, and the merge (${new Date(merged).toISOString()}) carried it out`,
+    approval: {
+      id: String(authorization.id || ''),
+      at,
+      atIso: new Date(at).toISOString(),
+      text: normalizeCommand(authorization.comment_text),
+      mergedAt: new Date(merged).toISOString(),
+    },
+  };
+}
+
+/**
+ * The comment written before an AUTHORIZED close, and it is a different note
+ * from `closureNote` on purpose (AC4).
+ *
+ * `closureNote` answers "why was this ticket allowed to be closed by a
+ * machine?" with the trail and the merge. This one has to answer a harder
+ * question, because the status it is leaving is one only Dane moves a ticket
+ * out of: **whose instruction, when it was given, and which pull request
+ * carried it out.** All three, named, so the next reader of the ticket can
+ * check the claim rather than take it.
+ */
+function authorizedClosureNote({ prName, prUrl, approval }) {
+  return [
+    `Closed to ${TERMINAL_STATUS_TO_SET} by \`npm run reconcile\` on ${NODE_NAME}, on Dane's own instruction.`,
+    '',
+    `**Whose word:** Dane, who commented "${approval.text}" on this ticket at ${approval.atIso}.`,
+    `**What carried it out:** ${prName} — ${prUrl} — which GitHub reports MERGED at ${approval.mergedAt}, after that comment.`,
+    '',
+    'Nothing was left for anyone to decide here: the instruction was given, it was carried out, and '
+    + 'the work is on `main`. Leaving the ticket in an operator status would not have been holding a '
+    + 'hand-off open — it would have been hiding finished work off the deploy list.',
+    '',
+    'This is the ONLY case in which this job moves a ticket out of an operator status. A merged PR '
+    + 'with no merge command from Dane is still only flagged, and `Needs your input` is never moved '
+    + 'at all. If this close is wrong, the merge command above is not his — say so on this ticket.',
+    '',
+    '[machine] posted by the reconciler under Dane\'s token — not his word',
+  ].join('\n');
 }
 
 /** null means "could not tell" — never treated as a real answer. */
@@ -779,7 +975,60 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
           repaired.push(`[DRY RUN] ${label}: ${prName} merged${multi} — would move to ${TERMINAL_STATUS_TO_SET}`);
         }
       } else {
-        // Operator status: flag, never move — the operator owns the exit.
+        // Operator status. ALMOST always flag, never move — the operator owns
+        // the exit. The single exception is the one shape where his decision
+        // has already been made AND carried out: `Ready to launch`, a merged
+        // PR, and his own merge command predating the merge. `operatorCloseVerdict`
+        // is the whole rule (86bbv05ay); everything short of all three falls
+        // through to the flag below, unchanged.
+        const verdict = operatorCloseVerdict({
+          status: task.status?.status,
+          comments,
+          mergedAt: pr.mergedAt,
+        });
+        if (verdict.mayClose) {
+          if (isLive) {
+            // Same order as the auto-repair path above, for the same reason: an
+            // unexplained close is the failure, so a note that cannot be posted
+            // means the move does not happen.
+            const note = authorizedClosureNote({
+              prName,
+              prUrl: authoritative.url,
+              approval: verdict.approval,
+            });
+            try {
+              commentOn(task.id, note);
+            } catch (err) {
+              unchecked.push(
+                `${label}: ${prName} merged on Dane's own instruction, but the explanation comment could not `
+                + `be posted (${err.message}) — NOT moved to ${TERMINAL_STATUS_TO_SET}`
+              );
+              continue;
+            }
+            try {
+              // GUARDED (AC3). Reading the ticket, asking GitHub and posting the
+              // note all take time, and he may have moved it himself in that
+              // window — in which case it is his move that stands, not this one.
+              updateStatus(task.id, TERMINAL_STATUS_TO_SET, { ifStatus: task.status?.status });
+              onWrite();
+              repaired.push(
+                `${label}: ${prName} merged${multi} — moved to ${TERMINAL_STATUS_TO_SET} on Dane's own `
+                + `instruction (${verdict.why})`
+              );
+            } catch (err) {
+              unchecked.push(
+                `${label}: ${prName} merged on Dane's own instruction, but the guarded move did not take — `
+                + `${err.message} (if it changed status while this pass was reading, that is the guard working)`
+              );
+            }
+          } else {
+            repaired.push(
+              `[DRY RUN] ${label}: ${prName} merged${multi} — would move to ${TERMINAL_STATUS_TO_SET}, because `
+              + `${verdict.why}`
+            );
+          }
+          continue;
+        }
         //
         // AND SAY IT ON THE TICKET, not only on the bus (2026-09-03, task
         // 86bbtqpxd). This exact finding was made about ticket 86bbqw49y and
@@ -793,7 +1042,7 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
         await flag(
           flagKey('merged-operator', task.id, authoritative.number),
           `${label} sits in "${task.status?.status}" but ${prName} is already MERGED. ` +
-            `Only you move a task out of that status — moving it automatically would bury the handoff. Worth a look.`,
+            `Not moved automatically, because ${verdict.why}. Only you move a task out of that status. Worth a look.`,
           {
             repaired,
             unchecked,
@@ -811,6 +1060,9 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
                 + 'The work is on `main` and `main` auto-deploys, so it is live. Nothing further is going to happen '
                 + 'here on its own: only Dane moves a ticket out of an operator status, and the reconciler will not '
                 + 'do it for him — moving it automatically would bury whatever hand-off the status is holding.\n\n'
+                + `**Why this one was not closed automatically:** ${verdict.why}. (The reconciler does close a `
+                + '`Ready to launch` ticket by itself when Dane\'s own merge command is on it and the merge came '
+                + 'after — that instruction has already been carried out, so there is nothing left to bury.)\n\n'
                 + '**Dane** moves this to Live, or **an agent session** asks him to. Until one of those happens this '
                 + 'is finished work that does not appear on the deploy list.\n\n'
                 + '(Automatic — npm run reconcile. Posted once; it will not repeat while nothing changes.)',
@@ -1378,6 +1630,9 @@ module.exports = {
   ghPrState,
   AUTO_REPAIR_STATUSES,
   OPERATOR_STATUSES,
+  OPERATOR_ID,
+  operatorCloseVerdict,
+  authorizedClosureNote,
   CLAIMABLE_STATUSES,
   TERMINAL_STATUS_TO_SET,
   closureNote,
