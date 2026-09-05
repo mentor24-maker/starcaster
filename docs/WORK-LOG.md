@@ -1,3 +1,32 @@
+## 2026-09-04 — The safety wire's own numbers now say which machine they came from (#610)
+
+There is a safety wire in this repo that stops an agent from handing you a
+command to paste when it could have run the command itself. It is deliberately
+switched off for the unattended loops, because there is nobody at the other end
+of those to hand anything to — so it only fires in sessions started at a
+terminal.
+
+Two places explained that design by quoting a count of past sessions, and both
+described the count as covering "this project" and "the entire history". It
+covered neither. Claude keeps its session records on the machine that ran them,
+with no shared copy, so those numbers were the Mac Mini's records and nothing
+else. Re-taking the reading there today: 1,781 sessions, of which exactly one
+was started at a terminal — and that one is a loop you typed on 23 August that
+then ran on its own for eleven days.
+
+The number itself was never wrong. What was wrong was calling it "everything",
+because the Mini is the loop box and a loop is the only thing anyone ever starts
+at a terminal there. That reading cannot answer the question that matters, which
+is whether the wire fires in **your** sessions, on your laptop. It has already
+been answered wrongly once from exactly this gap: an earlier review pass read
+the Mini's numbers and concluded the wire never fires where you would see it.
+
+So both places now name the machine, carry the corrected figures, and say
+plainly that the answer for your own sessions is not known. Taking that
+measurement needs your laptop — this machine cannot reach it — and it is
+escalated on the ticket rather than guessed at. Nothing about how the wire
+behaves was changed.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
