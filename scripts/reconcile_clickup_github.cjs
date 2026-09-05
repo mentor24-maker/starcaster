@@ -106,6 +106,15 @@ const {
 } = require('./lib/clickup.cjs');
 const { thisNode } = require('../lib/nodeRoles.js');
 const { findPullRequests } = require('./builder/mergeOnComment.js');
+// The Loop Queue's status ladder, defined ONCE (scripts/builder/loopStatuses.js).
+// This file used to hand-maintain its own name lists; see the comment on
+// CLAIMABLE_STATUSES below for what that cost.
+const loopStatuses = require('./builder/loopStatuses.js');
+// Which ticket a PULL REQUEST names, defined once. The reverse of
+// `findPullRequests`, and deliberately the repo's existing reader rather than a
+// second regex here (the mis-attribution comment on PR_OPENED below is about
+// exactly that mistake, one direction over).
+const { findTicketIds } = require('./builder/clickupTicketLink.js');
 
 /** How many terminal tasks the leftover-PR scan looks at, most recent first.
  *  Bounded because the terminal set grows forever — see the scan below. */
@@ -122,13 +131,41 @@ const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 // Auto-repair: the machine may move these on its own. Operator: only Dane
 // moves a task out of these (two-account model), so the tool flags, never
 // moves. A merged PR is meaningful against BOTH; the difference is the action.
-const AUTO_REPAIR_STATUSES = new Set(['building', 'in review']);
+const AUTO_REPAIR_STATUSES = new Set(loopStatuses.IN_PROGRESS_STATUSES);
 
 /** Which machine is writing. Never thrown from: a name is a nicety, not a gate. */
 const NODE_NAME = (() => {
   try { return thisNode() || 'an unnamed machine'; } catch { return 'an unnamed machine'; }
 })();
-const OPERATOR_STATUSES = new Set(['needs your input', 'ready to launch']);
+const OPERATOR_STATUSES = new Set(loopStatuses.OPERATOR_HELD_STATUSES);
+
+/**
+ * THE THIRD SET, AND WHY IT DID NOT EXIST (2026-09-02, task 86bbt3wzk).
+ *
+ * `Queued` and `Rework` satisfied NEITHER `isInFlight` NOR `isTerminal`, so
+ * they fell out of both scans entirely. Not reported as drift, not reported as
+ * "could not check" — not reported at all. That is a false all-clear, the
+ * `if (error) continue` shape DOCTRINE 3.11 is about, and this tool's own
+ * closing line ("N could not check — not the same as clean") could not cover
+ * it because nothing ever landed in that bucket.
+ *
+ * The dangerous half is a CLAIMABLE ticket with an OPEN pull request: a status
+ * loop-build claims from, advertising as unstarted, over work that already
+ * exists. That is the 2026-08-20 two-sessions-one-epic collision arriving
+ * through a side door — the atomic claim cannot prevent a duplicate when the
+ * ticket itself says nobody has started. Found live on 86bbjt1b4 with PR #449
+ * already open and recorded on it, and `npm run reconcile` said
+ * "2 checked clean, 0 would repair/flag".
+ *
+ * ALL FOUR SETS ARE NOW DERIVED FROM `loopStatuses`, not hand-copied here.
+ * Three name lists that each had to be remembered when `Rework` was added on
+ * 2026-08-31 is precisely how a status came to belong to none of them, and a
+ * list nobody updated fails silently and in the direction of looking fine.
+ * `reconcileClickupGithub.test.js` pins the property that would have caught
+ * this on day one: every status in the ladder belongs to exactly one set.
+ */
+const CLAIMABLE_STATUSES = new Set(loopStatuses.CLAIMABLE_BY_BUILD);
+
 const TERMINAL_STATUS_TO_SET = 'Live';
 /**
  * WHICH PULL REQUEST IS THIS TICKET'S? Asked of `mergeOnComment`, never
@@ -259,11 +296,85 @@ function isInFlight(task) {
 
 /** Terminal from ClickUp's own status.type where present (so a future
  *  "Won't do" done-type status is terminal without being name-listed), with a
- *  name fallback for callers/tests that carry no type. */
+ *  name fallback for callers/tests that carry no type. The NAMES come from
+ *  `loopStatuses.TERMINAL_STATUSES` (decision D1: `live` is the only one), so
+ *  a fourth hand-kept list cannot drift from the other three. */
 function isTerminal(task) {
   const type = (task.status?.type || '').toLowerCase();
   if (type === 'closed' || type === 'done') return true;
-  return (task.status?.status || '').toLowerCase() === 'live';
+  return loopStatuses.TERMINAL_STATUSES.includes((task.status?.status || '').toLowerCase());
+}
+
+/** A status loop-build may CLAIM FROM — the set neither other scan could see. */
+function isClaimable(task) {
+  return CLAIMABLE_STATUSES.has((task.status?.status || '').toLowerCase());
+}
+
+/** Is this the send-back tier? Asked by name, from the one status module, so
+ *  the verdict split below cannot drift from what `Rework` means elsewhere. */
+function isReworkStatus(status) {
+  return String(status || '').trim().toLowerCase() === loopStatuses.REWORK;
+}
+
+/**
+ * When the ticket was last spoken on, in epoch ms — 0 when nothing on it
+ * carries a usable date.
+ *
+ * Load-bearing for the reopen guard below: ClickUp comment `date` arrives as
+ * a numeric string, and a comment with no readable date must not be allowed
+ * to read as "old", which would silently re-enable the close it exists to
+ * prevent.
+ */
+function newestCommentAt(comments) {
+  let newest = 0;
+  for (const c of Array.isArray(comments) ? comments : []) {
+    const n = Number(c && c.date);
+    if (Number.isFinite(n) && n > newest) newest = n;
+  }
+  return newest;
+}
+
+/**
+ * MAY this scan close a claimable ticket whose trail PR merged? `null` = yes;
+ * a string = no, and the string says why.
+ *
+ * WHY THIS GATE EXISTS (review round 1). Repair-to-Live used to be confined to
+ * `Building` / `In review`. Reaching `Queued` and `Rework` put it in direct
+ * conflict with the instruction its own `closureNote` gives the reader: "If
+ * that is wrong, the trail is wrong ... Reopen the ticket and say so on it."
+ * Reopening means moving the ticket into a claimable status — which is now
+ * precisely the set this scan closes, on the next `npm run repair` wake, every
+ * 30 minutes, with a fresh comment each time (repairs carry no suppression
+ * window; `alreadyFlagged` gates `flag()` only). Those two statuses were the
+ * safe harbour that made the note's own instruction work.
+ *
+ * The signal is the one the reopener leaves: a word on the ticket AFTER the
+ * work merged. Nothing that merges normally speaks after the merge — the
+ * `PR opened:` trail and any review notes all predate it — so this stays
+ * silent on the drift case it is meant to repair, and fires on the shape where
+ * a human (or the closure note plus a reply to it) has been there since.
+ *
+ * It reports rather than repairs, and it never flags: a bus alarm here would
+ * announce a deliberate act as a contradiction, which is fix 1's mistake in
+ * the other tier.
+ */
+function reopenBlock({ comments, mergedAt }) {
+  const merged = Date.parse(mergedAt || '');
+  if (!Number.isFinite(merged)) {
+    return 'GitHub reports it merged but gave no merge time, so nothing here can tell whether the ticket '
+      + 'was deliberately reopened after the merge';
+  }
+  const spoke = newestCommentAt(comments);
+  if (!spoke) {
+    return 'no comment on the ticket carries a readable date, so nothing here can tell whether it was '
+      + 'deliberately reopened after the merge';
+  }
+  if (spoke > merged) {
+    return `the newest comment on it (${new Date(spoke).toISOString()}) POSTDATES the merge `
+      + `(${new Date(merged).toISOString()}) — a reopen is exactly what the closure note asks for, and `
+      + 'closing it again would undo it every 30 minutes';
+  }
+  return null;
 }
 
 /** null means "could not tell" — never treated as a real answer. */
@@ -277,6 +388,123 @@ function ghPrState(owner, repoName, number) {
   } catch {
     return null;
   }
+}
+
+/**
+ * How many MERGED pull requests the claimable index reads, newest first.
+ *
+ * THE INDEX IS TWO QUERIES, NOT ONE, AND THE ASYMMETRY IS THE POINT.
+ *
+ * Open pull requests are fetched WITHOUT a limit, because that half is the
+ * dangerous one — a claimable ticket over a live PR is what lets one piece of
+ * work be built twice — and the set is small and stays small by construction:
+ * the work-in-progress cap exists to keep it so (five today, 5 measured
+ * 2026-09-04). Bounding a set that is already bounded would only add a way to
+ * miss the case this ticket is about.
+ *
+ * Merged pull requests are bounded, because that set grows forever — 607 in
+ * this repo on 2026-09-04. "An unbounded scan that grows forever is a job that
+ * quietly gets slower until someone notices it timing out" is TERMINAL_SCAN_MAX's
+ * reasoning, and it applies to the half that actually grows.
+ *
+ * AND THE BOUND REPORTS ITSELF PRECISELY, WHICH TOOK TWO TRIES. The first
+ * version said "the index hit its limit" whenever it read `limit` rows — which
+ * is true on every run for as long as the repo has that many merges, so an
+ * honest "could not check" line became wallpaper within one pass of being
+ * written. Reading `limit` rows is not a defect; it is only a defect if a
+ * ticket's answer lies outside the window. So the window's floor is carried
+ * with the index, and the report names the claimable tickets that PREDATE it —
+ * the only ones whose merged pull request could have been missed. Today that
+ * count is zero and the line stays silent, which is what a bound that is
+ * comfortably wide should do.
+ */
+const PR_INDEX_LIMIT = 400;
+
+/**
+ * Every pull request that could name a claimable ticket, with its body.
+ *
+ * `null` means the index could not be read — never an empty list, which would
+ * read as "no PR anywhere names a claimable ticket" and is exactly the
+ * confident wrong answer this whole ticket is about not inventing. If EITHER
+ * half fails, the whole index fails: half an index reported as a whole one is
+ * the same false all-clear one level down.
+ *
+ * Costs no ClickUp quota at all, which is the reason it is asked this way
+ * round (see `claimableCandidates`).
+ */
+function ghPrIndex(limit = PR_INDEX_LIMIT) {
+  const ask = (args) => {
+    const out = execFileSync(
+      'gh',
+      ['pr', 'list', ...args, '--json', 'number,state,body,url,mergedAt'],
+      { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 }
+    );
+    const list = JSON.parse(out);
+    if (!Array.isArray(list)) throw new Error('gh pr list did not return a list');
+    return list;
+  };
+  try {
+    // The open half is deliberately unlimited; `--limit` is required by gh, so
+    // it is set far above anything the WIP cap permits rather than left to
+    // gh's default of 30, which WOULD silently truncate.
+    const open = ask(['--state', 'open', '--limit', '1000']);
+    const merged = ask(['--state', 'merged', '--limit', String(limit)]);
+    const index = open.concat(merged);
+    // The floor of the merged window, and ONLY when the window was actually
+    // bounded. `null` means "this covers every merge there is", which is a
+    // different statement from "the oldest merge I read was on this date".
+    const truncated = merged.length >= limit;
+    const floor = truncated
+      ? merged.reduce((min, pr) => {
+        const at = Date.parse(pr?.mergedAt || '');
+        return Number.isFinite(at) && (min === null || at < min) ? at : min;
+      }, null)
+      : null;
+    Object.defineProperty(index, 'mergedWindowStart', { value: floor, enumerable: false });
+    return index;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ticket id -> the pull requests whose BODY names it, restricted to the ids
+ * asked about. Pure, so the index rule is break-testable on its own.
+ *
+ * WHY THE INDEX RUNS THIS WAY ROUND, AND WHAT IT COSTS (measured 2026-09-04).
+ * The obvious reading of this ticket is "read every claimable ticket's
+ * comments". There are 66 claimable tickets and the pass already makes 34
+ * ClickUp requests in 19 seconds; 66 more puts a watchdog that runs every 30
+ * minutes at ~100 requests inside one rolling minute, against ClickUp's ~100
+ * per minute — sharing that budget with the relay. The ticket said to measure
+ * before assuming it was free, and it is not.
+ *
+ * Asking GitHub instead costs ONE call and no ClickUp quota at all, and it is
+ * not a weaker question: `clickup pr-opened` REFUSES (exit 4) to write a
+ * `PR opened:` trail unless the PR body names the ticket — `prBodyCarriesTicket`
+ * in loopTrail.js, gated on `bodyNamesTicket`. So every trail-recorded PR
+ * carries its ticket's link BY CONSTRUCTION, and the reverse index sees all of
+ * them. It also sees one shape reading comments cannot: an open PR that names a
+ * claimable ticket whose trail was never written at all.
+ *
+ * The index only NOMINATES. Every verdict below is still decided by
+ * `findPullRequests` on the ticket's own trail plus a fresh `gh pr view` — the
+ * one definition of "this ticket's PR" (86bbuv66c). A body link is an index
+ * entry, never a safety decision, which is the same role it plays in
+ * `wipCap.classifyPrs`.
+ */
+function claimableCandidates(prs, claimableIds) {
+  const want = new Set([...(claimableIds || [])].map((id) => String(id || '').trim().toLowerCase()));
+  const byTicket = new Map();
+  for (const pr of Array.isArray(prs) ? prs : []) {
+    if (!pr || typeof pr !== 'object') continue;
+    for (const id of findTicketIds(pr.body)) {
+      if (!want.has(id)) continue;
+      if (!byTicket.has(id)) byTicket.set(id, []);
+      byTicket.get(id).push(pr);
+    }
+  }
+  return byTicket;
 }
 
 /** Distinct PR URLs in a comment list, in order (comments arrive oldest-first,
@@ -604,6 +832,261 @@ async function checkMergedTasks(tasks, clean, repaired, unchecked, deps = {}) {
 }
 
 /**
+ * THE THIRD SCAN: claimable tickets that already have work in flight.
+ *
+ * `Queued` and `Rework` are the statuses loop-build claims from, and until
+ * 2026-09-02 neither of the other two scans could see them (CLAIMABLE_STATUSES
+ * above carries the incident). Two contradictions live in that gap, and they
+ * want opposite treatment:
+ *
+ *   PR OPEN   -> FLAG, never move. A claimable ticket with a live pull request
+ *                means either the ticket is stale (it was already built) or the
+ *                PR is (it was abandoned), and only a reader can tell which.
+ *                Moving it either way would be guessing about work in flight.
+ *                This is the half that can cause a DUPLICATE BUILD, so it is
+ *                also written onto the ticket itself, where the next pass that
+ *                claims it cannot miss it — a bus line competes with everything
+ *                else in the room (86bbtqpxd).
+ *
+ *   PR MERGED -> REPAIR to Live, exactly as the in-flight scan does: the
+ *                explanation comment first, and no move if that comment cannot
+ *                be posted. The work is in production and `main` auto-deploys,
+ *                so a ticket left claimable is a ticket a loop may rebuild.
+ *
+ *   PR CLOSED unmerged -> CLEAN, and it is worth being explicit about why: an
+ *                abandoned branch under a claimable ticket is the system
+ *                working. The ticket IS the work still to do.
+ *
+ * @param {object} deps injectable, same shape as the other two scans.
+ */
+async function checkClaimableTasks(tasks, clean, repaired, unchecked, deps = {}) {
+  const {
+    prIndex = ghPrIndex,
+    getComments = getTaskCommentRecords,
+    prState = ghPrState,
+    updateStatus = moveTaskStatus,
+    postBus = postBusMessage,
+    commentOn = commentOnTask,
+    alreadyFlagged = null,
+    recordFlagged = () => {},
+    recordRaised = () => {},
+    recordExamined = () => {},
+    isLive = live,
+    now = Date.now(),
+    log = say,
+    onWrite = () => {},
+    indexLimit = PR_INDEX_LIMIT,
+  } = deps;
+
+  const claimable = tasks.filter(isClaimable);
+  log(`[reconcile] ${claimable.length} claimable task(s) (${[...CLAIMABLE_STATUSES].join(' / ')}) — the set neither other scan could see`);
+  if (claimable.length === 0) return;
+
+  const prs = prIndex(indexLimit);
+  if (!prs) {
+    // Never "clean". The index is the only thing that nominates candidates, so
+    // without it NOTHING in this set was checked — say exactly that.
+    unchecked.push(
+      `${claimable.length} claimable task(s): the pull request index could not be read `
+      + '(`gh pr list` failed) — cannot tell whether any of them already has work in flight'
+    );
+    return;
+  }
+  const candidates = claimableCandidates(prs, claimable.map((t) => t.id));
+  const notNominated = claimable.length - candidates.size;
+
+  // Only the MERGED half is bounded, so only it can miss anything — and it can
+  // only miss a ticket OLDER than the window it read. A ticket created after
+  // the oldest merge in the window cannot have a merged pull request outside
+  // it. `mergedWindowStart` is null when the window covered every merge there
+  // is, and absent on a hand-built index in a test; neither is a truncation.
+  const windowStart = typeof prs.mergedWindowStart === 'number' ? prs.mergedWindowStart : null;
+  if (windowStart !== null) {
+    const predating = claimable.filter((t) => !candidates.has(String(t.id).toLowerCase())
+      && Number(t.date_created || 0) > 0 && Number(t.date_created) < windowStart);
+    if (predating.length) {
+      unchecked.push(
+        `${predating.length} claimable task(s) are older than the ${indexLimit} merged pull requests read `
+        + `(the window starts ${new Date(windowStart).toISOString().slice(0, 10)}), so a pull request that `
+        + 'merged before then would not have been seen — raise PR_INDEX_LIMIT if this persists'
+      );
+    }
+  }
+  if (notNominated > 0) {
+    // The honest edge of the cheap index, stated once rather than as N lines.
+    // `pr-opened` refuses to write a trail unless the PR body names the ticket,
+    // so this can only bite a PR whose trail was written by hand, or one in
+    // another repo (the index is this repo's).
+    unchecked.push(
+      `${notNominated} claimable task(s): no pull request in this repo names them, so their comments were `
+      + 'not read directly — a trail written by hand against a PR whose body omits the ClickUp link, or a '
+      + 'PR in another repo, would be missed here'
+    );
+  }
+
+  for (const task of claimable) {
+    const nominated = candidates.get(String(task.id).toLowerCase());
+    if (!nominated) continue;
+
+    const status = task.status?.status || '';
+    const label = `task ${task.id} "${task.name}"`;
+    const nominatedBy = nominated.map((pr) => `#${pr.number}`).join(', ');
+
+    let comments;
+    try {
+      comments = await getComments(task.id);
+    } catch (err) {
+      unchecked.push(`${label}: claimable, and PR ${nominatedBy} names it, but its comments could not be read — ${err.message}`);
+      continue;
+    }
+
+    // The ticket's OWN trail decides, not the index that nominated it.
+    const trailPrs = findPullRequests(comments);
+    if (trailPrs.length === 0) {
+      unchecked.push(
+        `${label}: is "${status}" and PR ${nominatedBy} names it in the pull request body, but the ticket `
+        + 'carries no `PR opened:` trail — cannot confirm that PR is this ticket\'s work '
+        + '(`npm run clickup -- pr-opened` writes the trail)'
+      );
+      continue;
+    }
+
+    const authoritative = trailPrs[0];
+    const prName = `PR #${authoritative.number}`;
+    const pr = prState(authoritative.owner, authoritative.repo, authoritative.number);
+    if (!pr) {
+      unchecked.push(`${label}: claimable, but the state of ${prName} could not be read from GitHub`);
+      continue;
+    }
+    const multi = trailPrs.length > 1 ? ` (newest of ${trailPrs.length} trail PRs)` : '';
+    recordExamined(String(task.id));
+
+    if (pr.state === 'OPEN') {
+      // REWORK + AN OPEN PR IS THE HEALTHY STATE, NOT DRIFT (review round 1).
+      //
+      // `loop-build/SKILL.md`: "Rework is a send-back: a ticket that already
+      // has a branch, an open PR and review notes on it", and "A `Rework`
+      // ticket keeps its branch ... push to the SAME PR". So every ticket
+      // review has ever sent back wears exactly this shape, and the first
+      // version of this scan raised a bus alarm and a permanent ticket
+      // comment on all of them. The live dry run caught it doing so on
+      // 86bbrqa5j, a textbook two-round send-back with nothing wrong with it.
+      //
+      // The duplicate-build danger this scan exists to prevent is real for
+      // `Queued` — the ticket advertises as unstarted, which is what happened
+      // to 86bbjt1b4 — and does not exist for `Rework`: `build-start` exits 3
+      // on an existing branch and the next pass continues the same PR.
+      //
+      // An alarm that fires on a healthy state is the same defect as the
+      // truncation line that fired unconditionally, one section over: it is
+      // wallpaper within one pass of being written, and this one leaves a
+      // permanent comment on the ticket as well. So the tier decides the
+      // verdict. The MERGED half below is genuine drift for both tiers and is
+      // deliberately NOT split.
+      if (isReworkStatus(status)) {
+        clean.push(
+          `${label}: "${status}" with ${prName} still open${multi} — a send-back keeps its branch and its `
+          + 'PR, so that is the defined state of every ticket review hands back, not drift'
+        );
+        continue;
+      }
+      await flag(
+        flagKey('open-pr-under-claimable', task.id, authoritative.number),
+        `${label} is "${status}" — a status loop-build CLAIMS FROM — but its own ${prName} is still OPEN${multi}. `
+          + 'A loop can claim this ticket and build it a second time, on a second branch, against the first. '
+          + 'Either the ticket is stale (the work is already built) or the PR is (it was abandoned) — nothing '
+          + 'here can tell which, so nothing is moved.',
+        {
+          repaired,
+          unchecked,
+          postBus,
+          commentOn,
+          alreadyFlagged,
+          recordFlagged,
+          recordRaised,
+          isLive,
+          now,
+          what: `${label}: open PR under a claimable task`,
+          ticketComment: {
+            taskId: task.id,
+            text: `**This ticket is "${status}", which loop-build claims from — and ${prName} for it is still OPEN.**\n\n`
+              + `${authoritative.url}\n\n`
+              + 'That combination is what lets the same work get built twice, on two branches, against each other '
+              + '(2026-08-20). The atomic claim cannot prevent it: the ticket itself is advertising as unstarted.\n\n'
+              + '**Before building this, run `npm run clickup -- build-start --task ' + task.id + '`** — it will find '
+              + 'that pull request and tell you to continue it rather than open a second one. If the pull request is '
+              + 'the stale one, close it and say so here.\n\n'
+              + '(Automatic — npm run reconcile. Posted once; it will not repeat while nothing changes.)',
+          },
+        }
+      );
+      continue;
+    }
+
+    if (pr.state === 'MERGED') {
+      // THE TRAIL SAYS MERGED AND THE INDEX SAYS A PR IS STILL OPEN (review
+      // round 1, finding 3). `authoritative` is the ticket's own newest trail
+      // PR; `nominated` is every PR in this repo whose BODY names the ticket.
+      // If a nominating PR is OPEN while the trail's newest is merged, the
+      // trail is stale — a second round was built and `pr-opened` never wrote
+      // its line — and closing on the older merge buries work still in flight.
+      // That is the one thing this scan must never do, and the fact is already
+      // in hand: no extra call, just the array that nominated the ticket.
+      const stillOpen = nominated.filter((p) => String(p?.state || '').toUpperCase() === 'OPEN');
+      if (stillOpen.length) {
+        unchecked.push(
+          `${label}: its trail's newest PR ${prName} is MERGED, but ${stillOpen.map((p) => `#${p.number}`).join(', ')} `
+          + `names this ticket and is still OPEN — the trail and the index disagree about which pull request is `
+          + 'this ticket\'s current work, so nothing is moved (`npm run clickup -- pr-opened` writes the missing trail)'
+        );
+        continue;
+      }
+
+      // A DELIBERATE REOPEN IS NOT DRIFT (review round 1, finding 2).
+      const blocked = reopenBlock({ comments, mergedAt: pr.mergedAt });
+      if (blocked) {
+        unchecked.push(
+          `${label}: claimable ("${status}") while ${prName} is merged, but ${blocked} — NOT moved to `
+          + `${TERMINAL_STATUS_TO_SET}`
+        );
+        continue;
+      }
+
+      if (isLive) {
+        // Same order as the in-flight path, for the same reason: the record
+        // comes first and it GATES the move. An unexplained close is the
+        // failure (86bbuv66c), so writing the status anyway would be doing the
+        // damage on purpose.
+        const note = closureNote({ prName, prUrl: authoritative.url, mergedAt: pr.mergedAt });
+        try {
+          commentOn(task.id, note);
+        } catch (err) {
+          unchecked.push(
+            `${label}: claimable while ${prName} is merged, but the explanation comment could not be posted `
+            + `(${err.message}) — NOT moved to ${TERMINAL_STATUS_TO_SET}`
+          );
+          continue;
+        }
+        try {
+          updateStatus(task.id, TERMINAL_STATUS_TO_SET);
+          onWrite();
+          repaired.push(`${label}: claimable ("${status}") but ${prName} is merged${multi} — moved to ${TERMINAL_STATUS_TO_SET}`);
+        } catch (err) {
+          unchecked.push(`${label}: ${prName} merged, but could not move the task — ${err.message}`);
+        }
+      } else {
+        repaired.push(`[DRY RUN] ${label}: claimable ("${status}") but ${prName} is merged${multi} — would move to ${TERMINAL_STATUS_TO_SET}`);
+      }
+      continue;
+    }
+
+    // CLOSED without merging: the branch was abandoned and the ticket is
+    // legitimately back in the queue. Not drift.
+    clean.push(`${label}: "${status}" with ${prName} closed unmerged${multi} — abandoned branch, the ticket is the work still to do`);
+  }
+}
+
+/**
  * Post a contradiction — to the bus, and where the finding names one ticket,
  * onto that ticket. Dry run proposes.
  *
@@ -801,6 +1284,7 @@ async function main() {
   };
 
   await checkMergedTasks(tasks, clean, repaired, unchecked, deps);
+  await checkClaimableTasks(tasks, clean, repaired, unchecked, deps);
   await checkStampedBranches(tasks, clean, repaired, unchecked, deps);
 
   if (live) {
@@ -873,6 +1357,10 @@ if (require.main === module) {
 
 module.exports = {
   checkMergedTasks,
+  checkClaimableTasks,
+  claimableCandidates,
+  ghPrIndex,
+  PR_INDEX_LIMIT,
   deckVerdict,
   standDownReport,
   SWITCH_TIMEOUT_MS,
@@ -883,9 +1371,14 @@ module.exports = {
   REPOST_EVERY_MS,
   isInFlight,
   isTerminal,
+  isClaimable,
+  isReworkStatus,
+  newestCommentAt,
+  reopenBlock,
   ghPrState,
   AUTO_REPAIR_STATUSES,
   OPERATOR_STATUSES,
+  CLAIMABLE_STATUSES,
   TERMINAL_STATUS_TO_SET,
   closureNote,
 };

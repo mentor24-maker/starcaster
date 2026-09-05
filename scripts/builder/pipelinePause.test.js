@@ -1461,3 +1461,18 @@ test('both sweeping commands read ONE staleness threshold', () => {
   assert.equal((code.match(/strandedAfterMs \}\)/g) || []).length, 3,
     'and passed to all three sweep call sites (sweep, resume-running, resume-paused)');
 });
+
+/*
+ * A scheduled job stopping at the ClickUp reserve is not a failure and must
+ * not be reported as one. The door hands back a non-numeric status saying
+ * exactly what happened; coerced to a number it became `HTTP ?`, which is the
+ * shape of a message that sends its reader looking for a network fault
+ * (2026-09-04, task 86bbugd8j).
+ */
+test('a non-numeric status is printed as the reason it is, not as "HTTP ?"', () => {
+  const yielded = { res: { ok: false, status: 'YIELDED (the ClickUp reserve)' }, json: null, text: '' };
+  assert.equal(store.whyOf(yielded), 'YIELDED (the ClickUp reserve)');
+  // And an ordinary HTTP failure still reads the way it always did.
+  assert.equal(store.whyOf({ res: { ok: false, status: 503 } }), 'HTTP 503');
+  assert.equal(store.whyOf({ res: { ok: false, status: 0 } }), 'HTTP ?');
+});
