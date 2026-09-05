@@ -1,3 +1,27 @@
+## 2026-09-05 — The auto-merge lane mistook its own notes for Dane objecting (#618)
+
+There is a lane that merges the safest pull requests — the ones that only
+touch tests and documentation — by itself. It announces what it is about to
+do, waits an hour, and merges if nobody says anything. If Dane comments on
+the ticket during that hour, it stops: he is talking about it, so the machine
+does not act.
+
+The trouble is that the loops post their own notes to ClickUp using Dane's
+account, so every comment a script writes comes back looking as though he
+wrote it. The lane could not tell the two apart. A routine note from another
+part of the pipeline, landing during that hour, read as an objection — and
+the merge he had already approved was cancelled, with a message telling him
+he had commented on the ticket when he had not.
+
+It only ever failed in the harmless direction: it cancelled merges that
+should have gone through, never the reverse. But it blamed him for something
+he did not do, and it delayed work he had authorized.
+
+Machine notes now stamp themselves, and the lane reads that stamp. Only a
+comment it can positively identify as machine-written is ignored — anything
+it cannot classify still counts as Dane's word and still stops the merge, so
+the cautious half of the behaviour is untouched.
+
 ## 2026-09-05 — The panel layout checker could not fail on the panel it had just checked (#613)
 
 `check:panels` is the check that looks at the admin panels in a real browser
