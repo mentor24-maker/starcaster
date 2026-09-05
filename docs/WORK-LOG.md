@@ -26,6 +26,22 @@ the screen showed nothing at all. The message was being read a fraction of a
 second too late, after another part of the app had already wiped it off the
 address bar. Only opening the page in a real browser caught it.
 
+A review then caught what showing the real reason had opened up. That reason is
+whatever the platform last told us, and platforms do not always answer in
+sentences — when a gateway is having a bad day it answers with a whole web page
+of error markup, and one of ours passes that straight through. A client's card
+would have read "<!DOCTYPE html><html><head><title>502 Bad Gateway</title>…
+Reconnect to fix it." A real explanation still comes through word for word; one
+that is markup, or far too long to be a sentence, now falls back to the plain
+canned line instead. Wrong-but-readable beats a page of code every time.
+
+Two smaller things went in alongside it. If the list of accounts failed to load
+in the moment right after a client was turned down, the explanation was shown
+nowhere at all — and it had already been cleared off the address bar, so it was
+gone for good. It now appears at the top of the panel when there is no card to
+put it on. And the list of things the screen tidies out of the address bar had
+drifted out of step with what actually gets put there.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually

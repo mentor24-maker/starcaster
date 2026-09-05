@@ -117,6 +117,51 @@ function asSentence(text) {
 }
 
 /**
+ * The longest a recorded cause may be and still be a sentence on a card.
+ *
+ * Measured, not guessed. The longest prose the sweep itself composes is the
+ * identity-drift sentence with two full Bluesky handles in it — 189 characters
+ * ("This connection was saved as delray-beach-tennis-center.bsky.social and now
+ * authenticates as …"). The 409 branch then appends "(it was saved as X.)" to
+ * an adapter's own sentence, which is shorter. 300 clears every one of those
+ * with room to spare, and a raw gateway error page — the thing this exists to
+ * stop — is thousands.
+ */
+const MAX_CAUSE_LENGTH = 300;
+
+/**
+ * Is this recorded cause something a client can actually read off a card?
+ *
+ * `last_error` is not always prose. It is whatever `verifyResult.error` held,
+ * and two adapters demonstrably put machinery in there: `facebookPage.js` falls
+ * back to the ENTIRE raw response body when it is not JSON, which for a gateway
+ * 502 is an HTML page, and a client's card then reads
+ * "<!DOCTYPE html><html><head><title>502 Bad Gateway</title>… Reconnect to fix
+ * it." That is landmine 16 — internal text on a surface a client reads — and it
+ * is what sent this ticket back on 2026-09-05.
+ *
+ * The test is about what the text IS, not about what it says. Rewriting a cause
+ * we do not like would be substituting our wording for the platform's, which
+ * acceptance criterion 5 forbids; so a cause either comes through untouched or
+ * is dropped entirely for the generic line that already exists. There is no
+ * middle setting where we edit it.
+ *
+ * Two structural disqualifications, both of which real prose passes:
+ *   markup   — a tag or a doctype, which no sentence written for a client has
+ *   length   — longer than any sentence the sweep composes (see above)
+ */
+function readsAsClientProse(text) {
+  const trimmed = safeText(text).trim();
+  if (!trimmed) return false;
+  if (trimmed.length > MAX_CAUSE_LENGTH) return false;
+  // A doctype, or an opening/closing tag. Deliberately narrow: a bare "<" or a
+  // stray ">" is arithmetic or an arrow and appears in ordinary prose, so only
+  // "<" immediately followed by a letter, "/" or "!" counts as markup.
+  if (/<[a-zA-Z!/]/.test(trimmed)) return false;
+  return true;
+}
+
+/**
  * The sentence on an amber card, and where it comes from.
  *
  * The whole point of the verify sweep is that it learns WHY a connection
@@ -139,7 +184,10 @@ function attentionSentence(row) {
     return 'The stored permission is incomplete. Reconnect to fix it.';
   }
   const status = safeText(row?.status);
-  const cause = asSentence(row?.lastError);
+  // The fitness test runs on the STORED text, before asSentence capitalises it
+  // and closes it — dressing a 502 page as a sentence first and then measuring
+  // the result would be testing our own punctuation, not what was recorded.
+  const cause = readsAsClientProse(row?.lastError) ? asSentence(row?.lastError) : '';
   if (cause) {
     const action = ATTENTION_ACTIONS[status] || 'Reconnect to fix it.';
     return `${cause} ${action}`;
@@ -647,7 +695,9 @@ module.exports = {
   CARD_STATES,
   ATTENTION_REASONS,
   AUTH_KIND_FIELDS,
+  MAX_CAUSE_LENGTH,
   cardStateFor,
+  readsAsClientProse,
   attentionSentence,
   buildCards,
 };

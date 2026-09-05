@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   AppPasswordForm,
   CONNECT_PARAMS,
+  noticeForCard,
+  orphanNoticeFor,
   ConnectionCardRow,
   connectReturnMessage,
   disconnectConfirmMessage,
@@ -404,6 +406,71 @@ describe('A refused connect says why', () => {
     expect(CONNECT_PARAMS).toContain('connect_provider');
     expect(CONNECT_PARAMS).toContain('connect_oauth');
     expect(CONNECT_PARAMS).toContain('connect_code');
+    // `routes/engage.js:1642-1643` sets these two as well. The shell wipes the
+    // hash regardless, so leaving them off was tidiness rather than a bug — but
+    // this list is meant to BE what engage.js appends, and a list that has
+    // drifted cannot be read as a decision by whoever comes next.
+    expect(CONNECT_PARAMS).toContain('connect_account');
+    expect(CONNECT_PARAMS).toContain('connect_choose');
+  });
+});
+
+/**
+ * A return sentence is shown SOMEWHERE, always.
+ *
+ * From the 2026-09-05 send-back. The panel hid the orphan notice behind the
+ * same `!loadError` guard as the card list, so if `GET /api/connections` failed
+ * in the seconds after a refusal there was no card to carry the sentence and
+ * the panel-level fallback was suppressed too. It is gone for good at that
+ * point — the parameter was cleared off the URL before this decision is ever
+ * made — and the client is left on a screen that says nothing about the attempt
+ * they just made, which reads as the Connect button being broken.
+ */
+describe('Where the refusal sentence goes', () => {
+  const NOTICE = {
+    provider: 'instagram',
+    tone: 'error' as const,
+    sentence: 'Instagram could not be connected because this account is not linked to a Facebook Page.',
+  };
+  const CARDS = [{ provider: 'instagram' }, { provider: 'bluesky' }];
+  const LOADED = { loading: false, loadError: '' };
+
+  it('leaves it to the card when that card is on screen', () => {
+    expect(orphanNoticeFor(NOTICE, CARDS, LOADED)).toBe(null);
+    expect(noticeForCard(NOTICE, 'instagram')).toBe(NOTICE);
+    expect(noticeForCard(NOTICE, 'bluesky')).toBe(null);
+  });
+
+  it('shows it at panel level when the connections list failed to load', () => {
+    // The card list is hidden by `loadError`, so no card can carry it.
+    const shown = orphanNoticeFor(NOTICE, CARDS, {
+      loading: false,
+      loadError: 'Could not load your connections',
+    });
+    expect(shown).toBe(NOTICE);
+  });
+
+  it('shows it at panel level when no card matches the provider', () => {
+    expect(orphanNoticeFor(NOTICE, [{ provider: 'bluesky' }], LOADED)).toBe(NOTICE);
+    // A refusal that named no provider at all.
+    const nameless = { ...NOTICE, provider: '' };
+    expect(orphanNoticeFor(nameless, CARDS, LOADED)).toBe(nameless);
+  });
+
+  it('holds it back while the list is still loading, so it lands on its card', () => {
+    // Cards are empty mid-load; rendering it unattached here would make it jump
+    // to the card a moment later.
+    expect(orphanNoticeFor(NOTICE, [], { loading: true, loadError: '' })).toBe(null);
+  });
+
+  it('says nothing when there was no refusal', () => {
+    expect(orphanNoticeFor(null, CARDS, LOADED)).toBe(null);
+    expect(orphanNoticeFor(null, [], { loading: false, loadError: 'boom' })).toBe(null);
+  });
+
+  it('matches the card case-insensitively, as the redirect may change it', () => {
+    expect(orphanNoticeFor({ ...NOTICE, provider: 'instagram' }, [{ provider: 'Instagram' }], LOADED))
+      .toBe(null);
   });
 });
 

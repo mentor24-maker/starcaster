@@ -215,8 +215,73 @@ export function connectReturnMessage(read: (name: string) => string): ConnectNot
   return null;
 }
 
-/** Every parameter this screen consumes, cleared together once it has been read. */
-export const CONNECT_PARAMS = ['connect_oauth', 'connect_provider', 'connect_error', 'connect_notice', 'connect_code'];
+/**
+ * Every parameter this screen consumes, cleared together once it has been read.
+ *
+ * The list must match what `routes/engage.js` actually appends
+ * (`connectionsReturnUrl`, engage.js:1636-1644) — a parameter left off is one
+ * left on the URL. Harmless today, because the vanilla shell rewrites the hash
+ * to bare `#page=<id>` while it boots and drops every key regardless; the point
+ * is that this list stops being the thing that is true, and the next reader
+ * cannot tell which absences were decisions.
+ */
+export const CONNECT_PARAMS = [
+  'connect_oauth',
+  'connect_provider',
+  'connect_error',
+  'connect_notice',
+  'connect_code',
+  'connect_account',
+  'connect_choose',
+];
+
+/**
+ * Which card, if any, a return sentence belongs to.
+ *
+ * Matched case-insensitively because the parameter has been round-tripped
+ * through a provider's redirect, and a catalogue key is lower case.
+ */
+export function noticeForCard(
+  notice: ConnectNotice | null,
+  provider: string,
+): ConnectNotice | null {
+  if (!notice) return null;
+  return notice.provider === String(provider || '').toLowerCase() ? notice : null;
+}
+
+/**
+ * When the sentence has to be shown by the PANEL rather than by a card.
+ *
+ * The rule is that a return sentence is shown somewhere, always. By the time
+ * this is asked, the parameter has already been cleared off the URL — so a
+ * surface that declines to show it is the last word on the subject, and the
+ * client is returned to a screen that says nothing at all about the attempt
+ * they just made. An unexplained return reads as the button being broken
+ * (landmine 17).
+ *
+ * Three ways a card cannot carry it, and the third is the one that sent this
+ * ticket back on 2026-09-05:
+ *   - the refusal named no provider at all
+ *   - it named one that is not in the catalogue any more
+ *   - `GET /api/connections` FAILED, so there are no cards on screen to
+ *     attach it to. The panel used to hide the orphan notice behind the same
+ *     `!loadError` guard as the card list, which meant a load failing in the
+ *     seconds after a refusal swallowed the sentence permanently.
+ *
+ * Pure and given its inputs so a test can pin all three without a browser.
+ */
+export function orphanNoticeFor(
+  notice: ConnectNotice | null,
+  cards: Pick<ConnectionCard, 'provider'>[],
+  view: { loading: boolean; loadError: string },
+): ConnectNotice | null {
+  if (!notice) return null;
+  if (view.loading) return null;
+  // The cards are on screen only when the list actually loaded.
+  const cardsVisible = !view.loadError;
+  const carried = cardsVisible && cards.some((card) => noticeForCard(notice, card.provider));
+  return carried ? null : notice;
+}
 
 /**
  * The hash, as key/value pairs. Self-contained on purpose — see below.
@@ -685,17 +750,12 @@ export default function ConnectionsPanel(): JSX.Element {
     }
   };
 
-  // The sentence belongs to ONE card — the provider that was being connected.
-  // Matched case-insensitively because the parameter has been round-tripped
-  // through a provider's redirect, and a catalogue key is lower case.
+  // Both decisions are pure functions above, so a test pins them directly
+  // rather than through a rendered panel with a mocked fetch.
   const noticeFor = (card: ConnectionCard): ConnectNotice | null => (
-    connectNotice && connectNotice.provider === String(card.provider || '').toLowerCase()
-      ? connectNotice
-      : null
+    noticeForCard(connectNotice, card.provider)
   );
-  const orphanNotice = connectNotice && !cards.some((card) => noticeFor(card))
-    ? connectNotice
-    : null;
+  const orphanNotice = orphanNoticeFor(connectNotice, cards, { loading, loadError });
 
   return (
     <div ref={hostRef} className="connections-panel">
@@ -715,7 +775,7 @@ export default function ConnectionsPanel(): JSX.Element {
             showing it on a card and far better than swallowing it: an
             unexplained return to this screen reads as the button being broken
             (landmine 17). */}
-        {!loading && !loadError && orphanNotice && (
+        {!loading && orphanNotice && (
           <p
             className={`connections-panel-notice connections-card-notice-${orphanNotice.tone}`}
             data-notice-tone={orphanNotice.tone}
