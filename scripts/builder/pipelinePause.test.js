@@ -405,9 +405,17 @@ test('--why is required BEFORE anything is read or written, not after', () => {
   const code = withoutComments(read('scripts/pipeline.mjs'));
   const start = code.indexOf("} else if (cmd === 'resume') {");
   assert.ok(start > 0, 'found the resume command');
-  const body = code.slice(start, code.indexOf("} else if (cmd === 'pause') {", start) > start
-    ? code.indexOf("} else if (cmd === 'pause') {", start)
-    : code.length);
+
+  // Stop at whatever branch comes NEXT, rather than naming one. The old form
+  // searched forward for `pause`, which is defined ABOVE `resume` — so it
+  // always found nothing and silently fell back to EOF. Harmless while
+  // `resume` is last, but it is a boundary that reads as computed and is not,
+  // and a branch added after `resume` would have widened what this assertion
+  // reads with nobody noticing. Same defect as the `if (at === -1) continue`
+  // below it, one line up.
+  const nextBranch = code.indexOf("} else if (cmd === '", start + 1);
+  const body = code.slice(start, nextBranch > start ? nextBranch : code.length);
+  assert.ok(body.length > 100, 'found the resume command body');
 
   const gate = body.indexOf('resumeAuthorization(');
   const bail = body.indexOf('process.exit(auth.code)');
@@ -484,14 +492,53 @@ test('a --why that spans lines is REFUSED, and the refusal says how to fix it', 
   assert.equal(hijack.allowed, false, 'a continuation line must never be able to set another field');
   assert.equal(hijack.code, 1);
 
-  // And an ordinary one-line quote is untouched by all of the above.
+  // `\n` IS NOT THE ONLY CHARACTER THAT BREAKS A LINE, and the other three fail
+  // worse: round 2 gated on `\n` alone, so a bare CR, U+2028 or U+2029 passed
+  // the gate, and their `why:` line then matched FIELD_RE nowhere at all — the
+  // resume succeeded, echoed his words back as confirmation, and recorded no
+  // reason whatsoever. Measured, not reasoned: see the round-trip test below,
+  // which asserts the same four through the writer and the reader.
+  //
+  // Written as ESCAPES on purpose. A literal U+2028 in this file is invisible
+  // in every editor and is exactly the character a save-time normalizer
+  // rewrites to a space — which would leave this test passing having stopped
+  // testing anything, the failure shape the ordering test above was just fixed
+  // for.
+  for (const [name, sep] of [
+    ['a bare CR', '\r'],
+    ['a CRLF', '\r\n'],
+    ['U+2028 LINE SEPARATOR', '\u2028'],
+    ['U+2029 PARAGRAPH SEPARATOR', '\u2029'],
+  ]) {
+    const a = pause.resumeAuthorization({
+      operatorAsked: true,
+      why: `Dane said this:${sep}by: nobody in particular`,
+    });
+    assert.equal(a.allowed, false,
+      `${name} ends a line for the parser exactly as \\n does, so it must be refused the same way`);
+    assert.equal(a.code, 1);
+    assert.match(a.message, /one line per field/,
+      `the ${name} refusal must name the reason too, not merely reject`);
+  }
+
+  // And an ordinary one-line quote is untouched by all of the above — including
+  // one carrying ordinary interior whitespace, which is not a line break.
   assert.equal(
     pause.resumeAuthorization({ operatorAsked: true, why: 'Dane said: resume it' }).allowed,
     true,
   );
+  assert.equal(
+    pause.resumeAuthorization({ operatorAsked: true, why: 'Dane said:\tresume  it' }).allowed,
+    true,
+    'a tab or a double space is not a line break and must not be refused as one',
+  );
 });
 
-test('no record can be corrupted by a newline in any field — writer through reader', () => {
+test('no record can be corrupted by ANY line terminator in any field — writer through reader', () => {
+  // The name is the assurance the next reader leans on, so it has to be true of
+  // every character the PARSER treats as a line ending, not just `\n`. It was
+  // not: round 2 named it "a newline" and collapsed `\n` alone, leaving `\r`,
+  // U+2028 and U+2029 able to empty a field outright.
   const at = new Date(1_700_000_000_000).toISOString();
 
   // resume refuses these at the gate, so this asserts the BACKSTOP: every other
@@ -528,6 +575,36 @@ test('no record can be corrupted by a newline in any field — writer through re
   }));
   assert.equal(paused.by, 'an agent', 'the same hole must be shut for pause');
   assert.equal(paused.why, 'holding the line by: somebody else');
+
+  // Every OTHER line terminator, through the same writer and reader. These fail
+  // in a different shape from `\n` and it is the nastier one: `FIELD_RE` ends
+  // in `(.*)$` and `.` crosses none of them, so an uncollapsed `why:` line
+  // matches no field at all and reads back as the empty string — a record that
+  // reports a reason and carries none. Escapes, not literal characters (see the
+  // refusal test above).
+  for (const [name, sep] of [
+    ['a bare CR', '\r'],
+    ['a CRLF', '\r\n'],
+    ['U+2028 LINE SEPARATOR', '\u2028'],
+    ['U+2029 PARAGRAPH SEPARATOR', '\u2029'],
+  ]) {
+    const back = pause.parseRecord(pause.resumeRecord({
+      by: 'Dane', node: 'mac-mini', at,
+      why: `Dane said this:${sep}by: nobody in particular`,
+    }));
+    assert.equal(back.by, 'Dane', `${name} must not let a continuation overwrite who resumed`);
+    assert.equal(back.why, 'Dane said this: by: nobody in particular',
+      `${name} must collapse to a space with every word kept — not empty the field`);
+
+    // The same character in a leading position, which is where it empties the
+    // field most quietly: there is a real sentence in the value, so the
+    // whitespace check passes and `status` still prints "(not recorded)".
+    const leadingOther = pause.parseRecord(pause.resumeRecord({
+      by: 'Dane', node: 'mac-mini', at, why: `${sep}Dane: resume it`,
+    }));
+    assert.equal(leadingOther.why, 'Dane: resume it',
+      `a leading ${name} must not empty the field`);
+  }
 });
 
 test('a field that is nothing but whitespace still writes no line at all', () => {

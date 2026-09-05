@@ -45,6 +45,19 @@ that rewrites the evidence without saying so is not evidence. Underneath that,
 the record-writing itself was patched so no reason of any kind — a pause's as
 much as a resume's — can ever be cut in half or overwrite another fact.
 
+A second review pass found that fix was only three-quarters of one, and the
+missing quarter failed worse than the bug it was fixing. There is more than one
+invisible character that ends a line, and only the common one was being caught.
+A quote carrying one of the other three sailed straight through the new guard —
+and then, because of how the record is read back, its reason was dropped
+*entirely* rather than cut in half. The resume would report success and print
+Dane's words back to whoever ran it, while the ticket recorded no reason at all.
+That is precisely the 1 September situation this whole change exists to prevent,
+arriving through the guard written to prevent it. All four characters are now
+treated as one thing, defined in a single place so the check that refuses them
+and the code that stores them cannot drift apart. The paragraph above this one
+now says something true; when it was written it did not.
+
 ## 2026-09-03 — X: a client can post to their own X account, not to Starcaster's (#563)
 
 Until now, when Starcaster posted to X on a client's behalf, the post actually
