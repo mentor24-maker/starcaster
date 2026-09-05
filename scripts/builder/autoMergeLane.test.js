@@ -16,6 +16,11 @@ const {
   latestAutoMergeMarker,
   markerLine,
   switchCommand,
+  nearMissResume,
+  nearMissNotice,
+  NEAR_MISS_MEMORY,
+  newNearMisses,
+  ledgerAfterNearMiss,
   killSwitchState,
   SWITCH_STOP,
   SWITCH_RESUME,
@@ -257,6 +262,94 @@ test('stop is matched loosely, resume strictly — the asymmetry is deliberate',
     'a resume must be the whole message — a false resume costs an unwanted merge');
   assert.equal(switchCommand('merge'), null);
   assert.equal(switchCommand(''), null);
+});
+
+// ── A near miss says so, instead of matching nothing in silence (86bbuv99r) ──
+
+test('his real 11:11pm message is a near miss — it does NOT resume, and it is not silent', () => {
+  // The exact string ClickUp stored on 2026-09-03, and again on 2026-09-05.
+  const his = '**`resume auto-merging`**';
+  assert.equal(switchCommand(his), null, 'the strict matcher is unchanged — this must still not resume');
+  const miss = nearMissResume(his);
+  assert.ok(miss, 'and it must no longer be indistinguishable from silence');
+  assert.equal(miss.phrase, SWITCH_RESUME);
+
+  const notice = nearMissNotice({ where: 'on the party line', saw: miss.saw });
+  assert.match(notice, /did not take/i, 'it has to say plainly that nothing happened');
+  // The phrase is handed back PLAIN. The wrapper he copied came from an
+  // agent's own card; a notice that repeats it hands him another dud line.
+  assert.match(notice, /\n\nresume auto-merging\n/,
+    'the phrase must appear on its own line with no bold and no backticks');
+  // The echo above quotes HIM, wrapper and all — that is the evidence, and it
+  // is indented as a block so it reads as a quotation. What must be clean is
+  // the half he is being told to copy from.
+  const instruction = notice.slice(notice.indexOf('Type or paste exactly this line'));
+  assert.ok(!/[*`_]/.test(instruction.split('(Only "resume"')[0]),
+    'the line he is told to copy must carry no markdown at all');
+  assert.match(notice, /What came through, exactly as ClickUp stored it/,
+    'and he is shown what actually arrived, so the wrapper is visible as the cause');
+});
+
+test('a message that DID take gets no notice — resume and stop alike', () => {
+  assert.equal(nearMissResume('resume auto-merging'), null);
+  assert.equal(nearMissResume('`resume auto-merging`'), null, 'backticks already matched');
+  assert.equal(nearMissResume('Resume Auto Merging.'), null, 'so did case, spacing and a full stop');
+  assert.equal(nearMissResume('hey, stop auto-merging until I look at this'), null,
+    'the stop matcher is untouched, and a stop that took is not a near miss');
+});
+
+test('an unrelated message produces NO notice — the noise failure, pinned', () => {
+  // If this test ever fails, the fix has become worse than the silence it
+  // replaced: the party line is where every alarm lands.
+  for (const quiet of [
+    'merge',
+    'merge 599',
+    'looks good, ship it',
+    'why has nothing merged since 6:27pm?',
+    'resume the pipeline',
+    'auto-merging',
+    '',
+    null,
+  ]) {
+    assert.equal(nearMissResume(quiet), null, `must stay quiet about ${JSON.stringify(quiet)}`);
+  }
+});
+
+test('a near miss is answered ONCE, not once per pass', () => {
+  const candidates = [{ id: 'msg-1', where: 'on the party line', saw: 'x' }];
+  let ledger = asLedger(null);
+
+  const first = newNearMisses({ candidates, ledger });
+  assert.equal(first.length, 1, 'the first pass answers it');
+
+  ledger = ledgerAfterNearMiss(ledger, ['msg-1']);
+  assert.deepEqual(newNearMisses({ candidates, ledger }), [],
+    'every pass after that stays quiet — the message is still in view, and it is not news twice');
+
+  // A SECOND near miss from him is news again, even with identical text.
+  const again = newNearMisses({ candidates: [...candidates, { id: 'msg-2', saw: 'x' }], ledger });
+  assert.equal(again.length, 1);
+  assert.equal(again[0].id, 'msg-2', 'dedup is by message id, never by text');
+});
+
+test('a near miss with no id is not answered — it could not be remembered', () => {
+  assert.deepEqual(newNearMisses({ candidates: [{ where: 'on the party line' }], ledger: null }), [],
+    'answering something we cannot record would repeat forever');
+  assert.deepEqual(newNearMisses({ candidates: [{ id: 'a' }, { id: 'a' }], ledger: null }).length, 1,
+    'and the same id twice in one pass is one answer');
+});
+
+test('the answered-near-miss memory survives a round trip and stays bounded', () => {
+  const ids = Array.from({ length: NEAR_MISS_MEMORY + 20 }, (_, i) => `m${i}`);
+  let ledger = asLedger(null);
+  for (const id of ids) ledger = ledgerAfterNearMiss(ledger, [id]);
+  assert.equal(ledger.nearMisses.length, NEAR_MISS_MEMORY, 'the file stays a file');
+  assert.equal(ledger.nearMisses[ledger.nearMisses.length - 1], `m${ids.length - 1}`, 'newest kept');
+
+  const reread = asLedger(JSON.parse(JSON.stringify(ledger)));
+  assert.deepEqual(reread.nearMisses, ledger.nearMisses, 'and it comes back off disk intact');
+  // The whitelist in asLedger is why this key has to be named there at all.
+  assert.deepEqual(asLedger({ nearMisses: 'not an array' }).nearMisses, []);
 });
 
 test('an UNREADABLE switch means OFF — the fail-safe direction', () => {

@@ -78,6 +78,29 @@ const LEGACY_MACHINE_PREFIXES = [
 ];
 
 /**
+ * The same idea as the list above, but matching the FAMILY rather than the
+ * exact strings — because the list could only ever hold the signatures
+ * somebody had already thought of.
+ *
+ * Found by rehearsal, 2026-09-05 (task 86bbuv99r). The party line carries
+ * `[CC-starcaster loop-build]`, `[CC-starcaster loop-review]` and
+ * `[reconciler]` many times a day, and not one of them matched: the exact
+ * string `[CC-starcaster]` does not prefix `[CC-starcaster loop-build]`, and
+ * `[reconciler]` was never listed at all. Every one of those posts was
+ * therefore being read as DANE'S OWN WORDS on the channel where the kill
+ * switch is read — which is task 86bbt038u's failure exactly, still live in
+ * the half of it that enumerated signatures instead of describing them.
+ *
+ * Still tight: the tag must be the very first thing in the message, inside
+ * brackets, and its first token must name a machine sender. Nothing Dane
+ * types starts that way — his messages on the bus are prose.
+ */
+// NOT `machine` — the [machine] marker is deliberately honoured only on the
+// LAST non-empty line (a body that OPENS with it is a person quoting one), and
+// putting it in this head-anchored family quietly repealed that rule.
+const MACHINE_TAG = /^\[\s*(cc-[a-z0-9-]+|bus-relay|auto-merge|reconciler)\b[^\]]*\]/i;
+
+/**
  * Undo the editor's markdown escaping before matching a prefix.
  *
  * ClickUp's CHAT api hands back "\\[CC-starcaster bus-relay\\] ..." — it escapes
@@ -118,7 +141,8 @@ function isMachineComment(text) {
   if (!s.trim()) return false;
   if (lastNonEmptyLine(s).startsWith(MACHINE_MARKER)) return true;
   const head = s.trimStart();
-  return LEGACY_MACHINE_PREFIXES.some((p) => head.startsWith(p));
+  if (LEGACY_MACHINE_PREFIXES.some((p) => head.startsWith(p))) return true;
+  return MACHINE_TAG.test(head);
 }
 
 /**
@@ -197,6 +221,7 @@ module.exports = {
   MACHINE_MARKER,
   MACHINE_MARKER_LINE,
   LEGACY_MACHINE_PREFIXES,
+  MACHINE_TAG,
   isMachineComment,
   stampMachineComment,
   stampMachineCommentBlocks,

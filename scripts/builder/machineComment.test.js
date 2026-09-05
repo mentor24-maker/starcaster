@@ -197,6 +197,34 @@ test('the other agents posting to the same party line under his token', () => {
   assert.equal(isMachineComment('\\[CC-starcaster\\] Review PASSED'), true);
 });
 
+test('a signature the list never thought of is still a machine — the family, not the string', () => {
+  // Found by rehearsal on 2026-09-05 (task 86bbuv99r): all three of these are
+  // posted to the party line many times a day and NONE of them matched, so
+  // every one was being read as Dane's own words on the channel the kill
+  // switch is read from. The exact string "[CC-starcaster]" is not a prefix
+  // of "[CC-starcaster loop-build]", and "[reconciler]" was never listed.
+  assert.equal(isMachineComment('[CC-starcaster loop-build] built 86bbuv99r'), true);
+  assert.equal(isMachineComment('[CC-starcaster loop-review] PASS — 86bbuv9jt, PR #616'), true);
+  assert.equal(isMachineComment('[reconciler] branch `x` is still on this Mac'), true);
+  assert.equal(isMachineComment('\\[CC-starcaster loop-build\\] built 86bbuv99r'), true,
+    'and in the escaped form the chat api actually returns');
+  assert.equal(isMachineComment('[CC-normie build] anything'), true, 'any CC- sibling repo');
+  // NOT the [machine] marker — that one is honoured on the LAST line only, and
+  // adding it to this head-anchored family silently repealed that rule when
+  // this test was first written. The test above it caught it.
+  assert.equal(isMachineComment(`${MACHINE_MARKER_LINE}\n\nbut then he typed more`), false);
+});
+
+test('a bracket Dane typed himself is NOT a machine tag', () => {
+  // The whole risk of matching a family rather than a list. His messages are
+  // prose; the tag has to be the first thing in the message AND name a sender.
+  assert.equal(isMachineComment('[monday] lets merge 599'), false);
+  assert.equal(isMachineComment('[note to self] stop auto-merging tonight'), false);
+  assert.equal(isMachineComment('resume auto-merging'), false);
+  assert.equal(isMachineComment('I read the [CC-starcaster bus-relay] post and disagree'), false,
+    'a tag QUOTED mid-sentence is him talking about a machine, not a machine talking');
+});
+
 test('HIS OWN WORDS ARE STILL HIS — unescaping must not swallow the operator', () => {
   // The exact message the switch was supposed to read on 2026-09-01.
   assert.equal(isMachineComment('```cpp\nresume auto-merging\n```'), false);
