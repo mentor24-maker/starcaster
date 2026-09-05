@@ -42,7 +42,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
-import { assertManagerRoom, countUncomparableManagers } from './lattice-room.mjs';
+import { assertManagerRoom, bucketFields, findUncomparableManagers } from './lattice-room.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const { cannotTell, verdict, EXIT_FAIL, EXIT_CANNOT_TELL } = await import('./harness-exit.mjs');
@@ -513,11 +513,7 @@ function assertLattice(panels, width) {
     // stays one bucket, so a genuine stagger still fails rather than being
     // explained away as a second column.
     const declared = panel.pairs || 1;
-    const buckets = declared > 1
-      ? [...new Map(allFields.map((f) => [f.labelBoxX, null])).keys()]
-        .sort((a, b) => a - b)
-        .map((x) => allFields.filter((f) => f.labelBoxX === x))
-      : [allFields];
+    const buckets = bucketFields(panel);
 
     if (declared > 1 && buckets.length > declared) {
       failures.push(
@@ -817,8 +813,15 @@ let columnGridsSeen = 0;
  * run over the Trigger panel was reported as proof the layout was right when
  * most of what the reader assumes was checked had never been able to fail
  * (task 86bbufmdt).
+ *
+ * PER PAIR-COLUMN and KEYED, both learned in review round 1 of that same
+ * ticket. Per column because the comparative assertions run inside the bucket
+ * loop, so a two-column manager holding one item has every one of them vacuous
+ * while its group-wide field count looks like a comparable 2. Keyed because
+ * the first version added the per-width count three times and printed 9 for
+ * 3 real blocks.
  */
-let uncomparableManagers = 0;
+const uncomparableManagers = new Map();   // stable key -> the widths it was seen at
 
 for (const width of WIDTHS) {
   const { browser, page } = await launch({ width, height: 1400, headless: true });
@@ -836,7 +839,14 @@ for (const width of WIDTHS) {
     const panels = measure(page, NON_STRETCH);
     const measured = await panels;
     panelsSeen += measured.length;
-    uncomparableManagers += countUncomparableManagers(measured);
+    for (const u of findUncomparableManagers(measured)) {
+      // Keyed, not summed. Adding the per-width count over three widths
+      // printed "9 declared manager(s)" for 3 real blocks — three times the
+      // truth, on the one ticket whose acceptance criterion is that a count
+      // must not read as a verdict (review round 1, 2026-09-05).
+      if (!uncomparableManagers.has(u.key)) uncomparableManagers.set(u.key, { label: u.label, widths: [] });
+      uncomparableManagers.get(u.key).widths.push(width);
+    }
     allFailures.push(...assertLattice(measured, width));
     // W9 runs at every width on purpose: a ceiling is only interesting on the
     // wide end, and 1440 alone would let a 1600px-only overflow through.
@@ -888,6 +898,35 @@ if (panelsSeen === 0) {
  * wrong whatever else about the run was hollow, which is the ranking
  * `verdict()` encodes.
  */
+/*
+ * WHAT A PASS OVER A DECLARED MANAGER IS WORTH — printed on EVERY run, green
+ * or red, including when the number is zero.
+ *
+ * Round 1 of this ticket wrote "printed on every green run, not only when it
+ * is non-zero, so the reader is never left inferring it from silence" directly
+ * above an `if (uncomparableManagers)`, which printed nothing at zero — the
+ * exact silence the comment claimed to have removed. A comment that describes
+ * the opposite of its code is worse than no comment, because it is read as
+ * evidence. Zero now says so out loud.
+ */
+function uncomparableNote() {
+  if (!uncomparableManagers.size) {
+    return '[check:panels] NOTE — every declared item manager rendered at least two label/field\n'
+      + '  pairs in every pair-column, so the four comparative assertions (label widths,\n'
+      + '  label-text offsets, field offsets, field widths) were live on all of them.';
+  }
+  const rows = [...uncomparableManagers.values()]
+    .map((u) => `      · ${u.label} (at ${u.widths.join('/')}px)`)
+    .join('\n');
+  return `[check:panels] NOTE — ${uncomparableManagers.size} declared pair-column(s) rendered a single\n`
+    + '  label/field pair, so the four comparative assertions (label widths, label-text\n'
+    + '  offsets, field offsets, field widths) had nothing to compare and could not fail on\n'
+    + '  them. The per-field assertions — the label-room floor and ceiling, the cropped-word\n'
+    + '  check, and control-right-of-label — did run. Seed a second row in\n'
+    + '  scripts/ui/seed_fixture.mjs if these should be compared too:\n'
+    + rows;
+}
+
 const code = verdict({ failures: allFailures.length, blind: blind.length });
 
 if (code === EXIT_FAIL) {
@@ -900,13 +939,7 @@ if (code === EXIT_FAIL) {
       blind.map((b) => `  • ${b.split('\n')[0]}`).join('\n') + '\n'
     );
   }
-  if (uncomparableManagers) {
-    console.error(
-      `\nAlso: ${uncomparableManagers} declared manager(s) rendered a single label/field pair,\n`
-      + 'so the comparative assertions could not fail on them. There may be more problems\n'
-      + 'there that nothing above was able to see.\n'
-    );
-  }
+  console.error(`\n${uncomparableNote()}\n`);
   console.error(
     '\nW0: one label width and one field width per panel. The two numbers live in\n' +
     'src/css/_variables.css (--builder-field-label-w / --builder-field-control-w).\n' +
@@ -923,19 +956,4 @@ console.log(
   + `and ${columnGridsSeen} titled-column manager(s) at ${WIDTHS.join('/')}px.`
 );
 
-/*
- * WHAT THE COUNT ABOVE IS WORTH. A pass is only evidence about assertions that
- * could have failed, and on a one-row manager four of the six cannot. Printed
- * on every green run, not only when it is non-zero, so the reader is never
- * left inferring it from silence.
- */
-if (uncomparableManagers) {
-  console.log(
-    `[check:panels] NOTE — ${uncomparableManagers} declared manager(s) rendered a single `
-    + 'label/field pair, so the four comparative assertions (label widths, label-text\n'
-    + '  offsets, field offsets, field widths) had nothing to compare and could not fail on\n'
-    + '  them. The per-field assertions — label room floor and ceiling, the cropped-word\n'
-    + '  check, and control-right-of-label — did run. Seed a second row in\n'
-    + '  scripts/ui/seed_fixture.mjs if that block should be compared too.'
-  );
-}
+console.log(uncomparableNote());

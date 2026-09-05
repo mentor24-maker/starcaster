@@ -206,9 +206,30 @@ as a rule first, then gets a checker where one is possible.
     `shared.length > 1` before it is measured at all — but the declared-
     manager list carried no such guard. The ceiling is a property of one
     field set rather than a comparison, so it bites at n=1; and the harness
-    now **prints how many declared managers rendered a single pair**, on
-    green runs as well as red, so the count in the closing line can never
-    again be read as a verdict over assertions that had nothing to compare.
+    now **prints how many declared pair-columns rendered a single pair**, on
+    green runs as well as red — including when the number is zero — so the
+    count in the closing line can never again be read as a verdict over
+    assertions that had nothing to compare.
+
+  **Every one of those questions is asked per PAIR-COLUMN, and getting that
+  wrong is how the first attempt at this fix failed review.** W0 is a
+  per-column rule: a manager declaring `data-lattice-pairs="2"` puts two
+  label/field pairs on a row, and each column is held to the rule on its own.
+  The ceiling shipped in round 1 took `Math.min` over the whole group and ran
+  outside the loop the floor check runs inside, so on a two-column manager a
+  correct left column pinned the minimum at 40px and a notched right column
+  was **invisible** — and 5 of the 10 declared managers in the fixture are
+  two-column (`feature-cards`, `carousel` Slides and Cards, `program-list`,
+  `blog-tag-cloud`). The assertion added to close a hole could not fail on
+  half the blocks it covered, which is the same shape as the defect. The
+  single-pair count had the mirror of it: measured per group, a two-column
+  manager holding one item counted as comparable while every comparative
+  assertion in both its columns was vacuous.
+  `bucketFields` (`scripts/ui/lattice-room.mjs`) is now the **one** definition
+  of a pair-column, shared with `assertLattice`, so the ceiling and the floor
+  cannot ask different questions about the same geometry. Two definitions of
+  "column" is exactly how one assertion ends up policing a different shape
+  than the one beside it.
 
   **The scope is the declaration, deliberately.** A block carrying
   `data-lattice-pairs` is a self-contained lattice sizing its label track
