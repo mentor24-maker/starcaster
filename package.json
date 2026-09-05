@@ -17,6 +17,7 @@
     "check:build-paths": "node scripts/check_build_paths.cjs",
     "check:assets": "node scripts/check_asset_versions.cjs",
     "check:syntax": "node scripts/check_syntax.cjs",
+    "check:automerge-reach": "node scripts/check_automerge_reach.cjs",
     "clickup": "doppler run --project starcaster --config dev --no-check-version -- node scripts/clickup_direct.mjs",
     "pipeline": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pipeline.mjs",
     "connections:verify": "doppler run --project starcaster --config dev --no-check-version -- node scripts/connections_verify_sweep.mjs",

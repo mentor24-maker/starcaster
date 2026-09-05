@@ -1484,11 +1484,51 @@ fell through on that moment — other checks green, the PR merged, the re-run's
 answer never observed. "No gate on this PR" is benign before a re-run exists;
 during the wait it means *cannot see*, and cannot-see is not a pass.
 
-## Lane A — when the machine supplies the word (2026-08-25, task 86bbkw2au)
+## Lanes A and B — when the machine supplies the word (2026-08-25, task 86bbkw2au; Lane B 2026-09-04, task 86bbuzyra)
 
 **Canon: vault `doctrine/AUTO-MERGE-LANES.md`, ratified 2026-08-24.** That
 document is binding; this section is how it is wired up here. If the two ever
 disagree, the vault is right and this file is the thing to fix.
+
+> ### THEY DISAGREE RIGHT NOW — read this before you widen anything
+>
+> As of **2026-09-04** this file and the vault say two different things about
+> Lane B, and by the precedence rule you have just read, the vault wins — which
+> would instruct you to undo a decision Dane made on purpose. So the divergence
+> is written down here, at the rule, rather than left for someone to discover:
+>
+> | | The ratified vault, 2026-08-24 | Dane's ruling, 2026-09-04 (task 86bbuzyra) |
+> |---|---|---|
+> | Lane B's status | **"not shipped"** | ship it |
+> | Lane B's file set | `lib/`, `scripts/`, tooling | `scripts/`, `docs/`, tests — **`lib/` excluded** |
+>
+> **Do not "fix this file to match the vault."** The vault text predates the
+> measurement that forced the question (nine merges in a night, none of them
+> Lane A's, seven hours of a ten-hour night with no merge at all) and predates
+> his answer. `lib/` is excluded for a reason he gave himself and which is still
+> true: `server.js` requires it directly, so a bad merge there reaches a
+> client's site with nobody in the path. Widening Lane B back to `lib/` is a
+> regression, and two independent mechanisms will stop you —
+> `npm run check:automerge-reach` and six named tests in
+> `scripts/builder/autoMergeLane.test.js`.
+>
+> **The vault text is also load-bearing in the other direction, and it is not
+> satisfied.** It withholds Lane B until Lane A's run has shown the objection
+> window and the digest actually work, and that run has produced no
+> observations: 2026-08-23 12:36 → 2026-09-04 10:16, 573 relay passes, 640
+> tickets considered, `announced=0 in window=0 auto-merged=0 cancelled=0`. Lane
+> A armed for the first time on 2026-09-04 (PR #592) and did not land, latching
+> the whole lane off. So **this code is built and merged, and Lane B stays
+> switched off in practice until Lane A completes one clean announce → wait →
+> merge cycle.** That is Dane's own instruction, 2026-09-05: *"1"* — clear the
+> latch, keep the hold.
+>
+> **Status of the repair:** a proposal to amend the vault document — mark Lane B
+> ruled, record the `lib/` exclusion and its reason, and state the
+> Lane-A-must-arm-once precondition as an operating gate rather than a shipping
+> gate — is filed at vault `doctrine/_proposals/AUTO-MERGE-LANE-B.md`
+> (2026-09-05). **Only Dane ratifies it.** Until he does, this box is the record,
+> and the vault's Lane B rows are superseded by his ruling above.
 
 ### What it is, in one paragraph
 
@@ -1501,21 +1541,101 @@ touches **nothing but tests and documentation**. It announces itself on the
 ticket, waits **one hour**, and merges unless you say anything at all.
 
 Your ruling, 2026-08-24: *"Ship Lane A now. Give it a 1-hour window to start.
-Never for C."* Lane B was not ruled on and is not built. Lane C — anything
-visual, routes, migrations, auth, CI — is never automated.
+Never for C."* Lane C — anything visual, routes, migrations, auth, CI — is never
+automated.
+
+**Lane B was ruled on 2026-09-04** and is now built. What forced it: overnight
+2026-09-03 nine pull requests merged and Lane A merged **none** of them, because
+the pipeline had spent the night building on itself — `scripts/`, which is
+neither a test nor a document. Seven hours of a ten-hour night had no merge at
+all, and the gaps lined up exactly with when you were asleep. The merge rate was
+not a property of the pipeline; it was a property of your sleep schedule.
+
+Your ruling, 2026-09-04, choosing between four options: **"A — `scripts/`,
+`docs/` and test files only."** You removed `lib/` from the proposal yourself,
+with the reason: `server.js` requires it directly (`lib/config`,
+`lib/environmentBanner`, `lib/publicSiteHosts`, `lib/devTeamStore`), and it
+holds the stores and `projectScope.js` that serve tenant sites. `lib/builder-client/**`
+also bundles into `public/builder-bundle.js` and into `lib/builder/template.js`,
+which renders a client's published pages. A bad merge there reaches a client's
+site with no human in the path.
 
 ### What qualifies
 
-Every changed file must match one of:
+**Lane A** — every changed file matches one of:
 
 ```
 *.test.js   *.test.ts   *.test.tsx   *.test.mjs
 docs/**     *.md
 ```
 
-**One file outside that set disqualifies the whole pull request.** There is no
+**Lane B** — every changed file matches Lane A's set, or:
+
+```
+scripts/**/*.js   scripts/**/*.mjs   scripts/**/*.cjs
+scripts/**/*.ts   scripts/**/*.json
+```
+
+The extension list is not decoration. A bare `scripts/**` also carried
+`scripts/git-hooks/pre-commit` (extensionless — and doctrine criterion 4 names
+git hooks outright), every `.sh` runner and installer, and would carry a `.sql`
+migration the day somebody adds one, which criterion 1 calls out as *not*
+reversible by a single revert.
+
+The lane a PR runs in is **the widest lane any one of its files needs**. A test
+file inside `scripts/` still reads as Lane A, so the narrower lane does not
+quietly stop existing.
+
+**One file outside the set disqualifies the whole pull request.** There is no
 partial credit and no "mostly tests": a mixed PR carries the risk of its
 riskiest file, not the average of them.
+
+### The merge machinery is never auto-merged, in either lane
+
+Doctrine criterion 4: *"A machine may never auto-merge a change to the machinery
+that governs machines … CI workflows, git hooks, `check_conventions`,
+`nodeRoles`, `.gitattributes`, **the merge step itself**, or this document."*
+
+Until Lane B this needed almost no code. `scripts/builder/mergeOnComment.js` is
+neither a test nor a document, so Lane A refused it without being asked to —
+only the *tests* of the merge machinery needed an explicit rule. **Lane B
+removes that accident**, so the rule now covers the sources too:
+`mergeOnComment`, `autoMergeLane`, `autoMergeLedgerFile`, `passClaim`, `wipCap`,
+`preflight`, `reviewGate`, `pipelinePause`, `clickup_direct`, `pipeline`,
+`repair` and their siblings, plus every `scripts/check_*` gate, every
+`scripts/**/*.sh` runner, and `scripts/git-hooks/`.
+
+Measured on 2026-09-04: of 413 tracked files under `scripts/`, **63 are blocked
+as governance and 350 are auto-mergeable.**
+
+Worth knowing when you read the first digest: on the fourteen pull requests
+merged over 2026-09-03/04, this lane would have merged **none of them** — not
+because the boundary is wrong, but because that night's work was almost entirely
+the merge machinery itself. Over the last sixty merged PRs it would have carried
+five (three Lane A, two Lane B).
+
+### The boundary cannot silently expire
+
+You attached a condition to choosing it:
+
+```
+"A folder boundary is not permanent. scripts/ is unreachable from a served
+ route today, but nothing enforces that ... If you pick A or D, the build
+ should include a check that fails if an auto-mergeable folder becomes
+ reachable from the server. Otherwise this decision silently expires."
+```
+
+That is `npm run check:automerge-reach`, and it runs in CI on every pull
+request. It walks the require/import graph out from `server.js`,
+`api/[...slug].js` and `routes/index.js` and fails if it reaches a file Lane B
+would carry, naming the import that did it. A missing entry point exits **2**
+(cannot tell), never 0 — a clean sweep over the wrong graph is worse than none.
+
+Measured when it shipped: 279 files are reachable from the server and none of
+them is auto-mergeable. The crossing you named — `lib/loopThroughput.js`
+importing `scripts/builder/wipCap.js` — is real, but `lib/loopThroughput.js` is
+not reachable from any entry point, and both files it pulls are governance-blocked
+anyway.
 
 Disqualified even though they match, because a machine never auto-merges the
 machinery that governs machines: any `CLAUDE.md`, `docs/DOCTRINE.md`, this file,

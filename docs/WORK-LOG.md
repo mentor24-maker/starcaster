@@ -1,3 +1,102 @@
+## 2026-09-04 — The machine can now merge its own tooling overnight, within a boundary Dane drew (#599)
+
+Overnight on 3 September, nine pieces of finished work were merged and the
+automatic merge lane merged none of them. Every one of those merges was Dane's
+own hand on a button, and the times show it: a cluster while he was up, then
+three and a half hours of nothing, then a merge at 4:29am when he happened to be
+awake, then nearly four more hours of nothing. Seven hours of a ten-hour night
+with no merges at all. The rate at which work reached the live site was not a
+property of the pipeline; it was a property of his sleep schedule.
+
+The cause was narrow and correct behaviour. The automatic lane only accepts
+changes where every file is a test or a document, and that night the pipeline
+had been working almost entirely on itself — on the scripts that run the
+pipeline. Not one of those changes could ever have qualified, so the lane
+considered them and correctly declined, every ten minutes, all night.
+
+The fix is a second lane for the pipeline's own tooling. Dane picked the
+boundary himself rather than accepting the one that was proposed: scripts,
+documents and tests only, with the shared library folder deliberately left out,
+because the live web server loads that folder directly and part of it is what
+draws clients' published pages. A bad automatic merge there would reach a
+client's website with nobody in the way.
+
+Building it turned up something the boundary alone did not cover. The scripts
+folder is also where the merging machinery itself lives, and the rule protecting
+that machinery had only ever listed its *tests* — the machinery's own code
+needed no rule while the lane refused everything that was not a test or a
+document. Widening the lane quietly removed that protection, and the very first
+thing it would have done is merge a change to the merge step. So the rule now
+covers the code as well, along with every automated check, every startup script,
+and the git hooks, which have no file extension and would have slipped past
+every existing pattern.
+
+Dane attached one condition to his answer: that the boundary must not be allowed
+to expire silently, because nothing stops a future change from making a script
+reachable from the live server. That is now a check running on every pull
+request. It traces what the server actually loads and fails if anything
+auto-mergeable turns up in there, naming the exact import that did it.
+
+Two numbers worth recording. Of 413 files under scripts, 63 are now permanently
+off-limits to automatic merging and 350 are eligible. And on the fourteen
+changes merged over the 3rd and 4th, this new lane would have merged none of
+them — not because the boundary is wrong, but because that night's work was
+almost entirely the merge machinery itself, which no lane may touch. It would
+have carried five of the last sixty.
+
+One more thing was measured and is not fixed here: the original lane has never
+once armed. In 573 passes since 23 August it considered 640 tickets, announced
+nothing and merged nothing. That is recorded on the ticket and needs its own
+look.
+
+A postscript, and it is the best possible advertisement for the check Dane
+asked for. This work sat on its branch for a day while he considered whether to
+switch it on. Catching the branch up with everything that had landed
+meanwhile, that new check went red straight away: the shared ClickUp helper
+that arrived in the meantime is loaded, through three steps, by the live web
+server — and it in turn loads a small file deciding how long to wait before
+retrying a failed call. That file was automatically mergeable, and it was now
+running on a live path. Nobody did anything wrong; two reasonable changes met
+and the boundary quietly moved. That file is now off-limits to automatic
+merging alongside the door it sits behind. The condition Dane attached to his
+answer caught a real crossing within a day of being written, which is exactly
+what he said it was for.
+
+A second postscript, on 5 September, and it says the same thing twice. Catching
+the branch up again — a second day of waiting, a second batch of other people's
+finished work to absorb — the same check went red again, on two more files.
+Nobody moved the boundary this time either. The same shared ClickUp helper now
+hands off two more decisions: one file holds this machine's spending budget
+against ClickUp's limit, and another decides whether this process is a scheduled
+background job or a session Dane is talking to. Between them they can silence
+every automatic message the pipeline sends, including the lane's own
+announcements and the stop switch — and they sit on the same path from the live
+server that caught the first one. Both are now off-limits to automatic merging.
+Three crossings in two catch-up merges, none of them anybody's mistake: this is
+simply what a boundary drawn by folder does over time, and the reason Dane's
+condition was the right condition.
+
+The other half of this day's work is bookkeeping that is not optional. The
+ratified company doctrine still says this second lane is "not shipped" and still
+lists the shared library folder — the one Dane deliberately excluded — as part of
+it. The pipeline's own engineering notes carry a rule saying that when the two
+disagree, the doctrine wins and the notes are what to fix. Left alone, that rule
+would have instructed the next reader to undo Dane's decision. So the
+disagreement is now written down at that exact rule, in a box that says plainly
+which way it goes and why, and a proposal to amend the doctrine has been filed in
+the vault for Dane to ratify. It asks for four things: record his ruling and the
+reason for the exclusion; state that the protection around the merge machinery
+covers its code and not just its tests; require a check behind any boundary drawn
+by folder; and — the substantive one — change the condition holding this lane
+back so that it stops the lane from *merging* rather than from *existing*. The
+concern behind that condition is right and survives untouched: the older lane has
+still never completed a single announce-wait-merge cycle, so nothing has yet
+shown the objection window works. But holding the code on a branch is not what
+makes that safe. It is the same hold, paid for in repeated catch-up merges, and
+it hides the hold from the switch where everyone looks for it. Dane's answer on
+5 September was to clear the latch and keep the hold, which is exactly that
+distinction.
+
 ## 2026-09-05 — A main menu item now joins up with its dropdown instead of floating above it (#615)
 
 When you hover a top menu item that has a dropdown — "Pickleball", for
