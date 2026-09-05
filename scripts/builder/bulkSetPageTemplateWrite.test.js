@@ -51,7 +51,7 @@ function makeStore({ pages, templates, failPageIds = [], silentlyDropPageIds = [
     if (method === 'GET' && /select=project_id/.test(query)) {
       return { ok: false, status: 400, error: 'column does not exist' };
     }
-    calls.push({ method, table, query });
+    calls.push({ method, table, query, body });
     if (table === 'builder_page_revisions') return { ok: true, data: [] };
     if (table === 'builder_page_templates') {
       return { ok: true, data: templates.map((t) => ({ ...t })) };
@@ -426,4 +426,53 @@ test('the revision is still banked, and off the page as it was BEFORE the change
 
   const revisionWrites = calls.filter((c) => c.table === 'builder_page_revisions' && c.method === 'POST');
   assert.equal(revisionWrites.length, 1);
+});
+
+// ── Round 4, item 3: whose change was it, and what kind ─────────────────────
+
+test('every revision names the operator and says it was a template change', async () => {
+  // The revision is this operation's per-page undo, and Page History is where
+  // the operator goes looking after a bulk re-pour has surprised him. Recorded
+  // with saved_by null and reason 'save' -- which is what it did until round 4
+  // -- a 43-page bulk change is indistinguishable from him hand-editing each
+  // page one at a time, and a later stale-edit collision blames "somebody
+  // else" rather than naming him.
+  const { store, calls } = makeStore({
+    pages: [pageRow(1, 'Home'), pageRow(2, 'About')],
+    templates: [NEW_TEMPLATE],
+  });
+
+  const res = await store.bulkSetPageTemplate([1, 2], '47', null, {
+    actor: { id: 'user-7', name: 'Dane Christensen', email: 'dane@example.com' },
+  });
+  assert.equal(res.ok, true);
+
+  const revisions = calls
+    .filter((c) => c.table === 'builder_page_revisions' && c.method === 'POST')
+    .flatMap((c) => (Array.isArray(c.body) ? c.body : [c.body]));
+  assert.equal(revisions.length, 2, 'one revision per page');
+  for (const row of revisions) {
+    assert.equal(row.reason, 'template', 'the reason must say what this was');
+    assert.equal(row.saved_by, 'user-7');
+    assert.equal(row.saved_by_name, 'Dane Christensen');
+  }
+});
+
+test('no signed-in user is recorded as no author — never as a wrong one', async () => {
+  // A script or a cron reaches the store with no actor. The revision still has
+  // to be banked, and Page History says "Template changed" with no name rather
+  // than inventing one.
+  const { store, calls } = makeStore({
+    pages: [pageRow(1, 'Home')],
+    templates: [NEW_TEMPLATE],
+  });
+
+  await store.bulkSetPageTemplate([1], '47');
+
+  const revisions = calls
+    .filter((c) => c.table === 'builder_page_revisions' && c.method === 'POST')
+    .flatMap((c) => (Array.isArray(c.body) ? c.body : [c.body]));
+  assert.equal(revisions.length, 1);
+  assert.equal(revisions[0].reason, 'template');
+  assert.equal(revisions[0].saved_by, null);
 });

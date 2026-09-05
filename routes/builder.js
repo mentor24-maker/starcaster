@@ -136,6 +136,7 @@ const { populateTitlesInSections } = require('../lib/populateModuleTitles');
 const {
   listPageSnapshots,
   getPageSnapshot,
+  pageSnapshotExists,
   createPageSnapshot,
   deletePageSnapshot,
 } = require('../lib/builderPageSnapshotsStore');
@@ -543,12 +544,19 @@ async function handle(req, res, pathname, method) {
     const request = readBulkSetTemplateRequest(body);
     if (!request.ok) return sendErr(res, request.status, request.error), true;
     const { pageIds, pageTemplateId, snapshotId } = request;
-    const snapshot = await getPageSnapshot(snapshotId, scope);
+    // EXISTS, not "fetch it": the snapshot's `pages` blob holds every page
+    // layout in the project, and this guard only needs to know the row is
+    // there. Loading it cost a full read and deserialize immediately before
+    // the write loop, in the invocation least able to afford one.
+    const snapshot = await pageSnapshotExists(snapshotId, scope);
     if (!snapshot.ok) {
       const refusal = describeArchiveCheckFailure(snapshotId, snapshot);
       return sendErr(res, refusal.status, refusal.error), true;
     }
-    const result = await bulkSetPageTemplate(pageIds, pageTemplateId, scope);
+    // WHO asked for it. Without the actor every revision this banks records no
+    // author, so Page History cannot tell a 43-page bulk re-pour from him
+    // hand-editing each page.
+    const result = await bulkSetPageTemplate(pageIds, pageTemplateId, scope, { actor: actorFrom(req) });
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not change the template'), true;
     return sendOk(
       res,

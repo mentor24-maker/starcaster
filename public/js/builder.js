@@ -4352,6 +4352,35 @@ App.builder = (function () {
     dialog.showModal();
   }
 
+  // EVERY sentence this operation shows the operator is worded in
+  // /shared/bulkTemplateOutcome.js, which the admin shell loads as its own
+  // <script> tag (src/layout.html). If that one file 404s or fails to parse,
+  // App.bulkTemplateOutcome is undefined and every call through it is a
+  // TypeError — thrown from inside the very handlers that are supposed to be
+  // telling the operator what happened.
+  //
+  // Round 3 guarded ONE of the three call sites. The success report was not
+  // one of them: it sat inside the write's try, so a missing module turned a
+  // run in which every page moved and verified into "some pages may already
+  // have been changed … Restore All from Archives" — a destructive action
+  // recommended after nothing went wrong. The pre-flight catch was not
+  // guarded either, and there the TypeError escaped as an unhandled rejection
+  // and the operator got no message at all.
+  //
+  // So the module is reached HERE and nowhere else, and each caller supplies
+  // the plain sentence to fall back to. Those fallbacks are deliberately dull:
+  // they never claim damage that did not happen and never recommend Restore
+  // All, which rolls the whole project back to the archive point and takes any
+  // unrelated edit made since with it.
+  // scripts/builder/bulkTemplateGuard.test.js fails if a call site is ever
+  // added outside this function.
+  function sayBulkTemplate(fnName, args, fallbackMessage) {
+    const outcomes = App.bulkTemplateOutcome;
+    const describe = outcomes && outcomes[fnName];
+    if (typeof describe !== 'function') return { message: fallbackMessage, isError: true };
+    return describe(args);
+  }
+
   // Archive first, then change. The order is the whole safety of this
   // operation: it re-pours every selected page, which is what emptied 35
   // sections off the Delray home page on 2026-08-14.
@@ -4389,12 +4418,19 @@ App.builder = (function () {
       });
     } catch (err) {
       if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Change Template'; }
-      notify(App.bulkTemplateOutcome.describeBulkTemplateFailure({
-        error: err && err.message,
-        status: err && err.status,
-        wroteNothing: true,
-        archiveTaken: false,
-      }).message, true);
+      // Definite whichever way this went: the check endpoint cannot write,
+      // so even a request that died half way through it changed nothing and
+      // took no archive. That is why the fallback may say so outright.
+      notify(sayBulkTemplate(
+        'describeBulkTemplateFailure',
+        {
+          error: err && err.message,
+          status: err && err.status,
+          wroteNothing: true,
+          archiveTaken: false,
+        },
+        `${(err && err.message) || 'The check failed'}. Nothing was changed and no archive was taken.`,
+      ).message, true);
       return;
     }
 
@@ -4430,25 +4466,34 @@ App.builder = (function () {
       if (pageIsLiveOnPublicSite(item)) liveIds.add(safeText(id));
     });
 
+    // THE TRY HOLDS THE REQUEST AND NOTHING ELSE.
+    //
+    // Reporting used to sit inside it, and its catch says "some pages may
+    // already have been changed … Restore All from Archives". So any throw
+    // while WORDING a clean run was caught and read out as a possible
+    // disaster: with /shared/bulkTemplateOutcome.js missing, a run in which
+    // every page moved and verified showed the operator a raw TypeError
+    // followed by a recommendation to roll the whole project back. A report is
+    // not part of the operation it reports on, and it must not be able to
+    // rewrite that operation's verdict.
+    let result = null;
+    let interrupted = null;
     try {
-      const result = await api('/api/builder/landing-pages/bulk-set-template', {
+      result = await api('/api/builder/landing-pages/bulk-set-template', {
         method: 'POST',
         body: JSON.stringify({ pageIds: ids, pageTemplateId, snapshotId }),
       });
-      const rows = (Array.isArray(result.results) ? result.results : []).map((row) => ({
-        ...(row && typeof row === 'object' ? row : {}),
-        isLive: liveIds.has(safeText(row && row.id)),
-      }));
-      if (dialog) dialog.close();
-      await refreshPagesTableAfterBulkChange();
-
-      // The three verdicts are counted and worded in public/shared/, where a
-      // test can reach them. Branching over them here is what produced "41 of
-      // 43 moved; 2 failed" on a run that ALSO had two unconfirmed pages —
-      // the read-back warning vanished and those two were counted as moved.
-      const outcome = App.bulkTemplateOutcome.describeBulkTemplateOutcome({ rows, templateName });
-      notify(outcome.message, outcome.isError);
     } catch (err) {
+      interrupted = err || new Error('The request failed');
+    }
+
+    // The table is reloaded either way: after a death it is the only way the
+    // screen stops being a lie, and after a refusal it costs a read and shows
+    // the same values.
+    if (dialog) dialog.close();
+    await refreshPagesTableAfterBulkChange();
+
+    if (interrupted) {
       // TWO COMPLETELY DIFFERENT EVENTS ARRIVE HERE, and the fork between them
       // is made in public/shared/ where a test can reach it. A structured
       // refusal carries an HTTP status (App.api attaches it) and means the
@@ -4459,27 +4504,38 @@ App.builder = (function () {
       // Restore All — which rolls the whole project back — in response to a
       // no-op.
       //
-      // The table is reloaded either way: on the death path it is the only way
-      // the screen stops being a lie, and on the refusal path it costs a read
-      // and shows the same values.
-      if (dialog) dialog.close();
-      await refreshPagesTableAfterBulkChange();
-      // This is the one path where the message must survive anything, because
-      // it is the only signal that pages may have moved. If the shared module
-      // did not load, say the short version rather than nothing at all — a
-      // thrown TypeError here would leave the operator with silence.
-      let message = `${(err && err.message) || 'The request failed'}. Some pages may already have been changed; the list has been reloaded. Restore All from Archives if this is not what you wanted.`;
-      if (App.bulkTemplateOutcome) {
-        message = App.bulkTemplateOutcome.describeBulkTemplateFailure({
-          error: err && err.message,
-          status: err && err.status,
+      // The fallback cannot make that fork, so it makes no claim either way:
+      // it says where to look and that the archive exists, which is true of
+      // both, and recommends nothing destructive.
+      notify(sayBulkTemplate(
+        'describeBulkTemplateFailure',
+        {
+          error: interrupted && interrupted.message,
+          status: interrupted && interrupted.status,
           liveCount: liveIds.size,
           archiveTaken: true,
-        }).message;
-      }
-      notify(message, true);
+        },
+        `${(interrupted && interrupted.message) || 'The request failed'}. The list has been reloaded — check the Template column to see what changed. Archives holds the archive taken just before this run.`,
+      ).message, true);
       if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Change Template'; }
+      return;
     }
+
+    const rows = (Array.isArray(result && result.results) ? result.results : []).map((row) => ({
+      ...(row && typeof row === 'object' ? row : {}),
+      isLive: liveIds.has(safeText(row && row.id)),
+    }));
+
+    // The three verdicts are counted and worded in public/shared/, where a
+    // test can reach them. Branching over them here is what produced "41 of
+    // 43 moved; 2 failed" on a run that ALSO had two unconfirmed pages —
+    // the read-back warning vanished and those two were counted as moved.
+    const outcome = sayBulkTemplate(
+      'describeBulkTemplateOutcome',
+      { rows, templateName },
+      'The change ran and the server answered, but this screen could not load the file that words the result, so it cannot say how each page fared. Check the Template column. Archives holds the archive taken just before this run.',
+    );
+    notify(outcome.message, outcome.isError);
   }
 
   // Reloading is itself a call that can fail, and it runs on the path where

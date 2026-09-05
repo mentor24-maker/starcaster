@@ -252,3 +252,73 @@ test('getPageSnapshot tags ITS OWN 400, which is what the route reads', async ()
   const refusal = describeArchiveCheckFailure('not-a-number', res);
   assert.match(refusal.error, /is not an archive id/);
 });
+
+// ── Round 4, item 4: the guard that loaded every page in the project ────────
+
+/**
+ * The archive guard runs immediately before the write loop, in the invocation
+ * least able to afford a wasted read.
+ *
+ * It used to call getPageSnapshot, which is `select=*` — so confirming a row
+ * exists pulled that snapshot's whole `pages` blob (138 page layouts on the
+ * production project) across the wire and JSON.parsed it, to answer yes or no.
+ * pageSnapshotExists asks for one column and returns the SAME shapes, because
+ * describeArchiveCheckFailure branches on them: its own 400 carries
+ * INVALID_SNAPSHOT_ID, a missing row is a 404, and anything else is the
+ * database envelope raw — a failure to look, not a finding.
+ */
+const supabaseModulePath = require.resolve('../../lib/supabase');
+const snapshotsStorePath = require.resolve('../../lib/builderPageSnapshotsStore');
+const projectScopePath = require.resolve('../../lib/projectScope');
+
+function makeSnapshotsStore(answer) {
+  for (const p of [supabaseModulePath, snapshotsStorePath, projectScopePath]) delete require.cache[p];
+  const supabase = require(supabaseModulePath);
+  const queries = [];
+  supabase.isConfigured = () => true;
+  supabase.tableConfig = () => ({ builderPageSnapshots: 'builder_page_snapshots' });
+  supabase.sbQuery = async ({ method = 'GET', query = '' }) => {
+    if (method === 'GET' && /select=project_id/.test(query)) {
+      return { ok: false, status: 400, error: 'column does not exist' };
+    }
+    queries.push(query);
+    return answer;
+  };
+  return { store: require(snapshotsStorePath), queries };
+}
+
+test('the existence check asks for one column, never the pages blob', async () => {
+  const { store, queries } = makeSnapshotsStore({ ok: true, data: [{ id: 37 }] });
+  const res = await store.pageSnapshotExists(37);
+  assert.equal(res.ok, true);
+  assert.equal(queries.length, 1);
+  assert.match(queries[0], /select=id\b/);
+  assert.doesNotMatch(queries[0], /select=\*/, 'this is a yes/no, not a fetch of every page in the project');
+});
+
+test('a missing row is a 404, so the route can still say the archive is absent', async () => {
+  const { store } = makeSnapshotsStore({ ok: true, data: [] });
+  const res = await store.pageSnapshotExists(999999);
+  assert.equal(res.ok, false);
+  assert.equal(res.status, 404);
+  assert.match(describeArchiveCheckFailure('999999', res).error, /No archive with id "999999"/);
+});
+
+test('an id that is not a number is tagged INVALID_SNAPSHOT_ID, exactly as before', async () => {
+  const { store, queries } = makeSnapshotsStore({ ok: true, data: [] });
+  const res = await store.pageSnapshotExists('not-a-number');
+  assert.equal(res.status, 400);
+  assert.equal(res.code, 'INVALID_SNAPSHOT_ID');
+  assert.equal(queries.length, 0, 'it should not reach the database at all');
+  assert.match(describeArchiveCheckFailure('not-a-number', res).error, /is not an archive id/);
+});
+
+test('a database refusal comes back RAW, so it stays a could-not-check', async () => {
+  // The whole point of round 3 item 4: a 400 from PostgREST for some other
+  // reason must not read as "that is not an archive id".
+  const { store } = makeSnapshotsStore({ ok: false, status: 400, error: 'malformed filter' });
+  const res = await store.pageSnapshotExists(37);
+  assert.equal(res.ok, false);
+  assert.equal(res.code, undefined, 'the store must not claim a refusal it did not raise');
+  assert.match(describeArchiveCheckFailure('37', res).error, /Could not check whether archive "37" exists/);
+});
