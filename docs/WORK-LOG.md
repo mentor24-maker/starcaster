@@ -32,6 +32,51 @@ The last part matters as much as the first. A safety check that never lets
 anything through is its own kind of broken, so all four behaviours were tested
 by deliberately removing the fix and watching the right test fail.
 
+**Sent back once, and rightly.** The first version of this worked perfectly
+when looking at the machine it was running on, and could not see the other one
+at all — in two separate ways, either of which brought the original problem
+straight back.
+
+The first was a quoting slip. To look at the other machine it has to say
+"look in your own home folder", and it wrote that instruction in a way the
+other machine reads literally instead of filling in — like posting a letter
+addressed to "your house" rather than to the actual street. The far machine
+looked for a folder with that literal name, did not find one, and answered
+"there is no copy of the project here" — confidently, as a real answer rather
+than as a shrug. So every ticket built on the other machine would have been
+declared empty and sent back to the queue: the exact thing this was written to
+stop, just from the other seat.
+
+The second was worse, because it broke the check the other way. The Mini and
+the MacBook are not wired up to talk to each other in both directions — the
+MacBook can reach the Mini, but not the other way round, and that is written
+down in our own inventory of machines. The sweep asked both anyway. From the
+Mini, which is where it actually runs, the MacBook never answers, so the sweep
+said "I could not check" about every single ticket and became unable to move
+anything at all. A safety check that never lets anything through — the exact
+failure the paragraph above says was tested for, arriving through a door the
+test did not cover, because the test was handed a tidy list of one machine
+while the real thing walks the list of both.
+
+Both are fixed, and the second needed a decision rather than a repair. A
+machine that is merely asleep is a reading we failed to take, and the sweep
+still refuses to move a ticket on that basis. A machine there is no way to
+phone at all is a different thing: waiting for it is waiting forever. So the
+sweep now gets on with its job, and every sentence it writes — on screen, in
+the note left on the ticket, and on the party line — names the machine it could
+not look at, so nobody reads a partial answer as a complete one. The real fix
+for that gap is to wire the two machines up; that is separate work, and it is
+now the only thing standing between this and a complete answer.
+
+Three smaller things came back with the send-back and are fixed too: a merged
+branch could pin its own ticket in "Building" forever, because the sweep
+counted commits instead of comparing the actual changes, and squash-merging
+makes those two different questions; the scheduled health report picked the
+wrong line out of the sweep's output and could headline "all is well" over a
+real finding; and a dry run offered to apply a change that would not have done
+anything. Every one of the six was broken on purpose afterwards to watch the
+test that guards it fail.
+
 ## 2026-09-05 — The switch that quietly ignored him three times (#621)
 
 Automatic merging can be switched off, and it is switched back on by posting
