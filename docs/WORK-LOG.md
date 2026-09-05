@@ -1,3 +1,39 @@
+## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
+
+Pull requests are merged one at a time here, and the plan is to switch on a
+**merge queue** — a line, so several can go through in order without each one
+resetting the others. Before that could happen, something had to be fixed that
+only breaks once the queue exists.
+
+When a script tells GitHub to merge, GitHub answers "done" in two completely
+different situations. Today it really has merged. With a queue switched on, it
+means *"I have put it in the line."* Same answer, and our scripts could not tell
+them apart.
+
+They broke in opposite directions. `npm run ship` — the command that takes
+finished work live — looked a second later, saw the pull request still open, and
+stopped with "the merge did not complete". That would have happened on every
+single run, while the merge was in fact perfectly fine, and it would have
+stopped before tidying up. Annoying, but loud, and it changed nothing.
+
+The other one was the dangerous one. When Dane comments `merge` on a ticket, a
+background job does it for him. That job checked only that the *command* worked.
+It then wrote down the current time as the merge time, announced "merged" on the
+party line, and moved the ticket to **Live** — while the pull request was still
+sitting in the line, possibly never to merge at all. A ticket marked done, a
+merge announced, and a time written down as fact, for something that had not
+happened.
+
+Both now ask the same question, through the same piece of code, and wait for a
+real answer: merged, closed, still in the line, or "could not tell". *Still in
+the line* is its own answer — not a success and not a failure. Nothing is
+recorded, no time is invented, the ticket stays where it is, and Dane's `merge`
+word stays unspent so the next pass finishes the job properly. The merge time
+now comes from GitHub itself rather than from our own clock.
+
+It costs an ordinary day nothing: with no queue switched on, the first look
+already says merged and the wait is over before it starts.
+
 ## 2026-09-05 — The switch that quietly ignored him three times (#621)
 
 Automatic merging can be switched off, and it is switched back on by posting
