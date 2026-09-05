@@ -93,18 +93,43 @@ test('a successful merge from a worktree does not attempt gh\'s own local branch
 test('the merge call is still allowed to fail without stopping the script — the REAL check is what follows', () => {
   // gh's own exit code is not the source of truth for "did the merge work"
   // (see the test above — it can be non-zero on a real success). The
-  // authoritative check is the separate `gh pr view ... --json state` read
-  // immediately after, which must still exist and must still fail() the
-  // script when the state is not MERGED — that is what keeps criterion 3
-  // (a genuine failure still exits non-zero) true.
+  // authoritative check is an independent re-read of the PR state after the
+  // merge command, which must still fail() the script when the pull request
+  // did not merge — that is what keeps criterion 3 (a genuine failure still
+  // exits non-zero) true.
+  //
+  // THE SPELLING OF THAT RE-READ CHANGED (2026-09-05, task 86bbv35cq) and the
+  // property did not. It used to be one `gh pr view --json state` an instant
+  // after the merge command, compared against 'MERGED'. Under a merge queue
+  // `gh pr merge` ENQUEUES and returns at once, so that single read sees OPEN
+  // on a merge that is genuinely under way and ship would fail on every run.
+  // The re-read is now `mergeCompletion.waitForMerge`, shared with the relay's
+  // merge step so the two cannot answer "did it merge?" differently. What this
+  // test asserts is the property, not the old line: ship still re-reads GitHub
+  // itself, and still stops on anything that is not an observed merge.
   const mergeCallMatch = code.match(/'gh',\s*\[\s*'pr',\s*'merge',[^)]*\)/);
   assert.ok(mergeCallMatch, 'must find the gh pr merge call');
   assert.match(mergeCallMatch[0], /allowFail:\s*true/, 'gh\'s own cosmetic exit code must not stop the script');
 
   const afterMerge = code.slice(code.indexOf(mergeCallMatch[0]));
-  assert.match(afterMerge, /json',\s*'state'/, 'must independently re-read the PR state after merging');
-  assert.match(afterMerge, /merged\.out\s*!==\s*'MERGED'/, 'must compare against MERGED specifically');
-  assert.match(afterMerge.slice(0, afterMerge.indexOf("merged.out !== 'MERGED'") + 200), /fail\(/, 'a state other than MERGED must still call fail()');
+  assert.match(afterMerge, /waitForMerge\(/, 'must independently re-read the PR state after merging');
+  assert.match(afterMerge, /'pr',\s*'view',\s*prNumber,\s*'--json',\s*'state,mergedAt'/, 'the re-read asks GitHub for the state and its own merge time');
+
+  // Every outcome that is NOT an observed merge stops the script, and the
+  // success line is reached only after all three have been ruled out.
+  for (const outcome of ['queued', 'unknown', 'closed']) {
+    const at = afterMerge.indexOf(`mergeWait.outcome === '${outcome}'`);
+    assert.ok(at > -1, `ship handles the ${outcome} outcome`);
+    assert.match(afterMerge.slice(at, at + 400), /fail\(/, `a ${outcome} outcome must still call fail()`);
+  }
+  const success = afterMerge.indexOf('It is live once Vercel finishes deploying');
+  assert.ok(success > -1, 'must find the merge success line');
+  for (const outcome of ['queued', 'unknown', 'closed']) {
+    assert.ok(
+      afterMerge.indexOf(`mergeWait.outcome === '${outcome}'`) < success,
+      `ship declares the merge only after ruling out ${outcome}`
+    );
+  }
 });
 
 test('nothing overrides the exit code at the very end — a clean run relies on Node\'s own 0, not a forced one', () => {

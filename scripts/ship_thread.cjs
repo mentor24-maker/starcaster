@@ -53,8 +53,14 @@ const { execFileSync, spawnSync } = require('child_process');
 
 const PROTECTED = new Set(['main', 'master']);
 const CI_TIMEOUT_MIN = 20;
+// How long to wait for a merge to actually land after `gh pr merge` returns.
+// With no merge queue this is never spent: the first read already says MERGED.
+// Under a queue it is the ceiling on how long ship holds the terminal before
+// answering "queued, not yet merged" (task 86bbv35cq).
+const MERGE_TIMEOUT_MIN = 15;
 const { pickPullRequestCommit, REPIN_SUBJECT, NUDGE_SUBJECT } = require('./builder/pullRequestCommit');
 const { waitForChecks } = require('./builder/waitForChecks');
+const { waitForMerge, mergeTimeLabel } = require('./builder/mergeCompletion');
 const {
   decideTrailWrite, bodyWithTicketLink, describeTrailResult, prUrl: prUrlFor,
 } = require('./builder/shipPrTrail');
@@ -589,11 +595,56 @@ if (state.out === 'DIRTY' || state.out === 'BEHIND') {
 // was both redundant and the actual source of the whole problem.
 run('gh', ['pr', 'merge', prNumber, '--squash'], { allowFail: true });
 
-const merged = quiet('gh', ['pr', 'view', prNumber, '--json', 'state', '--jq', '.state']);
-if (merged.out !== 'MERGED') {
-  fail(`The merge did not complete (PR #${prNumber} is "${merged.out}"). Nothing else has been changed.`);
+// `gh pr merge` EXITING 0 IS NOT A MERGE (task 86bbv35cq). Under a merge queue
+// it enqueues and returns at once, leaving the pull request OPEN for as long as
+// the queue takes — so reading the state back one instant later, as this used
+// to, would fail every single run with "The merge did not complete" while the
+// merge was in fact under way. Wait for the state GitHub actually reports.
+// With no queue — today's state — the first read already says MERGED and this
+// returns before it ever sleeps, so nothing here costs an ordinary ship a
+// second.
+let lastMergeReport = '';
+const mergeWait = waitForMerge({
+  now: () => Date.now(),
+  sleep: sleepMs,
+  timeoutMs: MERGE_TIMEOUT_MIN * 60 * 1000,
+  readPr: () => {
+    const seen = quiet('gh', ['pr', 'view', prNumber, '--json', 'state,mergedAt']);
+    if (!seen.ok) return null;
+    try { return JSON.parse(seen.out); } catch (_) { return null; }
+  },
+  onPoll: (state, elapsed) => {
+    if (state === 'merged' || state === 'closed') return;
+    const mins = Math.round(elapsed / 60000);
+    const line = state === 'open'
+      ? `    #${prNumber} is queued to merge, not merged yet — waiting (${mins}m).`
+      : `    Could not read #${prNumber} from GitHub just now — trying again (${mins}m).`;
+    if (line !== lastMergeReport) { say(line); lastMergeReport = line; }
+  },
+});
+
+if (mergeWait.outcome === 'queued') {
+  // NOT a failure and NOT a success — the third answer. The merge is under
+  // way; nothing here may claim it, and nothing here may undo it.
+  fail(
+    `PR #${prNumber} is QUEUED to merge, not merged yet — it was still open after ` +
+    `${MERGE_TIMEOUT_MIN} minutes.\n\n` +
+    'Nothing has gone wrong and nothing else has been changed. GitHub is still working\n' +
+    'through the merge queue. Run `npm run ship` again in a few minutes — it will see\n' +
+    'the merge and carry on with the tidy-up.'
+  );
 }
-say(`    Merged #${prNumber}. It is live once Vercel finishes deploying.`);
+if (mergeWait.outcome === 'unknown') {
+  fail(
+    `Could not read PR #${prNumber} from GitHub at all (${mergeWait.failedReads} attempt(s) came back blind),\n` +
+    'so whether it merged is unknown — not merged, and not failed either.\n\n' +
+    'Nothing else has been changed. Check `gh auth status` and run `npm run ship` again.'
+  );
+}
+if (mergeWait.outcome === 'closed') {
+  fail(`PR #${prNumber} was CLOSED without merging. Nothing else has been changed.`);
+}
+say(`    Merged #${prNumber} at ${mergeTimeLabel(mergeWait.mergedAt)}. It is live once Vercel finishes deploying.`);
 
 /* ---------------------------------------------------------------- 8. tidy */
 
