@@ -287,6 +287,84 @@ test('the four card states are decided from what is actually stored', async (t) 
   assert.ok(cards.get('bluesky').reason.length > 20, 'the reason is a sentence, not a status word');
 });
 
+/**
+ * The amber card says what the SWEEP found, not one of four generic lines.
+ * Connections 6b of 7 (86bbu50mb).
+ *
+ * The verify sweep exists to learn why a connection stopped working and write
+ * it down — a drifted Bluesky handle names the account it now signs in as, an
+ * unrenewed grant names the deadline it passed. `verifySweep.js` says as much
+ * where it marks a row expiring: "the card goes amber with the sentence below
+ * under it". It did not. The route read `status` alone and printed a line from
+ * a four-entry map, so every cause the sweep recorded arrived at the client as
+ * the same sentence and `last_error` was written by one slice and read by
+ * nobody.
+ *
+ * These pin `attentionSentence` directly rather than through a stored row,
+ * because the sentence is the deliverable and a round trip would only prove the
+ * store still round-trips.
+ */
+test('an amber card carries the recorded cause, not a generic line', async () => {
+  const h = withRoute();
+  const { attentionSentence } = h.route;
+
+  // The sweep's own sentence for a drifted Bluesky handle, verbatim from
+  // outcomeFor() in lib/connections/verifySweep.js.
+  const drift = 'the handle now signs in as a different account (it was saved as delray.bsky.social.)';
+  const shown = attentionSentence({ status: 'error', lastError: drift, hasAccessToken: true });
+  assert.ok(
+    shown.includes('handle now signs in as a different account'),
+    `the recorded cause has to survive to the card, got: ${shown}`
+  );
+  assert.ok(
+    shown.includes('delray.bsky.social'),
+    'the account the sweep named is the one fact a client can act on'
+  );
+  // And it still says what to DO. A cause with no next step is a fault report.
+  assert.ok(shown.includes('Reconnect'), `the card still says how to fix it, got: ${shown}`);
+
+  // A fragment is opened and closed as a sentence — presentation only. No other
+  // character may change, or the panel is substituting our wording for the
+  // platform's (acceptance criterion 5).
+  assert.ok(shown.startsWith('The handle now signs in'), `capitalised, got: ${shown}`);
+  assert.ok(
+    shown.includes('(it was saved as delray.bsky.social.) Reconnect'),
+    'the stored text is passed through unedited apart from its first letter'
+  );
+
+  // Each status keeps its own instruction, so "about to stop" and "has expired"
+  // do not both read as the same emergency.
+  assert.ok(
+    attentionSentence({ status: 'expiring', lastError: 'it expires tomorrow', hasAccessToken: true })
+      .includes('keep posting'),
+    'an expiring connection is asked to be renewed, not restored'
+  );
+  assert.ok(
+    attentionSentence({ status: 'revoked', lastError: 'permission was withdrawn', hasAccessToken: true })
+      .includes('restore'),
+    'a revoked one is asked to be restored'
+  );
+
+  // Nothing recorded — a status changed by hand, or a row from before the sweep
+  // existed — still gets a full sentence rather than an empty card.
+  const generic = attentionSentence({ status: 'expired', lastError: '', hasAccessToken: true });
+  assert.match(generic, /expired/i);
+  assert.ok(generic.length > 20, 'the fallback is still a sentence');
+
+  // Our own storage being incomplete outranks whatever a platform last said:
+  // the resolver skips a token-less row, so no amount of provider detail
+  // changes what the client has to do about it.
+  assert.match(
+    attentionSentence({ status: 'error', lastError: 'the platform refused it', hasAccessToken: false }),
+    /stored permission is incomplete/i
+  );
+
+  // An unknown status is not a blank card. `CONNECTION_STATUSES` can grow, and
+  // a card that says nothing is indistinguishable from a broken screen.
+  const unknown = attentionSentence({ status: 'something-new', lastError: '', hasAccessToken: true });
+  assert.ok(unknown.length > 20, `an unknown status still gets a sentence, got: ${unknown}`);
+});
+
 test('a card never carries a token, and never describes one', async (t) => {
   const h = withRoute();
   t.after(h.restore);
