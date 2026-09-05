@@ -58,6 +58,15 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO" || exit 1
 
+# ── THIS IS A BACKGROUND JOB, AND IT SAYS SO ─────────────────────────────────
+# The ClickUp budget is one allowance per token for the whole company, and the
+# operator's decision (2026-09-03) is that scheduled jobs yield: "You are never
+# blocked by a background job." Every child process inherits this, so anything
+# this script runs will stop at the reserve instead of spending the budget an
+# interactive session is about to need. See scripts/lib/clickupCaller.cjs —
+# there is no tty guess anywhere; a scheduled job is one that declares itself.
+export STARCASTER_CALLER=scheduled
+
 echo "=== weekly-report $(date '+%Y-%m-%d %H:%M:%S') — $REPO"
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
