@@ -8257,10 +8257,21 @@ function BlogRelatedPostsPreview({
         credentials: "include",
         headers
       }).then((r) => (r.ok ? r.json() : null)),
-      fetch(`/api/blog/posts?status=published&limit=100`, {
-        credentials: "include",
-        headers
-      }).then((r) => (r.ok ? r.json() : null)),
+      /*
+       * Page through the archive rather than matching against the first 100.
+       * Tag matching happens in the browser, so a post the first page did not
+       * reach is a post no match can find, and "nothing relates to this" would
+       * be a claim about posts this module never saw (task 86bbuncxj).
+       */
+      readAllPages<BlogPostRecord>(async (page, limit) => {
+        const r = await fetch(`/api/blog/posts?status=published&limit=${limit}&page=${page}`, {
+          credentials: "include",
+          headers
+        });
+        if (!r.ok) throw new Error(`blog posts page ${page}: ${r.status}`);
+        const d = await r.json();
+        return Array.isArray(d?.posts) ? (d.posts as BlogPostRecord[]) : [];
+      }).catch(() => null),
       showCategories
         ? fetch("/api/blog/categories", { credentials: "include", headers }).then((r) =>
             r.ok ? r.json() : null
@@ -8270,9 +8281,17 @@ function BlogRelatedPostsPreview({
       .then(async ([currentData, allData, catData]) => {
         const current: BlogPostRecord | null =
           (currentData?.data ?? currentData?.post ?? null) as BlogPostRecord | null;
-        const allPosts: BlogPostRecord[] = Array.isArray(allData?.posts)
-          ? (allData.posts as BlogPostRecord[])
-          : [];
+        const allPosts: BlogPostRecord[] = allData ? allData.items : [];
+        /*
+         * The match ran over a slice of the blog rather than all of it, so
+         * "no other post shares a tag with this one" would be a claim about
+         * posts this module never saw (task 86bbuncxj). Builder-only: a
+         * visitor sees nothing at all from this module when it is empty, and
+         * a partial-but-populated result needs no visitor-facing caveat.
+         */
+        const scanCaveat = allData && allData.complete
+          ? ""
+          : " Not all published posts could be read, so the search was incomplete.";
         const fetchedCats: BlogCategory[] = Array.isArray(catData?.categories)
           ? (catData.categories as BlogCategory[])
           : [];
@@ -8311,7 +8330,7 @@ function BlogRelatedPostsPreview({
               ? ""
               : relatedIds.size === 0
                 ? "Nothing is related to this post yet. Open the post in the editor and pick its related posts."
-                : `${relatedIds.size} post${relatedIds.size === 1 ? " is" : "s are"} related to this one, but ${relatedIds.size === 1 ? "it is" : "none are"} published — a draft cannot appear here.`
+                : `${relatedIds.size} post${relatedIds.size === 1 ? " is" : "s are"} related to this one, but ${relatedIds.size === 1 ? "it is" : "none are"} published — a draft cannot appear here.${scanCaveat}`
           );
           return;
         }
@@ -8328,7 +8347,9 @@ function BlogRelatedPostsPreview({
         });
 
         setRelatedPosts(filtered.slice(0, count));
-        setEmptyReason(filtered.length > 0 ? "" : matchFailureReason(current, matchBy, allPosts.length));
+        setEmptyReason(
+          filtered.length > 0 ? "" : matchFailureReason(current, matchBy, allPosts.length) + scanCaveat
+        );
       })
       .catch(() => {
         setRelatedPosts([]);
