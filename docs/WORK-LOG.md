@@ -35,6 +35,27 @@ the tests turned up a genuine bug before it shipped — the code that reads the
 machine's start time was also matching a *different* field that happens to end
 in the same three letters, which would have reported a confident, completely
 wrong date.
+
+**Then the review caught the check doing the very thing it was built to
+prevent**, and this is worth reading, because it is the shape of almost every
+problem in this system. The Mini has six jobs on its list. Three of them have a
+timer that can be inspected; the other three — the two build lanes and the
+video worker — do not have one yet, on purpose. The new check looked at the
+three it could see, found them all fine, and reported: *"All 3 owned roles came
+back."* Every word of that is true and the sentence is a lie, because the
+machine owns six, and the three it did not mention are exactly the ones a 3am
+power cut takes out and leaves nobody to notice.
+
+It now measures the answer against what the machine is *supposed* to be running
+rather than against whatever it happened to look at, and says so out loud:
+*"3 of 6 owned roles confirmed; loop-build, loop-review, youtube-media have no
+schedule to check."* Same count, honest sentence. Two smaller versions of the
+same fault went with it: a Mac that cannot say which machine it is now gets "I
+cannot tell" instead of a pass, and a job whose timer file was deleted while it
+was still running used to print a tick in the table underneath a line saying
+one job had not come back — the table and the summary were reading the same
+thing two different ways, and now they read it from one place.
+
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
 Pull requests are merged one at a time here, and the plan is to switch on a

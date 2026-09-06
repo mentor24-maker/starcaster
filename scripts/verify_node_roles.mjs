@@ -134,20 +134,29 @@ if (observed.length === 0) {
 
 // --- record what was seen ---------------------------------------------------
 
-const written = rebootTest.recordVerification({ node: node.name, boot, roles: observed });
+// The skipped rows go in too, so the record states what was NOT looked at as
+// well as what answered. A record listing three roles is otherwise
+// indistinguishable from a machine that owns three, which is how doctor:node
+// came to print "All 3 owned roles came back" on a Mini owning six.
+const written = rebootTest.recordVerification({ node: node.name, boot, roles: observed, skipped });
 if (!written.ok) {
   cannotTell(['Could not write the verification record.', written.why, written.file ? `file: ${written.file}` : '']);
 }
 
-const missing = observed.filter((r) => !r.installed || !r.loaded);
+// The table and the summary read the SAME fact, from the same function. They
+// did not used to: the row prefix keyed off `row.loaded` alone while this
+// count keyed off `!installed || !loaded`, so a plist deleted without
+// unloading — `{installed: false, loaded: true}`, the state
+// `install_bus_relay.sh --uninstall` explicitly produces — printed
+// `ok  bus-relay: loaded` under a summary saying one role did not come back,
+// naming nothing. The operator was handed a contradiction with no way to
+// resolve it.
+const missing = observed.filter(rebootTest.didNotComeBack);
 const lines = [];
 
 lines.push(`${node.name} — roles verified against boot ${boot.at}`);
 lines.push('');
-for (const row of observed) {
-  const state = row.loaded ? 'loaded' : row.installed ? 'INSTALLED BUT NOT LOADED' : 'NOT INSTALLED';
-  lines.push(`  ${row.loaded ? 'ok  ' : 'FAIL'}  ${row.role}: ${state}`);
-}
+for (const row of observed) lines.push(rebootTest.roleTableLine(row));
 for (const row of skipped) lines.push(`  --    ${row.role}: not checked — ${row.why}`);
 lines.push('');
 lines.push(`recorded: ${written.file}`);
@@ -160,7 +169,12 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-lines.push(`All ${observed.length} probeable role${observed.length === 1 ? '' : 's'} are installed and loaded.`);
+lines.push(
+  `All ${observed.length} probeable role${observed.length === 1 ? '' : 's'} are installed and loaded`
+  + (skipped.length
+    ? `, and ${skipped.length} owned role${skipped.length === 1 ? '' : 's'} (${skipped.map((s) => s.role).join(', ')}) ${skipped.length === 1 ? 'has' : 'have'} no schedule to check — recorded as unchecked, not as passing.`
+    : `. ${node.name} owns ${owned.length} role${owned.length === 1 ? '' : 's'} and every one of them was probed.`),
+);
 lines.push('doctor:node will report PASS until this machine restarts, and CANNOT TELL again after that.');
 console.log(lines.join('\n'));
 process.exit(0);

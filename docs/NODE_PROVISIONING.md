@@ -197,6 +197,37 @@ is the failure this whole slice exists against. For the same reason, if any
 owned schedule cannot be probed, `node:verify` writes **nothing** and exits 2:
 half a reading recorded as a whole one would read as a verification.
 
+**A PASS is measured against what the machine OWNS, not against the record.**
+The record is evidence; evidence cannot also be the standard it is graded
+against. Grading the rows against themselves meant a record covering three
+roles on a machine that owns six reported *"All 3 owned roles came back"* —
+and on the Mini those other three are the two loop lanes and the media worker,
+which is exactly what a 3am power blip takes out. So the verdict is handed
+`nodeProvision.schedulesForNode()` and compares against it:
+
+*   An owned, probeable role **absent from the record** is CANNOT TELL, naming
+    it. That is the drift case: give a `blocked` row an installer — which
+    `lib/nodeProvision.js` explicitly anticipates — and without this the report
+    keeps passing off a record written before that role could be probed at all.
+*   An owned role with **no schedule to check** is named on the PASS line
+    itself, with its reason, rather than left out of the count: *"3 of 6 owned
+    roles confirmed; loop-build, loop-review, youtube-media have no schedule to
+    check."* Same shape `lib/nodeHeartbeat.js` settled — a role with no emitter
+    reports NOT REPORTING with its reason, never as healthy.
+*   `node:verify` records the **skipped** rows too, so the record is a full
+    statement of what was looked at and what was not.
+*   And a machine this system **cannot identify** gets CANNOT TELL rather than a
+    pass. `node:verify` already refuses an unknown node (exit 2); the reading
+    half refuses for the same reason, because the only record that could exist
+    on such a machine is one copied from another Mac.
+
+**The row and the summary read one fact.** `didNotComeBack(row)` — installed
+AND loaded — is the single expression behind both `node:verify`'s table prefix
+and its count. They were written separately once, and a plist deleted without
+unloading (`{installed: false, loaded: true}`, which
+`install_bus_relay.sh --uninstall` produces) printed `ok  bus-relay: loaded`
+under a summary saying one role did not come back, naming nothing.
+
 **The cross-machine half is the heartbeat, on purpose.** Doctrine asks you to
 confirm *from another machine*, and it is right — a Mac that cannot log in
 cannot report on itself. That mechanism already exists as Slice E:

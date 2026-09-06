@@ -531,10 +531,24 @@ heading('REBOOT TEST — have this machine\'s roles been confirmed since it rest
     : { ok: false, why: bootProbe.ran ? `sysctl failed: ${bootProbe.error}` : 'sysctl is not on this shell\'s PATH' };
 
   const stored = rebootTest.readVerification();
+  // Both inputs are named rather than defaulted, and both used to be missing.
+  //
+  // `node` was `knownNode ? node.name : null`, and `null` did not merely skip
+  // the identity question — it disarmed the copied-record guard inside
+  // `rebootTestReport` and let an unidentified machine reach a PASS. The
+  // library now refuses a nameless node outright, which is why this can pass
+  // the name straight through.
+  //
+  // `owned` is the standard the record is graded against. Without it the
+  // record graded itself, so three recorded roles on a Mini owning six printed
+  // "All 3 owned roles came back". `schedulesForNode` is only meaningful for a
+  // machine this system recognises, so an unknown node passes nothing and gets
+  // the library's refusal.
   const verdict = rebootTest.rebootTestReport({
     boot: boot.ok ? boot : { why: boot.why },
     stored,
     node: knownNode ? node.name : null,
+    owned: knownNode ? provision.schedulesForNode(node.name) : null,
   });
 
   if (verdict.state === 'pass') pass(verdict.headline, verdict.why);

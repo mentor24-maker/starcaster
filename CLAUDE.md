@@ -359,8 +359,14 @@ screen with everything stopped and nothing reporting it — `launchctl list` sho
 nothing wrong because nothing is loaded to be wrong. So `doctor:node` has a
 sixth section that asks a different question from the schedules one: **have this
 machine's roles been confirmed since it last restarted?** `npm run node:verify`
-probes every owned schedule and records what it SAW, role by role; `doctor:node`
-reads that back. The thing compared is the machine's boot identity
+probes every owned schedule and records what it SAW, role by role — plus the
+roles it skipped and why; `doctor:node` reads that back. **The verdict is graded
+against what the machine OWNS, never against the record**, or a record covering
+three roles on a Mini owning six reads as "all owned roles came back": an owned
+role with no schedule to check is named on the verdict line rather than dropped
+from the count, an owned role missing from the record is CANNOT TELL, and a
+machine this system cannot identify gets no pass at all.
+The thing compared is the machine's boot identity
 (`sysctl -n kern.boottime`), not a date somebody maintains, so a restart puts
 the answer back to CANNOT TELL on its own. The record carries observations and
 never a verdict — a pass a script could write by reaching its own last line is
