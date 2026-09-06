@@ -57,6 +57,10 @@ const REASON_LABELS: Record<string, string> = {
   save: "Edited",
   propagate: "Shared section updated",
   revert: "Restored",
+  // A bulk template change re-pours the whole page, so its revision is the
+  // only copy of the layout it replaced. Recorded as 'save' it read as an
+  // ordinary hand edit, which is the one thing it is not.
+  template: "Template changed",
 };
 
 function formatWhen(iso: string): string {

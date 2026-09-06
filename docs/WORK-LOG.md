@@ -41,6 +41,336 @@ site — the page text was byte-for-byte identical before and after. So a visito
 gets a control that looks like it works and silently ignores them. That is its
 own defect, on its own ticket, with the choice about what should replace it
 going to Dane.
+## 2026-09-05 — The Mini can tell you a job is switched on. It could not tell you the job ever started. (#626)
+
+The Mac Mini runs jobs on a timer — the thing that relays your comments, the
+hourly pipeline check, the weekly report. `npm run doctor:node` has been able to
+tell you those timers are set up and switched on.
+
+There is a gap between "switched on" and "actually running", and it is the one
+that bites at 3am. Timed jobs on a Mac are *your* jobs, not the machine's, and
+they do not start until somebody logs in. The Mini's disk is encrypted and it
+does not log in by itself — so if the power blips overnight, it comes back up,
+sits at the login screen, and every one of those jobs simply never starts. The
+machine looks completely fine. Nothing is broken, so nothing complains. The
+failure is silence, which is the one thing the rest of this system was built to
+make impossible.
+
+So `doctor:node` now asks a different question — *have this machine's jobs been
+confirmed since it last restarted?* — and gives one of three answers: yes, no,
+or **I cannot tell**. That third one is the default, and it is the honest one.
+A new command, `npm run node:verify`, is what goes and looks: it asks each job
+whether it is really loaded, writes down what it actually saw, and nothing else.
+The two are separate on purpose, because `doctor:node` promises never to change
+anything on your machine, and that promise is what makes it safe to run when
+things are going wrong.
+
+The clever bit is what makes the answer expire on its own. Rather than a "last
+checked" date somebody has to remember to update, it records the machine's own
+statement of when it last started up. Restart the Mini and the recorded start
+time no longer matches — so the report goes straight back to "I cannot tell",
+with nobody having to notice or do anything. Which is exactly the situation it
+exists to catch.
+
+It was proved both ways on the real machine: a job was switched off on purpose
+and the check named it and failed; switched back on and it passed. And writing
+the tests turned up a genuine bug before it shipped — the code that reads the
+machine's start time was also matching a *different* field that happens to end
+in the same three letters, which would have reported a confident, completely
+wrong date.
+
+**Then the review caught the check doing the very thing it was built to
+prevent**, and this is worth reading, because it is the shape of almost every
+problem in this system. The Mini has six jobs on its list. Three of them have a
+timer that can be inspected; the other three — the two build lanes and the
+video worker — do not have one yet, on purpose. The new check looked at the
+three it could see, found them all fine, and reported: *"All 3 owned roles came
+back."* Every word of that is true and the sentence is a lie, because the
+machine owns six, and the three it did not mention are exactly the ones a 3am
+power cut takes out and leaves nobody to notice.
+
+It now measures the answer against what the machine is *supposed* to be running
+rather than against whatever it happened to look at, and says so out loud:
+*"3 of 6 owned roles confirmed; loop-build, loop-review, youtube-media have no
+schedule to check."* Same count, honest sentence. Two smaller versions of the
+same fault went with it: a Mac that cannot say which machine it is now gets "I
+cannot tell" instead of a pass, and a job whose timer file was deleted while it
+was still running used to print a tick in the table underneath a line saying
+one job had not come back — the table and the summary were reading the same
+thing two different ways, and now they read it from one place.
+
+**And then the review caught it a third time, in three more places.** The fix
+above had been applied to the *passing* sentence and nowhere else, so the same
+mistake — trusting the notepad instead of the job list — was still live in three
+other answers. A machine where every job had lost its timer reported a green
+*"0 of 2 confirmed"*, naming the same job as checked and as not-checked in one
+breath. A leftover note about a job that had since moved to the other Mac
+produced a permanent failure about a job this machine does not even run, and the
+only way to clear it was to delete the file. And the MacBook, which has two jobs
+and no timer for either, was told it had never been checked and handed a command
+that refuses to run there — a to-do nobody could ever tick off.
+
+All three were one root cause, so there is now one answer to one question:
+*which of the jobs on this notepad are jobs this machine actually runs and can
+inspect right now?* Everything is read off that. A leftover note is named out
+loud and counted as neither good news nor bad. A pass has to have confirmed at
+least one job. And a machine with nothing to inspect gets its own plain sentence
+— *"nothing on this machine has a schedule a reboot could take away"* — which is
+word for word what the checking command itself says, so the two halves finally
+agree rather than pointing at each other.
+
+One of the new tests was rewritten during the work because it could not fail.
+It compared two lists that the fix itself had made incapable of overlapping, so
+it would have gone green forever no matter how wrong the sentence a person
+actually reads had become. It now reads the names back out of that sentence.
+
+**Round four, and this one killed the whole report.** The check keeps a small
+notepad file on the machine recording what it last saw. Anything can write to
+that file, and the code that *writes* it was fussy about the format while the
+code that *reads* it barely looked — so a single bad line in that file did not
+produce a wrong answer, it produced no answer at all. `npm run doctor:node`
+prints its report in one go at the very end, so the crash threw away all six
+sections: which machine this is, whether the tools are installed, the checkouts,
+the settings, the timers, and the reboot check itself. I reproduced it exactly —
+**zero bytes of report, a stack trace instead** — and then again with the fix, on
+the same bad file: the full report, seven sections, and the reboot line reading
+*"this machine's role verification could not be read"* with the one command that
+clears it. That is the whole point. The moment you most need that command is the
+morning after a power cut, and it was one stray byte away from telling you
+nothing.
+
+The second fault was the same shape as ones already fixed twice on this ticket:
+the notepad says which machine it describes, and there was a guard to reject one
+copied from the *other* Mac — but a notepad that named **no** machine skipped
+that guard entirely and was accepted as this machine's own. Backwards: if a file
+turns up here at all, the likeliest explanation is that somebody copied a folder
+between the two Macs, and one that cannot even say whose it is has less to vouch
+for it, not more. Both halves now share one definition of a usable record, and
+neither will write or accept one that cannot name its machine.
+
+Last, a small readability fix that matters more than it sounds. The explanation
+line ran several separate findings together with no full stops, so a job that had
+**moved to the other Mac** read as a fourth job on this one with no timer — the
+line the operator reads to decide whether anything is wrong was quietly saying
+something untrue. Each finding is its own sentence now. All six fixes were broken
+on purpose, one at a time, and each one turned a named test red.
+## 2026-09-06 — A rule, instead of a fifth round of fixing the same bug (#602)
+
+Four times now, review has sent the bulk template change back for the same
+thing, and it has never once been the part that moves your pages — that half
+has been right since the first round. It is the *sentence you read afterwards*.
+Each round we fixed the exact sentences review named, and each round the same
+mistake turned up somewhere else. You looked at that pattern and picked option
+B: one more pass, wording only, with **a rule rather than another list — no
+sentence may state anything the code did not check.**
+
+That is now built as a mechanism, not a good intention. Every sentence that
+claims something happened has to be handed the fact that proves it, and a fact
+is three-way: yes, no, or *nobody checked*. "Nobody checked" is the default, and
+it never gets to make the claim. A test walks every combination of those facts
+and fails if any sentence ever says something its fact did not license — so a
+sentence written next month is covered by this too, which is the whole point.
+It found a fifth instance of the bug while it was being written.
+
+The three live faults are gone with it. The worst: if the change crashed
+half-way, the server's reply looked identical to a polite refusal, so the app
+told you *"an archive was saved just before this, so Archives has a new entry
+that undoes nothing"* — pointing you away from your only undo at the one moment
+pages really had been rewritten. The server now says outright when it refused
+before touching anything, so the app can tell the two apart instead of guessing.
+Second: the message said "the list has been reloaded" whether or not it had, and
+it fails precisely when everything else is failing — so you would check the
+Template column, see nothing moved, and reasonably conclude nothing happened. It
+now tells you when the list could not be refreshed. Third, one page live and
+unconfirmed read "1 of the selected page is live"; it reads properly now.
+
+All three were reproduced in a real browser before and after, by forcing the
+crash and the failed reload deliberately.
+
+## 2026-09-04 — Move a whole batch of pages onto a different template in one go (#602)
+
+Builder: Pages now has a fourth button above the table — **Change Template**.
+Filter the list down to one template, tick the box at the top-left of the table
+to select everything showing, pick a new template, and all of those pages move
+onto it at once. Each one is rebuilt with the new template's layout, which is
+what you asked for when this was specced: not just relabelling the pages, but
+actually re-pouring them.
+
+That is a destructive thing to do to a page — it is the same operation that
+emptied 35 sections off the Delray home page back in August — so two things
+happen automatically and cannot be switched off. First, an archive of your
+pages is saved *before* a single page is touched; if that archive cannot be
+saved, nothing changes at all and it tells you so. Second, every page is read
+back after it is written and the message tells you how many came back correct,
+rather than trusting that the save worked. Undo is the Archives button: open
+the archive it just made and click Restore All. One caveat the dialog now
+states plainly — that archive holds *all* your pages, so restoring it also
+rolls back any other page edits made after it was taken.
+
+The list of templates you can move pages onto is deliberately shorter than the
+one in the filter dropdown at the top of the column. The filter is for looking;
+this is for writing. Three kinds of entry in that filter would have destroyed
+pages rather than re-templated them: a built-in placeholder that has no layout
+at all, the "starter" templates whose layouts only exist inside the browser,
+and your email templates, which are not page layouts. The picker offers your
+real, saved page templates and nothing else, and if a project has none it says
+so instead of showing you an empty box.
+
+Review sent this back once, and it was right to. The dangerous half — the
+archive, the re-pour, the read-back — was sound, but the layer that *tells you
+what happened* was not, in four ways. If the request died half way through, the
+table kept showing the old template names while the pages underneath had
+already been rewritten; it now reloads the list and says plainly that some
+pages may have moved and some may not. If some pages failed *and* some could
+not be confirmed in the same run, the "could not be confirmed" warning vanished
+entirely and those pages were counted as moved; all three numbers are now
+always reported. The warning told you to check the pages "before publishing",
+which invents a step that does not exist — a page with no published copy is
+served straight to visitors, so the dialog now names how many of the pages you
+have selected are live on the public site right now (38 of 43, in the Delray
+project). And an archive lookup that merely *failed* used to tell you that you
+had not taken an archive at all, sending you off to make one that already
+existed; only a genuine "not found" says that now.
+
+Review sent it back a second time, at the same layer, and the headline one was
+a beauty: when the server flatly *refused* the change — "no archive with that
+id, nothing was changed" — the app pasted its own "the request failed part-way,
+so some pages may already have been changed" onto the end and then pointed you
+at Restore All. One message saying both things at once, recommending the
+biggest undo in the app in response to something that had changed nothing.
+Those are two different events and the app could not tell them apart; it can
+now, and when the server refuses you get the server's sentence and nothing
+else. Second: the archive was being taken *before* the server checked whether
+the change was allowed, so a refusal left a full copy of all 138 pages sitting
+in Archives having undone nothing — two of those in a row and your real
+archives fall off the end of the list you are being told to restore from. The
+app now asks first and archives second, and if a refusal does slip through
+after the archive was taken it says so, so the extra entry is not a mystery.
+Third, and smallest to say but not to read: with exactly one page unconfirmed
+the warning read "they is live on the public site". Three more were taken while
+in there — a database error that merely *looked* like a bad archive id no
+longer reads as one, an empty template list now says whether it is empty
+because you have none or because the list would not load, and each page now
+costs one database read fewer, which on a 43-page selection is 43 fewer round
+trips inside a function that has run out of time before.
+
+Review sent it back a third time, and it was the same defect wearing a third
+face — this time on the run where *nothing had gone wrong*. All of the
+sentences this feature shows you live in one small file that the page loads
+separately. If that file does not arrive — a bad deploy, a cached miss, a
+browser blocking it — then the code that writes the message crashes. It was
+crashing *inside* the block whose job is to catch a failed request, so a run in
+which every page moved and every page was confirmed reported a raw programming
+error followed by "some pages may already have been changed" and, once again, a
+recommendation to Restore All. The worst possible advice at the calmest possible
+moment. Two things changed: the message is now built after the request is
+finished with, so a problem writing the message can no longer be mistaken for a
+problem with the change; and all three places that reach for that file now go
+through one guarded door with a plain sentence to fall back on — one that tells
+you the change ran, tells you where to look, and never recommends the big undo.
+Measured in a real browser with the file blocked, before and after.
+
+Two smaller ones went in with it. A bulk template change now appears in Page
+History as "Template changed by <your name>" rather than as an ordinary edit by
+nobody, which matters because that entry is the per-page undo for this exact
+operation. And the check that confirms your archive exists was loading every
+page in the project to do it — 138 page layouts pulled across to answer a
+yes-or-no question, right before the write that has run out of time before.
+## 2026-09-06 — A blog list said "13" and showed 9, with no way to see the rest (#629)
+
+On a client's tag page, the heading read *"Blog posts matching the tag 'junior
+tennis': 13"* and the page showed **nine** posts. There was no next-page link, no
+"load more", and nothing anywhere saying the list had been shortened. Four posts
+simply were not there. A visitor who counts the cards decides the site is broken;
+a visitor who does not never learns those four exist.
+
+The count was telling the truth. The list was not. The module worked out how many
+posts matched, printed that number, and then drew only as many cards as its
+"Posts per page" setting allowed — and threw the remainder away without a word.
+Turning that setting up would only have moved the problem further down the page.
+
+There was a second, quieter version of the same fault underneath it. The list only
+ever asked the server for the **first 100 posts**, then did all its sorting and
+filtering inside the visitor's browser. Any site with more than 100 published posts
+would find that a tag on an older post came up completely empty — and the message
+we added last week, *"No posts tagged 'junior tennis'"*, would have stated that
+confidently and been wrong. A confident wrong answer is worse than a vague one.
+
+Both are fixed. The list now keeps asking the server for the next hundred posts
+until it has them all, so no filter can miss an older one. And under the cards
+there is now a **"Show more posts"** button with a line reading **"Showing 9 of
+13"** beside it, so what the page claims and what a visitor can actually reach are
+the same thing. Click it and the rest appear; when everything is on screen, both
+the button and the line go away. Changing a filter starts the list over at the top.
+
+One more piece of honesty went in with it: if the list ever cannot read the whole
+archive, it says "of 250 **or more**" rather than a firm number, and an empty
+result says so instead of claiming nothing matched. The module should never make a
+confident statement about posts it never looked at.
+## 2026-09-05 — Every ticket the reconciler closed was told '[object Object]' did it (#619)
+
+When the automatic reconciler notices that a ticket's work has already been
+merged and shipped, it moves the ticket to `Live` and leaves a note on it
+explaining what happened and which machine did it. That note is the only
+explanation you get for a machine touching your ticket — so it matters that it
+reads like a sentence.
+
+It did not. Where the machine's name should have been, every one of those notes
+said `[object Object]`. The most recent was on 5 September. The cause is the
+kind of thing that is invisible until you see it once: the function that answers
+"which machine am I?" hands back a small bundle of facts about the machine — its
+name, where that name came from, which file it was read out of — and the
+reconciler was dropping the whole bundle into the sentence instead of pulling
+the name out of it. When you put a bundle of facts where a word belongs,
+JavaScript writes the words "object Object" in square brackets and carries on
+without complaining.
+
+The evidence half of the note — the pull request link and the merge time — was
+always right, so nothing was ever closed for the wrong reason. But a note that
+reads like broken software undermines the one instruction it carries ("Reopen
+the ticket and say so on it"), and that instruction is what a newer safeguard
+relies on. Fixed, along with tests that pin the shape rather than the wording:
+if that bundle of facts ever changes form again, the tests go red here rather
+than the sentence going wrong on Dane's board.
+## 2026-09-05 — The SQL hand-off check could jam itself shut, and then keep asking for a file you already had (#620)
+
+When an agent finishes a turn on a branch that adds a database script, a check
+makes it hand that script to you properly rather than mentioning it in passing.
+That check is allowed to interrupt at most three times in a session and then
+step aside, because a check that can jam a conversation shut is worse than the
+thing it is guarding against.
+
+It keeps that count in a small file, with a backup location for when the first
+one is unavailable. The two halves of that arrangement disagreed: the part that
+*reads* the count stopped at the first file it could open, while the part that
+*saves* it stopped at the first file it could write to. So if the main file
+stayed readable but stopped accepting writes, every save went to the backup and
+every read came back from the stale original. The count never moved, the
+step-aside never happened, and the check would have interrupted every turn from
+then on — the exact jam the limit exists to prevent, arriving through the limit.
+The same freeze lost the list of scripts already handed over, so a file you had
+already been given got asked for again on every turn afterwards.
+
+Reading and saving now happen in one place, and the read looks at every location
+rather than stopping at the first. Measured against the current live code in the
+same run: twelve turns with the file made read-only part-way through, the live
+code interrupts twelve times out of twelve; this branch interrupts three times
+and then stands aside, which is what it was always meant to do.
+
+Review then caught a second fault of the same shape, and it was the more
+dangerous direction. That backup location is shared by the whole machine, and
+the file in it was named after the session alone. One session here often has
+several folders open at once — that is the normal way of working — so all of
+them were sharing a single count. Once the first folder's own file froze and its
+count spilled into the shared backup, the newly-thorough read handed that
+spent-up count to every other folder, and the check went completely silent in
+them: not interrupting too much, but never interrupting at all, for the rest of
+the session. The same shared file also carried the list of scripts already
+handed over, so a script handed to you from one folder counted as handed over
+from all of them. The backup file is now named after the folder as well as the
+session. Measured against the current live code in one run: a healthy second
+folder gets none of its three interruptions today, and all three with this fix.
+Nothing to look at — this only runs between an agent's turns.
 
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
