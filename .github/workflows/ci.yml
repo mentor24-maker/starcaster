@@ -191,6 +191,18 @@ jobs:
         # being fixed is not one an advisory warning will hold.
         run: npm run check:builder-notes
 
+      - name: Builder-time scaffolding cannot reach visitors (blocking)
+        # The rendering sibling of the gate above. The grep can only find a
+        # phrase it already knows; the three placeholders live on client sites
+        # in ticket 86bbvqcbk were plain JSX branches with no such phrase in
+        # them, and four review rounds each closed one and missed the next.
+        # This renders all 61 module types with liveSite set — on their own, in
+        # a table cell, and in a mega-menu feature slot, because two of those
+        # containers were dropping the liveSite prop entirely — and reads the
+        # text a visitor would actually get. Blocking, for the same reason:
+        # what it catches ships to a client's public site.
+        run: npm run check:live-placeholders
+
       - name: AI token metering coverage (blocking)
         # A model call that records nothing is invisible spending. The meter was
         # restored repo-wide on 2026-08-17 (13 call sites); this gate keeps it

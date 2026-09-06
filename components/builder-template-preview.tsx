@@ -619,6 +619,15 @@ function CrmFormPreview({
   const visibleFields = publicFormFields(form.fields ?? []).filter(
     (field) => !(liveSite && crmSelectHasNothingToChoose(field))
   );
+  /*
+   * Every field was dropped by the filter above. On a published page that is a
+   * heading and a Submit button over nothing — and a click posts, writes an
+   * empty contact row and thanks the visitor for it (ticket 86bbvqcbk,
+   * finding 3). `saveForm` refuses a form with no fields at all, so reaching
+   * this takes a form whose fields are ALL option-less dropdowns: rare, not
+   * impossible. The canvas still draws it, which is where it can be fixed.
+   */
+  if (liveSite && visibleFields.length === 0) return null;
   const labelStyle = {
     justifySelf: renderStyles.cssVars['--crm-form-label-justify'],
     textAlign: renderStyles.normalized.labelAlign as CSSProperties['textAlign'],
@@ -1348,11 +1357,25 @@ function CrmContactsTablePreview({
   );
 }
 
-function MerchProductCard({ settings }: { settings: Record<string, string> }) {
+function MerchProductCard({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
   const productName = settings.productName || "Merch product";
   const imageUrl = resolvePublicBuilderAssetUrl(settings.imageUrl);
   const productUrl = resolvePublicBuilderAssetUrl(settings.productUrl);
   const buttonLabel = settings.buttonLabel || "Buy on Redbubble";
+  /*
+   * Nothing has been filled in, so the card would render the words "Merch
+   * product" as if they were the product — sample copy on a client's shop
+   * (ticket 86bbvqcbk). The canvas keeps it: it is the placeholder that shows
+   * the card is there to configure.
+   */
+  if (liveSite && !settings.productName && !imageUrl && !productUrl) return null;
 
   return (
     <div className="product-card">
@@ -2111,7 +2134,7 @@ function BuilderModulePreview({
   const variant = module.settings.variant ?? "";
 
   if (module.type === "navigation") {
-    return <NavigationModulePreview module={module} previewMode={previewMode} />;
+    return <NavigationModulePreview module={module} previewMode={previewMode} liveSite={liveSite} />;
   }
 
   if (module.type === "heading") {
@@ -2185,7 +2208,7 @@ function BuilderModulePreview({
   }
 
   if (module.type === "merch") {
-    return <MerchProductCard settings={module.settings} />;
+    return <MerchProductCard settings={module.settings} liveSite={liveSite} />;
   }
 
   if (module.type === "quote") {
@@ -2250,6 +2273,15 @@ function BuilderModulePreview({
   }
 
   if (module.type === "player-portal") {
+    /*
+     * StarCaster has no player portal (BUILDER_CAPABILITIES.playerPortal), so
+     * this module renders a stub reading "Player Portal modules are not
+     * available in StarCaster." That is a note to whoever is building the
+     * page — it names our product on a tenant's own site, to a reader who can
+     * do nothing about it (ticket 86bbvqcbk). It stays on the canvas, where
+     * it is the only thing explaining why the module is blank.
+     */
+    if (liveSite) return null;
     return (
       <PlayerPortalAuthForm
         settings={getPlayerPortalAuthSettings(module.settings)}
@@ -2262,6 +2294,12 @@ function BuilderModulePreview({
     const embed = getVideoEmbedSource(module.settings.url);
     const title = module.settings.videoName || module.name || module.text || "Video";
     const opensInNewTab = module.settings.newTab !== "false";
+    /*
+     * No URL: the frame below is empty and the caption falls back to the word
+     * "Video" — an empty box under the module's own name, which is design-time
+     * chrome rather than anything a visitor can use (ticket 86bbvqcbk).
+     */
+    if (liveSite && !embed) return null;
 
     return (
       <figure className="builder-preview-video-card">
@@ -2302,6 +2340,7 @@ function BuilderModulePreview({
           module={module}
           variant={variant}
           placeholder="Choose a floating image"
+          liveSite={liveSite}
         />
       );
     }
@@ -2318,6 +2357,7 @@ function BuilderModulePreview({
             sectionScopedDecor={isSectionScopedOverlayDecor(module)}
             variant={variant}
             placeholder="Choose a floating image"
+            liveSite={liveSite}
           />
         ) : null}
         {usesOverlayHost ? (
@@ -2340,12 +2380,13 @@ function BuilderModulePreview({
         variant={variant}
         placeholder="Choose an image"
         columnWidthPercent={columnWidthPercent}
+        liveSite={liveSite}
       />
     );
   }
 
   if (module.type === "table") {
-    return <TableModulePreview module={module} />;
+    return <TableModulePreview module={module} liveSite={liveSite} />;
   }
 
   if (module.type === "social") {
@@ -2369,7 +2410,14 @@ function BuilderModulePreview({
   }
 
   if (module.type === "confetti") {
-    return <BuilderConfettiRuntime preview settings={module.settings} />;
+    /*
+     * `preview` was hardcoded true, so a published page ran the module's
+     * BUILDER chrome: an on-load confetti told the visitor "Confetti runs when
+     * this page loads" and offered them a Test Burst button, and a game-trigger
+     * module explained that it has no button on the live page — on the live
+     * page (ticket 86bbvqcbk).
+     */
+    return <BuilderConfettiRuntime preview={!liveSite} settings={module.settings} />;
   }
 
   if (module.type === "tractor-nav") {
@@ -2380,7 +2428,7 @@ function BuilderModulePreview({
     if (shouldRenderBlogPostManager(module.settings)) {
       return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
     }
-    return <BlogPostListPreview settings={module.settings} />;
+    return <BlogPostListPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-post-create") {
     return <BlogPostCreatePreview settings={module.settings} />;
@@ -2389,7 +2437,7 @@ function BuilderModulePreview({
     return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
   }
   if (module.type === "event-detail") {
-    return <EventDetailPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
+    return <EventDetailPreview settings={module.settings} theme={theme} themePalette={themePalette} liveSite={liveSite} />;
   }
   if (module.type === "event-calendar") {
     return <EventCalendarPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
@@ -2423,7 +2471,7 @@ function BuilderModulePreview({
     return <BlogPostTagsPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-post") {
-    return <BlogPostViewPreview settings={module.settings} />;
+    return <BlogPostViewPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-newsletter-subscribe") {
     return (
@@ -2564,7 +2612,14 @@ function resolveBlogPostManagerSettings(settings: Record<string, string>): Recor
  */
 const UNMATCHED_FILTER_VALUE = "__starcaster_unmatched_filter__";
 
-function BlogPostListPreview({ settings }: { settings: Record<string, string> }) {
+function BlogPostListPreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
   const [allPosts, setAllPosts] = useState<BlogPostRecord[]>([]);
   /*
    * Whether allPosts is the WHOLE published archive or as much of it as could
@@ -2933,7 +2988,16 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
       {visiblePosts.length === 0 ? (
         <div style={{ padding: "2rem", textAlign: "center", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
           {allPosts.length === 0 ? (
-            "No published posts yet. Use the Create Post module to add your first post."
+            /*
+             * "Use the Create Post module" names a tool the visitor cannot
+             * reach — it was unguarded on five published pages across two
+             * tenants (ticket 86bbvqcbk). A visitor gets the reason the list
+             * is empty and nothing else (landmine 17); the builder keeps the
+             * affordance.
+             */
+            liveSite
+              ? "No posts published yet."
+              : "No published posts yet. Use the Create Post module to add your first post."
           ) : (
             <>
               <div>{emptyFilteredMessage}</div>
@@ -5489,10 +5553,13 @@ function EventDetailPreview({
   settings,
   theme,
   themePalette,
+  liveSite = false,
 }: {
   settings: Record<string, string>;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const accent = settings.accentColor || "#0f4f8f";
   const backLinkUrl = (settings.backLinkUrl || "").trim();
@@ -5506,6 +5573,8 @@ function EventDetailPreview({
     || "We could not find that event. It may have been removed.";
 
   const [slug, setSlug] = useState("");
+  /* See BlogPostViewPreview: "" is also the value before the URL is read. */
+  const [urlRead, setUrlRead] = useState(false);
   const [event, setEvent] = useState<DetailEvent | null>(null);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -5515,6 +5584,7 @@ function EventDetailPreview({
   useEffect(() => {
     function syncSlugFromUrl() {
       setSlug(new URLSearchParams(window.location.search).get("event") ?? "");
+      setUrlRead(true);
     }
     syncSlugFromUrl();
     window.addEventListener("popstate", syncSlugFromUrl);
@@ -5595,6 +5665,25 @@ function EventDetailPreview({
   // No slug at all: the page has been opened directly rather than through a
   // calendar link. Said plainly, because a blank panel here reads as broken.
   if (!slug) {
+    /*
+     * A visitor cannot be asked to edit the address bar, so the
+     * "?event=your-event-slug" half of the note below is for whoever is
+     * BUILDING the page — and it was live on
+     * delraytennis.starcaster.pro/events-details (ticket 86bbvqcbk). They get
+     * the plain reason instead, and nothing at all until the URL has been
+     * read, so a valid event link no longer flashes this on its way in.
+     */
+    if (liveSite) {
+      if (!urlRead) return null;
+      return (
+        <div className="builder-event-detail" style={frameStyle}>
+          <p className="builder-event-detail-note">
+            No event selected. Open an event from the calendar to see its details.
+          </p>
+          {backLink}
+        </div>
+      );
+    }
     return (
       <div className="builder-event-detail" style={frameStyle}>
         <p className="builder-event-detail-note">
@@ -7935,7 +8024,14 @@ function BlogPostTagsPreview({
   );
 }
 
-function BlogPostViewPreview({ settings }: { settings: Record<string, string> }) {
+function BlogPostViewPreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
   type LivePost = BlogPostRecord & {
     body?: string;
     author?: string;
@@ -7947,6 +8043,13 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
   };
 
   const [postSlug, setPostSlug] = useState("");
+  /*
+   * Has the URL been read yet? `postSlug` is "" for the first render even when
+   * the address bar carries ?post=slug, so judging "no post" on that empty
+   * first value flashed the builder placeholder over a perfectly good post
+   * (ticket 86bbvqcbk).
+   */
+  const [urlRead, setUrlRead] = useState(false);
   const [post, setPost] = useState<LivePost | null>(null);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -7954,6 +8057,7 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
   useEffect(() => {
     function syncSlugFromUrl() {
       setPostSlug(new URLSearchParams(window.location.search).get("post") ?? "");
+      setUrlRead(true);
     }
     syncSlugFromUrl();
     window.addEventListener("popstate", syncSlugFromUrl);
@@ -8037,6 +8141,26 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
             dangerouslySetInnerHTML={{ __html: formatRichTextContent(post.body) || "" }}
           />
         ) : null}
+      </article>
+    );
+  }
+
+  /*
+   * No ?post= in the URL. Everything below is the BUILDER's placeholder —
+   * "Post Title", "Post body will appear here when opened with ?post=slug." —
+   * and with no liveSite prop it was reaching visitors on
+   * delraytennis.starcaster.pro/blog-post and on a law firm's public site,
+   * brandonmarinoff.com/blog-post-view (ticket 86bbvqcbk).
+   *
+   * A visitor gets plain copy naming the reason instead of a blank panel
+   * (landmine 17) — and nothing at all until the URL has actually been read,
+   * so a valid post link no longer flashes this on its way in.
+   */
+  if (liveSite) {
+    if (!urlRead) return null;
+    return (
+      <article className="blog-post-page">
+        <p className="blog-post-body">No post selected. Open a post from the blog to read it.</p>
       </article>
     );
   }
@@ -9981,7 +10105,8 @@ function NavMegaItem({
   onOpen,
   onClose,
   previewMode,
-  activePath
+  activePath,
+  liveSite = false
 }: {
   item: NavRenderItem;
   columns: NavMegaColumn<NavRenderItem>[];
@@ -9990,6 +10115,8 @@ function NavMegaItem({
   onClose: () => void;
   previewMode: boolean;
   activePath: string;
+  /** The feature slot below renders a whole module (ticket 86bbvqcbk). */
+  liveSite?: boolean;
 }) {
   const panelId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -10100,7 +10227,7 @@ function NavMegaItem({
             */}
           {item.featureModule ? (
             <div className="site-nav-mega-feature-module">
-              <BuilderModulePreview module={item.featureModule} previewMode={previewMode} />
+              <BuilderModulePreview module={item.featureModule} previewMode={previewMode} liveSite={liveSite} />
             </div>
           ) : featureImage || item.featureHeading ? (
             <Link className="site-nav-mega-feature" href={href}>
@@ -10119,10 +10246,13 @@ function NavMegaItem({
 
 function NavigationModulePreview({
   module,
-  previewMode = false
+  previewMode = false,
+  liveSite = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
   previewMode?: boolean;
+  /** A mega-menu column can hold a whole module — see NavMegaItem. */
+  liveSite?: boolean;
 }) {
   const pathname = usePathname();
   const activePath = normalizeNavPath(pathname || "/");
@@ -10254,6 +10384,7 @@ function NavigationModulePreview({
               item={item}
               activePath={activePath}
               previewMode={previewMode}
+              liveSite={liveSite}
               columns={buildMegaColumns(children, childrenOf, megaColumnCount)}
               isOpen={openMegaId === itemId}
               onOpen={() => setOpenMegaId(itemId)}
@@ -10302,7 +10433,18 @@ function NavigationModulePreview({
   );
 }
 
-function TableModulePreview({ module }: { module: import("@/lib/builder-template").BuilderTemplateModule }) {
+function TableModulePreview({
+  module,
+  liveSite = false
+}: {
+  module: import("@/lib/builder-template").BuilderTemplateModule;
+  /**
+   * A table CELL holds ordinary modules, so every liveSite guard in every one
+   * of them was bypassed inside a table until this prop existed — the guard
+   * was there, the prop never arrived (ticket 86bbvqcbk, finding 1).
+   */
+  liveSite?: boolean;
+}) {
   const td = parseTableData(module.settings);
   const borderW = Number.parseInt(module.settings.borderWidth || "1", 10);
   const borderC = module.settings.borderColor || "#cccccc";
@@ -10335,7 +10477,7 @@ function TableModulePreview({ module }: { module: import("@/lib/builder-template
                   <td key={ci} style={{ border: `${borderW}px solid ${borderC}`, padding: `${cellPad}px`, verticalAlign: "top" }}>
                     {cellMods.map((m) => (
                       <div key={m.id} className={`builder-preview-module ${getAlignmentClass(getModuleAlignment(m.settings))}`}>
-                        <BuilderModulePreview module={m} />
+                        <BuilderModulePreview module={m} liveSite={liveSite} />
                       </div>
                     ))}
                   </td>
