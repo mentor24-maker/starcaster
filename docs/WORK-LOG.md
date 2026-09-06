@@ -1,30 +1,31 @@
-## 2026-09-06 — A blog filter that could only see the newest hundred posts (#628)
+## 2026-09-06 — "You Might Also Like" could only see the newest hundred posts (#628)
 
-On a client's site, a blog page that filters posts — by tag, by category, by
-author, by date — does that sorting in the visitor's own browser. It asks the
-server for the posts first, and then narrows them down.
+On a client's site, the "You Might Also Like" box at the bottom of a blog post
+picks its suggestions in the visitor's own browser. It asks the server for the
+published posts first, then looks through them for ones sharing a tag with the
+post being read.
 
-The trouble was how many it asked for: a hundred. The server will not hand
-over more than a hundred at a time no matter what you ask, so on a blog with
-more than a hundred published posts, every filter on the page was quietly
-looking at only the newest hundred of them. A tag page would come up short, or
-come up empty, and there was nothing on the page to say why. "No posts have
-this tag" and "no posts in the newest hundred have this tag" looked exactly the
-same to a reader, and to us.
+The trouble was how many it asked for: a hundred. The server will not hand over
+more than a hundred at a time no matter what you ask, so on a blog with more
+than a hundred published posts, the box was only ever looking at the newest
+hundred. An older article could share every tag with what you were reading and
+still never be offered — and the box would say there was nothing related, which
+was simply not true.
 
 Delray has 55 posts today, 46 of them still unpublished drafts. Publishing that
 backlog would have taken the site straight past the limit, so this was about to
 stop being theoretical.
 
-The page now fetches the posts a hundred at a time until it has them all,
-which is the same thing the tag manager already does behind the scenes. A small
+The box now fetches the posts a hundred at a time until it has them all. A small
 blog is unaffected — nine posts still costs one trip to the server, exactly as
-before. There is still a ceiling, at a thousand posts, because a web page
-cannot make an unlimited number of requests while somebody waits for it; the
-difference is that reaching the ceiling now says so out loud on the page rather
-than silently showing less. A blog sitting at exactly a thousand posts gets no
-warning, because nothing is being hidden from it — warning about posts that do
-not exist is its own kind of wrong.
+before. If some of those trips fail, the box no longer passes off a partial
+search as a complete one: whoever is building the page is told the search was
+incomplete, while a visitor simply sees the suggestions that were found.
+
+The same bug on the main blog feed was fixed separately a few hours earlier
+(#630), and this change now shares that fix's paging code rather than carrying
+a second copy of it.
+
 ## 2026-09-06 — Scaffolding meant for the page builder was showing up on a client's blog (#627)
 
 When you drop a module onto a page in the Builder and have not filled it in
