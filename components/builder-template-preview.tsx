@@ -17,6 +17,11 @@ import {
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import { relatedIdsFor, relationChangesForPost, type PostRelationPair } from "@/lib/blog-post-relations";
 import {
+  incompleteListNotice,
+  readAllPublishedPosts,
+  type PublishedPostsRead,
+} from "@/lib/blog-published-posts";
+import {
   builderBackgroundParallaxActive,
   createDefaultBackgroundSettings,
   formatHeadingContent,
@@ -2518,6 +2523,16 @@ const UNMATCHED_FILTER_VALUE = "__starcaster_unmatched_filter__";
 
 function BlogPostListPreview({ settings }: { settings: Record<string, string> }) {
   const [allPosts, setAllPosts] = useState<BlogPostRecord[]>([]);
+  /*
+   * Whether the list the filters run over IS the whole blog. The feed used to
+   * ask for one page of 100 and filter that, so past 100 published posts a tag
+   * page showed an incomplete list with nothing saying so (task 86bbuncxj).
+   */
+  const [postsRead, setPostsRead] = useState<Pick<PublishedPostsRead<BlogPostRecord>, "truncated" | "ceiling" | "failedAtPage">>({
+    truncated: false,
+    ceiling: 0,
+    failedAtPage: 0,
+  });
   const [categories, setCategories] = useState<BlogCategory[]>([]);
   const [cardTemplate, setCardTemplate] = useState<CardTemplate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2598,8 +2613,15 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   useEffect(() => {
     const headers = getCrmProjectHeaders();
     Promise.all([
-      fetch(`/api/blog/posts?status=published&limit=100`, { credentials: "include", headers })
-        .then((r) => (r.ok ? r.json() : null)),
+      readAllPublishedPosts<BlogPostRecord>(async (page, pageSize) => {
+        const r = await fetch(
+          `/api/blog/posts?status=published&limit=${pageSize}&page=${page}`,
+          { credentials: "include", headers }
+        );
+        if (!r.ok) return null;
+        const d = await r.json();
+        return Array.isArray(d?.posts) ? (d.posts as BlogPostRecord[]) : null;
+      }),
       fetch("/api/blog/categories", { credentials: "include", headers })
         .then((r) => (r.ok ? r.json() : null)),
       fetch("/api/blog/card-template", { credentials: "include", headers })
@@ -2607,9 +2629,10 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
         .catch(() => null),
     ])
       .then(([pd, cd, td]) => {
-        const fetchedPosts = Array.isArray(pd?.posts) ? (pd.posts as BlogPostRecord[]) : [];
+        const fetchedPosts = pd.posts;
         const fetchedCats = Array.isArray(cd?.categories) ? (cd.categories as BlogCategory[]) : [];
         setAllPosts(fetchedPosts);
+        setPostsRead({ truncated: pd.truncated, ceiling: pd.ceiling, failedAtPage: pd.failedAtPage });
         setCategories(fetchedCats);
         const tplData = td?.template ?? td;
         if (tplData && typeof tplData === "object") setCardTemplate(migrateTemplate(tplData));
@@ -2721,6 +2744,17 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
     ? `Blog posts matching the ${singleFilter} \u201c${singleFilterValue}\u201d: ${filteredPosts.length}`
     : "";
 
+  /*
+   * When the list being filtered is NOT the whole blog, say so. An incomplete
+   * result that looks complete is the whole defect: "no posts tagged X" and
+   * "no posts tagged X among the ones this page can see" are different
+   * statements, and only one of them was ever shown (task 86bbuncxj).
+   *
+   * Visitor-safe on purpose, so it is not a BuilderOnlyNote (landmine 16): a
+   * reader filtering a partial list is being misled by the page itself.
+   */
+  const incompleteNotice = incompleteListNotice(postsRead);
+
   const emptyFilteredMessage = tagFilter
     ? `No posts tagged \u201c${tagFilter}\u201d.`
     : activeCategoryName
@@ -2827,6 +2861,15 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
           style={{ margin: "0 0 1.25rem", fontSize: "0.9375rem", fontWeight: 600, color: "#2d3748" }}
         >
           {resultsLine}
+        </div>
+      ) : null}
+
+      {incompleteNotice ? (
+        <div
+          className="builder-blog-post-list-incomplete-notice"
+          style={{ margin: "0 0 1.25rem", fontSize: "0.8125rem", color: "#718096" }}
+        >
+          {incompleteNotice}
         </div>
       ) : null}
 
@@ -8089,10 +8132,15 @@ function BlogRelatedPostsPreview({
         credentials: "include",
         headers
       }).then((r) => (r.ok ? r.json() : null)),
-      fetch(`/api/blog/posts?status=published&limit=100`, {
-        credentials: "include",
-        headers
-      }).then((r) => (r.ok ? r.json() : null)),
+      readAllPublishedPosts<BlogPostRecord>(async (page, pageSize) => {
+        const r = await fetch(`/api/blog/posts?status=published&limit=${pageSize}&page=${page}`, {
+          credentials: "include",
+          headers
+        });
+        if (!r.ok) return null;
+        const d = await r.json();
+        return Array.isArray(d?.posts) ? (d.posts as BlogPostRecord[]) : null;
+      }),
       showCategories
         ? fetch("/api/blog/categories", { credentials: "include", headers }).then((r) =>
             r.ok ? r.json() : null
@@ -8102,9 +8150,19 @@ function BlogRelatedPostsPreview({
       .then(async ([currentData, allData, catData]) => {
         const current: BlogPostRecord | null =
           (currentData?.data ?? currentData?.post ?? null) as BlogPostRecord | null;
-        const allPosts: BlogPostRecord[] = Array.isArray(allData?.posts)
-          ? (allData.posts as BlogPostRecord[])
-          : [];
+        const allPosts: BlogPostRecord[] = allData.posts;
+        /*
+         * The match ran over a slice of the blog rather than all of it, so
+         * "no other post shares a tag with this one" would be a claim about
+         * posts this module never saw (task 86bbuncxj). Builder-only: a
+         * visitor sees nothing at all from this module when it is empty, and
+         * a partial-but-populated result needs no visitor-facing caveat.
+         */
+        const scanCaveat = allData.truncated
+          ? ` Only the most recent ${allData.ceiling.toLocaleString()} published posts were searched.`
+          : allData.failedAtPage > 0
+            ? " Some published posts could not be loaded, so the search was incomplete."
+            : "";
         const fetchedCats: BlogCategory[] = Array.isArray(catData?.categories)
           ? (catData.categories as BlogCategory[])
           : [];
@@ -8143,7 +8201,7 @@ function BlogRelatedPostsPreview({
               ? ""
               : relatedIds.size === 0
                 ? "Nothing is related to this post yet. Open the post in the editor and pick its related posts."
-                : `${relatedIds.size} post${relatedIds.size === 1 ? " is" : "s are"} related to this one, but ${relatedIds.size === 1 ? "it is" : "none are"} published — a draft cannot appear here.`
+                : `${relatedIds.size} post${relatedIds.size === 1 ? " is" : "s are"} related to this one, but ${relatedIds.size === 1 ? "it is" : "none are"} published — a draft cannot appear here.${scanCaveat}`
           );
           return;
         }
@@ -8160,7 +8218,9 @@ function BlogRelatedPostsPreview({
         });
 
         setRelatedPosts(filtered.slice(0, count));
-        setEmptyReason(filtered.length > 0 ? "" : matchFailureReason(current, matchBy, allPosts.length));
+        setEmptyReason(
+          filtered.length > 0 ? "" : matchFailureReason(current, matchBy, allPosts.length) + scanCaveat
+        );
       })
       .catch(() => {
         setRelatedPosts([]);
