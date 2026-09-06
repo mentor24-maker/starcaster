@@ -783,6 +783,32 @@ function mergeObserveBudget({ used = 0, cap = MAX_IN_PASS_WAITS, waitMs = IN_PAS
 }
 
 /**
+ * Did that merge observation actually SPEND one of the pass's waits?
+ *
+ * WHY THIS IS NOT `observeBudget.charged` (round 3 of task 86bbv35cq). The
+ * slot was drawn BEFORE the observation, so a queue-less merge — which returns
+ * on the first read having slept 0ms, and is every merge on this repo today —
+ * still cost one of three. Measured: three ordinary merges in a pass left
+ * `used = 3/3`, and `mayWaitInPass` then refused the fourth ticket its real
+ * review-gate or CI wait and deferred it a whole ten-minute interval. For
+ * waits that never happened.
+ *
+ * That is criterion 5 — "it must work identically with NO queue enabled" —
+ * broken on the live path, by the accounting rather than by the wait.
+ *
+ * So the budget is charged on the way OUT, on evidence: `sleptMs` is what the
+ * observation really blocked for. `charged` still gates it, because a pass
+ * with no slots left is handed `timeoutMs: 0` and must not somehow spend a
+ * fourth.
+ *
+ * @param charged  whether a slot was available (mergeObserveBudget().charged)
+ * @param sleptMs  what the observation actually blocked for (waitForMerge)
+ */
+function mergeObservationSpendsSlot({ charged = false, sleptMs = 0 } = {}) {
+  return Boolean(charged) && Number(sleptMs) > 0;
+}
+
+/**
  * Given a freshly re-read gate and how long we have been waiting, what next?
  *
  * Deliberately does NOT re-implement the gate. `merge`, `refuse` and
@@ -1599,6 +1625,7 @@ module.exports = {
   IN_PASS_POLL_MS,
   MAX_IN_PASS_WAITS,
   mergeObserveBudget,
+  mergeObservationSpendsSlot,
   mayWaitInPass,
   afterCatchUpDecision,
   MERGE_PHRASES,

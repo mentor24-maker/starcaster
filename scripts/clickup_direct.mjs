@@ -2072,7 +2072,6 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     used: inPassBudget ? inPassBudget.used : Infinity,
     cap: inPassBudget ? inPassBudget.cap : 0,
   });
-  if (observeBudget.charged && inPassBudget) inPassBudget.used += 1;
   const observed = mergeCompletion.waitForMerge({
     now: () => Date.now(),
     sleep: sleepBlocking,
@@ -2085,15 +2084,40 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     },
   });
 
+  // CHARGED ON THE WAY OUT, ON EVIDENCE (round 3). The slot used to be drawn
+  // above, before the observation — so a queue-less merge, which answers on the
+  // first read having slept 0ms and is every merge on this repo today, still
+  // cost one of three. Three ordinary merges in a pass left the budget spent
+  // and the fourth ticket's REAL review-gate wait refused, deferring it a whole
+  // interval, for waits that never happened. `sleptMs` is what it actually
+  // blocked for; the rule lives in mergeOnComment beside the budget it spends.
+  if (inPassBudget && mergeOnComment.mergeObservationSpendsSlot({
+    charged: observeBudget.charged, sleptMs: observed.sleptMs,
+  })) inPassBudget.used += 1;
+
   if (observed.outcome !== 'merged') {
     // THE THIRD ANSWER (DOCTRINE 3.2). Not a success — nothing is recorded,
     // the ticket does not move to Live, no merge time is invented and the bus
     // is not told a merge happened. Not a refusal either — the merge command
     // succeeded and GitHub may well land it minutes from now, so his
     // authorization stays UNSPENT and the next pass picks the ticket up and
-    // finds it merged. The merge window is given back: main has not moved, so
-    // holding it would idle the queue behind a merge that is out of our hands.
-    releaseMergeWindow('the merge was handed to GitHub and has not landed yet');
+    // finds it merged.
+    //
+    // THE WINDOW IS NOT ALWAYS GIVEN BACK (round 3). It used to be released on
+    // every non-merged outcome, `queued` included — and `queued` is precisely
+    // the state where GitHub is holding this pull request and will land it.
+    // Handing the window over there lets the next merge move main, which puts
+    // the held pull request behind (protection is strict:true), resets the
+    // checks it is waiting on, and it never lands: the livelock the window
+    // exists to prevent, arriving through its own fix. An armed merge already
+    // holds the window for exactly this reason; a queued one is the same
+    // deferred main move. The decision is in mergeCompletion, break-tested.
+    const disposition = mergeCompletion.windowDispositionAfterMerge(observed);
+    if (disposition.release) {
+      releaseMergeWindow(disposition.why);
+    } else {
+      console.error(`  MERGE WINDOW HELD by PR #${pr.number} — ${disposition.why}`);
+    }
     const why = observed.outcome === 'queued'
       ? `PR #${pr.number} was ENQUEUED, not merged — ${mergeCompletion.holdLabel(observed.hold)}, and it was still open after ${observed.polls} read(s). The ticket has NOT been moved to Live and no merge has been recorded; the next pass will find it merged and do the bookkeeping then.`
       : observed.outcome === 'not-merged'
@@ -2105,7 +2129,14 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         : observed.outcome === 'closed'
           ? `PR #${pr.number} is CLOSED without having merged. The ticket has NOT been moved to Live and no merge has been recorded.`
           : `whether PR #${pr.number} merged is UNKNOWN — ${observed.failedReads} read(s) came back blind, so nobody looked. The ticket has NOT been moved to Live and no merge has been recorded.`;
-    unchecked.push(`${task.id}: ${why}`);
+    // The window's fate rides along on the SAME line, because a held window
+    // stops every other merge on this machine and that is not something to
+    // learn from a log nobody reads. A released one says so too, so the two
+    // are never told apart by silence.
+    const windowNote = disposition.release
+      ? 'The merge window was given back.'
+      : 'The merge window is being HELD by this pull request until it lands or the lease bound clears it — no other merge runs meanwhile.';
+    unchecked.push(`${task.id}: ${why} ${windowNote}`);
     console.error(`  MERGE NOT OBSERVED on ${label}: ${observed.outcome} — ${why}`);
     return {
       outcome: 'merge-not-observed',

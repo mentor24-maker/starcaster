@@ -60,6 +60,42 @@ the whole pass still finishes inside its ten minutes — and the test that check
 that is no longer able to miss a wait standing outside the arithmetic, which is
 exactly how this one got through the first time.
 
+**Round 3 — the shared piece was right; the two places using it were not.**
+Review found five things, and one of them was serious enough that it would have
+gone wrong on the very first day the line was switched on.
+
+There is a rule here that only one branch may be going into `main` at a time —
+a "window". Whoever holds it, holds it until their merge lands, because a merge
+landing shoves every other branch behind it and makes them re-run their checks.
+The background job took the window, told GitHub to merge, and then — on being
+told *"it is in the line"* — handed the window straight back. The next merge
+then moved `main`, pushed the queued branch behind, reset its checks, and it
+never landed. Then the same thing again, forever: the exact traffic jam the
+window exists to prevent, arriving through its own fix. Being in the line is a
+merge that is definitely coming, so it now keeps the window, the same way
+GitHub's own auto-merge already did. Where nothing at all is holding the pull
+request, or where it genuinely could not be read, the two are told apart rather
+than guessed at.
+
+Second, the job's wait allowance was being spent on waits that never happened.
+Today's merges finish instantly, so a merge cost the job one of its three
+allowed pauses for pausing zero seconds — and three merges in one pass left the
+fourth ticket's *real* wait refused and put off for another ten minutes. The
+allowance is now spent on what actually happened, not on what might have.
+
+The other three were in `npm run ship`, and they were all the same shape as
+round 1: the script describing something it could not do. It told you to run it
+again and it would "see the merge and finish tidying up" — and it had no way to
+see an already-merged branch, so running it again opened a *second* pull
+request for work that was already live. It now checks that first, before
+anything else, and needs two independent yeses before it will skip: GitHub
+confirming a merged pull request, and `main` genuinely already containing the
+work. If either one cannot be read, it does not skip. It also stopped
+announcing "queued to merge" one line above "nothing is holding it" — round 1's
+own sentence, still being printed directly above its own correction — and it no
+longer spends twenty minutes retrying a lookup that could never have worked,
+when it can tell that in the first second.
+
 ## 2026-09-05 — A repair that moves real tickets is now actually tested (#623)
 
 There is a repair in the system called the sweep. When one of the machines dies

@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   classifyMergeState, classifyMergeHold, holdIsPending, holdLabel,
-  mergedAtOf, mergeTimeLabel, waitForMerge,
+  mergedAtOf, mergeTimeLabel, waitForMerge, windowDispositionAfterMerge,
   prObservationArgv, parsePrObservation, PR_OBSERVATION_QUERY,
 } = require('./mergeCompletion');
 
@@ -412,8 +412,19 @@ test('THE RELAY WAIT IS CHARGED TO THE PASS BUDGET, not standing beside it', () 
   const wait = mergeStep.indexOf('mergeCompletion.waitForMerge(', budget);
   assert.ok(wait > budget, 'and it asks BEFORE waiting, or the answer is decoration');
 
-  assert.match(mergeStep.slice(budget, wait), /inPassBudget\.used \+= 1/,
-    'a charged wait actually spends a slot, or the cap counts nothing');
+  // AND IT IS SPENT ON THE WAY OUT, ON EVIDENCE (round 3). This assertion used
+  // to require the charge BETWEEN the budget and the wait — which pinned the
+  // round-3 defect in place: a queue-less merge answers on the first read
+  // having slept 0ms, and still cost one of three slots. Three ordinary merges
+  // left the fourth ticket's REAL wait refused and deferred a whole interval.
+  // The slot is now drawn after the observation, on `sleptMs`.
+  assert.doesNotMatch(mergeStep.slice(budget, wait), /inPassBudget\.used \+= 1/,
+    'the slot is not drawn before the observation — an unspent wait must cost nothing');
+  const afterWait = mergeStep.slice(wait, mergeStep.indexOf("observed.outcome !== 'merged'", wait));
+  assert.match(afterWait, /mergeObservationSpendsSlot\(/,
+    'the charge asks the shared rule whether this observation actually waited');
+  assert.match(afterWait, /sleptMs: observed\.sleptMs/, 'and it decides on what the wait really blocked for');
+  assert.match(afterWait, /inPassBudget\.used \+= 1/, 'a wait that DID sleep still spends its slot');
 
   const call = mergeStep.slice(wait, mergeStep.indexOf('});', wait));
   assert.match(call, /timeoutMs: observeBudget\.timeoutMs/, 'the wait is bounded by that answer');
@@ -428,4 +439,157 @@ test('merge-not-observed is its own outcome, counted apart from merged and waiti
     /m\.outcome === 'merged' \|\| m\.outcome === 'merge-not-observed'/,
     'it is never counted as a merge'
   );
+});
+
+/* ------------------------------------------------------------ round 3 */
+
+test('sleptMs reports what the wait ACTUALLY blocked for, not what it was willing to', () => {
+  // The number a wait budget must be charged on. Today's queue-less merge
+  // answers on the first read; charging it a slot for a wait it never took is
+  // criterion 5 broken by the accounting rather than by the wait.
+  assert.equal(harness([MERGED]).sleptMs, 0, 'an immediate merge slept not at all');
+  assert.equal(harness([UNHELD]).sleptMs, 0, 'and neither does a refused one');
+  assert.equal(harness([CLOSED]).sleptMs, 0);
+
+  // Two OPEN-but-held reads before the merge: it really did sleep twice.
+  const queued = harness([ENQUEUED, ENQUEUED, MERGED], { pollIntervalMs: 15_000 });
+  assert.equal(queued.outcome, 'merged');
+  assert.equal(queued.sleptMs, 30_000, 'two polls, two sleeps');
+
+  // A wait that runs out its budget slept for it.
+  const timedOut = harness([ENQUEUED], { timeoutMs: 60_000, pollIntervalMs: 15_000 });
+  assert.equal(timedOut.outcome, 'queued');
+  assert.ok(timedOut.sleptMs > 0, 'the budget was really spent');
+  assert.ok(timedOut.sleptMs <= 60_000 + 15_000, 'and never wildly beyond it');
+
+  // A blind read is still a wait — nobody looked, but the pass did block.
+  assert.ok(harness([null], { timeoutMs: 30_000, pollIntervalMs: 15_000 }).sleptMs > 0);
+
+  // Every outcome reports it, so no caller has to guess.
+  for (const script of [[MERGED], [CLOSED], [UNHELD], [ENQUEUED], [null]]) {
+    assert.equal(typeof harness(script, { timeoutMs: 30_000 }).sleptMs, 'number');
+  }
+});
+
+test('THE ROUND-3 LIVELOCK: a QUEUED merge keeps the merge window', () => {
+  // The relay released the window on every non-merged outcome, `queued`
+  // included — and `queued` is the one outcome where GitHub is demonstrably
+  // holding the pull request and WILL land it. Release it, the next merge
+  // moves main, strict:true puts the held one behind, its checks reset, and it
+  // never lands. Round after round. The relay's own arming path says the rule
+  // outright 100 lines above: arming takes the window and holds it until the
+  // merge lands, because an armed merge is a main move, just a deferred one.
+  const queued = windowDispositionAfterMerge({ outcome: 'queued', hold: 'queue' });
+  assert.equal(queued.release, false, 'a queued merge is a deferred main move — it holds');
+  assert.match(queued.why, /still land it/);
+
+  const armed = windowDispositionAfterMerge({ outcome: 'queued', hold: 'auto-merge' });
+  assert.equal(armed.release, false, 'auto-merge holds it exactly as a queue entry does');
+});
+
+test('the window IS given back where nothing will merge it', () => {
+  // Releasing is right whenever something was positively observed that means
+  // no merge is coming — holding then would idle every other merge on this
+  // machine until the lease bound cleared it.
+  assert.equal(windowDispositionAfterMerge({ outcome: 'merged', hold: 'none' }).release, true);
+  assert.equal(windowDispositionAfterMerge({ outcome: 'closed', hold: 'none' }).release, true);
+
+  const refused = windowDispositionAfterMerge({ outcome: 'not-merged', hold: 'none' });
+  assert.equal(refused.release, true, 'read cleanly as OPEN with nothing holding it — no merge is coming');
+  assert.match(refused.why, /nothing is holding/);
+});
+
+test('a CANNOT-TELL holds the window rather than handing it out on a guess', () => {
+  // DOCTRINE 3.2, and the two errors are not symmetric: releasing wrongly is
+  // an unbounded silent livelock, holding wrongly costs one merge lane for the
+  // lease's 45-minute bound, which clears itself and is reported.
+  const blind = windowDispositionAfterMerge({ outcome: 'unknown', hold: 'unknown' });
+  assert.equal(blind.release, false, 'nobody looked — main may be moving right now');
+
+  const unreadableHold = windowDispositionAfterMerge({ outcome: 'not-merged', hold: 'unknown' });
+  assert.equal(unreadableHold.release, false,
+    'the merge did not happen, but whether GitHub is still holding it was not read');
+
+  // Nonsense in is a hold, never a release.
+  assert.equal(windowDispositionAfterMerge().release, false);
+  assert.equal(windowDispositionAfterMerge({}).release, false);
+  assert.equal(windowDispositionAfterMerge({ outcome: 'banana' }).release, false);
+});
+
+test('the disposition composes with waitForMerge, end to end', () => {
+  // The two halves have to agree in the shapes the relay actually produces,
+  // not just in hand-written objects.
+  const refused = harness([UNHELD]);
+  assert.equal(refused.outcome, 'not-merged');
+  assert.equal(windowDispositionAfterMerge(refused).release, true);
+
+  const held = harness([ENQUEUED], { timeoutMs: 30_000 });
+  assert.equal(held.outcome, 'queued');
+  assert.equal(windowDispositionAfterMerge(held).release, false);
+
+  const cannotTell = harness([OPEN_NO_HOLD]);
+  assert.equal(cannotTell.outcome, 'not-merged');
+  assert.equal(cannotTell.hold, 'unknown');
+  assert.equal(windowDispositionAfterMerge(cannotTell).release, false);
+
+  assert.equal(windowDispositionAfterMerge(harness([MERGED])).release, true);
+  assert.equal(windowDispositionAfterMerge(harness([CLOSED])).release, true);
+});
+
+test('the relay ASKS that decision rather than releasing unconditionally', () => {
+  const mergeStep = relayCode.slice(relayCode.indexOf('async function runMergeStep'));
+  const guard = mergeStep.indexOf("observed.outcome !== 'merged'");
+  const nextGuard = mergeStep.indexOf('const mergedAt =', guard);
+  const block = mergeStep.slice(guard, nextGuard);
+
+  assert.match(block, /windowDispositionAfterMerge\(observed\)/,
+    'the not-merged path asks the shared decision');
+  assert.doesNotMatch(
+    block,
+    /releaseMergeWindow\('the merge was handed to GitHub and has not landed yet'\)/,
+    'the unconditional release that caused the livelock is gone'
+  );
+  assert.match(block, /disposition\.release/, 'and it acts on the answer');
+  // A held window stops every other merge on this machine — it may not be
+  // learned from silence.
+  assert.match(block, /MERGE WINDOW HELD/, 'a hold is said out loud');
+  assert.match(block, /windowNote/, 'and it reaches the operator-facing line, not just the log');
+});
+
+test('ship no longer announces a queue on a merge that was simply refused', () => {
+  // Round 1's sentence survived one line above its own correction: onPoll
+  // fired for any `open` read, before the hold was classified, so a refused
+  // merge printed "#625 is queued to merge, not merged yet" and then "still
+  // OPEN and nothing is holding it" immediately below it.
+  const poll = shipCode.slice(shipCode.indexOf('onPoll: (state, elapsed'), shipCode.indexOf('if (mergeWait.outcome'));
+  assert.ok(poll.length > 0, 'ship has a progress hook');
+  assert.doesNotMatch(poll, /is queued to merge/, 'it no longer asserts a queue it has not established');
+  assert.match(poll, /holdIsPending\(classifyMergeHold\(prJson\)\)/,
+    'it classifies the hold before saying anything');
+  assert.match(poll, /return;/, 'and says nothing at all when nothing is holding it');
+});
+
+test('ship answers a blind repository slug BEFORE spending twenty minutes on it', () => {
+  // With no slug every observation is blind by construction — the query is
+  // asked about owner "" — so the wait polled the full ceiling, eighty reads,
+  // and then reported `unknown` naming this as the likelier cause. It is
+  // knowable before the first poll.
+  const slug = shipCode.indexOf('const repoSlug =');
+  const wait = shipCode.indexOf('const mergeWait = waitForMerge(');
+  assert.ok(slug > 0 && wait > slug);
+  const between = shipCode.slice(slug, wait);
+  assert.match(between, /if \(!repoSlug\)/, 'the blind case is settled before the wait');
+  assert.match(between, /fail\(/, 'and it stops rather than polling a read that cannot succeed');
+});
+
+test("ship's queued and unknown endings no longer promise a path ship does not have", () => {
+  // Measured: `gh pr list --head <branch> --state open` returns nothing for a
+  // merged pull request, so "run ship again and it will see the merge" used to
+  // fall through to `gh pr create` and open a second one. Ship has that path
+  // now (builder/shipAlreadyLive), so the advice is true — and it is worded
+  // against what that path actually does.
+  const queued = shipCode.slice(shipCode.indexOf("mergeWait.outcome === 'queued'"), shipCode.indexOf("mergeWait.outcome === 'unknown'"));
+  assert.match(queued, /already in main/, 'it names the check the rerun actually performs');
+  assert.doesNotMatch(queued, /working\\n' \+\s*'through the merge queue/, "and never asserts a queue that is not there");
+  assert.match(shipCode, /decideAlreadyLive\(/, 'and the path it promises exists');
 });

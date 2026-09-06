@@ -249,8 +249,14 @@ function holdLabel(hold) {
  * @param pollIntervalMs gap between reads.
  * @param onPoll   (state, elapsedMs, prJson) => void  progress hook.
  *
- * @returns { outcome, mergedAt, polls, failedReads, state, hold } where
- * outcome is:
+ * @returns { outcome, mergedAt, polls, failedReads, sleptMs, state, hold } where
+ * `sleptMs` is how long the wait ACTUALLY blocked for — 0 when it answered on
+ * the first read, which is every merge on a queue-less repo. A caller that
+ * charges a wait budget must charge it on that, not on having been willing to
+ * wait (round 3 of this ticket): the relay spent one of its three in-pass
+ * slots on every ordinary merge for a wait it never took, so three merges in a
+ * pass left the fourth ticket's real CI wait refused and deferred a whole
+ * interval. And outcome is:
  *   'merged'     — observed MERGED. `mergedAt` is GitHub's time (or null if it
  *                  reported none).
  *   'closed'     — observed CLOSED without merging. It will not merge.
@@ -281,6 +287,7 @@ function waitForMerge({
   const start = now();
   let polls = 0;
   let failedReads = 0;
+  let sleptMs = 0;
   let sawHeld = false;
   let lastHold = 'unknown';
 
@@ -297,10 +304,10 @@ function waitForMerge({
     if (typeof onPoll === 'function') onPoll(state, elapsed, prJson);
 
     if (state === 'merged') {
-      return { outcome: 'merged', mergedAt: mergedAtOf(prJson), polls, failedReads, state, hold: classifyMergeHold(prJson) };
+      return { outcome: 'merged', mergedAt: mergedAtOf(prJson), polls, failedReads, sleptMs, state, hold: classifyMergeHold(prJson) };
     }
     if (state === 'closed') {
-      return { outcome: 'closed', mergedAt: null, polls, failedReads, state, hold: classifyMergeHold(prJson) };
+      return { outcome: 'closed', mergedAt: null, polls, failedReads, sleptMs, state, hold: classifyMergeHold(prJson) };
     }
     if (state === 'open') {
       // THE ROUND-2 FIX. "Still open" is not "enqueued" until something says
@@ -310,7 +317,7 @@ function waitForMerge({
       // that does not exist. Answer now, with the truth.
       lastHold = classifyMergeHold(prJson);
       if (!holdIsPending(lastHold)) {
-        return { outcome: 'not-merged', mergedAt: null, polls, failedReads, state, hold: lastHold };
+        return { outcome: 'not-merged', mergedAt: null, polls, failedReads, sleptMs, state, hold: lastHold };
       }
       sawHeld = true;
     } else {
@@ -326,12 +333,94 @@ function waitForMerge({
         mergedAt: null,
         polls,
         failedReads,
+        sleptMs,
         state,
         hold: sawHeld ? lastHold : 'unknown',
       };
     }
     sleep(pollIntervalMs);
+    sleptMs += pollIntervalMs;
   }
+}
+
+/**
+ * A merge was ordered and did NOT complete. Does the caller give the merge
+ * window back?
+ *
+ * WHY THIS IS A DECISION AND NOT A LINE OF CODE (round 3 of task 86bbv35cq).
+ * The relay released the window on EVERY non-merged outcome, `queued`
+ * included — and `queued` is the one outcome where GitHub is demonstrably
+ * holding the pull request and WILL land it. That is the livelock the window
+ * exists to prevent, arriving through its own fix: release it, the next merge
+ * moves `main`, `strict: true` puts the held pull request behind, its checks
+ * reset, and it never lands. Round after round.
+ *
+ * The relay's own arming path already states the rule 100 lines above:
+ * "ARMING IS A MAIN MOVE, just a deferred one... Two armed pull requests
+ * therefore reset each other exactly as two merged ones would, so arming takes
+ * the window and holds it until the merge lands." A `queued` merge is exactly
+ * that state and gets exactly that treatment.
+ *
+ * So the window is given back only where something was POSITIVELY OBSERVED
+ * that means no merge is coming:
+ *
+ *   'merged'     — it landed. main has moved; the window's job is done.
+ *   'closed'     — closed without merging. Nothing will land it.
+ *   'not-merged' with hold 'none' — read cleanly as OPEN with no queue entry
+ *                  and no auto-merge. GitHub refused it and is not holding it.
+ *
+ * Everything else HOLDS, and every one of those is a cannot-tell rather than a
+ * known-idle window (DOCTRINE 3.2):
+ *
+ *   'queued'     — GitHub is holding it. Releasing is the livelock.
+ *   'unknown'    — no clean read was ever taken. The merge command succeeded,
+ *                  so main may be moving right now; nobody looked.
+ *   'not-merged' with hold 'unknown' — the merge did not happen, but whether
+ *                  GitHub is still holding it could not be read.
+ *
+ * The two errors are not symmetric, which is what settles the cannot-tells.
+ * Releasing wrongly is an unbounded, silent livelock. Holding wrongly costs
+ * one merge lane for the lease's 45-minute bound, which clears itself and is
+ * reported — the same trade the lease already makes when a pass dies between
+ * taking the window and pushing.
+ *
+ * @param observed a `waitForMerge` result (or anything with { outcome, hold })
+ * @returns {{ release: boolean, why: string }}
+ */
+function windowDispositionAfterMerge(observed) {
+  const outcome = String((observed && observed.outcome) || '');
+  const hold = String((observed && observed.hold) || 'unknown');
+
+  if (outcome === 'merged') return { release: true, why: 'it merged' };
+  if (outcome === 'closed') {
+    return { release: true, why: 'the pull request is closed without merging, so nothing will land it' };
+  }
+  if (outcome === 'not-merged' && hold === 'none') {
+    return {
+      release: true,
+      why: 'the merge did not happen and nothing is holding the pull request, so no merge is coming',
+    };
+  }
+  if (outcome === 'queued') {
+    return {
+      release: false,
+      why: `GitHub is holding this pull request and will still land it (${holdLabel(hold)}), `
+        + 'so the window stays taken exactly as an armed merge does — giving it back would let the '
+        + 'next merge move main, put this one behind, and reset the checks it is waiting on',
+    };
+  }
+  if (outcome === 'not-merged') {
+    return {
+      release: false,
+      why: 'the merge did not happen, but whether GitHub is still holding this pull request could '
+        + 'not be read — so the window is held rather than handed out on a guess',
+    };
+  }
+  return {
+    release: false,
+    why: 'no clean reading of the pull request was taken at all, so whether main is about to move '
+      + 'is unknown — the window is held rather than handed out on a guess',
+  };
 }
 
 module.exports = {
@@ -339,6 +428,7 @@ module.exports = {
   classifyMergeHold,
   holdIsPending,
   holdLabel,
+  windowDispositionAfterMerge,
   mergedAtOf,
   mergeTimeLabel,
   waitForMerge,

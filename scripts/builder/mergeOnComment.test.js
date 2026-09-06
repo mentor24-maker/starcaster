@@ -885,6 +885,7 @@ const {
   IN_PASS_POLL_MS,
   MAX_IN_PASS_WAITS,
   mergeObserveBudget,
+  mergeObservationSpendsSlot,
   mayWaitInPass,
   afterCatchUpDecision,
 } = require('./mergeOnComment.js');
@@ -1002,6 +1003,53 @@ test('the merge observation draws from the SAME budget, and never a second one',
   }
 });
 
+test('ROUND 3: a wait that never happened costs nothing', () => {
+  // The round-2 fix charged the slot BEFORE the observation, on being WILLING
+  // to wait. But today's queue-less merge answers on the first read having
+  // slept 0ms — so every ordinary merge spent one of three slots for a wait it
+  // never took. Measured: three ordinary merges in a pass left used = 3/3, and
+  // `mayWaitInPass` then refused the fourth ticket its real review-gate or CI
+  // wait and deferred it a whole ten-minute interval. That is criterion 5 —
+  // "identically with NO queue enabled" — broken on the live path, by the
+  // accounting rather than by the wait.
+  assert.equal(mergeObservationSpendsSlot({ charged: true, sleptMs: 0 }), false,
+    'the queue-less path: willing to wait, never waited, pays nothing');
+  assert.equal(mergeObservationSpendsSlot({ charged: true, sleptMs: 1 }), true,
+    'a wait that really blocked spends its slot');
+  assert.equal(mergeObservationSpendsSlot({ charged: true, sleptMs: IN_PASS_WAIT_MS }), true);
+
+  // `charged` still gates it: a pass with no slots left is handed timeoutMs 0,
+  // takes one read and no sleep, and may not somehow spend a fourth.
+  assert.equal(mergeObservationSpendsSlot({ charged: false, sleptMs: 0 }), false);
+  assert.equal(mergeObservationSpendsSlot({ charged: false, sleptMs: 90_000 }), false,
+    'an unbudgeted wait cannot spend a slot it was never given');
+
+  // Missing arguments are the free answer, never the expensive one.
+  assert.equal(mergeObservationSpendsSlot(), false);
+  assert.equal(mergeObservationSpendsSlot({}), false);
+
+  // THE MEASUREMENT THAT NAMED THE DEFECT, as arithmetic: three ordinary
+  // merges in one pass, and the fourth ticket still gets its real wait.
+  let used = 0;
+  for (let merge = 0; merge < 3; merge += 1) {
+    const budget = mergeObserveBudget({ used, cap: MAX_IN_PASS_WAITS });
+    // A queue-less merge: one read, no sleep.
+    if (mergeObservationSpendsSlot({ charged: budget.charged, sleptMs: 0 })) used += 1;
+  }
+  assert.equal(used, 0, 'three ordinary merges spend nothing');
+  assert.equal(mayWaitInPass(used, MAX_IN_PASS_WAITS), true,
+    'so the next ticket that needs a REAL wait still gets one');
+
+  // And three merges GitHub really held do spend the pass, as they should.
+  let held = 0;
+  for (let merge = 0; merge < 3; merge += 1) {
+    const budget = mergeObserveBudget({ used: held, cap: MAX_IN_PASS_WAITS });
+    if (mergeObservationSpendsSlot({ charged: budget.charged, sleptMs: budget.timeoutMs })) held += 1;
+  }
+  assert.equal(held, MAX_IN_PASS_WAITS, 'real waits are still counted');
+  assert.equal(mayWaitInPass(held, MAX_IN_PASS_WAITS), false, 'and still stop the pass overrunning');
+});
+
 test('worst case is bounded — a pass cannot outlast its own interval', () => {
   // launchd runs one instance per Label and COALESCES the firings it misses
   // while a pass is still running, so a long pass can never stack. What it can
@@ -1034,6 +1082,22 @@ test('worst case is bounded — a pass cannot outlast its own interval', () => {
   assert.equal(spent, worstMs,
     'merge observations must fit INSIDE the worst case, not be added to it');
   assert.ok(spent < intervalMs, 'so a pass that spends every slot on merges still fits its wake');
+
+  // AND THE ACCOUNTING RUNS THE SAME WALK (round 3). The ceiling above bounds
+  // how long each observation MAY block; this bounds what a pass actually
+  // blocks for once the slot is charged on evidence. Walk it as the relay
+  // does — draw a budget, wait for as long as it allows, charge only what
+  // really slept — and the total must still be the one worst case.
+  let realUsed = 0;
+  let realMs = 0;
+  for (let ticket = 0; ticket < MAX_IN_PASS_WAITS + 3; ticket += 1) {
+    const budget = mergeObserveBudget({ used: realUsed, cap: MAX_IN_PASS_WAITS });
+    const sleptMs = budget.timeoutMs; // the worst case: GitHub held it the whole way
+    realMs += sleptMs;
+    if (mergeObservationSpendsSlot({ charged: budget.charged, sleptMs })) realUsed += 1;
+  }
+  assert.equal(realMs, worstMs, 'charging on evidence must not let a pass wait longer than the bound');
+  assert.ok(realMs < intervalMs, 'so it still fits inside the relay\'s own wake');
 });
 
 test('the relay waits after BOTH catch-up paths, and merges the same way', () => {
