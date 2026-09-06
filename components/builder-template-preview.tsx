@@ -262,7 +262,15 @@ function getContactFormFields(mode: "squeeze" | "standard" | "custom"): ContactF
   return standardFields;
 }
 
-function ContactFormPreview({ settings, projectId = "" }: { settings: Record<string, string>; projectId?: string }) {
+function ContactFormPreview({
+  settings,
+  projectId = "",
+  liveSite = false,
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+  liveSite?: boolean;
+}) {
   const mode = getContactFormMode(settings);
   const fields = getContactFormFields(mode);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -339,7 +347,9 @@ function ContactFormPreview({ settings, projectId = "" }: { settings: Record<str
         ))}
       </div>
       {mode === "custom" ? (
-        <div className="builder-contact-form-stub">Custom form builder coming soon. Standard fields are shown for now.</div>
+        <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
+          Custom form builder coming soon. Standard fields are shown for now.
+        </BuilderOnlyNote>
       ) : null}
       <button className="builder-contact-form-submit" disabled={isSubmitting} type="submit">
         {isSubmitting ? "Submitting..." : "Submit"}
@@ -368,6 +378,30 @@ function crmPreviewInputType(fieldType: string) {
   return fieldType || "text";
 }
 
+/**
+ * The two words a dropdown shows on the Builder canvas when its Options box is
+ * still empty, so the field does not draw as a blank control while the page is
+ * being designed. They are CANVAS ONLY — see crmSelectHasNothingToChoose.
+ */
+const CRM_SELECT_CANVAS_SAMPLE = ["Option one", "Option two"];
+
+function crmConfiguredSelectOptions(field: CrmFormField): string[] {
+  return Array.isArray(field.options) ? field.options : [];
+}
+
+/**
+ * A `select` field the tenant never gave any options to — a dropdown with
+ * nothing in it to choose.
+ *
+ * This is the DEFAULT state of a newly added dropdown, not a misconfiguration:
+ * `select` is a field type any tenant can add (public/js/crm.js), its Options
+ * box is free text with no validation, and lib/crmConfigStore.js defaults
+ * `options` to []. Leave the box blank and the field arrives here.
+ */
+function crmSelectHasNothingToChoose(field: CrmFormField): boolean {
+  return field.type === "select" && crmConfiguredSelectOptions(field).length === 0;
+}
+
 function CrmFormFieldControl({
   field,
   value,
@@ -392,7 +426,12 @@ function CrmFormFieldControl({
   }
 
   if (field.type === "select") {
-    const options = Array.isArray(field.options) && field.options.length ? field.options : ["Option one", "Option two"];
+    // A live page never reaches this fallback: CrmFormPreview drops an
+    // option-less dropdown from a published form entirely (see visibleFields).
+    // Without that filter these two words render to visitors as real choices
+    // they can submit into the tenant's CRM as contact data.
+    const configured = crmConfiguredSelectOptions(field);
+    const options = configured.length ? configured : CRM_SELECT_CANVAS_SAMPLE;
     return (
       <select
         name={field.key}
@@ -571,7 +610,15 @@ function CrmFormPreview({
   const styleSnapshot = resolveCrmFormStyleSnapshot(settings);
   const effectiveStyles = styleSnapshot ?? form.styles;
   const renderStyles = crmFormStylesToRenderStyles(effectiveStyles, form.accentColor, renderContext);
-  const visibleFields = publicFormFields(form.fields ?? []);
+  // A dropdown with nothing to choose is not a usable field on a published
+  // page, so it is left out rather than drawn empty: an empty `<select>` that
+  // the tenant also marked required cannot be satisfied, and browser
+  // constraint validation then blocks the whole form for every visitor —
+  // trading demo data leaking out for a form nobody can submit. On the canvas
+  // the field stays, with its sample options, so it is still there to design.
+  const visibleFields = publicFormFields(form.fields ?? []).filter(
+    (field) => !(liveSite && crmSelectHasNothingToChoose(field))
+  );
   const labelStyle = {
     justifySelf: renderStyles.cssVars['--crm-form-label-justify'],
     textAlign: renderStyles.normalized.labelAlign as CSSProperties['textAlign'],
@@ -2082,19 +2129,19 @@ function BuilderModulePreview({
   }
 
   if (module.type === "headline-rotator") {
-    return <HeadlineRotatorPreview module={module} />;
+    return <HeadlineRotatorPreview module={module} liveSite={liveSite} />;
   }
 
   if (module.type === "carousel") {
-    return <CarouselPreview module={module} />;
+    return <CarouselPreview module={module} liveSite={liveSite} />;
   }
 
   if (module.type === "program-list") {
-    return <ProgramListModulePreview module={module} />;
+    return <ProgramListModulePreview module={module} liveSite={liveSite} />;
   }
 
   if (module.type === "feature-cards") {
-    return <FeatureCardsModulePreview module={module} previewMode={previewMode} />;
+    return <FeatureCardsModulePreview module={module} previewMode={previewMode} liveSite={liveSite} />;
   }
 
   if (module.type === "poll-category-list") {
@@ -2183,7 +2230,7 @@ function BuilderModulePreview({
   }
 
   if (module.type === "contact-form") {
-    return <ContactFormPreview projectId={projectId} settings={module.settings} />;
+    return <ContactFormPreview projectId={projectId} settings={module.settings} liveSite={liveSite} />;
   }
 
   if (module.type === "crm-form") {
@@ -2373,7 +2420,7 @@ function BuilderModulePreview({
     return <BlogTagCloudPreview settings={module.settings} projectId={projectId} liveSite={liveSite} />;
   }
   if (module.type === "blog-post-tags") {
-    return <BlogPostTagsPreview settings={module.settings} />;
+    return <BlogPostTagsPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-post") {
     return <BlogPostViewPreview settings={module.settings} />;
@@ -2412,7 +2459,7 @@ function BuilderModulePreview({
     module.type === "blog-author-bio" ||
     module.type === "blog-toc"
   ) {
-    return <BlogModulePlaceholder type={module.type} />;
+    return <BlogModulePlaceholder type={module.type} liveSite={liveSite} />;
   }
 
   if (module.type === "admin-team-users") {
@@ -7819,14 +7866,37 @@ function BlogTagCloudPreview({
   );
 }
 
-function BlogPostTagsPreview({ settings }: { settings: Record<string, string> }) {
+function BlogPostTagsPreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
   const rawTags = settings.tags || "";
-  const tags = rawTags
+  const configured = rawTags
     ? rawTags
         .split(",")
         .map((t) => t.trim())
         .filter(Boolean)
-    : ["Example", "Tag"];
+    : [];
+
+  /*
+   * PLACEHOLDERS ARE A BUILDER AFFORDANCE, NOT CONTENT — the same rule the
+   * tag cloud learned at line ~7595. The old line here was
+   * `rawTags ? … : ["Example", "Tag"]`, so a tenant with no tags set showed
+   * its visitors "Tags: Example Tag" as though those were the post's real
+   * tags (operator report, 2026-09-03, delraytennis.starcaster.pro/blog).
+   * The two words exist so the module is not an empty box while somebody is
+   * designing the page.
+   */
+  const tags = configured.length ? configured : liveSite ? [] : ["Example", "Tag"];
+
+  // Nothing to show and nobody to instruct: a visitor gets no module at all,
+  // not a lone "Tags:" prefix over empty space.
+  if (liveSite && tags.length === 0) return null;
+
   const layout = settings.layout || "pills";
   const color = settings.color || "#0f4f8f";
   const bgColor = settings.bgColor || "#eff6ff";
@@ -8187,10 +8257,21 @@ function BlogRelatedPostsPreview({
         credentials: "include",
         headers
       }).then((r) => (r.ok ? r.json() : null)),
-      fetch(`/api/blog/posts?status=published&limit=100`, {
-        credentials: "include",
-        headers
-      }).then((r) => (r.ok ? r.json() : null)),
+      /*
+       * Page through the archive rather than matching against the first 100.
+       * Tag matching happens in the browser, so a post the first page did not
+       * reach is a post no match can find, and "nothing relates to this" would
+       * be a claim about posts this module never saw (task 86bbuncxj).
+       */
+      readAllPages<BlogPostRecord>(async (page, limit) => {
+        const r = await fetch(`/api/blog/posts?status=published&limit=${limit}&page=${page}`, {
+          credentials: "include",
+          headers
+        });
+        if (!r.ok) throw new Error(`blog posts page ${page}: ${r.status}`);
+        const d = await r.json();
+        return Array.isArray(d?.posts) ? (d.posts as BlogPostRecord[]) : [];
+      }).catch(() => null),
       showCategories
         ? fetch("/api/blog/categories", { credentials: "include", headers }).then((r) =>
             r.ok ? r.json() : null
@@ -8200,9 +8281,17 @@ function BlogRelatedPostsPreview({
       .then(async ([currentData, allData, catData]) => {
         const current: BlogPostRecord | null =
           (currentData?.data ?? currentData?.post ?? null) as BlogPostRecord | null;
-        const allPosts: BlogPostRecord[] = Array.isArray(allData?.posts)
-          ? (allData.posts as BlogPostRecord[])
-          : [];
+        const allPosts: BlogPostRecord[] = allData ? allData.items : [];
+        /*
+         * The match ran over a slice of the blog rather than all of it, so
+         * "no other post shares a tag with this one" would be a claim about
+         * posts this module never saw (task 86bbuncxj). Builder-only: a
+         * visitor sees nothing at all from this module when it is empty, and
+         * a partial-but-populated result needs no visitor-facing caveat.
+         */
+        const scanCaveat = allData && allData.complete
+          ? ""
+          : " Not all published posts could be read, so the search was incomplete.";
         const fetchedCats: BlogCategory[] = Array.isArray(catData?.categories)
           ? (catData.categories as BlogCategory[])
           : [];
@@ -8241,7 +8330,7 @@ function BlogRelatedPostsPreview({
               ? ""
               : relatedIds.size === 0
                 ? "Nothing is related to this post yet. Open the post in the editor and pick its related posts."
-                : `${relatedIds.size} post${relatedIds.size === 1 ? " is" : "s are"} related to this one, but ${relatedIds.size === 1 ? "it is" : "none are"} published — a draft cannot appear here.`
+                : `${relatedIds.size} post${relatedIds.size === 1 ? " is" : "s are"} related to this one, but ${relatedIds.size === 1 ? "it is" : "none are"} published — a draft cannot appear here.${scanCaveat}`
           );
           return;
         }
@@ -8258,7 +8347,9 @@ function BlogRelatedPostsPreview({
         });
 
         setRelatedPosts(filtered.slice(0, count));
-        setEmptyReason(filtered.length > 0 ? "" : matchFailureReason(current, matchBy, allPosts.length));
+        setEmptyReason(
+          filtered.length > 0 ? "" : matchFailureReason(current, matchBy, allPosts.length) + scanCaveat
+        );
       })
       .catch(() => {
         setRelatedPosts([]);
@@ -9148,7 +9239,15 @@ function SiteSearchResultsPreview({
   );
 }
 
-function BlogModulePlaceholder({ type }: { type: string }) {
+/**
+ * Three module types have no renderer yet, so the canvas shows a named dashed
+ * box where one will go. That box is scaffolding for whoever is building the
+ * page — on a published site it is a grey rectangle reading "Author Bio" with
+ * nothing in it, which is the same defect as "Tags: Example Tag": a
+ * Builder-time affordance rendering at visit time. A visitor gets nothing.
+ */
+function BlogModulePlaceholder({ type, liveSite = false }: { type: string; liveSite?: boolean }) {
+  if (liveSite) return null;
   const labels: Record<string, string> = {
     "blog-post-card": "Post Card",
     "blog-author-bio": "Author Bio",
@@ -9188,9 +9287,12 @@ function BlogModulePlaceholder({ type }: { type: string }) {
  * renderer cannot disagree about it.
  */
 function CarouselPreview({
-  module
+  module,
+  liveSite = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const settings = module.settings;
   const format = settings.format === "cards" ? "cards" : "slideshow";
@@ -9405,6 +9507,10 @@ function CarouselPreview({
   }, [count, index]);
 
   if (count === 0) {
+    // The text below is addressed to whoever is BUILDING the page. A visitor
+    // has no editor, so on a live site the module is simply not there rather
+    // than a box telling them to do something they cannot do (landmine 16).
+    if (liveSite) return null;
     return (
       <div className="builder-preview-carousel builder-preview-carousel-empty">
         {isCards ? "Add cards in the editor" : "Add slides in the editor"}
@@ -9649,9 +9755,12 @@ function CarouselPreview({
 }
 
 function HeadlineRotatorPreview({
-  module
+  module,
+  liveSite = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const color = module.settings.color || "#18324a";
   const entries = useMemo(
@@ -9772,6 +9881,10 @@ function HeadlineRotatorPreview({
   };
 
   if (entries.length === 0) {
+    // The text below is addressed to whoever is BUILDING the page. A visitor
+    // has no editor, so on a live site the module is simply not there rather
+    // than a box telling them to do something they cannot do (landmine 16).
+    if (liveSite) return null;
     return (
       <div className="builder-preview-headline-rotator" style={containerStyle}>
         <span style={{ alignSelf }}>Add headlines in the editor</span>
@@ -10282,14 +10395,21 @@ const FEATURE_CARD_ICON_SHAPES = new Set(["circle", "square", "plain"]);
  * text baked into an image never could.
  */
 function ProgramListModulePreview({
-  module
+  module,
+  liveSite = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const programs = parsePrograms(module.settings.programs);
 
   // Standard 5: an empty module is a designed state, not a blank box.
   if (programs.length === 0) {
+    // The text below is addressed to whoever is BUILDING the page. A visitor
+    // has no editor, so on a live site the module is simply not there rather
+    // than a box telling them to do something they cannot do (landmine 16).
+    if (liveSite) return null;
     return (
       <div className="builder-preview-programs builder-preview-programs-empty">
         Add programs in the editor
@@ -10414,15 +10534,22 @@ function ProgramListModulePreview({
 
 function FeatureCardsModulePreview({
   module,
-  previewMode = false
+  previewMode = false,
+  liveSite = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
   previewMode?: boolean;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const cards = parseBuilderCardItems(module.settings.cards, "card");
 
   // Standard 5: an empty module is a designed state, not a blank box.
   if (cards.length === 0) {
+    // The text below is addressed to whoever is BUILDING the page. A visitor
+    // has no editor, so on a live site the module is simply not there rather
+    // than a box telling them to do something they cannot do (landmine 16).
+    if (liveSite) return null;
     return (
       <div className="builder-preview-feature-cards builder-preview-feature-cards-empty">
         Add cards in the editor
