@@ -283,23 +283,12 @@ test('a worktree path with a space survives the probe', () => {
 });
 
 // ── the wiring: the sweep must actually ask ──────────────────────────────
-
-test('the sweep asks for local work before returning a build to Queued', () => {
-  const code = fs.readFileSync(path.join(__dirname, '..', 'pipeline.mjs'), 'utf8');
-  // The CALL SITE, not the definition. The first version of this test matched
-  // `workInProgressFor(` anywhere in the file and stayed green when the call
-  // inside the sweep was replaced with a hard-coded "nothing found" — the
-  // function was still defined, just never asked. (Found by break-testing.)
-  assert.match(code, /const local = reviewing \|\| provisional\.status !== 'Queued'/,
-    'the probe is asked only where the PR lookup asserts an ABSENCE');
-  assert.match(code, /:\s*workInProgressFor\(queue\.tasks/,
-    'the sweep must actually ask the probe, not assume an answer');
-  assert.match(code, /local\.verdict !== 'none'/, "…and must act on anything that is not a clean 'none'");
-  // One executor for the whole sweep: reachability is established at most once
-  // per machine (remoteProbe rule 1), not once per stranded ticket.
-  assert.match(code, /const probe = workProbe\(\);[\s\S]*for \(const s of stranded\)/,
-    'the ssh probe must be created ONCE, outside the per-ticket loop');
-});
+//
+// This used to be regexes over pipeline.mjs, because the sweep lived at module
+// scope in a CLI script that ran its dispatcher on import. It moved into
+// pipelineSweep.js on 2026-09-05 (task 86bbt204x) with its dependencies
+// injected, so the wiring can now be EXECUTED instead of pattern-matched.
+// Those tests live in pipelineSweep.test.js, beside the sweep itself.
 
 // ── THE REMOTE PATH ──────────────────────────────────────────────────────
 //
