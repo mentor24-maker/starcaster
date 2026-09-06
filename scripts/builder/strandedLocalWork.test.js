@@ -383,13 +383,19 @@ test('findWorkInProgress hands a routed remote machine the home-relative script'
 
 // ── NO SSH ROUTE IS NOT A FAILED READING ─────────────────────────────────
 
-test('criterion 3, IN THE SHIPPED CONFIGURATION — the real node list and the real inventory still answer "none"', () => {
+test('criterion 3, IN THE SHIPPED CONFIGURATION — the real node list and the real inventory answer "none" with no seat left unlooked', () => {
   // THE TEST ROUND 1 DID NOT HAVE, and the reason it shipped broken. Its
   // criterion-3 test was handed a one-machine node list; the shipped sweep
   // walks nodeRoles.KNOWN_NODES, which contains a machine with no ssh route
   // from the Mini — so in production every stranded build answered
   // `cannot-tell` and none could ever be unstuck. This test uses the real
   // list and the real inventory so that gap cannot reopen.
+  //
+  // Since 86bbvhzqv every node in KNOWN_NODES carries a declared ssh route,
+  // so the caveat the sweep used to append forever is gone. That is asserted
+  // here rather than against the sweep's wording: dropping `probe: ssh` from
+  // any machine in docs/ecosystem/inventory.yaml puts the caveat straight
+  // back, and this is the line that says so.
   const { clone, root } = makeRepo();          // nothing stamped here
   const nodeRoles = require('../../lib/nodeRoles.js');
   const routes = work.sshRoutedMachines(
@@ -407,8 +413,12 @@ test('criterion 3, IN THE SHIPPED CONFIGURATION — the real node list and the r
     shell: shellHere(clone),
   });
   assert.equal(verdict.verdict, 'none', 'the sweep must still be able to move a genuinely unbuilt ticket');
-  assert.ok(verdict.unlooked.length > 0, '…while naming the seat it could not look at');
-  assert.match(verdict.unlooked[0].why, /no ssh route/);
+  assert.deepEqual(verdict.unlooked.map((m) => m.machine), [],
+    '…and with every node routed, no seat is left unlooked and no caveat is appended');
+  for (const node of nodeRoles.KNOWN_NODES) {
+    assert.ok(routes.machines.includes(node),
+      `${node} is a known node with no ssh route declared in docs/ecosystem/inventory.yaml`);
+  }
   fs.rmSync(root, { recursive: true, force: true });
 });
 
