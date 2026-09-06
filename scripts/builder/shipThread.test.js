@@ -228,6 +228,41 @@ test('absence, timeout and real failure are three DIFFERENT messages — none of
   assert.match(failedBranch.slice(0, 300), /did not pass/, 'only the failed branch says "did not pass"');
 });
 
+test('ship asks WHY the checks are absent before waiting or nudging (PR #630)', () => {
+  // A pull request GitHub calls conflicting gets no runs at all — the workflows
+  // trigger on `pull_request`, which runs against a merge ref GitHub cannot
+  // build. Ship must therefore pass the mergeability probe in, or it goes back
+  // to spending both windows and handing out the nudge remedy for a cause the
+  // nudge cannot touch. Source-level for the same reason as the guards above.
+  assert.match(code, /queryMergeable:\s*\(\)\s*=>\s*queryPullRequestMergeable\(prNumber\)/,
+    'the CI wait must be given the mergeability probe');
+  assert.match(code, /function queryPullRequestMergeable/);
+  // Slice to the function's own closing brace, not a fixed character count: a
+  // window that overruns into the next function reads ITS `fail(` and the
+  // assertion below stops meaning anything.
+  const from = code.indexOf('function queryPullRequestMergeable');
+  const q = code.slice(from, code.indexOf('\n}\n', from));
+  assert.match(q, /mergeable,mergeStateStatus/, 'it reads both fields GitHub answers with');
+  assert.doesNotMatch(q, /fail\(/,
+    'this probe only ADDS a diagnosis — an unreadable reading must never stop ship');
+});
+
+test('a conflicting head gets its own message, and it is NOT the nudge advice', () => {
+  // The two causes of a checkless PR have opposite remedies, and the cost of
+  // #630 was twenty minutes of the wrong one. The conflicting branch must name
+  // the catch-up merge; the nudge advice belongs to the other branch alone.
+  const idx = source.indexOf("outcome === 'blocked_conflicting'");
+  assert.ok(idx > -1, 'ship must handle the blocked_conflicting outcome');
+  const branch = source.slice(idx, idx + 1600);
+  assert.match(branch, /npm run ship/, 'it names the catch-up merge as the remedy');
+  assert.match(branch, /does NOT fix this one/i, 'it says out loud that the nudge is the wrong remedy here');
+  assert.doesNotMatch(branch, /Actions is enabled/,
+    'the "check whether Actions is enabled" advice belongs to never_appeared, not to a conflict');
+  // And it must be decided BEFORE never_appeared, or the wrong message wins.
+  assert.ok(idx < source.indexOf("outcome === 'never_appeared'"),
+    'the conflicting case is a "no checks appeared" case too — it has to be tested first');
+});
+
 test('a broken gh call still stops ship — absence must not swallow a real error', () => {
   // queryPullRequestChecks returns [] for "no checks yet" but must fail() when
   // gh itself is broken (auth/network), or a dead endpoint would look like an
@@ -273,6 +308,24 @@ test('a failed nudge says WHICH step failed, because the advice is opposite', ()
     /will NOT help/,
     'the push case must not repeat the commit-failed advice — re-running ship DOES help here'
   );
+});
+
+test('LOOP_ENGINEERING names BOTH causes of a checkless PR, and a remedy for each', () => {
+  // Criterion 1 of task 86bbvqkr1. The doc used to describe one cause and one
+  // remedy as though that were the whole story, so a pass reading it applied
+  // the nudge commit to a conflicting head — which cannot work — and then
+  // reported that Actions must be broken. Pinned here because a doc is the one
+  // artifact that drifts with nothing failing.
+  const doc = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'LOOP_ENGINEERING.md'), 'utf8');
+  const section = doc.slice(doc.indexOf('## A build node must be able to make GitHub run its checks'));
+  const body = section.slice(0, section.indexOf('\n## ', 4));
+  assert.match(body, /mergeable,mergeStateStatus/,
+    'it must give the command that tells the two causes apart');
+  assert.match(body, /CONFLICTING/, 'the conflicting-head cause must be named');
+  assert.match(body, /merge ref/i, 'and WHY a conflicting head gets no runs');
+  assert.match(body, /git merge origin\/main/, 'the catch-up merge is the remedy for that cause');
+  assert.match(body, /--allow-empty/, 'the nudge commit is the remedy for the other cause');
+  assert.match(body, /UNKNOWN/, 'and UNKNOWN must be called out as neither');
 });
 
 test('LOOP_ENGINEERING no longer advises the ordering that steals the PR title', () => {

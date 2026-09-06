@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { classifyChecks, waitForChecks } = require('./waitForChecks');
+const { classifyChecks, classifyMergeable, waitForChecks } = require('./waitForChecks');
 
 /**
  * The bug this guards (PRs #356/#358, 2026-08-20): ship reached CI seconds
@@ -20,6 +20,7 @@ function harness(script, {
   pollIntervalMs = 20 * 1000,
   nudge,
   nudgeGraceMs,
+  queryMergeable,
 } = {}) {
   let clock = 0;
   let i = 0;
@@ -30,6 +31,7 @@ function harness(script, {
     pollIntervalMs,
     nudge,
     nudgeGraceMs,
+    queryMergeable,
     now: () => clock,
     sleep: (ms) => { clock += ms; },
     queryChecks: () => {
@@ -201,4 +203,129 @@ test('a check that appears on its own is never nudged for', () => {
   assert.equal(outcome.outcome, 'passed');
   assert.equal(nudges, 0);
   assert.equal(outcome.nudged, false);
+});
+
+
+/**
+ * THE 2026-09-06 BUG (PR #630). Commits `8ef87761` and `47f0b6c0` were pushed
+ * to an open, non-draft pull request eleven minutes apart and GitHub created no
+ * workflow runs for either, while other pull requests in the same repo started
+ * full runs in between them. `gh pr view 630 --json mergeable,mergeStateStatus`
+ * said `CONFLICTING` / `DIRTY`; `git merge-tree --write-tree` said the merge was
+ * clean. Both workflows here trigger on `pull_request`, which runs against the
+ * merge ref, and GitHub builds no merge ref for a pull request it believes
+ * conflicts — so it runs nothing, silently.
+ *
+ * The cost is not the missing check, it is the WRONG REMEDY: this code knew
+ * only the other cause, so it burned its grace window, pushed a nudge commit
+ * that could not help (the new head SHA does not merge either), burned a second
+ * window, and told the operator to check whether Actions was enabled. These
+ * tests pin the distinction.
+ */
+
+const conflicting = { mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' };
+const clean = { mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN' };
+const notYetKnown = { mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN' };
+
+test('classifyMergeable: either field is enough to call it conflicting', () => {
+  assert.equal(classifyMergeable(conflicting), 'conflicting');
+  assert.equal(classifyMergeable({ mergeable: 'CONFLICTING' }), 'conflicting');
+  assert.equal(classifyMergeable({ mergeStateStatus: 'DIRTY' }), 'conflicting');
+  assert.equal(classifyMergeable('conflicting'), 'conflicting');
+});
+
+test('classifyMergeable: UNKNOWN is not conflicting — it is the normal state after a push', () => {
+  // Treating GitHub's "still working it out" as a conflict would abandon the
+  // wait on nearly every healthy pull request, which is a worse bug than the
+  // one this guard fixes.
+  assert.equal(classifyMergeable(notYetKnown), 'unknown');
+  assert.equal(classifyMergeable(null), 'unknown');
+  assert.equal(classifyMergeable(undefined), 'unknown');
+  assert.equal(classifyMergeable({}), 'unknown');
+  assert.equal(classifyMergeable(clean), 'mergeable');
+});
+
+test('THE #630 PATH: no checks + a conflicting head → blocked_conflicting, on the FIRST poll', () => {
+  const { outcome, polls } = harness([none], {
+    appearGraceMs: 60 * 1000,
+    pollIntervalMs: 20 * 1000,
+    queryMergeable: () => conflicting,
+  });
+  assert.equal(outcome.outcome, 'blocked_conflicting');
+  assert.equal(polls, 1, 'it stops at once rather than waiting out a window that cannot end well');
+  assert.deepEqual(outcome.mergeable, conflicting, 'the reading rides along so the caller can name the remedy');
+});
+
+test('a conflicting head is never NUDGED — the nudge is the other cause\'s remedy', () => {
+  // This is the whole point. An empty commit moves the head SHA, but the new
+  // SHA does not merge either, so the push accomplishes nothing and costs a
+  // second grace window plus a commit on the branch.
+  let nudges = 0;
+  const { outcome } = harness([none], {
+    appearGraceMs: 60 * 1000,
+    pollIntervalMs: 20 * 1000,
+    nudge: () => { nudges += 1; return true; },
+    queryMergeable: () => conflicting,
+  });
+  assert.equal(outcome.outcome, 'blocked_conflicting');
+  assert.equal(nudges, 0, 'pushing an empty commit at a conflicting head is the wrong remedy');
+  assert.equal(outcome.nudged, false);
+});
+
+test('a mergeable head with no checks still nudges — the old behaviour is untouched', () => {
+  let nudges = 0;
+  const { outcome } = harness([none, none, none, none, pass], {
+    appearGraceMs: 60 * 1000,
+    pollIntervalMs: 20 * 1000,
+    nudge: () => { nudges += 1; return true; },
+    queryMergeable: () => clean,
+  });
+  assert.equal(outcome.outcome, 'passed');
+  assert.equal(nudges, 1);
+});
+
+test('UNKNOWN then CONFLICTING → it keeps asking, and catches the conflict when GitHub says so', () => {
+  // GitHub computes mergeability lazily, so the first reading after a push is
+  // routinely UNKNOWN. Reading it ONCE would miss every real conflict.
+  const readings = [notYetKnown, notYetKnown, conflicting];
+  let i = 0;
+  const { outcome, polls } = harness([none], {
+    appearGraceMs: 10 * 60 * 1000,
+    pollIntervalMs: 20 * 1000,
+    queryMergeable: () => readings[Math.min(i++, readings.length - 1)],
+  });
+  assert.equal(outcome.outcome, 'blocked_conflicting');
+  assert.equal(polls, 3, 'it waited through the two UNKNOWN readings rather than giving up');
+});
+
+test('a probe that throws or returns nothing is "cannot tell" — never a conflict, never a pass', () => {
+  for (const queryMergeable of [() => { throw new Error('gh exploded'); }, () => null, () => undefined]) {
+    const { outcome } = harness([none], {
+      appearGraceMs: 60 * 1000, pollIntervalMs: 20 * 1000, queryMergeable,
+    });
+    assert.equal(outcome.outcome, 'never_appeared', 'an unreadable probe falls back to the old path');
+    assert.equal(outcome.mergeable, null);
+  }
+});
+
+test('the probe stops once a check exists — a conflict found later is the merge gate\'s business', () => {
+  // Once checks are running, this function\'s job is to report their verdict.
+  // A pull request that goes conflicting mid-run still has real checks with a
+  // real result, and the merge gate refuses a DIRTY head on its own.
+  let probes = 0;
+  const { outcome } = harness([pending, pending, pass], {
+    appearGraceMs: 60 * 1000,
+    pollIntervalMs: 20 * 1000,
+    queryMergeable: () => { probes += 1; return conflicting; },
+  });
+  assert.equal(outcome.outcome, 'passed');
+  assert.equal(probes, 0, 'no wasted GitHub call once the checks are real');
+});
+
+test('no queryMergeable at all → every previous outcome is byte-for-byte what it was', () => {
+  // The guard is additive. A caller that does not pass the probe must behave
+  // exactly as it did before this existed.
+  assert.equal(harness([none], { appearGraceMs: 60 * 1000 }).outcome.outcome, 'never_appeared');
+  assert.equal(harness([none, none, pass]).outcome.outcome, 'passed');
+  assert.equal(harness([fail]).outcome.outcome, 'failed');
 });

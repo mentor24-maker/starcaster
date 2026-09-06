@@ -197,6 +197,34 @@ function queryPullRequestChecks(prNumber) {
   return []; // unreachable; fail() exits.
 }
 
+/**
+ * Ask GitHub whether this pull request conflicts with its base.
+ *
+ * WHY (2026-09-06, PR #630). Both workflows here trigger on `pull_request`,
+ * which GitHub runs against the MERGE of the branch and main. When it believes
+ * the two conflict it cannot build that merge, so it creates no run at all —
+ * silently. The pull request then looks exactly like one whose checks are
+ * merely early, and the remedy for THAT case (an empty nudge commit) cannot
+ * help, because the nudge's new head SHA does not merge either.
+ *
+ * Unlike `queryPullRequestChecks` this never stops ship. It only ever adds a
+ * diagnosis to a wait that was going to happen anyway, so a reading that cannot
+ * be taken returns null and the wait carries on as it always did — "cannot
+ * tell" must not become "conflicting", and it must not become a failure.
+ */
+function queryPullRequestMergeable(prNumber) {
+  const result = spawnSync('gh', ['pr', 'view', String(prNumber), '--json', 'mergeable,mergeStateStatus'], {
+    cwd: root, encoding: 'utf8',
+  });
+  const stdout = (result.stdout || '').trim();
+  if (!stdout) return null;
+  try {
+    const parsed = JSON.parse(stdout);
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch (_) { /* an unreadable answer is not a verdict */ }
+  return null;
+}
+
 // The PR URL spelling moved into `shipPrTrail` (task 86bbq7z1k, round 2). It
 // had a second caller there — the repair command a failed trail write prints —
 // which printed a bare `--pr 484` that `pr-opened` rejects. One spelling, one
@@ -567,6 +595,7 @@ const wait = waitForChecks({
   now: () => Date.now(),
   sleep: sleepMs,
   queryChecks: () => queryPullRequestChecks(prNumber),
+  queryMergeable: () => queryPullRequestMergeable(prNumber),
   nudge: nudgeChecks,
   onPoll: (state, list, elapsed) => {
     // One honest progress line per poll, only when the picture changes, so a
@@ -585,6 +614,30 @@ const wait = waitForChecks({
   },
 });
 
+// THE CONFLICTING HEAD (2026-09-06, PR #630). Handled before `never_appeared`
+// because it IS a "no checks appeared" case — just one with a completely
+// different cause and the opposite remedy. Ship already merges main in at step
+// 1, so getting here means main moved during the build and verify above, which
+// take minutes; running ship again does that catch-up and is the whole fix.
+if (wait.outcome === 'blocked_conflicting') {
+  const seen = wait.mergeable || {};
+  fail(
+    `GitHub says this pull request conflicts with main (mergeable: ${seen.mergeable || 'CONFLICTING'},\n` +
+    `mergeStateStatus: ${seen.mergeStateStatus || 'DIRTY'}), and it will not run ANY checks on a pull\n` +
+    `request it believes is conflicting — the workflows here run against the merge of the branch\n` +
+    `and main, and it cannot build that merge. So the checks are not late. They are not coming.\n\n` +
+    `An empty "nudge" commit does NOT fix this one. That is the remedy for the other way a pull\n` +
+    `request ends up checkless, and here it would only add a head SHA that does not merge either.\n\n` +
+    `Nothing was merged; the work is safe on the branch. Bring main in and the checks start:\n\n` +
+    `  npm run ship\n\n` +
+    `— it merges origin/main into this branch first, which is exactly what was missing. If it\n` +
+    `reports the branch is ALREADY up to date with main and GitHub still calls it conflicting,\n` +
+    `that is GitHub's stale mergeability cache rather than a real disagreement; push any new\n` +
+    `commit (\`git commit --allow-empty -m "Recompute mergeability" && git push\`) to make it\n` +
+    `work the answer out again.\n\n` +
+    `Look at: ${prUrl}`
+  );
+}
 if (wait.outcome === 'never_appeared') {
   fail(
     wait.nudged

@@ -35,6 +35,37 @@
  * more window to show up. Waiting longer, or re-running ship, cannot help;
  * only a new commit can.
  *
+ * AND THERE IS A SECOND CAUSE, WITH THE OPPOSITE REMEDY (2026-09-06, PR #630)
+ * A checkless pull request looks identical whichever cause it has, and until
+ * this was written the code knew only the first one — so it spent its whole
+ * grace window, pushed a nudge commit that could not possibly help, spent
+ * another window, and then told the operator to go and check whether Actions
+ * was enabled for the repository. All three of those are wrong advice here.
+ *
+ * Both workflows in this repo trigger on `pull_request`, which GitHub runs
+ * against the MERGE of the branch and its base. When it believes the pull
+ * request conflicts (`mergeable: CONFLICTING` / `mergeStateStatus: DIRTY`) it
+ * cannot build that merge ref, so it creates no run at all — no error, no
+ * skipped run, no annotation, just absence. On #630 two pushes eleven minutes
+ * apart produced nothing while other pull requests in the same repo started
+ * full runs in between them, and `git merge-tree --write-tree` said the merge
+ * was clean; the thing that started the checks was merging `origin/main` in.
+ *
+ * So absence is now interrogated rather than assumed: while no check has ever
+ * appeared, this asks GitHub whether the pull request is conflicting, and if it
+ * is, stops at once with its own outcome (`blocked_conflicting`) instead of
+ * waiting or nudging. A nudge commit is the remedy for the FIRST cause only;
+ * firing it at this one burns the grace window and changes nothing, because
+ * the new head SHA still cannot be merged either.
+ *
+ * ONLY WHILE NO CHECK HAS EVER APPEARED, and that scope is load-bearing. A
+ * conflicting head stops GitHub CREATING runs; it does not remove runs it has
+ * already made. Measured on 2026-09-06: PR #637 read `CONFLICTING` / `DIRTY`
+ * with all four of its checks passing, because they were created before the
+ * branch went stale. Probing once checks exist would report that fully green
+ * board as blocked — and it would be answering a question that is not this
+ * function's anyway, since the merge gate refuses a `DIRTY` head on its own.
+ *
  * Pure and injectable on purpose: driving the real thing needs a remote, a PR
  * and CI, so the behaviour would go untested in practice (the same reason the
  * force-push property in shipThread.test.js is asserted at source level). Here
@@ -60,6 +91,36 @@ function classifyChecks(checks) {
 }
 
 /**
+ * Classify one `gh pr view --json mergeable,mergeStateStatus` reading.
+ *   'conflicting' — GitHub believes the branch and its base disagree, so it
+ *                   will not build a merge ref and will not run a check
+ *   'mergeable'   — it can build the merge ref; absence of checks is the OTHER
+ *                   cause, and a nudge commit is the remedy
+ *   'unknown'     — no reading, an unparseable one, or GitHub's genuine
+ *                   `UNKNOWN`, which is what it returns for the first seconds
+ *                   after a push while it computes mergeability
+ *
+ * BOTH fields are read, and either one is enough. GitHub sets them together
+ * (`CONFLICTING` comes with `DIRTY`), but they are separate fields on separate
+ * schedules and reading only one of them would make this guard depend on which
+ * half of GitHub's answer arrived first.
+ *
+ * `UNKNOWN` is deliberately NOT conflicting. It is the ordinary state for a
+ * few seconds after every push, so treating it as a conflict would abandon the
+ * wait on almost every healthy pull request — the caller keeps waiting and
+ * asks again on the next poll, which is why this is polled rather than read
+ * once.
+ */
+function classifyMergeable(reading) {
+  if (!reading) return 'unknown';
+  const merge = String((typeof reading === 'string' ? reading : reading.mergeable) || '').toUpperCase();
+  const state = String((typeof reading === 'string' ? '' : reading.mergeStateStatus) || '').toUpperCase();
+  if (merge === 'CONFLICTING' || state === 'DIRTY') return 'conflicting';
+  if (merge === 'MERGEABLE') return 'mergeable';
+  return 'unknown';
+}
+
+/**
  * Wait for CI, distinguishing "not appeared yet" from "failed".
  *
  * @param queryChecks  () => Array   the current check list (empty = none yet)
@@ -75,16 +136,28 @@ function classifyChecks(checks) {
  *                     throw) if the push could not be made.
  * @param nudgeGraceMs how long to wait for a check after nudging; defaults to
  *                     appearGraceMs.
+ * @param queryMergeable () => ({ mergeable, mergeStateStatus }) | null
+ *                     optional: ask GitHub whether the pull request conflicts.
+ *                     Polled only while no check has ever appeared. Omit it and
+ *                     the behaviour is exactly what it was before this existed.
+ *                     It may return null, or throw, when no reading can be
+ *                     taken — that is treated as "unknown", never as "clean".
  *
- * @returns { outcome, checks, nudged } where outcome is one of:
- *   'passed'            — safe to merge
- *   'failed'            — a check reported failure
- *   'never_appeared'    — no check ever showed up, and a nudge (if one was
- *                         available) did not produce one either
- *   'timed_out_pending' — checks appeared but were still running at the budget
+ * @returns { outcome, checks, nudged, mergeable } where outcome is one of:
+ *   'passed'              — safe to merge
+ *   'failed'              — a check reported failure
+ *   'blocked_conflicting' — no check appeared and GitHub says the pull request
+ *                           conflicts, so no check ever will. The remedy is a
+ *                           catch-up merge of the base branch, NOT a nudge
+ *                           commit (2026-09-06, PR #630)
+ *   'never_appeared'      — no check ever showed up, and a nudge (if one was
+ *                           available) did not produce one either
+ *   'timed_out_pending'   — checks appeared but were still running at the budget
  * `nudged` says whether the extra push was actually made, so the caller can
  * tell "nothing has been tried yet" from "we pushed and GitHub still made no
  * run" — two very different things to put in front of an operator.
+ * `mergeable` is the last reading taken, or null if none was, so the caller can
+ * say WHICH remedy applies instead of listing both and letting a person guess.
  */
 function waitForChecks({
   queryChecks,
@@ -96,6 +169,7 @@ function waitForChecks({
   onPoll,
   nudge,
   nudgeGraceMs,
+  queryMergeable,
 } = {}) {
   if (typeof queryChecks !== 'function') throw new TypeError('waitForChecks needs a queryChecks function');
   if (typeof sleep !== 'function') throw new TypeError('waitForChecks needs a sleep function');
@@ -106,6 +180,7 @@ function waitForChecks({
   let sawAnyCheck = false;
   let nudged = false;
   let nudgedAt = 0;
+  let mergeable = null;
 
   for (;;) {
     const checks = queryChecks();
@@ -113,13 +188,34 @@ function waitForChecks({
     const elapsed = now() - start;
     if (typeof onPoll === 'function') onPoll(state, checks, elapsed);
 
-    if (state === 'failed') return { outcome: 'failed', checks, nudged };
-    if (state === 'passed') return { outcome: 'passed', checks, nudged };
+    if (state === 'failed') return { outcome: 'failed', checks, nudged, mergeable };
+    if (state === 'passed') return { outcome: 'passed', checks, nudged, mergeable };
     if (state === 'pending') sawAnyCheck = true;
+
+    // ASK WHY THE CHECKS ARE ABSENT BEFORE WAITING OUT THE WINDOW (PR #630).
+    // A pull request GitHub calls conflicting gets no runs at all, and no
+    // amount of waiting or nudging changes that — the nudge's new head SHA
+    // cannot be merged either. This runs BEFORE the budget and grace checks
+    // below on purpose: reaching either of those first would report the wrong
+    // cause and, worse, hand out the wrong remedy.
+    if (state === 'none' && !sawAnyCheck && typeof queryMergeable === 'function') {
+      let reading = null;
+      try {
+        reading = queryMergeable();
+      } catch (_) {
+        // A reading that cannot be taken is not a verdict. Fall through to the
+        // ordinary waiting path, which never calls absence a pass.
+        reading = null;
+      }
+      if (reading) mergeable = reading;
+      if (classifyMergeable(reading) === 'conflicting') {
+        return { outcome: 'blocked_conflicting', checks, nudged, mergeable };
+      }
+    }
 
     // Still 'none' or 'pending' at this point — decide whether to keep waiting.
     if (elapsed >= totalBudgetMs) {
-      return { outcome: sawAnyCheck ? 'timed_out_pending' : 'never_appeared', checks, nudged };
+      return { outcome: sawAnyCheck ? 'timed_out_pending' : 'never_appeared', checks, nudged, mergeable };
     }
     if (state === 'none' && !sawAnyCheck && elapsed >= appearGraceMs) {
       // Nothing has ever shown up and the grace window is spent. Waiting longer
@@ -140,15 +236,15 @@ function waitForChecks({
         } catch (_) {
           pushed = false;
         }
-        if (!pushed) return { outcome: 'never_appeared', checks, nudged: false };
+        if (!pushed) return { outcome: 'never_appeared', checks, nudged: false, mergeable };
         nudged = true;
         nudgedAt = now();
       } else if (!nudged) {
         // No nudge available: report it as its own thing, never as a failure.
-        return { outcome: 'never_appeared', checks, nudged: false };
+        return { outcome: 'never_appeared', checks, nudged: false, mergeable };
       } else if (now() - nudgedAt >= graceAfterNudge) {
         // We pushed and GitHub STILL made no run. That is not a delay any more.
-        return { outcome: 'never_appeared', checks, nudged: true };
+        return { outcome: 'never_appeared', checks, nudged: true, mergeable };
       }
     }
 
@@ -156,4 +252,4 @@ function waitForChecks({
   }
 }
 
-module.exports = { classifyChecks, waitForChecks };
+module.exports = { classifyChecks, classifyMergeable, waitForChecks };

@@ -2446,11 +2446,95 @@ Two things follow, and both used to be got wrong:
   `nudge` hook). It does that at most once, and if a run still does not appear
   it says plainly that this is no longer a delay.
 
-**Recovering a checkless PR by hand** — any new commit will do:
+**Recovering a checkless PR by hand** — any new commit will do, *for this cause*:
 
 ```
 git commit --allow-empty -m "Nudge GitHub into creating a check run" && git push
 ```
+
+### The OTHER cause, whose remedy is the opposite one (2026-09-06, PR #630)
+
+For a long time the paragraphs above were the whole story, and they are only
+half of it. A checkless pull request has **two** causes, they look completely
+identical from outside, and **the remedy for each does nothing for the other.**
+
+On PR #630 two commits were pushed eleven minutes apart — `8ef87761` at 16:26
+and `47f0b6c0` at 16:37 — and GitHub created no workflow runs for either:
+
+```
+$ gh api repos/mentor24-maker/starcaster/commits/8ef87761/check-runs
+Vercel Preview Comments   completed   success        <- and nothing else
+```
+
+Actions was healthy the whole time: other pull requests in the same repository
+got full `CI` + `review-gate` runs at 16:34 and 16:37, in between those two
+pushes. And the documented remedy was tried and did nothing — the nudge commit
+was pushed and produced no run either.
+
+**The cause is the pull request's merge state.**
+
+```
+$ gh pr view 630 --json mergeable,mergeStateStatus
+{"mergeable":"CONFLICTING","mergeStateStatus":"DIRTY"}
+```
+
+Both workflows here trigger on `pull_request` (`.github/workflows/ci.yml`,
+`review-gate.yml`), and a `pull_request` workflow runs against the **merge ref**
+— the branch merged into its base. GitHub cannot build that ref for a pull
+request it believes conflicts, so it runs **nothing at all**. No error, no
+skipped run, no annotation; the checks are simply absent. That is why the nudge
+cannot help: the empty commit does move the head SHA, but the new SHA does not
+merge either.
+
+`git merge-tree --write-tree origin/main HEAD` exited **0** with a clean tree,
+so this was the phantom kind of conflict rather than a real disagreement. What
+was not known before #630 is that a phantom conflict is not merely untidy —
+**it switches the pull request's checks off entirely.** The thing that fixed it
+was merging `origin/main` in: the moment the branch was current, `mergeable`
+flipped to `MERGEABLE` and both workflows started within seconds.
+
+### Which remedy applies — ask, do not guess
+
+One command tells the two apart, and it costs a second:
+
+```
+gh pr view <pr> --json mergeable,mergeStateStatus
+```
+
+| Reading | Cause | Remedy |
+|---|---|---|
+| `CONFLICTING` / `DIRTY` | GitHub will not build a merge ref, so it runs nothing | **Merge the base in** — `git merge origin/main --no-edit && git push`, or just `npm run ship`, which does the catch-up first |
+| `MERGEABLE` / anything else | The `opened` run and a too-quick second push were both dropped (#387/#389) | **Push any new commit** — `git commit --allow-empty -m "Nudge GitHub into creating a check run" && git push` |
+| `UNKNOWN` | GitHub has not worked it out yet — normal for a few seconds after a push | **Ask again.** Never read this as either of the above |
+
+Applying the wrong one is not a no-op: it burns a grace window, adds a commit
+that changes nothing, and then reports the wrong diagnosis. On #630 that ended
+in "check that Actions is enabled for the repository", about a repository whose
+Actions were running other people's pull requests at that exact minute.
+
+**`npm run ship` asks this itself now.** `scripts/builder/waitForChecks.js`
+polls mergeability while no check has ever appeared, and returns its own
+`blocked_conflicting` outcome the moment GitHub says `CONFLICTING` — before the
+grace window, and before the nudge, because reaching either of those first
+hands out the wrong remedy. The message names the catch-up merge and says out
+loud that the nudge is not the fix here. `UNKNOWN` is deliberately not treated
+as a conflict: it is the ordinary answer for the first seconds after every
+push, so it is polled rather than read once.
+
+**A conflicting head blocks runs from being CREATED; it does not remove runs
+that already exist.** Measured on 2026-09-06: PR #637 read `CONFLICTING` /
+`DIRTY` with all four of its checks passing, because they were created before
+the branch went stale. That is the whole reason the guard above only fires when
+**no check has ever appeared** — a pull request that goes conflicting mid-run
+still has real checks with a real verdict, and the merge gate refuses a `DIRTY`
+head on its own anyway. Firing on any conflicting reading would report a fully
+green board as blocked.
+
+**A pass waiting on checks by hand owes the same question.** If `gh pr checks`
+shows nothing, run the `gh pr view` line above *before* waiting. A conflicting
+head is a **CANNOT TELL**, not a slow CI run: the checks are not late, they are
+never coming, and waiting out the pass's budget on one is how a finished green
+branch ends up sitting in `Building` overnight.
 
 **Avoiding it in the first place:** do not push again in the seconds right after
 `gh pr create`. Open the PR, wait until `gh pr checks <pr>` lists a run, and
