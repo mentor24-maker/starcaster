@@ -1,3 +1,39 @@
+## 2026-09-06 — Text you had typed could vanish from the Builder, two different ways (#632)
+
+Back on 29 August, two odd things happened while the Delray header was being
+worked on. You added a paragraph reading "Wut?" to the home page and the
+Builder showed the box empty — even though the text really was saved. And a
+"Blog" heading you had put on the site header quietly went blank. Both were
+written down at the time and neither had an explanation.
+
+They turn out to be the same two boxes — the two typing boxes the Builder uses
+for rich text — and neither of the guesses on the ticket was right. The saving
+side was innocent all along: whatever the browser sends, the server keeps it,
+for every kind of module. There are now twenty-one tests that hold it to that,
+which is what proved the trouble was happening in the browser before anything
+reached the database.
+
+The first fault: the typing box keeps a note of the last thing it sent out, so
+that your own keystrokes do not bounce back and throw the cursor to the end of
+the line. But it was using that note to decide whether to show you a *new*
+value too — and since the box is holding "the last thing it sent" during every
+moment you are not actually typing, a value arriving from anywhere else got
+ignored almost every time. A box that opened empty stayed empty no matter what
+the page really held. It now checks what is actually in the box instead, which
+leaves your cursor alone and still lets a genuine change through.
+
+The second fault is the nastier one, because it destroyed work rather than
+hiding it. When the Builder loads text into a box behind the scenes, that quiet
+load was being recorded in the undo history as though you had typed it. So a
+single Ctrl+Z undid the *loading*, and the box then reported itself as empty —
+and empty got saved over your heading. That also explains why only the heading
+went blank while the buttons beside it were fine: the heading is the only one
+of them that uses a rich-text box at all. Loading is not typing, so it no
+longer goes in the undo history.
+
+While in there, one more: editing a heading through the `</>` HTML view and
+switching back used to throw the edit away without a word. It sticks now.
+
 ## 2026-09-05 — The Mini can tell you a job is switched on. It could not tell you the job ever started. (#626)
 
 The Mac Mini runs jobs on a timer — the thing that relays your comments, the
