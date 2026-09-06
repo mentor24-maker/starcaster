@@ -448,6 +448,7 @@ const {
   MERGE_MARKER,
   parseMergeMarker,
   latestMergeMarker,
+  countMergeRefusals,
 } = require('./mergeOnComment.js');
 
 /** A marker reply, in the exact shape markMergeHandled writes. */
@@ -2174,4 +2175,64 @@ test('a rehearsal does not stamp the escalation clock', () => {
   const upToLoopEnd = block.slice(0, block.indexOf('MERGE STUCK escalated on'));
   assert.match(upToLoopEnd, /if \(dryRun\) \{[\s\S]*?would escalate a stuck merge[\s\S]*?continue;/,
     'the dry-run branch must return before any write or any stamp');
+});
+
+/*
+ * THE DEDUP THE MACHINE STAMP BROKE (2026-09-06, task 86bbvr0j5).
+ *
+ * `call()` appends the `[machine]` line to every comment it posts, the merge
+ * step's own dedup marker included. That line ends "Dane's token — not his
+ * word", so the ` — <timestamp>` split below it took the stamp's em-dash: the
+ * timestamp was never recovered and the reason came back with the stamp glued
+ * on, matching nothing. The dedup stopped working the day the stamp shipped
+ * (2026-09-01) and nobody noticed until PR #628 posted the same conflict
+ * hand-off seven times in two hours.
+ *
+ * The fixture is the REAL stored text, copied from comment 90140253038828's
+ * reply thread — a hand-written approximation is exactly how this was missed.
+ */
+const STAMP = "\n\n[machine] posted by a loop under Dane's token — not his word";
+const REAL_MARKER = '[merge-on-comment] refused: conflict hand-off on PR #628 — 2026-09-06T17:56:12.369Z' + STAMP;
+
+test('a stamped refusal marker still yields its bare reason', () => {
+  const p = parseMergeMarker(REAL_MARKER);
+  assert.equal(p.kind, 'refused');
+  // Byte-identical to what the next pass compares against, or it goes quiet
+  // never and posts forever.
+  assert.equal(p.reason, 'conflict hand-off on PR #628');
+});
+
+test('a stamped refusal marker still yields its timestamp, so the age clock can run', () => {
+  assert.equal(parseMergeMarker(REAL_MARKER).at, '2026-09-06T17:56:12.369Z');
+});
+
+test('a stamped MERGED marker is still terminal, so no authorization is re-spent', () => {
+  // The direction that must never regress: a spent merge stays spent.
+  const merged = '[merge-on-comment] merged PR #628 at 2026-09-06T18:09:15.000Z' + STAMP;
+  assert.equal(parseMergeMarker(merged).kind, 'terminal');
+});
+
+test('an unstamped marker is unchanged, so markers written before the stamp still read', () => {
+  const old = '[merge-on-comment] refused: conflict hand-off on PR #500 — 2026-08-30T11:00:00.000Z';
+  const p = parseMergeMarker(old);
+  assert.equal(p.reason, 'conflict hand-off on PR #500');
+  assert.equal(p.at, '2026-08-30T11:00:00.000Z');
+});
+
+test('attempts are counted from the markers already on the thread', () => {
+  const replies = [
+    { comment_text: REAL_MARKER },
+    { comment_text: REAL_MARKER },
+    { comment_text: REAL_MARKER },
+  ];
+  assert.equal(countMergeRefusals(replies, 'conflict hand-off on PR #628'), 3);
+});
+
+test('only the markers giving THIS reason count toward the alarm', () => {
+  // A PR refused twice for red checks and once for a conflict has not tried
+  // the conflict three times, and an alarm saying so sends somebody looking
+  // for a problem that is not there.
+  const other = '[merge-on-comment] refused: checks are red on PR #628 — 2026-09-06T16:00:00.000Z' + STAMP;
+  const replies = [{ comment_text: other }, { comment_text: other }, { comment_text: REAL_MARKER }];
+  assert.equal(countMergeRefusals(replies, 'conflict hand-off on PR #628'), 1);
 });

@@ -60,6 +60,26 @@ const CONFLICT_TICKET_RE = /CONFLICT TICKET FILED:\s*PR\s*#(\d+)\s*—\s*(\S+)/i
 const STALE_HAND_OFF_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * How many times one merge may fail for the SAME reason before the pass stops
+ * being quiet about it — regardless of how little time has passed.
+ *
+ * WHY ATTEMPTS AND NOT ONLY AGE (2026-09-06, task 86bbvr0j5). Dane's call,
+ * after PR #628 failed to merge five times in ninety minutes while every
+ * surface stayed silent: "maybe the system can notice them sooner". The age
+ * rule above was written for a hand-off nobody had picked up, where a day of
+ * nothing is the signal. It is the wrong instrument for a merge that IS being
+ * retried and IS failing every time — the clock barely moves, and the thing
+ * going wrong is the repetition, not the wait.
+ *
+ * Three, because two is a coincidence a later pass often clears on its own
+ * (a lost push race, GitHub answering stale), and by the fourth Dane is
+ * reading identical comments and wondering why nothing has noticed. It is a
+ * FLOOR on noise, not a promise of silence before it: the age rule still fires
+ * independently for a hand-off that is not retrying at all.
+ */
+const MERGE_ATTEMPT_ALARM = 3;
+
+/**
  * THE ONE PREDICATE (2026-08-31, task 86bbq80j5).
  *
  * `gate.action === 'conflict'` is GitHub's answer, and GitHub's answer about a
@@ -254,6 +274,8 @@ const WORK_VOCABULARY = Object.freeze({
     stallWhat: (prNumber) => `PR #${prNumber} has been waiting on a conflict resolution`,
     /** Why an aged hand-off is news, when a ticket IS on file. */
     stallWhy: (filed, age) => `conflict ticket ${filed.id} has been open ${age} without clearing this conflict`,
+    /** Why a REPEATEDLY failing merge is news, whatever the clock says. */
+    stallWhyAttempts: (filed, tries) => `this merge has now failed ${tries} times for the same conflict${filed ? `, and conflict ticket ${filed.id} has not cleared it` : ', and nothing is on file to clear it'}`,
     /** How the end-of-pass summary counts it. */
     summaryCount: (n) => `${n} conflict(s) STILL UNRESOLVED`,
   }),
@@ -270,6 +292,7 @@ const WORK_VOCABULARY = Object.freeze({
     stallHeadline: 'MERGE STILL NOT CLEARED',
     stallWhat: (prNumber) => `PR #${prNumber} was expected to clear itself`,
     stallWhy: (filed, age) => `no overlap was found, so every pass has been retrying the catch-up on its own — and it has not cleared in ${age}`,
+    stallWhyAttempts: (filed, tries) => `no overlap was found, so every pass has retried the catch-up on its own — and it has now failed ${tries} times, which is no longer a stale answer clearing itself`,
     summaryCount: (n) => `${n} merge(s) STILL NOT CLEARED`,
   }),
   [VERDICT_KINDS.COULD_NOT_CHECK]: Object.freeze({
@@ -281,6 +304,7 @@ const WORK_VOCABULARY = Object.freeze({
     stallHeadline: 'MERGE STILL BLOCKED — THE CHECK NEVER RAN',
     stallWhat: (prNumber) => `PR #${prNumber} has been waiting for somebody to find out whether it conflicts at all`,
     stallWhy: (filed, age) => `ticket ${filed.id} has been open ${age} and nobody has established whether there is a conflict at all`,
+    stallWhyAttempts: (filed, tries) => `this merge has now been blocked ${tries} times and the check has never once run, so nobody has established whether there is a conflict at all${filed ? ` — ticket ${filed.id} is on file` : ', and nothing is on file to find out'}`,
     summaryCount: (n) => `${n} merge(s) NEVER CHECKED`,
   }),
 });
@@ -491,17 +515,32 @@ function ageText(ms) {
  * news, and the sentence says which of the two it is. Any other actor — and an
  * absent one — keeps the original filed-ticket rule, which fails toward noise.
  */
-function handOffStalled({ at, now, filed, localVerdict }) {
+function handOffStalled({ at, now, filed, localVerdict, attempts }) {
   const actor = conflictActor({ localVerdict, filed });
+  const tries = Number(attempts);
+  // ATTEMPTS ARE CHECKED BEFORE ANYTHING THAT CAN RETURN (task 86bbvr0j5).
+  // Placed after either guard below it would be unreachable in exactly the
+  // case it exists for: a marker whose timestamp cannot be read already
+  // returns stalled, and the age rule returns NOT stalled for everything
+  // younger than a day — which is every repeated merge failure worth catching.
+  // The count is the one signal that does not depend on the clock at all.
+  if (Number.isFinite(tries) && tries >= MERGE_ATTEMPT_ALARM) {
+    return {
+      stalled: true,
+      why: verdictCopy(localVerdict).stallWhyAttempts(filed, tries),
+      ageMs: Number.isFinite(Date.parse(String(at || ''))) ? Number(now) - Date.parse(String(at || '')) : null,
+      attempts: tries,
+    };
+  }
   if (!filed && actor !== 'later-pass') {
-    return { stalled: true, why: 'no conflict ticket has been filed, so nothing is going to pick this up', ageMs: null };
+    return { stalled: true, why: 'no conflict ticket has been filed, so nothing is going to pick this up', ageMs: null, attempts: tries || 0 };
   }
   const then = Date.parse(String(at || ''));
   if (!Number.isFinite(then)) {
-    return { stalled: true, why: 'the hand-off carries no readable timestamp, so its age cannot be checked', ageMs: null };
+    return { stalled: true, why: 'the hand-off carries no readable timestamp, so its age cannot be checked', ageMs: null, attempts: tries || 0 };
   }
   const ageMs = Number(now) - then;
-  if (ageMs < STALE_HAND_OFF_MS) return { stalled: false, ageMs };
+  if (ageMs < STALE_HAND_OFF_MS) return { stalled: false, ageMs, attempts: tries || 0 };
   // THE ACTOR DECIDES THE SENTENCE, NOT `filed` (review round 2).
   // `filed` records what a PAST pass found; `actor` is what THIS pass found,
   // and they can disagree: a real conflict files a ticket, the build loop
@@ -516,7 +555,7 @@ function handOffStalled({ at, now, filed, localVerdict }) {
   // is two-valued here — so a hand-off whose check never ran was described as
   // "a conflict ticket ... without clearing this conflict", naming a conflict
   // nobody had found. Three verdicts, three sentences, all from one table.
-  return { stalled: true, why: verdictCopy(localVerdict).stallWhy(filed, ageText(ageMs)), ageMs };
+  return { stalled: true, why: verdictCopy(localVerdict).stallWhy(filed, ageText(ageMs)), ageMs, attempts: tries || 0 };
 }
 
 /**
@@ -629,6 +668,7 @@ module.exports = {
   shouldFileConflictTicket,
   CONFLICT_TICKET_RE,
   STALE_HAND_OFF_MS,
+  MERGE_ATTEMPT_ALARM,
   conflictTicketFiledComment,
   findConflictTicket,
   conflictTicketName,
