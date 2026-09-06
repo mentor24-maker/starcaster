@@ -712,9 +712,14 @@ npm run pipeline -- check                    # is the line paused? 3 = paused, c
 ```
 
 A loop that is alive and claims nothing every pass is the state that reads as
-healthy and is not — usually the work-in-progress cap being full, which means
-the merge side is the bottleneck, not the queue. The status output and the last
-pass's own report say which.
+healthy and is not — usually the work-in-progress cap being full. The decline
+message **names which stage is holding the slots** ("the slots are held by 1
+building, 4 in review") rather than blaming a lane it has not measured. Until
+2026-09-05 it said "the merge side is the bottleneck", and on the morning that
+was rewritten it was false: merges were landing unattended in about nine
+minutes and the stall was in review (task 86bbvh285). Where ticket statuses
+cannot be read at all it says the split **could not be determined**, which is
+different news from either answer.
 
 ### Starting one by hand — the fallback
 
@@ -2071,9 +2076,12 @@ The floor is applied to *everything*: the curve's own rungs, the runner's
 argument, and the on-disk state file. A hand-edited `120` cannot get through.
 Nor can a hand-edited `null` get *under* the hysteresis: `Number(null)` is 0,
 which a floor-only clamp would raise to 900 and treat as the cadence already
-in force, so one deep reading would shorten it at once. Anything that is not
-actually a number resolves to the long fallback instead, and the test asserts
-that value rather than merely `>= floor`.
+in force. Anything that is not actually a number resolves to the long fallback
+instead, and the test asserts that value rather than merely `>= floor`. Since
+the 2026-09-05 inversion this protects the *lengthening* guard rather than the
+shortening one — a junk state reading as 900 would make every quiet reading a
+lengthening, which is the direction that waits — but the defect and the fix
+are the same either way.
 
 ### "Claimable", not "queued"
 
@@ -2138,16 +2146,67 @@ be visible in the log, not inferred from an interval an hour later.
 
 ### Hysteresis, and which direction it protects
 
-**Shortening needs two consecutive readings. Lengthening is immediate.**
+**Shortening is immediate. Lengthening needs two consecutive readings that
+both want it.**
 
-One burst of tickets must not set a fast cadence for the rest of the night —
-the queue may be drained again before the loop next wakes. Going *slower*
-never waits, because that is the cheap mistake.
+**That is the opposite of what it said until 2026-09-05** (task 86bbvh285),
+and the inversion is worth reading rather than skimming, because the original
+reasoning was not silly — it was measured against the wrong cost.
 
-With no state on disk at all, the cadence in force is taken to be the runner's
-configured argument, so a first pass against a deep queue holds one cycle and
-shortens on the next. That is the same rule every later pass follows, rather
-than a special case that skips the guard exactly when nothing is known.
+The original rule: shortening waits for two consecutive readings, because one
+burst of tickets must not set a fast cadence for the rest of the night;
+lengthening never waits, because the expensive mistake is staying fast and
+burning quota invisibly.
+
+**What that missed.** The two errors are not the same size. Waking sooner than
+a wrong reading deserved costs **one extra pass** against a shallow queue. But
+the hold is paid *at the cadence that is already too long* — the loop sleeps
+the old interval to earn the right to shorten it — so refusing to shorten from
+an hour costs an hour, of the whole pipeline, because the WIP cap counts
+`In review` and a slow review lane fills it until `loop-build` stops claiming.
+
+**And on a drifting queue the guard was effectively unreachable.** This part is
+not what it looks like, and the ticket that filed it described it wrongly. The
+old comparison *was* directional — `lastProposed < current` — so two different
+short proposals ought to second each other. They cannot: a **held pass does not
+move `current`**, and an intervening reading that is not shorter than `current`
+is adopted and overwrites `lastProposed` with itself, throwing the short
+reading away. The second reading therefore has to beat the interval in force,
+and on a queue drifting across the curve's rows it usually does not.
+
+Measured, from `~/loop-logs/loop-review.log` on the Mini:
+
+```
+00:26  4 claimable -> 900s proposed, HELD at 1800s      (lastProposed = 900)
+01:05  3 claimable -> 1800s, not < 1800s, so adopted as-is
+                      and lastProposed reset to 1800 — the 900 is discarded
+01:44  2 claimable -> 1800s
+02:24  1 claimable -> 1800s
+```
+
+The queue reached the curve's deepest row and the cadence never went there.
+That is a **ratchet**, not hysteresis: alternating readings settle on the
+slower rung and stay.
+
+**What the ticket got wrong**, recorded so the next reader is not misled: it
+described the guard as comparing exact seconds ("two readings of the same
+value") and reported `loop-review` as pinned at 3600 s for over three hours.
+The comparison is directional, as above; and of the three hours at 3600 s that
+day, two passes genuinely read **zero claimable** — correct behaviour — and
+only the 14:05 pass was a hold. One hour was lost to hysteresis, not three.
+The conclusion survives the arithmetic, and the real defect is worse than the
+one reported, because a ratchet can strand the cadence a rung short forever.
+
+The anti-thrash property is not lost — it moved to the direction where being
+wrong is cheap. A queue that empties for one pass and refills no longer costs
+an hour of sleep, and the ratchet cannot form the other way either, because a
+reading that wants *shorter* is adopted outright rather than resetting a
+counter.
+
+With no state on disk at all, the cadence in force is still taken to be the
+runner's configured argument. A first pass against a deep queue therefore
+shortens at once, and a first pass against an empty one holds for a cycle —
+the same rule every later pass follows, not a special case.
 
 State is one small file per loop, beside the log the runner already writes:
 `~/loop-logs/<loop>.interval-state.json`. Deleting it is harmless — it costs
@@ -2163,7 +2222,8 @@ one cycle of hysteresis, in the safe direction.
 | The command itself fails | the runner's `$INTERVAL` argument | The runner never sleeps on a guess. |
 
 A failed read is **not a reading**: it leaves the hysteresis state untouched,
-so two outages in a row cannot masquerade as two consecutive short readings.
+so two outages in a row cannot masquerade as two consecutive readings in
+either direction.
 
 And nothing is silent. Every cycle logs the number *and* its reason —
 

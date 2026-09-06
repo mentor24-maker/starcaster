@@ -1064,10 +1064,14 @@ test('a missing or unparseable number still falls back', () => {
 });
 
 test('the resume sweep sends a stranded build back but leaves a stranded review', () => {
-  // Source-level, like the bus-relay wiring tests above: the move itself needs
-  // a live token. What must never come back is one unconditional move for
-  // every stranded ticket regardless of what died on it.
-  const code = withoutComments(read('scripts/pipeline.mjs'));
+  // Source-level, like the bus-relay wiring tests above. It reads the sweep's
+  // own module because that is where the loop lives (task 86bbt204x) — and it
+  // survives alongside the executed end-to-end test at the bottom of this file
+  // rather than being replaced by it: this one pins the SHAPE of the branch, so
+  // a rewrite that happens to pass the behavioural test still has to keep the
+  // review case ahead of the move. What must never come back is one
+  // unconditional move for every stranded ticket regardless of what died on it.
+  const code = withoutComments(read('scripts/builder/pipelineSweep.js'));
   assert.match(code, /const reviewing = s\.kind === 'a review'/,
     'the sweep must branch on what kind of pass died');
   const moved = code.indexOf('status: where.status');
@@ -1090,7 +1094,12 @@ test('the resume sweep hands its report what it left behind, and whether it look
   // and what was LEFT BEHIND is invisible to a function shown only what was
   // taken. Every `continue` in the sweep loop is a ticket that is still
   // stranded, so every one of them has to record itself.
-  const code = withoutComments(read('scripts/pipeline.mjs'));
+  // TWO files since the sweep moved (task 86bbt204x): the loop's own bail-outs
+  // are in its module, and the two reports are built by the callers that print
+  // and announce them. Reading one file for both would have quietly stopped
+  // checking half of this.
+  const code = withoutComments(read('scripts/builder/pipelineSweep.js'));
+  const callers = withoutComments(read('scripts/pipeline.mjs'));
 
   const failureContinues = code.match(/left\.push\(s\.id\);\s*continue;/g) || [];
   assert.equal(failureContinues.length, 3,
@@ -1108,9 +1117,9 @@ test('the resume sweep hands its report what it left behind, and whether it look
 
   // And BOTH reports carry it, so neither can print an all-clear the other
   // contradicts.
-  assert.match(code, /sweptSummary\(swept, \{ \.\.\.sweepState, applied: apply \}\)/,
+  assert.match(callers, /sweptSummary\(swept, \{ \.\.\.sweepState, applied: apply \}\)/,
     'the terminal summary must be told what was left, whether it looked, and whether it acted');
-  assert.match(code, /resumedMessage\(\{ by, pausedForMs, swept, \.\.\.sweepState \}\)/,
+  assert.match(callers, /resumedMessage\(\{ by, pausedForMs, swept, \.\.\.sweepState \}\)/,
     'the party-line message must be told the same thing, or the two disagree');
 });
 
@@ -1360,9 +1369,15 @@ test('"could not tell" never exits 0, whatever else is true of the run', () => {
 test('the sweep is reachable without pausing anything', () => {
   const code = withoutComments(read('scripts/pipeline.mjs'));
   assert.match(code, /} else if \(cmd === 'sweep'\) {/, 'there must be a standalone command');
-  // It must be the SAME sweep, not a second copy that drifts from it.
-  assert.equal((code.match(/async function sweepStranded\(/g) || []).length, 1,
+  // It must be the SAME sweep, not a second copy that drifts from it. Since
+  // task 86bbt204x the one definition lives in its own module — moved so it
+  // could be executed in a test, NOT copied — so this counts it there and
+  // insists this file has none of its own.
+  const sweepModule = withoutComments(read('scripts/builder/pipelineSweep.js'));
+  assert.equal((sweepModule.match(/async function sweepStranded\(/g) || []).length, 1,
     'one sweep exists');
+  assert.doesNotMatch(code, /async function sweepStranded\(/,
+    'and pipeline.mjs must delegate to it rather than keeping a second copy');
   assert.equal((code.match(/await sweepStranded\(/g) || []).length, 3,
     'and exactly three callers: `sweep`, `resume` on a paused pipeline, and `resume` on a running one');
 });
@@ -1384,8 +1399,9 @@ test('a dry run writes nothing at all', () => {
   // The safety property that makes an always-available sweep sound. 90 minutes
   // is longer than any loop pass but SHORTER than a hand-driven fast-track
   // session, which holds a ticket in "Building" for hours without touching it.
-  const code = withoutComments(read('scripts/pipeline.mjs'));
-  const fn = code.slice(code.indexOf('async function sweepStranded('), code.indexOf("const cmd = process.argv[2];"));
+  const code = withoutComments(read('scripts/builder/pipelineSweep.js'));
+  const fn = code.slice(code.indexOf('async function sweepStranded('), code.indexOf('module.exports'));
+  assert.ok(fn.length > 100, 'found the sweep');
   const bail = fn.indexOf('if (!apply) {');
   assert.ok(bail > 0, 'the dry run must bail out explicitly');
   // Every write in the sweep is a tryCall; none may come before the bail-out.
@@ -1428,7 +1444,8 @@ test('the hand-back note names the command that actually ran', () => {
 test('each caller tells the note which command it is', () => {
   const code = withoutComments(read('scripts/pipeline.mjs'));
   assert.match(code, /command: 'npm run pipeline -- sweep --apply'/, 'the standalone command must identify itself');
-  assert.match(code, /kind: s\.kind, command,/, 'and the sweep must pass it through to the note');
+  assert.match(withoutComments(read('scripts/builder/pipelineSweep.js')), /kind: s\.kind, command,/,
+    'and the sweep must pass it through to the note');
 });
 
 test('resume on an already-running pipeline sweeps instead of exiting', () => {
@@ -1458,7 +1475,11 @@ test('both sweeping commands read ONE staleness threshold', () => {
   const code = withoutComments(read('scripts/pipeline.mjs'));
   assert.equal((code.match(/num\('stranded-after-minutes'/g) || []).length, 1,
     'the option is parsed in exactly one place');
-  assert.equal((code.match(/strandedAfterMs \}\)/g) || []).length, 3,
+  // Matched at the CALL rather than by the punctuation that used to follow it:
+  // the old pattern counted `strandedAfterMs })`, so a call site that passed it
+  // and then passed anything else stopped being counted. One did, and the third
+  // match it was silently landing on was inside the sweep itself.
+  assert.equal((code.match(/sweepStranded\(\{[^}]*strandedAfterMs/g) || []).length, 3,
     'and passed to all three sweep call sites (sweep, resume-running, resume-paused)');
 });
 

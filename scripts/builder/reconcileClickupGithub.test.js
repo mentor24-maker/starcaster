@@ -20,11 +20,16 @@ const {
   standDownReport,
   SWITCH_TIMEOUT_MS,
   closureNote,
+  operatorCloseVerdict,
+  authorizedClosureNote,
+  OPERATOR_ID,
   AUTO_REPAIR_STATUSES,
   OPERATOR_STATUSES,
   CLAIMABLE_STATUSES,
 } = require('../reconcile_clickup_github.cjs');
 const loopStatuses = require('./loopStatuses.js');
+const machineComment = require('./machineComment.js');
+const mergeOnComment = require('./mergeOnComment.js');
 
 /**
  * Charter Q2 — the reconciler. Every dependency (`gh pr view`, ClickUp reads/
@@ -69,6 +74,296 @@ const trail = (n) => `PR opened: https://github.com/org/repo/pull/${n}`;
  * own comments — is a fixture that never reaches the code it means to test.
  */
 const MERGED_AFTER_COMMENTS = '2026-09-01T00:00:00.000Z';
+
+// ── the authorized close: operatorCloseVerdict (task 86bbv05ay) ──────────
+//
+// The predicate that lets ONE shape out of an operator status: `Ready to
+// launch`, a merged PR, and Dane's own merge command predating the merge.
+// Every near-miss is here, because a predicate that is too permissive closes
+// tickets he never signed off — worse than the problem it fixes, and it would
+// look exactly like the feature working.
+
+const MERGED_AT = '2026-09-04T08:57:00.000Z';
+const BEFORE_MERGE = Date.parse('2026-09-04T08:15:00.000Z');
+const AFTER_MERGE = Date.parse('2026-09-04T09:30:00.000Z');
+
+/** One comment record, authored. `who` defaults to Dane. */
+const said = (text, at, who = OPERATOR_ID, id = 'c1') => ({
+  id,
+  date: String(at),
+  user: { id: who },
+  comment_text: text,
+});
+
+/** The live 86bbugeda shape: his word, then the merge. */
+const authorized = () => [
+  said(trail(596), BEFORE_MERGE - 60_000, OPERATOR_ID, 'c0'),
+  said('merge', BEFORE_MERGE, OPERATOR_ID, 'c1'),
+];
+
+test('the qualifying shape: Ready to launch, merged PR, his merge command before it', () => {
+  const v = operatorCloseVerdict({
+    status: 'Ready to launch',
+    comments: authorized(),
+    mergedAt: MERGED_AT,
+  });
+  assert.equal(v.mayClose, true);
+  assert.equal(v.approval.text, 'merge');
+  assert.equal(v.approval.atIso, new Date(BEFORE_MERGE).toISOString());
+  assert.match(v.why, /Dane commented "merge"/);
+});
+
+test('BREAK-TEST: "Needs your input" is NEVER closed, merged PR or not (AC5)', () => {
+  const v = operatorCloseVerdict({
+    status: 'Needs your input',
+    comments: authorized(),
+    mergedAt: MERGED_AT,
+  });
+  assert.equal(v.mayClose, false, 'an unanswered question is the thing the refusal exists for');
+  assert.match(v.why, /Needs your input|not "Ready to launch"/i);
+});
+
+test('BREAK-TEST: no merge command from Dane — flag only, never closed (AC6)', () => {
+  const v = operatorCloseVerdict({
+    status: 'Ready to launch',
+    comments: [said(trail(596), BEFORE_MERGE - 60_000)],
+    mergedAt: MERGED_AT,
+  });
+  assert.equal(v.mayClose, false, 'a PR that merged by another route wants a human eye');
+  assert.match(v.why, /no merge command from Dane/);
+});
+
+test('BREAK-TEST: his merge command POSTDATES the merge — it did not authorize it', () => {
+  const v = operatorCloseVerdict({
+    status: 'Ready to launch',
+    comments: [said(trail(596), BEFORE_MERGE - 60_000, OPERATOR_ID, 'c0'), said('merge', AFTER_MERGE)],
+    mergedAt: MERGED_AT,
+  });
+  assert.equal(v.mayClose, false);
+  assert.match(v.why, /POSTDATES the merge/);
+});
+
+test('BREAK-TEST: a merge command from SOMEBODY ELSE is not his instruction', () => {
+  const v = operatorCloseVerdict({
+    status: 'Ready to launch',
+    comments: [said('merge', BEFORE_MERGE, OPERATOR_ID + 1)],
+    mergedAt: MERGED_AT,
+  });
+  assert.equal(v.mayClose, false);
+  assert.match(v.why, /no merge command from Dane/);
+});
+
+/**
+ * A MACHINE comment wearing his user id cannot authorize its own close.
+ *
+ * NOT LABELLED A BREAK-TEST, AND THE REASON IS THE POINT. Deleting the
+ * `isMachineComment` filter from the predicate leaves this passing — measured,
+ * not assumed. TWO independent rules reject a stamped comment and either alone
+ * is enough: the marker line makes `isMachineComment` true, and it ALSO makes
+ * the comment stop being a whole-comment merge phrase, so `isMergeCommand` is
+ * already false. Calling this a break-test for the filter would be claiming a
+ * guarantee the assertion cannot give (`check:panels`, 2026-09-04).
+ *
+ * So it asserts what it can actually prove: both rules hold, independently. If
+ * `isMergeCommand` ever loosens to a substring match — the change that would
+ * make the filter load-bearing — the second assertion fails here, on the line
+ * that says why it matters.
+ */
+test('a MACHINE comment wearing his user id cannot authorize its own close', () => {
+  const stamped = machineComment.stampMachineComment('merge');
+  assert.equal(machineComment.isMachineComment(stamped), true, 'the marker is what the filter reads');
+  assert.equal(
+    mergeOnComment.isMergeCommand(stamped), false,
+    'and the whole-comment rule rejects it too — if this ever flips, the filter becomes the only defence',
+  );
+
+  const v = operatorCloseVerdict({
+    status: 'Ready to launch',
+    comments: [said(stamped, BEFORE_MERGE)],
+    mergedAt: MERGED_AT,
+  });
+  assert.equal(v.mayClose, false, 'a loop posting under his token has not authorized anything');
+  assert.match(v.why, /no merge command from Dane/);
+});
+
+test('BREAK-TEST: prose that merely contains the word is not a command', () => {
+  for (const text of ['do not merge this yet', 'I will approve the design later', 'merge after Friday']) {
+    const v = operatorCloseVerdict({
+      status: 'Ready to launch',
+      comments: [said(text, BEFORE_MERGE)],
+      mergedAt: MERGED_AT,
+    });
+    assert.equal(v.mayClose, false, `"${text}" must not read as an authorization`);
+  }
+});
+
+test('BREAK-TEST: an approval older than the newest review verdict authorized an EARLIER round', () => {
+  const v = operatorCloseVerdict({
+    status: 'Ready to launch',
+    comments: [
+      said('merge', BEFORE_MERGE - 200_000, OPERATOR_ID, 'c0'),
+      said('REVIEW: sent back to Rework — see notes', BEFORE_MERGE - 100_000, OPERATOR_ID, 'c1'),
+      said(trail(597), BEFORE_MERGE - 50_000, OPERATOR_ID, 'c2'),
+    ],
+    mergedAt: MERGED_AT,
+  });
+  assert.equal(v.mayClose, false, 'a word about work that was sent back is not a word about what shipped');
+  assert.match(v.why, /predates the newest review verdict/);
+});
+
+test('BREAK-TEST: no readable merge time means no ordering, so it is a refusal not a pass', () => {
+  for (const mergedAt of [undefined, '', 'not a date']) {
+    const v = operatorCloseVerdict({ status: 'Ready to launch', comments: authorized(), mergedAt });
+    assert.equal(v.mayClose, false, `mergedAt=${JSON.stringify(mergedAt)} must not close anything`);
+    assert.match(v.why, /no merge time/);
+  }
+});
+
+test('the OLDEST qualifying command is the evidence, not the repeat he should not have had to type', () => {
+  const v = operatorCloseVerdict({
+    status: 'Ready to launch',
+    comments: [
+      said('merge', BEFORE_MERGE - 100_000, OPERATOR_ID, 'first'),
+      said('merge', BEFORE_MERGE, OPERATOR_ID, 'second'),
+    ],
+    mergedAt: MERGED_AT,
+  });
+  assert.equal(v.mayClose, true);
+  assert.equal(v.approval.id, 'first');
+});
+
+test('the closure note names whose instruction, when, and which PR carried it out (AC4)', () => {
+  const v = operatorCloseVerdict({
+    status: 'Ready to launch',
+    comments: authorized(),
+    mergedAt: MERGED_AT,
+  });
+  const note = authorizedClosureNote({
+    prName: 'PR #596',
+    prUrl: 'https://github.com/org/repo/pull/596',
+    approval: v.approval,
+  });
+  assert.match(note, /Dane/, 'whose instruction');
+  assert.match(note, /"merge"/, 'what he said, verbatim');
+  assert.match(note, new RegExp(new Date(BEFORE_MERGE).toISOString()), 'when he said it');
+  assert.match(note, /PR #596/, 'which PR carried it out');
+  assert.match(note, /pull\/596/);
+  assert.match(note, /MERGED at 2026-09-04T08:57/, 'and when that merge happened');
+  assert.match(note, /\[machine\]/, 'a machine comment says so — it posts under his token');
+});
+
+// ── the authorized close, through checkMergedTasks ───────────────────────
+
+/** Comment records with authorship, in the shape checkMergedTasks reads. */
+const authored = (...c) => async () => c;
+
+test('LIVE: the qualifying ticket is moved to Live, and the move is GUARDED (AC3)', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const moved = [];
+  const commented = [];
+  const posted = [];
+  await checkMergedTasks([task('t1', 'Held', 'Ready to launch')], clean, repaired, unchecked, {
+    getComments: authored(...authorized()),
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AT }),
+    updateStatus: (id, status, opts) => moved.push([id, status, opts]),
+    commentOn: () => {},
+    postBus: async (ch, text) => posted.push(text),
+    isLive: true,
+  });
+  assert.equal(moved.length, 1, 'the qualifying ticket must actually move');
+  assert.equal(moved[0][0], 't1');
+  assert.equal(moved[0][1], 'Live');
+  assert.equal(moved[0][2].ifStatus, 'Ready to launch', 'the move must be guarded on the status it read');
+  assert.equal(posted.length, 0, 'a completed handoff is not a contradiction — nothing to flag');
+  assert.equal(unchecked.length, 0);
+  assert.ok(repaired.some((r) => /moved to Live on Dane's own instruction/.test(r)));
+});
+
+test('LIVE: the explanation is posted BEFORE the move, and a failed comment blocks it', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const moved = [];
+  await checkMergedTasks([task('t1', 'Held', 'Ready to launch')], clean, repaired, unchecked, {
+    getComments: authored(...authorized()),
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AT }),
+    updateStatus: (id, status) => moved.push([id, status]),
+    commentOn: () => { throw new Error('ClickUp said no'); },
+    isLive: true,
+  });
+  assert.equal(moved.length, 0, 'an unexplained close is the failure this exists to prevent');
+  assert.equal(unchecked.length, 1);
+  assert.match(unchecked[0], /NOT moved to Live/);
+});
+
+test('LIVE: a guard that refuses is UNCHECKED, never reported as a repair', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  await checkMergedTasks([task('t1', 'Held', 'Ready to launch')], clean, repaired, unchecked, {
+    getComments: authored(...authorized()),
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AT }),
+    updateStatus: () => { throw new Error('NOT claimed: expected status "Ready to launch"'); },
+    commentOn: () => {},
+    isLive: true,
+  });
+  assert.equal(unchecked.length, 1);
+  assert.match(unchecked[0], /guarded move did not take/);
+  assert.ok(!repaired.some((r) => /moved to Live/.test(r)));
+});
+
+test('DRY RUN: it says it WOULD move it, and why, and writes nothing (AC7)', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  let writes = 0;
+  const commented = [];
+  await checkMergedTasks([task('t1', 'Held', 'Ready to launch')], clean, repaired, unchecked, {
+    getComments: authored(...authorized()),
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AT }),
+    updateStatus: () => { writes += 1; },
+    commentOn: async (id, text) => commented.push([id, text]),
+    isLive: false,
+  });
+  assert.equal(writes, 0, 'dry run is still the default and still writes nothing');
+  assert.equal(commented.length, 0);
+  assert.equal(repaired.length, 1);
+  assert.match(repaired[0], /DRY RUN/);
+  assert.match(repaired[0], /would move to Live/);
+  assert.match(repaired[0], /Dane commented "merge"/, 'and it says WHY it would be allowed to');
+});
+
+test('BREAK-TEST through the scan: the merge command removed gives today\'s flag-only outcome', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const moved = [];
+  const posted = [];
+  const commented = [];
+  await checkMergedTasks([task('t1', 'Held', 'Ready to launch')], clean, repaired, unchecked, {
+    getComments: authored(said(trail(596), BEFORE_MERGE - 60_000)),
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AT }),
+    updateStatus: (id, s) => moved.push([id, s]),
+    postBus: async (ch, text) => posted.push(text),
+    commentOn: async (id, text) => commented.push([id, text]),
+    recordFlagged: () => {},
+    isLive: true,
+  });
+  assert.equal(moved.length, 0, 'no instruction means no close');
+  assert.equal(posted.length, 1, 'it is still flagged, exactly as before');
+  assert.match(posted[0], /Only you move a task out of that status/);
+  assert.match(posted[0], /no merge command from Dane/, 'and the flag now says why it could not close it');
+  assert.equal(commented.length, 1, 'and the durable half is unchanged');
+});
+
+test('BREAK-TEST through the scan: Needs your input with his merge word on it is STILL only flagged', async () => {
+  const { clean, repaired, unchecked } = buckets();
+  const moved = [];
+  const posted = [];
+  await checkMergedTasks([task('t1', 'Held', 'Needs your input')], clean, repaired, unchecked, {
+    getComments: authored(...authorized()),
+    prState: () => ({ state: 'MERGED', mergedAt: MERGED_AT }),
+    updateStatus: (id, s) => moved.push([id, s]),
+    postBus: async (ch, text) => posted.push(text),
+    commentOn: () => {},
+    recordFlagged: () => {},
+    isLive: true,
+  });
+  assert.equal(moved.length, 0, 'an unanswered question is never closed by a machine, whatever merged');
+  assert.equal(posted.length, 1);
+});
 
 // ── checkMergedTasks ─────────────────────────────────────────────────────
 

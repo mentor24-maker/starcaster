@@ -437,7 +437,8 @@ async function pageComments({ get, taskId, maxPages = 40 }) {
  * reader concludes something never happened.
  */
 /**
- * A task's comments as RECORDS — `{ id, date, comment_text }`, oldest-first.
+ * A task's comments as RECORDS — `{ id, date, user, comment_text }`,
+ * oldest-first.
  *
  * `getTaskComments` below flattens these to bare strings, which is all most
  * callers want. A caller that has to decide something about a comment needs
@@ -450,6 +451,19 @@ async function pageComments({ get, taskId, maxPages = 40 }) {
  * That is not hypothetical: the reconciler passed strings, so it could not use
  * that parser at all, wrote its own loose regex over prose, and closed a live
  * ticket on another ticket's pull request (86bbuv66c, 2026-09-04).
+ *
+ * `user` CARRIES AUTHORSHIP, and it is here because dropping it made a whole
+ * class of question unaskable (2026-09-05, task 86bbv05ay). Every other reader
+ * of a merge command in this repo — `mergeDecision`, `liveApprovalAt`,
+ * `autoMergeLane` — decides authorship by numeric user id, and a reader handed
+ * these records could not: it would have had to fall back to the text alone,
+ * which reads "merge" typed by anybody as Dane's authorization. Passing the
+ * field through costs nothing and keeps the reconciler asking the SAME question
+ * the merge path asks, rather than a weaker second version of it.
+ *
+ * It is passed through verbatim rather than reduced to an id, because
+ * `machineComment.isMachineComment` needs the text and the callers need the
+ * name for the evidence line they write.
  */
 async function getTaskCommentRecords(taskId) {
   const out = await pageComments({ get: (p) => call('GET', p), taskId });
@@ -464,6 +478,7 @@ async function getTaskCommentRecords(taskId) {
   return out.comments.reverse().map((c) => ({
     id: String(c.id ?? ''),
     date: c.date,
+    user: c.user || null,
     comment_text: c.comment_text || '',
   }));
 }
@@ -517,9 +532,21 @@ function shellFailureDetail(err, timeoutMs) {
  * "that status does not exist" 200 that a bare PUT would report as success.
  * Returns the command's own report line.
  */
-function moveTaskStatus(taskId, status, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
-  return runDirect(['status', '--task', String(taskId), '--status', status], {
-    what: `move task ${taskId} -> "${status}"`,
+/**
+ * Move a task, through the one verified door.
+ *
+ * `ifStatus` makes the move a GUARDED one: `clickup status --if-status` re-reads
+ * the task and exits 3 without writing if it is no longer wearing that status,
+ * which `runDirect` surfaces as a throw. A caller that read a status, thought
+ * about it, and then wrote wants this — the thinking is the window. Added for
+ * the reconciler's authorized close (86bbv05ay), where the gap between reading
+ * the ticket and closing it spans a `gh` call and a comment post, and a ticket
+ * Dane moved himself in that gap must be left exactly where he put it.
+ */
+function moveTaskStatus(taskId, status, { timeoutMs = SHELL_TIMEOUT_MS, ifStatus = null } = {}) {
+  const guard = ifStatus ? ['--if-status', String(ifStatus)] : [];
+  return runDirect(['status', '--task', String(taskId), '--status', status, ...guard], {
+    what: `move task ${taskId} -> "${status}"${ifStatus ? ` (only while it is "${ifStatus}")` : ''}`,
     timeoutMs,
   });
 }

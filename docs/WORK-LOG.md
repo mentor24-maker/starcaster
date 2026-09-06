@@ -21,6 +21,136 @@ Machine notes now stamp themselves, and the lane reads that stamp. Only a
 comment it can positively identify as machine-written is ignored — anything
 it cannot classify still counts as Dane's word and still stops the merge, so
 the cautious half of the behaviour is untouched.
+## 2026-09-05 — A repair that moves real tickets is now actually tested (#623)
+
+There is a repair in the system called the sweep. When one of the machines dies
+part-way through a job, its ticket is left sitting in a state nothing will ever
+pick up again — it is invisible, not merely late. The sweep is the thing that
+finds those and puts them back in the line.
+
+Three days ago that repair was fixed so it could be run at any time, and that
+fix was right and is still right. But it went in with a strange gap: the tests
+around it never actually ran it. They read the *text* of the program and
+checked that the sweep was mentioned in the right places, the way you might
+confirm a recipe lists flour without ever baking anything. That is a weak
+check on a strong piece of code, because this is the code that genuinely moves
+tickets around the board on its own.
+
+The reason nobody had tested it properly was mundane: the sweep lived inside a
+command-line tool, and there was no way to get hold of it without running the
+whole tool. So it has been moved into its own file, arranged so a test can hand
+it a pretend version of ClickUp and watch what it does. Nothing about how it
+behaves has changed — the same code, in a place a test can reach.
+
+Then the test that was asked for: put some stuck tickets in front of it, run
+the sweep, and check each one went where it should. The pretend ClickUp really
+carries out the changes it is given, so the sweep can be run a second time over
+the board the first run left behind and confirmed to come back clean — which is
+exactly how a person would check it by hand. Seventeen tests in all, covering
+the ordinary case, the four different ways it can fail, and the important one
+where ClickUp says "fine" but nothing actually moved.
+
+The tests were then proved to be worth having by deliberately breaking the
+sweep six different ways and confirming each break was caught. A test that
+cannot fail is decoration.
+
+Worth recording: this ticket turned out to be a duplicate — the same problem
+had been written up twice on the same day, and most of it was already fixed.
+That was checked before any code was written, said so on the ticket, and only
+the part that was genuinely still missing was built.
+
+## 2026-09-05 — The switch that quietly ignored him three times (#621)
+
+Automatic merging can be switched off, and it is switched back on by posting
+one exact line: `resume auto-merging`. The wording has to be the whole message
+and nothing else, on purpose — if it fired whenever the phrase merely came up
+in conversation, the machines would merge something nobody had agreed to.
+
+What went wrong is what happened when Dane got *close*. Nothing at all. On
+3 September he posted the line with bold and backticks around it, copied from a
+card an agent had written for him. It matched nothing, nobody said so, and he
+spent the next thirty-five minutes believing merging was back on. He did the
+same thing twice more on 5 September — at 6:47pm and 8:58pm — while an urgent
+piece of work sat parked waiting for exactly that switch. Three tries, no
+answer to any of them, because a near miss and a message nobody read looked
+identical from where he was sitting.
+
+Now a message that was clearly *meant* to be the switch gets a reply: nothing
+changed, here is what actually arrived, and here is the line to copy — as plain
+text on its own, so the reply cannot hand him another dud.
+
+Rehearsing the fix turned up a second problem underneath it. The system worked
+out which party-line messages were Dane's by keeping a list of the signatures
+the machines sign with, and the list had gone out of date: three signatures in
+daily use were missing from it, so those posts were being read as *his own
+words* on the one channel where the off switch is listened for. It now
+recognises the family of signatures rather than a list of them.
+
+## 2026-09-05 — A ticket you had already said "merge" to sat there waiting for you anyway (#617)
+
+Two of the seven columns on the Loop Queue board belong to you: `Needs your
+input` and `Ready to launch`. Nothing automatic is allowed to move a ticket out
+of either one, and that rule is right — a machine tidying away a ticket that was
+holding a question you had not seen yet would erase the question.
+
+But the rule was being applied by looking only at which column the ticket was
+in, and the column is not really the question. The real question is *is there
+still a decision of Dane's outstanding?* On the morning of 4 September there
+was not: you commented `merge` on a ticket at 8:15, the work went live at 8:57,
+and at 9:00 the ticket was still sitting in `Ready to launch` as though it were
+waiting on you. It was not waiting on anything. Your instruction had been given
+and carried out. The ticket was just stale paperwork by then — and finished work
+parked in one of your columns does not show up on the list of what shipped.
+
+So the tidy-up job can now close exactly one shape of ticket by itself, and only
+when all three of these are true: the ticket is in `Ready to launch`, its pull
+request really did merge, and your own `merge` comment is on the ticket from
+*before* the merge. Miss any one of them and nothing changes — it flags it and
+leaves it alone, exactly as before, and now says which of the three was missing.
+`Needs your input` is never touched at all, whatever merged, because an
+unanswered question is the whole reason the rule exists.
+
+Three things were tightened beyond what was asked for, all of them about not
+closing something on a word that was not really yours. It reads your merge
+command out of the comments rather than guessing from the column or from who is
+assigned. It checks the comment was actually typed by you and not written by one
+of the loops, which all post under your login. And it ignores a `merge` you gave
+before the last review verdict — that one approved an earlier attempt that was
+sent back and rebuilt, so it is a word about work that no longer exists. The
+close is also guarded: if you move the ticket yourself while the job is thinking,
+your move wins.
+
+Every one of those guards was tested by taking it out and watching a named test
+go red, and the note the job leaves on the ticket says whose instruction it
+acted on, when you gave it, and which pull request carried it out — so the claim
+can be checked rather than taken on trust.
+## 2026-09-05 — Merges no longer knock each other back to the start (#616)
+
+Before a pull request can go live, GitHub insists it has the very latest work
+in it. That sounds sensible, and it is — but it means every merge that lands
+makes every other waiting change out of date, and throws away the tests that
+had just passed on it. So when several merges happened close together they kept
+knocking each other back to the beginning, and each one had to be tested all
+over again. Nothing looked broken while it happened: every single step reported
+success, so it just felt slow.
+
+On the night of 3 September a merge Dane approved at 11:25pm did not go live
+until 11:49pm, and the whole twenty-four minutes went on re-running tests that
+had already passed.
+
+The fix is a queue of one. Only a single change at a time is allowed to be on
+its way to going live; the others simply wait their turn, untouched, so nothing
+resets them. Each change is now tested exactly once no matter how many are
+lined up behind it — with eight waiting, the last one used to need eight rounds
+of testing and now needs one.
+
+Two things worth knowing. It was checked first whether that "must have the
+latest work" rule was GitHub's own or something we had chosen ourselves; it is
+GitHub's, and it protects something real, so it was left alone. And one gap is
+left open deliberately: the fast-track lane still merges without taking its
+turn, so it can still interrupt one waiting change. Making the fast track wait
+behind the machines is Dane's call, not a decision to slip in quietly, so it
+has been written up separately.
 
 ## 2026-09-05 — The panel layout checker could not fail on the panel it had just checked (#613)
 
