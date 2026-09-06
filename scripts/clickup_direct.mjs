@@ -93,7 +93,7 @@ const {
 } = busRelayPlan;
 const { retryDecision } = clickupRetry;
 const {
-  mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
+  mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker, countMergeRefusals,
   refusalNotice, refusalBusLine, conflictHandOffNotice, mergedNotice,
 } = mergeOnComment;
 const {
@@ -1095,7 +1095,7 @@ async function waitForChecksInPass({ pr, repo, label, fields, budget, gateOf = g
   }
 }
 
-async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeRefusedAt, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget, lane }) {
+async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeRefusedAt, mergeRefusedCount, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget, lane }) {
   // ONE GATE, ONE MERGE COMMAND, ONE Live TRANSITION (task 86bbkw2au). Lane A
   // replaces the operator's WORD and nothing else, so it arrives here as a
   // decision of the same shape and takes the identical path afterwards:
@@ -1116,6 +1116,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     handled: mergeHandled,
     refused: mergeRefused,
     refusedAt: mergeRefusedAt,
+    refusedCount: mergeRefusedCount,
   });
   if (decision.act === 'ignore') return { outcome: 'none' };
 
@@ -1741,6 +1742,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     if (alreadySaid(handOffReason) && !freshlyFiled) {
       const stalled = handOffStalled({
         at: decision.priorRefusalAt, now: Date.now(), filed, localVerdict,
+        attempts: decision.priorRefusalCount,
       });
       if (!stalled.stalled) {
         console.error(`  MERGE HANDED OFF (unchanged, nothing posted) on ${label}: ${gate.reason}`);
@@ -4451,6 +4453,10 @@ if (cmd === 'whoami') {
       // that has been sitting for three days, and only the second is news
       // (task 86bbq0fh8).
       const mergeRefusedAt = new Map();
+      // ...and HOW MANY TIMES this exact refusal has been given. A merge that
+      // is retrying and failing every pass moves no clock, so age alone cannot
+      // see it (task 86bbvr0j5).
+      const mergeRefusedCount = new Map();
 
       for (const c of fromOperator) {
         const repliesOut = await call('GET', `/api/v2/comment/${c.id}/reply`);
@@ -4467,6 +4473,10 @@ if (cmd === 'whoami') {
         if (marker && marker.kind === 'refused') {
           mergeRefused.set(String(c.id), marker.reason);
           mergeRefusedAt.set(String(c.id), marker.at || '');
+          // Counted over the whole reply thread, not just the newest marker:
+          // the attempts ARE the earlier markers, and only the ones that gave
+          // this same reason count toward this alarm.
+          mergeRefusedCount.set(String(c.id), countMergeRefusals(replies, marker.reason));
         }
         else if (marker) mergeHandled.add(String(c.id));
         const already = replies.some((r) => (r.comment_text || '').startsWith(BUS_RELAY_MARKER));
@@ -4556,7 +4566,7 @@ if (cmd === 'whoami') {
         // pass carries on to the next ticket.
         let m;
         try {
-          m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, mergeRefusedAt, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget });
+          m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, mergeRefusedAt, mergeRefusedCount, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget });
         } catch (err) {
           unchecked.push(`${t.id}: the merge step THREW (${err && err.message ? err.message : err}) — this ticket got no merge decision, nothing was posted on it, and its authorization is unspent. That is a defect in the merge step; it needs an agent session.`);
           console.error(`  MERGE STEP THREW on "${t.name}" (${t.id}): ${err && err.stack ? err.stack : err}`);

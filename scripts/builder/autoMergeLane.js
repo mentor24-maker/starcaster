@@ -47,6 +47,7 @@ const {
   isReviewPassed,
   findPullRequest,
 } = require('./mergeOnComment');
+const { isStampedMachineComment, MACHINE_MARKER } = require('./machineComment');
 
 // ── Criterion 1: which files may ride in this lane ───────────────────────────
 
@@ -282,6 +283,197 @@ function parseAutoMergeMarker(text) {
   return { kind: m[1].toLowerCase(), pr: Number(m[2]) };
 }
 
+// ── Recognising the lane's OWN voice ─────────────────────────────────────────
+
+/**
+ * The first line of each notice, named here rather than typed at the builder,
+ * because the recogniser below matches on it. A notice and the test that
+ * recognises it are the same pairing `announcementNotice` already keeps with
+ * its marker: written apart they drift, and the drift is silent.
+ */
+const announcementOpening = (prNumber, deadlineLabel) =>
+  `**Merging PR #${prNumber} at ${deadlineLabel} unless you say otherwise.**`;
+const ANNOUNCEMENT_OPENING_RE = /^\*\*Merging PR #(\d+) at .+ unless you say otherwise\.\*\*$/;
+const CANCELLATION_OPENING = '**Auto-merge stopped. Nothing was merged.**';
+
+/**
+ * Is this comment NOTHING BUT one of this lane's own notices?
+ *
+ * WHY A MARKER LINE IS NOT ENOUGH (2026-09-06, task 86bbv8nvy round 2). The
+ * announcement is the card Dane is most likely to paste, because it is the one
+ * he is replying to — and a verbatim requote carries every line of it,
+ * including the `[auto-merge] armed PR #618` marker and the `[machine]` stamp.
+ * Asking either of those alone read HIS objection as a fresh announcement,
+ * dated to his own words: the window silently restarted from the moment he
+ * said stop, and an hour later the lane merged the PR he had said hold on,
+ * giving "announced 60 minute(s) ago with no objection" as its reason.
+ *
+ * So a notice is recognised by its two ENDS, which a quote cannot both keep:
+ * the body must OPEN with the notice's own first line and CLOSE with the
+ * matching marker line (ignoring the machine stamp `call()` appends after it).
+ * Text of his above the card breaks the opening; text of his below it breaks
+ * the close. Only the lane writes both, and only in this order.
+ *
+ * WHY THE ENDS RATHER THAN THE STAMP. Measured 2026-09-06 over 209 real Loop
+ * Queue comments: 189 are machine-written, and NOT ONE of them announces
+ * itself at the top — they all open with ordinary prose ("PR opened:",
+ * "REVIEW: sent back...", "BUILD (round 3):"). A general "machine-marked at
+ * both ends" rule would therefore have called every card on the board Dane's
+ * word. These two notices are different because this module BUILDS them, so
+ * their first line is a fixed string it can check against.
+ *
+ * @returns {'armed'|'cancelled'|null} which notice, or null if it is not one.
+ */
+function isLaneNotice(text) {
+  const lines = String(text == null ? '' : text)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (!lines.length) return null;
+  // Drop the machine stamp: `call()` appends it after the marker, so the
+  // marker is the last line the notice itself wrote.
+  const body = lines[lines.length - 1].startsWith(MACHINE_MARKER) ? lines.slice(0, -1) : lines;
+  if (body.length < 2) return null;
+  const closing = parseAutoMergeMarker(body[body.length - 1]);
+  if (!closing) return null;
+  const opens = closing.kind === 'armed'
+    ? ANNOUNCEMENT_OPENING_RE.test(body[0])
+    : body[0] === CANCELLATION_OPENING;
+  if (!opens) return null;
+  // The opening names the PR too, and it must be the SAME PR the marker names
+  // — otherwise two cards spliced together would pass.
+  if (closing.kind === 'armed' && Number(ANNOUNCEMENT_OPENING_RE.exec(body[0])[1]) !== closing.pr) return null;
+  return closing.kind;
+}
+
+/**
+ * Did a person assemble this comment out of a machine card and words of their
+ * own?
+ *
+ * The objection filter's problem, stated exactly: the `[machine]` stamp is the
+ * LAST line of every card a loop posts, so a card pasted UNDER Dane's own
+ * words lands the stamp at the end of HIS comment, and the whole thing reads
+ * as machine-written. Round 1 closed the other ordering (a card pasted ABOVE
+ * his words puts the stamp mid-text); this closes the one round 2 found.
+ *
+ * Two signs, either of which means a person did the assembling:
+ *
+ *   1. It carries one of THIS LANE's marker lines but is not one of this
+ *      lane's notices. Only the lane writes those markers, and only inside a
+ *      notice — so a marker in anything else was pasted there. This is the
+ *      exact case measured on the real lane, and it needs no history.
+ *
+ *   2. It contains another comment from this ticket whole, and is longer than
+ *      it. A loop writes fresh prose; it does not reproduce a card that is
+ *      already on the ticket. Compared on WORDS ALONE, not on the raw text —
+ *      see `normalizeForQuoting`, and read that note before trusting this one:
+ *      the whole sign turned on a formatting difference until 2026-09-06.
+ *      Its false-positive cost is measured in `normalizeForQuoting`'s note —
+ *      8 cards on the real board, unchanged by the widening, all one legacy
+ *      shape, all in the cancelling direction.
+ *
+ * WHAT IT DOES NOT COVER, said plainly rather than left to be found again —
+ * and note that the first version of this paragraph got the answer wrong. It
+ * named a foreign-ticket card as the ONLY residue, while the much likelier
+ * case, a card off this very ticket pasted with its formatting dropped, was
+ * sailing through sign 2 on the asterisks alone.
+ *
+ * What is left after that is genuinely the foreign card: he pastes a stamped
+ * card from a DIFFERENT ticket that is not a lane notice. The lane has never
+ * seen it, so containment has nothing to match against, and nothing in the
+ * body says a person put it there. Closing that needs the stamp itself bound
+ * to the body it was written for (a digest in the stamp line), which changes
+ * what every card a loop posts looks like and is this ticket's stated
+ * non-goal.
+ *
+ * THAT LIMIT IS A GUESS ABOUT WHAT NOBODY DOES, which is what the last two
+ * rounds of this ticket were as well. It is pinned by a test that FAILS if a
+ * later change closes it, so the claim cannot quietly outlive the code.
+ */
+function quotesMachineText(c, comments) {
+  const text = String((c && c.comment_text) || '');
+  if (!text.trim()) return false;
+  if (parseAutoMergeMarker(text) && !isLaneNotice(text)) return true;
+  const mine = normalizeForQuoting(text);
+  return (comments || []).some((other) => {
+    if (!other || String(other.id) === String(c.id)) return false;
+    const theirs = normalizeForQuoting(other.comment_text);
+    // Short comments are excluded: "merge" appears inside half the cards on
+    // the board, and a one-word containment says nothing about who typed it.
+    if (theirs.length < QUOTED_RUN_MIN) return false;
+    return mine.length > theirs.length && mine.includes(theirs);
+  });
+}
+
+/**
+ * Long enough that containment means a paste rather than a coincidence.
+ * Counted on the normalised form below, which is shorter than the raw text.
+ */
+const QUOTED_RUN_MIN = 60;
+
+/**
+ * Reduce a comment to its WORDS, so the containment test survives the paste.
+ *
+ * WHY NOT WHITESPACE ALONE (2026-09-06, task 86bbv8nvy round 3). The first cut
+ * collapsed whitespace only, on the stated premise that "whitespace is what a
+ * paste is least likely to preserve exactly". Markdown is. Dane described his
+ * own method in his own words two days earlier, on 86bbuzyra:
+ *
+ *     "I copied that and pasted special as Paste and Match Style."
+ *
+ * Paste-and-match-style drops the formatting. The stored card reads
+ * `**REVIEW: PASSED** — every gate re-run`; what lands in his comment reads
+ * `REVIEW: PASSED — every gate re-run`. Containment failed on the asterisks
+ * alone, so his comment stayed discounted and his objection with it — and the
+ * lane merged the PR he said hold on, giving "announced 90 minute(s) ago with
+ * no objection" as its reason. This ticket's own failure, arriving through a
+ * third door.
+ *
+ * SO IT COMPARES THE WORDS AND NOTHING ELSE. Every mark a renderer eats —
+ * emphasis, code ticks, fences and their language tag, bullets, heading
+ * hashes, quote bars, and all punctuation — is gone from BOTH sides before the
+ * test. That is deliberately more than the emphasis marks alone: it makes the
+ * question "what exactly does his editor preserve?" stop mattering, and that
+ * question is unanswerable from here. The marks are DELETED rather than
+ * spaced, so `` `continue` ``+`s` reads as "continues", the way it renders.
+ *
+ * MEASURED BOTH WAYS, 2026-09-06, over 679 stamped machine cards on 134 real
+ * Loop Queue tickets — because widening containment can only ADD matches, and
+ * the earlier count was taken with the narrow form:
+ *
+ *   - It closes the bug: with a rendered copy of each of those 679 cards
+ *     pasted under an objection, all 679 are now read as his. The narrow form
+ *     caught 216. (456 of the 679, 67%, carry emphasis or code marks at all.)
+ *   - It costs nothing NEW. Driving the real `quotesMachineText` over all 679
+ *     against every comment on their own tickets: 8 are read as assembled by
+ *     a person, and the SAME 8, from the same pairs, under the old narrow
+ *     form. Widening added none. (Measured with the real function rather than
+ *     machine-card pairs, because the filter compares against every comment on
+ *     the ticket, and the pairwise count misses exactly this.)
+ *
+ * THOSE 8 ARE PRE-EXISTING AND ALL ONE SHAPE, recorded here so the next reader
+ * does not re-find them: a card that mentions a PR url swallows the older
+ * bare `PR opened: <url>` comment naming the same PR, which is just over the
+ * length floor. They predate the stamp, so nothing marks them as machine
+ * text. Left alone deliberately — fixing it means moving `QUOTED_RUN_MIN` or
+ * special-casing that line, both of which are their own change with their own
+ * risk, and this one is in the forgiving direction.
+ *
+ * And the direction is the forgiving one either way: a false positive here
+ * reads a machine card as his and CANCELS, which costs a re-announcement. A
+ * false negative merges over the top of him.
+ */
+function normalizeForQuoting(text) {
+  return String(text == null ? '' : text)
+    .toLowerCase()
+    // A fence takes its language tag with it — ```js renders as nothing, but
+    // left alone it is the word "js" on the stored side and absent on his.
+    .replace(/```[a-z0-9+#.-]*/g, ' ')
+    .replace(/[*_~`]+/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 function commentDate(c) {
   const n = Number(c && c.date);
   return Number.isFinite(n) ? n : 0;
@@ -299,7 +491,35 @@ function byDateNewestFirst(comments) {
 function latestAutoMergeMarker(comments) {
   for (const c of byDateNewestFirst(comments)) {
     const parsed = parseAutoMergeMarker(c.comment_text);
-    if (parsed) return { ...parsed, at: commentDate(c), commentId: String(c.id) };
+    if (!parsed) continue;
+
+    // A MARKER ONLY COUNTS ON A COMMENT THIS LANE ACTUALLY WROTE
+    // (2026-09-06, task 86bbv8nvy). The announcement is the card Dane is most
+    // likely to paste — it is the one he is replying to — and a verbatim
+    // requote carries its `[auto-merge] armed PR #618` line. Read as a second
+    // announcement dated to HIS comment, the window silently restarted from
+    // the moment he said stop, and an hour later the lane merged the PR he had
+    // said hold on. Round 1 asked only for the `[machine]` stamp, which a
+    // requote also carries; `isLaneNotice` asks for the notice's two ENDS,
+    // which his words displace whichever way up he pastes it.
+    //
+    // THE TWO KINDS SKIP IN OPPOSITE DIRECTIONS, because their fail-safe
+    // directions are opposite (round 2 of this ticket).
+    //
+    //   `armed`     — an unrecognised one arms NOTHING. Nothing merges on a
+    //                 window the lane cannot vouch for, and re-announcing
+    //                 costs a fresh review PASS like every other cancel.
+    //
+    //   `cancelled` — an unrecognised one is STILL TERMINAL. Cancelling is
+    //                 what makes `laneADecision` refuse to announce again
+    //                 without a fresh PASS, so skipping one would read as
+    //                 "never announced" and put the notice back in front of
+    //                 him — the guard that exists so he does not have to say
+    //                 no twice. Trusting a cancellation too readily costs a
+    //                 merge that does not happen; distrusting one costs a
+    //                 merge that does.
+    if (parsed.kind === 'armed' && isLaneNotice(c.comment_text) !== 'armed') continue;
+    return { ...parsed, at: commentDate(c), commentId: String(c.id) };
   }
   return null;
 }
@@ -655,8 +875,51 @@ function laneADecision({
     // comment, not a keyword. If he is talking about it, the machine stops.
     // A "false" objection costs him one word; a missed objection costs an
     // unwanted merge, so the asymmetry runs this way on purpose.
+    //
+    // BUT A MACHINE COMMENT IS NOT HIM (2026-09-04, task 86bbv8nvy). The loops
+    // post under Dane's token, so EVERY card a script writes comes back from
+    // the API stamped with his user id — including this lane's own
+    // announcement and the stuck-merge escalation. Asking the user id alone
+    // read the pipeline talking to itself as him objecting, and cancelled a
+    // merge he had authorized with the words "you commented on this ticket",
+    // which he had not.
+    //
+    // THE STRICT READER, NOT THE WIDE ONE (round 1 of this ticket). Only the
+    // tail stamp counts here — `isStampedMachineComment`, the last-line-only
+    // half of scripts/builder/machineComment.js. The wide `isMachineComment`
+    // ALSO honours a head-anchored tag (`[CC-starcaster loop-review]`,
+    // `[auto-merge]`, `[bus-relay]`, `[reconciler]`), which other callers do
+    // need — and which is exactly what Dane types when he quotes a card and
+    // objects underneath it. Measured: "[auto-merge] armed PR #618 lane A\nno,
+    // hold this one" classified as a machine's words. Over 110 real Loop Queue
+    // comments, every one of the 100 machine-written ones carried the tail
+    // stamp and none needed the head tag, so this costs the lane nothing.
+    //
+    // AND THE OTHER WAY UP (round 2 of this ticket). The stamp is the LAST
+    // line of every card a loop posts, so a card pasted UNDERNEATH his words
+    // leaves the stamp at the end of HIS comment and the whole thing reads as
+    // machine-written. Measured on the real lane: "no, hold this one" followed
+    // by the announcement card merged the PR an hour later, reason "announced
+    // 60 minute(s) ago with no objection". `quotesMachineText` is what closes
+    // it — see its own note for the two signs it reads and, just as
+    // importantly, the one paste it still cannot see.
+    //
+    // WHICH WAY THIS CALL SITE FAILS, because it is NOT the direction the head
+    // of machineComment.js describes. There, mistaking his word for a
+    // machine's leaves an escalation unreleased: loud, and the ticket stays
+    // with him. Here it MERGES — silently, an hour later, over the top of him.
+    // Same misreading, opposite blast radius, which is why this site asks for
+    // more than the stamp and the escalation site does not.
+    //
+    // THE ASYMMETRY IS UNCHANGED, and this is the whole safety argument: only
+    // a comment POSITIVELY recognised as machine-written is discounted.
+    // Anything unclassifiable — an unstamped comment, an unreadable body, a
+    // head tag he could have typed, a stamped body carrying text a person
+    // assembled, a format nobody has seen — is still his, and still cancels.
     const objection = all.find(
-      (c) => Number(c.user && c.user.id) === Number(operatorId) && commentDate(c) > marker.at,
+      (c) => Number(c.user && c.user.id) === Number(operatorId)
+        && commentDate(c) > marker.at
+        && !(isStampedMachineComment(c.comment_text) && !quotesMachineText(c, all)),
     );
     if (objection) {
       return {
@@ -664,7 +927,13 @@ function laneADecision({
         pr,
         announcementId: marker.commentId,
         announcedAt: marker.at,
-        reason: 'you commented on this ticket while the window was open',
+        // SAY WHICH IT WAS. Naming him for something a script did is the
+        // dishonesty this whole ticket was filed about, so a comment that is
+        // only HIS because it carries a pasted card says so — he can see at a
+        // glance whether the lane read him right.
+        reason: isStampedMachineComment(objection.comment_text)
+          ? 'you commented on this ticket while the window was open — your comment quotes a machine card, so the lane read the words around it as yours'
+          : 'you commented on this ticket while the window was open',
         objectionId: String(objection.id),
       };
     }
@@ -755,7 +1024,7 @@ function announcementNotice({ pr, files, deadlineLabel, at }) {
   return {
     marker: markerLine('armed', pr.number, at),
     body: [
-      `**Merging PR #${pr.number} at ${deadlineLabel} unless you say otherwise.**`,
+      announcementOpening(pr.number, deadlineLabel),
       '',
       'This change touches nothing but tests and documentation, a review pass has already',
       'passed it, and its checks are green — so rather than wait for you to say "merge",',
@@ -783,7 +1052,7 @@ function cancellationNotice({ pr, why, at }) {
   return {
     marker: markerLine('cancelled', pr.number, at),
     body: [
-      `**Auto-merge stopped. Nothing was merged.**`,
+      CANCELLATION_OPENING,
       '',
       `Why: ${why}.`,
       '',
@@ -1191,6 +1460,8 @@ module.exports = {
   // notices
   announcementNotice,
   cancellationNotice,
+  isLaneNotice,
+  quotesMachineText,
   // digest
   DIGEST_EVERY_MS,
   DIGEST_WINDOW_MS,

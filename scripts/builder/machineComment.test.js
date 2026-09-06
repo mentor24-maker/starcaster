@@ -7,6 +7,7 @@ const {
   MACHINE_MARKER,
   MACHINE_MARKER_LINE,
   isMachineComment,
+  isStampedMachineComment,
   stampMachineComment,
   commentTextKey,
   isCommentPostPath,
@@ -232,4 +233,66 @@ test('HIS OWN WORDS ARE STILL HIS — unescaping must not swallow the operator',
   assert.equal(isMachineComment('merge'), false);
   // A backslash he typed himself in ordinary prose does not make it machine.
   assert.equal(isMachineComment('the path is C:\\Users\\Dane — merge when you can'), false);
+});
+
+// ── The strict reader: the stamp, and only the stamp ─────────────────────────
+
+test('the strict reader answers on the tail stamp alone', () => {
+  // What it is FOR: `isMachineComment` also honours a head-anchored tag, and a
+  // head tag is what Dane types when he quotes a card and replies underneath.
+  // At a call site where a false "a machine wrote this" DISCARDS his words —
+  // Lane A's objection test, task 86bbv8nvy — that half must not apply.
+  const quoted = [
+    '[CC-starcaster loop-review] REVIEW: PASSED\n\nwait, do not merge this yet',
+    '[auto-merge] armed PR #618 lane A — 6pm\n\nno, hold this one',
+    '[bus-relay] relayed\n\nstop, this is wrong',
+    '[reconciler] moved it to Live\n\nput it back',
+  ];
+  for (const body of quoted) {
+    assert.equal(isMachineComment(body), true, 'the wide reader still matches the head tag');
+    assert.equal(isStampedMachineComment(body), false,
+      `his words under a quoted card are his: ${JSON.stringify(body.split('\n')[0])}`);
+  }
+});
+
+test('the strict reader still recognises every real machine card', () => {
+  // It costs nothing, because `call()` stamps at the door: every card a loop
+  // posts carries the tail marker whatever else it opens with.
+  assert.equal(isStampedMachineComment(stampMachineComment('PR opened: https://x/1')), true);
+  assert.equal(isStampedMachineComment(
+    stampMachineComment('[CC-starcaster loop-review] REVIEW: PASSED')), true);
+  assert.equal(isStampedMachineComment(`some words\n\n${MACHINE_MARKER_LINE}`), true);
+});
+
+test('the strict reader keeps every "could not tell" as NOT machine', () => {
+  // Same asymmetry as the wide one: an unknown is not a verdict. Answering
+  // "machine" for a read nobody made is the DOCTRINE 3.11 failure.
+  assert.equal(isStampedMachineComment(null), false);
+  assert.equal(isStampedMachineComment(undefined), false);
+  assert.equal(isStampedMachineComment(''), false);
+  assert.equal(isStampedMachineComment('   \n  '), false);
+  assert.equal(isStampedMachineComment('hold off on this one'), false);
+});
+
+test('the strict reader honours the marker only on the LAST non-empty line', () => {
+  assert.equal(isStampedMachineComment(`${MACHINE_MARKER_LINE}\n\nwhy is this merging?`), false,
+    'a pasted card at the top is him quoting one');
+  assert.equal(isStampedMachineComment(`ok\n${MACHINE_MARKER_LINE}\n\n\n`), true,
+    'trailing blank lines do not hide the stamp');
+  // Escaped brackets from the chat API still resolve — same unescaping as the
+  // wide reader, so the two cannot disagree about a stamp.
+  assert.equal(isStampedMachineComment(`ok\n\\${MACHINE_MARKER}\\ posted by a loop`), true);
+});
+
+test('a card that OPENS with a machine tag still gets its own stamp', () => {
+  // The door used to skip these: they already "looked machine" to the wide
+  // reader, so nothing was appended, and the strict reader would then have
+  // called the card Dane's word. Break-test — put `isMachineComment` back in
+  // `stampMachineComment` and this fails.
+  const card = '[CC-starcaster bus-relay] MERGED: PR #618 is in main';
+  const stamped = stampMachineComment(card);
+  assert.equal(isStampedMachineComment(stamped), true, 'the stamp is written');
+  assert.ok(stamped.startsWith(card), 'the original text is untouched');
+  // Still idempotent on the stamp itself.
+  assert.equal(stampMachineComment(stamped), stamped, 'a retry cannot leave two');
 });

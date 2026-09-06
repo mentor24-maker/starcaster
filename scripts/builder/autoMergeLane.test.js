@@ -32,6 +32,8 @@ const {
   laneADecision,
   announcementNotice,
   cancellationNotice,
+  isLaneNotice,
+  quotesMachineText,
   digestDue,
   digestBody,
   digestSince,
@@ -45,6 +47,8 @@ const {
   switchSignalsFromLedger,
   mergesSince,
 } = require('./autoMergeLane');
+
+const { MACHINE_MARKER_LINE, stampMachineComment, stampCommentBody, isCommentPostPath } = require('./machineComment');
 
 /**
  * Task 86bbkw2au — Lane A. Canon: vault doctrine/AUTO-MERGE-LANES.md.
@@ -65,6 +69,8 @@ const DAY = 24 * HOUR;
 const OPERATOR = 48012725;
 const T0 = 1_756_000_000_000; // a fixed epoch; nothing here reads a real clock
 
+const DOCS_ONLY = ['docs/LOCAL_DEVELOPMENT.md', 'README.md', 'scripts/builder/themeWizardApply.test.js'];
+
 let nextId = 1000;
 const comment = (text, { at = T0, user = 7, id } = {}) => ({
   id: String(id ?? nextId++),
@@ -74,18 +80,38 @@ const comment = (text, { at = T0, user = 7, id } = {}) => ({
 });
 
 const fromDane = (text, at) => comment(text, { at, user: OPERATOR });
+/**
+ * A machine comment AS THE API HANDS IT BACK: stamped, and carrying Dane's own
+ * user id, because the loops post under his token. `comment(..., { user: 7 })`
+ * is not this shape and never was — which is exactly why every test passed
+ * while the lane cancelled real merges (task 86bbv8nvy).
+ */
+const fromMachine = (text, at) => comment(stampMachineComment(text), { at, user: OPERATOR });
 const prComment = (n, at) => comment(`PR opened: https://github.com/mentor24-maker/starcaster/pull/${n}`, { at });
 const reviewPass = (at) => comment('REVIEW: PASSED (checked out, gates green)', { at });
 const reviewFail = (at) => comment('REVIEW: sent back to Queued — the test does not fail when broken', { at });
-const armed = (n, at) => comment(`some words\n${markerLine('armed', n, 'iso')}`, { at });
-const cancelled = (n, at) => comment(`${markerLine('cancelled', n, 'iso')}`, { at });
+/**
+ * The lane's own notices, AS THE API HANDS THEM BACK — stamped, because
+ * `call()` stamps every comment a machine posts at the door.
+ *
+ * They must be stamped for the same reason `fromMachine` must be: the marker
+ * reader now honours a marker only on a comment a machine actually wrote
+ * (task 86bbv8nvy round 1), so an unstamped fixture models a notice that
+ * cannot exist and would test the wrong lane. Dane quoting `[auto-merge]
+ * armed PR #618` is what an UNstamped marker really is, and it must not arm.
+ */
+const armed = (n, at) => comment(stampMachineComment(
+  announcementNotice({ pr: { number: n, url: `https://github.com/x/y/pull/${n}` }, files: DOCS_ONLY, deadlineLabel: '6:00pm EDT', at: 'iso' }).body,
+), { at, user: OPERATOR });
+const cancelled = (n, at) => comment(stampMachineComment(
+  cancellationNotice({ pr: { number: n, url: `https://github.com/x/y/pull/${n}` }, why: 'you commented', at: 'iso' }).body,
+), { at, user: OPERATOR });
 
 /** A ticket that is ready in every way except whatever the test is probing. */
 function readyTicket({ pr = 42, verdictAt = T0, prAt = T0 - 1000, extra = [] } = {}) {
   return [prComment(pr, prAt), reviewPass(verdictAt), ...extra];
 }
 
-const DOCS_ONLY = ['docs/LOCAL_DEVELOPMENT.md', 'README.md', 'scripts/builder/themeWizardApply.test.js'];
 
 // ── Criterion 1: which files may ride ────────────────────────────────────────
 
@@ -605,12 +631,394 @@ test('only HIS comments object, and only ones inside the window', () => {
     status: 'Ready to launch', comments: machine, operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
   }).act, 'merge');
 
+  // AND THE SAME COMMENT AS IT REALLY ARRIVES — stamped, under Dane's own user
+  // id, because the loops post with his token (task 86bbv8nvy). The line above
+  // passes on a user id no machine comment actually carries, so it could never
+  // have caught this; this one is the assertion that fails without the filter.
+  const stamped = readyTicket({
+    extra: [armed(42, T0 + 10), fromMachine('[CC-starcaster] Review PASSED — gates green', T0 + 20)],
+  });
+  assert.equal(laneADecision({
+    status: 'Ready to launch', comments: stamped, operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
+  }).act, 'merge', 'a stamped machine comment under his token is the pipeline, not him');
+
   // His comment from BEFORE the announcement is not an objection to it — the
   // announcement came after and gave him a fresh hour.
   const before = readyTicket({ extra: [fromDane('looks good', T0 + 5), armed(42, T0 + 10)] });
   assert.equal(laneADecision({
     status: 'Ready to launch', comments: before, operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
   }).act, 'merge');
+});
+
+test('the machine filter narrows the objection test and nothing else', () => {
+  // Break-test 1 — drop `!isMachineComment(...)` from laneADecision and the
+  // stamped-comment assertion above turns into a cancel.
+  //
+  // Break-test 2 — make the filter swallow everything (`() => true`) and BOTH
+  // halves of this test fail: his plain word stops cancelling, and so does the
+  // comment nobody can classify. That is the direction that would merge
+  // something he objected to, so it gets its own named assertions.
+  const base = {
+    status: 'Ready to launch', operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
+  };
+
+  // His own word, in the window, unstamped: cancels, exactly as before.
+  const his = readyTicket({ extra: [armed(42, T0 + 10), fromDane('hold off on this one', T0 + 20)] });
+  const d = laneADecision({ ...base, comments: his });
+  assert.equal(d.act, 'cancel', 'his real comment must still cancel');
+  assert.match(d.reason, /you commented/);
+
+  // HE QUOTES A MACHINE CARD AND OBJECTS UNDERNEATH IT. This is how he
+  // actually objects, and both quoting styles must survive it (round 1 of
+  // task 86bbv8nvy — the first cut only covered the tail marker, which was
+  // the half that already worked).
+  //
+  // Break-test 3 — swap `isStampedMachineComment` back to the wide
+  // `isMachineComment` and the three head-tag cases below turn into merges:
+  // the lane ships over the top of him saying stop.
+  const quotedHeads = [
+    '[CC-starcaster loop-review] REVIEW: PASSED (checked out, gates green)',
+    '[auto-merge] window opened on this PR',
+    '[bus-relay] relayed to the bus',
+    '[reconciler] moved 86bbv8nvy to Live',
+  ];
+  for (const card of quotedHeads) {
+    const quotingHead = readyTicket({
+      extra: [armed(42, T0 + 10), fromDane(`${card}\n\nno, hold this one — I want to look`, T0 + 20)],
+    });
+    assert.equal(laneADecision({ ...base, comments: quotingHead }).act, 'cancel',
+      `his words under a quoted "${card.split(']')[0]}]" card are still his words`);
+  }
+
+  // The same act with the TAIL marker pasted first. The stamp lands mid-text
+  // rather than last, which is the direction machineComment.js chose on
+  // purpose, and it is the safe one here too.
+  const quoting = readyTicket({
+    extra: [armed(42, T0 + 10), fromDane(`${MACHINE_MARKER_LINE}\n\nwait, why is this merging?`, T0 + 20)],
+  });
+  assert.equal(laneADecision({ ...base, comments: quoting }).act, 'cancel',
+    'his words after a pasted marker are still his words');
+
+  // AND THE HEAD TAG STILL DOES NOT MAKE A REAL MACHINE CARD OBJECT — every
+  // card a loop posts carries the tail stamp too (call() writes it at the
+  // door), so narrowing to the stamp costs the lane nothing. Sampled over 110
+  // real Loop Queue comments: 100 machine-written, 100 via the tail stamp.
+  const realCard = readyTicket({
+    extra: [armed(42, T0 + 10), fromMachine('[CC-starcaster loop-review] REVIEW: PASSED', T0 + 20)],
+  });
+  assert.equal(laneADecision({ ...base, comments: realCard }).act, 'merge',
+    'a real machine card carries the stamp and is still discounted');
+
+  // An UNCLASSIFIABLE comment under his id still objects. No stamp, no legacy
+  // prefix, nothing to recognise — so the lane must assume him and stop.
+  const unknown = readyTicket({ extra: [armed(42, T0 + 10), fromDane('?', T0 + 20)] });
+  assert.equal(laneADecision({ ...base, comments: unknown }).act, 'cancel',
+    'an unrecognised comment is still an objection — the asymmetry is preserved');
+
+  // An unreadable body is the same case: `isMachineComment(undefined)` is
+  // false by design, so it counts as his rather than being discounted.
+  const unreadable = readyTicket({
+    extra: [armed(42, T0 + 10), { id: '9001', date: String(T0 + 20), user: { id: OPERATOR } }],
+  });
+  assert.equal(laneADecision({ ...base, comments: unreadable }).act, 'cancel',
+    'a comment whose text could not be read is not proof a machine wrote it');
+});
+
+test('HE QUOTES THE ANNOUNCEMENT ITSELF — his quote must not re-arm the window', () => {
+  // The card he is most likely to quote is the one he is replying to. Before
+  // this, his quote of `[auto-merge] armed PR #42 ...` registered as a SECOND
+  // announcement dated to his own comment: the window silently restarted from
+  // his words, his objection was no longer "after the marker", and an hour
+  // later the lane merged the PR he had said hold on.
+  //
+  // Break-test — drop the `isStampedMachineComment` guard from
+  // `latestAutoMergeMarker` and both assertions below turn into merges.
+  const base = { status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY };
+  const quotesTheNotice = readyTicket({
+    extra: [
+      armed(42, T0 + 10),
+      fromDane(`${markerLine('armed', 42, 'iso')}\n\nno, hold this one — I want to look`, T0 + 20),
+    ],
+  });
+
+  // Inside the real window: it is an objection, exactly like any other comment.
+  const during = laneADecision({ ...base, comments: quotesTheNotice, now: T0 + 10 + HOUR });
+  assert.equal(during.act, 'cancel', 'his words under a quoted announcement are an objection');
+  assert.match(during.reason, /you commented/);
+
+  // And an hour past HIS comment — the window his quote would have re-armed —
+  // it is still cancelled, not merged. This is the assertion that failed.
+  assert.equal(
+    laneADecision({ ...base, comments: quotesTheNotice, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'his quote of the announcement is not an announcement, so it cannot re-arm',
+  );
+});
+
+test('HE PASTES THE CARD UNDER HIS WORDS — the other way up, and the one that merged', () => {
+  // ROUND 2 OF THIS TICKET, and the reason round 1 was sent back. Round 1
+  // closed the ordering where he pastes a card ABOVE his reply: the `[machine]`
+  // stamp lands mid-text and the comment reads as his. Pasted UNDERNEATH his
+  // words the stamp is the LAST line of HIS comment, so the whole thing read as
+  // machine-written — and quoting below your reply is at least as natural as
+  // quoting above it. Dane pastes machine text into his comments (2026-09-05,
+  // on 86bbuzyra: "I copied that and pasted special as Paste and Match Style").
+  //
+  // Measured on the real lane before the fix, driving laneADecision with no
+  // mocks: "no, hold this one" followed by the announcement card gave
+  //     >> inside the window:  ignore | the objection window has 55 minute(s) left
+  //     >> an hour past his comment: MERGE | "announced 60 minute(s) ago with no objection"
+  // — the lane merged the PR he said hold on, and named nobody objecting as
+  // its reason, because his comment had also re-armed the window from his own
+  // words.
+  //
+  // Break-test 1 — delete the `quotesMachineText` call from the objection
+  // filter and every assertion below turns into a merge.
+  const base = { status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY };
+  const card = armed(42, T0 + 10);
+  const pastedUnder = readyTicket({
+    extra: [card, fromDane(`no, hold this one — I want to look\n\n${card.comment_text}`, T0 + 20)],
+  });
+
+  const during = laneADecision({ ...base, comments: pastedUnder, now: T0 + 10 + HOUR });
+  assert.equal(during.act, 'cancel', 'his words ABOVE a pasted card are still his words');
+
+  // The assertion that failed: an hour past HIS comment, past the window his
+  // quote would have re-armed.
+  assert.equal(
+    laneADecision({ ...base, comments: pastedUnder, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'a card pasted under his objection must not merge over the top of him',
+  );
+
+  // And the marker still comes from the LANE's announcement, not from his
+  // comment — the window never restarted.
+  const marker = latestAutoMergeMarker(pastedUnder);
+  assert.equal(marker.commentId, String(card.id), 'the window is the lane\'s, dated to the lane\'s own notice');
+
+  // THE MESSAGE SAYS WHICH IT WAS. Naming him for something a script did is
+  // the dishonesty this whole ticket was filed about, so a comment that is
+  // only his because it carries a pasted card says so.
+  assert.match(during.reason, /quotes a machine card/);
+  const plain = readyTicket({ extra: [card, fromDane('hold off', T0 + 20)] });
+  assert.doesNotMatch(
+    laneADecision({ ...base, comments: plain, now: T0 + 10 + HOUR }).reason,
+    /quotes a machine card/,
+    'a comment he simply typed is not described as a quote',
+  );
+});
+
+test('he quotes a NON-lane machine card from this ticket, underneath his words', () => {
+  // The announcement is not the only card he might paste. Any comment already
+  // on the ticket, reproduced whole with words of his around it, was assembled
+  // by a person — a loop writes fresh prose, it does not reprint a card that
+  // is already there. Measured 2026-09-06 over 1,278 ordered pairs drawn from
+  // 189 real machine cards on 60 Loop Queue tickets: ZERO machine card
+  // contains another comment whole, so this costs the lane nothing.
+  //
+  // Break-test 2 — drop the containment half of `quotesMachineText` (keep only
+  // the marker half) and this one turns into a merge.
+  const verdict = fromMachine(
+    '[CC-starcaster loop-review] REVIEW: PASSED — every gate re-run on the branch, break-tested, checked out and driven by hand',
+    T0 + 5,
+  );
+  const comments = readyTicket({
+    extra: [
+      armed(42, T0 + 10),
+      verdict,
+      fromDane(`no — hold this one, I want to read it first\n\n${verdict.comment_text}`, T0 + 20),
+    ],
+  });
+  assert.equal(
+    laneADecision({ status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY, comments, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'his words around a card copied off this ticket are still his words',
+  );
+});
+
+test('HE PASTES WITHOUT THE FORMATTING — the third door, and the one that merged', () => {
+  // ROUND 3 OF THIS TICKET. Sign 2 above compares his comment against the
+  // cards on the ticket, and it used to compare the RAW TEXT with only its
+  // whitespace collapsed — on the premise that "whitespace is what a paste is
+  // least likely to preserve exactly". Markdown is. Dane said how he pastes,
+  // in his own words, on 86bbuzyra two days before this was found:
+  //
+  //     "I copied that and pasted special as Paste and Match Style."
+  //
+  // That drops the formatting. The stored card carries `**` and backticks; his
+  // copy does not; containment failed on the marks alone. His comment was
+  // still stamped — the `[machine]` line is plain text and survives any paste
+  // — so it stayed discounted, and the lane merged the PR he said hold on,
+  // reason "announced 90 minute(s) ago with no objection".
+  //
+  // Measured on the real board: 456 of 679 stamped machine cards (67%) carry
+  // emphasis or code marks that a rendered paste drops, so this was the common
+  // case, not an edge one.
+  //
+  // Break-test — put `normalizeForQuoting` back to `replace(/\s+/g, ' ')` and
+  // both assertions below turn into merges.
+  const base = { status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY };
+
+  // A card with the markdown these cards really carry.
+  const verdict = fromMachine(
+    '**REVIEW: PASSED** — every gate re-run on the branch, `npm run typecheck` clean, '
+    + '*break-tested* four ways, checked out and driven by hand.\n\n```js\nconst ok = true;\n```',
+    T0 + 5,
+  );
+  // What paste-and-match-style puts in his comment: the words, no marks.
+  const asPasted = verdict.comment_text
+    .replace(/```[a-z]*\n?/g, '')
+    .replace(/\*\*/g, '')
+    .replace(/\*/g, '')
+    .replace(/`/g, '');
+  assert.notEqual(asPasted, verdict.comment_text, 'the fixture must actually differ from the stored card');
+
+  const comments = readyTicket({
+    extra: [armed(42, T0 + 10), verdict, fromDane(`no — hold this one, I want to read it first\n\n${asPasted}`, T0 + 20)],
+  });
+
+  const during = laneADecision({ ...base, comments, now: T0 + 10 + HOUR });
+  assert.equal(during.act, 'cancel', 'a card he pasted WITHOUT its formatting is still a card he pasted');
+
+  // An hour past HIS comment — the assertion that merged.
+  assert.equal(
+    laneADecision({ ...base, comments, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'a formatting-stripped paste must not merge over the top of him',
+  );
+
+  // And the verbatim paste, which already worked, still does — widening the
+  // normaliser must not have traded one ordering for the other.
+  const verbatim = readyTicket({
+    extra: [armed(42, T0 + 10), verdict, fromDane(`no — hold this one\n\n${verdict.comment_text}`, T0 + 20)],
+  });
+  assert.equal(
+    laneADecision({ ...base, comments: verbatim, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'the verbatim paste is unaffected',
+  );
+});
+
+test('WHAT THIS DOES NOT COVER, pinned so it is found on purpose and not by accident', () => {
+  // Said plainly rather than left to be discovered a fourth time — and this
+  // comment has BEEN wrong once already, which is the reason to distrust it.
+  // Round 2 wrote it claiming the foreign card was the only case left, while
+  // the far likelier one — a card off THIS ticket, pasted with its formatting
+  // dropped — was sailing through sign 2 on the asterisks alone. Round 3 found
+  // that one live. What is pinned here is the remainder AFTER that fix.
+  //
+  // Neither sign `quotesMachineText` reads can see a card pasted from a
+  // DIFFERENT ticket that is not one of this lane's notices: the text is
+  // stamped, the lane has never seen it, so containment has nothing to compare
+  // against, and nothing in the body says a person put it there.
+  //
+  // Closing it needs the stamp bound to the body it was written for — a digest
+  // in the stamp line — which changes what every card a loop posts looks like
+  // and is this ticket's stated non-goal. If a later change DOES close it,
+  // this test fails, and that is the point: the note above it has to be
+  // rewritten rather than quietly outliving the limit it describes.
+  const foreign = stampMachineComment('BUILD: a card posted on some other ticket entirely, pasted in from elsewhere');
+  const comments = readyTicket({
+    extra: [armed(42, T0 + 10), fromDane(`no, hold this one\n\n${foreign}`, T0 + 20)],
+  });
+  assert.equal(
+    laneADecision({ status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY, comments, now: T0 + 20 + HOUR + 1 }).act,
+    'merge',
+    'the known gap: a stamped card from another ticket is still read as a machine\'s',
+  );
+});
+
+test('isLaneNotice recognises the lane\'s own voice by BOTH ends, not by a marker', () => {
+  // A requote carries the marker line and the stamp. What it cannot carry is
+  // both ENDS of the notice with nothing of his outside them.
+  //
+  // Break-test 3 — let `isLaneNotice` return on the closing marker alone
+  // (drop the opening check) and the two "pasted" assertions below fail.
+  const notice = announcementNotice({
+    pr: { number: 42, url: 'https://github.com/x/y/pull/42' }, files: DOCS_ONLY, deadlineLabel: '6:00pm EDT', at: 'iso',
+  }).body;
+  const cancelNotice = cancellationNotice({
+    pr: { number: 42, url: 'https://github.com/x/y/pull/42' }, why: 'you commented', at: 'iso',
+  }).body;
+
+  assert.equal(isLaneNotice(stampMachineComment(notice)), 'armed');
+  assert.equal(isLaneNotice(stampMachineComment(cancelNotice)), 'cancelled');
+  assert.equal(isLaneNotice(notice), 'armed', 'the stamp is optional — the notice is recognised by what the LANE wrote');
+
+  assert.equal(isLaneNotice(`${notice}\n\nno, hold this one`), null, 'his words below it break the close');
+  assert.equal(isLaneNotice(`no, hold this one\n\n${notice}`), null, 'his words above it break the opening');
+  assert.equal(isLaneNotice(markerLine('armed', 42, 'iso')), null, 'a bare marker line is not a notice');
+  assert.equal(isLaneNotice(''), null);
+  assert.equal(isLaneNotice(null), null);
+
+  // Two cards spliced together must not pass by borrowing an end from each.
+  const other = announcementNotice({
+    pr: { number: 99, url: 'https://github.com/x/y/pull/99' }, files: DOCS_ONLY, deadlineLabel: '6:00pm EDT', at: 'iso',
+  }).body;
+  const spliced = `${other.split('\n')[0]}\n${notice.split('\n').slice(1).join('\n')}`;
+  assert.equal(isLaneNotice(spliced), null, 'the opening and the marker must name the same PR');
+});
+
+test('an unrecognised CANCELLED marker is still terminal — the skip fails safe both ways', () => {
+  // The two kinds fail safe in OPPOSITE directions, and reading them the same
+  // way is a regression round 2 caught before it shipped. Skipping an `armed`
+  // marker arms nothing, which is safe. Skipping a `cancelled` one makes the
+  // ticket read as never announced, so the lane announces AGAIN with no fresh
+  // review PASS — the guard that exists so he does not have to say no twice.
+  //
+  // Break-test 4 — apply the `isLaneNotice` guard to `cancelled` as well as
+  // `armed`, and this turns into `announce`.
+  const bare = [
+    prComment(42, T0 - 1000),
+    reviewPass(T0),
+    armed(42, T0 + 10),
+    comment(markerLine('cancelled', 42, 'iso'), { at: T0 + 30, user: OPERATOR }),
+  ];
+  const d = laneADecision({
+    status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY, comments: bare, now: T0 + 30 + HOUR + 1,
+  });
+  assert.equal(d.act, 'ignore', 'a cancellation the lane cannot vouch for still stops it');
+  assert.match(d.reason, /you stopped the last auto-merge/);
+});
+
+test('THE COUPLING: a real announcement, posted the real way, still arms', () => {
+  // The guard above makes the lane's OWN notice depend on the stamp, so if the
+  // posting path ever stopped stamping, Lane A would go silently dead — it
+  // would announce every pass and never find its own announcement. That is
+  // two modules agreeing, which is the kind of thing that drifts.
+  //
+  // So this asserts the whole chain with no live post: the body the lane
+  // builds, sent to the path `postLaneNotice` uses, through the same
+  // `stampCommentBody` that `call()` applies at the door.
+  const PATH = '/api/v2/task/86bbv8nvy/comment';
+  assert.equal(isCommentPostPath(PATH), true, 'the notice path is a comment post, so it gets stamped');
+
+  const notice = announcementNotice({
+    pr: { number: 42 }, files: DOCS_ONLY, deadlineLabel: '6:00pm EDT', at: 'iso',
+  });
+  const sent = stampCommentBody({ comment_text: notice.body });
+  const asStored = comment(sent.comment_text, { at: T0 + 10 });
+
+  const read = latestAutoMergeMarker([asStored]);
+  assert.ok(read, 'the lane can read back its own posted announcement');
+  assert.equal(read.kind, 'armed');
+  assert.equal(read.pr, 42);
+});
+
+test('an unstamped marker arms nothing at all — it is not the lane talking', () => {
+  // The safe direction, stated on purpose: a marker nobody can confirm a
+  // machine wrote leaves the ticket un-announced, so nothing merges on it.
+  // Re-announcing costs a fresh review PASS, like every other cancel.
+  const forged = [
+    prComment(42, T0 - 1000),
+    reviewPass(T0),
+    comment(markerLine('armed', 42, 'iso'), { at: T0 + 10, user: OPERATOR }),
+  ];
+  const d = laneADecision({
+    status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY, comments: forged, now: T0 + 10 + HOUR + 1,
+  });
+  assert.notEqual(d.act, 'merge', 'an unstamped marker must never carry a merge');
+  assert.equal(d.act, 'announce', 'the ticket reads as never announced, so the lane announces properly');
 });
 
 test('cancelling is terminal — no re-announcement without a FRESH review pass', () => {
