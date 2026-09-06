@@ -5,7 +5,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { buildLandingPagePatch, buildLandingPageCreateInput } = require('../../routes/builder');
+const {
+  buildLandingPagePatch,
+  buildLandingPageCreateInput,
+  buildBulkCreatePageInput,
+} = require('../../routes/builder');
 const { inputToRow, rowToPage } = require('../../lib/builderPagesStore');
 
 /**
@@ -139,6 +143,93 @@ test('the create ROUTE uses the builder, instead of assembling its own list agai
     routes,
     /createPage\(buildLandingPageCreateInput\(body, name\), scope\)/,
     'POST /api/builder/landing-pages must build its input with buildLandingPageCreateInput'
+  );
+});
+
+/**
+ * BULK create -- the other caller of createPage, and the one #614 did not reach
+ * (task 86bbve4kp).
+ *
+ * Measured on 2026-09-05: a bulk run with `templateId: "47"` wrote 47 into the
+ * legacy `template_id` and left `page_template_id` NULL, and answered 200. So
+ * every page a batch made read "No template" in Page Details even though the
+ * operator had picked one.
+ */
+
+test('a bulk-created page carries the chosen page template', () => {
+  const input = buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: '47',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  });
+  assert.equal(input.pageTemplateId, '47', 'bulk create must carry the template it built the page from');
+});
+
+test('a bulk-created page still writes the legacy templateId it always has', () => {
+  // The bulk route has always put the chosen id in template_id too. Anything
+  // reading that column must see exactly what it saw before this fix.
+  const input = buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: '47',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  });
+  assert.equal(input.templateId, '47', 'the legacy column must be unchanged by this fix');
+});
+
+test('the bulk create input survives the store, all the way to a row', () => {
+  // Same end-to-end shape the single create is held to: route whitelist AND
+  // store, because either one drops the field silently.
+  const row = inputToRow(buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: '47',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  }));
+  assert.equal(row.page_template_id, '47');
+  assert.equal(row.template_id, '47');
+  assert.equal(rowToPage({ id: 1, ...row }).pageTemplateId, '47');
+});
+
+test('a built-in template id reaches the column too, not just a numeric row id', () => {
+  // BUILT_IN_PAGE_TEMPLATES ids are legal page_template_id values -- the
+  // migration claims them by name -- so bulk create must not assume digits.
+  const input = buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: 'standard-right-form',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  });
+  assert.equal(input.pageTemplateId, 'standard-right-form');
+});
+
+test('the BULK route uses the builder, instead of assembling its own list again', () => {
+  // The bug was a third hand-written field list inside the bulk handler. If a
+  // future edit inlines one again this fails -- otherwise the tests above keep
+  // passing while the route ignores them, which is exactly what happened
+  // between #614 and this fix.
+  const routes = fs.readFileSync(path.join(__dirname, '..', '..', 'routes', 'builder.js'), 'utf8');
+  assert.match(
+    routes,
+    /createPage\(buildBulkCreatePageInput\(\{/,
+    'bulk-create-with-model must build its input with buildBulkCreatePageInput'
   );
 });
 

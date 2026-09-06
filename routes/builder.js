@@ -87,6 +87,52 @@ function buildLandingPageCreateInput(body, name) {
 }
 
 /**
+ * Build the createPage input for POST /api/builder/landing-pages/bulk-create-with-model.
+ *
+ * Bulk Create is the OTHER caller of createPage, and it had the identical
+ * defect the single-page route had: a third hand-written field list that did
+ * not name `pageTemplateId`, so every page a batch produced read "No template"
+ * in Page Details. The fix for the single create (#614, task 86bbujvq8) was
+ * correct and did not reach here (task 86bbve4kp).
+ *
+ * Two ids, one value. The bulk route resolves its template BY ROW ID
+ * (`listPageTemplates(...).find((t) => t.id === templateId)`), so the id it is
+ * handed IS the page-template id -- it belongs in `pageTemplateId`. It is also
+ * passed through as the legacy `templateId`, which is what the column has held
+ * for every page bulk create has ever made; changing that would alter what
+ * existing readers of `template_id` see, which is out of scope here.
+ *
+ * A named function rather than an object literal inside the handler, because a
+ * field list assembled inside a route is a list nothing can check -- which is
+ * how this same field went missing twice.
+ */
+function buildBulkCreatePageInput({
+  name,
+  slug,
+  templateId,
+  themeId,
+  isPublished,
+  pageBackground,
+  theme,
+  layoutSections,
+}) {
+  return buildLandingPageCreateInput(
+    {
+      slug,
+      templateId,
+      pageTemplateId: templateId,
+      themeId,
+      templateKind: 'modular',
+      isPublished,
+      pageBackground,
+      theme,
+      layoutSections,
+    },
+    name
+  );
+}
+
+/**
  * Who is making this request, for the page-revision audit trail.
  *
  * The dispatcher puts a platform session on req.authUser, and a tenant
@@ -1742,19 +1788,16 @@ async function handle(req, res, pathname, method) {
           }
         }
 
-        // Derive a templateId from the slug/name (stable, no time suffix for create)
-        const derivedTemplateId = templateId;
-        const pageResult = await createPage({
+        const pageResult = await createPage(buildBulkCreatePageInput({
           name,
           slug,
-          templateId: derivedTemplateId,
+          templateId,
           themeId,
-          templateKind: 'modular',
           isPublished: body.isPublished ?? body.is_published ?? true,
           pageBackground: templateBackground,
           theme: effectiveTheme,
           layoutSections,
-        }, scope);
+        }), scope);
 
         if (!pageResult.ok) {
           return { name, slug, error: pageResult.error || 'Could not create page', contentExtracted, contentNote };
@@ -2432,6 +2475,7 @@ module.exports = {
   manifest,
   buildLandingPagePatch,
   buildLandingPageCreateInput,
+  buildBulkCreatePageInput,
   // Exported for scripts/builder/bulkSetPageTemplate.test.js: the archive-first
   // rule is the only undo a bulk re-pour has, so it is tested directly rather
   // than inferred from a request that has to be stood up first.
