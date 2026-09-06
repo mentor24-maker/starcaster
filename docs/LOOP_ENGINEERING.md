@@ -1517,23 +1517,42 @@ disagree, the vault is right and this file is the thing to fix.
 > `npm run check:automerge-reach` and six named tests in
 > `scripts/builder/autoMergeLane.test.js`.
 >
-> **The vault text is also load-bearing in the other direction, and it is not
-> satisfied.** It withholds Lane B until Lane A's run has shown the objection
-> window and the digest actually work, and that run has produced no
-> observations: 2026-08-23 12:36 → 2026-09-04 10:16, 573 relay passes, 640
-> tickets considered, `announced=0 in window=0 auto-merged=0 cancelled=0`. Lane
-> A armed for the first time on 2026-09-04 (PR #592) and did not land, latching
-> the whole lane off. So **this code is built and merged, and Lane B stays
-> switched off in practice until Lane A completes one clean announce → wait →
-> merge cycle.** That is Dane's own instruction, 2026-09-05: *"1"* — clear the
-> latch, keep the hold.
+> **The vault's other precondition is real history, and it is kept here.** It
+> withheld Lane B until Lane A's run had shown the objection window and the
+> digest actually work — and that proof never arrived. By 2026-09-04, 573 relay
+> passes had considered 640 tickets with `announced=0 in window=0 auto-merged=0
+> cancelled=0`; Lane A armed for the first time that day (PR #592), did not
+> land, and latched the lane off. Dane held #599 unmerged on that precondition
+> twice — 2026-09-04 (*"1"* — HOLD) and 2026-09-05 (*"1"* — clear the latch,
+> keep the hold). Then the full measurement arrived: over the whole relay log,
+> 2026-08-23 12:36 → 2026-09-06 12:07, **841 passes considered 1,260 tickets
+> and announced zero** — the announce → wait → merge cycle never once began,
+> the lane was not even running in 512 of those passes, and the only candidate
+> in the queue was correctly refused. The proof he was waiting for was blocked
+> by exactly the narrowness this PR fixes.
+>
+> **He dropped the hold on 2026-09-06** (12:37pm MT, on task 86bbuzyra),
+> answering *"1"* to a card whose option 1 read: *"Merge #599 now, drop the
+> hold. The proof happens afterwards, with the wider lane, which is far more
+> likely to ever produce a candidate."* That was a weighed choice made with the
+> numbers in front of him — take the proof afterwards, with a lane wide enough
+> to produce a candidate, rather than before it with one that could not. So
+> **Lane B operates.** Do not treat the retired hold as an instruction and do
+> not switch the lane off on its account; the controls that govern it are the
+> ordinary ones — the shared switch, the caps, `--no-merge`, and "stop
+> auto-merging".
 >
 > **Status of the repair:** a proposal to amend the vault document — mark Lane B
 > ruled, record the `lib/` exclusion and its reason, and state the
 > Lane-A-must-arm-once precondition as an operating gate rather than a shipping
 > gate — is filed at vault `doctrine/_proposals/AUTO-MERGE-LANE-B.md`
-> (2026-09-05). **Only Dane ratifies it.** Until he does, this box is the record,
-> and the vault's Lane B rows are superseded by his ruling above.
+> (2026-09-05). **Only Dane ratifies it, and its fourth amendment is now
+> overtaken:** his 2026-09-06 answer retires the Lane-A-must-arm-once
+> precondition outright, so ratifying that amendment as filed would reimpose a
+> hold he has dropped. The proposal is not rewritten from here; whoever carries
+> it to ratification updates that amendment against his 9/6 answer on this
+> ticket. Until he ratifies, this box is the record, and the vault's Lane B
+> rows are superseded by his rulings above.
 
 ### What it is, in one paragraph
 
