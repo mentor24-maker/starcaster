@@ -1,3 +1,35 @@
+## 2026-09-06 — A client's tag page was showing visitors two made-up tags (#630)
+
+The tag page on the Delray tennis site had a small row in its sidebar reading
+**Tags: Example Tag**. Those are not tags anybody typed. They are sample
+content — the two words the Post Tags module shows on the Builder canvas so it
+is not an invisible empty box while you are laying a page out. Nothing told it
+to stop doing that once the page went live, so every visitor read two invented
+words as if they were the site's real tags.
+
+The same thing had already been fixed a few days ago for the Tag Cloud module
+sitting right next to it. This is that same rule applied to its neighbour: on a
+live page, a module with nothing to show now shows **nothing at all** — not an
+empty row, and not a lonely "Tags:" label hanging over blank space, which looks
+just as broken. On the Builder canvas the sample words are unchanged, because
+that is where they earn their keep.
+
+Three more modules got the same treatment. Post Card, Author Bio and Table of
+Contents have no real display of their own yet — all they draw is a grey dashed
+rectangle with their own name in it. No client page is using one today, so
+nobody has seen it, but a visitor who did would read "Post Card" in a dashed box
+as something that failed to load. That is closed now before it happens.
+
+Two other things on the same ticket are deliberately not part of this. The
+Messaging tag list that was telling visitors to "add tags in the Messaging
+section" turned out to be fixed already, in the batch that went out on the 3rd —
+checking the code the live site is actually running confirmed the sentence is
+gone. And the duplicate search box on that page is not a code fault at all: the
+page has a search module sitting next to a post feed that already draws its own
+search. Taking one away is an edit to a client's live page, and that is Dane's
+call, not something a background job should decide on its own. The question is
+waiting on the ticket.
+
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
 Pull requests are merged one at a time here, and the plan is to switch on a
