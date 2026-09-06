@@ -2385,6 +2385,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         pageThemeDirtyRef.current = false;
         pageTemplateDirtyRef.current = false;
         setPageThemeId(data.page.themeId ?? "");
+        // Read the template back off the SAVED page, the same way the theme
+        // is. Without this the panel keeps showing what was typed, so a value
+        // the server dropped still reads as set until a reload -- which is how
+        // the create path lost pageTemplateId for as long as it did.
+        setPageTemplateId(data.page.pageTemplateId ?? "");
         // Move our idea of "the version I am editing" forward, or the next save
         // in this session collides with the one we just made.
         loadedUpdatedAtRef.current = data.page.updatedAt ?? "";

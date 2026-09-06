@@ -50,6 +50,13 @@ async function safely(call, method, path, body) {
 
 function whyOf(out) {
   if (out && out.threw) return `could not reach ClickUp — ${out.threw}`;
+  // A NON-NUMERIC status is a reason, not a code, and it is printed as it
+  // stands. `clickup_direct.mjs` uses one to say a scheduled job stopped at
+  // the ClickUp reserve — nothing failed, it declined to spend. Coerced
+  // through `statusOf` that became `HTTP ?`, which is the shape of a message
+  // that sends its reader hunting for a network fault (task 86bbugd8j).
+  const raw = out?.res?.status ?? out?.status;
+  if (typeof raw === 'string' && raw.trim() && !/^\d+$/.test(raw)) return raw;
   return `HTTP ${statusOf(out) || '?'}`;
 }
 

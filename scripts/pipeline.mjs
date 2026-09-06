@@ -5,7 +5,10 @@
  *   npm run pipeline -- status                    is the line running, and if not, since when and who
  *   npm run pipeline -- check                     the same question, for a machine: 0 = running, 3 = paused
  *   npm run pipeline -- pause [--now] [--why "…"] stop new claims, wait for work in flight to finish
- *   npm run pipeline -- resume --operator-asked   hand the deck back, and sweep up anything stranded
+ *   npm run pipeline -- resume --operator-asked --why "…"
+ *                                               hand the deck back, and sweep up anything stranded.
+ *                                               --why is REQUIRED and takes Dane's own words, quoted,
+ *                                               on ONE line (the record keeps one line per field).
  *
  * THE `--` IS NOT OPTIONAL. Without it npm swallows every `--flag` before this
  * script ever sees it: `resume --operator-asked` is then refused for missing
@@ -34,10 +37,17 @@
 
 import { setTimeout as sleep } from 'node:timers/promises';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import pipelinePause from './builder/pipelinePause.js';
 import buildStart from './builder/buildStart.js';
+import pipelineSweep from './builder/pipelineSweep.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import nodeRoles from '../lib/nodeRoles.js';
+import taskRepo from './builder/taskRepo.js';
+import remoteProbe from './builder/remoteProbe.js';
+import strandedLocalWork from './builder/strandedLocalWork.js';
 // The one door to ClickUp, and the budget it keeps (task 86bbugcpa).
 import clickupLib from './lib/clickup.cjs';
 
@@ -47,15 +57,21 @@ const {
   SWITCH_TASK_NAME, STRANDED_AFTER_MS,
   pauseRecord, resumeRecord, readTrail, pauseVerdict,
   inFlight, describeTickets, strandedExplanation, drainReport,
-  resumedMessage, sweptTicketNote, sweptSummary, sweepExitCode, resumeAuthorization, numericOption,
+  resumedMessage, sweptSummary, sweepExitCode, resumeAuthorization, numericOption,
   humanTime, humanDuration,
-  strandedBuildDestination,
 } = pipelinePause;
 const { resolveBuildStart, prLookupArgs } = buildStart;
+const { sweepStranded: runSweep } = pipelineSweep;
+const { findWorkInProgress, sshRoutedMachines } = strandedLocalWork;
 // The switch is READ in exactly one place, shared with bus-relay, so the two
 // can never hold different ideas of where the flag is or what counts as
 // unreadable (pipelinePauseStore.js says why that matters).
 const { readSwitch: storeReadSwitch, fetchQueue: storeFetchQueue, loopNoteOf, whyOf } = pipelinePauseStore;
+
+// This file's own checkout, derived rather than written down — the inventory
+// it reads below travels with the repo, and a literal path is an assumption
+// that fails on every machine but the one it was typed on (NODES P1).
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 /** Constant in every real run; overridable only so tests can point at a
@@ -102,9 +118,15 @@ function usage(code = 2) {
   console.error('  pause [--now] [--why "..."] [--by NAME] [--wait-minutes N]');
   console.error('                                  stop new claims immediately, then wait for work in flight to finish.');
   console.error('                                  --now skips the wait and names exactly what it left running.');
-  console.error('  resume --operator-asked [--by NAME] [--no-sweep]');
+  console.error('  resume --operator-asked --why "..." [--by NAME] [--no-sweep]');
   console.error('                                  hand the deck back. Refused without --operator-asked: an agent may pause');
-  console.error('                                  the line but may not un-pause the operator\'s deck. Sweeps tickets that');
+  console.error('                                  the line but may not un-pause the operator\'s deck. Refused without --why');
+  console.error('                                  too: paste what Dane actually said, quoted, so the switch ticket can');
+  console.error('                                  answer "on whose word?" later without reading a session transcript.');
+  console.error('                                  That quote must be ONE line — the record keeps one line per field, so a');
+  console.error('                                  second line would be dropped and one starting "by:" would overwrite who');
+  console.error('                                  resumed. Keep every word; join the lines with spaces.');
+  console.error('                                  Sweeps tickets that');
   console.error('                                  were stranded mid-pass, with a note: a half-built build goes to Rework, an');
   console.error('                                  unstarted one to Queued, and a review is released where it stands so its');
   console.error('                                  finished build is not lost. `sweep` is that same repair on its own.');
@@ -294,142 +316,104 @@ const fmt = pipelinePause.humanTime;
 // ---------------------------------------------------------------------------
 
 /**
- * THE STRANDED-TICKET SWEEP — the one repair for work whose pass died, and
- * until 2026-09-02 it was reachable from nowhere that mattered.
+ * THE STRANDED-TICKET SWEEP — the one repair for work whose pass died.
  *
- * It used to live inline in `resume`, BELOW that command's early exit for "the
- * pipeline is already running". So the repair `status` recommends by name could
- * only run as a side effect of lifting a pause — while a ticket strands when a
- * session dies, which happens overwhelmingly while the pipeline is RUNNING. On
- * 2026-09-02 four stranded builds filled four of the five in-flight slots
- * overnight; `status` printed the advice, `resume --operator-asked` answered
- * "Nothing to resume — the pipeline is already running", and changed nothing.
- * A guard placed above the work it protects, never exercised in the state it
- * exists for (DOCTRINE, unreachable guards).
+ * The sweep itself lives in ./builder/pipelineSweep.js, where its three
+ * ClickUp calls are injected so every branch of it is drivable in `node --test`
+ * with no token and no network (task 86bbt204x). It moved there rather than
+ * being copied: this is still the only implementation, and the three callers
+ * below — `sweep`, `resume` on a paused pipeline, and `resume` on a running one
+ * — all reach it through this one wrapper.
  *
- * So it is a function with a queue passed in, called from two places: `resume`
- * (before the flag is lifted, exactly as before) and the standalone `sweep`
- * command (at any time). `--no-sweep` is now decided by the CALLER, because
- * only `resume` has such a flag — a sweep asked not to sweep is not a thing
- * the sweep needs to know how to be.
+ * Why it was worth moving: the sweep MOVES REAL TICKETS on the board, and
+ * until now the "running + stranded" path was covered only by regexes over
+ * this file's own text. A regex proving the function is called cannot catch a
+ * bug inside it.
  *
- * `apply` is false by default at the command, and the dry run is a real
- * preview: it asks `build-start` the same question and names the same
- * destination, and writes nothing. That default is also the safety property
- * that makes an always-available sweep sound — 90 minutes is longer than any
- * loop pass but NOT longer than a hand-driven fast-track session, which holds
- * a ticket in "Building" for hours without touching it. Nothing moves unless
- * somebody who has read the ages types `--apply`.
- *
- * Returns `{ swept, found, sweepState }`. The three-part report is unchanged
- * and is the reason this is worth reading: `swept` is what moved, `left` is
- * what was examined and could NOT be moved, `checked` is whether the queue was
- * looked at at all. Not looking and finding nothing are different answers
- * (86bbqw49y).
+ * Sweep first, then lift the flag. In that order a ticket that was stranded is
+ * back in the line BEFORE the loops start claiming again, so the very next
+ * pass can pick it up rather than finding it a minute later.
  */
-async function sweepStranded({ by, queue, apply = false, strandedAfterMs = STRANDED_AFTER_MS, command = 'npm run pipeline -- resume' }) {
-  // Sweep first, then lift the flag. In this order a ticket that was stranded
-  // is back in the line BEFORE the loops start claiming again, so the very
-  // next pass can pick it up rather than finding it a minute later.
-  // Three things the report needs, and only this loop can know two of them.
-  // `swept` is what was unstuck. `left` is what was EXAMINED and could not be —
-  // invisible to a summary that is only shown what was taken, which is how an
-  // all-clear came to print one line under "it is still stranded" (86bbqw49y).
-  // `checked` is whether the queue was looked at at all: not looking and
-  // finding nothing are different answers, and only one of them is an
-  // all-clear.
-  const swept = [];
-  const left = [];
-  let sweepChecked = false;
-  let sweepWhy = '';
-  let found = 0;
-  if (queue?.readable) {
-    sweepChecked = true;
-    const rows = (queue.tasks || []).map((t) => ({ ...t, loopNote: loopNoteOf(t) }));
-    const { stranded } = inFlight(rows, { nowMs: Date.now(), strandedAfterMs });
-    found = stranded.length;
-    for (const s of stranded) {
-      // WHERE a stranded ticket belongs depends on what died on it.
-      //
-      // A stranded BUILD has no finished work to protect, so it goes back to
-      // Queued and the next build pass picks it up (its `build-start` check
-      // finds any half-pushed branch, which is what the note tells it to do).
-      //
-      // A stranded REVIEW is different: the ticket is already in "In review",
-      // which is where a ticket WAITS for a reviewer. All that is wrong with it
-      // is the stale claim note saying a review is running. Sending it to
-      // Queued would throw away a completed, PR-open build and hand the whole
-      // job to a second builder. So it is released where it stands — note
-      // cleared, status untouched — and the next review pass claims it.
-      const reviewing = s.kind === 'a review';
-      // WHERE a stranded build goes depends on whether anything was built for
-      // it (task 86bbr1u9v). Asked BEFORE the note is written, because the note
-      // names the destination — a note saying "Queued" above a move to "Rework"
-      // is a trail that contradicts the board, and the trail is the only thing
-      // the next pass reads. Reviews skip it: they never move.
-      const dest = reviewing ? { action: 'n/a' } : await buildStartFor(s.id);
-      const plan = reviewing ? null : strandedBuildDestination(dest.action);
-      // HOW STALE, on every line. The sweep can now be run at any moment
-      // rather than only out of a pause, so its reader has to be able to tell
-      // a ticket dead since midnight from one a hand-driven session claimed 91
-      // minutes ago and is still working on. The threshold cannot make that
-      // call for them; the age can.
-      const age = s.ageMs != null ? `, untouched for ${humanDuration(s.ageMs)}` : '';
+function sweepStranded(opts) {
+  // ONE ssh executor for the whole sweep, not one per ticket. Reachability is
+  // established at most once per machine and reused (remoteProbe rule 1) —
+  // otherwise a sweep over six stranded tickets pays the same sleeping
+  // machine's connect timeout six times. Built here, at the top of one sweep,
+  // which is exactly the lifetime that cache should have.
+  const probe = workProbe();
+  return runSweep({
+    buildStartFor, clearLoopNote, tryCall,
+    findLocalWork: (task) => workInProgressFor(task, probe),
+    ...opts,
+  });
+}
 
-      // A DRY RUN STOPS HERE, having written nothing. It still does the full
-      // `build-start` lookup above, because "where would this go" is the whole
-      // question the dry run is asked, and answering it from a guess would
-      // make the preview a different program from the thing it previews.
-      if (!apply) {
-        console.error(`  ${s.id} ("${s.name}") WOULD ${reviewing
-          ? 'be released where it stands in "In review" — its build is finished and its PR is open'
-          : `return to ${plan.status} — ${plan.why}`}; it is ${s.kind} with nothing working on it${age}.`);
-        swept.push({ id: s.id, kind: s.kind, destination: reviewing ? 'In review' : plan.status });
-        continue;
-      }
-      const note = await tryCall('POST', `/api/v2/task/${s.id}/comment`, {
-        comment_text: sweptTicketNote({
-          at: new Date().toISOString(), by, kind: s.kind, command,
-          destination: plan?.status, why: plan?.why,
-        }),
-        notify_all: false,
-      });
-      if (!note.ok) {
-        console.error(`  ${s.id}: could not write the hand-back note (${whyOf(note)}) — LEAVING it where it is rather than moving it silently.`);
-        left.push(s.id);
-        continue;
-      }
-
-      const task = (queue.tasks || []).find((t) => String(t.id) === s.id);
-
-      if (reviewing) {
-        const cleared = await clearLoopNote(task);
-        if (!cleared) {
-          console.error(`  ${s.id}: the note landed but the stale review claim could NOT be cleared — the next review pass will still see it as taken.`);
-          left.push(s.id);
-          continue;
-        }
-        console.error(`  ${s.id} ("${s.name}") released in "In review" — its review pass died${age}, but its build is finished and its PR is open.`);
-        swept.push({ id: s.id, kind: s.kind, destination: 'In review' }); // matches the per-ticket line above, verbatim
-        continue;
-      }
-
-      const rem = (task?.assignees || []).map((a) => a.id);
-      const where = plan;
-      const move = await tryCall('PUT', `/api/v2/task/${s.id}`, { status: where.status, assignees: { add: [], rem } });
-      if (!move.ok || String(move.json?.status?.status || '').toLowerCase() !== where.status.toLowerCase()) {
-        console.error(`  ${s.id}: the note landed but the move to ${where.status} did NOT (${whyOf(move)}) — it is still stranded.`);
-        left.push(s.id);
-        continue;
-      }
-      console.error(`  ${s.id} ("${s.name}") returned to ${where.status} — it was ${s.kind} with nothing working on it${age}; ${where.why}.`);
-      swept.push({ id: s.id, kind: s.kind, destination: where.status });
-    }
-  } else {
-    sweepWhy = 'the queue could not be read';
-    console.error('  the queue could not be read, so nothing was swept — run `npm run pipeline -- status` after this.');
+/**
+ * Run a read-only shell one-liner here, or on another machine over SSH.
+ *
+ * The same shape `check_ecosystem_drift.cjs` uses, and for the same reason: a
+ * probe that hangs on a sleeping laptop is a probe nobody waits for, and a
+ * connection that fails is a state rather than a verdict. `remoteProbe` owns
+ * the ssh flags, the login-shell wrapping and the once-per-machine
+ * reachability cache — this is only the process call underneath it.
+ */
+function runLocal(cmd, args, timeoutMs = 8000) {
+  try {
+    return { ok: true, out: execFileSync(cmd, args, { timeout: timeoutMs, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
+  } catch (err) {
+    return {
+      ok: false,
+      missing: err.code === 'ENOENT',
+      timedOut: remoteProbe.isTimeout(err),
+      code: typeof err.status === 'number' ? err.status : null,
+    };
   }
-  return { swept, found, sweepState: { checked: sweepChecked, left: left.length, why: sweepWhy } };
+}
+
+/** The executor plus the answer to "which machines can be asked at all". */
+function workProbe() {
+  const here = thisNodeName();
+  const exec = remoteProbe.createExecutor({ run: runLocal, hereId: here });
+  // WHICH MACHINES HAVE AN SSH ROUTE, read once per sweep from the same field
+  // of the same file `check_ecosystem_drift.cjs` reads. Without it the sweep
+  // ssh'd a machine with no route — 255, every ticket, every run — and
+  // reported the whole queue as unjudgeable from the one seat it runs on.
+  let routes = { known: false, machines: [] };
+  try {
+    routes = sshRoutedMachines(readFileSync(path.join(REPO_ROOT, 'docs', 'ecosystem', 'inventory.yaml'), 'utf8'));
+  } catch {
+    // Unreadable inventory -> every machine is tried, and an ssh failure
+    // becomes an honest cannot-tell. Fail towards not moving things.
+  }
+  return { here, shell: exec.shell, routedMachines: routes.machines, routesKnown: routes.known };
+}
+
+/**
+ * Is a build in flight for this stranded ticket on somebody's disk?
+ *
+ * The repo comes from the ticket's own `repo:` tag through `taskRepo`, the
+ * same resolver the build loop uses, so the sweep looks in the checkout the
+ * builder would actually have used.
+ */
+function workInProgressFor(task, probe) {
+  const resolved = taskRepo.resolveTaskRepo(task?.tags);
+  if (resolved.action !== 'build' || !resolved.repo) {
+    // An unresolvable repo is not "no work": we do not know where to look.
+    return { verdict: 'cannot-tell', work: [], unlooked: [], unseen: [{ machine: 'this machine', why: `the task's repo could not be resolved (${resolved.reason})` }] };
+  }
+  const home = taskRepo.repoHome(resolved.repo);
+  if (!home) {
+    return { verdict: 'cannot-tell', work: [], unlooked: [], unseen: [{ machine: 'this machine', why: `no checkout path is known for repo:${resolved.repo}` }] };
+  }
+  return findWorkInProgress({
+    taskId: task.id,
+    repoHome: home,
+    nodes: nodeRoles.KNOWN_NODES,
+    hereId: probe.here,
+    shell: probe.shell,
+    routedMachines: probe.routedMachines,
+    routesKnown: probe.routesKnown,
+  });
 }
 
 /**
@@ -484,11 +468,22 @@ if (cmd === 'check') {
   console.log(v.message);
 
   if (sw.readable && sw.switchFound) {
+    // WHICHEVER record is current, not only a pause. A running pipeline is a
+    // state somebody put it into, and until 2026-09-01 `status` said nothing
+    // about who or on what word — so the question "was this resume authorized?"
+    // had no surface to be asked on (task 86bbrqa5j). A resume written before
+    // --why existed prints "(not recorded)", which is the honest answer and is
+    // itself the visibility the ticket asked for.
     const { state } = readTrail(sw.comments || []);
-    if (state?.paused) {
+    if (state) {
       console.log('');
-      console.log(`paused since:  ${fmt(state.atMs) || state.at}`);
-      console.log(`paused by:     ${state.by || '(not recorded)'}`);
+      if (state.paused) {
+        console.log(`paused since:  ${fmt(state.atMs) || state.at}`);
+        console.log(`paused by:     ${state.by || '(not recorded)'}`);
+      } else {
+        console.log(`resumed:       ${fmt(state.atMs) || state.at}`);
+        console.log(`resumed by:    ${state.by || '(not recorded)'}`);
+      }
       console.log(`from machine:  ${state.node || '(not recorded)'}`);
       console.log(`why:           ${state.why || '(not recorded)'}`);
     }
@@ -648,7 +643,12 @@ if (cmd === 'check') {
   }
 
 } else if (cmd === 'resume') {
-  const auth = resumeAuthorization({ operatorAsked: flag('operator-asked') });
+  // BOTH halves of the claim are read and judged before anything is read from
+  // ClickUp or written to it. `resume` sweeps stranded tickets on its way past
+  // — real writes — so a guard that ran later would refuse a resume that had
+  // already changed the board, which is the failure shape DOCTRINE warns about.
+  const why = arg('why', '');
+  const auth = resumeAuthorization({ operatorAsked: flag('operator-asked'), why });
   if (!auth.allowed) { console.error(auth.message); process.exit(auth.code); }
   console.error(auth.message);
 
@@ -695,7 +695,7 @@ if (cmd === 'check') {
     : await sweepStranded({ by, queue: sw.queue, apply: true, strandedAfterMs });
 
   const at = new Date().toISOString();
-  await writeRecord(sw.task.id, resumeRecord({ by, node: thisNodeName(), at }), 'Resume', at);
+  await writeRecord(sw.task.id, resumeRecord({ by, node: thisNodeName(), at, why }), 'Resume', at);
   await stampSwitchNote(sw.task, `▶ running — resumed ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase().replace(/\s/g, '')}`);
 
   const pausedForMs = Number.isFinite(before.atMs) ? Date.now() - before.atMs : null;

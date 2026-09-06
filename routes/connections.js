@@ -45,6 +45,18 @@ const projectConnectionsStore = require('../lib/projectConnectionsStore');
 const projectSocialCredentialsStore = require('../lib/projectSocialCredentialsStore');
 const { makeActive, storeAccounts } = require('../lib/connections/completeConnection');
 const verifySweep = require('../lib/connections/verifySweep');
+/**
+ * The fitness test for a cause a client will read, and the limit behind it.
+ *
+ * Both live in lib/connections/clientProse.js because the OTHER half of this
+ * slice needs the identical rule on a different path — `connect_error` on the
+ * return URL after a refused connect, in routes/engage.js. Round 1 of review
+ * caught a raw 502 page reaching a card through the stored cause below; round 2
+ * caught the same page reaching a client through the carried one, because the
+ * rule had been written here, where the first defect was. One definition, two
+ * requires, so tuning either one tunes both.
+ */
+const { CAUSE_LIMITS, readsAsClientProse } = require('../lib/connections/clientProse');
 
 const PREFIX = '/api/connections';
 
@@ -77,6 +89,78 @@ const ATTENTION_REASONS = Object.freeze({
   revoked: 'Permission was withdrawn on the platform itself. Reconnect to restore it.',
   error: 'The last time we used this connection the platform refused it. Reconnect to fix it.',
 });
+
+/**
+ * What to DO about it, split from why it happened.
+ *
+ * The map above answers both questions in one sentence, which is right only
+ * when we know nothing else. When the sweep recorded a real cause we want to
+ * show that instead — but a cause with no instruction after it leaves a client
+ * reading a fault report with no next step, so the instruction is kept and only
+ * the cause is replaced.
+ */
+const ATTENTION_ACTIONS = Object.freeze({
+  expiring: 'Reconnect to keep posting.',
+  expired: 'Reconnect to start posting again.',
+  revoked: 'Reconnect to restore it.',
+  error: 'Reconnect to fix it.',
+});
+
+/**
+ * A stored fragment, turned into a sentence, without rewording it.
+ *
+ * `last_error` is written as a lower-case fragment on purpose — the sweep
+ * composes them ("<why>, and it could not be renewed (<why>)"), so a capital
+ * letter in the middle would read wrong. Capitalising the first character and
+ * closing the sentence is presentation; changing any other character would be
+ * substituting our wording for the platform's, which is the thing acceptance
+ * criterion 5 forbids.
+ */
+function asSentence(text) {
+  const trimmed = safeText(text).trim();
+  if (!trimmed) return '';
+  const opened = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  // A closing bracket or quote may follow the full stop and the sentence is
+  // still closed. The sweep composes exactly that shape — "(it was saved as
+  // delray.bsky.social.)" — and a naive end-of-string test appends a second
+  // full stop outside the bracket. Caught by its own test rather than by a
+  // client reading "…bsky.social.). Reconnect to fix it."
+  return /[.!?][)\]"'\u201d\u2019]?$/.test(opened) ? opened : `${opened}.`;
+}
+
+/**
+ * The sentence on an amber card, and where it comes from.
+ *
+ * The whole point of the verify sweep is that it learns WHY a connection
+ * stopped working and writes that down — a drifted Bluesky handle names the
+ * account it now signs in as, an unrenewed grant names the deadline it passed.
+ * `verifySweep.js` says so where it marks a row expiring: "the card goes amber
+ * with the sentence below under it". Until this function existed it did not:
+ * the route read only `status` and printed one of four generic lines, so every
+ * cause the sweep had gone to the trouble of recording arrived at the client as
+ * the same sentence, and `last_error` was written by one slice and read by
+ * nobody.
+ *
+ * Order: a missing token is our own storage being incomplete and outranks
+ * whatever a provider last said about it; then the sweep's recorded cause; then
+ * the generic line for a row that has a bad status and no recorded reason
+ * (which is what a hand-written status change leaves behind).
+ */
+function attentionSentence(row) {
+  if (row?.hasAccessToken === false) {
+    return 'The stored permission is incomplete. Reconnect to fix it.';
+  }
+  const status = safeText(row?.status);
+  // The fitness test runs on the STORED text, before asSentence capitalises it
+  // and closes it — dressing a 502 page as a sentence first and then measuring
+  // the result would be testing our own punctuation, not what was recorded.
+  const cause = readsAsClientProse(row?.lastError, 'stored') ? asSentence(row?.lastError) : '';
+  if (cause) {
+    const action = ATTENTION_ACTIONS[status] || 'Reconnect to fix it.';
+    return `${cause} ${action}`;
+  }
+  return ATTENTION_REASONS[status] || 'This connection is not working. Reconnect to fix it.';
+}
 
 /**
  * THE ONE PLACE A PLATFORM IS NAMED IN THIS FILE, and it is a bridge out of an
@@ -234,11 +318,11 @@ function cardStateFor(entry, rows) {
 
   const troubled = rows[0];
   if (troubled) {
-    const status = safeText(troubled.status);
-    const reason = troubled.hasAccessToken === false
-      ? 'The stored permission is incomplete. Reconnect to fix it.'
-      : (ATTENTION_REASONS[status] || 'This connection is not working. Reconnect to fix it.');
-    return { cardState: 'needs_attention', account: publicAccount(troubled), reason };
+    return {
+      cardState: 'needs_attention',
+      account: publicAccount(troubled),
+      reason: attentionSentence(troubled),
+    };
   }
 
   return { cardState: 'not_connected', account: null, reason: '' };
@@ -578,6 +662,9 @@ module.exports = {
   CARD_STATES,
   ATTENTION_REASONS,
   AUTH_KIND_FIELDS,
+  CAUSE_LIMITS,
   cardStateFor,
+  readsAsClientProse,
+  attentionSentence,
   buildCards,
 };

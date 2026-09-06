@@ -1733,4 +1733,153 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+  /*
+   * SQUARE BOTTOM WHEN OPEN (navLinkRadiusTopOnly) — measured BOTH ways.
+   *
+   * Operator, 2026-09-03: *"I want a radius control for the main menu item
+   * containers e.g. Pickleball. The radius should only appear on the top side
+   * of the container, which means the connection to the dropdown container
+   * needs to account for that."*
+   *
+   * These are the first contracts here to use `hover`. The whole feature lives
+   * in a state no static frame contains — the item changes shape only while
+   * its own dropdown is open — so without it the honest options were a unit
+   * test on a variable, or an assertion pointed at a `display: none` panel
+   * that the harness rightly refuses to measure.
+   *
+   * The OFF contract is the more valuable of the two. This control ships off
+   * and its blast radius is the main menu of every published tenant page, so
+   * "an untouched menu is unmoved" is the claim that actually matters — and it
+   * rests on getNavModuleStyle emitting no new variable while three CSS rules
+   * fall back to today's value. That is two files agreeing about a fallback
+   * chain, which holds right up until somebody edits one of them.
+   */
+  {
+    id: 'nav-open-item-keeps-all-four-corners-by-default',
+    why:
+      'The "Square bottom when open" control ships OFF, and the argument that it is safe to add at ' +
+      'all is that a menu which has never seen it renders exactly as before. That argument spans a ' +
+      'TypeScript emitter and two stylesheets — nothing else in the repo fails when one of them ' +
+      'drifts. This reads the open menu item out of a real browser and fails the moment the default ' +
+      'stops being the old rendering.',
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: JSON.stringify([
+          { id: 'home', label: 'Home', href: '/' },
+          { id: 'play', label: 'Pickleball', href: '/pickleball' },
+          { id: 'p1', label: 'Leagues', href: '/leagues', parentId: 'play' },
+          { id: 'p2', label: 'Clinics', href: '/clinics', parentId: 'play' },
+        ]),
+        navBorderRadius: '18',
+        navDropdownRadius: '20',
+      },
+    },
+    hover: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+    selector: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+    read: ['borderTopLeftRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius'],
+    expect(sample) {
+      const top = sample.styles.borderTopLeftRadius;
+      const bottomLeft = sample.styles.borderBottomLeftRadius;
+      const bottomRight = sample.styles.borderBottomRightRadius;
+      if (top !== '18px') {
+        return `the open menu item renders a ${top} top corner with Link Radius set to 18 — the ` +
+          'control has reached the top of the pill, which it must never touch.';
+      }
+      if (bottomLeft !== '18px' || bottomRight !== '18px') {
+        return `with "Square bottom when open" OFF the open menu item renders bottom corners of ` +
+          `${bottomLeft} / ${bottomRight}, and Link Radius is 18. Both must be 18px: the control is ` +
+          'off, so this menu has to look exactly as it did before the control existed. Every live ' +
+          'tenant menu just changed shape.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'nav-open-item-squares-its-bottom-corners-when-asked',
+    why:
+      'An open item and the panel hanging under it read as two rounded pills stacked on top of each ' +
+      'other. Squaring the item\'s bottom two corners is the half of the fix a visitor actually ' +
+      'looks at, and it exists only while the dropdown is open — so it is invisible to every other ' +
+      'check in this repo. The top corners are asserted alongside it, because a control that squared ' +
+      'the whole pill would satisfy a bottom-only assertion and be plainly wrong.',
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: JSON.stringify([
+          { id: 'home', label: 'Home', href: '/' },
+          { id: 'play', label: 'Pickleball', href: '/pickleball' },
+          { id: 'p1', label: 'Leagues', href: '/leagues', parentId: 'play' },
+          { id: 'p2', label: 'Clinics', href: '/clinics', parentId: 'play' },
+        ]),
+        navBorderRadius: '18',
+        navDropdownRadius: '20',
+        navLinkRadiusTopOnly: 'true',
+      },
+    },
+    hover: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+    selector: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+    read: ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius'],
+    expect(sample) {
+      const { borderTopLeftRadius: tl, borderTopRightRadius: tr } = sample.styles;
+      const { borderBottomLeftRadius: bl, borderBottomRightRadius: br } = sample.styles;
+      if (bl !== '0px' || br !== '0px') {
+        return `with "Square bottom when open" ON the open menu item still rounds its bottom corners ` +
+          `(${bl} / ${br}). The item and the panel under it still read as two stacked pills, which ` +
+          'is the exact thing the control was added to fix — so it appears to do nothing.';
+      }
+      if (tl !== '18px' || tr !== '18px') {
+        return `the item squared its TOP corners too (${tl} / ${tr}), with Link Radius set to 18. ` +
+          'The operator asked for the radius to remain "only on the top side"; squaring all four ' +
+          'turns his menu into rectangles.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'nav-open-dropdown-panel-squares-its-top-edge-to-meet-the-item',
+    why:
+      'The other half of the same join. Squaring the item alone leaves the panel with a rounded lip ' +
+      'under a square edge, which reads as a rendering fault rather than as one shape — and the ' +
+      'panel is styled in a different stylesheet from the item, so the two halves can drift apart ' +
+      'independently. That is the bug this module has already had twice: the builder and the live ' +
+      'site disagreeing about what one control does.',
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: JSON.stringify([
+          { id: 'home', label: 'Home', href: '/' },
+          { id: 'play', label: 'Pickleball', href: '/pickleball' },
+          { id: 'p1', label: 'Leagues', href: '/leagues', parentId: 'play' },
+          { id: 'p2', label: 'Clinics', href: '/clinics', parentId: 'play' },
+        ]),
+        navBorderRadius: '18',
+        navDropdownRadius: '20',
+        navLinkRadiusTopOnly: 'true',
+      },
+    },
+    hover: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+    selector: '.site-nav-dropdown-menu',
+    read: ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'display'],
+    expect(sample) {
+      if (sample.styles.display === 'none') {
+        return 'the dropdown panel is still closed while its trigger is hovered, so nothing about the ' +
+          'join was measured. Fix the scene, never the assertion.';
+      }
+      const { borderTopLeftRadius: tl, borderTopRightRadius: tr } = sample.styles;
+      if (tl !== '0px' || tr !== '0px') {
+        return `the panel keeps rounded top corners (${tl} / ${tr}) while the item above it is ` +
+          'squared, so the join has a lip and the two shapes still do not read as one.';
+      }
+      if (sample.styles.borderBottomLeftRadius !== '20px') {
+        return `the panel squared its BOTTOM corners too ` +
+          `(${sample.styles.borderBottomLeftRadius}), with Panel Radius set to 20. Only the top edge ` +
+          "meets the item — squaring the bottom throws away the operator's Panel Radius where it is " +
+          'still visible.';
+      }
+      return null;
+    },
+  },
 ];

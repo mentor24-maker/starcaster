@@ -50,18 +50,60 @@ function onBranch(dir, branch) {
   execFileSync('git', ['checkout', '-b', branch], { cwd: dir, stdio: 'ignore' });
 }
 
-function runHook(dir, { message = '', sessionId = 's1' } = {}) {
-  const result = spawnSync('node', [HOOK], {
-    input: JSON.stringify({
-      hook_event_name: 'Stop',
-      session_id: sessionId,
-      cwd: dir,
-      last_assistant_message: message,
-    }),
+function runHook(dir, { message = '', sessionId = 's1', stopHookActive, env } = {}) {
+  const payload = {
+    hook_event_name: 'Stop',
+    session_id: sessionId,
+    cwd: dir,
+    last_assistant_message: message,
+  };
+  // Absent unless asked for -- the CONTROL half of the stop_hook_active tests
+  // is the identical payload with the key simply not there.
+  if (stopHookActive !== undefined) payload.stop_hook_active = stopHookActive;
+
+  // process.execPath, not 'node': the git-off-PATH tests below hand this a PATH
+  // with no git on it, and resolving the runner through that same PATH would
+  // fail to launch the hook at all and read as a pass.
+  const result = spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify(payload),
     encoding: 'utf8',
-    env: { ...process.env, SKIP_SQL_HANDOFF: '' },
+    env: env || { ...process.env, SKIP_SQL_HANDOFF: '' },
   });
   return { code: result.status, stderr: result.stderr || '' };
+}
+
+/**
+ * A session id nothing else will collide with, and that a LATER RUN cannot
+ * inherit.
+ *
+ * The tests below deliberately drive state into `os.tmpdir()`, which -- unlike
+ * the per-worktree git dir every other test uses -- is machine-wide and
+ * outlives the run. With a fixed id the second `npm run test:hooks` read back
+ * the FIRST run's counter, already at three, and the stand-down tests failed
+ * for a reason that had nothing to do with the hook. Measured: run one green,
+ * run two red, no code changed in between.
+ *
+ * Registered for cleanup so the suite does not litter the machine either.
+ */
+const FALLBACK_STATE_FILES = [];
+let sidCounter = 0;
+function fallbackSid(label) {
+  const id = `${label}-${process.pid}-${++sidCounter}`;
+  FALLBACK_STATE_FILES.push(path.join(os.tmpdir(), `sql-handoff-${id}.json`));
+  return id;
+}
+
+test.after(() => {
+  for (const file of FALLBACK_STATE_FILES) {
+    try { fs.rmSync(file, { force: true }); } catch { /* best effort */ }
+  }
+});
+
+/** A PATH carrying node but no git — the mini's bare-PATH condition. */
+function pathWithoutGit() {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'nogit-bin-'));
+  fs.symlinkSync(process.execPath, path.join(bin, 'node'));
+  return { ...process.env, SKIP_SQL_HANDOFF: '', PATH: bin };
 }
 
 test('REFUSES the turn when the branch adds SQL and the reply omits the block', () => {
@@ -282,4 +324,226 @@ test('messageHandsOff needs both the banner and that file\'s own URL', () => {
   assert.equal(messageHandsOff(`x ${url} y`, 'b', 'docs/SQL/a.sql'), false, 'URL alone is not the block');
   assert.equal(messageHandsOff(renderBlock('b', 'docs/SQL/a.sql'), 'b', 'docs/SQL/b.sql'), false, 'wrong file');
   assert.equal(messageHandsOff(renderBlock('b', 'docs/SQL/a.sql'), 'b', 'docs/SQL/a.sql'), true);
+});
+
+
+/* ------------------------------------------------------------------------- *
+ * The brake, in the conditions that actually break it (task 86bbt7mxe).
+ *
+ * The three worktree tests above cover WHERE the state lives. These cover
+ * WHETHER it can be written at all, and the harness's own loop flag. The
+ * ticket's headline -- the `<toplevel>/.git` path bug -- was already fixed
+ * before this ran; measured on main at 03340bba, a worktree answered
+ * 2,2,2,0,0 correctly. What it could not survive was a state directory that
+ * resolves fine and then refuses the write: six refusals out of six, and it
+ * would have been six hundred.
+ * ------------------------------------------------------------------------- */
+
+test('stands down when the state directory refuses the write — the wedge', () => {
+  // THE REGRESSION. `writeState` swallowed the failure and returned nothing, so
+  // `refusals` read 0 on every turn and the three-refusal valve could never
+  // fire. Chmod 500 is a real read-only mount / permissions / full disk, which
+  // is the case the old code called harmless.
+  const wt = makeWorktree();
+  addSql(wt);
+  const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: wt, encoding: 'utf8' }).trim();
+  fs.chmodSync(gitDir, 0o500);
+  try {
+    const sessionId = fallbackSid('unwritable');
+    const codes = [];
+    for (let i = 0; i < 6; i++) codes.push(runHook(wt, { message: 'nope', sessionId }).code);
+    assert.deepEqual(
+      codes,
+      [2, 2, 2, 0, 0, 0],
+      'an unwritable git dir must fall back, not refuse forever'
+    );
+  } finally {
+    fs.chmodSync(gitDir, 0o700); // or the temp dir cannot be cleaned up
+  }
+});
+
+test('the fallback state file is real, and is read back on the next turn', () => {
+  // The mechanism behind the test above, asserted directly: the count has to
+  // land somewhere a later turn can find it, or the codes array is passing for
+  // the wrong reason.
+  const wt = makeWorktree();
+  addSql(wt);
+  const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: wt, encoding: 'utf8' }).trim();
+  fs.chmodSync(gitDir, 0o500);
+  try {
+    const sessionId = fallbackSid('fallbackstate');
+    assert.equal(runHook(wt, { message: 'nope', sessionId }).code, 2);
+    assert.equal(runHook(wt, { message: 'nope', sessionId }).code, 2);
+
+    assert.ok(
+      !fs.existsSync(path.join(gitDir, `sql-handoff-${sessionId}.json`)),
+      'precondition: the git dir must NOT have taken the write, or this proves nothing'
+    );
+    const fallback = path.join(os.tmpdir(), `sql-handoff-${sessionId}.json`);
+    assert.ok(fs.existsSync(fallback), `expected the counter at ${fallback}`);
+    assert.equal(
+      JSON.parse(fs.readFileSync(fallback, 'utf8')).refusals,
+      2,
+      'the second turn must have READ the first turn back, not started over'
+    );
+  } finally {
+    fs.chmodSync(gitDir, 0o700);
+  }
+});
+
+test('refuses NOTHING when nowhere is writable — no count, no refusal', () => {
+  // The end of the line: if the count cannot land anywhere at all, there is no
+  // brake to be had, and the honest answer is to let the turn end rather than
+  // refuse without a limit. TMPDIR is pointed at a path that cannot be written.
+  const wt = makeWorktree();
+  addSql(wt);
+  const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: wt, encoding: 'utf8' }).trim();
+  fs.chmodSync(gitDir, 0o500);
+  const sealed = fs.mkdtempSync(path.join(os.tmpdir(), 'sealed-'));
+  fs.chmodSync(sealed, 0o500);
+  try {
+    const env = { ...process.env, SKIP_SQL_HANDOFF: '', TMPDIR: sealed };
+    const codes = [];
+    for (let i = 0; i < 3; i++) codes.push(runHook(wt, { message: 'nope', sessionId: 'sealed', env }).code);
+    // 'sealed' needs no unique id: TMPDIR is redirected at a sealed directory,
+    // so by construction this test writes nowhere that outlives it.
+    assert.deepEqual(codes, [0, 0, 0], 'a hook that cannot count its refusals must not issue any');
+  } finally {
+    fs.chmodSync(gitDir, 0o700);
+    fs.chmodSync(sealed, 0o700);
+  }
+});
+
+test('stop_hook_active exits 0 — with the CONTROL that still refuses', () => {
+  // The harness's own infinite-loop flag. The control is the point: an
+  // identical reply with the key absent must still refuse, or this test would
+  // pass just as well against a hook that had stopped working entirely.
+  const wt = makeWorktree();
+  addSql(wt);
+
+  assert.equal(
+    runHook(wt, { message: 'nope', sessionId: 'flagon', stopHookActive: true }).code,
+    0,
+    'the harness says this turn is already a continuation — stand down'
+  );
+  assert.equal(
+    runHook(wt, { message: 'nope', sessionId: 'flagoff' }).code,
+    2,
+    'CONTROL: the identical reply without the flag must still refuse'
+  );
+});
+
+test('stop_hook_active does not spend a refusal', () => {
+  // It exits before the counter, so a continuation must not eat one of the
+  // three. Otherwise the two brakes interfere and three real refusals become
+  // fewer, silently.
+  const wt = makeWorktree();
+  addSql(wt);
+
+  runHook(wt, { message: 'nope', sessionId: 'nospend', stopHookActive: true });
+  runHook(wt, { message: 'nope', sessionId: 'nospend', stopHookActive: true });
+
+  const codes = [];
+  for (let i = 0; i < 5; i++) codes.push(runHook(wt, { message: 'nope', sessionId: 'nospend' }).code);
+  assert.deepEqual(codes, [2, 2, 2, 0, 0], 'all three refusals must survive the continuations');
+});
+
+test('with git off PATH it stands ASIDE — 0,0,0, not 2,2,2', () => {
+  // The ticket asked for 2,2,2,0,0 here, inherited from check_operator_handoff,
+  // and that is the wrong target for THIS hook. That one judges the message
+  // text, so it can still tell there is something to refuse without git. This
+  // one's judgement is entirely git-derived -- currentBranch() and
+  // newSqlFiles() both shell out -- so with no git it cannot know the branch
+  // adds any SQL at all, and refusing would be refusing on no evidence.
+  const wt = makeWorktree();
+  addSql(wt);
+  const env = pathWithoutGit();
+
+  assert.ok(
+    spawnSync('git', ['--version'], { env }).error,
+    'precondition: git must actually be unreachable on this PATH'
+  );
+
+  const codes = [];
+  for (let i = 0; i < 5; i++) codes.push(runHook(wt, { message: 'nope', sessionId: 'nogit', env }).code);
+  assert.deepEqual(codes, [0, 0, 0, 0, 0], 'no evidence means no refusal');
+});
+
+test('with the cwd outside any git repo it stands aside', () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'norepo-'));
+  const codes = [];
+  for (let i = 0; i < 5; i++) codes.push(runHook(outside, { message: 'nope', sessionId: 'norepo' }).code);
+  assert.deepEqual(codes, [0, 0, 0, 0, 0]);
+});
+
+test('a half-written state file does not silently reset the counter', () => {
+  // `undefined >= MAX_REFUSALS` is false, so a truncated file used to read as
+  // "zero refusals so far" and hand back a fresh set of three, every turn. The
+  // shapes are coerced now; this asserts the coercion, not the happy path.
+  const wt = makeWorktree();
+  addSql(wt);
+  const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: wt, encoding: 'utf8' }).trim();
+  fs.writeFileSync(path.join(gitDir, 'sql-handoff-junk.json'), '{"refusals":"three","handedOff":"nope"}');
+
+  const codes = [];
+  for (let i = 0; i < 5; i++) codes.push(runHook(wt, { message: 'nope', sessionId: 'junk' }).code);
+  assert.deepEqual(codes, [2, 2, 2, 0, 0], 'a junk file must not become an unbounded refusal loop');
+});
+
+test('a hand-off arriving on a CONTINUATION turn is still recorded', () => {
+  // The regression that sent PR #609 back to Rework on 2026-09-05.
+  //
+  // The stop_hook_active exit was placed at the very top of main(), before the
+  // block that reads the reply and records what it handed off. But a
+  // continuation turn is exactly where the hand-off arrives: the hook refuses,
+  // the agent adds the block, and THAT turn carries the flag. So the reply that
+  // solved the problem was never read, `handedOff` never persisted, and the
+  // hook re-demanded the same file on every ordinary turn afterwards --
+  // spending its whole three-refusal brake on SQL the operator already had.
+  //
+  // Measured on the branch with the exit at the top: 2,0,2,0,2,0.
+  // Measured on main at 03340bba, which had no exit at all:  2,0,0,0,0,0.
+  //
+  // The flag must suppress the REFUSAL, not the LEARNING.
+  const wt = makeWorktree();
+  const file = addSql(wt);
+  const block = renderBlock('add-revisions', file);
+
+  const codes = [
+    runHook(wt, { message: 'nope', sessionId: 'contlearn' }).code,
+    runHook(wt, { message: block, sessionId: 'contlearn', stopHookActive: true }).code,
+    runHook(wt, { message: 'Anything else?', sessionId: 'contlearn' }).code,
+    runHook(wt, { message: block, sessionId: 'contlearn', stopHookActive: true }).code,
+    runHook(wt, { message: 'Still nothing to hand off.', sessionId: 'contlearn' }).code,
+    runHook(wt, { message: 'Nor here.', sessionId: 'contlearn' }).code,
+  ];
+
+  assert.deepEqual(
+    codes,
+    [2, 0, 0, 0, 0, 0],
+    'the block arrived on t2 — re-demanding it on t3 means the continuation threw the reply away'
+  );
+});
+
+test('the brake survives an ordinary hand-off, so a LATER new file is still caught', () => {
+  // The consequence of the test above, and the reason it is a defect rather
+  // than a nuisance: with the hand-off never recorded, three ordinary turns
+  // exhaust the brake, and a brand new SQL file committed afterwards -- never
+  // handed off, precisely what this hook exists for -- is missed in silence.
+  //
+  // Measured on the branch: 0 (MISSED). On main: 2 (caught).
+  const wt = makeWorktree();
+  const first = addSql(wt, 'add_first.sql');
+  const block = renderBlock('add-revisions', first);
+
+  runHook(wt, { message: 'nope', sessionId: 'brakeleft' });
+  runHook(wt, { message: block, sessionId: 'brakeleft', stopHookActive: true });
+  runHook(wt, { message: 'next turn', sessionId: 'brakeleft' });
+  runHook(wt, { message: 'and another', sessionId: 'brakeleft' });
+
+  addSql(wt, 'add_second.sql');
+  const result = runHook(wt, { message: 'here you go', sessionId: 'brakeleft' });
+
+  assert.equal(result.code, 2, 'a new, never-handed-off SQL file must still be caught');
+  assert.match(result.stderr, /add_second\.sql/, 'and it must name the file that is outstanding');
 });
