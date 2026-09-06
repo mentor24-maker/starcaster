@@ -24,11 +24,23 @@ Two other things on the same ticket are deliberately not part of this. The
 Messaging tag list that was telling visitors to "add tags in the Messaging
 section" turned out to be fixed already, in the batch that went out on the 3rd —
 checking the code the live site is actually running confirmed the sentence is
-gone. And the duplicate search box on that page is not a code fault at all: the
-page has a search module sitting next to a post feed that already draws its own
-search. Taking one away is an edit to a client's live page, and that is Dane's
-call, not something a background job should decide on its own. The question is
-waiting on the ticket.
+gone.
+
+And the "duplicate" search box turned out not to be duplicated at all. Opening
+the real page in a browser and counting: **there is exactly one search box on
+that page**, the one in the sidebar. The post feed underneath it has its own
+search switched off, so it draws a tag dropdown and nothing else. The earlier
+note here said the feed drew a second search box; it read that off the list of
+modules on the page rather than off the page, and it was wrong.
+
+What is actually wrong with that one search box is worse, and it is new: **it
+does nothing.** Typing a word and pressing Search reloads the page with
+`?search=<word>` in the address bar, and the post list never looks at that
+value, so the results do not change by a single character. Measured on the live
+site — the page text was byte-for-byte identical before and after. So a visitor
+gets a control that looks like it works and silently ignores them. That is its
+own defect, on its own ticket, with the choice about what should replace it
+going to Dane.
 
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 

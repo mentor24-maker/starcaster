@@ -8485,6 +8485,24 @@ function BlogRelatedPostsPreview({
   );
 }
 
+/*
+ * THIS SUBMITS TO A PARAMETER NOTHING ON THE PAGE NECESSARILY READS. The form
+ * reloads the current page (or `targetPageUrl`) with `?<searchParam>=<query>`,
+ * and it is the OTHER module on the page that has to honour that value. Only
+ * `blog-search-results` / `site-search-results` do. `blog-post-list` seeds its
+ * filters from `category`, `tag` and `author` and never looks at `search`, so a
+ * Blog Search dropped beside a Post Feed is a control that changes the address
+ * bar and nothing else.
+ *
+ * Measured on delraytennis.starcaster.pro/tags, 2026-09-06: submitting a
+ * nonsense query left the rendered page byte-for-byte identical (4990
+ * characters of body text before and after) with `?search=…` in the URL. That
+ * page is the one search box it has — the feed's own search is switched off
+ * there — so the ticket that called it a "duplicate" search box was reading the
+ * module list rather than the page (86bbup8df). Which module should own search
+ * on that page is the operator's call and has its own ticket; this note exists
+ * so the next reader does not have to re-measure it.
+ */
 function BlogSearchPreview({ settings }: { settings: Record<string, string> }) {
   const searchParam = (settings.searchParam || "search").trim();
   const targetPageUrl = (settings.targetPageUrl || "").trim();
