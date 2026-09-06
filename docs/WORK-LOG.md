@@ -53,6 +53,30 @@ The Builder still shows the field, sample choices and all, so it is there to
 design. Both of those before-and-after behaviours were measured in a real
 browser on the real published-page code, not reasoned about.
 
+**Round three, and this is the one that mattered.** Review checked that fix,
+agreed the leak was gone, and then found what the made-up options had been
+hiding all along. Leaving out a dropdown that has no choices is only correct if
+the page can tell an empty dropdown from a filled-in one — and it could not.
+When a contact form was saved, the site owner's actual choices were being
+thrown away at four separate points on the way to the database, so *every*
+dropdown arrived at a published page looking empty. The new rule was therefore
+deleting real questions, not just dead ones.
+
+Delray's form has a genuine example sitting in the database right now: "How did
+you find us?", with Referral, Search Engine and AI. Put that on a page and,
+before this fix, the question simply would not appear and nobody's answer would
+ever be collected — while the save reported success every time. The reason
+nobody had noticed dropdowns were broken is exactly that they always looked
+populated: "Option one / Option two" was standing in for the choices that had
+been dropped.
+
+So the choices now travel with the field, through one shared piece of code that
+all four places use — the two that read, the two that write — so they cannot
+drift apart again. Measured both ways on the real published-page code: before,
+that question was missing from the form entirely; after, it is there with all
+three answers, and the form sends. A dropdown the owner genuinely left blank is
+still left out, which was the right call and is unchanged.
+
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
 Pull requests are merged one at a time here, and the plan is to switch on a

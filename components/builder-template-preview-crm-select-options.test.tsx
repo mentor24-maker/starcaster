@@ -28,6 +28,13 @@ import { BuilderTemplatePreview } from "./builder-template-preview";
  * builder-template-preview-builder-affordances.test.tsx because the CRM form
  * renders nothing but "Loading form…" until its fetch resolves, and effects do
  * not run under renderToStaticMarkup.
+ *
+ * Round 3 note: the configured dropdown below is stubbed with real `options`,
+ * and until round 3 the API could not actually produce that shape — the store
+ * stripped `options` in both directions, so the live guard was deleting every
+ * dropdown rather than only the empty ones. The stub is honest now.
+ * scripts/builder/crmFormFieldOptions.test.js is what holds it honest: it
+ * asserts the options survive the store, which no render-level test can see.
  */
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
