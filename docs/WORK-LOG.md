@@ -1,3 +1,34 @@
+## 2026-09-06 — A blog list said "13" and showed 9, with no way to see the rest (#629)
+
+On a client's tag page, the heading read *"Blog posts matching the tag 'junior
+tennis': 13"* and the page showed **nine** posts. There was no next-page link, no
+"load more", and nothing anywhere saying the list had been shortened. Four posts
+simply were not there. A visitor who counts the cards decides the site is broken;
+a visitor who does not never learns those four exist.
+
+The count was telling the truth. The list was not. The module worked out how many
+posts matched, printed that number, and then drew only as many cards as its
+"Posts per page" setting allowed — and threw the remainder away without a word.
+Turning that setting up would only have moved the problem further down the page.
+
+There was a second, quieter version of the same fault underneath it. The list only
+ever asked the server for the **first 100 posts**, then did all its sorting and
+filtering inside the visitor's browser. Any site with more than 100 published posts
+would find that a tag on an older post came up completely empty — and the message
+we added last week, *"No posts tagged 'junior tennis'"*, would have stated that
+confidently and been wrong. A confident wrong answer is worse than a vague one.
+
+Both are fixed. The list now keeps asking the server for the next hundred posts
+until it has them all, so no filter can miss an older one. And under the cards
+there is now a **"Show more posts"** button with a line reading **"Showing 9 of
+13"** beside it, so what the page claims and what a visitor can actually reach are
+the same thing. Click it and the rest appear; when everything is on screen, both
+the button and the line go away. Changing a filter starts the list over at the top.
+
+One more piece of honesty went in with it: if the list ever cannot read the whole
+archive, it says "of 250 **or more**" rather than a firm number, and an empty
+result says so instead of claiming nothing matched. The module should never make a
+confident statement about posts it never looked at.
 ## 2026-09-05 — Every ticket the reconciler closed was told '[object Object]' did it (#619)
 
 When the automatic reconciler notices that a ticket's work has already been
