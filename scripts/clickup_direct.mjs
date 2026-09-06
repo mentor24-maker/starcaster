@@ -2059,13 +2059,29 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   //
   // With no queue, which is the state this ships into, `gh pr merge` merges
   // synchronously and this returns on its very first read without sleeping.
+  //
+  // THE WAIT IS CHARGED AND BOUNDED (round 2). It draws an in-pass wait slot
+  // like every other wait in this pass — same cap, same per-wait ceiling — so
+  // the tested "a pass cannot outlast its own interval" invariant covers it
+  // instead of standing beside it. A 15-minute literal here would have been
+  // 1.5x the relay's whole 600s wake, which is the precise mistake the
+  // MAX_IN_PASS_WAITS comment records having already been made once. A spent
+  // budget still takes ONE read and no sleep, which is the entire queue-less
+  // path, so nothing ordinary is missed by a pass that has done its waiting.
+  const observeBudget = mergeOnComment.mergeObserveBudget({
+    used: inPassBudget ? inPassBudget.used : Infinity,
+    cap: inPassBudget ? inPassBudget.cap : 0,
+  });
+  if (observeBudget.charged && inPassBudget) inPassBudget.used += 1;
   const observed = mergeCompletion.waitForMerge({
     now: () => Date.now(),
     sleep: sleepBlocking,
+    timeoutMs: observeBudget.timeoutMs,
+    pollIntervalMs: mergeOnComment.IN_PASS_POLL_MS,
     readPr: () => {
-      const seen = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', 'state,mergedAt']);
+      const seen = gh(mergeCompletion.prObservationArgv(repo, pr.number));
       if (!seen.ok) return null;
-      try { return JSON.parse(seen.stdout); } catch { return null; }
+      return mergeCompletion.parsePrObservation(seen.stdout);
     },
   });
 
@@ -2079,10 +2095,16 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // holding it would idle the queue behind a merge that is out of our hands.
     releaseMergeWindow('the merge was handed to GitHub and has not landed yet');
     const why = observed.outcome === 'queued'
-      ? `PR #${pr.number} was ENQUEUED, not merged — still open after ${observed.polls} read(s). The ticket has NOT been moved to Live and no merge has been recorded; the next pass will find it merged and do the bookkeeping then.`
-      : observed.outcome === 'closed'
-        ? `PR #${pr.number} is CLOSED without having merged. The ticket has NOT been moved to Live and no merge has been recorded.`
-        : `whether PR #${pr.number} merged is UNKNOWN — ${observed.failedReads} read(s) came back blind, so nobody looked. The ticket has NOT been moved to Live and no merge has been recorded.`;
+      ? `PR #${pr.number} was ENQUEUED, not merged — ${mergeCompletion.holdLabel(observed.hold)}, and it was still open after ${observed.polls} read(s). The ticket has NOT been moved to Live and no merge has been recorded; the next pass will find it merged and do the bookkeeping then.`
+      : observed.outcome === 'not-merged'
+        // NOT a queue wait, and this is the round-2 correction: with nothing
+        // holding the pull request there is no queue to wait for and the merge
+        // simply did not happen. Said plainly, once, rather than dressed as
+        // "GitHub is still working through the merge queue".
+        ? `PR #${pr.number} did NOT merge — it is still open and ${mergeCompletion.holdLabel(observed.hold)}. The merge command reported success, so GitHub refused it after the fact (a branch that fell behind main is the usual reason — protection has strict:true). The ticket has NOT been moved to Live and no merge has been recorded.`
+        : observed.outcome === 'closed'
+          ? `PR #${pr.number} is CLOSED without having merged. The ticket has NOT been moved to Live and no merge has been recorded.`
+          : `whether PR #${pr.number} merged is UNKNOWN — ${observed.failedReads} read(s) came back blind, so nobody looked. The ticket has NOT been moved to Live and no merge has been recorded.`;
     unchecked.push(`${task.id}: ${why}`);
     console.error(`  MERGE NOT OBSERVED on ${label}: ${observed.outcome} — ${why}`);
     return {
@@ -2092,7 +2114,11 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       reason: why,
       headSha: prJson.headRefOid || null,
       // 'queued' and 'closed' ARE readings; 'unknown' is the absence of one.
-      cannotTell: observed.outcome === 'unknown',
+      // So is a `not-merged` whose HOLD could not be read: the merge is known
+      // not to have happened, but whether GitHub will still land it is not,
+      // and a confident refusal there would be the same overreach in miniature.
+      cannotTell: observed.outcome === 'unknown'
+        || (observed.outcome === 'not-merged' && observed.hold === 'unknown'),
       mergeState: observed.outcome,
     };
   }

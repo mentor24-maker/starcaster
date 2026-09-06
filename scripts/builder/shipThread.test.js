@@ -111,25 +111,80 @@ test('the merge call is still allowed to fail without stopping the script — th
   assert.ok(mergeCallMatch, 'must find the gh pr merge call');
   assert.match(mergeCallMatch[0], /allowFail:\s*true/, 'gh\'s own cosmetic exit code must not stop the script');
 
+  // AND THE SPELLING CHANGED AGAIN (round 2, same ticket). The re-read now
+  // asks for the state and the HOLD in one call, because "still open" is not
+  // "enqueued" until something says so — see mergeCompletion.js.
   const afterMerge = code.slice(code.indexOf(mergeCallMatch[0]));
   assert.match(afterMerge, /waitForMerge\(/, 'must independently re-read the PR state after merging');
-  assert.match(afterMerge, /'pr',\s*'view',\s*prNumber,\s*'--json',\s*'state,mergedAt'/, 'the re-read asks GitHub for the state and its own merge time');
+  assert.match(afterMerge, /prObservationArgv\(/, 'the re-read asks GitHub for the state, its merge time AND what is holding it');
 
   // Every outcome that is NOT an observed merge stops the script, and the
-  // success line is reached only after all three have been ruled out.
-  for (const outcome of ['queued', 'unknown', 'closed']) {
+  // success line is reached only after all four have been ruled out.
+  const OUTCOMES = ['not-merged', 'queued', 'unknown', 'closed'];
+  for (const outcome of OUTCOMES) {
     const at = afterMerge.indexOf(`mergeWait.outcome === '${outcome}'`);
     assert.ok(at > -1, `ship handles the ${outcome} outcome`);
-    assert.match(afterMerge.slice(at, at + 400), /fail\(/, `a ${outcome} outcome must still call fail()`);
+    assert.match(afterMerge.slice(at, at + 900), /fail\(/, `a ${outcome} outcome must still call fail()`);
   }
   const success = afterMerge.indexOf('It is live once Vercel finishes deploying');
   assert.ok(success > -1, 'must find the merge success line');
-  for (const outcome of ['queued', 'unknown', 'closed']) {
+  for (const outcome of OUTCOMES) {
     assert.ok(
       afterMerge.indexOf(`mergeWait.outcome === '${outcome}'`) < success,
       `ship declares the merge only after ruling out ${outcome}`
     );
   }
+});
+
+test('CRITERION 5 ON THE FAILURE PATH: a refused merge stays the fast, true answer', () => {
+  // The half round 1 broke. `main`'s protection has strict:true, so a branch
+  // that falls behind between ship's CI wait and its merge call is refused —
+  // the commonest refusal there is. Round 1 turned that accurate one-second
+  // answer into a fifteen-minute wait ending in "Nothing has gone wrong...
+  // GitHub is still working through the merge queue", which named a mechanism
+  // this repo does not have and, if followed, looped the same wait forever.
+  //
+  // Driven for real rather than asserted at source: waitForMerge is injectable
+  // precisely so the shapes ship cannot reach in a test — a merge command that
+  // succeeds while the PR stays open — are ordinary unit cases.
+  const { waitForMerge } = require('./mergeCompletion');
+  const drive = (payload, timeoutMs) => {
+    let clock = 0;
+    return {
+      ...waitForMerge({
+        readPr: () => payload,
+        sleep: (ms) => { clock += ms; },
+        now: () => clock,
+        timeoutMs,
+      }),
+      elapsed: clock,
+    };
+  };
+
+  // No queue, no auto-merge: GitHub refused it. One read, no sleep, and the
+  // outcome ship maps to a plain failure.
+  const refused = drive(
+    { state: 'OPEN', mergedAt: null, isInMergeQueue: false, autoMergeEnabled: false },
+    20 * 60 * 1000
+  );
+  assert.equal(refused.outcome, 'not-merged');
+  assert.equal(refused.elapsed, 0, 'a twenty-minute budget is not spent on a merge nobody is holding');
+  assert.notEqual(refused.outcome, 'queued', 'the false reassurance is gone');
+
+  // The success path is unchanged and still costs nothing.
+  const merged = drive(
+    { state: 'MERGED', mergedAt: '2026-09-05T22:19:33Z', isInMergeQueue: false, autoMergeEnabled: false },
+    20 * 60 * 1000
+  );
+  assert.equal(merged.outcome, 'merged');
+  assert.equal(merged.elapsed, 0);
+
+  // And the message ship prints for that failure must not mention a queue.
+  const at = code.indexOf("mergeWait.outcome === 'not-merged'");
+  const block = code.slice(at, at + 900);
+  assert.doesNotMatch(block, /merge queue/, 'a refused merge is never announced as a queue wait');
+  assert.match(block, /still OPEN/, 'it names the true state');
+  assert.match(block, /run `npm run ship` again/i, 'and the advice actually resolves it — catch up and retry');
 });
 
 test('nothing overrides the exit code at the very end — a clean run relies on Node\'s own 0, not a forced one', () => {

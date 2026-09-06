@@ -33,6 +33,33 @@ now comes from GitHub itself rather than from our own clock.
 
 It costs an ordinary day nothing: with no queue switched on, the first look
 already says merged and the wait is over before it starts.
+
+**Round 2 — and the first fix had swapped one wrong answer for another.** Review
+caught it. The new code called the pull request *"still in the line"* any time it
+was still open — without ever checking that a line existed. None does; the queue
+has not been switched on yet. So on today's setup every genuinely *refused*
+merge was being announced as a calm queue wait: fifteen minutes of waiting, then
+"nothing has gone wrong, GitHub is still working through the merge queue", about
+a mechanism that is not there. Every word of that was false, and doing what it
+suggested — run it again — just started the same fifteen minutes over.
+
+That mattered because refusals are common. This repo will not merge a branch
+that has fallen behind, and a branch can fall behind in the seconds between its
+checks passing and the merge going through. That used to be a one-second, honest
+"the merge did not complete". It is again: the script now asks GitHub, in the
+same breath as everything else, whether anything is actually holding this pull
+request — a place in the line, or GitHub's own auto-merge. If nothing is, it says
+so at once and tells you to run it again, which genuinely fixes it. If something
+is, and only then, it waits.
+
+The second half was a timing bug in the background job. Its wait could run for
+fifteen minutes; the job itself wakes every ten. One pull request would have
+swallowed the job's own next wake-up, and everything else riding on it. The wait
+is now drawn from the same small allowance every other wait in that job uses, so
+the whole pass still finishes inside its ten minutes — and the test that checks
+that is no longer able to miss a wait standing outside the arithmetic, which is
+exactly how this one got through the first time.
+
 ## 2026-09-05 — A repair that moves real tickets is now actually tested (#623)
 
 There is a repair in the system called the sweep. When one of the machines dies

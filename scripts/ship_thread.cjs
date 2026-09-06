@@ -53,14 +53,22 @@ const { execFileSync, spawnSync } = require('child_process');
 
 const PROTECTED = new Set(['main', 'master']);
 const CI_TIMEOUT_MIN = 20;
-// How long to wait for a merge to actually land after `gh pr merge` returns.
-// With no merge queue this is never spent: the first read already says MERGED.
-// Under a queue it is the ceiling on how long ship holds the terminal before
-// answering "queued, not yet merged" (task 86bbv35cq).
-const MERGE_TIMEOUT_MIN = 15;
+// How long to wait for a merge to actually land after `gh pr merge` returns —
+// and it is only ever SPENT on a pull request GitHub is demonstrably holding
+// (a merge queue entry or auto-merge). An unheld OPEN pull request is a merge
+// that was refused, and ship says so on the first read, in about a second.
+//
+// DERIVED, NOT PICKED (round 2 of task 86bbv35cq). It was 15, a number that
+// traced to nothing but prose. What a merge queue actually does is run `verify`
+// once more on the merged result — the same CI run ship already waits on — so
+// the ceiling is the one already measured for that, not a second guess beside
+// it. If CI gets slower, both move together.
+const MERGE_TIMEOUT_MIN = CI_TIMEOUT_MIN;
 const { pickPullRequestCommit, REPIN_SUBJECT, NUDGE_SUBJECT } = require('./builder/pullRequestCommit');
 const { waitForChecks } = require('./builder/waitForChecks');
-const { waitForMerge, mergeTimeLabel } = require('./builder/mergeCompletion');
+const {
+  waitForMerge, mergeTimeLabel, holdLabel, prObservationArgv, parsePrObservation,
+} = require('./builder/mergeCompletion');
 const {
   decideTrailWrite, bodyWithTicketLink, describeTrailResult, prUrl: prUrlFor,
 } = require('./builder/shipPrTrail');
@@ -133,6 +141,22 @@ function fetchTaskNameFromClickUp(id) {
 /** Block for ms without a busy loop — the CI poll is the only place this runs. */
 function sleepMs(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Run a command and parse its stdout as JSON, or null.
+ *
+ * NOT `quiet()`, for the reason `fetchTaskNameFromClickUp` above already
+ * documents: `quiet` concatenates stderr onto stdout, which is right when the
+ * output is for a person to read and fatal when it is about to be parsed. One
+ * `gh` deprecation notice on stderr and `JSON.parse` throws, which this path
+ * would read as "the pull request could not be read" — a cannot-tell
+ * manufactured out of a perfectly good answer.
+ */
+function readJson(cmd, argv, { cwd = root } = {}) {
+  const result = spawnSync(cmd, argv, { cwd, encoding: 'utf8' });
+  if (result.status !== 0) return null;
+  try { return JSON.parse(String(result.stdout || '')); } catch (_) { return null; }
 }
 
 const bucketOf = (check) => String((check && check.bucket) || '').toLowerCase();
@@ -603,16 +627,27 @@ run('gh', ['pr', 'merge', prNumber, '--squash'], { allowFail: true });
 // With no queue — today's state — the first read already says MERGED and this
 // returns before it ever sleeps, so nothing here costs an ordinary ship a
 // second.
+// AND "STILL OPEN" IS NOT "ENQUEUED" (round 2). The observation asks GitHub,
+// in the same read as the state, whether anything is actually holding this
+// pull request — a merge queue entry or auto-merge. If nothing is, the merge
+// was refused and this says so at once, which is the accurate one-second
+// answer ship gave before any of this. Only a pull request GitHub is really
+// holding is worth waiting on.
+//
+// `main`'s protection has `strict: true`, so a branch that falls behind
+// between the CI wait above and the merge call below is refused exactly this
+// way — and it is the commonest refusal there is, which is why announcing it
+// as a queue wait mattered.
+const repoSlug = (() => {
+  const seen = readJson('gh', ['repo', 'view', '--json', 'nameWithOwner']);
+  return (seen && seen.nameWithOwner) || '';
+})();
 let lastMergeReport = '';
 const mergeWait = waitForMerge({
   now: () => Date.now(),
   sleep: sleepMs,
   timeoutMs: MERGE_TIMEOUT_MIN * 60 * 1000,
-  readPr: () => {
-    const seen = quiet('gh', ['pr', 'view', prNumber, '--json', 'state,mergedAt']);
-    if (!seen.ok) return null;
-    try { return JSON.parse(seen.out); } catch (_) { return null; }
-  },
+  readPr: () => parsePrObservation(readJson('gh', prObservationArgv(repoSlug, prNumber))),
   onPoll: (state, elapsed) => {
     if (state === 'merged' || state === 'closed') return;
     const mins = Math.round(elapsed / 60000);
@@ -623,14 +658,29 @@ const mergeWait = waitForMerge({
   },
 });
 
-if (mergeWait.outcome === 'queued') {
-  // NOT a failure and NOT a success — the third answer. The merge is under
-  // way; nothing here may claim it, and nothing here may undo it.
+if (mergeWait.outcome === 'not-merged') {
+  // A REAL FAILURE, answered promptly and named truthfully. No queue is
+  // mentioned, because none is holding it — saying otherwise is what round 1
+  // did, and following that advice looped the same wait forever.
   fail(
-    `PR #${prNumber} is QUEUED to merge, not merged yet — it was still open after ` +
-    `${MERGE_TIMEOUT_MIN} minutes.\n\n` +
+    `The merge did not complete — PR #${prNumber} is still OPEN and ` +
+    `${holdLabel(mergeWait.hold)}.\n\n` +
+    'The merge command reported success, so GitHub refused it afterwards. The usual\n' +
+    'reason is that main moved again in the seconds between the checks passing and the\n' +
+    'merge, and this branch is protected against merging while behind.\n\n' +
+    'Nothing else has been changed. Run `npm run ship` again — it catches up on main\n' +
+    'first, so a second run normally goes straight through.'
+  );
+}
+if (mergeWait.outcome === 'queued') {
+  // NOT a failure and NOT a success — the third answer, and now only reachable
+  // when GitHub really is holding the pull request. The merge is under way;
+  // nothing here may claim it, and nothing here may undo it.
+  fail(
+    `PR #${prNumber} is QUEUED to merge, not merged yet — ${holdLabel(mergeWait.hold)}, ` +
+    `and it was still open after ${MERGE_TIMEOUT_MIN} minutes.\n\n` +
     'Nothing has gone wrong and nothing else has been changed. GitHub is still working\n' +
-    'through the merge queue. Run `npm run ship` again in a few minutes — it will see\n' +
+    'through the merge. Run `npm run ship` again in a few minutes — it will see\n' +
     'the merge and carry on with the tidy-up.'
   );
 }
@@ -638,7 +688,11 @@ if (mergeWait.outcome === 'unknown') {
   fail(
     `Could not read PR #${prNumber} from GitHub at all (${mergeWait.failedReads} attempt(s) came back blind),\n` +
     'so whether it merged is unknown — not merged, and not failed either.\n\n' +
-    'Nothing else has been changed. Check `gh auth status` and run `npm run ship` again.'
+    (repoSlug
+      ? 'Nothing else has been changed. Check `gh auth status` and run `npm run ship` again.'
+      : 'This folder\'s GitHub repository could not be identified either (`gh repo view` gave\n' +
+        'nothing), which is the likelier cause. Check `gh auth status` and run `npm run ship`\n' +
+        'again. Nothing else has been changed.')
   );
 }
 if (mergeWait.outcome === 'closed') {

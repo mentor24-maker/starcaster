@@ -884,6 +884,7 @@ const {
   IN_PASS_WAIT_MS,
   IN_PASS_POLL_MS,
   MAX_IN_PASS_WAITS,
+  mergeObserveBudget,
   mayWaitInPass,
   afterCatchUpDecision,
 } = require('./mergeOnComment.js');
@@ -963,6 +964,44 @@ test('the budget is a named constant, roughly 2x the observed median', () => {
   assert.ok(IN_PASS_POLL_MS > 0 && IN_PASS_POLL_MS < IN_PASS_WAIT_MS);
 });
 
+test('the merge observation draws from the SAME budget, and never a second one', () => {
+  // ROUND 2 of task 86bbv35cq. The merge-observation wait shipped taking a
+  // 15-minute default, blocking, uncapped per ticket, and charged to nothing.
+  // Against a 600s wake that is one PR swallowing the relay's own next firing
+  // — the precise mistake the comment on the next test records having already
+  // been made once, arriving on a new path.
+  //
+  // It is not a second budget. It is an in-pass wait: same slots, same
+  // ceiling, so the worst case below covers it by construction rather than
+  // being a sum of two numbers nobody maintains.
+  const fresh = mergeObserveBudget({ used: 0, cap: MAX_IN_PASS_WAITS });
+  assert.equal(fresh.charged, true);
+  assert.equal(fresh.timeoutMs, IN_PASS_WAIT_MS, 'one wait, the same ceiling as every other');
+
+  const last = mergeObserveBudget({ used: MAX_IN_PASS_WAITS - 1, cap: MAX_IN_PASS_WAITS });
+  assert.equal(last.charged, true);
+
+  // A SPENT BUDGET STILL LOOKS ONCE. timeoutMs 0 takes one read and no sleep,
+  // which is the whole of the queue-less path — so a pass that has done its
+  // waiting still observes every ordinary merge correctly, and merely does not
+  // linger on one GitHub is holding. Refusing to read at all would reinvent
+  // the false success this ticket started from.
+  const spent = mergeObserveBudget({ used: MAX_IN_PASS_WAITS, cap: MAX_IN_PASS_WAITS });
+  assert.equal(spent.charged, false, 'it does not charge a slot it has not got');
+  assert.equal(spent.timeoutMs, 0, 'and it does not sleep');
+
+  // No budget object at all (a caller that forgot to thread it through) is the
+  // spent case, never the unbounded one.
+  assert.equal(mergeObserveBudget({ used: Infinity, cap: 0 }).timeoutMs, 0);
+  assert.equal(mergeObserveBudget().timeoutMs, IN_PASS_WAIT_MS, 'defaults are the ordinary case');
+
+  // The ceiling can never exceed one in-pass wait, whatever it is handed.
+  for (const used of [0, 1, 2, 3, 99]) {
+    assert.ok(mergeObserveBudget({ used }).timeoutMs <= IN_PASS_WAIT_MS,
+      'no path may return a wait longer than one slot');
+  }
+});
+
 test('worst case is bounded — a pass cannot outlast its own interval', () => {
   // launchd runs one instance per Label and COALESCES the firings it misses
   // while a pass is still running, so a long pass can never stack. What it can
@@ -981,6 +1020,20 @@ test('worst case is bounded — a pass cannot outlast its own interval', () => {
     `a pass could hold open for ${Math.round(worstMs / 60_000)} minutes, which is not ` +
     `shorter than the ${Math.round(intervalMs / 60_000)}-minute relay interval — it would ` +
     `swallow its own next firing and delay approvals that arrive while it runs`);
+
+  // AND EVERY WAIT IS INSIDE THAT SUM (round 2 of task 86bbv35cq). Multiplying
+  // the two named constants is only a bound while nothing waits OUTSIDE them,
+  // and that is exactly how the merge observation got past this test the first
+  // time: it was a third wait the arithmetic never saw. So walk the budget
+  // down slot by slot, spending a merge observation at each step, and prove
+  // the total is still the same worst case rather than more than it.
+  let spent = 0;
+  for (let used = 0; used < MAX_IN_PASS_WAITS + 2; used += 1) {
+    spent += mergeObserveBudget({ used, cap: MAX_IN_PASS_WAITS }).timeoutMs;
+  }
+  assert.equal(spent, worstMs,
+    'merge observations must fit INSIDE the worst case, not be added to it');
+  assert.ok(spent < intervalMs, 'so a pass that spends every slot on merges still fits its wake');
 });
 
 test('the relay waits after BOTH catch-up paths, and merges the same way', () => {

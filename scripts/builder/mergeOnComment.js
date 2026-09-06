@@ -744,6 +744,45 @@ function mayWaitInPass(waitsUsed, cap = MAX_IN_PASS_WAITS) {
 }
 
 /**
+ * How long may THIS pass hold itself open watching a merge land?
+ *
+ * WHY THIS EXISTS (round 2 of task 86bbv35cq). The merge-observation wait was
+ * added taking a 15-minute default, blocking (`Atomics.wait` freezes the event
+ * loop), uncapped per ticket, and charged to nothing — so `inPassBudget` never
+ * saw it and the tested "a pass cannot outlast its own interval" invariant did
+ * not cover it. The relay's schedule is 600s. One enqueued pull request would
+ * have been 900s, several 30-45 minutes, swallowing the relay's own next
+ * firings and everything else that rides its ten-minute wake.
+ *
+ * That is exactly what the comment on the worst-case test already warned
+ * about: "the 15-minute bound this replaces... was picked when the relay ran
+ * hourly, and it survived the change to 10 minutes still permitting a pass
+ * 1.5x longer than the whole interval." It came straight back on a new path.
+ *
+ * So the merge observation is not a second budget. It IS an in-pass wait — the
+ * same slots, the same per-wait ceiling, the same accounting — because two
+ * budgets that must jointly fit under one interval is a sum nobody maintains.
+ * The worst case stays MAX_IN_PASS_WAITS x IN_PASS_WAIT_MS, which
+ * mergeOnComment.test.js already pins against the relay's real interval read
+ * out of install_bus_relay.sh.
+ *
+ * A SPENT BUDGET IS NOT A REFUSAL TO LOOK. It returns `timeoutMs: 0`, which
+ * still takes one read and no sleep — and one read is the whole of the
+ * queue-less path, where `gh pr merge` has already merged synchronously by the
+ * time it returns. So a pass that has spent its waits still observes every
+ * ordinary merge correctly; it just does not linger on one GitHub is holding.
+ *
+ * @param used  waits already spent this pass (inPassBudget.used)
+ * @param cap   how many the pass gets (inPassBudget.cap)
+ * @param waitMs per-wait ceiling
+ * @returns {{ timeoutMs: number, charged: boolean }}
+ */
+function mergeObserveBudget({ used = 0, cap = MAX_IN_PASS_WAITS, waitMs = IN_PASS_WAIT_MS } = {}) {
+  if (!mayWaitInPass(used, cap)) return { timeoutMs: 0, charged: false };
+  return { timeoutMs: waitMs, charged: true };
+}
+
+/**
  * Given a freshly re-read gate and how long we have been waiting, what next?
  *
  * Deliberately does NOT re-implement the gate. `merge`, `refuse` and
@@ -1559,6 +1598,7 @@ module.exports = {
   mergedElsewhereNotice,
   IN_PASS_POLL_MS,
   MAX_IN_PASS_WAITS,
+  mergeObserveBudget,
   mayWaitInPass,
   afterCatchUpDecision,
   MERGE_PHRASES,
