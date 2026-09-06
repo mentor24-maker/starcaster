@@ -97,6 +97,48 @@ it hides the hold from the switch where everyone looks for it. Dane's answer on
 5 September was to clear the latch and keep the hold, which is exactly that
 distinction.
 
+A third postscript, on 6 September, and this time the check Dane asked for could
+not see the problem — so the branch grew a second one. Dane answered "1" on the
+ticket that morning: merge it now, drop the hold. Catching the branch up before
+doing that pulled in two more days of finished work, and six modules had been
+lifted out of the merge step into files of their own — one that answers "did
+that pull request actually merge?", one that decides which branch may go next,
+its store on disk, one that answers "is this already live?", and the two halves
+of the repair pass that moves tickets between columns when a build dies. Every
+one of them landed inside the lane and outside the list of things the lane may
+not touch. Measured straight after the merge: the machine would have
+auto-merged a change to any of them.
+
+Nobody moved the boundary this time either, and this is the third time in three
+days that sentence has been written. The list of protected machinery is kept by
+hand, and a hand-kept list cannot name a file that did not exist when it was
+written. Refactoring behind a boundary is simply how a boundary expires. Dane's
+condition catches one direction of this — an automatically-mergeable file
+becoming reachable from the live server — and by design it says nothing about a
+file becoming part of the merge step, because the merge step does not run on
+the website.
+
+So there is now a matching check pointing the other way, and it asks two
+questions. Can this file run the command that merges a pull request? And does
+the merge step load it? A file that fails either test must be protected, or
+listed by name with a written reason — three are listed today, all of them
+concerned with naming a pull request rather than merging one. Both halves were
+broken on purpose before being believed: removing the protections put the right
+filenames back on screen, and a fresh throwaway file that runs the merge
+command was caught the moment it appeared. The guard also flagged itself on its
+first run, because its own examples contain real merge commands, and that is
+the correct answer for the correct reason — a file that decides what may merge
+automatically must not merge automatically.
+
+Twenty-two files are newly off-limits, counted rather than estimated: the
+number of automatically-mergeable files in the repository went from 797 to 775.
+They are the six above, the runner behind `npm run ship`, three more the merge
+step consults about conflicts, about retrying, and about whether a "merge"
+comment came from Dane or from a machine, the record of which machine may run
+which job — named by hand in the ratified doctrine, and until now protected
+only by the accident of sitting in a folder the lane does not reach — and each
+of their tests, because a test that decides what merging means governs merging
+just as much as the code does.
 ## 2026-09-05 — The auto-merge lane mistook its own notes for Dane objecting (#618)
 
 There is a lane that merges the safest pull requests — the ones that only

@@ -206,6 +206,51 @@ const GOVERNANCE_STEMS = [
   // what Dane's condition predicted and why the check runs on every PR.
   'clickupLedger',
   'clickupCaller',
+  // THE MERGE STEP, BROKEN INTO PIECES WHILE THIS BRANCH WAITED (2026-09-06,
+  // the fourth catch-up merge). Every one of these arrived on `main` between
+  // 2026-09-04 and 2026-09-06 as code lifted OUT of the merge step into its
+  // own module, and each one landed auto-mergeable: measured on this branch
+  // immediately after the catch-up, `laneEligibility` carried all six via
+  // lane B. Nothing had gone wrong — the list is by hand, and a file that did
+  // not exist when the list was written cannot be on it.
+  //
+  // That is the failure mode itself, not an oversight to tut at: the boundary
+  // expires every time somebody refactors behind it, exactly as the clickup
+  // entries above expired twice in one day. `mergeMachineryGovernance.test.js`
+  // is the guard that now fails the build instead of letting the next one
+  // through, and these are the files it was measured against.
+  'mergeCompletion', // "did this PR actually merge?" — every merging caller asks it
+  'mergeWindowLease', // who may be in the catch-up window, i.e. who merges next
+  'mergeWindowLeaseFile', // that lease's store; a fail-safe is only as good as its disk
+  'shipAlreadyLive', // ship's "is this already merged?" — the decision before a merge
+  'shipThread', // `npm run ship` IS a merge step
+  'ship_thread', // ...and this is the runner that performs it
+  'conflictWork', // what counts as a conflict, which is what stops a merge
+  'machineComment', // whether a "merge" comment is Dane's or a machine's own (#618)
+  'refusalClass', // whether a failed merge may be retried
+  // The guard that enforces this whole paragraph. It flagged ITSELF on its
+  // first run — its control fixtures contain real `gh pr merge` calls — and
+  // that is the right answer for the right reason: a file that decides what
+  // may auto-merge is the machinery that governs merging, so a machine must
+  // not auto-merge a change to it. Same rule that already covers
+  // `autoMergeLane` itself.
+  'mergeMachineryGovernance',
+  // The repair pass that moves tickets between statuses on its own. `repair`
+  // and `pipeline` are already stems for this reason; on 2026-09-05 the sweep
+  // was lifted out of `pipeline.mjs` into its own file precisely so it could
+  // be tested, and the stem did not follow it.
+  'pipelineSweep',
+  'strandedLocalWork', // decides whether a stranded ticket's work still exists
+  // WHICH MACHINE MAY RUN WHAT, and whether its jobs came back after a reboot.
+  // Doctrine criterion 4 names `nodeRoles` outright, alongside the merge step.
+  // `lib/nodeRoles.js` is refused today only because `lib/` is outside the
+  // lane — the same protection-by-accident this branch exists to remove — and
+  // `scripts/verify_node_roles.mjs` landed inside the lane on 2026-09-05. A
+  // machine that can auto-merge these can widen its own roles, or excuse its
+  // own dead schedules, and grade itself afterwards.
+  'nodeRoles',
+  'verify_node_roles',
+  'nodeRebootTest',
 ];
 
 /**
