@@ -120,6 +120,102 @@ nobody, which matters because that entry is the per-page undo for this exact
 operation. And the check that confirms your archive exists was loading every
 page in the project to do it — 138 page layouts pulled across to answer a
 yes-or-no question, right before the write that has run out of time before.
+## 2026-09-06 — A blog list said "13" and showed 9, with no way to see the rest (#629)
+
+On a client's tag page, the heading read *"Blog posts matching the tag 'junior
+tennis': 13"* and the page showed **nine** posts. There was no next-page link, no
+"load more", and nothing anywhere saying the list had been shortened. Four posts
+simply were not there. A visitor who counts the cards decides the site is broken;
+a visitor who does not never learns those four exist.
+
+The count was telling the truth. The list was not. The module worked out how many
+posts matched, printed that number, and then drew only as many cards as its
+"Posts per page" setting allowed — and threw the remainder away without a word.
+Turning that setting up would only have moved the problem further down the page.
+
+There was a second, quieter version of the same fault underneath it. The list only
+ever asked the server for the **first 100 posts**, then did all its sorting and
+filtering inside the visitor's browser. Any site with more than 100 published posts
+would find that a tag on an older post came up completely empty — and the message
+we added last week, *"No posts tagged 'junior tennis'"*, would have stated that
+confidently and been wrong. A confident wrong answer is worse than a vague one.
+
+Both are fixed. The list now keeps asking the server for the next hundred posts
+until it has them all, so no filter can miss an older one. And under the cards
+there is now a **"Show more posts"** button with a line reading **"Showing 9 of
+13"** beside it, so what the page claims and what a visitor can actually reach are
+the same thing. Click it and the rest appear; when everything is on screen, both
+the button and the line go away. Changing a filter starts the list over at the top.
+
+One more piece of honesty went in with it: if the list ever cannot read the whole
+archive, it says "of 250 **or more**" rather than a firm number, and an empty
+result says so instead of claiming nothing matched. The module should never make a
+confident statement about posts it never looked at.
+## 2026-09-05 — Every ticket the reconciler closed was told '[object Object]' did it (#619)
+
+When the automatic reconciler notices that a ticket's work has already been
+merged and shipped, it moves the ticket to `Live` and leaves a note on it
+explaining what happened and which machine did it. That note is the only
+explanation you get for a machine touching your ticket — so it matters that it
+reads like a sentence.
+
+It did not. Where the machine's name should have been, every one of those notes
+said `[object Object]`. The most recent was on 5 September. The cause is the
+kind of thing that is invisible until you see it once: the function that answers
+"which machine am I?" hands back a small bundle of facts about the machine — its
+name, where that name came from, which file it was read out of — and the
+reconciler was dropping the whole bundle into the sentence instead of pulling
+the name out of it. When you put a bundle of facts where a word belongs,
+JavaScript writes the words "object Object" in square brackets and carries on
+without complaining.
+
+The evidence half of the note — the pull request link and the merge time — was
+always right, so nothing was ever closed for the wrong reason. But a note that
+reads like broken software undermines the one instruction it carries ("Reopen
+the ticket and say so on it"), and that instruction is what a newer safeguard
+relies on. Fixed, along with tests that pin the shape rather than the wording:
+if that bundle of facts ever changes form again, the tests go red here rather
+than the sentence going wrong on Dane's board.
+## 2026-09-05 — The SQL hand-off check could jam itself shut, and then keep asking for a file you already had (#620)
+
+When an agent finishes a turn on a branch that adds a database script, a check
+makes it hand that script to you properly rather than mentioning it in passing.
+That check is allowed to interrupt at most three times in a session and then
+step aside, because a check that can jam a conversation shut is worse than the
+thing it is guarding against.
+
+It keeps that count in a small file, with a backup location for when the first
+one is unavailable. The two halves of that arrangement disagreed: the part that
+*reads* the count stopped at the first file it could open, while the part that
+*saves* it stopped at the first file it could write to. So if the main file
+stayed readable but stopped accepting writes, every save went to the backup and
+every read came back from the stale original. The count never moved, the
+step-aside never happened, and the check would have interrupted every turn from
+then on — the exact jam the limit exists to prevent, arriving through the limit.
+The same freeze lost the list of scripts already handed over, so a file you had
+already been given got asked for again on every turn afterwards.
+
+Reading and saving now happen in one place, and the read looks at every location
+rather than stopping at the first. Measured against the current live code in the
+same run: twelve turns with the file made read-only part-way through, the live
+code interrupts twelve times out of twelve; this branch interrupts three times
+and then stands aside, which is what it was always meant to do.
+
+Review then caught a second fault of the same shape, and it was the more
+dangerous direction. That backup location is shared by the whole machine, and
+the file in it was named after the session alone. One session here often has
+several folders open at once — that is the normal way of working — so all of
+them were sharing a single count. Once the first folder's own file froze and its
+count spilled into the shared backup, the newly-thorough read handed that
+spent-up count to every other folder, and the check went completely silent in
+them: not interrupting too much, but never interrupting at all, for the rest of
+the session. The same shared file also carried the list of scripts already
+handed over, so a script handed to you from one folder counted as handed over
+from all of them. The backup file is now named after the folder as well as the
+session. Measured against the current live code in one run: a healthy second
+folder gets none of its three interruptions today, and all three with this fix.
+Nothing to look at — this only runs between an agent's turns.
+
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
 Pull requests are merged one at a time here, and the plan is to switch on a
