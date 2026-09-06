@@ -36,12 +36,22 @@
  * The DECISIONS stay where they were and are not re-derived here: where a
  * stranded build belongs is `pipelinePause.strandedBuildDestination`, and the
  * hand-back note is `pipelinePause.sweptTicketNote`.
+ *
+ * `findLocalWork` IS INJECTED FOR THE SAME REASON THE CLICKUP CALLS ARE (task
+ * 86bbur9tk). Before asserting that nothing was built for a ticket, the sweep
+ * asks every machine it can reach whether a branch stamped with that ticket is
+ * sitting in a worktree — which needs ssh, a node list and an inventory, none
+ * of which belong in a `node --test` run. It is REQUIRED rather than
+ * defaulted: a sweep with no probe would answer "nothing anywhere" for every
+ * ticket, which is precisely the false all-clear this ticket exists to remove,
+ * and a default is how that comes back silently.
  */
 
 const {
   STRANDED_AFTER_MS, inFlight, strandedBuildDestination, sweptTicketNote, humanDuration,
 } = require('./pipelinePause.js');
 const { loopNoteOf, whyOf } = require('./pipelinePauseStore.js');
+const { preservedLine, describeUnlooked } = require('./strandedLocalWork.js');
 
 /**
  * Sweep the stranded tickets out of a queue reading.
@@ -69,16 +79,23 @@ const { loopNoteOf, whyOf } = require('./pipelinePauseStore.js');
  * @param {Function} o.buildStartFor     async (taskId) -> { action, why }
  * @param {Function} o.clearLoopNote     async (task) -> boolean
  * @param {Function} o.tryCall           async (method, path, body) -> { ok, json, ... }
+ * @param {Function} o.findLocalWork     (task) -> { verdict, work, unseen, unlooked }
  * @param {Function} [o.log]             where the per-ticket lines go
  * @param {number}   [o.nowMs]           the clock, injectable so a test is deterministic
  */
 async function sweepStranded({
   by, queue, apply = false, strandedAfterMs = STRANDED_AFTER_MS,
   command = 'npm run pipeline -- resume',
-  buildStartFor, clearLoopNote, tryCall,
+  buildStartFor, clearLoopNote, tryCall, findLocalWork,
   log = (msg) => console.error(msg),
   nowMs = Date.now(),
 }) {
+  // Loud, at the top, before anything is read. A missing probe is a wiring
+  // mistake, and the only thing worse than the sweep refusing to run is the
+  // sweep running blind and calling every ticket empty.
+  if (typeof findLocalWork !== 'function') {
+    throw new Error('sweepStranded needs findLocalWork — without it, it cannot tell an unbuilt ticket from a half-built one');
+  }
   // Three things the report needs, and only this loop can know two of them.
   // `swept` is what was unstuck. `left` is what was EXAMINED and could not be —
   // invisible to a summary that is only shown what was taken, which is how an
@@ -86,6 +103,14 @@ async function sweepStranded({
   // `checked` is whether the queue was looked at at all.
   const swept = [];
   const left = [];
+  // A FOURTH BUCKET, and it is neither a success nor a failure (task
+  // 86bbur9tk). `preserved` is a stranded ticket the sweep deliberately did
+  // NOT move: a half-built one whose worktree is still on a machine, or one
+  // it could not judge because a machine it expected an answer from went
+  // quiet. Folding these into `left` would report a correct decision as a
+  // failed write; folding them into `swept` would claim a move that never
+  // happened.
+  const preserved = [];
   let sweepChecked = false;
   let sweepWhy = '';
   let found = 0;
@@ -115,13 +140,51 @@ async function sweepStranded({
       // is a trail that contradicts the board, and the trail is the only thing
       // the next pass reads. Reviews skip it: they never move.
       const dest = reviewing ? { action: 'n/a' } : await buildStartFor(s.id);
-      const plan = reviewing ? null : strandedBuildDestination(dest.action);
+      // The destination WITHOUT the local-work reading yet — needed only to
+      // decide whether that reading is worth taking. A ticket heading for
+      // Rework already has a PR, so nothing is being asserted absent. The plan
+      // actually USED is built below, once the reading is in, so its sentence
+      // can name the seats that went unlooked-at.
+      const provisional = reviewing ? null : strandedBuildDestination(dest.action);
       // HOW STALE, on every line. The sweep can be run at any moment rather
       // than only out of a pause, so its reader has to be able to tell a ticket
       // dead since midnight from one a hand-driven session claimed 91 minutes
       // ago and is still working on. The threshold cannot make that call for
       // them; the age can.
       const age = s.ageMs != null ? `, untouched for ${humanDuration(s.ageMs)}` : '';
+
+      // BEFORE SAYING "NOTHING WAS BUILT", LOOK (task 86bbur9tk).
+      //
+      // Only on the Queued path: an open PR already proves work exists and
+      // sends the ticket to Rework, and a review is never moved at all. What
+      // is being second-guessed is the one answer that asserts an ABSENCE —
+      // and it asserts it from a pull-request lookup, which cannot see a
+      // worktree with seven uncommitted files in it. That is how 86bbuhph0 was
+      // reported as unbuilt on 2026-09-03 while two thirds of it sat on the
+      // MacBook.
+      //
+      //   work         leave it in "Building" and say where the work is.
+      //   cannot-tell  a machine that should have answered did not — leave it
+      //                alone and say which, with the command to settle it.
+      //   none         every machine that could be asked answered, and none
+      //                holds anything. The sweep's real job, unchanged.
+      const local = reviewing || provisional.status !== 'Queued'
+        ? { verdict: 'none', work: [], unseen: [], unlooked: [] }
+        : await findLocalWork((queue.tasks || []).find((t) => String(t.id) === s.id) || { id: s.id });
+      if (local.verdict !== 'none') {
+        log(preservedLine({ id: s.id, name: s.name, verdict: local.verdict, work: local.work, unseen: local.unseen, unlooked: local.unlooked, age }));
+        preserved.push({ id: s.id, kind: s.kind, verdict: local.verdict });
+        continue;
+      }
+
+      // GOING AHEAD, AND SAYING WHAT IT COULD NOT SEE. A machine with no ssh
+      // route from here is a permanent blind spot rather than a failed
+      // reading, so it does not stop the move — but it goes into the sentence,
+      // the ticket's own note and the bus, because the defect this ticket
+      // names is a sweep asserting an absence it never checked.
+      const plan = reviewing ? null : strandedBuildDestination(dest.action, {
+        unlookedSeats: describeUnlooked(local.unlooked),
+      });
 
       // A DRY RUN STOPS HERE, having written nothing. It still does the full
       // `build-start` lookup above, because "where would this go" is the whole
@@ -176,7 +239,7 @@ async function sweepStranded({
     sweepWhy = 'the queue could not be read';
     log('  the queue could not be read, so nothing was swept — run `npm run pipeline -- status` after this.');
   }
-  return { swept, found, sweepState: { checked: sweepChecked, left: left.length, why: sweepWhy } };
+  return { swept, found, sweepState: { checked: sweepChecked, left: left.length, preserved, why: sweepWhy } };
 }
 
 module.exports = { sweepStranded };

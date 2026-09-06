@@ -105,6 +105,11 @@ function run(tasks, opts = {}) {
       return true;
     },
     tryCall: fake.tryCall,
+    // The default for these tests: every machine answered, none holds work.
+    // Stated rather than defaulted inside the sweep — a sweep that assumed
+    // this would call every ticket empty, which is the defect task 86bbur9tk
+    // exists to remove. Tests that care override it through `opts.sweep`.
+    findLocalWork: async () => ({ verdict: 'none', work: [], unseen: [], unlooked: [] }),
     log: (m) => said.push(m),
     ...opts.sweep,
   }).then((out) => ({ ...out, said, cleared, fake }));
@@ -123,7 +128,7 @@ test('a stranded build is moved, and the sweep says where it went', async () => 
 
   assert.equal(found, 1, 'it found the stranded ticket');
   assert.deepEqual(swept, [{ id: 'b1', kind: 'a build', destination: 'Rework' }]);
-  assert.deepEqual(sweepState, { checked: true, left: 0, why: '' });
+  assert.deepEqual(sweepState, { checked: true, left: 0, preserved: [], why: '' });
 
   // The BOARD moved, not merely the report.
   assert.equal(fake.byId.get('b1').status.status, 'rework');
@@ -180,7 +185,7 @@ test('a ticket that is merely in flight is left alone', async () => {
 
   assert.equal(found, 0);
   assert.deepEqual(swept, []);
-  assert.deepEqual(sweepState, { checked: true, left: 0, why: '' }, 'looked, found nothing — an all-clear it earned');
+  assert.deepEqual(sweepState, { checked: true, left: 0, preserved: [], why: '' }, 'looked, found nothing — an all-clear it earned');
   assert.deepEqual(fake.calls, [], 'and it wrote nothing at all');
 });
 
@@ -227,6 +232,7 @@ test('the dry run asks the SAME question the apply does, not a cheaper guess', a
     queue: { readable: true, tasks },
     nowMs: NOW,
     buildStartFor: async (id) => { asked.push(id); return { action: 'continue' }; },
+    findLocalWork: async () => ({ verdict: 'none', work: [], unseen: [], unlooked: [] }),
     clearLoopNote: async () => true,
     tryCall: async () => { throw new Error('a dry run must not call ClickUp'); },
     log: () => {},
@@ -306,6 +312,7 @@ test('a queue that could not be read is "could not tell", never an all-clear', a
       queue,
       apply: true,
       buildStartFor: async () => { throw new Error('nothing may be looked up'); },
+      findLocalWork: async () => { throw new Error('nothing may be probed either'); },
       clearLoopNote: async () => { throw new Error('nothing may be cleared'); },
       tryCall: async () => { throw new Error('nothing may be written'); },
       log: (m) => said.push(m),
@@ -372,7 +379,7 @@ test('running the sweep twice: the second pass finds nothing left to do', async 
   const second = await run(tasks, { fake, sweep: { apply: true } });
   assert.equal(second.found, 0, 'nothing is stranded any more');
   assert.deepEqual(second.swept, []);
-  assert.deepEqual(second.sweepState, { checked: true, left: 0, why: '' },
+  assert.deepEqual(second.sweepState, { checked: true, left: 0, preserved: [], why: '' },
     'a clean report that was EARNED by looking, which is the only kind worth printing');
 
   // Specifically: the repair stuck, in all three shapes.
@@ -392,4 +399,140 @@ test('the threshold is a parameter, so a caller can widen or narrow what counts'
   assert.equal((await run(tasks, { sweep: { apply: true } })).found, 0, 'not stale by the default');
   assert.equal((await run(tasks, { sweep: { apply: true, strandedAfterMs: 10 * MIN } })).found, 1,
     'stale once the caller says 10 minutes');
+});
+
+// ---------------------------------------------------------------------------
+// LOOKING BEFORE ASSERTING AN ABSENCE (task 86bbur9tk).
+//
+// The sweep's "nothing has been built for it" is true of a ticket nobody ever
+// started AND of one built two thirds of the way and never pushed. These
+// drive the real function; round 1 covered the same ground with regexes over
+// pipeline.mjs's text, which is what let the whole remote half ship broken.
+
+const localWork = require('./strandedLocalWork.js');
+
+/** A stranded build with no PR — the `fresh` path, the one that asserts an absence. */
+function strandedBuild(id = '86bbAAA') {
+  return [building(id)];
+}
+
+test('a half-built ticket is NOT returned to the claim line, and the sweep says where the work is', async () => {
+  const tasks = strandedBuild();
+  const out = await run(tasks, {
+    sweep: {
+      apply: true,
+      findLocalWork: async () => ({
+        verdict: 'work',
+        work: [{ machine: 'macbook-pro', branch: 'related-articles-module', worktree: '/w/related-articles-module', dirty: 7, ahead: 0 }],
+        unseen: [], unlooked: [],
+      }),
+    },
+  });
+  assert.deepEqual(out.swept, [], 'nothing was moved');
+  assert.deepEqual(out.sweepState.preserved, [{ id: '86bbAAA', kind: 'a build', verdict: 'work' }]);
+  assert.equal(out.sweepState.left, 0, 'a deliberate decision is not a failed write');
+  assert.equal(out.fake.calls.length, 0, 'no note, no move — the ticket was not touched at all');
+  const line = out.said.join('\n');
+  assert.match(line, /macbook-pro/);
+  assert.match(line, /related-articles-module/);
+  assert.match(line, /7 uncommitted files/);
+});
+
+test('a ticket the sweep could not judge is left alone, with the command to settle it', async () => {
+  const out = await run(strandedBuild(), {
+    sweep: {
+      apply: true,
+      findLocalWork: async () => ({
+        verdict: 'cannot-tell', work: [],
+        unseen: [{ machine: 'mac-mini', why: 'ssh "mac-mini" did not answer' }],
+        unlooked: [],
+      }),
+    },
+  });
+  assert.deepEqual(out.swept, []);
+  assert.equal(out.fake.calls.length, 0);
+  assert.equal(out.sweepState.preserved[0].verdict, 'cannot-tell');
+  assert.match(out.said.join('\n'), /CANNOT TELL/);
+  assert.match(out.said.join('\n'), /npm run clickup -- status/, 'a finding nobody can act on gets skimmed');
+});
+
+test('THE SWEEP\'S REAL JOB SURVIVES — nothing anywhere still goes back to Queued', async () => {
+  // The mirror-image defect, and this repo has shipped it. Round 1 shipped it
+  // again through the node list: every machine was ssh'd including one with no
+  // route, so from the Mini every ticket read cannot-tell forever.
+  const out = await run(strandedBuild(), { sweep: { apply: true } });
+  assert.deepEqual(out.swept, [{ id: '86bbAAA', kind: 'a build', destination: 'Queued' }]);
+  assert.deepEqual(out.sweepState.preserved, []);
+});
+
+test('a seat with no route does not freeze the sweep, and is named in the note the ticket receives', async () => {
+  const out = await run(strandedBuild(), {
+    sweep: {
+      apply: true,
+      findLocalWork: async () => ({
+        verdict: 'none', work: [], unseen: [],
+        unlooked: [{ machine: 'macbook-pro', why: 'no ssh route to it is declared in docs/ecosystem/inventory.yaml' }],
+      }),
+    },
+  });
+  assert.deepEqual(out.swept, [{ id: '86bbAAA', kind: 'a build', destination: 'Queued' }],
+    'a permanent blind spot must not stop the sweep working on the seat it CAN see');
+  const note = out.fake.calls.find((w) => w.path.endsWith('/comment'));
+  assert.match(note.body.comment_text, /macbook-pro/,
+    'the next builder reads the caveat where they read the instruction');
+  assert.doesNotMatch(note.body.comment_text, /because nothing has been built for it that a new branch would duplicate/,
+    'the flat confident sentence is the defect this ticket exists to remove');
+});
+
+test('the probe is asked only where an ABSENCE is being asserted — never for a Rework or a review', async () => {
+  const asked = [];
+  const probe = async (task) => { asked.push(String(task.id)); return { verdict: 'none', work: [], unseen: [], unlooked: [] }; };
+
+  await run([building('86bbPR')],
+    { actions: { '86bbPR': 'continue' }, sweep: { apply: true, findLocalWork: probe } });
+  assert.deepEqual(asked, [], 'an open PR already proves work exists');
+
+  await run([reviewing('86bbRV')], { sweep: { apply: true, findLocalWork: probe } });
+  assert.deepEqual(asked, [], 'a stranded review is never moved, so nothing is asserted absent');
+
+  await run(strandedBuild('86bbQD'), { sweep: { apply: true, findLocalWork: probe } });
+  assert.deepEqual(asked, ['86bbQD'], '…but the Queued path is exactly the one that asserts an absence');
+});
+
+test('a dry run takes the reading too, and previews the ticket it would NOT move', async () => {
+  const out = await run(strandedBuild(), {
+    sweep: {
+      findLocalWork: async () => ({
+        verdict: 'work',
+        work: [{ machine: 'mac-mini', branch: 'b', worktree: '/w/b', dirty: 2, ahead: 0 }],
+        unseen: [], unlooked: [],
+      }),
+    },
+  });
+  assert.deepEqual(out.swept, [], 'the preview must not claim it would move a ticket it would preserve');
+  assert.equal(out.sweepState.preserved.length, 1);
+  assert.equal(out.fake.calls.length, 0);
+});
+
+test('a sweep with no probe REFUSES — it never runs blind', async () => {
+  // A default here would answer "nothing anywhere" for every ticket, which is
+  // the exact false all-clear this ticket removes. Loud beats silent.
+  await assert.rejects(
+    () => sweepStranded({
+      by: 'a test', queue: { readable: true, tasks: [] },
+      buildStartFor: async () => ({ action: 'fresh' }), clearLoopNote: async () => true, tryCall: async () => ({ ok: true }),
+    }),
+    /needs findLocalWork/,
+  );
+});
+
+test('the real describeUnlooked wording reaches the ticket, not a second copy of it', async () => {
+  // One formatter for the blind-spot clause: the terminal line, the ticket
+  // note and the bus must not describe the same seat three ways.
+  const unlooked = [{ machine: 'macbook-pro', why: 'no ssh route to it is declared' }];
+  const out = await run(strandedBuild(), {
+    sweep: { apply: true, findLocalWork: async () => ({ verdict: 'none', work: [], unseen: [], unlooked }) },
+  });
+  const note = out.fake.calls.find((w) => w.path.endsWith('/comment'));
+  assert.match(note.body.comment_text, new RegExp(localWork.describeUnlooked(unlooked).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });

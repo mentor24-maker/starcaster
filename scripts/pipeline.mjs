@@ -37,11 +37,17 @@
 
 import { setTimeout as sleep } from 'node:timers/promises';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import pipelinePause from './builder/pipelinePause.js';
 import buildStart from './builder/buildStart.js';
 import pipelineSweep from './builder/pipelineSweep.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import nodeRoles from '../lib/nodeRoles.js';
+import taskRepo from './builder/taskRepo.js';
+import remoteProbe from './builder/remoteProbe.js';
+import strandedLocalWork from './builder/strandedLocalWork.js';
 // The one door to ClickUp, and the budget it keeps (task 86bbugcpa).
 import clickupLib from './lib/clickup.cjs';
 
@@ -56,10 +62,16 @@ const {
 } = pipelinePause;
 const { resolveBuildStart, prLookupArgs } = buildStart;
 const { sweepStranded: runSweep } = pipelineSweep;
+const { findWorkInProgress, sshRoutedMachines } = strandedLocalWork;
 // The switch is READ in exactly one place, shared with bus-relay, so the two
 // can never hold different ideas of where the flag is or what counts as
 // unreadable (pipelinePauseStore.js says why that matters).
 const { readSwitch: storeReadSwitch, fetchQueue: storeFetchQueue, loopNoteOf, whyOf } = pipelinePauseStore;
+
+// This file's own checkout, derived rather than written down — the inventory
+// it reads below travels with the repo, and a literal path is an assumption
+// that fails on every machine but the one it was typed on (NODES P1).
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 /** Constant in every real run; overridable only so tests can point at a
@@ -323,7 +335,85 @@ const fmt = pipelinePause.humanTime;
  * pass can pick it up rather than finding it a minute later.
  */
 function sweepStranded(opts) {
-  return runSweep({ buildStartFor, clearLoopNote, tryCall, ...opts });
+  // ONE ssh executor for the whole sweep, not one per ticket. Reachability is
+  // established at most once per machine and reused (remoteProbe rule 1) —
+  // otherwise a sweep over six stranded tickets pays the same sleeping
+  // machine's connect timeout six times. Built here, at the top of one sweep,
+  // which is exactly the lifetime that cache should have.
+  const probe = workProbe();
+  return runSweep({
+    buildStartFor, clearLoopNote, tryCall,
+    findLocalWork: (task) => workInProgressFor(task, probe),
+    ...opts,
+  });
+}
+
+/**
+ * Run a read-only shell one-liner here, or on another machine over SSH.
+ *
+ * The same shape `check_ecosystem_drift.cjs` uses, and for the same reason: a
+ * probe that hangs on a sleeping laptop is a probe nobody waits for, and a
+ * connection that fails is a state rather than a verdict. `remoteProbe` owns
+ * the ssh flags, the login-shell wrapping and the once-per-machine
+ * reachability cache — this is only the process call underneath it.
+ */
+function runLocal(cmd, args, timeoutMs = 8000) {
+  try {
+    return { ok: true, out: execFileSync(cmd, args, { timeout: timeoutMs, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
+  } catch (err) {
+    return {
+      ok: false,
+      missing: err.code === 'ENOENT',
+      timedOut: remoteProbe.isTimeout(err),
+      code: typeof err.status === 'number' ? err.status : null,
+    };
+  }
+}
+
+/** The executor plus the answer to "which machines can be asked at all". */
+function workProbe() {
+  const here = thisNodeName();
+  const exec = remoteProbe.createExecutor({ run: runLocal, hereId: here });
+  // WHICH MACHINES HAVE AN SSH ROUTE, read once per sweep from the same field
+  // of the same file `check_ecosystem_drift.cjs` reads. Without it the sweep
+  // ssh'd a machine with no route — 255, every ticket, every run — and
+  // reported the whole queue as unjudgeable from the one seat it runs on.
+  let routes = { known: false, machines: [] };
+  try {
+    routes = sshRoutedMachines(readFileSync(path.join(REPO_ROOT, 'docs', 'ecosystem', 'inventory.yaml'), 'utf8'));
+  } catch {
+    // Unreadable inventory -> every machine is tried, and an ssh failure
+    // becomes an honest cannot-tell. Fail towards not moving things.
+  }
+  return { here, shell: exec.shell, routedMachines: routes.machines, routesKnown: routes.known };
+}
+
+/**
+ * Is a build in flight for this stranded ticket on somebody's disk?
+ *
+ * The repo comes from the ticket's own `repo:` tag through `taskRepo`, the
+ * same resolver the build loop uses, so the sweep looks in the checkout the
+ * builder would actually have used.
+ */
+function workInProgressFor(task, probe) {
+  const resolved = taskRepo.resolveTaskRepo(task?.tags);
+  if (resolved.action !== 'build' || !resolved.repo) {
+    // An unresolvable repo is not "no work": we do not know where to look.
+    return { verdict: 'cannot-tell', work: [], unlooked: [], unseen: [{ machine: 'this machine', why: `the task's repo could not be resolved (${resolved.reason})` }] };
+  }
+  const home = taskRepo.repoHome(resolved.repo);
+  if (!home) {
+    return { verdict: 'cannot-tell', work: [], unlooked: [], unseen: [{ machine: 'this machine', why: `no checkout path is known for repo:${resolved.repo}` }] };
+  }
+  return findWorkInProgress({
+    taskId: task.id,
+    repoHome: home,
+    nodes: nodeRoles.KNOWN_NODES,
+    hereId: probe.here,
+    shell: probe.shell,
+    routedMachines: probe.routedMachines,
+    routesKnown: probe.routesKnown,
+  });
 }
 
 /**

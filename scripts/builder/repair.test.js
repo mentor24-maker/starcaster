@@ -234,3 +234,42 @@ test('reconcile exits the codes this table says it does', () => {
   assert.match(src, /exit: 2,[\s\S]{0,400}?COULD NOT TELL/,
     `an unaskable switch exits 2, which this table reads as "${repair.readStep(drift, 2)}"`);
 });
+
+// ── which line of the sweep's output reaches the report ──────────────────
+
+test('a preserved-only sweep puts its FINDING on the report, not the pipeline banner', () => {
+  // The exact shape that was silenced (round-1 review of task 86bbur9tk):
+  // the sweep moved nothing, deliberately preserved one ticket, and the old
+  // keyword grep ("stranded ticket") matched none of it — so the report
+  // headlined "The pipeline is RUNNING" and the finding never reached the bus.
+  const pause = require('./pipelinePause.js');
+  const summary = pause.sweptSummary([], {
+    checked: true, left: 0, applied: true,
+    preserved: [{ id: '86bbAAA', kind: 'a build', verdict: 'work' }],
+  });
+  const out = ['The pipeline is RUNNING — resumed by Dane at Sep 1, 2026, 6:56 PM.', summary];
+  assert.equal(repair.findingLine(out, 'stranded'), summary);
+  assert.match(repair.findingLine(out, 'stranded'), /86bbAAA/);
+});
+
+test('the sweep\'s own threshold note is preamble too, not a finding', () => {
+  const out = [
+    'The pipeline is RUNNING — resumed by Dane at Sep 1, 2026, 6:56 PM.',
+    '(counting a ticket stranded after under a minute, not the usual 90 minutes)',
+    '2 stranded tickets WOULD be unstuck: 86bbAAA (would return to Queued).',
+  ];
+  assert.match(repair.findingLine(out, 'stranded'), /WOULD be unstuck/);
+});
+
+test('a sweep that found nothing still reports its all-clear, not the banner', () => {
+  const out = ['The pipeline is RUNNING — resumed by Dane.', 'No stranded tickets needed unsticking.'];
+  assert.equal(repair.findingLine(out, 'stranded'), 'No stranded tickets needed unsticking.');
+});
+
+test('every other step keeps the first line, and an empty step says so', () => {
+  assert.equal(repair.findingLine(['first', 'second'], 'drift'), 'first');
+  assert.equal(repair.findingLine([], 'stranded'), '(the step printed nothing)');
+  assert.equal(repair.findingLine(['The pipeline is RUNNING — resumed by Dane.'], 'stranded'),
+    'The pipeline is RUNNING — resumed by Dane.',
+    'a sweep whose ONLY line is the banner has nothing better to show');
+});
