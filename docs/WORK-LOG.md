@@ -1,3 +1,39 @@
+## 2026-09-06 — Scaffolding meant for the page builder was showing up on a client's blog (#627)
+
+When you drop a module onto a page in the Builder and have not filled it in
+yet, it does not sit there as an empty rectangle. It shows you something —
+either a couple of made-up sample entries so you can see the shape of the
+thing, or a short note saying "Add cards in the editor". That is helpful while
+you are designing. It is scaffolding.
+
+The problem is that the scaffolding was also being shown to visitors. Dane
+photographed a post on the Delray tennis blog on 3 September that said
+**"Tags: Example Tag"** underneath it, printed exactly the way real tags are
+printed. That post has no tags; those two words were the sample content, and a
+reader had no way to know that. The other half of what he photographed that
+day — "No tags found. Add tags in the Messaging section." — was fixed a couple
+of days ago, but this half had been sitting in the queue behind it.
+
+So this went and looked at every module for the same mistake, and found eight
+of them. Besides the tags, three modules that have not been built yet were
+showing visitors a grey dashed box with the module's name in it ("Author Bio",
+"Table of Contents"), and four more were telling readers to go and add slides,
+headlines, programs or cards "in the editor" — an editor a visitor cannot
+reach and does not know exists.
+
+All eight now show nothing at all on a published page when they have nothing
+real to show. Nothing changed in the Builder itself: every sample and every
+note is still there while you are designing a page. Sixteen new tests hold each
+of those two halves in place, and each one was checked by putting the bug back
+and watching the test go red.
+
+Two blind spots turned up along the way and are written on the ticket. The
+automatic check that is supposed to catch this kind of text only recognises
+certain phrasings, and "in the editor" is not one of them — which is why all
+four of those slipped through. And the browser-based rendering check cannot
+look at published pages at all, only at the Builder canvas, so it could never
+have seen any of this.
+
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
 Pull requests are merged one at a time here, and the plan is to switch on a
