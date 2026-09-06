@@ -2372,7 +2372,7 @@ function BuilderModulePreview({
     return <BlogTagCloudPreview settings={module.settings} projectId={projectId} liveSite={liveSite} />;
   }
   if (module.type === "blog-post-tags") {
-    return <BlogPostTagsPreview settings={module.settings} />;
+    return <BlogPostTagsPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-post") {
     return <BlogPostViewPreview settings={module.settings} />;
@@ -2411,7 +2411,7 @@ function BuilderModulePreview({
     module.type === "blog-author-bio" ||
     module.type === "blog-toc"
   ) {
-    return <BlogModulePlaceholder type={module.type} />;
+    return <BlogModulePlaceholder type={module.type} liveSite={liveSite} />;
   }
 
   if (module.type === "admin-team-users") {
@@ -7721,14 +7721,40 @@ function BlogTagCloudPreview({
   );
 }
 
-function BlogPostTagsPreview({ settings }: { settings: Record<string, string> }) {
+/*
+ * THE LIVE TENANT SITE'S POST-TAGS ROW, not only a canvas preview — the same
+ * route as the Tag Cloud above: routes/publicSitePages.js -> site.html ->
+ * BuilderPublicSitePage -> BuilderTemplatePreview -> here. There is no
+ * server-side renderer for this module type, so this is the whole of what a
+ * visitor sees.
+ *
+ * PLACEHOLDERS ARE A BUILDER AFFORDANCE, NOT CONTENT (same rule as
+ * BlogTagCloudPreview, PR #564). This module reads only its own `tags`
+ * setting — it does NOT read a current post — so an empty setting hit the
+ * `["Example", "Tag"]` fallback on every page type, and a visitor to the
+ * Delray tag index read two literal sample pills as real content
+ * (operator report, 2026-09-03).
+ *
+ * On a live site an empty list renders NOTHING. Not an empty pill row, and
+ * not a lone "Tags:" prefix over empty space — a heading with nothing under
+ * it is the same defect wearing a smaller hat (CLAUDE.md landmine 16).
+ */
+function BlogPostTagsPreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  liveSite?: boolean;
+}) {
   const rawTags = settings.tags || "";
-  const tags = rawTags
-    ? rawTags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean)
-    : ["Example", "Tag"];
+  const configured = rawTags
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const tags = configured.length ? configured : liveSite ? [] : ["Example", "Tag"];
+
+  if (liveSite && tags.length === 0) return null;
+
   const layout = settings.layout || "pills";
   const color = settings.color || "#0f4f8f";
   const bgColor = settings.bgColor || "#eff6ff";
@@ -9050,12 +9076,22 @@ function SiteSearchResultsPreview({
   );
 }
 
-function BlogModulePlaceholder({ type }: { type: string }) {
+/*
+ * These three module types have no renderer at all — the dashed box naming the
+ * module is the whole of what they draw. That is a Builder affordance: it
+ * keeps the module findable on the canvas while somebody designs the page.
+ * A visitor to a published page has nothing to do with "Post Card" in a grey
+ * dashed rectangle, so on a live site it renders nothing (same rule as the
+ * Tag Cloud and the post-tags row above). No public page carries one today;
+ * this closes the hole before one does.
+ */
+function BlogModulePlaceholder({ type, liveSite = false }: { type: string; liveSite?: boolean }) {
   const labels: Record<string, string> = {
     "blog-post-card": "Post Card",
     "blog-author-bio": "Author Bio",
     "blog-toc": "Table of Contents"
   };
+  if (liveSite) return null;
   return (
     <div
       style={{
