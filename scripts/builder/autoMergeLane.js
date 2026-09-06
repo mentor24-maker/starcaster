@@ -365,18 +365,30 @@ function isLaneNotice(text) {
  *
  *   2. It contains another comment from this ticket whole, and is longer than
  *      it. A loop writes fresh prose; it does not reproduce a card that is
- *      already on the ticket. Measured 2026-09-06 over 1,278 ordered pairs
- *      drawn from 189 real machine cards: ZERO machine card contains another
- *      comment whole, so this costs the lane nothing.
+ *      already on the ticket. Compared on WORDS ALONE, not on the raw text —
+ *      see `normalizeForQuoting`, and read that note before trusting this one:
+ *      the whole sign turned on a formatting difference until 2026-09-06.
+ *      Measured with the current normaliser over 6,020 ordered pairs of real
+ *      machine cards on one ticket and 87,130 across tickets: ZERO machine
+ *      card contains another's words whole, so this costs the lane nothing.
  *
- * WHAT IT DOES NOT COVER, said plainly rather than left to be found again.
- * Neither sign fires if he pastes a card from a DIFFERENT ticket that is not a
- * lane notice — the text is stamped, the lane has never seen it, and nothing
- * in the body says a person put it there. Closing that needs the stamp itself
- * to be bound to the body it was written for (a digest in the stamp line),
- * which changes what every card a loop posts looks like and is this ticket's
- * stated non-goal. What is left is the case he actually performs: quoting the
- * card he is replying to, which is on the ticket he is replying on.
+ * WHAT IT DOES NOT COVER, said plainly rather than left to be found again —
+ * and note that the first version of this paragraph got the answer wrong. It
+ * named a foreign-ticket card as the ONLY residue, while the much likelier
+ * case, a card off this very ticket pasted with its formatting dropped, was
+ * sailing through sign 2 on the asterisks alone.
+ *
+ * What is left after that is genuinely the foreign card: he pastes a stamped
+ * card from a DIFFERENT ticket that is not a lane notice. The lane has never
+ * seen it, so containment has nothing to match against, and nothing in the
+ * body says a person put it there. Closing that needs the stamp itself bound
+ * to the body it was written for (a digest in the stamp line), which changes
+ * what every card a loop posts looks like and is this ticket's stated
+ * non-goal.
+ *
+ * THAT LIMIT IS A GUESS ABOUT WHAT NOBODY DOES, which is what the last two
+ * rounds of this ticket were as well. It is pinned by a test that FAILS if a
+ * later change closes it, so the claim cannot quietly outlive the code.
  */
 function quotesMachineText(c, comments) {
   const text = String((c && c.comment_text) || '');
@@ -393,12 +405,62 @@ function quotesMachineText(c, comments) {
   });
 }
 
-/** Long enough that containment means a paste rather than a coincidence. */
+/**
+ * Long enough that containment means a paste rather than a coincidence.
+ * Counted on the normalised form below, which is shorter than the raw text.
+ */
 const QUOTED_RUN_MIN = 60;
 
-/** Whitespace is what a paste is least likely to preserve exactly. */
+/**
+ * Reduce a comment to its WORDS, so the containment test survives the paste.
+ *
+ * WHY NOT WHITESPACE ALONE (2026-09-06, task 86bbv8nvy round 3). The first cut
+ * collapsed whitespace only, on the stated premise that "whitespace is what a
+ * paste is least likely to preserve exactly". Markdown is. Dane described his
+ * own method in his own words two days earlier, on 86bbuzyra:
+ *
+ *     "I copied that and pasted special as Paste and Match Style."
+ *
+ * Paste-and-match-style drops the formatting. The stored card reads
+ * `**REVIEW: PASSED** — every gate re-run`; what lands in his comment reads
+ * `REVIEW: PASSED — every gate re-run`. Containment failed on the asterisks
+ * alone, so his comment stayed discounted and his objection with it — and the
+ * lane merged the PR he said hold on, giving "announced 90 minute(s) ago with
+ * no objection" as its reason. This ticket's own failure, arriving through a
+ * third door.
+ *
+ * SO IT COMPARES THE WORDS AND NOTHING ELSE. Every mark a renderer eats —
+ * emphasis, code ticks, fences and their language tag, bullets, heading
+ * hashes, quote bars, and all punctuation — is gone from BOTH sides before the
+ * test. That is deliberately more than the emphasis marks alone: it makes the
+ * question "what exactly does his editor preserve?" stop mattering, and that
+ * question is unanswerable from here. The marks are DELETED rather than
+ * spaced, so `` `continue` ``+`s` reads as "continues", the way it renders.
+ *
+ * MEASURED BOTH WAYS, 2026-09-06, over 679 stamped machine cards on 134 real
+ * Loop Queue tickets — because widening containment can only ADD matches, and
+ * the earlier count was taken with the narrow form:
+ *
+ *   - It closes the bug: with a rendered copy of each of those 679 cards
+ *     pasted under an objection, all 679 are now read as his. The narrow form
+ *     caught 216. (456 of the 679, 67%, carry emphasis or code marks at all.)
+ *   - It costs nothing: ZERO false positives over 6,020 ordered pairs of real
+ *     machine cards on the same ticket, and zero over 87,130 cross-ticket
+ *     pairs. No machine card contains another one's words whole.
+ *
+ * And the direction is the forgiving one either way: a false positive here
+ * reads a machine card as his and CANCELS, which costs a re-announcement. A
+ * false negative merges over the top of him.
+ */
 function normalizeForQuoting(text) {
-  return String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+  return String(text == null ? '' : text)
+    .toLowerCase()
+    // A fence takes its language tag with it — ```js renders as nothing, but
+    // left alone it is the word "js" on the stored side and absent on his.
+    .replace(/```[a-z0-9+#.-]*/g, ' ')
+    .replace(/[*_~`]+/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
 function commentDate(c) {

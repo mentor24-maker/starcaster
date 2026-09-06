@@ -55,12 +55,37 @@ does not reprint a card that is already there. Checked against 189 real machine
 notes on the board — not one of them reprints another, so this costs the lane
 nothing.
 
+And when the lane does stop because of a quoted card, it now says so in those
+words, rather than telling him he commented when what it really saw was a card
+he had pasted.
+
+A third way in turned up on the next review, and it was the most ordinary of
+the three. The test above — "does his comment reproduce a note already on the
+ticket?" — compared the two texts almost exactly as written. But Dane described
+his own method a few days earlier: he copies a card and uses *Paste and Match
+Style*, which throws the formatting away. The stored note is full of bold marks
+and code ticks; his copy has none of them. Same words, different characters, so
+the comparison found nothing in common and his objection was discounted again —
+and the lane merged the pull request he had said to hold, giving "nobody
+objected" as its reason.
+
+The fix is to compare the *words* and ignore everything else: bold marks, code
+ticks, bullets, headings, punctuation, all of it dropped from both sides before
+the comparison. That makes the question "what exactly does his editor keep?"
+stop mattering, which is the right way to settle a question nobody here can
+answer. Measured against every machine note on the board — 679 of them across
+134 tickets — a stripped copy of each one is now correctly read as his, where
+the old comparison caught 216. Two thirds of the notes on the board carry the
+formatting that was breaking it, so this was the common case rather than an
+edge one. And it costs nothing: across more than ninety thousand pairs of real
+machine notes, not one contains another's words, so no genuine machine note
+starts being mistaken for his.
+
 One paste is still not covered, and it is written down rather than left to be
-found again: a note copied in from a *different* ticket. Closing that means
-changing what every machine note looks like, which is deliberately out of scope
-here. And when the lane does stop because of a quoted card, it now says so in
-those words, rather than telling him he commented when what it really saw was a
-card he had pasted.
+found again: a note copied in from a *different* ticket, which the lane has
+never seen and so has nothing to compare against. Closing that means changing
+what every machine note looks like, which is deliberately out of scope here.
+
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
 Pull requests are merged one at a time here, and the plan is to switch on a

@@ -836,11 +836,81 @@ test('he quotes a NON-lane machine card from this ticket, underneath his words',
   );
 });
 
+test('HE PASTES WITHOUT THE FORMATTING — the third door, and the one that merged', () => {
+  // ROUND 3 OF THIS TICKET. Sign 2 above compares his comment against the
+  // cards on the ticket, and it used to compare the RAW TEXT with only its
+  // whitespace collapsed — on the premise that "whitespace is what a paste is
+  // least likely to preserve exactly". Markdown is. Dane said how he pastes,
+  // in his own words, on 86bbuzyra two days before this was found:
+  //
+  //     "I copied that and pasted special as Paste and Match Style."
+  //
+  // That drops the formatting. The stored card carries `**` and backticks; his
+  // copy does not; containment failed on the marks alone. His comment was
+  // still stamped — the `[machine]` line is plain text and survives any paste
+  // — so it stayed discounted, and the lane merged the PR he said hold on,
+  // reason "announced 90 minute(s) ago with no objection".
+  //
+  // Measured on the real board: 456 of 679 stamped machine cards (67%) carry
+  // emphasis or code marks that a rendered paste drops, so this was the common
+  // case, not an edge one.
+  //
+  // Break-test — put `normalizeForQuoting` back to `replace(/\s+/g, ' ')` and
+  // both assertions below turn into merges.
+  const base = { status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY };
+
+  // A card with the markdown these cards really carry.
+  const verdict = fromMachine(
+    '**REVIEW: PASSED** — every gate re-run on the branch, `npm run typecheck` clean, '
+    + '*break-tested* four ways, checked out and driven by hand.\n\n```js\nconst ok = true;\n```',
+    T0 + 5,
+  );
+  // What paste-and-match-style puts in his comment: the words, no marks.
+  const asPasted = verdict.comment_text
+    .replace(/```[a-z]*\n?/g, '')
+    .replace(/\*\*/g, '')
+    .replace(/\*/g, '')
+    .replace(/`/g, '');
+  assert.notEqual(asPasted, verdict.comment_text, 'the fixture must actually differ from the stored card');
+
+  const comments = readyTicket({
+    extra: [armed(42, T0 + 10), verdict, fromDane(`no — hold this one, I want to read it first\n\n${asPasted}`, T0 + 20)],
+  });
+
+  const during = laneADecision({ ...base, comments, now: T0 + 10 + HOUR });
+  assert.equal(during.act, 'cancel', 'a card he pasted WITHOUT its formatting is still a card he pasted');
+
+  // An hour past HIS comment — the assertion that merged.
+  assert.equal(
+    laneADecision({ ...base, comments, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'a formatting-stripped paste must not merge over the top of him',
+  );
+
+  // And the verbatim paste, which already worked, still does — widening the
+  // normaliser must not have traded one ordering for the other.
+  const verbatim = readyTicket({
+    extra: [armed(42, T0 + 10), verdict, fromDane(`no — hold this one\n\n${verdict.comment_text}`, T0 + 20)],
+  });
+  assert.equal(
+    laneADecision({ ...base, comments: verbatim, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'the verbatim paste is unaffected',
+  );
+});
+
 test('WHAT THIS DOES NOT COVER, pinned so it is found on purpose and not by accident', () => {
-  // Said plainly rather than left to be discovered a fourth time. Neither sign
-  // `quotesMachineText` reads can see a card pasted from a DIFFERENT ticket
-  // that is not one of this lane's notices: the text is stamped, the lane has
-  // never seen it, and nothing in the body says a person put it there.
+  // Said plainly rather than left to be discovered a fourth time — and this
+  // comment has BEEN wrong once already, which is the reason to distrust it.
+  // Round 2 wrote it claiming the foreign card was the only case left, while
+  // the far likelier one — a card off THIS ticket, pasted with its formatting
+  // dropped — was sailing through sign 2 on the asterisks alone. Round 3 found
+  // that one live. What is pinned here is the remainder AFTER that fix.
+  //
+  // Neither sign `quotesMachineText` reads can see a card pasted from a
+  // DIFFERENT ticket that is not one of this lane's notices: the text is
+  // stamped, the lane has never seen it, so containment has nothing to compare
+  // against, and nothing in the body says a person put it there.
   //
   // Closing it needs the stamp bound to the body it was written for — a digest
   // in the stamp line — which changes what every card a loop posts looks like
