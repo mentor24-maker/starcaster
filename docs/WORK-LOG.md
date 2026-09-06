@@ -32,7 +32,21 @@ of them that uses a rich-text box at all. Loading is not typing, so it no
 longer goes in the undo history.
 
 While in there, one more: editing a heading through the `</>` HTML view and
-switching back used to throw the edit away without a word. It sticks now.
+switching back used to throw the edit away without a word. It sticks now — and
+writing the test for it turned up that the first attempt at this fix did not
+actually work. Switching back re-reads the markup you typed, which can legally
+change it (typing `<b>` gives you the same bold text written as `<strong>`), and
+the box was only told to speak up in the rare case where it had not already been
+brought up to date. So the page could end up holding one spelling of your
+heading while you were looking at another. It now says plainly what it is
+showing, every time you switch back.
+
+The tests are the reason this took two rounds. The first set proved the sync
+helper and the server, both of which were fine; nothing failed if you put the
+old broken behaviour back. There are now tests that open the two real typing
+boxes, put a value into them and read what appears on screen — and each fix was
+put back the wrong way on purpose to watch the right test fail before it was
+believed.
 
 ## 2026-09-06 — "You Might Also Like" could only see the newest hundred posts (#628)
 

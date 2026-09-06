@@ -236,12 +236,26 @@ export function BuilderInlineRichTextEditor({
       return;
     }
 
-    // emitUpdate: true, because an edit made in HTML view is the operator's
-    // edit and has to reach the page. With emitUpdate: false nothing called
-    // onChange, so switching back to WYSIWYG threw the edit away and left
-    // lastEmittedRef describing a document that no longer existed.
-    editor.commands.setContent(prepareHeadingHtmlForEditor(codeViewValue), { emitUpdate: true });
+    editor.commands.setContent(prepareHeadingHtmlForEditor(codeViewValue), { emitUpdate: false });
     setIsCodeView(false);
+
+    // An edit made in HTML view is the operator's edit and has to reach the
+    // page, so the emission is made HERE rather than left to setContent's
+    // emitUpdate. setContent only emits when it produces a transaction, and by
+    // the time the operator switches back the sync effect above has usually
+    // written the same document already — so emitUpdate would fire nothing and
+    // the edit would sit only in the textarea's own emission.
+    //
+    // That emission is the RAW text typed; re-parsing it can legally change it
+    // (`<b>` becomes `<strong>`, markup the heading schema cannot hold is
+    // dropped). Announcing the editor's own reading is what keeps the page and
+    // what the operator is looking at describing the same heading.
+    const nextFromEditor = headingHtmlFromEditor(editor.getHTML());
+
+    if (nextFromEditor !== lastEmittedRef.current) {
+      lastEmittedRef.current = nextFromEditor;
+      onChange(nextFromEditor);
+    }
   }
 
   if (!editor) {
