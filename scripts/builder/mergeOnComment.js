@@ -52,19 +52,57 @@ const MERGE_PHRASES = ['merge', 'merge it', 'ship it', 'approve'];
  * what keeps whole-message strictness honest: without this, "strict" quietly
  * means "strict about things the operator cannot control".
  *
- * Only the code-block SYNTAX goes. Nothing inside is touched, so prose that
- * merely mentions a command is still prose, and the caller still requires the
- * whole remaining string to equal a phrase.
+ * Only the WRAPPER goes. Nothing inside is touched, so prose that merely
+ * mentions a command is still prose, and the caller still requires the whole
+ * remaining string to equal a phrase.
+ *
+ * IT CAME BACK IN A DIFFERENT SHAPE (2026-09-06, task 86bbvraw4). The first
+ * version of this stripped backticks and fences, because that was the wrapper
+ * ClickUp had produced. On 2026-09-06 Dane posted the resume three times over
+ * half an hour and the lane stayed latched off; the near-miss detector quoted
+ * what had actually been stored:
+ *
+ *     **resume auto-merging**
+ *
+ * Markdown bold, which he did not type — it rode along on a formatted copy. It
+ * only took on the fourth try, using Paste and Match Style. His words:
+ * "we definitely need to do string match or some other method that will strip
+ * the invisible style characters so I don't always have to remember to paste
+ * just so."
+ *
+ * So this now removes the CLASS rather than the instance: emphasis, invisible
+ * characters, and the dash variants an editor substitutes. Whole-message
+ * strictness is untouched — that is the point. Strict has to mean strict about
+ * what he SAID, never about what his editor did to it on the way out.
  */
-function stripCodeFormatting(text) {
+function stripEditorFormatting(text) {
   return String(text || '')
     // A fenced block: ```lang\n ... \n``` — the opening fence may carry a
     // language tag ClickUp inferred, which is never part of the instruction.
     .replace(/^[ \t]*```[^\n`]*\n?/gm, '')
     .replace(/^[ \t]*```[ \t]*$/gm, '')
     // Inline backticks: `merge` is the same instruction as merge.
-    .replace(/`/g, '');
+    .replace(/`/g, '')
+    // Invisible characters a paste carries: zero-width space/non-joiner/joiner,
+    // BOM, and the bidirectional marks. They are never part of an instruction
+    // and they are, by definition, the ones he cannot see to remove.
+    .replace(/[\u200B-\u200F\u2028\u2029\uFEFF]/g, '')
+    // A non-breaking space is a space. Collapsing it here rather than in the
+    // whitespace pass below keeps that pass's \s+ honest across engines.
+    .replace(/\u00A0/g, ' ')
+    // Dash variants: en/em dash, non-breaking and figure hyphen, minus sign.
+    // "auto-merging" carries a hyphen, and autocorrect rewrites it.
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    // Markdown emphasis: **bold**, __bold__, *italic*, _italic_, ~~strike~~.
+    // Removed as MARKERS, not as pairs — a copy can bring one end and not the
+    // other, and half a wrapper is still the editor talking.
+    .replace(/\*\*|__|~~/g, '')
+    .replace(/[*_]/g, '');
 }
+
+/** The old name, kept because the whole point is that the wrapper varies.
+ *  One implementation, so a caller cannot get the narrow behaviour by accident. */
+const stripCodeFormatting = stripEditorFormatting;
 
 /**
  * Normalize a comment for phrase matching: strip code formatting the editor
@@ -75,7 +113,7 @@ function stripCodeFormatting(text) {
  * string must equal a phrase.
  */
 function normalizeCommand(text) {
-  return stripCodeFormatting(text)
+  return stripEditorFormatting(text)
     .trim()
     .toLowerCase()
     .replace(/\s+/g, ' ')
@@ -1678,6 +1716,7 @@ module.exports = {
   countMergeRefusals,
   latestMergeMarker,
   normalizeCommand,
+  stripEditorFormatting,
   commentDate,
   isMergeCommand,
   isReviewVerdict,

@@ -48,6 +48,131 @@ boxes, put a value into them and read what appears on screen — and each fix wa
 put back the wrong way on purpose to watch the right test fail before it was
 believed.
 
+## 2026-09-06 — Notes and a test left over after the tag-page fix landed elsewhere (#630)
+
+**Correcting the earlier version of this entry, which was wrong.** It claimed
+this change fixed the made-up tags a visitor could see on the Delray tennis tag
+page. It did not. Two other pieces of work had already fixed them by the time
+this one reached review, and the code here turned out to be a second copy of a
+fix that was already live on the client's site:
+
+- The **Tags: Example Tag** pills, and the grey dashed boxes reading "Post
+  Card" / "Author Bio" / "Table of Contents", were fixed by **#627**, which
+  swept the same fault across eight modules rather than four.
+- The Messaging tag list telling visitors to "add tags in the Messaging
+  section" was fixed by **#580**, on the 3rd.
+
+So the code was dropped rather than merged. Keeping it would have been worse
+than useless: it was written against an older copy of the file, and merging it
+would have stripped the live-site protection back off five other modules that
+#627 had just fixed.
+
+What is left here, and is genuinely new:
+
+- **Written-down instructions for looking at a page the way a visitor sees
+  it**, on your own machine, without publishing anything. Half of the confusion
+  on this ticket came from guessing at what a live page renders instead of
+  looking at one, and until now there was nowhere that said how to look.
+- **One extra test.** A tags setting containing nothing but commas — `",, "` —
+  is the same "no tags" case wearing punctuation, and nothing was checking it.
+  The code already handles it correctly; now something would notice if that
+  stopped being true.
+
+Two findings from this ticket also went somewhere useful. The "duplicate"
+search box on that page turned out not to be duplicated — there is exactly one,
+counted in a browser on the live page. What is wrong with it is worse and was
+not known before: **typing a word into it does nothing.** The page reloads with
+the word in the address bar and the list of posts does not change by a single
+character. That has its own ticket, and Dane has already chosen what should
+replace it.
+
+## 2026-09-05 — The auto-merge lane mistook its own notes for Dane objecting (#618)
+
+There is a lane that merges the safest pull requests — the ones that only
+touch tests and documentation — by itself. It announces what it is about to
+do, waits an hour, and merges if nobody says anything. If Dane comments on
+the ticket during that hour, it stops: he is talking about it, so the machine
+does not act.
+
+The trouble is that the loops post their own notes to ClickUp using Dane's
+account, so every comment a script writes comes back looking as though he
+wrote it. The lane could not tell the two apart. A routine note from another
+part of the pipeline, landing during that hour, read as an objection — and
+the merge he had already approved was cancelled, with a message telling him
+he had commented on the ticket when he had not.
+
+It only ever failed in the harmless direction: it cancelled merges that
+should have gone through, never the reverse. But it blamed him for something
+he did not do, and it delayed work he had authorized.
+
+Machine notes now stamp themselves, and the lane reads that stamp. Only a
+comment it can positively identify as machine-written is ignored — anything
+it cannot classify still counts as Dane's word and still stops the merge, so
+the cautious half of the behaviour is untouched.
+
+Two more holes turned up while building it, both the same shape. The lane was
+willing to accept the stamp OR an older style of label a machine used to open
+its notes with — and that label is exactly what Dane types when he pastes a
+card and writes his answer underneath it. So his own "no, hold this one" could
+be read as a machine talking. The lane now asks only for the stamp, which
+cannot be pasted into place by accident.
+
+Worse, the note he is most likely to quote is the announcement itself, because
+it is the one he is replying to. Quoting it put a second announcement on the
+ticket, dated to his own comment, which quietly restarted the hour — so his
+objection was no longer "after the announcement" and never registered at all.
+An hour later the lane merged the very thing he had said to hold.
+
+Asking for the stamp closed one half of that and left the other open, which a
+review caught before any of it shipped. The stamp is the LAST line of every
+note a machine writes. Paste a card ABOVE your reply and the stamp lands in the
+middle, so the comment still reads as yours — that is the case the stamp fixed.
+Paste it UNDERNEATH your reply and the stamp is the last line of *your*
+comment, so the whole thing reads as the machine's. Quoting below what you are
+answering is at least as normal as quoting above it, and driving the real lane
+showed exactly what it cost: "no, hold this one" followed by the announcement
+card merged the pull request an hour later, giving "nobody objected" as its
+reason.
+
+Two things close it. The lane now recognises its own announcement by both
+ends — the opening line it writes and the marker it signs off with — which a
+quote cannot keep, because his words displace one end or the other whichever
+way up he pastes it. And a comment that reproduces a note already on the
+ticket, with words around it, is read as his: a machine writes fresh text, it
+does not reprint a card that is already there. Checked against 189 real machine
+notes on the board — not one of them reprints another, so this costs the lane
+nothing.
+
+And when the lane does stop because of a quoted card, it now says so in those
+words, rather than telling him he commented when what it really saw was a card
+he had pasted.
+
+A third way in turned up on the next review, and it was the most ordinary of
+the three. The test above — "does his comment reproduce a note already on the
+ticket?" — compared the two texts almost exactly as written. But Dane described
+his own method a few days earlier: he copies a card and uses *Paste and Match
+Style*, which throws the formatting away. The stored note is full of bold marks
+and code ticks; his copy has none of them. Same words, different characters, so
+the comparison found nothing in common and his objection was discounted again —
+and the lane merged the pull request he had said to hold, giving "nobody
+objected" as its reason.
+
+The fix is to compare the *words* and ignore everything else: bold marks, code
+ticks, bullets, headings, punctuation, all of it dropped from both sides before
+the comparison. That makes the question "what exactly does his editor keep?"
+stop mattering, which is the right way to settle a question nobody here can
+answer. Measured against every machine note on the board — 679 of them across
+134 tickets — a stripped copy of each one is now correctly read as his, where
+the old comparison caught 216. Two thirds of the notes on the board carry the
+formatting that was breaking it, so this was the common case rather than an
+edge one. And it costs nothing: across more than ninety thousand pairs of real
+machine notes, not one contains another's words, so no genuine machine note
+starts being mistaken for his.
+
+One paste is still not covered, and it is written down rather than left to be
+found again: a note copied in from a *different* ticket, which the lane has
+never seen and so has nothing to compare against. Closing that means changing
+what every machine note looks like, which is deliberately out of scope here.
 ## 2026-09-06 — "You Might Also Like" could only see the newest hundred posts (#628)
 
 On a client's site, the "You Might Also Like" box at the bottom of a blog post
