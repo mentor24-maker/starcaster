@@ -1,3 +1,114 @@
+## 2026-09-06 — Scaffolding meant for the page builder was showing up on a client's blog (#627)
+
+When you drop a module onto a page in the Builder and have not filled it in
+yet, it does not sit there as an empty rectangle. It shows you something —
+either a couple of made-up sample entries so you can see the shape of the
+thing, or a short note saying "Add cards in the editor". That is helpful while
+you are designing. It is scaffolding.
+
+The problem is that the scaffolding was also being shown to visitors. Dane
+photographed a post on the Delray tennis blog on 3 September that said
+**"Tags: Example Tag"** underneath it, printed exactly the way real tags are
+printed. That post has no tags; those two words were the sample content, and a
+reader had no way to know that. The other half of what he photographed that
+day — "No tags found. Add tags in the Messaging section." — was fixed a couple
+of days ago, but this half had been sitting in the queue behind it.
+
+So this went and looked at every module for the same mistake, and found eight
+of them. Besides the tags, three modules that have not been built yet were
+showing visitors a grey dashed box with the module's name in it ("Author Bio",
+"Table of Contents"), and four more were telling readers to go and add slides,
+headlines, programs or cards "in the editor" — an editor a visitor cannot
+reach and does not know exists.
+
+All eight now show nothing at all on a published page when they have nothing
+real to show. Nothing changed in the Builder itself: every sample and every
+note is still there while you are designing a page. Sixteen new tests hold each
+of those two halves in place, and each one was checked by putting the bug back
+and watching the test go red.
+
+Two blind spots turned up along the way and are written on the ticket. The
+automatic check that is supposed to catch this kind of text only recognises
+certain phrasings, and "in the editor" is not one of them — which is why all
+four of those slipped through. And the browser-based rendering check cannot
+look at published pages at all, only at the Builder canvas, so it could never
+have seen any of this.
+
+**Round two.** Review checked the eight fixes, agreed with all of them, and
+then found a ninth the sweep had walked past — and a worse one. A CRM contact
+form can have a dropdown field, and until the site owner types some choices
+into it, the dropdown was falling back to two made-up ones: "Option one" and
+"Option two". A blank Options box is simply what a brand-new dropdown looks
+like, so this was not an unusual setup. Unlike the sample tags, which a visitor
+could only read, these were choosable: someone could pick "Option one" and send
+it into the client's contact list as real information about themselves.
+
+Measuring it in a browser turned up a second problem hiding underneath. If the
+site owner had also ticked "required" on that dropdown, the browser refused to
+send the form at all — every visitor filled it in, pressed Send, and nothing
+happened. So an empty dropdown was not just leaking made-up words; it was
+quietly breaking the form around it. Rather than show an empty dropdown, a
+published page now leaves the field out altogether, and the form works again.
+The Builder still shows the field, sample choices and all, so it is there to
+design. Both of those before-and-after behaviours were measured in a real
+browser on the real published-page code, not reasoned about.
+
+**Round three, and this is the one that mattered.** Review checked that fix,
+agreed the leak was gone, and then found what the made-up options had been
+hiding all along. Leaving out a dropdown that has no choices is only correct if
+the page can tell an empty dropdown from a filled-in one — and it could not.
+When a contact form was saved, the site owner's actual choices were being
+thrown away at four separate points on the way to the database, so *every*
+dropdown arrived at a published page looking empty. The new rule was therefore
+deleting real questions, not just dead ones.
+
+Delray's form has a genuine example sitting in the database right now: "How did
+you find us?", with Referral, Search Engine and AI. Put that on a page and,
+before this fix, the question simply would not appear and nobody's answer would
+ever be collected — while the save reported success every time. The reason
+nobody had noticed dropdowns were broken is exactly that they always looked
+populated: "Option one / Option two" was standing in for the choices that had
+been dropped.
+
+So the choices now travel with the field, through one shared piece of code that
+all four places use — the two that read, the two that write — so they cannot
+drift apart again. Measured both ways on the real published-page code: before,
+that question was missing from the form entirely; after, it is there with all
+three answers, and the form sends. A dropdown the owner genuinely left blank is
+still left out, which was the right call and is unchanged.
+
+**Round four — the sweep had walked past a whole module.** The contact form has
+three modes, and one of them is called **Custom**. Pick it from the dropdown in
+its settings — it sits right next to Squeeze and Standard, with nothing to warn
+you — and the published page told every visitor: *"Custom form builder coming
+soon. Standard fields are shown for now."* That is a sentence about our own
+product, aimed at whoever is designing the page, printed on a client's live
+site. The form underneath it works perfectly well; it just came with a note
+about a feature the visitor has never heard of and cannot wait for.
+
+It is exactly the same mistake as the eight above, and the code even said so:
+the note was tagged with the same styling name that this very file wraps in the
+builder-only guard two other places. It simply had never been given the
+switch that tells it whether it is on a live page. Now it has one. The sentence
+is gone from published pages and still there on the canvas, and the form's real
+fields — the ones that collect leads — keep rendering either way. That last
+part is the whole point, so it has its own test: the note stands down, the
+module does not.
+
+The reason three rounds of review kept missing it is the more useful half. The
+automatic check that catches this kind of text works from a list of phrasings,
+and "coming soon" was not on it — the check had been quietly incapable of
+seeing this defect the entire time. It is on the list now, and it was proved by
+putting the leak back and watching the check catch it, then running the old
+version of the check against the same leak and watching it report all clear.
+
+Adding the phrase turned up one more thing worth knowing. Written the obvious
+way, it also flagged the "Coming soon." a visitor sees when they land on a web
+address with no page published on it — which is correct, ordinary copy that
+must keep working. So the rule is narrower than it first looked: "coming soon"
+only counts as a leak when the same sentence also mentions the builder, a
+module or the editor. A club announcing that its new clubhouse is coming soon
+is left alone.
 ## 2026-09-05 — The Mini can tell you a job is switched on. It could not tell you the job ever started. (#626)
 
 The Mac Mini runs jobs on a timer — the thing that relays your comments, the

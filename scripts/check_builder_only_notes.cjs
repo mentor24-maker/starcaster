@@ -47,6 +47,19 @@ const BUILDER_PHRASES = [
   /\bin the Messaging section\b/i,
   /\bin Builder\s*›/i,
   /\bAdd (?:tags|topics|posts|items) in the\b/i,
+  // "Custom form builder coming soon. Standard fields are shown for now."
+  // reached visitors on a published contact form for the whole of ticket
+  // 86bbugd2e, through three rounds of review, because none of the phrases
+  // above match it — it names no admin area, it just talks about the Builder
+  // as a product. A visitor has no idea what is coming, or to whom.
+  //
+  // "coming soon" ALONE is not the defect, and matching it alone is wrong:
+  // BuilderPublicSitePage renders "Coming soon." when a URL has no published
+  // page, which is correct copy for a visitor and must keep rendering. What
+  // makes it a leak is the line ALSO naming our tooling. Hence the AND below
+  // — the lookahead is the "coming soon" half, the tail is the tooling half,
+  // and either may come first.
+  /(?=.*\bcoming soon\b).*\b(?:builder|module|editor)\b/i,
 ];
 
 // Files that actually render tenant pages. A phrase in a settings PANEL is
