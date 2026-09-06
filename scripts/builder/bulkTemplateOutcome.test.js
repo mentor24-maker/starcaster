@@ -8,6 +8,9 @@ const {
   describeBulkTemplateOutcome,
   describeBulkTemplateInterruption,
   describeBulkTemplateFailure,
+  NOTHING_WRITTEN,
+  CLAIMS,
+  fact,
 } = require('../../public/shared/bulkTemplateOutcome');
 
 /**
@@ -196,14 +199,19 @@ test('called with nothing at all, it still answers', () => {
  * re-poured underneath it.
  */
 test('an interrupted run says the outcome is unknown in BOTH directions', () => {
-  const out = describeBulkTemplateInterruption({ error: 'Invalid API response', liveCount: 0 });
+  const out = describeBulkTemplateInterruption({
+    error: 'Invalid API response',
+    liveCount: 0,
+    listReloaded: true,
+  });
   assert.equal(out.isError, true);
   assert.match(out.message, /Invalid API response/);
   assert.match(out.message, /may already have been changed/);
   assert.match(out.message, /some may not/);
   // The table it is describing has been reloaded, and it says so — otherwise
-  // the operator has no way to know the screen is current.
-  assert.match(out.message, /the list has been reloaded/);
+  // the operator has no way to know the screen is current. It says so because
+  // the CALLER checked, not because this sentence assumes it.
+  assert.match(out.message, /The list has been reloaded/);
   assert.match(out.message, /Restore All from Archives/);
 });
 
@@ -284,7 +292,7 @@ test('one live out of several unconfirmed says how many, and agrees with itself'
 const REFUSAL = 'No archive with id "999999" — nothing was changed. Take an archive first.';
 
 test('a server refusal says what the server said and NOTHING else', () => {
-  const out = describeBulkTemplateFailure({ error: REFUSAL, status: 400, liveCount: 1 });
+  const out = describeBulkTemplateFailure({ error: REFUSAL, status: 400, code: NOTHING_WRITTEN, liveCount: 1 });
   assert.equal(out.definite, true);
   assert.equal(out.message, REFUSAL);
   assert.doesNotMatch(out.message, /part-way/);
@@ -293,21 +301,71 @@ test('a server refusal says what the server said and NOTHING else', () => {
 });
 
 test('the full stop is not doubled onto a sentence that already has one', () => {
-  const out = describeBulkTemplateFailure({ error: REFUSAL, status: 400 });
+  const out = describeBulkTemplateFailure({ error: REFUSAL, status: 400, code: NOTHING_WRITTEN });
   assert.doesNotMatch(out.message, /\.\./);
   // And a reason with no stop of its own still gets one.
-  const bare = describeBulkTemplateFailure({ error: 'Not authenticated', status: 401 });
+  const bare = describeBulkTemplateFailure({ error: 'Not authenticated', status: 401, code: NOTHING_WRITTEN });
   assert.equal(bare.message, 'Not authenticated.');
 });
 
-test('every 4xx and 5xx the route can raise is treated as definite', () => {
-  // The store answers ok:false only when ZERO pages were written, and every
-  // refusal this route raises happens before a single write.
+test('a refusal the ROUTE tagged is definite at every status', () => {
+  // The code is the evidence, and it is good at any status the route chooses.
   for (const status of [400, 401, 403, 404, 409, 422, 500]) {
-    const out = describeBulkTemplateFailure({ error: 'refused', status, liveCount: 3 });
+    const out = describeBulkTemplateFailure({
+      error: 'refused', status, code: NOTHING_WRITTEN, liveCount: 3,
+    });
     assert.equal(out.definite, true, `status ${status}`);
     assert.doesNotMatch(out.message, /part-way/, `status ${status}`);
   }
+});
+
+/**
+ * ROUND 4'S DEFECT, AND THE ONE THE RULE EXISTS FOR.
+ *
+ * This test used to assert the opposite: that every 4xx and 5xx is definite,
+ * on the stated premise that "every refusal this route raises happens before a
+ * single write". That is true of the route's own refusals and false of a
+ * CRASH. sbQuery's `await res.text()` sits outside the try that wraps fetch
+ * (lib/supabase.js), so a dropped body read throws; nothing between there and
+ * routes/index.js catches it; and routes/index.js answers it with a
+ * well-formed JSON 500. Round 4 made it happen — a probe throwing `socket hang
+ * up` on the second page's PATCH — and page one HAD been re-poured while the
+ * operator was told:
+ *
+ *   socket hang up. An archive was saved just before this, so Archives has a
+ *   new entry that undoes nothing.
+ *
+ * The archive is the only undo this operation has, and that sentence sends him
+ * away from it, definitively, right after real damage.
+ */
+test('an untagged 500 is a could-not-tell, whatever the status says', () => {
+  const out = describeBulkTemplateFailure({
+    error: 'socket hang up',
+    status: 500,
+    code: 'INTERNAL_ERROR',
+    archiveTaken: true,
+    liveCount: 2,
+    listReloaded: true,
+  });
+  assert.equal(out.definite, false);
+  assert.match(out.message, /may already have been changed/);
+  // The three sentences that sent the operator away from his only undo.
+  assert.doesNotMatch(out.message, /undoes nothing/);
+  assert.doesNotMatch(out.message, /Nothing was changed/);
+  assert.match(out.message, /Restore All from Archives/);
+});
+
+test('the store failing on EVERY page is a could-not-tell too', () => {
+  // "Every page reported a failure" is not "the database is untouched": a PATCH
+  // that lands and then answers 500 comes back as a failed row. The store
+  // deliberately leaves that answer untagged, so it must not read as definite.
+  const out = describeBulkTemplateFailure({
+    error: 'Could not change the template on any page',
+    status: 500,
+    archiveTaken: true,
+  });
+  assert.equal(out.definite, false);
+  assert.doesNotMatch(out.message, /undoes nothing/);
 });
 
 test('a rejection with NO status is still the mid-flight sentence', () => {
@@ -329,7 +387,7 @@ test('a rejection with NO status is still the mid-flight sentence', () => {
 test('a refusal AFTER the archive was taken says the archive is there', () => {
   // Otherwise the Archives list grows an entry the operator cannot account
   // for — and he is being told to restore from that list.
-  const out = describeBulkTemplateFailure({ error: REFUSAL, status: 400, archiveTaken: true });
+  const out = describeBulkTemplateFailure({ error: REFUSAL, status: 400, code: NOTHING_WRITTEN, archiveTaken: true });
   assert.match(out.message, /An archive was saved just before this/);
   assert.match(out.message, /undoes nothing/);
   assert.doesNotMatch(out.message, /part-way/);
@@ -357,4 +415,136 @@ test('a garbage argument does not throw and does not claim to know', () => {
     assert.ok(out.message.length > 0);
     assert.equal(out.isError, true);
   }
+});
+
+// ── The RULE: no sentence may state anything the code did not check ─────────
+
+/**
+ * Dane's answer to the round-4 escalation, 2026-09-05: option B — "one more
+ * build round, scoped to wording only, with a rule instead of a list: no
+ * sentence may state anything the code did not check."
+ *
+ * Four rounds of review sent this file back for one class of defect in four
+ * spellings, and each round fixed the instances named and left the siblings.
+ * The tests below are not about those four; they are about the sentences
+ * nobody has written yet. Every claim the module can make is declared in
+ * CLAIMS with the fact that licenses it, and this walks a matrix of inputs
+ * asserting no phrase ever appears in a message its fact did not license.
+ *
+ * Add a sentence tomorrow that hard-codes "the list has been reloaded" and
+ * this fails, without anybody having to remember the rule.
+ */
+
+/**
+ * The caller's own error text is EXCLUDED before the phrases are looked for.
+ *
+ * The server's refusal legitimately contains "nothing was changed" — those are
+ * its words, quoted, not a claim this module is making. What is being tested is
+ * the sentences this file composes around them.
+ */
+function composedText(message, errorText) {
+  return errorText ? message.split(errorText).join(' ') : message;
+}
+
+const MATRIX = [];
+for (const code of [undefined, NOTHING_WRITTEN, 'INTERNAL_ERROR', 'VALIDATION_ERROR']) {
+  for (const wroteNothing of [undefined, true, false]) {
+    for (const listReloaded of [undefined, true, false]) {
+      for (const archiveTaken of [undefined, true, false]) {
+        for (const status of [undefined, 400, 500]) {
+          for (const liveCount of [0, 1, 2]) {
+            MATRIX.push({
+              error: 'THE SERVERS OWN WORDS', code, wroteNothing, listReloaded, archiveTaken, status, liveCount,
+            });
+          }
+        }
+      }
+    }
+  }
+}
+
+test('no claim is ever made without the fact that licenses it', () => {
+  assert.ok(MATRIX.length > 300, 'the matrix should be a real sweep');
+  for (const opts of MATRIX) {
+    for (const describe of [describeBulkTemplateFailure, describeBulkTemplateInterruption]) {
+      const out = describe(opts);
+      const said = composedText(out.message, opts.error);
+      for (const rule of CLAIMS) {
+        if (!said.includes(rule.phrase)) continue;
+        assert.ok(
+          rule.licensed(opts),
+          `${describe.name} claimed "${rule.name}" — the phrase "${rule.phrase}" — with no fact licensing it.\n`
+            + `  input:   ${JSON.stringify(opts)}\n`
+            + `  message: ${out.message}`,
+        );
+      }
+    }
+  }
+});
+
+test('the two claims about the list are never both made, and never contradict', () => {
+  for (const opts of MATRIX) {
+    for (const describe of [describeBulkTemplateFailure, describeBulkTemplateInterruption]) {
+      const said = describe(opts).message;
+      assert.ok(
+        !(said.includes('The list has been reloaded') && said.includes('The list could not be reloaded')),
+        `both reload sentences in one message: ${JSON.stringify(opts)}`,
+      );
+      // UNKNOWN says NOTHING. That is the rule's whole third state: a caller
+      // that did not check gets a sentence that does not mention the list.
+      if (opts.listReloaded === undefined) {
+        assert.doesNotMatch(said, /the list/i, `an unchecked reload was described: ${JSON.stringify(opts)}`);
+      }
+    }
+  }
+});
+
+test('a fact is three-state, and anything that is not a boolean is UNKNOWN', () => {
+  // No cheerful default: a caller that forgot to check must not inherit a
+  // claim. This is what makes a NEW call site safe by construction.
+  assert.equal(fact(true), true);
+  assert.equal(fact(false), false);
+  for (const value of [undefined, null, '', 'true', 'false', 0, 1, {}, []]) {
+    assert.equal(fact(value), 'unknown', `${JSON.stringify(value)} must not be read as a checked fact`);
+  }
+});
+
+test('the browser copy of NOTHING_WRITTEN matches the server copy', () => {
+  // Two copies on purpose — nothing under lib/ requires out of public/, because
+  // those modules are bundled into serverless functions and public/ is static
+  // assets. Two copies that can drift are worse than one that cannot, so this
+  // is the join.
+  const store = require('../../lib/builderPagesStore');
+  assert.equal(store.NOTHING_WRITTEN, NOTHING_WRITTEN);
+});
+
+// ── Round 4, item 3: "1 of the selected page is live" ───────────────────────
+
+/**
+ * The grammar bug round 3's own build comment quoted as the BEFORE it was
+ * fixing — fixed in describeBulkTemplateOutcome and left live in its sibling.
+ * "N of the selected ___" is always plural; only the verb follows the count.
+ */
+test('the live sentence is grammatical at one page and at many', () => {
+  const one = describeBulkTemplateInterruption({ error: 'network error', liveCount: 1 });
+  assert.match(one.message, /1 of the selected pages is live on the public site/);
+  assert.doesNotMatch(one.message, /the selected page is/);
+
+  const two = describeBulkTemplateInterruption({ error: 'network error', liveCount: 2 });
+  assert.match(two.message, /2 of the selected pages are live on the public site/);
+});
+
+test('a failed reload is stated as a failed reload, not glossed over', () => {
+  // The case measured in round 4: the write and the reload both refused, and
+  // the table still showed the pre-change values under a sentence claiming it
+  // had reloaded. He checks the Template column as instructed, sees nothing
+  // moved, and concludes nothing happened.
+  const out = describeBulkTemplateInterruption({
+    error: 'Failed to fetch',
+    liveCount: 1,
+    listReloaded: false,
+  });
+  assert.match(out.message, /The list could not be reloaded/);
+  assert.match(out.message, /may still show the values from before this run/);
+  assert.doesNotMatch(out.message, /The list has been reloaded/);
 });

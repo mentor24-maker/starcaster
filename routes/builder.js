@@ -198,6 +198,7 @@ const {
   bulkSetPublished,
   bulkSetPageTemplate,
   checkBulkSetPageTemplate,
+  NOTHING_WRITTEN,
 } = require('../lib/builderPagesStore');
 // Sections and modules share ONE propagation engine since Sync 7/7. The
 // section entry point is re-exported by the pages store above for the callers
@@ -397,13 +398,19 @@ function readBulkSetTemplateRequest(body) {
   const pageTemplateId = String(source.pageTemplateId ?? source.page_template_id ?? '').trim();
   const snapshotId = String(source.snapshotId ?? source.snapshot_id ?? '').trim();
 
-  if (!pageIds.length) return { ok: false, status: 400, error: 'pageIds is required' };
-  if (!pageTemplateId) return { ok: false, status: 400, error: 'pageTemplateId is required' };
+  // Every refusal here is raised before the route touches a page, and the CODE
+  // is how the browser gets to know that. Without it the report is guessing
+  // from an HTTP status, which cannot tell a decision from a crash.
+  if (!pageIds.length) return { ok: false, status: 400, error: 'pageIds is required', code: NOTHING_WRITTEN };
+  if (!pageTemplateId) {
+    return { ok: false, status: 400, error: 'pageTemplateId is required', code: NOTHING_WRITTEN };
+  }
   if (!snapshotId) {
     return {
       ok: false,
       status: 400,
       error: 'snapshotId is required — take an archive before changing templates in bulk',
+      code: NOTHING_WRITTEN,
     };
   }
   return { ok: true, pageIds, pageTemplateId, snapshotId };
@@ -429,11 +436,16 @@ function describeArchiveCheckFailure(snapshotId, lookup) {
   const status = Number(result.status) || 0;
   const detail = String(result.error || '').trim();
 
+  // Every branch below is raised before a page is touched, so all three carry
+  // the code that says so. The three differ in what they claim about the
+  // ARCHIVE; they agree completely about the pages.
+  //
   // Definite: the archive is not there.
   if (status === 404) {
     return {
       status: 400,
       error: `No archive with id "${id}" — nothing was changed. Take an archive first.`,
+      code: NOTHING_WRITTEN,
     };
   }
 
@@ -448,6 +460,7 @@ function describeArchiveCheckFailure(snapshotId, lookup) {
     return {
       status: 400,
       error: `"${id}" is not an archive id — nothing was changed. Take an archive first.`,
+      code: NOTHING_WRITTEN,
     };
   }
 
@@ -456,6 +469,7 @@ function describeArchiveCheckFailure(snapshotId, lookup) {
   return {
     status: status || 500,
     error: `Could not check whether archive "${id}" exists, so nothing was changed. The archive lookup answered ${status || 'no status'}${detail ? `: ${detail}` : ''}. This is not the same as having no archive — try again.`,
+    code: NOTHING_WRITTEN,
   };
 }
 
@@ -606,14 +620,16 @@ async function handle(req, res, pathname, method) {
     const pageIds = Array.isArray(body?.pageIds) ? body.pageIds : [];
     const pageTemplateId = String(body?.pageTemplateId ?? body?.page_template_id ?? '').trim();
     const check = await checkBulkSetPageTemplate(pageIds, pageTemplateId, scope);
-    if (!check.ok) return sendErr(res, check.status || 500, check.error || 'Could not check the template change'), true;
+    if (!check.ok) {
+      return sendErr(res, check.status || 500, check.error || 'Could not check the template change', { code: check.code }), true;
+    }
     return sendOk(res, 200, check.data, check.data), true;
   }
 
   if (pathname === '/api/builder/landing-pages/bulk-set-template' && requestMethod === 'POST') {
     const body = await parseJsonBody(req).catch(() => ({}));
     const request = readBulkSetTemplateRequest(body);
-    if (!request.ok) return sendErr(res, request.status, request.error), true;
+    if (!request.ok) return sendErr(res, request.status, request.error, { code: request.code }), true;
     const { pageIds, pageTemplateId, snapshotId } = request;
     // EXISTS, not "fetch it": the snapshot's `pages` blob holds every page
     // layout in the project, and this guard only needs to know the row is
@@ -622,13 +638,19 @@ async function handle(req, res, pathname, method) {
     const snapshot = await pageSnapshotExists(snapshotId, scope);
     if (!snapshot.ok) {
       const refusal = describeArchiveCheckFailure(snapshotId, snapshot);
-      return sendErr(res, refusal.status, refusal.error), true;
+      return sendErr(res, refusal.status, refusal.error, { code: refusal.code }), true;
     }
     // WHO asked for it. Without the actor every revision this banks records no
     // author, so Page History cannot tell a 43-page bulk re-pour from him
     // hand-editing each page.
     const result = await bulkSetPageTemplate(pageIds, pageTemplateId, scope, { actor: actorFrom(req) });
-    if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not change the template'), true;
+    // result.code is NOTHING_WRITTEN only when the store refused before writing.
+    // The "every page failed" answer deliberately carries no code, because that
+    // is not the same as knowing the database is untouched — so the browser
+    // reports it as a could-not-tell rather than as a definite no-op.
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'Could not change the template', { code: result.code }), true;
+    }
     return sendOk(
       res,
       200,

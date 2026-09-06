@@ -142,6 +142,59 @@ test('no fallback recommends Restore All, and none claims pages may have changed
   );
 });
 
+test('no fallback claims the list was reloaded', () => {
+  // THE RULE (Dane, 2026-09-05): no sentence may state anything the code did
+  // not check. The claims test in bulkTemplateOutcome.test.js enforces that
+  // for the wording module; the fallbacks live HERE, in a file nothing but a
+  // browser parses, and they are the one set of sentences that module cannot
+  // reach. One of them said "The list has been reloaded — check the Template
+  // column" while the reload's own result was being thrown away.
+  const code = functionBody(source, 'runBulkChangeTemplate')
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+
+  assert.doesNotMatch(
+    code,
+    /list has been reloaded|list was reloaded/i,
+    'a fallback states the list reloaded; refreshPagesTableAfterBulkChange swallows a failed reload, '
+      + 'and this path runs when the API is already unhealthy — so the claim is false exactly when it matters',
+  );
+});
+
+test('the reload reports whether it actually worked, and the caller keeps the answer', () => {
+  // The evidence behind the claim. Round 4 measured the write and the reload
+  // both refused: the table still showed the pre-change template values under a
+  // sentence saying it had reloaded, so the operator checked the column, saw
+  // nothing moved, and concluded nothing had happened.
+  const refresh = functionBody(source, 'refreshPagesTableAfterBulkChange');
+  assert.match(refresh, /return true;/, 'the reload no longer reports success');
+  assert.match(refresh, /return false;/, 'the reload swallows its failure without reporting it');
+
+  const body = functionBody(source, 'runBulkChangeTemplate');
+  assert.match(
+    body,
+    /const listReloaded = await refreshPagesTableAfterBulkChange\(\)/,
+    'the caller throws away the reload result, so the report is back to asserting it',
+  );
+  assert.match(body, /listReloaded,/, 'the reload result is never passed to the wording');
+});
+
+test('the server\'s own code is carried into the report, not just its status', () => {
+  // A status says how the response was shaped; the CODE says who decided.
+  // routes/index.js answers an unhandled throw with a well-formed JSON 500, so
+  // reading the status alone called a crash a decision — and told the operator
+  // the archive "undoes nothing" after a page had really been re-poured.
+  const body = functionBody(source, 'runBulkChangeTemplate');
+  const codeLines = body.split('\n').filter((line) => /code:.*\.code/.test(line));
+  assert.equal(
+    codeLines.length,
+    2,
+    'both failure paths must pass the server error code through to the wording; '
+      + `found ${codeLines.length}`,
+  );
+});
+
 test('the write\'s try holds the request and nothing else', () => {
   // The catch below this try says pages may have been re-poured. Anything else
   // inside it — a report, a notify, a dialog close — can therefore turn its own
@@ -162,4 +215,117 @@ test('the write\'s try holds the request and nothing else', () => {
     );
   }
   assert.ok(block.includes('bulk-set-template'), 'the request itself should still be in there');
+});
+
+// ── The weakest link in the evidence chain ──────────────────────────────────
+
+/**
+ * App.api has to carry the server's error CODE, not just its status.
+ *
+ * This is the one hop in the chain that no other test can see, and it is in
+ * public/js/core.js — parsed by nothing but the browser (landmine 9). The
+ * route stamps NOTHING_WRITTEN on refusals it raised before touching a page;
+ * the wording module refuses to say "nothing was changed" without it. If this
+ * hop drops the code, both ends still look correct and the whole rule quietly
+ * stops working.
+ *
+ * So the real function is lifted and RUN over a fake fetch, rather than having
+ * its source matched — the difference between this failing when the behaviour
+ * goes and merely noticing that the text moved.
+ */
+const CORE_JS = path.join(__dirname, '..', '..', 'public', 'js', 'core.js');
+const coreSource = fs.readFileSync(CORE_JS, 'utf8');
+
+/**
+ * Brace-match the block that follows `marker`.
+ *
+ * functionBody() finds the first `{` after the function's NAME, which for
+ * `function api(path, options = {})` is the default parameter — so it lifts
+ * `{}` and the test passes against nothing. Anchoring on the whole signature
+ * is what makes this read the real body.
+ */
+function blockAfter(src, marker) {
+  const start = src.indexOf(marker);
+  assert.notEqual(start, -1, `${marker} is gone from public/js/core.js`);
+  const open = src.indexOf('{', start + marker.length);
+  let depth = 0;
+  for (let i = open; i < src.length; i += 1) {
+    if (src[i] === '{') depth += 1;
+    else if (src[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return src.slice(open, i + 1);
+    }
+  }
+  throw new Error(`could not find the end of the block after ${marker}`);
+}
+
+const API_SIGNATURE = 'App.api = async function api(path, options = {})';
+
+function loadApi(fakeFetch) {
+  const body = blockAfter(coreSource, API_SIGNATURE);
+  assert.ok(body.includes('jsErr.status'), 'the lifted body is not App.api');
+  // eslint-disable-next-line no-new-func
+  const make = new Function(
+    'App', 'state', 'fetch',
+    `return async function api(path, options = {}) ${body};`,
+  );
+  return make(
+    { getSessionToken: () => '', notify() {}, auth: null },
+    { currentProjectId: '' },
+    fakeFetch,
+  );
+}
+
+/** A response shaped the way routes/http.js sendErr writes one. */
+function jsonResponse(status, payload) {
+  const raw = JSON.stringify(payload);
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: '',
+    headers: { get: () => 'application/json' },
+    text: async () => raw,
+  };
+}
+
+test('App.api attaches the server error code, not only its status', async () => {
+  const api = loadApi(async () => jsonResponse(400, {
+    ok: false,
+    error: { message: 'No archive with id "37"', code: 'NOTHING_WRITTEN' },
+  }));
+
+  const thrown = await api('/api/builder/landing-pages/bulk-set-template', { method: 'POST' })
+    .then(() => null, (err) => err);
+
+  assert.ok(thrown, 'a 400 should still reject');
+  assert.equal(thrown.status, 400);
+  assert.equal(
+    thrown.code,
+    'NOTHING_WRITTEN',
+    'the code is dropped on the way to the browser, so the report has nothing to check and '
+      + 'goes back to guessing "the server decided" from an HTTP status',
+  );
+});
+
+test('an unhandled server throw arrives WITHOUT the code that would make it definite', async () => {
+  // routes/index.js answers an unhandled exception with a well-formed JSON 500
+  // (code INTERNAL_ERROR). It is shaped exactly like a refusal, and pages may
+  // already have been re-poured — which is why the status alone must never be
+  // read as "the server decided".
+  const api = loadApi(async () => jsonResponse(500, {
+    ok: false,
+    error: { message: 'socket hang up', code: 'INTERNAL_ERROR' },
+  }));
+
+  const thrown = await api('/api/builder/landing-pages/bulk-set-template', { method: 'POST' })
+    .then(() => null, (err) => err);
+
+  assert.equal(thrown.status, 500);
+  assert.notEqual(thrown.code, 'NOTHING_WRITTEN');
+});
+
+test('a response with no code at all leaves code undefined rather than inventing one', async () => {
+  const api = loadApi(async () => jsonResponse(500, { ok: false, error: { message: 'boom' } }));
+  const thrown = await api('/x', {}).then(() => null, (err) => err);
+  assert.equal(thrown.code, undefined);
 });

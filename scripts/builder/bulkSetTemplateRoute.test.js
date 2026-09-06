@@ -197,3 +197,72 @@ test('the check path writes nothing at all — no revision, no page, no archive'
   assert.equal(calls.filter((c) => c.method !== 'GET').length, 0, 'the check must not write');
   assert.deepEqual(rows.map((r) => r.page_template_id), ['27', '27']);
 });
+
+// ── The rule's evidence, on the wire ────────────────────────────────────────
+
+/**
+ * "Nothing was changed" is a claim, and the browser cannot check it.
+ *
+ * From the browser an unhandled throw and a deliberate refusal look identical:
+ * routes/index.js answers both with a well-formed JSON error envelope, and
+ * sbQuery genuinely can throw — its `await res.text()` sits outside the try
+ * that wraps fetch. Round 4 measured the consequence: page one HAD been
+ * re-poured, and because the report read `status >= 400` as "the server
+ * decided", the operator was told the archive "undoes nothing" — sent away
+ * from the only undo this operation has.
+ *
+ * So the route says it instead of leaving it to be deduced. These tests are
+ * the trip: the code the route stamps has to survive into the response body,
+ * because "the route sets it" and "the browser receives it" are two claims.
+ */
+const { NOTHING_WRITTEN } = require('../../lib/builderPagesStore');
+
+test('a refusal raised before any write is tagged NOTHING_WRITTEN on the wire', async () => {
+  const { route, calls } = withRoute({ snapshots: [] });
+  const out = await post(route, '/api/builder/landing-pages/bulk-set-template', BODY);
+
+  assert.equal(out.status, 400);
+  assert.equal(out.payload.error.code, NOTHING_WRITTEN);
+  assert.equal(calls.filter((c) => c.method === 'PATCH').length, 0);
+});
+
+test('the validation refusals are tagged too', async () => {
+  const { route } = withRoute();
+  for (const body of [
+    { pageIds: [], pageTemplateId: '47', snapshotId: '37' },
+    { pageIds: [1], pageTemplateId: '', snapshotId: '37' },
+    { pageIds: [1], pageTemplateId: '47', snapshotId: '' },
+  ]) {
+    const out = await post(route, '/api/builder/landing-pages/bulk-set-template', body);
+    assert.equal(out.status, 400, JSON.stringify(body));
+    assert.equal(out.payload.error.code, NOTHING_WRITTEN, JSON.stringify(body));
+  }
+});
+
+test('a template that cannot be resolved is tagged — the store refused before writing', async () => {
+  const { route, calls } = withRoute();
+  const out = await post(route, '/api/builder/landing-pages/bulk-set-template', {
+    ...BODY, pageTemplateId: 'no-such-template',
+  });
+
+  assert.equal(out.payload.ok, false);
+  assert.equal(out.payload.error.code, NOTHING_WRITTEN);
+  assert.equal(calls.filter((c) => c.method === 'PATCH').length, 0);
+});
+
+test('"every page failed" is deliberately NOT tagged', async () => {
+  // This is the honest half of the rule, and it is the easy one to get wrong.
+  // Every page reporting a failure is not the same as knowing the database is
+  // untouched: a PATCH that lands and then answers 500 comes back here as a
+  // failed row. Tagging it would put "nothing was changed" in front of the
+  // operator on exactly the evidence nobody has.
+  const { route } = withRoute({ pages: [] });
+  const out = await post(route, '/api/builder/landing-pages/bulk-set-template', BODY);
+
+  assert.equal(out.payload.ok, false);
+  assert.notEqual(
+    out.payload.error.code,
+    NOTHING_WRITTEN,
+    'the all-pages-failed answer claims the database is untouched, which it did not check',
+  );
+});

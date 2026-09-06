@@ -31,6 +31,44 @@
  * So: no branching over the counts. All three are stated, every time, and a
  * count of zero is simply left unsaid.
  *
+ * THE RULE: NO SENTENCE MAY STATE ANYTHING THE CODE DID NOT CHECK.
+ *
+ * Dane's answer, 2026-09-05, to the round-4 escalation. Four rounds of review
+ * sent this file back for the same class of defect in four spellings — a
+ * could-not-tell rendered as a definite answer (rounds 1, 2), a definite answer
+ * rendered as a could-not-tell (rounds 2, 3), and after real damage a definite
+ * "the archive undoes nothing" (round 4). Every round fixed the instances named
+ * and left the siblings, because the fix was a list. This is the rule instead:
+ *
+ *   A sentence that asserts something happened is a CLAIM. A claim may only be
+ *   made when the caller passed the fact that establishes it. There is no
+ *   default and no "assume it worked" — a fact that is not literally `true` or
+ *   `false` is UNKNOWN, and an UNKNOWN claim is not made at all.
+ *
+ * It is mechanical, not a habit: claims go through `claim()`, every claim is
+ * listed in CLAIMS with the fact that licenses it, and
+ * scripts/builder/bulkTemplateOutcome.test.js drives every function over a
+ * matrix of inputs and fails if a claim's phrase ever appears in a message its
+ * fact did not license. A new sentence that hard-codes "the list has been
+ * reloaded" fails that test without anybody having to remember this paragraph.
+ *
+ * The two facts that were being INFERRED rather than checked:
+ *
+ *   - "the server decided, so nothing was written" was inferred from
+ *     `status >= 400`. routes/index.js answers an UNHANDLED THROW with a
+ *     well-formed JSON 500, and sbQuery can throw: `await res.text()`
+ *     (lib/supabase.js) sits outside the try/catch that wraps fetch(), so a
+ *     dropped body read escapes the store as an exception. Pages already
+ *     re-poured, and the operator was told the archive "undoes nothing" — sent
+ *     away from the only undo this operation has. The route now SAYS so
+ *     instead: a refusal raised before any write carries the error code
+ *     NOTHING_WRITTEN, which is a fact the server checked and the browser
+ *     cannot.
+ *   - "the list has been reloaded" was asserted flat. The reload is itself a
+ *     call that can fail, on a path where the API is unhealthy by hypothesis,
+ *     and refreshPagesTableAfterBulkChange swallows the failure by design. The
+ *     caller now reports whether it worked.
+ *
  * AND WHERE THE PAGES ARE. A page with no published snapshot is served
  * straight from its draft (routes/publicSite.js -> getPublishedPage falls back
  * to getPublishedPageForProject), so on a project that has never published —
@@ -53,6 +91,95 @@
   function plural(n, one, many) {
     return n === 1 ? one : many;
   }
+
+  // The server's own word that a refusal was raised BEFORE any page was
+  // written. It is the only thing that licenses "nothing was changed" from an
+  // HTTP error, because the browser cannot tell a deliberate refusal from an
+  // unhandled throw: routes/index.js renders both as a JSON error envelope.
+  // Set by routes/builder.js on the bulk-set-template paths.
+  const NOTHING_WRITTEN = 'NOTHING_WRITTEN';
+
+  const UNKNOWN = 'unknown';
+
+  /**
+   * A caller-supplied fact, in one of THREE states.
+   *
+   * Anything that is not literally `true` or `false` is UNKNOWN — undefined, a
+   * missing property, null, a string, a number. That is the whole point: a
+   * caller that forgot to check gets UNKNOWN, not a cheerful default, so a new
+   * call site cannot silently inherit a claim nobody verified.
+   */
+  function fact(value) {
+    if (value === true) return true;
+    if (value === false) return false;
+    return UNKNOWN;
+  }
+
+  /**
+   * Say one of three things depending on the fact.
+   *
+   * The UNKNOWN branch may not make the claim. Saying NOTHING is always a valid
+   * answer there and is usually the right one — the operator is better served
+   * by a sentence that omits what it does not know than by one that guesses.
+   */
+  function claim(value, whenTrue, whenFalse, whenUnknown) {
+    const state = fact(value);
+    if (state === true) return whenTrue;
+    if (state === false) return whenFalse;
+    return whenUnknown;
+  }
+
+  /**
+   * Did the server tell us, positively, that it wrote nothing?
+   *
+   * Two ways to know, both evidence rather than inference:
+   *   - the caller knows the endpoint it called cannot write at all (the
+   *     pre-flight check), so even a request that died half way changed
+   *     nothing; or
+   *   - the refusal came back tagged NOTHING_WRITTEN, which the route only
+   *     puts on refusals it raised before touching a page.
+   *
+   * An HTTP status is NOT one of them. That was round 4's defect.
+   */
+  function serverWroteNothing(opts) {
+    return opts.wroteNothing === true || text(opts.code) === NOTHING_WRITTEN;
+  }
+
+  /**
+   * EVERY claim this file can make, with the fact that licenses it.
+   *
+   * The test walks this table across a matrix of inputs and fails if a phrase
+   * shows up in a message whose fact was not true. That is what makes the rule
+   * a rule rather than four fixed bugs: it constrains sentences that have not
+   * been written yet.
+   */
+  const CLAIMS = [
+    {
+      name: 'the list was reloaded',
+      phrase: 'The list has been reloaded',
+      licensed: (opts) => opts.listReloaded === true,
+    },
+    {
+      name: 'the list could not be reloaded',
+      phrase: 'The list could not be reloaded',
+      licensed: (opts) => opts.listReloaded === false,
+    },
+    {
+      name: 'nothing was changed',
+      phrase: 'Nothing was changed',
+      licensed: (opts) => serverWroteNothing(opts),
+    },
+    {
+      name: 'the archive undoes nothing',
+      phrase: 'undoes nothing',
+      licensed: (opts) => serverWroteNothing(opts) && opts.archiveTaken === true,
+    },
+    {
+      name: 'pages may already have been changed',
+      phrase: 'may already have been changed',
+      licensed: (opts) => !serverWroteNothing(opts),
+    },
+  ];
 
   // The server's own sentences already end in a full stop; the ones assembled
   // here do not. Appending blindly produced `Take an archive first..` in the
@@ -168,11 +295,48 @@
     const opts = options && typeof options === 'object' ? options : {};
     const reason = text(opts.error) || 'the request failed';
     const liveCount = Number.isFinite(opts.liveCount) ? Math.max(0, Math.trunc(opts.liveCount)) : 0;
+    // "N of the selected ___" is ALWAYS plural — only the verb follows the
+    // count. Hanging the noun off plural(n, 'page is', 'pages are') produced
+    // "1 of the selected page is live on the public site", in the one sentence
+    // this whole read-back exists to produce. Round 3 fixed this in
+    // describeBulkTemplateOutcome and left its sibling here holding the bug it
+    // had just quoted as the BEFORE.
     const live = liveCount
-      ? ` ${liveCount} of the selected ${plural(liveCount, 'page is', 'pages are')} live on the public site.`
+      ? ` ${liveCount} of the selected pages ${plural(liveCount, 'is', 'are')} live on the public site.`
       : '';
+    // THE RELOAD IS A CLAIM. refreshPagesTableAfterBulkChange swallows a failed
+    // reload on purpose, and this path is the one where the API is already
+    // unhealthy, so the two failures are correlated rather than independent.
+    // Asserted flat, this sentence was false exactly when it mattered: the
+    // table still showed the pre-change template values while telling the
+    // operator it had reloaded, so he checked the column, saw nothing moved and
+    // concluded nothing had happened.
+    const reloaded = claim(
+      opts.listReloaded,
+      ' The list has been reloaded.',
+      ' The list could not be reloaded, so the Template column may still show the values from before this run.',
+      '',
+    );
+    // "Some pages may already have been changed" IS A CLAIM, and what licenses
+    // it is not knowing that nothing was written. A caller that does know must
+    // not get this sentence — that is rounds 1 and 2's defect in its other
+    // direction, a definite answer rendered as a could-not-tell, and it ends by
+    // recommending Restore All, which rolls the whole project back to the
+    // archive point and takes any unrelated edit with it.
+    //
+    // describeBulkTemplateFailure never routes a known no-op here. This branch
+    // is for a direct caller, and it exists because the rule is a property of
+    // the FUNCTION, not of one path through the file. The claims test found it.
+    if (serverWroteNothing(opts)) {
+      return {
+        message: `${endSentence(reason)} Nothing was changed.${reloaded}`,
+        isError: true,
+        definite: true,
+      };
+    }
+
     return {
-      message: `${endSentence(reason)} The request failed part-way, so some pages may already have been changed and some may not — the list has been reloaded.${live} Check the pages, or Restore All from Archives if this is not what you wanted.`,
+      message: `${endSentence(reason)} The request failed part-way, so some pages may already have been changed and some may not.${reloaded}${live} Check the pages, or Restore All from Archives if this is not what you wanted.`,
       isError: true,
       definite: false,
     };
@@ -216,24 +380,41 @@
   function describeBulkTemplateFailure(options) {
     const opts = options && typeof options === 'object' ? options : {};
     const status = Number(opts.status);
-    const serverRefused = Number.isFinite(status) && status >= 400;
-    // The caller may KNOW this particular request could not have changed a
-    // page whatever happened to it — the pre-flight check writes nothing even
-    // when it dies half way. That is the one other way to be certain.
-    const wroteNothing = opts.wroteNothing === true;
 
-    if (!serverRefused && !wroteNothing) {
+    // EVIDENCE, NOT INFERENCE. This used to be `status >= 400`, and that is a
+    // guess about who decided: routes/index.js answers an unhandled throw with
+    // a well-formed JSON 500, and sbQuery throws when a response body read
+    // fails (await res.text() sits outside the try that wraps fetch). Measured
+    // in round 4 by making the second page's PATCH die: page one HAD been
+    // re-poured, and the operator was told
+    //
+    //   socket hang up. An archive was saved just before this, so Archives has
+    //   a new entry that undoes nothing.
+    //
+    // — pointed away from the only undo the operation has, right after real
+    // damage. So the definite branch now needs the server to SAY it wrote
+    // nothing. Anything else, including a 500, is a could-not-tell and gets the
+    // interruption sentence, which claims nothing in either direction.
+    const wroteNothing = serverWroteNothing(opts);
+
+    if (!wroteNothing) {
       return describeBulkTemplateInterruption({
         error: opts.error,
         liveCount: opts.liveCount,
+        listReloaded: opts.listReloaded,
       });
     }
 
     const reason = endSentence(text(opts.error) || `The request was refused${Number.isFinite(status) ? ` (${status})` : ''}`);
-    // The server's own refusals already say "nothing was changed"; a request
-    // that died on the pre-flight check has said nothing at all.
-    const nothingChanged = wroteNothing && !serverRefused ? ' Nothing was changed.' : '';
-    const archiveNote = opts.archiveTaken
+    // The route's own refusals already say "nothing was changed" in their
+    // message; a request that died on the pre-flight check has said nothing at
+    // all, so this supplies it. Both are licensed by the same fact.
+    const nothingChanged = opts.wroteNothing === true && !Number.isFinite(status) ? ' Nothing was changed.' : '';
+    // Only sayable because nothing was written — that is what makes "undoes
+    // nothing" true rather than a guess. Without the archive note the Archives
+    // list grows an entry the operator cannot account for, on the list he is
+    // being told to restore from.
+    const archiveNote = opts.archiveTaken === true
       ? ' An archive was saved just before this, so Archives has a new entry that undoes nothing.'
       : '';
     return {
@@ -248,5 +429,11 @@
     describeBulkTemplateOutcome,
     describeBulkTemplateInterruption,
     describeBulkTemplateFailure,
+    // The rule's own machinery, exported so the route and the test speak the
+    // same words rather than two copies of them.
+    NOTHING_WRITTEN,
+    CLAIMS,
+    fact,
+    claim,
   };
 });

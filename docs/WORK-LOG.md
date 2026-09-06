@@ -1,3 +1,36 @@
+## 2026-09-06 — A rule, instead of a fifth round of fixing the same bug (#602)
+
+Four times now, review has sent the bulk template change back for the same
+thing, and it has never once been the part that moves your pages — that half
+has been right since the first round. It is the *sentence you read afterwards*.
+Each round we fixed the exact sentences review named, and each round the same
+mistake turned up somewhere else. You looked at that pattern and picked option
+B: one more pass, wording only, with **a rule rather than another list — no
+sentence may state anything the code did not check.**
+
+That is now built as a mechanism, not a good intention. Every sentence that
+claims something happened has to be handed the fact that proves it, and a fact
+is three-way: yes, no, or *nobody checked*. "Nobody checked" is the default, and
+it never gets to make the claim. A test walks every combination of those facts
+and fails if any sentence ever says something its fact did not license — so a
+sentence written next month is covered by this too, which is the whole point.
+It found a fifth instance of the bug while it was being written.
+
+The three live faults are gone with it. The worst: if the change crashed
+half-way, the server's reply looked identical to a polite refusal, so the app
+told you *"an archive was saved just before this, so Archives has a new entry
+that undoes nothing"* — pointing you away from your only undo at the one moment
+pages really had been rewritten. The server now says outright when it refused
+before touching anything, so the app can tell the two apart instead of guessing.
+Second: the message said "the list has been reloaded" whether or not it had, and
+it fails precisely when everything else is failing — so you would check the
+Template column, see nothing moved, and reasonably conclude nothing happened. It
+now tells you when the list could not be refreshed. Third, one page live and
+unconfirmed read "1 of the selected page is live"; it reads properly now.
+
+All three were reproduced in a real browser before and after, by forcing the
+crash and the failed reload deliberately.
+
 ## 2026-09-04 — Move a whole batch of pages onto a different template in one go (#602)
 
 Builder: Pages now has a fourth button above the table — **Change Template**.

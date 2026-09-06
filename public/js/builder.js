@@ -4426,6 +4426,7 @@ App.builder = (function () {
         {
           error: err && err.message,
           status: err && err.status,
+          code: err && err.code,
           wroteNothing: true,
           archiveTaken: false,
         },
@@ -4491,7 +4492,7 @@ App.builder = (function () {
     // screen stops being a lie, and after a refusal it costs a read and shows
     // the same values.
     if (dialog) dialog.close();
-    await refreshPagesTableAfterBulkChange();
+    const listReloaded = await refreshPagesTableAfterBulkChange();
 
     if (interrupted) {
       // TWO COMPLETELY DIFFERENT EVENTS ARRIVE HERE, and the fork between them
@@ -4512,10 +4513,15 @@ App.builder = (function () {
         {
           error: interrupted && interrupted.message,
           status: interrupted && interrupted.status,
+          // The server's own word for "I refused before writing anything".
+          // Reading the status instead is a guess, and it guessed wrong on an
+          // unhandled throw, which routes/index.js answers as a JSON 500.
+          code: interrupted && interrupted.code,
           liveCount: liveIds.size,
           archiveTaken: true,
+          listReloaded,
         },
-        `${(interrupted && interrupted.message) || 'The request failed'}. The list has been reloaded — check the Template column to see what changed. Archives holds the archive taken just before this run.`,
+        `${(interrupted && interrupted.message) || 'The request failed'}. Check the Template column to see what changed. Archives holds the archive taken just before this run.`,
       ).message, true);
       if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Change Template'; }
       return;
@@ -4547,8 +4553,18 @@ App.builder = (function () {
       await loadSavedPages();
       renderPagesTable();
       syncLandingPageTableControls();
+      return true;
     } catch (_) {
-      // Left deliberately silent: the caller says what happened.
+      // Still silent — the caller says what happened, and a load error is the
+      // quieter of the two messages. But it RETURNS the answer now: the
+      // report used to state "the list has been reloaded" flat, and this path
+      // runs when the API is already unhealthy, so the reload fails in exactly
+      // the run where the sentence matters. Measured in round 4 with the write
+      // and the reload both refused: the table still showed the pre-change
+      // template values underneath a sentence claiming it had reloaded, so the
+      // operator checks the column, sees nothing moved, and concludes nothing
+      // happened.
+      return false;
     }
   }
 

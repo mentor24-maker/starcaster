@@ -766,6 +766,17 @@ App.api = async function api(path, options = {}) {
     // some pages may already have been changed", which is a definite answer
     // rendered as a could-not-tell (bulk template change, 2026-09-04).
     jsErr.status = res.status;
+    // The server's own CODE, not just its status. A status says how the
+    // response was shaped; the code says who decided. routes/index.js answers
+    // an unhandled throw with a well-formed JSON 500 (code INTERNAL_ERROR), so
+    // a caller reading the status alone cannot tell a deliberate refusal from a
+    // crash — and the bulk template change read exactly that as "the server
+    // decided, nothing was written" after pages had already been re-poured
+    // (2026-09-05, round 4). A route that knows it refused before writing says
+    // so with a code; dropping it here left the browser nothing to check.
+    if (typeof err === 'object' && err !== null && err.code) {
+      jsErr.code = err.code;
+    }
     if (typeof err === 'object' && err !== null && err.details) {
       jsErr.details = err.details;
     }
