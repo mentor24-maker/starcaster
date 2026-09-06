@@ -1,14 +1,15 @@
 'use strict';
 
 /**
- * IS ANY PART OF THE MERGE STEP AUTO-MERGEABLE?
+ * IS ANY PART OF THE GOVERNANCE MACHINERY AUTO-MERGEABLE?
  *
  * The sibling of `check:automerge-reach`, pointed the other way. That check
  * asks "has an auto-mergeable file reached the SERVER?", because Lane B's
  * safety argument is that no served route reaches `scripts/`. This one asks
- * "has an auto-mergeable file reached the MERGE STEP?", because Lane B's other
- * safety argument is that a machine may never merge a change to the machinery
- * that merges. Ratified doctrine, criterion 4:
+ * "has an auto-mergeable file reached the machinery that GOVERNS merging?",
+ * because Lane B's other safety argument is that a machine may never merge a
+ * change to the machinery that governs it — the merge step, the referee that
+ * decides what a review PASS is, and the gates. Ratified doctrine, criterion 4:
  *
  *   "A machine may never auto-merge a change to the machinery that governs
  *    machines ... CI workflows, git hooks, check_conventions, nodeRoles,
@@ -196,17 +197,45 @@ test('the walk reaches both trees and the merge executors already in them', () =
  * ------------------------------------------------------------------ */
 
 /**
- * The merge step, named file by file. Each one is already governance-blocked;
- * the assertion below checks that, so this list cannot rot into a set of
- * paths that stopped being protected.
+ * WHAT COUNTS AS GOVERNANCE MACHINERY — and therefore whose imports get asked
+ * the question below.
+ *
+ * THREE KINDS, because `GOVERNANCE_STEMS` protects three kinds and says so in
+ * its own section headings: the merge step, "the referee: what counts as a
+ * review PASS", and the gates. Until 2026-09-06 only the FIRST of the three
+ * had a guard, which review round 2 on task 86bbuzyra found. So the exact rot
+ * this file exists to stop — a hand-kept list that cannot name a file
+ * extracted after it was written — was still wide open for the other two, and
+ * this branch is what newly exposes them: before Lane B, `scripts/` was
+ * refused by accident. Measured on this branch before the fix:
+ *
+ *     laneEligibility(['scripts/builder/reviewGateClickup.js'])
+ *       -> { lane: 'B' }   // decides whether the referee sees a passing verdict
+ *
+ * TWO OF THE THREE ARE DERIVED, NOT LISTED. The referee is found by stem and
+ * the gates by the `scripts/check_` prefix — the same rules `governanceReason`
+ * already uses to block them, so the two lists cannot disagree. Naming four
+ * files here by hand, which is what the send-back suggested, would have
+ * reproduced the original defect one door over: a sixteenth `scripts/check_*`
+ * gate would be blocked on arrival and its dependencies still never asked.
+ *
+ * Deriving is not theory here — it found a file the hand list missed.
+ * `scripts/pin_asset_versions.cjs` is imported by `check_asset_versions.cjs`
+ * for `defaultHtmlTargets` and `hashFile`: it is that gate's target list and
+ * its hash function, i.e. the gate's entire subject.
+ *
+ * The MERGE STEP stays a literal list because it shares no stem or prefix to
+ * derive from. `every named root exists` below is what keeps it honest, and
+ * the extraction guard is what catches the pieces it loses.
  *
  * `scripts/clickup_direct.mjs` is deliberately NOT a root even though it
- * performs the merge. It is the 4000-line relay and imports 28 modules, most
- * of them ordinary ClickUp commands — `loopNote`, `operatorCard`,
- * `buildStart`. Rooting here would demand blocking all of them and would
- * narrow Lane B far past the boundary Dane actually chose, which is his call
- * and not this test's. The merge-step modules it imports are roots in their
- * own right below, which is where the real question lives.
+ * performs the merge, and that carve-out survives this widening on purpose.
+ * It is the 4000-line relay and imports 28 modules, most of them ordinary
+ * ClickUp commands — `loopNote`, `operatorCard`, `buildStart`. Rooting here
+ * would demand blocking all of them and would narrow Lane B far past the
+ * boundary Dane actually chose, which is his call and not this test's. The
+ * merge-step modules it imports are roots in their own right below, which is
+ * where the real question lives.
  */
 const MERGE_STEP_ROOTS = [
   'scripts/builder/mergeOnComment.js',
@@ -219,6 +248,34 @@ const MERGE_STEP_ROOTS = [
   'scripts/builder/autoMergeLane.js',
   'scripts/ship_thread.cjs',
 ];
+
+/**
+ * The referee, by stem — the same three stems `GOVERNANCE_STEMS` files under
+ * "what counts as a review PASS, and what a send-back is".
+ *
+ * Test files are excluded from the ROOTS (not from the blocking, which
+ * `governanceReason` already does): a test decides nothing at run time, and
+ * rooting on one drags its fixtures-only helpers into the question.
+ */
+const REFEREE_RE = /(^|\/)(reviewGate|review_gate|sendBackRounds)\.(js|mjs|cjs)$/;
+
+/** The gates, by the prefix `GOVERNANCE_FILE_PREFIXES` already blocks. */
+const GATE_PREFIX = 'scripts/check_';
+
+const isTestFile = (f) => /\.test\.(js|mjs|cjs|ts|tsx)$/.test(f);
+
+function refereeRoots() {
+  return walkedSourceFiles().map(rel).filter((f) => REFEREE_RE.test(f) && !isTestFile(f));
+}
+
+function gateRoots() {
+  return walkedSourceFiles().map(rel).filter((f) => f.startsWith(GATE_PREFIX) && !isTestFile(f));
+}
+
+/** Every root, in the order the three kinds are described above. */
+function governedRoots() {
+  return [...MERGE_STEP_ROOTS, ...refereeRoots(), ...gateRoots()];
+}
 
 /**
  * Dependencies of the merge step that a lane may still carry, each with why.
@@ -276,18 +333,48 @@ function directDependencies(file) {
 }
 
 test('every named root exists and is itself governance-blocked', () => {
-  for (const root of MERGE_STEP_ROOTS) {
+  for (const root of governedRoots()) {
     assert.ok(fs.existsSync(path.join(ROOT, root)),
-      `${root} is named as the merge step but does not exist — it was renamed `
-      + 'or split, and this guard has been walking a file that is not there');
+      `${root} is named as governance machinery but does not exist — it was `
+      + 'renamed or split, and this guard has been walking a file that is not there');
     assert.ok(governanceReason(root),
-      `${root} is named as the merge step but no lane rule blocks it`);
+      `${root} is named as governance machinery but no lane rule blocks it`);
   }
+});
+
+/*
+ * A DERIVED LIST FAILS DIFFERENTLY FROM A HAND-KEPT ONE. The hand-kept list
+ * rots by omission, loudly, once somebody looks; a derivation that stops
+ * matching returns an empty set and every assertion built on it passes
+ * forever. That is the same shape as the blind walk above, so it gets the
+ * same treatment: name what each rule must find rather than counting.
+ */
+test('the derived root rules still find the referee and the gates', () => {
+  const referee = refereeRoots();
+  for (const known of ['scripts/builder/reviewGate.js', 'scripts/review_gate.mjs']) {
+    assert.ok(referee.includes(known),
+      `the referee rule no longer matches ${known} — it has gone blind, and `
+      + 'every dependency of the review gate is unasked');
+  }
+  const gates = gateRoots();
+  for (const known of ['scripts/check_conventions.cjs', 'scripts/check_syntax.cjs']) {
+    assert.ok(gates.includes(known),
+      `the gate rule no longer matches ${known} — it has gone blind, and every `
+      + 'dependency of the gates is unasked');
+  }
+  // The prefix is a family, not two files: `check_conventions` is the one
+  // doctrine names by hand and the rest are the same kind of thing.
+  assert.ok(gates.length >= 10, `expected the scripts/check_* family, found ${gates.length}`);
+
+  // ...and a test file is NOT a root, or the fixtures-only helpers of every
+  // gate's test get dragged into the question and the allowlist gets padded.
+  assert.ok(!governedRoots().some(isTestFile),
+    'a test decides nothing at run time and must not be a root');
 });
 
 test('every direct dependency of the merge step is blocked, or allowed by name', () => {
   const offenders = [];
-  for (const root of MERGE_STEP_ROOTS) {
+  for (const root of governedRoots()) {
     for (const dep of directDependencies(root)) {
       if (governanceReason(dep)) continue;
       if (!laneForFile(dep)) continue; // outside every lane anyway
@@ -296,22 +383,23 @@ test('every direct dependency of the merge step is blocked, or allowed by name',
     }
   }
   assert.deepEqual(offenders, [],
-    'the merge step imports these, so a change to one changes what the merge '
-    + 'step does — and a lane would carry it without Dane. Add the stem to '
-    + 'GOVERNANCE_STEMS, or record it in ALLOWED_DEPENDENCIES with a reason.');
+    'the merge step, the referee or a gate imports these, so a change to one '
+    + 'changes what that machinery decides — and a lane would carry it without '
+    + 'Dane. Add the stem to GOVERNANCE_STEMS, or record it in '
+    + 'ALLOWED_DEPENDENCIES with a reason.');
 });
 
 /*
  * A recorded allowance that is no longer a dependency is stale bookkeeping,
  * and a stale allowance is how an exception outlives its reason.
  */
-test('every allowance is still a real dependency of the merge step', () => {
-  const deps = new Set(MERGE_STEP_ROOTS.flatMap(directDependencies));
+test('every allowance is still a real dependency of governance machinery', () => {
+  const deps = new Set(governedRoots().flatMap(directDependencies));
   for (const [dep, why] of ALLOWED_DEPENDENCIES) {
     assert.ok(deps.has(dep),
-      `${dep} is allowed as a merge-step dependency but nothing in the merge `
-      + 'step imports it any more — delete the entry rather than leaving it to '
-      + 'excuse the file if it ever comes back');
+      `${dep} is allowed as a governance-machinery dependency but nothing in `
+      + 'the merge step, the referee or a gate imports it any more — delete the '
+      + 'entry rather than leaving it to excuse the file if it ever comes back');
     assert.ok(why && why.length > 20, `${dep} must say WHY it is allowed`);
   }
 });

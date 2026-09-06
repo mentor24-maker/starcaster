@@ -1530,6 +1530,53 @@ test('git hooks and shell runners are governance, though neither is a .js file',
   }
 });
 
+test("the referee's and the gates' own helpers are governance too", () => {
+  // REVIEW ROUND 2 ON TASK 86bbuzyra (2026-09-06). GOVERNANCE_STEMS protects
+  // three kinds of machinery — the merge step, the referee that decides what a
+  // review PASS is, and the gates — but only the merge step had a guard asking
+  // what it IMPORTS. So the rot that guard exists to stop was still open for
+  // the other two, and this branch is what exposed it: before Lane B,
+  // `scripts/` was refused by accident. All five were carriable by Lane B when
+  // the send-back was written; the reproduction was:
+  //
+  //   laneEligibility(['scripts/builder/reviewGateClickup.js'])  -> lane B
+  //
+  // Each decides something the machinery above then acts on, so a machine that
+  // could merge one could change what the referee accepts or what a gate
+  // checks, and grade itself afterwards.
+  for (const f of [
+    'scripts/builder/reviewGateClickup.js', // what the referee reads back from ClickUp
+    'scripts/builder/clickupTicketLink.js', // what counts as "this PR names its ticket"
+    'scripts/builder/loopTrail.js', // the trail the referee reads
+    'scripts/lib/generated_files.cjs', // the gates' definition of a generated file
+    'scripts/pin_asset_versions.cjs', // check_asset_versions' targets AND its hash
+  ]) {
+    assert.ok(governanceReason(f), `${f} governs what the referee or a gate decides`);
+    assert.equal(laneEligibility([f]).eligible, false, `${f} must never auto-merge`);
+  }
+});
+
+test('...and blocking them did NOT narrow Lane B into uselessness', () => {
+  // The half that is easy to fake: an allowlist that is subtly too strict
+  // refuses everything and looks exactly like the situation this ticket was
+  // filed to fix. Ordinary pipeline tooling next door to all five must still
+  // be carried.
+  for (const f of [
+    'scripts/builder/loopNote.js',
+    'scripts/builder/operatorCard.js',
+    'scripts/builder/buildStart.js',
+    'scripts/builder/pullRequestTitle.js',
+    'docs/WORK-LOG.md',
+  ]) {
+    assert.equal(governanceReason(f), null, `${f} is ordinary tooling, not governance`);
+  }
+  assert.equal(laneEligibility([
+    'scripts/builder/loopNote.js',
+    'scripts/builder/loopNote.test.js',
+    'docs/WORK-LOG.md',
+  ]).lane, 'B', 'a pipeline-internal PR must still be Lane B eligible');
+});
+
 test('the gates themselves are governance — every scripts/check_* file', () => {
   const names = fs.readdirSync(path.join(__dirname, '..')).filter((n) => n.startsWith('check_'));
   assert.ok(names.length >= 10, 'expected the check_* family to exist');

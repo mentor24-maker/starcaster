@@ -251,6 +251,19 @@ const GOVERNANCE_STEMS = [
   'nodeRoles',
   'verify_node_roles',
   'nodeRebootTest',
+  // THE REFEREE'S AND THE GATES' OWN HELPERS (2026-09-06, review round 2 on
+  // task 86bbuzyra). The paragraphs above protect three kinds of machinery —
+  // the merge step, the referee that decides what a review PASS is, and the
+  // gates the work is judged by — but only the MERGE STEP had a guard asking
+  // what it imports. These five are what the widened guard found when the
+  // other two kinds were finally asked the same question. Every one of them
+  // was carriable by Lane B, and each decides something the machinery above
+  // then acts on:
+  'reviewGateClickup', // what the referee reads back from ClickUp, i.e. whether a ticket has a passing verdict
+  'clickupTicketLink', // what counts as "this PR names its ticket" — widen the matcher and the gate accepts a PR with no trail
+  'loopTrail', // the trail the referee reads to decide a PR was opened by a loop at all
+  'generated_files', // check_conventions' and check_syntax' definition of which files are generated
+  'pin_asset_versions', // check_asset_versions' target list AND its hash function — the gate's whole subject
 ];
 
 /**
