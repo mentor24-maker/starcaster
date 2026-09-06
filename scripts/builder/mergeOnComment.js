@@ -24,6 +24,7 @@
 // The one reading of a local merge verdict, shared with the merge step so the
 // two cannot disagree about it (task 86bbq80j5).
 const { isRealOverlap, isSelfHealing, isPermanent, conflictActor, verdictCopy, conflictVerdictKind } = require('./conflictWork');
+const { stripMachineMarker } = require('./machineComment');
 
 // Every refusal reason, classified terminal/transient/unknown where it is
 // RAISED (task 86bbtqpxd). There is no default: a code absent from that table
@@ -224,7 +225,14 @@ const LEGACY_HAND_OFF_RE = /^conflict hand-off on PR #\d+$/i;
  * ("no \"PR opened:\" comment on this ticket — nothing to merge").
  */
 function parseMergeMarker(text) {
-  const raw = String(text || '');
+  // THE STAMP COMES OFF FIRST (2026-09-06, task 86bbvr0j5). `call()` appends
+  // the `[machine]` line to every comment it posts, this marker included, and
+  // that line ends in "Dane's token — not his word". The ` — <timestamp>` split
+  // below takes the LAST em-dash, so the stamp captured it: the timestamp was
+  // never recovered and the reason came back with the stamp glued on. Neither
+  // ever matched what the next pass compared against, which killed the dedup
+  // and made the stall alarm behind it unreachable.
+  const raw = stripMachineMarker(text);
   if (!raw.startsWith(MERGE_MARKER)) return null;
   let rest = raw.slice(MERGE_MARKER.length).trim();
   let at = '';
@@ -275,6 +283,38 @@ function latestMergeMarker(replies) {
 }
 
 /**
+ * How many times a pass has already refused this authorization FOR THIS REASON.
+ *
+ * WHY IT IS COUNTED (2026-09-06, task 86bbvr0j5, Dane's call). A conflicting
+ * PR retries every relay pass, and the only alarm on that path measured AGE —
+ * 24 hours, chosen when the failure being imagined was a hand-off nobody had
+ * picked up. It is the wrong instrument for a merge that is actively retrying
+ * and failing: PR #628 failed five times in ninety minutes and the clock had
+ * barely moved. Dane noticed by eye and asked why the system had not.
+ *
+ * The attempts need no new storage, because each pass already writes its own
+ * marker reply. Counting the markers that gave THIS reason is the number of
+ * times this exact refusal has been reached — which is the question, and it
+ * survives a restart because the record is on the ticket rather than in
+ * memory.
+ *
+ * Matching on the reason, not merely on the marker, is what keeps it honest: a
+ * PR refused twice for red checks and once for a conflict has not tried the
+ * conflict three times, and an alarm that said so would send somebody looking
+ * for a problem that is not there.
+ */
+function countMergeRefusals(replies, reason) {
+  const want = String(reason == null ? '' : reason).trim();
+  if (!want) return 0;
+  let n = 0;
+  for (const r of replies || []) {
+    const parsed = parseMergeMarker(r && r.comment_text);
+    if (parsed && parsed.kind === 'refused' && String(parsed.reason).trim() === want) n += 1;
+  }
+  return n;
+}
+
+/**
  * Decide what a bus-relay pass should do with one Ready-to-launch ticket.
  *
  * Returns `{ act, reason, ... }` where act is one of:
@@ -295,7 +335,7 @@ function latestMergeMarker(replies) {
  * re-planning costs no extra noise on the ticket. A different reason, or a
  * clean run through to 'merge', is new information and is acted on.
  */
-function mergeDecision({ status, comments, operatorId, handled, refused, refusedAt }) {
+function mergeDecision({ status, comments, operatorId, handled, refused, refusedAt, refusedCount }) {
   const seen = handled instanceof Set ? handled : new Set(handled || []);
   const priorRefusals = refused instanceof Map ? refused : new Map(Object.entries(refused || {}));
   // WHEN the previous refusal was written, carried alongside WHY. A conflict
@@ -303,6 +343,7 @@ function mergeDecision({ status, comments, operatorId, handled, refused, refused
   // has not changed (task 86bbq0fh8) — and the age can only come from the
   // marker, which is the one record of when the pass actually said it.
   const priorRefusalTimes = refusedAt instanceof Map ? refusedAt : new Map(Object.entries(refusedAt || {}));
+  const priorRefusalCounts = refusedCount instanceof Map ? refusedCount : new Map(Object.entries(refusedCount || {}));
   const all = byDateNewestFirst(comments);
 
   // Only Ready to launch. The same word on any other status does nothing —
@@ -332,6 +373,9 @@ function mergeDecision({ status, comments, operatorId, handled, refused, refused
     commentDate: commentDate(authorization),
     priorRefusal: priorRefusals.get(String(authorization.id)),
     priorRefusalAt: priorRefusalTimes.get(String(authorization.id)) || '',
+    // HOW MANY TIMES, alongside why and when. Age alone cannot see a merge
+    // that is retrying and failing every few minutes (task 86bbvr0j5).
+    priorRefusalCount: Number(priorRefusalCounts.get(String(authorization.id))) || 0,
   };
 
   // A refusal we have already given, whose reason is still true, is not news.
@@ -1631,6 +1675,7 @@ module.exports = {
   MERGE_PHRASES,
   MERGE_MARKER,
   parseMergeMarker,
+  countMergeRefusals,
   latestMergeMarker,
   normalizeCommand,
   commentDate,

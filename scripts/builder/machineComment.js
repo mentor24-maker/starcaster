@@ -163,6 +163,39 @@ function stampMachineComment(text) {
  * `comment` array of `{ text, attributes }` blocks. Returns the key, or null
  * when this body is not a comment post at all.
  */
+/**
+ * The comment text WITHOUT the machine stamp `call()` appended.
+ *
+ * WHY (2026-09-06, task 86bbvr0j5). The stamp is written at the door, onto
+ * every machine comment — including the merge step's own dedup marker, whose
+ * format predates it and ends in ` — <ISO timestamp>`. The stamp put a second
+ * em-dash AFTER that timestamp, so `parseMergeMarker`'s `lastIndexOf(' — ')`
+ * found the one in "Dane's token — not his word", failed to split the
+ * timestamp off, and returned a reason with the timestamp and the whole stamp
+ * glued to it. It therefore never equalled the reason the next pass compared
+ * it against, so the merge step's dedup silently stopped working on the day
+ * the stamp shipped: PR #628 posted the identical conflict hand-off seven
+ * times in two hours, and the stall alarm behind that comparison became
+ * unreachable.
+ *
+ * Anchored on the LAST non-empty line, exactly like `isMachineComment` — same
+ * question, so it must not be a second definition that can drift. A body that
+ * does not end in the stamp comes back unchanged.
+ */
+function stripMachineMarker(text) {
+  const raw = String(text == null ? '' : text);
+  const lines = raw.split('\n');
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    // Only the stamp, and only at the end. Anything else means this comment
+    // does not carry one and must come back untouched.
+    if (!line.startsWith(MACHINE_MARKER)) break;
+    return lines.slice(0, i).join('\n').trim();
+  }
+  return raw.trim();
+}
+
 function commentTextKey(body) {
   if (!body || typeof body !== 'object') return null;
   if (typeof body.comment_text === 'string') return 'comment_text';
@@ -228,6 +261,7 @@ module.exports = {
   stampCommentBody,
   blocksToText,
   commentTextKey,
+  stripMachineMarker,
   isCommentPostPath,
   lastNonEmptyLine,
 };
