@@ -247,6 +247,30 @@ confirmed role. And a machine with nothing probeable gets its own sentence —
 the sentence `scripts/verify_node_roles.mjs` already writes, so the read half
 and the write half agree instead of pointing at each other.
 
+**What the write half refuses, the read half refuses too — and neither of them
+crashes.** The record is a file in `~/Library/Application Support` that anything
+can write, so "what counts as a record" has to be one rule, not two. It was two.
+`recordVerification` checked every row on the way in; the reader checked the
+record's shape and stopped at the edge of the list; and the verdict then read a
+role name off each row. A single `null` row in that list threw a TypeError —
+and because `doctor:node` builds its whole report in memory and prints it with
+one `console.log` on its last line, **all six sections went with it**: identity,
+toolchain, repos, config, schedules and the reboot test, leaving the npm banner
+and a stack trace. The command this file calls read-only and safe anywhere
+answered nothing at all, on exactly the morning it exists for. Both halves share
+one definition of a usable row now, and the verdict re-checks the rows itself
+because it is also handed records directly. **A crash is not one of the three
+states**, and an ungradeable record is CANNOT TELL — never a pass.
+
+**A record that cannot say whose it is gets the same refusal as one from another
+Mac.** The copied-record guard read `record.node && record.node !== node`, so an
+*unattributed* record skipped the comparison and was graded as this machine's
+own — the shape with the least claim on this machine of any of them. The
+likeliest way any record is sitting here at all is a folder copied between Macs;
+one that names no machine simply has less to say for itself than one naming the
+wrong one. `recordVerification` refuses to write that shape as well, so neither
+half can produce it and neither will accept it.
+
 **The row and the summary read one fact.** `didNotComeBack(row)` — installed
 AND loaded — is the single expression behind both `node:verify`'s table prefix
 and its count. They were written separately once, and a plist deleted without

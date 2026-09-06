@@ -610,3 +610,148 @@ test('the record lives beside the heartbeat stamps, not in the repo', () => {
   // ...and it is NOT in the repo, which is the point of the folder choice.
   assert.ok(!rt.verificationDir(FAKE_HOME).includes('starcaster/.claude'));
 });
+
+// --- round 3: a record shape neither half agreed on --------------------------
+//
+// The write half validated every row; the read half validated the record's
+// SHAPE and stopped at the edge of the list; the verdict then read `row.role`
+// off each row. The gap between them was a TypeError, and `doctor_node.mjs`
+// prints its whole report with one `console.log` on its last line, so all six
+// sections went with it.
+
+test('a record row that is not an observation makes the record unreadable', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'reboot-test-'));
+  try {
+    fs.mkdirSync(rt.verificationDir(home), { recursive: true });
+    const bad = [
+      [null, { role: 'bus-relay', installed: true, loaded: true }],
+      [{ role: 'bus-relay', installed: true, loaded: true }, 'bus-relay'],
+      [['bus-relay', true, true]],
+      [{ installed: true, loaded: true }],
+      [{ role: '', installed: true, loaded: true }],
+      [{ role: 'bus-relay' }],
+      [{ role: 'bus-relay', installed: true }],
+      [{ role: 'bus-relay', installed: 'yes', loaded: 'yes' }],
+    ];
+    for (const roles of bad) {
+      fs.writeFileSync(
+        rt.verificationFile(home),
+        JSON.stringify({ node: 'mac-mini', boot: { sec: BOOT_SEC }, at: 'x', roles, skipped: [] }),
+      );
+      const stored = rt.readVerification({ homedir: home });
+      assert.equal(stored.readable, false, `expected a refusal for ${JSON.stringify(roles)}`);
+      assert.equal(stored.found, false);
+      assert.ok(stored.why, 'an unreadable record must say what is wrong with it');
+      // Criterion 4: unreadable is CANNOT TELL upstairs, never a pass.
+      const verdict = rt.rebootTestReport({ boot: boot(), stored, node: 'mac-mini', owned: OWNED });
+      assert.equal(verdict.state, 'unknown');
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a malformed record is a verdict, not a TypeError, even handed over directly', () => {
+  // This is the crash itself. `rebootTestReport` is documented as taking what
+  // `readVerification` returned, and is also fed records straight from callers
+  // and tests — the same reason the empty-record guard above it stayed. A
+  // crash is not one of the three states, and the caller that dies here is the
+  // diagnostic somebody is running BECAUSE something is already wrong.
+  for (const roles of [[null], [undefined], ['bus-relay'], [{ installed: true, loaded: true }], [{ role: 'bus-relay' }]]) {
+    let verdict;
+    assert.doesNotThrow(() => {
+      verdict = rt.rebootTestReport({
+        boot: boot(),
+        stored: storedRecord({ roles }),
+        node: 'mac-mini',
+        owned: OWNED,
+      });
+    }, `a record row of ${JSON.stringify(roles)} threw instead of answering`);
+    assert.equal(verdict.state, 'unknown');
+    assert.doesNotMatch(verdict.headline, /confirmed|came back/, 'an ungradeable record is not a pass');
+  }
+});
+
+test('a record that cannot say which machine it describes is not this machine\'s', () => {
+  // Was: `if (node && record.node && record.node !== node)`, so a record with
+  // no attribution skipped the copied-record guard and was graded to a PASS —
+  // the shape with the LEAST claim on this machine of any, by this module's own
+  // reasoning about copied Application Support folders.
+  for (const missing of ['', undefined, null, 0, 123, {}]) {
+    const verdict = rt.rebootTestReport({
+      boot: boot(),
+      stored: storedRecord({ node: missing }),
+      node: 'mac-mini',
+      owned: OWNED,
+    });
+    assert.equal(verdict.state, 'unknown', `record.node = ${JSON.stringify(missing)} reached ${verdict.state}`);
+    assert.match(verdict.headline, /does not say which machine/);
+    assert.doesNotMatch(verdict.headline, /came back|confirmed/);
+  }
+});
+
+test('recordVerification refuses to write a record that cannot name its machine', () => {
+  // The other half of the same rule: nothing may WRITE the shape the reader
+  // now refuses. `verify_node_roles.mjs` refuses an unknown node before it
+  // reaches here, so nothing in this repo writes one today — which is exactly
+  // the "nothing calls it that way yet" round 1 was sent back over.
+  const calls = [];
+  const write = { mkdirSync: () => calls.push('mkdir'), writeFileSync: () => calls.push('write') };
+  const roles = [{ role: 'bus-relay', installed: true, loaded: true }];
+  for (const node of [undefined, null, '', 0, 42]) {
+    const r = rt.recordVerification({ node, boot: boot(), roles, write });
+    assert.equal(r.ok, false, `expected a refusal for node ${JSON.stringify(node)}`);
+    assert.match(r.why, /which machine/);
+  }
+  assert.deepEqual(calls, [], 'a refused verification must not touch the disk');
+  assert.equal(rt.recordVerification({ node: 'mac-mini', boot: boot(), roles, write }).ok, true);
+});
+
+test('a stale row does not read as a fourth role with no schedule', () => {
+  // The seam: the not-checked list joined its entries with a bare space and
+  // was never terminated, so the stale-row sentence ran straight on from the
+  // last one — `youtube-media (Installing it needs ...) pulse-pipelines is in
+  // the record, but ...`. The operator's whole answer is this line.
+  const owned = [
+    OWNED[0],
+    { role: 'loop-build', blocked: 'The loops run inside a long-lived agent session. There is no installer in this repo yet.' },
+    { role: 'loop-review', blocked: 'Same as loop-build. One session runs both lanes.' },
+  ];
+  const stale = 'pulse-pipelines';
+  const withStale = (rows) => storedRecord({ roles: [...rows, { role: stale, installed: true, loaded: true }] });
+
+  const pass = rt.rebootTestReport({
+    boot: boot(),
+    stored: withStale([{ role: 'bus-relay', installed: true, loaded: true }]),
+    node: 'mac-mini',
+    owned,
+  });
+  assert.equal(pass.state, 'pass');
+
+  const fail = rt.rebootTestReport({
+    boot: boot(),
+    stored: withStale([{ role: 'bus-relay', installed: true, loaded: false }]),
+    node: 'mac-mini',
+    owned,
+  });
+  assert.equal(fail.state, 'fail');
+
+  for (const verdict of [pass, fail]) {
+    // The clause a reader takes as "roles with no schedule" is everything from
+    // `Not checked:` to the first full stop. The stale role must not be in it.
+    const clause = /Not checked: ([^.]*)\./.exec(verdict.why);
+    assert.ok(clause, `no terminated "Not checked:" clause in: ${verdict.why}`);
+    assert.doesNotMatch(
+      clause[1],
+      new RegExp(`\\b${stale}\\b`),
+      `"${stale}" is stale, but it reads as a role with no schedule: ${verdict.why}`,
+    );
+    assert.doesNotMatch(clause[1], /is in the record/, `the stale sentence ran on: ${verdict.why}`);
+    // ...and it is still said, in its own sentence.
+    assert.match(verdict.why, new RegExp(`\\. ${stale} is in the record`));
+  }
+
+  // The FAIL line's own seam: the roles that did not come back were listed
+  // without a full stop, so the next finding ran on from `...has not loaded it`.
+  assert.doesNotMatch(fail.why, /loaded it [A-Za-z]/, `the failure clause ran on: ${fail.why}`);
+});

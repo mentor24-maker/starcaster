@@ -80,6 +80,37 @@ One of the new tests was rewritten during the work because it could not fail.
 It compared two lists that the fix itself had made incapable of overlapping, so
 it would have gone green forever no matter how wrong the sentence a person
 actually reads had become. It now reads the names back out of that sentence.
+
+**Round four, and this one killed the whole report.** The check keeps a small
+notepad file on the machine recording what it last saw. Anything can write to
+that file, and the code that *writes* it was fussy about the format while the
+code that *reads* it barely looked — so a single bad line in that file did not
+produce a wrong answer, it produced no answer at all. `npm run doctor:node`
+prints its report in one go at the very end, so the crash threw away all six
+sections: which machine this is, whether the tools are installed, the checkouts,
+the settings, the timers, and the reboot check itself. I reproduced it exactly —
+**zero bytes of report, a stack trace instead** — and then again with the fix, on
+the same bad file: the full report, seven sections, and the reboot line reading
+*"this machine's role verification could not be read"* with the one command that
+clears it. That is the whole point. The moment you most need that command is the
+morning after a power cut, and it was one stray byte away from telling you
+nothing.
+
+The second fault was the same shape as ones already fixed twice on this ticket:
+the notepad says which machine it describes, and there was a guard to reject one
+copied from the *other* Mac — but a notepad that named **no** machine skipped
+that guard entirely and was accepted as this machine's own. Backwards: if a file
+turns up here at all, the likeliest explanation is that somebody copied a folder
+between the two Macs, and one that cannot even say whose it is has less to vouch
+for it, not more. Both halves now share one definition of a usable record, and
+neither will write or accept one that cannot name its machine.
+
+Last, a small readability fix that matters more than it sounds. The explanation
+line ran several separate findings together with no full stops, so a job that had
+**moved to the other Mac** read as a fourth job on this one with no timer — the
+line the operator reads to decide whether anything is wrong was quietly saying
+something untrue. Each finding is its own sentence now. All six fixes were broken
+on purpose, one at a time, and each one turned a named test red.
 ## 2026-09-05 — The SQL hand-off check could jam itself shut, and then keep asking for a file you already had (#620)
 
 When an agent finishes a turn on a branch that adds a database script, a check
