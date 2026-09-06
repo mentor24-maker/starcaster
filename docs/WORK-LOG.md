@@ -21,6 +21,22 @@ Machine notes now stamp themselves, and the lane reads that stamp. Only a
 comment it can positively identify as machine-written is ignored — anything
 it cannot classify still counts as Dane's word and still stops the merge, so
 the cautious half of the behaviour is untouched.
+
+Two more holes turned up while building it, both the same shape. The lane was
+willing to accept the stamp OR an older style of label a machine used to open
+its notes with — and that label is exactly what Dane types when he pastes a
+card and writes his answer underneath it. So his own "no, hold this one" could
+be read as a machine talking. The lane now asks only for the stamp, which
+cannot be pasted into place by accident.
+
+Worse, the note he is most likely to quote is the announcement itself, because
+it is the one he is replying to. Quoting it put a second announcement on the
+ticket, dated to his own comment, which quietly restarted the hour — so his
+objection was no longer "after the announcement" and never registered at all.
+An hour later the lane merged the very thing he had said to hold. An
+announcement only counts now if it carries the stamp, so a quote of one arms
+nothing.
+
 ## 2026-09-05 — A repair that moves real tickets is now actually tested (#623)
 
 There is a repair in the system called the sweep. When one of the machines dies

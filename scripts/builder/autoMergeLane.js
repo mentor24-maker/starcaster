@@ -47,7 +47,7 @@ const {
   isReviewPassed,
   findPullRequest,
 } = require('./mergeOnComment');
-const { isMachineComment } = require('./machineComment');
+const { isStampedMachineComment } = require('./machineComment');
 
 // ── Criterion 1: which files may ride in this lane ───────────────────────────
 
@@ -299,6 +299,20 @@ function byDateNewestFirst(comments) {
  */
 function latestAutoMergeMarker(comments) {
   for (const c of byDateNewestFirst(comments)) {
+    // A MARKER ONLY COUNTS ON A COMMENT A MACHINE ACTUALLY POSTED
+    // (2026-09-06, task 86bbv8nvy round 1). The announcement is the card Dane
+    // is MOST likely to quote — it is the one he is replying to — and quoting
+    // its `[auto-merge] armed PR #618` line put a second "announcement" on the
+    // ticket dated to HIS comment. Measured: the window silently restarted
+    // from his own words, his objection was no longer "after the marker", and
+    // an hour later the lane merged the very PR he had said hold on.
+    //
+    // Same door as the objection filter above, same key: the lane's own notice
+    // carries the tail `[machine]` stamp `call()` writes; his quote of it does
+    // not. It fails safe — an unrecognised marker is not an armed window, so
+    // nothing merges on it; re-announcing takes a fresh review PASS, which is
+    // what every other cancel already costs.
+    if (!isStampedMachineComment(c.comment_text)) continue;
     const parsed = parseAutoMergeMarker(c.comment_text);
     if (parsed) return { ...parsed, at: commentDate(c), commentId: String(c.id) };
   }
@@ -663,18 +677,28 @@ function laneADecision({
     // announcement and the stuck-merge escalation. Asking the user id alone
     // read the pipeline talking to itself as him objecting, and cancelled a
     // merge he had authorized with the words "you commented on this ticket",
-    // which he had not. `isMachineComment` is the one reader for that
-    // question (scripts/builder/machineComment.js); a second definition here
-    // would be a second thing to keep in step.
+    // which he had not.
+    //
+    // THE STRICT READER, NOT THE WIDE ONE (round 1 of this ticket). Only the
+    // tail stamp counts here — `isStampedMachineComment`, the last-line-only
+    // half of scripts/builder/machineComment.js. The wide `isMachineComment`
+    // ALSO honours a head-anchored tag (`[CC-starcaster loop-review]`,
+    // `[auto-merge]`, `[bus-relay]`, `[reconciler]`), which other callers do
+    // need — and which is exactly what Dane types when he quotes a card and
+    // objects underneath it. Measured: "[auto-merge] armed PR #618 lane A\nno,
+    // hold this one" classified as a machine's words. Over 110 real Loop Queue
+    // comments, every one of the 100 machine-written ones carried the tail
+    // stamp and none needed the head tag, so this costs the lane nothing.
     //
     // THE ASYMMETRY IS UNCHANGED, and this is the whole safety argument: only
     // a comment POSITIVELY recognised as machine-written is discounted.
     // Anything unclassifiable — an unstamped comment, an unreadable body, a
-    // format nobody has seen — is still his, and still cancels.
+    // head tag he could have typed, a format nobody has seen — is still his,
+    // and still cancels.
     const objection = all.find(
       (c) => Number(c.user && c.user.id) === Number(operatorId)
         && commentDate(c) > marker.at
-        && !isMachineComment(c.comment_text),
+        && !isStampedMachineComment(c.comment_text),
     );
     if (objection) {
       return {
