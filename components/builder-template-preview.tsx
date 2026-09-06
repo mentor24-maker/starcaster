@@ -2081,19 +2081,19 @@ function BuilderModulePreview({
   }
 
   if (module.type === "headline-rotator") {
-    return <HeadlineRotatorPreview module={module} />;
+    return <HeadlineRotatorPreview module={module} liveSite={liveSite} />;
   }
 
   if (module.type === "carousel") {
-    return <CarouselPreview module={module} />;
+    return <CarouselPreview module={module} liveSite={liveSite} />;
   }
 
   if (module.type === "program-list") {
-    return <ProgramListModulePreview module={module} />;
+    return <ProgramListModulePreview module={module} liveSite={liveSite} />;
   }
 
   if (module.type === "feature-cards") {
-    return <FeatureCardsModulePreview module={module} previewMode={previewMode} />;
+    return <FeatureCardsModulePreview module={module} previewMode={previewMode} liveSite={liveSite} />;
   }
 
   if (module.type === "poll-category-list") {
@@ -2372,7 +2372,7 @@ function BuilderModulePreview({
     return <BlogTagCloudPreview settings={module.settings} projectId={projectId} liveSite={liveSite} />;
   }
   if (module.type === "blog-post-tags") {
-    return <BlogPostTagsPreview settings={module.settings} />;
+    return <BlogPostTagsPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-post") {
     return <BlogPostViewPreview settings={module.settings} />;
@@ -2411,7 +2411,7 @@ function BuilderModulePreview({
     module.type === "blog-author-bio" ||
     module.type === "blog-toc"
   ) {
-    return <BlogModulePlaceholder type={module.type} />;
+    return <BlogModulePlaceholder type={module.type} liveSite={liveSite} />;
   }
 
   if (module.type === "admin-team-users") {
@@ -7721,14 +7721,37 @@ function BlogTagCloudPreview({
   );
 }
 
-function BlogPostTagsPreview({ settings }: { settings: Record<string, string> }) {
+function BlogPostTagsPreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
   const rawTags = settings.tags || "";
-  const tags = rawTags
+  const configured = rawTags
     ? rawTags
         .split(",")
         .map((t) => t.trim())
         .filter(Boolean)
-    : ["Example", "Tag"];
+    : [];
+
+  /*
+   * PLACEHOLDERS ARE A BUILDER AFFORDANCE, NOT CONTENT — the same rule the
+   * tag cloud learned at line ~7595. The old line here was
+   * `rawTags ? … : ["Example", "Tag"]`, so a tenant with no tags set showed
+   * its visitors "Tags: Example Tag" as though those were the post's real
+   * tags (operator report, 2026-09-03, delraytennis.starcaster.pro/blog).
+   * The two words exist so the module is not an empty box while somebody is
+   * designing the page.
+   */
+  const tags = configured.length ? configured : liveSite ? [] : ["Example", "Tag"];
+
+  // Nothing to show and nobody to instruct: a visitor gets no module at all,
+  // not a lone "Tags:" prefix over empty space.
+  if (liveSite && tags.length === 0) return null;
+
   const layout = settings.layout || "pills";
   const color = settings.color || "#0f4f8f";
   const bgColor = settings.bgColor || "#eff6ff";
@@ -9050,7 +9073,15 @@ function SiteSearchResultsPreview({
   );
 }
 
-function BlogModulePlaceholder({ type }: { type: string }) {
+/**
+ * Three module types have no renderer yet, so the canvas shows a named dashed
+ * box where one will go. That box is scaffolding for whoever is building the
+ * page — on a published site it is a grey rectangle reading "Author Bio" with
+ * nothing in it, which is the same defect as "Tags: Example Tag": a
+ * Builder-time affordance rendering at visit time. A visitor gets nothing.
+ */
+function BlogModulePlaceholder({ type, liveSite = false }: { type: string; liveSite?: boolean }) {
+  if (liveSite) return null;
   const labels: Record<string, string> = {
     "blog-post-card": "Post Card",
     "blog-author-bio": "Author Bio",
@@ -9090,9 +9121,12 @@ function BlogModulePlaceholder({ type }: { type: string }) {
  * renderer cannot disagree about it.
  */
 function CarouselPreview({
-  module
+  module,
+  liveSite = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const settings = module.settings;
   const format = settings.format === "cards" ? "cards" : "slideshow";
@@ -9307,6 +9341,10 @@ function CarouselPreview({
   }, [count, index]);
 
   if (count === 0) {
+    // The text below is addressed to whoever is BUILDING the page. A visitor
+    // has no editor, so on a live site the module is simply not there rather
+    // than a box telling them to do something they cannot do (landmine 16).
+    if (liveSite) return null;
     return (
       <div className="builder-preview-carousel builder-preview-carousel-empty">
         {isCards ? "Add cards in the editor" : "Add slides in the editor"}
@@ -9551,9 +9589,12 @@ function CarouselPreview({
 }
 
 function HeadlineRotatorPreview({
-  module
+  module,
+  liveSite = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const color = module.settings.color || "#18324a";
   const entries = useMemo(
@@ -9674,6 +9715,10 @@ function HeadlineRotatorPreview({
   };
 
   if (entries.length === 0) {
+    // The text below is addressed to whoever is BUILDING the page. A visitor
+    // has no editor, so on a live site the module is simply not there rather
+    // than a box telling them to do something they cannot do (landmine 16).
+    if (liveSite) return null;
     return (
       <div className="builder-preview-headline-rotator" style={containerStyle}>
         <span style={{ alignSelf }}>Add headlines in the editor</span>
@@ -10184,14 +10229,21 @@ const FEATURE_CARD_ICON_SHAPES = new Set(["circle", "square", "plain"]);
  * text baked into an image never could.
  */
 function ProgramListModulePreview({
-  module
+  module,
+  liveSite = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const programs = parsePrograms(module.settings.programs);
 
   // Standard 5: an empty module is a designed state, not a blank box.
   if (programs.length === 0) {
+    // The text below is addressed to whoever is BUILDING the page. A visitor
+    // has no editor, so on a live site the module is simply not there rather
+    // than a box telling them to do something they cannot do (landmine 16).
+    if (liveSite) return null;
     return (
       <div className="builder-preview-programs builder-preview-programs-empty">
         Add programs in the editor
@@ -10316,15 +10368,22 @@ function ProgramListModulePreview({
 
 function FeatureCardsModulePreview({
   module,
-  previewMode = false
+  previewMode = false,
+  liveSite = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
   previewMode?: boolean;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const cards = parseBuilderCardItems(module.settings.cards, "card");
 
   // Standard 5: an empty module is a designed state, not a blank box.
   if (cards.length === 0) {
+    // The text below is addressed to whoever is BUILDING the page. A visitor
+    // has no editor, so on a live site the module is simply not there rather
+    // than a box telling them to do something they cannot do (landmine 16).
+    if (liveSite) return null;
     return (
       <div className="builder-preview-feature-cards builder-preview-feature-cards-empty">
         Add cards in the editor
