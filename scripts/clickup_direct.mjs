@@ -79,6 +79,7 @@ import autoMergeLane from './builder/autoMergeLane.js';
 import autoMergeLedgerFile from './builder/autoMergeLedgerFile.js';
 import mergeWindowLease from './builder/mergeWindowLease.js';
 import mergeWindowLeaseFile from './builder/mergeWindowLeaseFile.js';
+import mergeCompletion from './builder/mergeCompletion.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
 import sendBackRounds from './builder/sendBackRounds.js';
 import pipelinePause from './builder/pipelinePause.js';
@@ -248,6 +249,19 @@ function requestCount() { return clickupLib.getBudget().requests; }
 /** Plain sleep. Only the retry loop uses it. */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * A BLOCKING sleep, for the merge-completion wait (task 86bbv35cq).
+ *
+ * The merge step is synchronous throughout — every `gh` call here is
+ * `spawnSync` — and `mergeCompletion.waitForMerge` is shared with
+ * `scripts/ship_thread.cjs`, which is CommonJS and cannot await at all. One
+ * synchronous wait for both callers is what keeps the two from answering "did
+ * it merge?" differently. Nothing else in this file may use it.
+ */
+function sleepBlocking(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 /**
@@ -1287,7 +1301,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // round 1 of task 86bbuvd50). The bound used to compare the reason PROSE,
   // and GitHub rewords a cannot-tell mid-block — so the commit is what says
   // whether this is still the same wall or a new one.
-  const fields = 'number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,headRefOid,title,url,statusCheckRollup,autoMergeRequest';
+  const fields = 'number,state,mergedAt,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,headRefOid,title,url,statusCheckRollup,autoMergeRequest';
   const view = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
   if (!view.ok) {
     // A read that failed is not a red PR — it is a PR nobody checked. Say so
@@ -1324,7 +1338,11 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       console.error(`  DRY RUN — PR #${pr.number} is already merged; would record it and set ${label} to Live`);
       return { outcome: 'would-record-merged', pr: pr.number };
     }
-    const mergedAt = new Date().toISOString();
+    // GITHUB'S MERGE TIME, NEVER OURS (task 86bbv35cq, criterion 4). This
+    // used to stamp `new Date()` at the moment the read returned, which for an
+    // armed merge is however long after the merge as the relay's next pass —
+    // up to ten minutes — and it is written on the ticket as fact.
+    const mergedAt = mergeCompletion.mergeTimeLabel(mergeCompletion.mergedAtOf(prJson));
     const record = mergeOnComment.mergedElsewhereNotice({ commentId: authorizingComment, pr, mergedAt, armed: wasArmed });
     // THE ORDINARY ENDING OF AN ARMED MERGE, and therefore the ordinary way
     // the merge window is given back: the pass that armed this pull request
@@ -2030,7 +2048,123 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   if (!merged.ok) {
     return refuse(`the merge command itself failed (${merged.stderr.slice(0, 300)})`, `PR #${pr.number} could not be merged.`, mergeOnComment.REFUSAL_CODES.mergeCommandFailed);
   }
-  const mergedAt = new Date().toISOString();
+
+  // `gh` EXITING 0 IS NOT A MERGE (task 86bbv35cq). Under a merge queue that
+  // command ENQUEUES and returns success at once; the pull request stays OPEN
+  // for as long as the queue takes and may never merge at all if the group's
+  // CI fails. Everything below this line — stamping a merge time, writing the
+  // merged marker, moving the ticket to Live, announcing it on the bus — is
+  // the bookkeeping a COMPLETED merge owes, and none of it may run on a merge
+  // nobody has observed. So the merge is observed first.
+  //
+  // With no queue, which is the state this ships into, `gh pr merge` merges
+  // synchronously and this returns on its very first read without sleeping.
+  //
+  // THE WAIT IS CHARGED AND BOUNDED (round 2). It draws an in-pass wait slot
+  // like every other wait in this pass — same cap, same per-wait ceiling — so
+  // the tested "a pass cannot outlast its own interval" invariant covers it
+  // instead of standing beside it. A 15-minute literal here would have been
+  // 1.5x the relay's whole 600s wake, which is the precise mistake the
+  // MAX_IN_PASS_WAITS comment records having already been made once. A spent
+  // budget still takes ONE read and no sleep, which is the entire queue-less
+  // path, so nothing ordinary is missed by a pass that has done its waiting.
+  const observeBudget = mergeOnComment.mergeObserveBudget({
+    used: inPassBudget ? inPassBudget.used : Infinity,
+    cap: inPassBudget ? inPassBudget.cap : 0,
+  });
+  const observed = mergeCompletion.waitForMerge({
+    now: () => Date.now(),
+    sleep: sleepBlocking,
+    timeoutMs: observeBudget.timeoutMs,
+    pollIntervalMs: mergeOnComment.IN_PASS_POLL_MS,
+    readPr: () => {
+      const seen = gh(mergeCompletion.prObservationArgv(repo, pr.number));
+      if (!seen.ok) return null;
+      return mergeCompletion.parsePrObservation(seen.stdout);
+    },
+  });
+
+  // CHARGED ON THE WAY OUT, ON EVIDENCE (round 3). The slot used to be drawn
+  // above, before the observation — so a queue-less merge, which answers on the
+  // first read having slept 0ms and is every merge on this repo today, still
+  // cost one of three. Three ordinary merges in a pass left the budget spent
+  // and the fourth ticket's REAL review-gate wait refused, deferring it a whole
+  // interval, for waits that never happened. `sleptMs` is what it actually
+  // blocked for; the rule lives in mergeOnComment beside the budget it spends.
+  if (inPassBudget && mergeOnComment.mergeObservationSpendsSlot({
+    charged: observeBudget.charged, sleptMs: observed.sleptMs,
+  })) inPassBudget.used += 1;
+
+  if (observed.outcome !== 'merged') {
+    // THE THIRD ANSWER (DOCTRINE 3.2). Not a success — nothing is recorded,
+    // the ticket does not move to Live, no merge time is invented and the bus
+    // is not told a merge happened. Not a refusal either — the merge command
+    // succeeded and GitHub may well land it minutes from now, so his
+    // authorization stays UNSPENT and the next pass picks the ticket up and
+    // finds it merged.
+    //
+    // THE WINDOW IS NOT ALWAYS GIVEN BACK (round 3). It used to be released on
+    // every non-merged outcome, `queued` included — and `queued` is precisely
+    // the state where GitHub is holding this pull request and will land it.
+    // Handing the window over there lets the next merge move main, which puts
+    // the held pull request behind (protection is strict:true), resets the
+    // checks it is waiting on, and it never lands: the livelock the window
+    // exists to prevent, arriving through its own fix. An armed merge already
+    // holds the window for exactly this reason; a queued one is the same
+    // deferred main move. The decision is in mergeCompletion, break-tested.
+    const disposition = mergeCompletion.windowDispositionAfterMerge(observed);
+    if (disposition.release) {
+      releaseMergeWindow(disposition.why);
+    } else {
+      console.error(`  MERGE WINDOW HELD by PR #${pr.number} — ${disposition.why}`);
+    }
+    const why = observed.outcome === 'queued'
+      ? `PR #${pr.number} was ENQUEUED, not merged — ${mergeCompletion.holdLabel(observed.hold)}, and it was still open after ${observed.polls} read(s). The ticket has NOT been moved to Live and no merge has been recorded; the next pass will find it merged and do the bookkeeping then.`
+      : observed.outcome === 'not-merged'
+        // NOT a queue wait, and this is the round-2 correction: with nothing
+        // holding the pull request there is no queue to wait for and the merge
+        // simply did not happen. Said plainly, once, rather than dressed as
+        // "GitHub is still working through the merge queue".
+        //
+        // AND NOT ALWAYS A REFUSAL EITHER (round 4). `not-merged` covers hold
+        // 'none' — observed, nothing is holding it, GitHub really did refuse —
+        // and hold 'unknown', where the field never came back and why it did
+        // not merge is simply not known. This line asserted a refusal for
+        // both, and it is written to the ticket and to the bus, so it reaches
+        // Dane. Six lines below, this same return already sets
+        // `cannotTell: true` on exactly that reading: the code knew, and the
+        // sentence did not. The wording is shared with ship, in
+        // mergeCompletion.
+        ? `PR #${pr.number} did NOT merge — it is still open and ${mergeCompletion.holdLabel(observed.hold)}. ${mergeCompletion.notMergedExplanation(observed.hold).cause} The ticket has NOT been moved to Live and no merge has been recorded.`
+        : observed.outcome === 'closed'
+          ? `PR #${pr.number} is CLOSED without having merged. The ticket has NOT been moved to Live and no merge has been recorded.`
+          : `whether PR #${pr.number} merged is UNKNOWN — ${observed.failedReads} read(s) came back blind, so nobody looked. The ticket has NOT been moved to Live and no merge has been recorded.`;
+    // The window's fate rides along on the SAME line, because a held window
+    // stops every other merge on this machine and that is not something to
+    // learn from a log nobody reads. A released one says so too, so the two
+    // are never told apart by silence.
+    const windowNote = disposition.release
+      ? 'The merge window was given back.'
+      : 'The merge window is being HELD by this pull request until it lands or the lease bound clears it — no other merge runs meanwhile.';
+    unchecked.push(`${task.id}: ${why} ${windowNote}`);
+    console.error(`  MERGE NOT OBSERVED on ${label}: ${observed.outcome} — ${why}`);
+    return {
+      outcome: 'merge-not-observed',
+      pr: pr.number,
+      prUrl: pr.url,
+      reason: why,
+      headSha: prJson.headRefOid || null,
+      // 'queued' and 'closed' ARE readings; 'unknown' is the absence of one.
+      // So is a `not-merged` whose HOLD could not be read: the merge is known
+      // not to have happened, but whether GitHub will still land it is not,
+      // and a confident refusal there would be the same overreach in miniature.
+      cannotTell: observed.outcome === 'unknown'
+        || (observed.outcome === 'not-merged' && observed.hold === 'unknown'),
+      mergeState: observed.outcome,
+    };
+  }
+
+  const mergedAt = mergeCompletion.mergeTimeLabel(observed.mergedAt);
   // Released BEFORE the bookkeeping below, which is several ClickUp writes and
   // a bus post. main has already moved; holding the window through that would
   // idle the next merge for no reason, and a failure in the bookkeeping must
@@ -4116,7 +4250,7 @@ if (cmd === 'whoami') {
   // cap x budget, which is what keeps a pass from becoming unbounded
   // and stops one stuck PR starving the rest (task 86bbk2fb5).
   const inPassBudget = { used: 0, cap: mergeOnComment.MAX_IN_PASS_WAITS };
-  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0, stalled: 0, armed: 0, threw: 0 };
+  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0, stalled: 0, armed: 0, notObserved: 0, threw: 0 };
   // Report what could not be checked rather than silently passing over it
   // (DOCTRINE 3.11) — a task this script could not read is a task whose
   // comments might be sitting unrelayed, not a clean zero.
@@ -4450,6 +4584,12 @@ if (cmd === 'whoami') {
         else if (m.outcome === 'auto-merge-armed' || m.outcome === 'would-arm-auto-merge') merges.armed++;
         else if (m.outcome === 'auto-merge-disarmed' || m.outcome === 'would-disarm-auto-merge') merges.waiting++;
         else if (m.outcome === 'waiting' || m.outcome === 'would-update-branch' || m.outcome === 'would-rerun-review-gate' || m.outcome === 'would-record-merged') merges.waiting++;
+        // THE MERGE COMMAND RAN AND THE MERGE WAS NOT OBSERVED (task
+        // 86bbv35cq). Its own bucket, never `merged`: counting it with the
+        // merges is precisely the false success this ticket exists to remove,
+        // and counting it with `waiting` would hide the one case a queue makes
+        // possible — a pull request handed to GitHub that never lands.
+        else if (m.outcome === 'merge-not-observed') merges.notObserved++;
         // THE READING THIS PASS TOOK, whatever it was. Recorded for EVERY
         // outcome, not only the stuck ones, because a verdict that CLEARS is
         // what deletes the stored run — criterion 5, "a resolved wobble leaves
@@ -4929,6 +5069,18 @@ if (cmd === 'whoami') {
             else await stampLoopNoteSoftly(t.id, loopNote('auto-merge-cancelled', { at: clockAt(Date.now()) }), unchecked);
             console.error(`  LANE A CANCELLED at merge time on ${label}: ${m.reason}`);
             lane.cancelled++;
+          } else if (m.outcome === 'merge-not-observed') {
+            // The merge command ran and the merge was NOT observed (task
+            // 86bbv35cq) — enqueued, closed, or unreadable. Emphatically not
+            // counted as a lane merge: the ledger is the rate cap, and
+            // crediting it with a merge that has not happened would spend a
+            // slot on nothing. The announcement stays armed, the ticket stays
+            // where it is, and the next pass finds it merged (or still not)
+            // and does the bookkeeping then. Already reported in `unchecked`
+            // by the merge step; this line is so the lane's own log says it
+            // too, rather than filing it under "CI is still running".
+            console.error(`  LANE A MERGE NOT OBSERVED on ${label}: ${m.reason}`);
+            lane.waiting++;
           } else {
             // 'waiting' — CI is still running. The announcement stays armed
             // and the next pass tries again. Nothing is said, because nothing
@@ -5017,7 +5169,7 @@ if (cmd === 'whoami') {
     : '';
 
   const mergeLine = mergingAllowed
-    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.armed} handed to GitHub auto-merge, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass${merges.threw ? `, ${merges.threw} THREW (see could-not-be-checked below)` : ''}`
+    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.armed} handed to GitHub auto-merge, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass${merges.notObserved ? `, ${merges.notObserved} MERGE NOT OBSERVED (enqueued or unreadable — see could-not-be-checked below)` : ''}${merges.threw ? `, ${merges.threw} THREW (see could-not-be-checked below)` : ''}`
     : pauseState.paused
       ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
       : ', merging disabled (--no-merge)';
