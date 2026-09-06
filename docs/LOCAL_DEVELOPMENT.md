@@ -268,7 +268,7 @@ grey dashed box reading "Post Card". All of them are supposed to be there
 while somebody designs a page and gone once a visitor arrives.
 
 Every one of those has been found the same way — by Dane, on a client's live
-site (PRs #564, #576, #580, #630). Not because the check is hard, but because
+site (PRs #564, #576, #580, #627). Not because the check is hard, but because
 nothing said how to run it, so "I looked at it" always meant the canvas,
 which is the half where the placeholder is *correct*.
 
@@ -313,10 +313,11 @@ npm run build:builder
 git stash pop && npm run build:builder
 ```
 
-Delete the scratch page when you are done. This is how #630 was checked: the
-same published page rendered `Tags: / Example / Tag / Post Card / Author Bio /
-Table of Contents` before and nothing at all after — which is the sentence
-"where I looked at it" is asking for, and no test could have produced it.
+Delete the scratch page when you are done. This is how the placeholder sweep
+that became #627 was checked: the same published page rendered `Tags: /
+Example / Tag / Post Card / Author Bio / Table of Contents` before and nothing
+at all after — which is the sentence "where I looked at it" is asking for, and
+no test could have produced it.
 
 ## When something is wrong
 
