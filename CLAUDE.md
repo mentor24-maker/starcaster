@@ -335,6 +335,7 @@ setting somebody flips on one machine at 2am.
 npm run node:whoami          # which machine is this, and what may it run
 npm run node:owns -- <job>   # 0 = yes, 3 = another machine's job, 1 = cannot tell
 npm run doctor:node          # is this MACHINE a valid node? (read-only, safe anywhere)
+npm run node:verify          # did this machine's jobs come back after it restarted?
 npm run provision:node       # what would it take to make it one? (dry run)
 ```
 
@@ -350,6 +351,23 @@ work would grade it by the assumptions it acted on — but they read ONE invento
 quietly. **Installing the pulse schedules reports CANNOT DO YET on every run**
 until Slice B (`86bbh9kh2`) exists: a green check on a machine that runs no jobs
 is the exact failure the NODES plan was written against.
+
+**A schedule can be installed, loaded, and never have started at all.** macOS
+scheduled jobs are USER jobs: they do not run until somebody logs in. With
+FileVault on and no automatic login, a 3am power blip leaves the Mini at a login
+screen with everything stopped and nothing reporting it — `launchctl list` shows
+nothing wrong because nothing is loaded to be wrong. So `doctor:node` has a
+sixth section that asks a different question from the schedules one: **have this
+machine's roles been confirmed since it last restarted?** `npm run node:verify`
+probes every owned schedule and records what it SAW, role by role; `doctor:node`
+reads that back. The thing compared is the machine's boot identity
+(`sysctl -n kern.boottime`), not a date somebody maintains, so a restart puts
+the answer back to CANNOT TELL on its own. The record carries observations and
+never a verdict — a pass a script could write by reaching its own last line is
+the failure the section exists against. Two commands because `doctor:node`
+writes nothing, which is what makes it safe on a machine that is on fire.
+The cross-machine half ("confirm from another machine") is the heartbeat below,
+deliberately not rebuilt here.
 
 ### A job that stops firing has to say so
 

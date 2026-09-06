@@ -158,6 +158,61 @@ cutover ends up half-done in both directions.
 
 ---
 
+## The reboot test — did the jobs come BACK?
+
+`doctor:node` can tell you a schedule is installed and loaded. That is not the
+same claim as *the roles came back after this machine last restarted*, and on an
+always-on box the gap between the two is where the silence lives.
+
+Scheduled jobs on macOS are **user** jobs: they do not start until somebody logs
+in. With FileVault on and no automatic login, a 3am power blip leaves the Mac
+sitting at a login screen with every job stopped and **nothing anywhere
+reporting it**. `launchctl list` shows nothing wrong, because nothing is loaded
+to be wrong. This is the check behind that decision (ClickUp doc
+`2kydhxeu-754`, page 1; vault `doctrine/NODES.md` §5, principle P5).
+
+```
+npm run node:verify      probe every owned schedule and record what was seen
+npm run doctor:node      read that record back — PASS / FAIL / CANNOT TELL
+```
+
+**Two commands, because `doctor:node` writes nothing.** That promise at the top
+of its file is what makes it safe to run on a machine that is on fire, and a
+check that quietly wrote state would retire it. So `node:verify` confirms and
+`doctor:node` reads.
+
+**The boot identity is what gets compared, not a date somebody maintains.**
+`sysctl -n kern.boottime` is the machine's own statement of when it last
+started, so a restart invalidates the record on its own — the report goes back
+to CANNOT TELL with nobody having to remember anything. (Sixty seconds of
+tolerance, because macOS stores that instant as wall-clock time and NTP moves
+it. Drift beyond that reads as "restarted", which costs a spurious CANNOT TELL
+and never a spurious PASS.)
+
+**The record carries what was observed, never a verdict.** `recordVerification`
+refuses a record with no per-role rows, so `node:verify` cannot claim a pass by
+reaching its own last line, and the PASS/FAIL is re-derived from those rows on
+every read. A green tick written by the code path that was *supposed* to check
+is the failure this whole slice exists against. For the same reason, if any
+owned schedule cannot be probed, `node:verify` writes **nothing** and exits 2:
+half a reading recorded as a whole one would read as a verification.
+
+**The cross-machine half is the heartbeat, on purpose.** Doctrine asks you to
+confirm *from another machine*, and it is right — a Mac that cannot log in
+cannot report on itself. That mechanism already exists as Slice E:
+`scripts/run_bus_relay.sh` runs the staleness check **before** it asks whether
+it owns the relay, so the non-owning machine, awake every ten minutes doing
+nothing, is the vantage point that survives the owning machine being dead.
+Building a second one here would be two watchdogs disagreeing quietly. What
+`node:verify` adds is the half the heartbeat structurally cannot do: stand *on*
+the machine and say whether its roles have been confirmed since the current boot.
+
+Exit codes for `node:verify`: **0** everything came back · **1** a role did not
+(recorded, so `doctor:node` reports FAIL too) · **2** could not take a reading,
+nothing written.
+
+---
+
 ## What it cannot do yet, and why that is printed every single run
 
 **Installing the pulse scheduled jobs needs pulse's `bin/install-launchd.sh`,

@@ -12,6 +12,11 @@
  * the schedules that make it a place work can run? Until now that was a
  * seven-page document (ClickUp doc 2kydhxeu-754) and a person reading down it.
  *
+ * Section 6 asks the one doctrine names that the rest of this file cannot:
+ * did the roles come BACK after the machine last restarted (vault
+ * `doctrine/NODES.md` §5, principle P5). It is a read; `npm run node:verify`
+ * is what confirms, which is why the promise below survives.
+ *
  * READ-ONLY. It installs nothing, starts nothing and writes nothing. Running
  * it on a machine that is on fire is always safe — which is the point, because
  * it is what you run BEFORE deciding whether to provision.
@@ -44,6 +49,7 @@ const require = createRequire(import.meta.url);
 const nodeRoles = require('../lib/nodeRoles.js');
 const provision = require('../lib/nodeProvision.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
+const rebootTest = require('../lib/nodeRebootTest.js');
 const { mainCheckoutDir } = await import('./lib/main_checkout.mjs');
 
 const HERE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -437,8 +443,8 @@ if (!knownNode) {
         `${job.role}: cannot tell whether its schedule is installed.`,
         `${job.installer} --status did not answer (${status.error || 'no output'}).`,
       );
-    } else if (/schedule:\s+INSTALLED/.test(status.text)) {
-      const loaded = /loaded:\s+yes/.test(status.text);
+    } else if (rebootTest.parseScheduleStatus(status.text).installed) {
+      const { loaded } = rebootTest.parseScheduleStatus(status.text);
       if (loaded) pass(`${job.role}: schedule installed and loaded.`, job.label);
       else fail(`${job.role}: schedule file exists but launchd has not loaded it.`, `${job.installer}`, job.label);
     } else {
@@ -494,7 +500,7 @@ if (!knownNode) {
     if (!spec.installer) continue;
     if (nodeRoles.roleOwner(role) === node.name) continue;
     const status = sh('bash', [path.join(MAIN_CHECKOUT, spec.installer), '--status'], { timeoutMs: 20000 });
-    if (status.ok && /schedule:\s+INSTALLED/.test(status.text)) {
+    if (status.ok && rebootTest.parseScheduleStatus(status.text).installed) {
       fail(
         `${role} is installed here, but ${nodeRoles.roleOwner(role)} owns it.`,
         `${spec.installer} --uninstall`,
@@ -504,7 +510,46 @@ if (!knownNode) {
   }
 }
 
-// --- 6. the steps that are Dane's -------------------------------------------
+// --- 6. the reboot test -----------------------------------------------------
+// Doctrine (vault `doctrine/NODES.md` §5, principle P5) asks for one more thing
+// than the section above: not "is the schedule installed" but "did the roles
+// come back after this machine last restarted". Those are different questions,
+// and on an always-on box with FileVault the gap between them is where the
+// silence lives — scheduled jobs are USER jobs, so a 3am power blip leaves the
+// Mac at a login screen with everything stopped and nothing reporting it.
+//
+// This section only READS. `npm run node:verify` is what confirms, and it is a
+// separate program so that the promise at the top of this file — installs
+// nothing, starts nothing, writes nothing — stays true.
+
+heading('REBOOT TEST — have this machine\'s roles been confirmed since it restarted?');
+
+{
+  const bootProbe = sh('sysctl', ['-n', 'kern.boottime']);
+  const boot = bootProbe.ok
+    ? rebootTest.parseBootTime(bootProbe.text)
+    : { ok: false, why: bootProbe.ran ? `sysctl failed: ${bootProbe.error}` : 'sysctl is not on this shell\'s PATH' };
+
+  const stored = rebootTest.readVerification();
+  const verdict = rebootTest.rebootTestReport({
+    boot: boot.ok ? boot : { why: boot.why },
+    stored,
+    node: knownNode ? node.name : null,
+  });
+
+  if (verdict.state === 'pass') pass(verdict.headline, verdict.why);
+  else if (verdict.state === 'fail') fail(verdict.headline, verdict.fix, verdict.why);
+  else unknown(verdict.headline, verdict.why, verdict.fix);
+
+  // The half this machine structurally cannot answer, said out loud rather
+  // than left as an absence. A Mac sitting at a login screen cannot report on
+  // itself, so "confirm from another machine" is the heartbeat's job (Slice E)
+  // and it already runs from the machine that does NOT own the job.
+  note('The cross-machine half of this test is `npm run heartbeat`, which is run by whichever machine is awake — '
+    + 'including the one that does not own the job. A machine that cannot log in cannot report on itself.');
+}
+
+// --- 7. the steps that are Dane's -------------------------------------------
 
 heading("WAITING ON DANE — steps no script may perform");
 
