@@ -158,6 +158,142 @@ cutover ends up half-done in both directions.
 
 ---
 
+## The reboot test — did the jobs come BACK?
+
+`doctor:node` can tell you a schedule is installed and loaded. That is not the
+same claim as *the roles came back after this machine last restarted*, and on an
+always-on box the gap between the two is where the silence lives.
+
+Scheduled jobs on macOS are **user** jobs: they do not start until somebody logs
+in. With FileVault on and no automatic login, a 3am power blip leaves the Mac
+sitting at a login screen with every job stopped and **nothing anywhere
+reporting it**. `launchctl list` shows nothing wrong, because nothing is loaded
+to be wrong. This is the check behind that decision (ClickUp doc
+`2kydhxeu-754`, page 1; vault `doctrine/NODES.md` §5, principle P5).
+
+```
+npm run node:verify      probe every owned schedule and record what was seen
+npm run doctor:node      read that record back — PASS / FAIL / CANNOT TELL
+```
+
+**Two commands, because `doctor:node` writes nothing.** That promise at the top
+of its file is what makes it safe to run on a machine that is on fire, and a
+check that quietly wrote state would retire it. So `node:verify` confirms and
+`doctor:node` reads.
+
+**The boot identity is what gets compared, not a date somebody maintains.**
+`sysctl -n kern.boottime` is the machine's own statement of when it last
+started, so a restart invalidates the record on its own — the report goes back
+to CANNOT TELL with nobody having to remember anything. (Sixty seconds of
+tolerance, because macOS stores that instant as wall-clock time and NTP moves
+it. Drift beyond that reads as "restarted", which costs a spurious CANNOT TELL
+and never a spurious PASS.)
+
+**The record carries what was observed, never a verdict.** `recordVerification`
+refuses a record with no per-role rows, so `node:verify` cannot claim a pass by
+reaching its own last line, and the PASS/FAIL is re-derived from those rows on
+every read. A green tick written by the code path that was *supposed* to check
+is the failure this whole slice exists against. For the same reason, if any
+owned schedule cannot be probed, `node:verify` writes **nothing** and exits 2:
+half a reading recorded as a whole one would read as a verification.
+
+**A PASS is measured against what the machine OWNS, not against the record.**
+The record is evidence; evidence cannot also be the standard it is graded
+against. Grading the rows against themselves meant a record covering three
+roles on a machine that owns six reported *"All 3 owned roles came back"* —
+and on the Mini those other three are the two loop lanes and the media worker,
+which is exactly what a 3am power blip takes out. So the verdict is handed
+`nodeProvision.schedulesForNode()` and compares against it:
+
+*   An owned, probeable role **absent from the record** is CANNOT TELL, naming
+    it. That is the drift case: give a `blocked` row an installer — which
+    `lib/nodeProvision.js` explicitly anticipates — and without this the report
+    keeps passing off a record written before that role could be probed at all.
+*   An owned role with **no schedule to check** is named on the PASS line
+    itself, with its reason, rather than left out of the count: *"3 of 6 owned
+    roles confirmed; loop-build, loop-review, youtube-media have no schedule to
+    check."* Same shape `lib/nodeHeartbeat.js` settled — a role with no emitter
+    reports NOT REPORTING with its reason, never as healthy.
+*   `node:verify` records the **skipped** rows too, so the record is a full
+    statement of what was looked at and what was not.
+*   And a machine this system **cannot identify** gets CANNOT TELL rather than a
+    pass. `node:verify` already refuses an unknown node (exit 2); the reading
+    half refuses for the same reason, because the only record that could exist
+    on such a machine is one copied from another Mac.
+
+**Both verdicts come off one intersection — owned AND probeable.** Grading
+against ownership was applied to the PASS *count* first and to nothing else, so
+three ways to reach a verdict nobody earned survived a round:
+
+*   A green **`0 of 2 owned roles confirmed`**, on a machine whose every role
+    had lost its schedule — with the same role named as `Observed` and as
+    `Not checked` in one sentence. `lib/nodeProvision.js` hands back `blocked`
+    automatically for any role with no registered installer, so a role *losing*
+    one produces exactly that shape.
+*   A **permanent FAIL naming a role the machine does not run**, because FAIL
+    still filtered the record's own rows. A row left behind by a job that moved
+    machines could only be cleared by deleting the file.
+*   A **CANNOT TELL on `macbook-pro` that could never be cleared**: it owns
+    `db-refresh` (deliberately no schedule) and `pulse-pipelines` (installer is
+    Slice B), so it has nothing probeable at all, and the fix line it was given
+    was `npm run node:verify` — which refuses that machine (exit 2). A fix line
+    that refuses is worse than none: it reads as a step somebody skipped.
+
+So the record's rows are intersected **once** with the probeable inventory, and
+PASS, FAIL and the drift case all read off that one list. A row outside it is
+*stale*: named in the explanation, counted in neither. A PASS needs at least one
+confirmed role. And a machine with nothing probeable gets its own sentence —
+*"Nothing on this machine has a schedule a reboot could take away"* — which is
+the sentence `scripts/verify_node_roles.mjs` already writes, so the read half
+and the write half agree instead of pointing at each other.
+
+**What the write half refuses, the read half refuses too — and neither of them
+crashes.** The record is a file in `~/Library/Application Support` that anything
+can write, so "what counts as a record" has to be one rule, not two. It was two.
+`recordVerification` checked every row on the way in; the reader checked the
+record's shape and stopped at the edge of the list; and the verdict then read a
+role name off each row. A single `null` row in that list threw a TypeError —
+and because `doctor:node` builds its whole report in memory and prints it with
+one `console.log` on its last line, **all six sections went with it**: identity,
+toolchain, repos, config, schedules and the reboot test, leaving the npm banner
+and a stack trace. The command this file calls read-only and safe anywhere
+answered nothing at all, on exactly the morning it exists for. Both halves share
+one definition of a usable row now, and the verdict re-checks the rows itself
+because it is also handed records directly. **A crash is not one of the three
+states**, and an ungradeable record is CANNOT TELL — never a pass.
+
+**A record that cannot say whose it is gets the same refusal as one from another
+Mac.** The copied-record guard read `record.node && record.node !== node`, so an
+*unattributed* record skipped the comparison and was graded as this machine's
+own — the shape with the least claim on this machine of any of them. The
+likeliest way any record is sitting here at all is a folder copied between Macs;
+one that names no machine simply has less to say for itself than one naming the
+wrong one. `recordVerification` refuses to write that shape as well, so neither
+half can produce it and neither will accept it.
+
+**The row and the summary read one fact.** `didNotComeBack(row)` — installed
+AND loaded — is the single expression behind both `node:verify`'s table prefix
+and its count. They were written separately once, and a plist deleted without
+unloading (`{installed: false, loaded: true}`, which
+`install_bus_relay.sh --uninstall` produces) printed `ok  bus-relay: loaded`
+under a summary saying one role did not come back, naming nothing.
+
+**The cross-machine half is the heartbeat, on purpose.** Doctrine asks you to
+confirm *from another machine*, and it is right — a Mac that cannot log in
+cannot report on itself. That mechanism already exists as Slice E:
+`scripts/run_bus_relay.sh` runs the staleness check **before** it asks whether
+it owns the relay, so the non-owning machine, awake every ten minutes doing
+nothing, is the vantage point that survives the owning machine being dead.
+Building a second one here would be two watchdogs disagreeing quietly. What
+`node:verify` adds is the half the heartbeat structurally cannot do: stand *on*
+the machine and say whether its roles have been confirmed since the current boot.
+
+Exit codes for `node:verify`: **0** everything came back · **1** a role did not
+(recorded, so `doctor:node` reports FAIL too) · **2** could not take a reading,
+nothing written.
+
+---
+
 ## What it cannot do yet, and why that is printed every single run
 
 **Installing the pulse scheduled jobs needs pulse's `bin/install-launchd.sh`,

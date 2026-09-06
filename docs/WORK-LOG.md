@@ -1,3 +1,116 @@
+## 2026-09-05 — The Mini can tell you a job is switched on. It could not tell you the job ever started. (#626)
+
+The Mac Mini runs jobs on a timer — the thing that relays your comments, the
+hourly pipeline check, the weekly report. `npm run doctor:node` has been able to
+tell you those timers are set up and switched on.
+
+There is a gap between "switched on" and "actually running", and it is the one
+that bites at 3am. Timed jobs on a Mac are *your* jobs, not the machine's, and
+they do not start until somebody logs in. The Mini's disk is encrypted and it
+does not log in by itself — so if the power blips overnight, it comes back up,
+sits at the login screen, and every one of those jobs simply never starts. The
+machine looks completely fine. Nothing is broken, so nothing complains. The
+failure is silence, which is the one thing the rest of this system was built to
+make impossible.
+
+So `doctor:node` now asks a different question — *have this machine's jobs been
+confirmed since it last restarted?* — and gives one of three answers: yes, no,
+or **I cannot tell**. That third one is the default, and it is the honest one.
+A new command, `npm run node:verify`, is what goes and looks: it asks each job
+whether it is really loaded, writes down what it actually saw, and nothing else.
+The two are separate on purpose, because `doctor:node` promises never to change
+anything on your machine, and that promise is what makes it safe to run when
+things are going wrong.
+
+The clever bit is what makes the answer expire on its own. Rather than a "last
+checked" date somebody has to remember to update, it records the machine's own
+statement of when it last started up. Restart the Mini and the recorded start
+time no longer matches — so the report goes straight back to "I cannot tell",
+with nobody having to notice or do anything. Which is exactly the situation it
+exists to catch.
+
+It was proved both ways on the real machine: a job was switched off on purpose
+and the check named it and failed; switched back on and it passed. And writing
+the tests turned up a genuine bug before it shipped — the code that reads the
+machine's start time was also matching a *different* field that happens to end
+in the same three letters, which would have reported a confident, completely
+wrong date.
+
+**Then the review caught the check doing the very thing it was built to
+prevent**, and this is worth reading, because it is the shape of almost every
+problem in this system. The Mini has six jobs on its list. Three of them have a
+timer that can be inspected; the other three — the two build lanes and the
+video worker — do not have one yet, on purpose. The new check looked at the
+three it could see, found them all fine, and reported: *"All 3 owned roles came
+back."* Every word of that is true and the sentence is a lie, because the
+machine owns six, and the three it did not mention are exactly the ones a 3am
+power cut takes out and leaves nobody to notice.
+
+It now measures the answer against what the machine is *supposed* to be running
+rather than against whatever it happened to look at, and says so out loud:
+*"3 of 6 owned roles confirmed; loop-build, loop-review, youtube-media have no
+schedule to check."* Same count, honest sentence. Two smaller versions of the
+same fault went with it: a Mac that cannot say which machine it is now gets "I
+cannot tell" instead of a pass, and a job whose timer file was deleted while it
+was still running used to print a tick in the table underneath a line saying
+one job had not come back — the table and the summary were reading the same
+thing two different ways, and now they read it from one place.
+
+**And then the review caught it a third time, in three more places.** The fix
+above had been applied to the *passing* sentence and nowhere else, so the same
+mistake — trusting the notepad instead of the job list — was still live in three
+other answers. A machine where every job had lost its timer reported a green
+*"0 of 2 confirmed"*, naming the same job as checked and as not-checked in one
+breath. A leftover note about a job that had since moved to the other Mac
+produced a permanent failure about a job this machine does not even run, and the
+only way to clear it was to delete the file. And the MacBook, which has two jobs
+and no timer for either, was told it had never been checked and handed a command
+that refuses to run there — a to-do nobody could ever tick off.
+
+All three were one root cause, so there is now one answer to one question:
+*which of the jobs on this notepad are jobs this machine actually runs and can
+inspect right now?* Everything is read off that. A leftover note is named out
+loud and counted as neither good news nor bad. A pass has to have confirmed at
+least one job. And a machine with nothing to inspect gets its own plain sentence
+— *"nothing on this machine has a schedule a reboot could take away"* — which is
+word for word what the checking command itself says, so the two halves finally
+agree rather than pointing at each other.
+
+One of the new tests was rewritten during the work because it could not fail.
+It compared two lists that the fix itself had made incapable of overlapping, so
+it would have gone green forever no matter how wrong the sentence a person
+actually reads had become. It now reads the names back out of that sentence.
+
+**Round four, and this one killed the whole report.** The check keeps a small
+notepad file on the machine recording what it last saw. Anything can write to
+that file, and the code that *writes* it was fussy about the format while the
+code that *reads* it barely looked — so a single bad line in that file did not
+produce a wrong answer, it produced no answer at all. `npm run doctor:node`
+prints its report in one go at the very end, so the crash threw away all six
+sections: which machine this is, whether the tools are installed, the checkouts,
+the settings, the timers, and the reboot check itself. I reproduced it exactly —
+**zero bytes of report, a stack trace instead** — and then again with the fix, on
+the same bad file: the full report, seven sections, and the reboot line reading
+*"this machine's role verification could not be read"* with the one command that
+clears it. That is the whole point. The moment you most need that command is the
+morning after a power cut, and it was one stray byte away from telling you
+nothing.
+
+The second fault was the same shape as ones already fixed twice on this ticket:
+the notepad says which machine it describes, and there was a guard to reject one
+copied from the *other* Mac — but a notepad that named **no** machine skipped
+that guard entirely and was accepted as this machine's own. Backwards: if a file
+turns up here at all, the likeliest explanation is that somebody copied a folder
+between the two Macs, and one that cannot even say whose it is has less to vouch
+for it, not more. Both halves now share one definition of a usable record, and
+neither will write or accept one that cannot name its machine.
+
+Last, a small readability fix that matters more than it sounds. The explanation
+line ran several separate findings together with no full stops, so a job that had
+**moved to the other Mac** read as a fourth job on this one with no timer — the
+line the operator reads to decide whether anything is wrong was quietly saying
+something untrue. Each finding is its own sentence now. All six fixes were broken
+on purpose, one at a time, and each one turned a named test red.
 ## 2026-09-06 — A rule, instead of a fifth round of fixing the same bug (#602)
 
 Four times now, review has sent the bulk template change back for the same
