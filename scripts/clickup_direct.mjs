@@ -2125,7 +2125,17 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         // holding the pull request there is no queue to wait for and the merge
         // simply did not happen. Said plainly, once, rather than dressed as
         // "GitHub is still working through the merge queue".
-        ? `PR #${pr.number} did NOT merge — it is still open and ${mergeCompletion.holdLabel(observed.hold)}. The merge command reported success, so GitHub refused it after the fact (a branch that fell behind main is the usual reason — protection has strict:true). The ticket has NOT been moved to Live and no merge has been recorded.`
+        //
+        // AND NOT ALWAYS A REFUSAL EITHER (round 4). `not-merged` covers hold
+        // 'none' — observed, nothing is holding it, GitHub really did refuse —
+        // and hold 'unknown', where the field never came back and why it did
+        // not merge is simply not known. This line asserted a refusal for
+        // both, and it is written to the ticket and to the bus, so it reaches
+        // Dane. Six lines below, this same return already sets
+        // `cannotTell: true` on exactly that reading: the code knew, and the
+        // sentence did not. The wording is shared with ship, in
+        // mergeCompletion.
+        ? `PR #${pr.number} did NOT merge — it is still open and ${mergeCompletion.holdLabel(observed.hold)}. ${mergeCompletion.notMergedExplanation(observed.hold).cause} The ticket has NOT been moved to Live and no merge has been recorded.`
         : observed.outcome === 'closed'
           ? `PR #${pr.number} is CLOSED without having merged. The ticket has NOT been moved to Live and no merge has been recorded.`
           : `whether PR #${pr.number} merged is UNKNOWN — ${observed.failedReads} read(s) came back blind, so nobody looked. The ticket has NOT been moved to Live and no merge has been recorded.`;

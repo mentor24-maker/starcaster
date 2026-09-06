@@ -68,10 +68,12 @@ const { pickPullRequestCommit, REPIN_SUBJECT, NUDGE_SUBJECT } = require('./build
 const { waitForChecks } = require('./builder/waitForChecks');
 const {
   waitForMerge, mergeTimeLabel, holdLabel, holdIsPending, classifyMergeHold,
-  prObservationArgv, parsePrObservation,
+  notMergedExplanation, prObservationArgv, parsePrObservation,
 } = require('./builder/mergeCompletion');
 const { decideAlreadyLive } = require('./builder/shipAlreadyLive');
-const { branchContentIsInMain, branchHasMergedPr, mergeBase } = require('./lib/repo_state.cjs');
+const {
+  branchContentIsInMain, branchTouchedFiles, branchHasMergedPr, mergeBase,
+} = require('./lib/repo_state.cjs');
 const {
   decideTrailWrite, bodyWithTicketLink, describeTrailResult, prUrl: prUrlFor,
 } = require('./builder/shipPrTrail');
@@ -274,9 +276,18 @@ say(`[ship] Branch "${branch}"${DRY ? '  (dry run — nothing will change)' : ''
 // branch, so an ordinary ship never makes the GitHub call at all.
 git(['fetch', 'origin', '--quiet']);
 const alreadyLive = (() => {
-  const contentInMain = branchContentIsInMain({ name: branch, ref: branch }, mergeBase(), root);
+  const here = { name: branch, ref: branch };
+  const base = mergeBase();
+  const contentInMain = branchContentIsInMain(here, base, root);
   if (contentInMain !== true) return decideAlreadyLive({ contentInMain, mergedPr: null });
-  return decideAlreadyLive({ contentInMain, mergedPr: branchHasMergedPr(branch) });
+  // Only asked on the rare path where the free local reading already said
+  // yes, so an ordinary ship still pays nothing. It vetoes the third way to
+  // reach `live` (round 4): a branch that changed no files reads as
+  // content-in-main, and a reused topic name whose earlier pull request
+  // merged supplies the other signal — two yeses on no evidence.
+  const touchedFiles = branchTouchedFiles(here, base, root);
+  if (touchedFiles === false) return decideAlreadyLive({ contentInMain, mergedPr: null, touchedFiles });
+  return decideAlreadyLive({ contentInMain, mergedPr: branchHasMergedPr(branch), touchedFiles });
 })();
 
 if (alreadyLive.live) {
@@ -747,17 +758,20 @@ const mergeWait = waitForMerge({
 });
 
 if (mergeWait.outcome === 'not-merged') {
-  // A REAL FAILURE, answered promptly and named truthfully. No queue is
-  // mentioned, because none is holding it — saying otherwise is what round 1
-  // did, and following that advice looped the same wait forever.
+  // A FAILURE, answered promptly and named truthfully — but `not-merged` is
+  // TWO readings, and only one of them is an observed refusal (round 4).
+  // hold 'none' really was refused; hold 'unknown' means the hold field never
+  // came back, so the merge did not happen and WHY is not known. This block
+  // used to assert a refusal for both, one line below a line that had just
+  // said the hold could not be read, and its advice ("main moved again, run
+  // ship again") is misdirection on the reading it could not take. The split
+  // is in mergeCompletion, beside the classifier that creates the two.
+  const said = notMergedExplanation(mergeWait.hold);
   fail(
     `The merge did not complete — PR #${prNumber} is still OPEN and ` +
     `${holdLabel(mergeWait.hold)}.\n\n` +
-    'The merge command reported success, so GitHub refused it afterwards. The usual\n' +
-    'reason is that main moved again in the seconds between the checks passing and the\n' +
-    'merge, and this branch is protected against merging while behind.\n\n' +
-    'Nothing else has been changed. Run `npm run ship` again — it catches up on main\n' +
-    'first, so a second run normally goes straight through.'
+    `${said.cause}\n\n` +
+    `Nothing else has been changed. ${said.advice}`
   );
 }
 if (mergeWait.outcome === 'queued') {

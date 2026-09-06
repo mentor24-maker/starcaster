@@ -152,3 +152,45 @@ test('there is ONE tidy-up sequence, shared by both callers', () => {
     'the cleanup sequence is written once');
   assert.ok((shipCode.match(/tidyUp\(\)/g) || []).length >= 3, 'and called from both endings');
 });
+
+/* ------------------------------- ROUND 4: a branch that changed nothing */
+
+test('ROUND 4: a branch that touched no files is never "already live"', () => {
+  // `branchContentIsInMain` answers true for a branch that changed no files —
+  // right for its own question, and `npm run tidy` relies on it. Composed
+  // here it made a THIRD way to reach `live` on no evidence: GitHub deletes
+  // the head branch on merge, so a freshly made branch reusing a topic name
+  // whose earlier pull request merged scores true on BOTH signals.
+  const empty = decideAlreadyLive({ contentInMain: true, mergedPr: true, touchedFiles: false });
+  assert.equal(empty.live, false, 'two yeses on no evidence is still no evidence');
+  assert.match(empty.why, /not changed a single file/);
+});
+
+test('ROUND 4: the emptiness veto does not disturb either real answer', () => {
+  // It is only ever a veto. A branch that DID touch files decides exactly as
+  // it did before, and the default keeps any caller that does not pass it
+  // reading the same way.
+  assert.equal(decideAlreadyLive({ contentInMain: true, mergedPr: true, touchedFiles: true }).live, true);
+  assert.equal(decideAlreadyLive({ contentInMain: true, mergedPr: true }).live, true);
+  assert.equal(decideAlreadyLive({ contentInMain: false, mergedPr: true, touchedFiles: true }).live, false);
+
+  // A cannot-tell from the probe never authorizes the skip and never blocks a
+  // decision the other two signals can make on their own (DOCTRINE 3.2).
+  assert.equal(decideAlreadyLive({ contentInMain: true, mergedPr: true, touchedFiles: null }).live, true);
+  assert.equal(decideAlreadyLive({ contentInMain: true, mergedPr: null, touchedFiles: false }).live, false);
+});
+
+test('ROUND 4: ship asks that question, and only where it can change the answer', () => {
+  // The probe is a second pair of git calls, so it runs only on the rare path
+  // where the free local reading already said yes — an ordinary mid-flight
+  // ship still pays nothing for any of this.
+  assert.match(shipCode, /branchTouchedFiles\(/, 'ship takes the reading');
+  const step0 = shipCode.slice(shipCode.indexOf('const alreadyLive = '), shipCode.indexOf('if (alreadyLive.live)'));
+  assert.match(step0, /if \(contentInMain !== true\) return decideAlreadyLive/,
+    'the free local reading still short-circuits first');
+  assert.ok(
+    step0.indexOf('branchTouchedFiles(') > step0.indexOf('contentInMain !== true'),
+    'the extra probe is taken after that short-circuit, not before it'
+  );
+  assert.match(step0, /touchedFiles/, 'and the answer reaches the decision');
+});

@@ -344,6 +344,76 @@ function waitForMerge({
 }
 
 /**
+ * A `not-merged` reading, put into the words a caller prints.
+ *
+ * WHY THIS IS SHARED AND NOT A STRING AT EACH CALL SITE (round 4 of task
+ * 86bbv35cq). `waitForMerge` returns `not-merged` for TWO different readings,
+ * and `holdIsPending` is false for both:
+ *
+ *   hold 'none'    — read cleanly as OPEN with no queue entry and no
+ *                    auto-merge. Nothing is holding it, so GitHub really did
+ *                    refuse the merge. An OBSERVED refusal.
+ *   hold 'unknown' — the hold field was not returned at all. The merge did not
+ *                    happen; whether GitHub is still holding it is NOT KNOWN.
+ *
+ * Both callers printed the same sentence for both: "The merge command reported
+ * success, so GitHub refused it afterwards." On the `unknown` reading that
+ * asserts a refusal nobody observed — one line below a line that had just said
+ * the hold could not be read. The relay's version reaches the ticket and the
+ * bus, so it reaches Dane.
+ *
+ * The rest of this code path already had it right — the window is HELD on an
+ * unreadable hold, and the relay's own return sets `cannotTell: true` on
+ * exactly `not-merged && hold === 'unknown'`. The code knew it was a
+ * cannot-tell everywhere except in the sentence a human reads. That is this
+ * ticket's own defect class (an action reporting one thing while another is
+ * true), and it is worse than the round-2 version it echoes: round 2's false
+ * line was corrected by the line below it, and this one is the terminal
+ * message with no correction anywhere.
+ *
+ * So the split lives here, next to the classifier that creates the two
+ * readings, for the reason the module header already gives: two callers
+ * answering the same question separately will eventually answer it
+ * differently.
+ *
+ * NO CAUSE IS ASSERTED ON A CANNOT-TELL, AND NEITHER IS ANY ADVICE THAT
+ * PRESUMES ONE. Ship's old advice — "main moved again... run `npm run ship`
+ * again" — is misdirection when the real cause was an unreadable field, and
+ * following it merges a pull request that may already be landing.
+ *
+ * @param hold the `hold` off a `not-merged` observation
+ * @returns {{ causeIsObserved: boolean, cause: string, advice: string }}
+ *          `advice` is a full sentence for a caller that offers a next step;
+ *          the relay states no next step and uses only `cause`.
+ */
+function notMergedExplanation(hold) {
+  if (hold === 'none') {
+    // A REAL, OBSERVED REFUSAL. Nothing is holding the pull request, so the
+    // merge is not coming and saying why is fair — `main`'s protection has
+    // strict:true and a branch that fell behind is by far the commonest cause.
+    return {
+      causeIsObserved: true,
+      cause: 'The merge command reported success, so GitHub refused it afterwards. The usual reason '
+        + 'is that main moved again in the seconds between the checks passing and the merge, and '
+        + 'this branch is protected against merging while behind.',
+      advice: 'Run `npm run ship` again — it catches up on main first, so a second run normally goes '
+        + 'straight through.',
+    };
+  }
+  // EVERY OTHER HOLD IS A CANNOT-TELL, including anything unrecognised: only
+  // 'none' is a positive reading that nothing is holding the pull request.
+  return {
+    causeIsObserved: false,
+    cause: 'The merge command reported success and the pull request has not merged, but whether '
+      + 'GitHub is still holding it could not be read — so why it did not merge is not known. It '
+      + 'may have been refused, or it may still be held and about to land.',
+    advice: 'Open the pull request on GitHub to see which it is, then run `npm run ship` again: if it '
+      + 'has since merged, ship sees this branch is already in main and finishes the tidy-up; if it '
+      + 'was refused, it catches up on main and merges.',
+  };
+}
+
+/**
  * A merge was ordered and did NOT complete. Does the caller give the merge
  * window back?
  *
@@ -428,6 +498,7 @@ module.exports = {
   classifyMergeHold,
   holdIsPending,
   holdLabel,
+  notMergedExplanation,
   windowDispositionAfterMerge,
   mergedAtOf,
   mergeTimeLabel,

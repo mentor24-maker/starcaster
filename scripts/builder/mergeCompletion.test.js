@@ -7,6 +7,7 @@ const path = require('node:path');
 const {
   classifyMergeState, classifyMergeHold, holdIsPending, holdLabel,
   mergedAtOf, mergeTimeLabel, waitForMerge, windowDispositionAfterMerge,
+  notMergedExplanation,
   prObservationArgv, parsePrObservation, PR_OBSERVATION_QUERY,
 } = require('./mergeCompletion');
 
@@ -592,4 +593,105 @@ test("ship's queued and unknown endings no longer promise a path ship does not h
   assert.match(queued, /already in main/, 'it names the check the rerun actually performs');
   assert.doesNotMatch(queued, /working\\n' \+\s*'through the merge queue/, "and never asserts a queue that is not there");
   assert.match(shipCode, /decideAlreadyLive\(/, 'and the path it promises exists');
+});
+
+/* ------------------------------------------- ROUND 4: not-merged is TWO readings */
+
+test('ROUND 4: a hold that could not be read is never announced as a refusal', () => {
+  // `waitForMerge` returns `not-merged` for hold 'none' AND hold 'unknown' —
+  // holdIsPending is false for both — and both callers printed the same
+  // sentence for both: "The merge command reported success, so GitHub refused
+  // it afterwards." On the unknown reading that asserts a refusal nobody
+  // observed, one line below a line that had just said the hold could not be
+  // read. The relay's copy is written to the ticket and to the bus.
+  const observed = notMergedExplanation('none');
+  assert.equal(observed.causeIsObserved, true, "nothing is holding it — GitHub really did refuse");
+  assert.match(observed.cause, /refused it afterwards/);
+
+  const cannotTell = notMergedExplanation('unknown');
+  assert.equal(cannotTell.causeIsObserved, false);
+  assert.doesNotMatch(cannotTell.cause, /refused it afterwards/,
+    'a cannot-tell may not assert a refusal');
+  assert.match(cannotTell.cause, /could not be read/, 'it says what was not readable');
+  assert.match(cannotTell.cause, /not known/, 'and that the cause is not known');
+  // It must not swing to the opposite overreach either: "it is still queued"
+  // would be a second invented fact. Both possibilities, neither asserted.
+  assert.match(cannotTell.cause, /may have been refused/);
+  assert.match(cannotTell.cause, /may still be held/);
+});
+
+test('ROUND 4: the advice on a cannot-tell does not presume a cause either', () => {
+  // Ship's old advice — "main moved again... run ship again" — is misdirection
+  // when the real cause was an unreadable field, and following it merges a
+  // pull request that may already be landing.
+  const observed = notMergedExplanation('none');
+  assert.match(observed.advice, /catches up on main/, 'an observed refusal keeps the advice that fits it');
+
+  const cannotTell = notMergedExplanation('unknown');
+  assert.doesNotMatch(cannotTell.advice, /catches up on main first/,
+    'it does not prescribe the fix for a cause it did not establish');
+  assert.match(cannotTell.advice, /see which it is/, 'it says how to find out first');
+});
+
+test('ROUND 4: only a POSITIVE "nothing is holding it" is an observed refusal', () => {
+  // Anything unrecognised is a cannot-tell, not a refusal — the same direction
+  // windowDispositionAfterMerge already fails in.
+  for (const hold of ['unknown', '', undefined, null, 'queue', 'auto-merge', 'banana']) {
+    assert.equal(notMergedExplanation(hold).causeIsObserved, false, `hold ${String(hold)} is not an observed refusal`);
+  }
+  assert.equal(notMergedExplanation('none').causeIsObserved, true);
+});
+
+test('ROUND 4: it composes with a REAL unreadable-hold observation, end to end', () => {
+  // The break the review asked for: force a payload whose state reads and
+  // whose hold field is simply not returned — the exact case parsePrObservation
+  // deliberately preserves — and prove neither caller's sentence claims a
+  // refusal.
+  const parsed = parsePrObservation(JSON.stringify({
+    data: { repository: { pullRequest: { state: 'OPEN', mergedAt: null } } },
+  }));
+  assert.equal(parsed.isInMergeQueue, null, 'the field was not returned');
+  assert.equal(classifyMergeHold(parsed), 'unknown');
+
+  const observed = harness([parsed]);
+  assert.equal(observed.outcome, 'not-merged');
+  assert.equal(observed.hold, 'unknown');
+
+  const said = notMergedExplanation(observed.hold);
+  assert.equal(said.causeIsObserved, false);
+  // The three surfaces that already treated this reading correctly must keep
+  // agreeing with the sentence, which is the whole point of round 4.
+  assert.equal(windowDispositionAfterMerge(observed).release, false,
+    'the window is held on an unreadable hold');
+});
+
+test('ROUND 4: both callers take the sentence from here rather than spelling it themselves', () => {
+  // One function, two callers — the module header's own reason. Two callers
+  // answering the same question separately will eventually answer it
+  // differently, and one of them writes to the bus.
+  const shipBlock = shipCode.slice(
+    shipCode.indexOf("mergeWait.outcome === 'not-merged'"),
+    shipCode.indexOf("mergeWait.outcome === 'queued'")
+  );
+  assert.ok(shipBlock.length > 0);
+  assert.match(shipBlock, /notMergedExplanation\(mergeWait\.hold\)/, 'ship asks the shared decision');
+  assert.doesNotMatch(shipBlock, /so GitHub refused it afterwards/,
+    'ship no longer hard-codes a refusal for both readings');
+
+  const relayBlock = relayCode.slice(
+    relayCode.indexOf("observed.outcome === 'not-merged'"),
+    relayCode.indexOf("observed.outcome === 'closed'")
+  );
+  assert.ok(relayBlock.length > 0);
+  assert.match(relayBlock, /notMergedExplanation\(observed\.hold\)/, 'the relay asks it too');
+  assert.doesNotMatch(relayBlock, /so GitHub refused it after the fact/,
+    'the relay no longer hard-codes a refusal on the line that reaches the bus');
+});
+
+test('ROUND 4: the relay still marks that same reading as a cannot-tell', () => {
+  // The sentence and the machine-readable flag must not drift apart again —
+  // the whole defect was that the code knew and the sentence did not.
+  const mergeStep = relayCode.slice(relayCode.indexOf('async function runMergeStep'));
+  assert.match(mergeStep, /cannotTell: observed\.outcome === 'unknown'/);
+  assert.match(mergeStep, /observed\.outcome === 'not-merged' && observed\.hold === 'unknown'/);
 });

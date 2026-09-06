@@ -96,6 +96,42 @@ own sentence, still being printed directly above its own correction — and it n
 longer spends twenty minutes retrying a lookup that could never have worked,
 when it can tell that in the first second.
 
+**Round 4 — the script said "GitHub refused it" about something it had not been
+able to look at.** Review found one mistake sitting in two places, and it is the
+same mistake this whole ticket was written about: saying one thing while another
+is true.
+
+When a merge does not happen, the script asks a follow-up question — *is
+anything still holding this pull request?* There are two quite different answers
+it can come back with. One is "no, nothing is holding it", which really does
+mean GitHub turned the merge down. The other is "I could not read that", which
+means nobody knows yet. Both were being reported with the same sentence: *"The
+merge command reported success, so GitHub refused it afterwards."*
+
+So on the second one you got two lines, one under the other. The first said the
+answer could not be read. The second stated a refusal as fact — and then told
+you the usual cause and what to do about it. All of that was invented. Worse,
+`npm run ship` was pointing you at a fix for a problem it had no evidence you
+had, and the background job wrote the same false sentence onto the ticket and
+onto the party line, where Dane reads it.
+
+The odd part is that everything else already had it right. The merge window is
+held, not released, when that answer cannot be read, and the job's own internal
+record marks it as a could-not-tell. The code knew. Only the sentence a human
+reads did not. The two are now written in one place, so they cannot drift apart
+again: a real refusal keeps its old wording and its old advice, and a
+could-not-tell says the merge did not happen, says why it does not know, and
+tells you to look at the pull request before doing anything.
+
+One smaller thing, spotted in the same review. `ship` can now recognise a branch
+whose work is already live and skip straight to tidying up. It needs two yeses
+to do that, but a branch that has changed *nothing at all* was accidentally
+giving one of them for free — so a fresh branch reusing an old topic name whose
+pull request had merged could be waved through as "already live" when it was
+nothing of the sort. Nothing could be lost by it, but it is confusing, and it is
+now asked directly: a branch that has not changed a single file has nothing it
+could have merged.
+
 ## 2026-09-05 — The sweep that called a half-built ticket empty (#624)
 
 When a build session dies partway through, its ticket is left sitting in
