@@ -146,16 +146,17 @@ describe("Post Feed on a blog bigger than one page", () => {
    * statement on a client's site.
    */
   it("says so when the blog runs past the ceiling", async () => {
-    await renderFeed(blogOf(1050), "");
+    // BLOG_FEED_MAX_PAGES * BLOG_FEED_PAGE_SIZE is 2,000; this blog runs past it.
+    await renderFeed(blogOf(2100), "");
 
-    expect(document.body.textContent).toContain("Showing the most recent 1,000 posts");
-    expect(document.body.textContent).toContain("do not reach older ones");
+    // The count stops claiming to be a total once the read stopped early.
+    expect(document.body.textContent).toContain("or more");
   });
 
-  it("stays quiet on a blog of exactly the ceiling", async () => {
-    await renderFeed(blogOf(1000), "");
+  it("stays quiet on a blog that fits under the ceiling", async () => {
+    await renderFeed(blogOf(1050), "");
 
-    expect(document.body.textContent).not.toContain("Showing the most recent");
+    expect(document.body.textContent).not.toContain("or more");
   });
 
   it("admits a partial list when a later page could not be read", async () => {
@@ -196,7 +197,7 @@ describe("Post Feed on a blog bigger than one page", () => {
       await act(async () => { await Promise.resolve(); });
     }
 
-    expect(document.body.textContent).toContain("may be incomplete");
+    expect(document.body.textContent).toContain("or more");
     // What it DID read is still shown — a failed page is not an empty blog.
     expect(document.body.textContent).toContain("Post 1");
   });

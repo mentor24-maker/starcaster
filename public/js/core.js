@@ -758,6 +758,25 @@ App.api = async function api(path, options = {}) {
       // Upstream 401s (e.g. X API Unauthorized on publish) must not clear the app session.
     }
     const jsErr = new Error(String(text).trim());
+    // The HTTP status of a STRUCTURED refusal. Its presence is the signal: the
+    // server answered a JSON error envelope, so it decided — as opposed to the
+    // throws above, which carry no status because the request died or came
+    // back as something this app cannot read at all. A caller that cannot tell
+    // those apart narrates a flat refusal as "the request failed part-way, so
+    // some pages may already have been changed", which is a definite answer
+    // rendered as a could-not-tell (bulk template change, 2026-09-04).
+    jsErr.status = res.status;
+    // The server's own CODE, not just its status. A status says how the
+    // response was shaped; the code says who decided. routes/index.js answers
+    // an unhandled throw with a well-formed JSON 500 (code INTERNAL_ERROR), so
+    // a caller reading the status alone cannot tell a deliberate refusal from a
+    // crash — and the bulk template change read exactly that as "the server
+    // decided, nothing was written" after pages had already been re-poured
+    // (2026-09-05, round 4). A route that knows it refused before writing says
+    // so with a code; dropping it here left the browser nothing to check.
+    if (typeof err === 'object' && err !== null && err.code) {
+      jsErr.code = err.code;
+    }
     if (typeof err === 'object' && err !== null && err.details) {
       jsErr.details = err.details;
     }

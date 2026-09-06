@@ -1607,6 +1607,10 @@ ${fieldHtml}
     if (!name) { notify('Form name is required.', true); return; }
 
     syncFormEditorFieldRowsFromDom();
+    // `options` travels with the field. Without it a dropdown reaches the
+    // published page with nothing to choose, the module leaves the field out,
+    // and the question is silently never asked — while this save reports
+    // success. The rows already carry the config's options (allConfigFields).
     const fields = formEditorFieldRows
       .filter((row) => row.selected)
       .map((row) => ({
@@ -1614,6 +1618,7 @@ ${fieldHtml}
         label: row.label,
         type: row.type,
         required: Boolean(row.required),
+        options: Array.isArray(row.options) ? row.options : [],
       }));
 
     if (!fields.length) {
