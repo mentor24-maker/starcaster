@@ -403,6 +403,132 @@ test('the record states what was NOT looked at, so it is a full statement', () =
   }
 });
 
+// --- round 3: the verdict comes off what is OWNED **and** PROBEABLE ----------
+//
+// Round 2 graded the PASS count against ownership and left everything else
+// grading `record.roles`. Each test below returned the WRONG verdict before
+// that was fixed; the wrong answer each one produced is quoted with it.
+
+test('a machine whose owned roles all lost their schedules cannot reach a pass', () => {
+  // Was: state 'pass', headline "0 of 2 owned roles confirmed after the last
+  // restart" — a green tick over nothing at all. lib/nodeProvision.js hands
+  // back `blocked` automatically for any role with no registered installer, so
+  // a role LOSING its installer produces exactly this shape.
+  const verdict = rt.rebootTestReport({
+    boot: boot(),
+    stored: storedRecord({ roles: [{ role: 'bus-relay', installed: true, loaded: true }] }),
+    node: 'mac-mini',
+    owned: [
+      { role: 'bus-relay', blocked: 'the installer was removed' },
+      { role: 'weekly-report', manual: true, why: 'no schedule, on purpose' },
+    ],
+  });
+  assert.equal(verdict.state, 'unknown');
+  assert.doesNotMatch(verdict.headline, /confirmed/, 'nothing was confirmed, so nothing may say it was');
+  assert.match(verdict.why, /not a pass/);
+});
+
+test('no role is named as confirmed and as not-checked in the same verdict', () => {
+  // Was: "Observed: bus-relay. Not checked: bus-relay (the installer was
+  // removed)" — one role on both sides of one sentence.
+  //
+  // This reads the names back out of the rendered sentence rather than off
+  // `verdict.roles`, and that is the whole point of it. Against the fix,
+  // `verdict.roles` is drawn from the probeable inventory and `Not checked`
+  // from the unprobeable one, so comparing those two can NEVER fail however
+  // wrong the prose is — an assertion that cannot fail is not a test. What a
+  // reader sees is the sentence, so the sentence is what is checked.
+  const observedIn = (text) => {
+    const m = /Observed: ([^.]*)\./.exec(text);
+    return m ? m[1].split(',').map((r) => r.trim()).filter(Boolean) : [];
+  };
+  const notCheckedIn = (text) => {
+    const m = /Not checked: (.*)$/.exec(text);
+    return m ? m[1] : '';
+  };
+
+  const verdicts = [
+    // A role that has lost its installer, still sitting in the record.
+    rt.rebootTestReport({
+      boot: boot(),
+      stored: storedRecord({
+        roles: [
+          { role: 'bus-relay', installed: true, loaded: true },
+          { role: 'pipeline-pulse', installed: true, loaded: true },
+        ],
+      }),
+      node: 'mac-mini',
+      owned: [{ role: 'bus-relay', blocked: 'the installer was removed' }, ...OWNED.slice(1)],
+    }),
+    rt.rebootTestReport({ boot: boot(), stored: storedRecord(), node: 'mac-mini', owned: OWNED_SIX }),
+    rt.rebootTestReport({ boot: boot(), stored: storedRecord(), node: 'mac-mini', owned: OWNED }),
+  ];
+
+  for (const verdict of verdicts) {
+    const text = `${verdict.headline} ${verdict.why}`;
+    const notChecked = notCheckedIn(text);
+    for (const role of observedIn(text)) {
+      assert.ok(
+        !new RegExp(`\\b${role}\\b`).test(notChecked),
+        `"${role}" is named as observed and as not checked in one verdict: ${text}`,
+      );
+    }
+  }
+});
+
+test('a record row for a role this machine does not own is not a failure', () => {
+  // Was: state 'fail', "1 role did not come back after this machine restarted.
+  // bus-relay: schedule not installed" — a permanent failure naming a job this
+  // Mac does not run, clearable only by deleting the record.
+  const verdict = rt.rebootTestReport({
+    boot: boot(),
+    stored: storedRecord({
+      roles: [
+        { role: 'weekly-report', installed: true, loaded: true },
+        { role: 'bus-relay', installed: false, loaded: false },
+      ],
+    }),
+    node: 'mac-mini',
+    owned: [{ role: 'weekly-report', installer: 'scripts/install_weekly_report.sh' }],
+  });
+  assert.notEqual(verdict.state, 'fail', 'a role this machine does not own cannot fail on it');
+  assert.equal(verdict.state, 'pass');
+  assert.match(verdict.why, /bus-relay is in the record, but this machine no longer owns it/);
+  assert.deepEqual(verdict.roles.map((r) => r.role), ['weekly-report']);
+});
+
+test('a machine with nothing probeable is not sent to a command that refuses it', () => {
+  // Was: "This machine's roles have never been verified since the reboot test
+  // was added." with fix `npm run node:verify` — which exits 2 on exactly this
+  // machine (scripts/verify_node_roles.mjs), so macbook-pro had a CANNOT TELL
+  // it could never clear.
+  const macbookPro = [
+    { role: 'db-refresh', manual: true, why: 'Deliberately has no schedule; it spends production disk IO.' },
+    { role: 'pulse-pipelines', blocked: 'Installing these needs pulse\'s bin/install-launchd.sh, which is Slice B.' },
+  ];
+  for (const stored of [{ found: false, readable: true, file: '/tmp/nope.json' }, storedRecord()]) {
+    const verdict = rt.rebootTestReport({ boot: boot(), stored, node: 'macbook-pro', owned: macbookPro });
+    assert.equal(verdict.state, 'unknown');
+    assert.doesNotMatch(verdict.fix, /node:verify/, 'the fix line must not be a command that refuses this machine');
+    assert.match(verdict.headline, /a reboot could take away/);
+    assert.match(verdict.why, /exit 2/);
+  }
+});
+
+test('a record covering only roles that have moved away confirms nothing', () => {
+  // The empty-CONFIRMATION guard, as against the empty-RECORD one six lines
+  // above it in the library: every row is real, and not one of them speaks for
+  // a role this machine currently owns and can probe.
+  const verdict = rt.rebootTestReport({
+    boot: boot(),
+    stored: storedRecord({ roles: [{ role: 'weekly-report', installed: true, loaded: true }] }),
+    node: 'mac-mini',
+    owned: [{ role: 'bus-relay', installer: 'scripts/install_bus_relay.sh' }],
+  });
+  assert.equal(verdict.state, 'unknown');
+  assert.match(verdict.headline, /speaks for a role it currently owns/);
+});
+
 // --- a record from somewhere else -------------------------------------------
 
 test('a record copied from another machine says nothing about this one', () => {

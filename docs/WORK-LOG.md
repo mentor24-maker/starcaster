@@ -56,6 +56,31 @@ was still running used to print a tick in the table underneath a line saying
 one job had not come back — the table and the summary were reading the same
 thing two different ways, and now they read it from one place.
 
+**And then the review caught it a third time, in three more places.** The fix
+above had been applied to the *passing* sentence and nowhere else, so the same
+mistake — trusting the notepad instead of the job list — was still live in three
+other answers. A machine where every job had lost its timer reported a green
+*"0 of 2 confirmed"*, naming the same job as checked and as not-checked in one
+breath. A leftover note about a job that had since moved to the other Mac
+produced a permanent failure about a job this machine does not even run, and the
+only way to clear it was to delete the file. And the MacBook, which has two jobs
+and no timer for either, was told it had never been checked and handed a command
+that refuses to run there — a to-do nobody could ever tick off.
+
+All three were one root cause, so there is now one answer to one question:
+*which of the jobs on this notepad are jobs this machine actually runs and can
+inspect right now?* Everything is read off that. A leftover note is named out
+loud and counted as neither good news nor bad. A pass has to have confirmed at
+least one job. And a machine with nothing to inspect gets its own plain sentence
+— *"nothing on this machine has a schedule a reboot could take away"* — which is
+word for word what the checking command itself says, so the two halves finally
+agree rather than pointing at each other.
+
+One of the new tests was rewritten during the work because it could not fail.
+It compared two lists that the fix itself had made incapable of overlapping, so
+it would have gone green forever no matter how wrong the sentence a person
+actually reads had become. It now reads the names back out of that sentence.
+
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
 Pull requests are merged one at a time here, and the plan is to switch on a

@@ -221,6 +221,32 @@ which is exactly what a 3am power blip takes out. So the verdict is handed
     half refuses for the same reason, because the only record that could exist
     on such a machine is one copied from another Mac.
 
+**Both verdicts come off one intersection — owned AND probeable.** Grading
+against ownership was applied to the PASS *count* first and to nothing else, so
+three ways to reach a verdict nobody earned survived a round:
+
+*   A green **`0 of 2 owned roles confirmed`**, on a machine whose every role
+    had lost its schedule — with the same role named as `Observed` and as
+    `Not checked` in one sentence. `lib/nodeProvision.js` hands back `blocked`
+    automatically for any role with no registered installer, so a role *losing*
+    one produces exactly that shape.
+*   A **permanent FAIL naming a role the machine does not run**, because FAIL
+    still filtered the record's own rows. A row left behind by a job that moved
+    machines could only be cleared by deleting the file.
+*   A **CANNOT TELL on `macbook-pro` that could never be cleared**: it owns
+    `db-refresh` (deliberately no schedule) and `pulse-pipelines` (installer is
+    Slice B), so it has nothing probeable at all, and the fix line it was given
+    was `npm run node:verify` — which refuses that machine (exit 2). A fix line
+    that refuses is worse than none: it reads as a step somebody skipped.
+
+So the record's rows are intersected **once** with the probeable inventory, and
+PASS, FAIL and the drift case all read off that one list. A row outside it is
+*stale*: named in the explanation, counted in neither. A PASS needs at least one
+confirmed role. And a machine with nothing probeable gets its own sentence —
+*"Nothing on this machine has a schedule a reboot could take away"* — which is
+the sentence `scripts/verify_node_roles.mjs` already writes, so the read half
+and the write half agree instead of pointing at each other.
+
 **The row and the summary read one fact.** `didNotComeBack(row)` — installed
 AND loaded — is the single expression behind both `node:verify`'s table prefix
 and its count. They were written separately once, and a plist deleted without
