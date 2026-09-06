@@ -139,6 +139,44 @@ which job — named by hand in the ratified doctrine, and until now protected
 only by the accident of sitting in a folder the lane does not reach — and each
 of their tests, because a test that decides what merging means governs merging
 just as much as the code does.
+## 2026-09-06 — Notes and a test left over after the tag-page fix landed elsewhere (#630)
+
+**Correcting the earlier version of this entry, which was wrong.** It claimed
+this change fixed the made-up tags a visitor could see on the Delray tennis tag
+page. It did not. Two other pieces of work had already fixed them by the time
+this one reached review, and the code here turned out to be a second copy of a
+fix that was already live on the client's site:
+
+- The **Tags: Example Tag** pills, and the grey dashed boxes reading "Post
+  Card" / "Author Bio" / "Table of Contents", were fixed by **#627**, which
+  swept the same fault across eight modules rather than four.
+- The Messaging tag list telling visitors to "add tags in the Messaging
+  section" was fixed by **#580**, on the 3rd.
+
+So the code was dropped rather than merged. Keeping it would have been worse
+than useless: it was written against an older copy of the file, and merging it
+would have stripped the live-site protection back off five other modules that
+#627 had just fixed.
+
+What is left here, and is genuinely new:
+
+- **Written-down instructions for looking at a page the way a visitor sees
+  it**, on your own machine, without publishing anything. Half of the confusion
+  on this ticket came from guessing at what a live page renders instead of
+  looking at one, and until now there was nowhere that said how to look.
+- **One extra test.** A tags setting containing nothing but commas — `",, "` —
+  is the same "no tags" case wearing punctuation, and nothing was checking it.
+  The code already handles it correctly; now something would notice if that
+  stopped being true.
+
+Two findings from this ticket also went somewhere useful. The "duplicate"
+search box on that page turned out not to be duplicated — there is exactly one,
+counted in a browser on the live page. What is wrong with it is worse and was
+not known before: **typing a word into it does nothing.** The page reloads with
+the word in the address bar and the list of posts does not change by a single
+character. That has its own ticket, and Dane has already chosen what should
+replace it.
+
 ## 2026-09-05 — The auto-merge lane mistook its own notes for Dane objecting (#618)
 
 There is a lane that merges the safest pull requests — the ones that only

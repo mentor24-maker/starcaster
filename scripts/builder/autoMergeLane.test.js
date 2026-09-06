@@ -298,10 +298,22 @@ test('stop is matched loosely, resume strictly — the asymmetry is deliberate',
 
 // ── A near miss says so, instead of matching nothing in silence (86bbuv99r) ──
 
-test('his real 11:11pm message is a near miss — it does NOT resume, and it is not silent', () => {
+test('his real 11:11pm message now RESUMES — the wrapper is stripped (86bbvraw4)', () => {
   // The exact string ClickUp stored on 2026-09-03, and again on 2026-09-05.
-  const his = '**`resume auto-merging`**';
-  assert.equal(switchCommand(his), null, 'the strict matcher is unchanged — this must still not resume');
+  // It used to be reported as a near miss and left the lane off; Dane's call
+  // on 2026-09-06, after the same class cost him a fourth attempt, was to
+  // strip the formatting instead: "we definitely need to do string match or
+  // some other method that will strip the invisible style characters so I
+  // don't always have to remember to paste just so."
+  assert.equal(switchCommand('**`resume auto-merging`**'), 'resume');
+});
+
+test('a message with extra WORDS is still a near miss — it does not resume, and it is not silent', () => {
+  // The near-miss lane keeps its job. What changed is which failures reach it:
+  // formatting he cannot control is now stripped, while a phrase buried in a
+  // sentence is a genuine ambiguity and must not merge anything.
+  const his = 'resume auto-merging when CI is green';
+  assert.equal(switchCommand(his), null, 'a resume must still be the whole message');
   const miss = nearMissResume(his);
   assert.ok(miss, 'and it must no longer be indistinguishable from silence');
   assert.equal(miss.phrase, SWITCH_RESUME);
@@ -1870,4 +1882,56 @@ test('the all-time counter survives a round trip through asLedger', () => {
   const h = lane.laneAMergeHistory({ ledger: reloaded, fresh: false, readable: true });
   assert.equal(h.count, 1);
   assert.match(h.why, /PR #55/);
+});
+
+/*
+ * THE WRAPPER IS THE EDITOR TALKING, NOT HIM (2026-09-06, task 86bbvraw4).
+ *
+ * Dane posted the resume three times over half an hour on 2026-09-06 and the
+ * lane stayed latched off. The near-miss detector quoted what ClickUp had
+ * actually stored: `**resume auto-merging**` — markdown bold he never typed,
+ * carried in on a formatted copy. It took on the fourth try, with Paste and
+ * Match Style.
+ *
+ * This is the SECOND time in six days: stripCodeFormatting was added on
+ * 2026-09-01 (86bbt038u) after ClickUp wrapped the same phrase in a code
+ * fence and cost two days. Fixing one wrapper at a time is how the same
+ * failure keeps coming back, so these cover the class.
+ *
+ * The literal below is the real stored string. A hand-written approximation is
+ * exactly what would have missed it.
+ */
+test('a resume wrapped in the editor formatting he did not type still resumes', () => {
+  const wrapped = [
+    ['**resume auto-merging**', 'markdown bold — the real 2026-09-06 string'],
+    ['__resume auto-merging__', 'underscore bold'],
+    ['*resume auto-merging*', 'italic'],
+    ['~~resume auto-merging~~', 'strikethrough'],
+    ['`resume auto-merging`', 'inline backticks'],
+    ['```cpp\nresume auto-merging\n```', 'fenced block — the 2026-09-01 case'],
+    ['​resume auto-merging​', 'zero-width spaces'],
+    ['﻿resume auto-merging', 'byte order mark'],
+    ['resume auto-merging', 'non-breaking space'],
+    ['resume auto‑merging', 'non-breaking hyphen'],
+    ['resume auto–merging', 'en dash'],
+    ['**Resume Auto-Merging**', 'bold and capitalised'],
+  ];
+  for (const [text, why] of wrapped) {
+    assert.equal(switchCommand(text), 'resume', why);
+  }
+});
+
+test('stripping the wrapper does NOT loosen the whole-message rule', () => {
+  // The strictness is the safety property: a resume that fires when he was
+  // only TALKING about resuming costs an unwanted merge.
+  assert.equal(switchCommand('I will resume auto-merging later'), null);
+  assert.equal(switchCommand('resume auto-merging when CI is green'), null);
+  assert.equal(switchCommand('**resume auto-merging** once #618 lands'), null);
+});
+
+test('a formatted STOP is still a stop — a stop must never be lost', () => {
+  assert.equal(switchCommand('**stop auto-merging**'), 'stop');
+  assert.equal(switchCommand('`stop auto-merging`'), 'stop');
+  // Stop stays a SUBSTRING match, so it survives being said mid-sentence.
+  assert.equal(switchCommand('please **stop auto-merging** for now'), 'stop');
 });
