@@ -104,6 +104,20 @@ describe("demo content never reaches a visitor", () => {
   });
 
   /**
+   * A `tags` setting of nothing but separators — `",, "` — is the same empty
+   * case wearing punctuation: the split-and-filter reduces it to zero real
+   * tags. Worth its own assertion because the guard reads the FILTERED list,
+   * not the raw string, and a future rewrite that tested the raw string
+   * instead would pass every case above and put "Example Tag" back on a live
+   * page for any tenant whose tags field holds a stray comma.
+   */
+  it("renders nothing on a live page when the tags are only separators", () => {
+    const html = live("blog-post-tags", { tags: ",, " });
+    expect(html).not.toContain("Example");
+    expect(html).not.toContain("Tags:");
+  });
+
+  /**
    * blog-post-card, blog-author-bio and blog-toc have no renderer yet. The
    * canvas shows a named dashed box where one will go; a visitor was getting
    * that same grey rectangle with a module name in it.

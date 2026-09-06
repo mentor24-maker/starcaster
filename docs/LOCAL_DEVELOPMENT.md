@@ -244,8 +244,12 @@ policies exist. Treat "enabled RLS on a table" and "re-ran
 
 ## What local still will not tell you
 
-- **Custom domains.** Localhost skips host binding, so tenant sites on their
-  own domains can only really be checked live.
+- **Custom domains — the DNS half only.** Localhost skips host binding, so
+  whether a domain actually points here is a live question. The PAGE is not:
+  see "Looking at a page the way a visitor sees it" below. That distinction
+  matters, because this bullet used to say tenant sites "can only really be
+  checked live", and a check nobody believes is runnable is a check nobody
+  runs.
 - **Scheduled jobs.** The timed social publish runs on Vercel. Locally you can
   trigger it by hand; the schedule does not exist.
 - **Posting to X, Instagram, Bluesky.** There is no fake version of those.
@@ -254,6 +258,66 @@ policies exist. Treat "enabled RLS on a table" and "re-ran
   at <http://127.0.0.1:54424>. Password resets and invitations land there
   instead of in real inboxes, so you can test the whole flow without sending
   anything.
+
+## Looking at a page the way a visitor sees it
+
+The Builder canvas and a published tenant page are **the same React
+components with one prop different** — `liveSite`. A growing family of rules
+hangs off that prop: sample tags, "Set a Form ID in module settings", the
+grey dashed box reading "Post Card". All of them are supposed to be there
+while somebody designs a page and gone once a visitor arrives.
+
+Every one of those has been found the same way — by Dane, on a client's live
+site (PRs #564, #576, #580, #627). Not because the check is hard, but because
+nothing said how to run it, so "I looked at it" always meant the canvas,
+which is the half where the placeholder is *correct*.
+
+`npm run dev` and `builder-preview.html` are both the canvas. The live half
+is a different route, and it works locally:
+
+```
+http://localhost:3058/api/_site/<domain>?path=/<slug>
+```
+
+`<domain>` is any value in `app_projects.domain` in your local database
+(`daneofearth.org` and `brandonmarinoff.com` are both there after a
+`db:refresh`). That route mounts `BuilderPublicSitePage`, which passes
+`liveSite` — so what you get is exactly what a visitor gets.
+
+**Type the `?path=`.** Without it the inline script in `site.html` rewrites
+the address to `/` and you look at the home page while believing you are
+looking at yours. It fails silently and it looks like your page is empty.
+
+To check a specific module's live behaviour without waiting for a client to
+have one, write a scratch page straight into the LOCAL database — it is your
+own copy, and a page there costs nothing:
+
+```sql
+insert into builder_landing_page
+  (project_id, owner_user_id, slug, is_published, is_private, template_kind, layout_sections)
+select p.id, (select created_by_user_id from app_projects where id = p.id),
+       'scratch-check', true, false, 'landing',
+       '{"sections":[{"id":"s1","title":"Scratch","layout":"single","locked":false,
+          "modules":[{"id":"m1","name":"","text":"","type":"<module-type>",
+                      "column":"main","settings":{}}]}]}'::jsonb
+from app_projects p where p.domain = 'daneofearth.org';
+```
+
+Then get the BEFORE side by stashing your change, rebuilding just the bundle,
+and loading the same URL again:
+
+```
+git stash push components/builder-template-preview.tsx
+npm run build:builder
+# look at the page — this is main's behaviour
+git stash pop && npm run build:builder
+```
+
+Delete the scratch page when you are done. This is how the placeholder sweep
+that became #627 was checked: the same published page rendered `Tags: /
+Example / Tag / Post Card / Author Bio / Table of Contents` before and nothing
+at all after — which is the sentence "where I looked at it" is asking for, and
+no test could have produced it.
 
 ## When something is wrong
 
