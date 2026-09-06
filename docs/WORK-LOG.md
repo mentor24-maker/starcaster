@@ -97,6 +97,978 @@ it hides the hold from the switch where everyone looks for it. Dane's answer on
 5 September was to clear the latch and keep the hold, which is exactly that
 distinction.
 
+## 2026-09-05 — The auto-merge lane mistook its own notes for Dane objecting (#618)
+
+There is a lane that merges the safest pull requests — the ones that only
+touch tests and documentation — by itself. It announces what it is about to
+do, waits an hour, and merges if nobody says anything. If Dane comments on
+the ticket during that hour, it stops: he is talking about it, so the machine
+does not act.
+
+The trouble is that the loops post their own notes to ClickUp using Dane's
+account, so every comment a script writes comes back looking as though he
+wrote it. The lane could not tell the two apart. A routine note from another
+part of the pipeline, landing during that hour, read as an objection — and
+the merge he had already approved was cancelled, with a message telling him
+he had commented on the ticket when he had not.
+
+It only ever failed in the harmless direction: it cancelled merges that
+should have gone through, never the reverse. But it blamed him for something
+he did not do, and it delayed work he had authorized.
+
+Machine notes now stamp themselves, and the lane reads that stamp. Only a
+comment it can positively identify as machine-written is ignored — anything
+it cannot classify still counts as Dane's word and still stops the merge, so
+the cautious half of the behaviour is untouched.
+
+Two more holes turned up while building it, both the same shape. The lane was
+willing to accept the stamp OR an older style of label a machine used to open
+its notes with — and that label is exactly what Dane types when he pastes a
+card and writes his answer underneath it. So his own "no, hold this one" could
+be read as a machine talking. The lane now asks only for the stamp, which
+cannot be pasted into place by accident.
+
+Worse, the note he is most likely to quote is the announcement itself, because
+it is the one he is replying to. Quoting it put a second announcement on the
+ticket, dated to his own comment, which quietly restarted the hour — so his
+objection was no longer "after the announcement" and never registered at all.
+An hour later the lane merged the very thing he had said to hold.
+
+Asking for the stamp closed one half of that and left the other open, which a
+review caught before any of it shipped. The stamp is the LAST line of every
+note a machine writes. Paste a card ABOVE your reply and the stamp lands in the
+middle, so the comment still reads as yours — that is the case the stamp fixed.
+Paste it UNDERNEATH your reply and the stamp is the last line of *your*
+comment, so the whole thing reads as the machine's. Quoting below what you are
+answering is at least as normal as quoting above it, and driving the real lane
+showed exactly what it cost: "no, hold this one" followed by the announcement
+card merged the pull request an hour later, giving "nobody objected" as its
+reason.
+
+Two things close it. The lane now recognises its own announcement by both
+ends — the opening line it writes and the marker it signs off with — which a
+quote cannot keep, because his words displace one end or the other whichever
+way up he pastes it. And a comment that reproduces a note already on the
+ticket, with words around it, is read as his: a machine writes fresh text, it
+does not reprint a card that is already there. Checked against 189 real machine
+notes on the board — not one of them reprints another, so this costs the lane
+nothing.
+
+And when the lane does stop because of a quoted card, it now says so in those
+words, rather than telling him he commented when what it really saw was a card
+he had pasted.
+
+A third way in turned up on the next review, and it was the most ordinary of
+the three. The test above — "does his comment reproduce a note already on the
+ticket?" — compared the two texts almost exactly as written. But Dane described
+his own method a few days earlier: he copies a card and uses *Paste and Match
+Style*, which throws the formatting away. The stored note is full of bold marks
+and code ticks; his copy has none of them. Same words, different characters, so
+the comparison found nothing in common and his objection was discounted again —
+and the lane merged the pull request he had said to hold, giving "nobody
+objected" as its reason.
+
+The fix is to compare the *words* and ignore everything else: bold marks, code
+ticks, bullets, headings, punctuation, all of it dropped from both sides before
+the comparison. That makes the question "what exactly does his editor keep?"
+stop mattering, which is the right way to settle a question nobody here can
+answer. Measured against every machine note on the board — 679 of them across
+134 tickets — a stripped copy of each one is now correctly read as his, where
+the old comparison caught 216. Two thirds of the notes on the board carry the
+formatting that was breaking it, so this was the common case rather than an
+edge one. And it costs nothing: across more than ninety thousand pairs of real
+machine notes, not one contains another's words, so no genuine machine note
+starts being mistaken for his.
+
+One paste is still not covered, and it is written down rather than left to be
+found again: a note copied in from a *different* ticket, which the lane has
+never seen and so has nothing to compare against. Closing that means changing
+what every machine note looks like, which is deliberately out of scope here.
+## 2026-09-06 — "You Might Also Like" could only see the newest hundred posts (#628)
+
+On a client's site, the "You Might Also Like" box at the bottom of a blog post
+picks its suggestions in the visitor's own browser. It asks the server for the
+published posts first, then looks through them for ones sharing a tag with the
+post being read.
+
+The trouble was how many it asked for: a hundred. The server will not hand over
+more than a hundred at a time no matter what you ask, so on a blog with more
+than a hundred published posts, the box was only ever looking at the newest
+hundred. An older article could share every tag with what you were reading and
+still never be offered — and the box would say there was nothing related, which
+was simply not true.
+
+Delray has 55 posts today, 46 of them still unpublished drafts. Publishing that
+backlog would have taken the site straight past the limit, so this was about to
+stop being theoretical.
+
+The box now fetches the posts a hundred at a time until it has them all. A small
+blog is unaffected — nine posts still costs one trip to the server, exactly as
+before. If some of those trips fail, the box no longer passes off a partial
+search as a complete one: whoever is building the page is told the search was
+incomplete, while a visitor simply sees the suggestions that were found.
+
+The same bug on the main blog feed was fixed separately a few hours earlier
+(#630), and this change now shares that fix's paging code rather than carrying
+a second copy of it.
+
+## 2026-09-06 — Scaffolding meant for the page builder was showing up on a client's blog (#627)
+
+When you drop a module onto a page in the Builder and have not filled it in
+yet, it does not sit there as an empty rectangle. It shows you something —
+either a couple of made-up sample entries so you can see the shape of the
+thing, or a short note saying "Add cards in the editor". That is helpful while
+you are designing. It is scaffolding.
+
+The problem is that the scaffolding was also being shown to visitors. Dane
+photographed a post on the Delray tennis blog on 3 September that said
+**"Tags: Example Tag"** underneath it, printed exactly the way real tags are
+printed. That post has no tags; those two words were the sample content, and a
+reader had no way to know that. The other half of what he photographed that
+day — "No tags found. Add tags in the Messaging section." — was fixed a couple
+of days ago, but this half had been sitting in the queue behind it.
+
+So this went and looked at every module for the same mistake, and found eight
+of them. Besides the tags, three modules that have not been built yet were
+showing visitors a grey dashed box with the module's name in it ("Author Bio",
+"Table of Contents"), and four more were telling readers to go and add slides,
+headlines, programs or cards "in the editor" — an editor a visitor cannot
+reach and does not know exists.
+
+All eight now show nothing at all on a published page when they have nothing
+real to show. Nothing changed in the Builder itself: every sample and every
+note is still there while you are designing a page. Sixteen new tests hold each
+of those two halves in place, and each one was checked by putting the bug back
+and watching the test go red.
+
+Two blind spots turned up along the way and are written on the ticket. The
+automatic check that is supposed to catch this kind of text only recognises
+certain phrasings, and "in the editor" is not one of them — which is why all
+four of those slipped through. And the browser-based rendering check cannot
+look at published pages at all, only at the Builder canvas, so it could never
+have seen any of this.
+
+**Round two.** Review checked the eight fixes, agreed with all of them, and
+then found a ninth the sweep had walked past — and a worse one. A CRM contact
+form can have a dropdown field, and until the site owner types some choices
+into it, the dropdown was falling back to two made-up ones: "Option one" and
+"Option two". A blank Options box is simply what a brand-new dropdown looks
+like, so this was not an unusual setup. Unlike the sample tags, which a visitor
+could only read, these were choosable: someone could pick "Option one" and send
+it into the client's contact list as real information about themselves.
+
+Measuring it in a browser turned up a second problem hiding underneath. If the
+site owner had also ticked "required" on that dropdown, the browser refused to
+send the form at all — every visitor filled it in, pressed Send, and nothing
+happened. So an empty dropdown was not just leaking made-up words; it was
+quietly breaking the form around it. Rather than show an empty dropdown, a
+published page now leaves the field out altogether, and the form works again.
+The Builder still shows the field, sample choices and all, so it is there to
+design. Both of those before-and-after behaviours were measured in a real
+browser on the real published-page code, not reasoned about.
+
+**Round three, and this is the one that mattered.** Review checked that fix,
+agreed the leak was gone, and then found what the made-up options had been
+hiding all along. Leaving out a dropdown that has no choices is only correct if
+the page can tell an empty dropdown from a filled-in one — and it could not.
+When a contact form was saved, the site owner's actual choices were being
+thrown away at four separate points on the way to the database, so *every*
+dropdown arrived at a published page looking empty. The new rule was therefore
+deleting real questions, not just dead ones.
+
+Delray's form has a genuine example sitting in the database right now: "How did
+you find us?", with Referral, Search Engine and AI. Put that on a page and,
+before this fix, the question simply would not appear and nobody's answer would
+ever be collected — while the save reported success every time. The reason
+nobody had noticed dropdowns were broken is exactly that they always looked
+populated: "Option one / Option two" was standing in for the choices that had
+been dropped.
+
+So the choices now travel with the field, through one shared piece of code that
+all four places use — the two that read, the two that write — so they cannot
+drift apart again. Measured both ways on the real published-page code: before,
+that question was missing from the form entirely; after, it is there with all
+three answers, and the form sends. A dropdown the owner genuinely left blank is
+still left out, which was the right call and is unchanged.
+
+**Round four — the sweep had walked past a whole module.** The contact form has
+three modes, and one of them is called **Custom**. Pick it from the dropdown in
+its settings — it sits right next to Squeeze and Standard, with nothing to warn
+you — and the published page told every visitor: *"Custom form builder coming
+soon. Standard fields are shown for now."* That is a sentence about our own
+product, aimed at whoever is designing the page, printed on a client's live
+site. The form underneath it works perfectly well; it just came with a note
+about a feature the visitor has never heard of and cannot wait for.
+
+It is exactly the same mistake as the eight above, and the code even said so:
+the note was tagged with the same styling name that this very file wraps in the
+builder-only guard two other places. It simply had never been given the
+switch that tells it whether it is on a live page. Now it has one. The sentence
+is gone from published pages and still there on the canvas, and the form's real
+fields — the ones that collect leads — keep rendering either way. That last
+part is the whole point, so it has its own test: the note stands down, the
+module does not.
+
+The reason three rounds of review kept missing it is the more useful half. The
+automatic check that catches this kind of text works from a list of phrasings,
+and "coming soon" was not on it — the check had been quietly incapable of
+seeing this defect the entire time. It is on the list now, and it was proved by
+putting the leak back and watching the check catch it, then running the old
+version of the check against the same leak and watching it report all clear.
+
+Adding the phrase turned up one more thing worth knowing. Written the obvious
+way, it also flagged the "Coming soon." a visitor sees when they land on a web
+address with no page published on it — which is correct, ordinary copy that
+must keep working. So the rule is narrower than it first looked: "coming soon"
+only counts as a leak when the same sentence also mentions the builder, a
+module or the editor. A club announcing that its new clubhouse is coming soon
+is left alone.
+## 2026-09-05 — The Mini can tell you a job is switched on. It could not tell you the job ever started. (#626)
+
+The Mac Mini runs jobs on a timer — the thing that relays your comments, the
+hourly pipeline check, the weekly report. `npm run doctor:node` has been able to
+tell you those timers are set up and switched on.
+
+There is a gap between "switched on" and "actually running", and it is the one
+that bites at 3am. Timed jobs on a Mac are *your* jobs, not the machine's, and
+they do not start until somebody logs in. The Mini's disk is encrypted and it
+does not log in by itself — so if the power blips overnight, it comes back up,
+sits at the login screen, and every one of those jobs simply never starts. The
+machine looks completely fine. Nothing is broken, so nothing complains. The
+failure is silence, which is the one thing the rest of this system was built to
+make impossible.
+
+So `doctor:node` now asks a different question — *have this machine's jobs been
+confirmed since it last restarted?* — and gives one of three answers: yes, no,
+or **I cannot tell**. That third one is the default, and it is the honest one.
+A new command, `npm run node:verify`, is what goes and looks: it asks each job
+whether it is really loaded, writes down what it actually saw, and nothing else.
+The two are separate on purpose, because `doctor:node` promises never to change
+anything on your machine, and that promise is what makes it safe to run when
+things are going wrong.
+
+The clever bit is what makes the answer expire on its own. Rather than a "last
+checked" date somebody has to remember to update, it records the machine's own
+statement of when it last started up. Restart the Mini and the recorded start
+time no longer matches — so the report goes straight back to "I cannot tell",
+with nobody having to notice or do anything. Which is exactly the situation it
+exists to catch.
+
+It was proved both ways on the real machine: a job was switched off on purpose
+and the check named it and failed; switched back on and it passed. And writing
+the tests turned up a genuine bug before it shipped — the code that reads the
+machine's start time was also matching a *different* field that happens to end
+in the same three letters, which would have reported a confident, completely
+wrong date.
+
+**Then the review caught the check doing the very thing it was built to
+prevent**, and this is worth reading, because it is the shape of almost every
+problem in this system. The Mini has six jobs on its list. Three of them have a
+timer that can be inspected; the other three — the two build lanes and the
+video worker — do not have one yet, on purpose. The new check looked at the
+three it could see, found them all fine, and reported: *"All 3 owned roles came
+back."* Every word of that is true and the sentence is a lie, because the
+machine owns six, and the three it did not mention are exactly the ones a 3am
+power cut takes out and leaves nobody to notice.
+
+It now measures the answer against what the machine is *supposed* to be running
+rather than against whatever it happened to look at, and says so out loud:
+*"3 of 6 owned roles confirmed; loop-build, loop-review, youtube-media have no
+schedule to check."* Same count, honest sentence. Two smaller versions of the
+same fault went with it: a Mac that cannot say which machine it is now gets "I
+cannot tell" instead of a pass, and a job whose timer file was deleted while it
+was still running used to print a tick in the table underneath a line saying
+one job had not come back — the table and the summary were reading the same
+thing two different ways, and now they read it from one place.
+
+**And then the review caught it a third time, in three more places.** The fix
+above had been applied to the *passing* sentence and nowhere else, so the same
+mistake — trusting the notepad instead of the job list — was still live in three
+other answers. A machine where every job had lost its timer reported a green
+*"0 of 2 confirmed"*, naming the same job as checked and as not-checked in one
+breath. A leftover note about a job that had since moved to the other Mac
+produced a permanent failure about a job this machine does not even run, and the
+only way to clear it was to delete the file. And the MacBook, which has two jobs
+and no timer for either, was told it had never been checked and handed a command
+that refuses to run there — a to-do nobody could ever tick off.
+
+All three were one root cause, so there is now one answer to one question:
+*which of the jobs on this notepad are jobs this machine actually runs and can
+inspect right now?* Everything is read off that. A leftover note is named out
+loud and counted as neither good news nor bad. A pass has to have confirmed at
+least one job. And a machine with nothing to inspect gets its own plain sentence
+— *"nothing on this machine has a schedule a reboot could take away"* — which is
+word for word what the checking command itself says, so the two halves finally
+agree rather than pointing at each other.
+
+One of the new tests was rewritten during the work because it could not fail.
+It compared two lists that the fix itself had made incapable of overlapping, so
+it would have gone green forever no matter how wrong the sentence a person
+actually reads had become. It now reads the names back out of that sentence.
+
+**Round four, and this one killed the whole report.** The check keeps a small
+notepad file on the machine recording what it last saw. Anything can write to
+that file, and the code that *writes* it was fussy about the format while the
+code that *reads* it barely looked — so a single bad line in that file did not
+produce a wrong answer, it produced no answer at all. `npm run doctor:node`
+prints its report in one go at the very end, so the crash threw away all six
+sections: which machine this is, whether the tools are installed, the checkouts,
+the settings, the timers, and the reboot check itself. I reproduced it exactly —
+**zero bytes of report, a stack trace instead** — and then again with the fix, on
+the same bad file: the full report, seven sections, and the reboot line reading
+*"this machine's role verification could not be read"* with the one command that
+clears it. That is the whole point. The moment you most need that command is the
+morning after a power cut, and it was one stray byte away from telling you
+nothing.
+
+The second fault was the same shape as ones already fixed twice on this ticket:
+the notepad says which machine it describes, and there was a guard to reject one
+copied from the *other* Mac — but a notepad that named **no** machine skipped
+that guard entirely and was accepted as this machine's own. Backwards: if a file
+turns up here at all, the likeliest explanation is that somebody copied a folder
+between the two Macs, and one that cannot even say whose it is has less to vouch
+for it, not more. Both halves now share one definition of a usable record, and
+neither will write or accept one that cannot name its machine.
+
+Last, a small readability fix that matters more than it sounds. The explanation
+line ran several separate findings together with no full stops, so a job that had
+**moved to the other Mac** read as a fourth job on this one with no timer — the
+line the operator reads to decide whether anything is wrong was quietly saying
+something untrue. Each finding is its own sentence now. All six fixes were broken
+on purpose, one at a time, and each one turned a named test red.
+## 2026-09-06 — A rule, instead of a fifth round of fixing the same bug (#602)
+
+Four times now, review has sent the bulk template change back for the same
+thing, and it has never once been the part that moves your pages — that half
+has been right since the first round. It is the *sentence you read afterwards*.
+Each round we fixed the exact sentences review named, and each round the same
+mistake turned up somewhere else. You looked at that pattern and picked option
+B: one more pass, wording only, with **a rule rather than another list — no
+sentence may state anything the code did not check.**
+
+That is now built as a mechanism, not a good intention. Every sentence that
+claims something happened has to be handed the fact that proves it, and a fact
+is three-way: yes, no, or *nobody checked*. "Nobody checked" is the default, and
+it never gets to make the claim. A test walks every combination of those facts
+and fails if any sentence ever says something its fact did not license — so a
+sentence written next month is covered by this too, which is the whole point.
+It found a fifth instance of the bug while it was being written.
+
+The three live faults are gone with it. The worst: if the change crashed
+half-way, the server's reply looked identical to a polite refusal, so the app
+told you *"an archive was saved just before this, so Archives has a new entry
+that undoes nothing"* — pointing you away from your only undo at the one moment
+pages really had been rewritten. The server now says outright when it refused
+before touching anything, so the app can tell the two apart instead of guessing.
+Second: the message said "the list has been reloaded" whether or not it had, and
+it fails precisely when everything else is failing — so you would check the
+Template column, see nothing moved, and reasonably conclude nothing happened. It
+now tells you when the list could not be refreshed. Third, one page live and
+unconfirmed read "1 of the selected page is live"; it reads properly now.
+
+All three were reproduced in a real browser before and after, by forcing the
+crash and the failed reload deliberately.
+
+## 2026-09-04 — Move a whole batch of pages onto a different template in one go (#602)
+
+Builder: Pages now has a fourth button above the table — **Change Template**.
+Filter the list down to one template, tick the box at the top-left of the table
+to select everything showing, pick a new template, and all of those pages move
+onto it at once. Each one is rebuilt with the new template's layout, which is
+what you asked for when this was specced: not just relabelling the pages, but
+actually re-pouring them.
+
+That is a destructive thing to do to a page — it is the same operation that
+emptied 35 sections off the Delray home page back in August — so two things
+happen automatically and cannot be switched off. First, an archive of your
+pages is saved *before* a single page is touched; if that archive cannot be
+saved, nothing changes at all and it tells you so. Second, every page is read
+back after it is written and the message tells you how many came back correct,
+rather than trusting that the save worked. Undo is the Archives button: open
+the archive it just made and click Restore All. One caveat the dialog now
+states plainly — that archive holds *all* your pages, so restoring it also
+rolls back any other page edits made after it was taken.
+
+The list of templates you can move pages onto is deliberately shorter than the
+one in the filter dropdown at the top of the column. The filter is for looking;
+this is for writing. Three kinds of entry in that filter would have destroyed
+pages rather than re-templated them: a built-in placeholder that has no layout
+at all, the "starter" templates whose layouts only exist inside the browser,
+and your email templates, which are not page layouts. The picker offers your
+real, saved page templates and nothing else, and if a project has none it says
+so instead of showing you an empty box.
+
+Review sent this back once, and it was right to. The dangerous half — the
+archive, the re-pour, the read-back — was sound, but the layer that *tells you
+what happened* was not, in four ways. If the request died half way through, the
+table kept showing the old template names while the pages underneath had
+already been rewritten; it now reloads the list and says plainly that some
+pages may have moved and some may not. If some pages failed *and* some could
+not be confirmed in the same run, the "could not be confirmed" warning vanished
+entirely and those pages were counted as moved; all three numbers are now
+always reported. The warning told you to check the pages "before publishing",
+which invents a step that does not exist — a page with no published copy is
+served straight to visitors, so the dialog now names how many of the pages you
+have selected are live on the public site right now (38 of 43, in the Delray
+project). And an archive lookup that merely *failed* used to tell you that you
+had not taken an archive at all, sending you off to make one that already
+existed; only a genuine "not found" says that now.
+
+Review sent it back a second time, at the same layer, and the headline one was
+a beauty: when the server flatly *refused* the change — "no archive with that
+id, nothing was changed" — the app pasted its own "the request failed part-way,
+so some pages may already have been changed" onto the end and then pointed you
+at Restore All. One message saying both things at once, recommending the
+biggest undo in the app in response to something that had changed nothing.
+Those are two different events and the app could not tell them apart; it can
+now, and when the server refuses you get the server's sentence and nothing
+else. Second: the archive was being taken *before* the server checked whether
+the change was allowed, so a refusal left a full copy of all 138 pages sitting
+in Archives having undone nothing — two of those in a row and your real
+archives fall off the end of the list you are being told to restore from. The
+app now asks first and archives second, and if a refusal does slip through
+after the archive was taken it says so, so the extra entry is not a mystery.
+Third, and smallest to say but not to read: with exactly one page unconfirmed
+the warning read "they is live on the public site". Three more were taken while
+in there — a database error that merely *looked* like a bad archive id no
+longer reads as one, an empty template list now says whether it is empty
+because you have none or because the list would not load, and each page now
+costs one database read fewer, which on a 43-page selection is 43 fewer round
+trips inside a function that has run out of time before.
+
+Review sent it back a third time, and it was the same defect wearing a third
+face — this time on the run where *nothing had gone wrong*. All of the
+sentences this feature shows you live in one small file that the page loads
+separately. If that file does not arrive — a bad deploy, a cached miss, a
+browser blocking it — then the code that writes the message crashes. It was
+crashing *inside* the block whose job is to catch a failed request, so a run in
+which every page moved and every page was confirmed reported a raw programming
+error followed by "some pages may already have been changed" and, once again, a
+recommendation to Restore All. The worst possible advice at the calmest possible
+moment. Two things changed: the message is now built after the request is
+finished with, so a problem writing the message can no longer be mistaken for a
+problem with the change; and all three places that reach for that file now go
+through one guarded door with a plain sentence to fall back on — one that tells
+you the change ran, tells you where to look, and never recommends the big undo.
+Measured in a real browser with the file blocked, before and after.
+
+Two smaller ones went in with it. A bulk template change now appears in Page
+History as "Template changed by <your name>" rather than as an ordinary edit by
+nobody, which matters because that entry is the per-page undo for this exact
+operation. And the check that confirms your archive exists was loading every
+page in the project to do it — 138 page layouts pulled across to answer a
+yes-or-no question, right before the write that has run out of time before.
+## 2026-09-06 — A blog list said "13" and showed 9, with no way to see the rest (#629)
+
+On a client's tag page, the heading read *"Blog posts matching the tag 'junior
+tennis': 13"* and the page showed **nine** posts. There was no next-page link, no
+"load more", and nothing anywhere saying the list had been shortened. Four posts
+simply were not there. A visitor who counts the cards decides the site is broken;
+a visitor who does not never learns those four exist.
+
+The count was telling the truth. The list was not. The module worked out how many
+posts matched, printed that number, and then drew only as many cards as its
+"Posts per page" setting allowed — and threw the remainder away without a word.
+Turning that setting up would only have moved the problem further down the page.
+
+There was a second, quieter version of the same fault underneath it. The list only
+ever asked the server for the **first 100 posts**, then did all its sorting and
+filtering inside the visitor's browser. Any site with more than 100 published posts
+would find that a tag on an older post came up completely empty — and the message
+we added last week, *"No posts tagged 'junior tennis'"*, would have stated that
+confidently and been wrong. A confident wrong answer is worse than a vague one.
+
+Both are fixed. The list now keeps asking the server for the next hundred posts
+until it has them all, so no filter can miss an older one. And under the cards
+there is now a **"Show more posts"** button with a line reading **"Showing 9 of
+13"** beside it, so what the page claims and what a visitor can actually reach are
+the same thing. Click it and the rest appear; when everything is on screen, both
+the button and the line go away. Changing a filter starts the list over at the top.
+
+One more piece of honesty went in with it: if the list ever cannot read the whole
+archive, it says "of 250 **or more**" rather than a firm number, and an empty
+result says so instead of claiming nothing matched. The module should never make a
+confident statement about posts it never looked at.
+## 2026-09-05 — Every ticket the reconciler closed was told '[object Object]' did it (#619)
+
+When the automatic reconciler notices that a ticket's work has already been
+merged and shipped, it moves the ticket to `Live` and leaves a note on it
+explaining what happened and which machine did it. That note is the only
+explanation you get for a machine touching your ticket — so it matters that it
+reads like a sentence.
+
+It did not. Where the machine's name should have been, every one of those notes
+said `[object Object]`. The most recent was on 5 September. The cause is the
+kind of thing that is invisible until you see it once: the function that answers
+"which machine am I?" hands back a small bundle of facts about the machine — its
+name, where that name came from, which file it was read out of — and the
+reconciler was dropping the whole bundle into the sentence instead of pulling
+the name out of it. When you put a bundle of facts where a word belongs,
+JavaScript writes the words "object Object" in square brackets and carries on
+without complaining.
+
+The evidence half of the note — the pull request link and the merge time — was
+always right, so nothing was ever closed for the wrong reason. But a note that
+reads like broken software undermines the one instruction it carries ("Reopen
+the ticket and say so on it"), and that instruction is what a newer safeguard
+relies on. Fixed, along with tests that pin the shape rather than the wording:
+if that bundle of facts ever changes form again, the tests go red here rather
+than the sentence going wrong on Dane's board.
+## 2026-09-05 — The SQL hand-off check could jam itself shut, and then keep asking for a file you already had (#620)
+
+When an agent finishes a turn on a branch that adds a database script, a check
+makes it hand that script to you properly rather than mentioning it in passing.
+That check is allowed to interrupt at most three times in a session and then
+step aside, because a check that can jam a conversation shut is worse than the
+thing it is guarding against.
+
+It keeps that count in a small file, with a backup location for when the first
+one is unavailable. The two halves of that arrangement disagreed: the part that
+*reads* the count stopped at the first file it could open, while the part that
+*saves* it stopped at the first file it could write to. So if the main file
+stayed readable but stopped accepting writes, every save went to the backup and
+every read came back from the stale original. The count never moved, the
+step-aside never happened, and the check would have interrupted every turn from
+then on — the exact jam the limit exists to prevent, arriving through the limit.
+The same freeze lost the list of scripts already handed over, so a file you had
+already been given got asked for again on every turn afterwards.
+
+Reading and saving now happen in one place, and the read looks at every location
+rather than stopping at the first. Measured against the current live code in the
+same run: twelve turns with the file made read-only part-way through, the live
+code interrupts twelve times out of twelve; this branch interrupts three times
+and then stands aside, which is what it was always meant to do.
+
+Review then caught a second fault of the same shape, and it was the more
+dangerous direction. That backup location is shared by the whole machine, and
+the file in it was named after the session alone. One session here often has
+several folders open at once — that is the normal way of working — so all of
+them were sharing a single count. Once the first folder's own file froze and its
+count spilled into the shared backup, the newly-thorough read handed that
+spent-up count to every other folder, and the check went completely silent in
+them: not interrupting too much, but never interrupting at all, for the rest of
+the session. The same shared file also carried the list of scripts already
+handed over, so a script handed to you from one folder counted as handed over
+from all of them. The backup file is now named after the folder as well as the
+session. Measured against the current live code in one run: a healthy second
+folder gets none of its three interruptions today, and all three with this fix.
+Nothing to look at — this only runs between an agent's turns.
+
+## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
+
+Pull requests are merged one at a time here, and the plan is to switch on a
+**merge queue** — a line, so several can go through in order without each one
+resetting the others. Before that could happen, something had to be fixed that
+only breaks once the queue exists.
+
+When a script tells GitHub to merge, GitHub answers "done" in two completely
+different situations. Today it really has merged. With a queue switched on, it
+means *"I have put it in the line."* Same answer, and our scripts could not tell
+them apart.
+
+They broke in opposite directions. `npm run ship` — the command that takes
+finished work live — looked a second later, saw the pull request still open, and
+stopped with "the merge did not complete". That would have happened on every
+single run, while the merge was in fact perfectly fine, and it would have
+stopped before tidying up. Annoying, but loud, and it changed nothing.
+
+The other one was the dangerous one. When Dane comments `merge` on a ticket, a
+background job does it for him. That job checked only that the *command* worked.
+It then wrote down the current time as the merge time, announced "merged" on the
+party line, and moved the ticket to **Live** — while the pull request was still
+sitting in the line, possibly never to merge at all. A ticket marked done, a
+merge announced, and a time written down as fact, for something that had not
+happened.
+
+Both now ask the same question, through the same piece of code, and wait for a
+real answer: merged, closed, still in the line, or "could not tell". *Still in
+the line* is its own answer — not a success and not a failure. Nothing is
+recorded, no time is invented, the ticket stays where it is, and Dane's `merge`
+word stays unspent so the next pass finishes the job properly. The merge time
+now comes from GitHub itself rather than from our own clock.
+
+It costs an ordinary day nothing: with no queue switched on, the first look
+already says merged and the wait is over before it starts.
+
+**Round 2 — and the first fix had swapped one wrong answer for another.** Review
+caught it. The new code called the pull request *"still in the line"* any time it
+was still open — without ever checking that a line existed. None does; the queue
+has not been switched on yet. So on today's setup every genuinely *refused*
+merge was being announced as a calm queue wait: fifteen minutes of waiting, then
+"nothing has gone wrong, GitHub is still working through the merge queue", about
+a mechanism that is not there. Every word of that was false, and doing what it
+suggested — run it again — just started the same fifteen minutes over.
+
+That mattered because refusals are common. This repo will not merge a branch
+that has fallen behind, and a branch can fall behind in the seconds between its
+checks passing and the merge going through. That used to be a one-second, honest
+"the merge did not complete". It is again: the script now asks GitHub, in the
+same breath as everything else, whether anything is actually holding this pull
+request — a place in the line, or GitHub's own auto-merge. If nothing is, it says
+so at once and tells you to run it again, which genuinely fixes it. If something
+is, and only then, it waits.
+
+The second half was a timing bug in the background job. Its wait could run for
+fifteen minutes; the job itself wakes every ten. One pull request would have
+swallowed the job's own next wake-up, and everything else riding on it. The wait
+is now drawn from the same small allowance every other wait in that job uses, so
+the whole pass still finishes inside its ten minutes — and the test that checks
+that is no longer able to miss a wait standing outside the arithmetic, which is
+exactly how this one got through the first time.
+
+**Round 3 — the shared piece was right; the two places using it were not.**
+Review found five things, and one of them was serious enough that it would have
+gone wrong on the very first day the line was switched on.
+
+There is a rule here that only one branch may be going into `main` at a time —
+a "window". Whoever holds it, holds it until their merge lands, because a merge
+landing shoves every other branch behind it and makes them re-run their checks.
+The background job took the window, told GitHub to merge, and then — on being
+told *"it is in the line"* — handed the window straight back. The next merge
+then moved `main`, pushed the queued branch behind, reset its checks, and it
+never landed. Then the same thing again, forever: the exact traffic jam the
+window exists to prevent, arriving through its own fix. Being in the line is a
+merge that is definitely coming, so it now keeps the window, the same way
+GitHub's own auto-merge already did. Where nothing at all is holding the pull
+request, or where it genuinely could not be read, the two are told apart rather
+than guessed at.
+
+Second, the job's wait allowance was being spent on waits that never happened.
+Today's merges finish instantly, so a merge cost the job one of its three
+allowed pauses for pausing zero seconds — and three merges in one pass left the
+fourth ticket's *real* wait refused and put off for another ten minutes. The
+allowance is now spent on what actually happened, not on what might have.
+
+The other three were in `npm run ship`, and they were all the same shape as
+round 1: the script describing something it could not do. It told you to run it
+again and it would "see the merge and finish tidying up" — and it had no way to
+see an already-merged branch, so running it again opened a *second* pull
+request for work that was already live. It now checks that first, before
+anything else, and needs two independent yeses before it will skip: GitHub
+confirming a merged pull request, and `main` genuinely already containing the
+work. If either one cannot be read, it does not skip. It also stopped
+announcing "queued to merge" one line above "nothing is holding it" — round 1's
+own sentence, still being printed directly above its own correction — and it no
+longer spends twenty minutes retrying a lookup that could never have worked,
+when it can tell that in the first second.
+
+**Round 4 — the script said "GitHub refused it" about something it had not been
+able to look at.** Review found one mistake sitting in two places, and it is the
+same mistake this whole ticket was written about: saying one thing while another
+is true.
+
+When a merge does not happen, the script asks a follow-up question — *is
+anything still holding this pull request?* There are two quite different answers
+it can come back with. One is "no, nothing is holding it", which really does
+mean GitHub turned the merge down. The other is "I could not read that", which
+means nobody knows yet. Both were being reported with the same sentence: *"The
+merge command reported success, so GitHub refused it afterwards."*
+
+So on the second one you got two lines, one under the other. The first said the
+answer could not be read. The second stated a refusal as fact — and then told
+you the usual cause and what to do about it. All of that was invented. Worse,
+`npm run ship` was pointing you at a fix for a problem it had no evidence you
+had, and the background job wrote the same false sentence onto the ticket and
+onto the party line, where Dane reads it.
+
+The odd part is that everything else already had it right. The merge window is
+held, not released, when that answer cannot be read, and the job's own internal
+record marks it as a could-not-tell. The code knew. Only the sentence a human
+reads did not. The two are now written in one place, so they cannot drift apart
+again: a real refusal keeps its old wording and its old advice, and a
+could-not-tell says the merge did not happen, says why it does not know, and
+tells you to look at the pull request before doing anything.
+
+One smaller thing, spotted in the same review. `ship` can now recognise a branch
+whose work is already live and skip straight to tidying up. It needs two yeses
+to do that, but a branch that has changed *nothing at all* was accidentally
+giving one of them for free — so a fresh branch reusing an old topic name whose
+pull request had merged could be waved through as "already live" when it was
+nothing of the sort. Nothing could be lost by it, but it is confusing, and it is
+now asked directly: a branch that has not changed a single file has nothing it
+could have merged.
+
+## 2026-09-05 — The sweep that called a half-built ticket empty (#624)
+
+When a build session dies partway through, its ticket is left sitting in
+"Building" with nothing working on it. A tidy-up pass called the sweep finds
+those and puts them back in the queue so somebody can pick them up again.
+
+Before it moves one, it asks a question: was anything actually built for this?
+The only way it could answer was to check GitHub for a pull request — and a
+pull request only exists once the work has been pushed. So a ticket somebody
+had built two thirds of, in a folder on their machine, with nothing pushed
+yet, looked exactly the same to it as a ticket nobody had ever started. It
+said "nothing has been built for it" and sent both back to the queue.
+
+That happened on 3 September. About two thirds of a piece of work was sitting
+in a folder on the MacBook — seven changed files — and the ticket was returned
+to the line as though it were untouched. Nothing was deleted; the folder is
+still there. What was lost is the connection between the two: the ticket no
+longer pointed at the work, and the next person to pick it up would have built
+the whole thing again from scratch.
+
+The sweep now goes and looks first. Every branch created for a ticket carries
+that ticket's number, so it checks each machine for one, and counts it as work
+in progress if there are unsaved changes in the folder or commits that have not
+gone anywhere yet. If it finds work, it leaves the ticket alone and prints
+where the work is — which machine, which folder, which branch — so you can walk
+straight to it. If it cannot reach one of the machines to look (a laptop asleep,
+say), it says so and still leaves the ticket alone, rather than guessing. And
+if every machine answers and none of them has anything, it does exactly what it
+did before.
+
+The last part matters as much as the first. A safety check that never lets
+anything through is its own kind of broken, so all four behaviours were tested
+by deliberately removing the fix and watching the right test fail.
+
+**Sent back once, and rightly.** The first version of this worked perfectly
+when looking at the machine it was running on, and could not see the other one
+at all — in two separate ways, either of which brought the original problem
+straight back.
+
+The first was a quoting slip. To look at the other machine it has to say
+"look in your own home folder", and it wrote that instruction in a way the
+other machine reads literally instead of filling in — like posting a letter
+addressed to "your house" rather than to the actual street. The far machine
+looked for a folder with that literal name, did not find one, and answered
+"there is no copy of the project here" — confidently, as a real answer rather
+than as a shrug. So every ticket built on the other machine would have been
+declared empty and sent back to the queue: the exact thing this was written to
+stop, just from the other seat.
+
+The second was worse, because it broke the check the other way. The Mini and
+the MacBook are not wired up to talk to each other in both directions — the
+MacBook can reach the Mini, but not the other way round, and that is written
+down in our own inventory of machines. The sweep asked both anyway. From the
+Mini, which is where it actually runs, the MacBook never answers, so the sweep
+said "I could not check" about every single ticket and became unable to move
+anything at all. A safety check that never lets anything through — the exact
+failure the paragraph above says was tested for, arriving through a door the
+test did not cover, because the test was handed a tidy list of one machine
+while the real thing walks the list of both.
+
+Both are fixed, and the second needed a decision rather than a repair. A
+machine that is merely asleep is a reading we failed to take, and the sweep
+still refuses to move a ticket on that basis. A machine there is no way to
+phone at all is a different thing: waiting for it is waiting forever. So the
+sweep now gets on with its job, and every sentence it writes — on screen, in
+the note left on the ticket, and on the party line — names the machine it could
+not look at, so nobody reads a partial answer as a complete one. The real fix
+for that gap is to wire the two machines up; that is separate work, and it is
+now the only thing standing between this and a complete answer.
+
+Three smaller things came back with the send-back and are fixed too: a merged
+branch could pin its own ticket in "Building" forever, because the sweep
+counted commits instead of comparing the actual changes, and squash-merging
+makes those two different questions; the scheduled health report picked the
+wrong line out of the sweep's output and could headline "all is well" over a
+real finding; and a dry run offered to apply a change that would not have done
+anything. Every one of the six was broken on purpose afterwards to watch the
+test that guards it fail.
+## 2026-09-05 — A repair that moves real tickets is now actually tested (#623)
+
+There is a repair in the system called the sweep. When one of the machines dies
+part-way through a job, its ticket is left sitting in a state nothing will ever
+pick up again — it is invisible, not merely late. The sweep is the thing that
+finds those and puts them back in the line.
+
+Three days ago that repair was fixed so it could be run at any time, and that
+fix was right and is still right. But it went in with a strange gap: the tests
+around it never actually ran it. They read the *text* of the program and
+checked that the sweep was mentioned in the right places, the way you might
+confirm a recipe lists flour without ever baking anything. That is a weak
+check on a strong piece of code, because this is the code that genuinely moves
+tickets around the board on its own.
+
+The reason nobody had tested it properly was mundane: the sweep lived inside a
+command-line tool, and there was no way to get hold of it without running the
+whole tool. So it has been moved into its own file, arranged so a test can hand
+it a pretend version of ClickUp and watch what it does. Nothing about how it
+behaves has changed — the same code, in a place a test can reach.
+
+Then the test that was asked for: put some stuck tickets in front of it, run
+the sweep, and check each one went where it should. The pretend ClickUp really
+carries out the changes it is given, so the sweep can be run a second time over
+the board the first run left behind and confirmed to come back clean — which is
+exactly how a person would check it by hand. Seventeen tests in all, covering
+the ordinary case, the four different ways it can fail, and the important one
+where ClickUp says "fine" but nothing actually moved.
+
+The tests were then proved to be worth having by deliberately breaking the
+sweep six different ways and confirming each break was caught. A test that
+cannot fail is decoration.
+
+Worth recording: this ticket turned out to be a duplicate — the same problem
+had been written up twice on the same day, and most of it was already fixed.
+That was checked before any code was written, said so on the ticket, and only
+the part that was genuinely still missing was built.
+
+## 2026-09-05 — The switch that quietly ignored him three times (#621)
+
+Automatic merging can be switched off, and it is switched back on by posting
+one exact line: `resume auto-merging`. The wording has to be the whole message
+and nothing else, on purpose — if it fired whenever the phrase merely came up
+in conversation, the machines would merge something nobody had agreed to.
+
+What went wrong is what happened when Dane got *close*. Nothing at all. On
+3 September he posted the line with bold and backticks around it, copied from a
+card an agent had written for him. It matched nothing, nobody said so, and he
+spent the next thirty-five minutes believing merging was back on. He did the
+same thing twice more on 5 September — at 6:47pm and 8:58pm — while an urgent
+piece of work sat parked waiting for exactly that switch. Three tries, no
+answer to any of them, because a near miss and a message nobody read looked
+identical from where he was sitting.
+
+Now a message that was clearly *meant* to be the switch gets a reply: nothing
+changed, here is what actually arrived, and here is the line to copy — as plain
+text on its own, so the reply cannot hand him another dud.
+
+Rehearsing the fix turned up a second problem underneath it. The system worked
+out which party-line messages were Dane's by keeping a list of the signatures
+the machines sign with, and the list had gone out of date: three signatures in
+daily use were missing from it, so those posts were being read as *his own
+words* on the one channel where the off switch is listened for. It now
+recognises the family of signatures rather than a list of them.
+
+## 2026-09-05 — A ticket you had already said "merge" to sat there waiting for you anyway (#617)
+
+Two of the seven columns on the Loop Queue board belong to you: `Needs your
+input` and `Ready to launch`. Nothing automatic is allowed to move a ticket out
+of either one, and that rule is right — a machine tidying away a ticket that was
+holding a question you had not seen yet would erase the question.
+
+But the rule was being applied by looking only at which column the ticket was
+in, and the column is not really the question. The real question is *is there
+still a decision of Dane's outstanding?* On the morning of 4 September there
+was not: you commented `merge` on a ticket at 8:15, the work went live at 8:57,
+and at 9:00 the ticket was still sitting in `Ready to launch` as though it were
+waiting on you. It was not waiting on anything. Your instruction had been given
+and carried out. The ticket was just stale paperwork by then — and finished work
+parked in one of your columns does not show up on the list of what shipped.
+
+So the tidy-up job can now close exactly one shape of ticket by itself, and only
+when all three of these are true: the ticket is in `Ready to launch`, its pull
+request really did merge, and your own `merge` comment is on the ticket from
+*before* the merge. Miss any one of them and nothing changes — it flags it and
+leaves it alone, exactly as before, and now says which of the three was missing.
+`Needs your input` is never touched at all, whatever merged, because an
+unanswered question is the whole reason the rule exists.
+
+Three things were tightened beyond what was asked for, all of them about not
+closing something on a word that was not really yours. It reads your merge
+command out of the comments rather than guessing from the column or from who is
+assigned. It checks the comment was actually typed by you and not written by one
+of the loops, which all post under your login. And it ignores a `merge` you gave
+before the last review verdict — that one approved an earlier attempt that was
+sent back and rebuilt, so it is a word about work that no longer exists. The
+close is also guarded: if you move the ticket yourself while the job is thinking,
+your move wins.
+
+Every one of those guards was tested by taking it out and watching a named test
+go red, and the note the job leaves on the ticket says whose instruction it
+acted on, when you gave it, and which pull request carried it out — so the claim
+can be checked rather than taken on trust.
+## 2026-09-05 — Merges no longer knock each other back to the start (#616)
+
+Before a pull request can go live, GitHub insists it has the very latest work
+in it. That sounds sensible, and it is — but it means every merge that lands
+makes every other waiting change out of date, and throws away the tests that
+had just passed on it. So when several merges happened close together they kept
+knocking each other back to the beginning, and each one had to be tested all
+over again. Nothing looked broken while it happened: every single step reported
+success, so it just felt slow.
+
+On the night of 3 September a merge Dane approved at 11:25pm did not go live
+until 11:49pm, and the whole twenty-four minutes went on re-running tests that
+had already passed.
+
+The fix is a queue of one. Only a single change at a time is allowed to be on
+its way to going live; the others simply wait their turn, untouched, so nothing
+resets them. Each change is now tested exactly once no matter how many are
+lined up behind it — with eight waiting, the last one used to need eight rounds
+of testing and now needs one.
+
+Two things worth knowing. It was checked first whether that "must have the
+latest work" rule was GitHub's own or something we had chosen ourselves; it is
+GitHub's, and it protects something real, so it was left alone. And one gap is
+left open deliberately: the fast-track lane still merges without taking its
+turn, so it can still interrupt one waiting change. Making the fast track wait
+behind the machines is Dane's call, not a decision to slip in quietly, so it
+has been written up separately.
+
+## 2026-09-05 — The panel layout checker could not fail on the panel it had just checked (#613)
+
+`check:panels` is the check that looks at the admin panels in a real browser
+and says whether the labels and fields line up. It is the one check the
+automated system cannot run for itself, because it needs a browser — so it
+only ever runs when somebody runs it, and the rule for trusting it is to break
+the layout on purpose first and watch it go red.
+
+On 3 September somebody did that on the Trigger panel and it stayed green
+through two deliberate breaks, including undoing the exact fix that had just
+shipped for that panel. A check that cannot fail is worse than no check,
+because its green gets quoted as proof.
+
+It turned out the checker had already measured the problem and was throwing
+the number away. It asked whether a label's column was too narrow — a cramped
+label is the thing the rule was written against — and never asked whether one
+was too wide. With the fix undone, the word "Trigger" was sitting in a column
+more than seven times wider than the word: 362 pixels of dead space, which is
+exactly the gap the original ticket was about. There was a second reason too:
+three of the four Trigger blocks only show one row, and most of the other
+tests work by comparing rows to each other, so with one row there is nothing
+to disagree with.
+
+This adds a ceiling on that dead space, set from measurements rather than
+picked: every correctly-built block in the app sits at exactly 40 pixels, the
+loosest legitimate block anywhere is 133, and the fault is 362 — so the
+ceiling is 140. It compares a block against itself, so it works on a one-row
+block too. The checker also now says how many blocks only showed one row, on
+good runs as well as bad, so its final tally can never again be read as a
+verdict over comparisons that never happened.
+
+Review sent the first attempt back, and it was right to: the new test was the
+same shape as the fault it was written for. Some of these panels put two
+label-and-field pairs side by side on one row — five of the ten in the test
+page do — and the new ceiling looked at the whole block at once. So a
+correct left-hand column set the number, and a wrong right-hand column was
+invisible. The measurement now runs on each column separately, from a single
+shared definition of what a column is, so the "too wide" test and the "too
+narrow" test can never again be asking about different things. Proved by
+making only the right-hand column wrong: this version goes red on it, the
+first version stayed green on exactly the same break. Two smaller repairs
+went in with it — the one-row tally was being added up once per screen width,
+so it read 9 when the real answer was 3, and a comment claimed the tally
+printed on every run while the code printed nothing when it was zero.
+
+Proven the way the ticket asked: putting the original fault back now produces
+12 failures across all four panels at all three screen widths, and taking it
+out again goes green. The new rule is also plain enough to be tested without a
+browser, so for the first time a piece of this check runs in CI on every pull
+request.
+## 2026-09-05 — A new page keeps the template you chose (#614)
+
+Making a brand new page in the Builder, you could pick a Template and a Theme,
+press Save, and be told it saved — and the Template would come back empty while
+the Theme stuck. Setting it a second time worked, so it looked like the first
+save just did not take.
+
+It was not the save. The part of the server that creates a page keeps a list of
+which fields it is allowed to store, and the template was never added to that
+list. The Builder was sending it every time; the server quietly dropped it and
+still answered "created". The Theme survived because the Theme was on the list,
+and the second attempt worked because editing an existing page runs through
+different code that does know about the field.
+
+The field is stored now. That list also moved out of the middle of the request
+handler into its own named piece of code with tests on it, because a list
+buried inside a route is one nothing can check — which is how a field went
+missing in the first place without anyone noticing. Two smaller things came
+with it: the Page Details panel now re-reads the template back off the saved
+page rather than showing what you typed, and a fallback deep in the storage
+code that could drop the template while reporting success now says out loud
+when it fires.
 ## 2026-09-05 — A main menu item now joins up with its dropdown instead of floating above it (#615)
 
 When you hover a top menu item that has a dropdown — "Pickleball", for

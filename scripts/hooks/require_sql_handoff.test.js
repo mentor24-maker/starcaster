@@ -25,8 +25,25 @@ const {
  * with real JSON and asserts it actually refuses.
  */
 
+/**
+ * Every scratch directory this suite creates, swept in test.after().
+ *
+ * `fs.mkdtempSync` makes a real directory in a MACHINE-WIDE temp dir and
+ * nothing removes it, so each run left four behind and they accumulated: 1,997
+ * `sqlhandoff-*` repos on the mini as of 2026-09-05, plus 41 each of the
+ * others. The state FILES were already cleaned up (see FALLBACK_STATE_FILES);
+ * the directories holding them were not, which is the same oversight one level
+ * up.
+ */
+const SCRATCH_DIRS = [];
+function scratchDir(prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  SCRATCH_DIRS.push(dir);
+  return dir;
+}
+
 function makeRepo() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sqlhandoff-'));
+  const dir = scratchDir('sqlhandoff-');
   const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
   git('init', '-b', 'main');
   git('config', 'user.email', 'test@example.com');
@@ -84,24 +101,47 @@ function runHook(dir, { message = '', sessionId = 's1', stopHookActive, env } = 
  * run two red, no code changed in between.
  *
  * Registered for cleanup so the suite does not litter the machine either.
+ *
+ * Any test that can reach the fallback at all needs one of these. Since the
+ * read merges every candidate rather than stopping at the first that parses
+ * (see openState), a fixed id shared with a leftover tmpdir file would be read
+ * back on every turn, not only when the git dir refuses the write.
+ *
+ * The sweep matches by PREFIX, not by an exact path, because the fallback
+ * filename now carries a per-worktree key after the session id (see
+ * stateFiles). A list of exact paths silently stopped matching the moment that
+ * key was added -- the same shape of leak this list was added to close, and
+ * invisible, since a test that litters still passes.
  */
-const FALLBACK_STATE_FILES = [];
+const FALLBACK_SIDS = [];
 let sidCounter = 0;
 function fallbackSid(label) {
   const id = `${label}-${process.pid}-${++sidCounter}`;
-  FALLBACK_STATE_FILES.push(path.join(os.tmpdir(), `sql-handoff-${id}.json`));
+  FALLBACK_SIDS.push(id);
   return id;
 }
 
 test.after(() => {
-  for (const file of FALLBACK_STATE_FILES) {
-    try { fs.rmSync(file, { force: true }); } catch { /* best effort */ }
+  for (const id of FALLBACK_SIDS) {
+    const prefix = `sql-handoff-${id}`;
+    let entries = [];
+    try { entries = fs.readdirSync(os.tmpdir()); } catch { /* best effort */ }
+    for (const entry of entries) {
+      if (!entry.startsWith(prefix)) continue;
+      try { fs.rmSync(path.join(os.tmpdir(), entry), { force: true }); } catch { /* best effort */ }
+    }
+  }
+  for (const dir of SCRATCH_DIRS) {
+    // A test that chmods a git dir restores it in its own `finally`; this is
+    // only the sweep, so a directory it still cannot enter is left alone
+    // rather than failing the run at the very end.
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
   }
 });
 
 /** A PATH carrying node but no git — the mini's bare-PATH condition. */
 function pathWithoutGit() {
-  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'nogit-bin-'));
+  const bin = scratchDir('nogit-bin-');
   fs.symlinkSync(process.execPath, path.join(bin, 'node'));
   return { ...process.env, SKIP_SQL_HANDOFF: '', PATH: bin };
 }
@@ -379,8 +419,21 @@ test('the fallback state file is real, and is read back on the next turn', () =>
       !fs.existsSync(path.join(gitDir, `sql-handoff-${sessionId}.json`)),
       'precondition: the git dir must NOT have taken the write, or this proves nothing'
     );
-    const fallback = path.join(os.tmpdir(), `sql-handoff-${sessionId}.json`);
-    assert.ok(fs.existsSync(fallback), `expected the counter at ${fallback}`);
+    // Found by prefix rather than by an exact name, because the name carries a
+    // per-worktree key this test has no business recomputing -- doing that
+    // would just assert the hook's own arithmetic back at itself.
+    const matches = fs
+      .readdirSync(os.tmpdir())
+      .filter((entry) => entry.startsWith(`sql-handoff-${sessionId}`));
+    assert.deepEqual(matches.length, 1, `expected exactly one fallback file, got ${matches.join(', ') || 'none'}`);
+
+    assert.notEqual(
+      matches[0],
+      `sql-handoff-${sessionId}.json`,
+      'the fallback must be keyed by WORKTREE too — a session-only name is one file shared by every worktree of the session, which switched the guard off in all but the first'
+    );
+
+    const fallback = path.join(os.tmpdir(), matches[0]);
     assert.equal(
       JSON.parse(fs.readFileSync(fallback, 'utf8')).refusals,
       2,
@@ -399,7 +452,7 @@ test('refuses NOTHING when nowhere is writable — no count, no refusal', () => 
   addSql(wt);
   const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: wt, encoding: 'utf8' }).trim();
   fs.chmodSync(gitDir, 0o500);
-  const sealed = fs.mkdtempSync(path.join(os.tmpdir(), 'sealed-'));
+  const sealed = scratchDir('sealed-');
   fs.chmodSync(sealed, 0o500);
   try {
     const env = { ...process.env, SKIP_SQL_HANDOFF: '', TMPDIR: sealed };
@@ -411,6 +464,196 @@ test('refuses NOTHING when nowhere is writable — no count, no refusal', () => 
   } finally {
     fs.chmodSync(gitDir, 0o700);
     fs.chmodSync(sealed, 0o700);
+  }
+});
+
+test('a state file that goes read-only MID-SESSION still stands down', () => {
+  // THE FREEZE. The read returned the first candidate that PARSED and the
+  // write returned the first that ACCEPTED A WRITE, so once a state file
+  // existed in the git dir and then lost write permission -- readable still,
+  // and the directory itself still writable -- it shadowed the fallback for
+  // good. Every write landed in tmpdir; every read came back from the stale
+  // git-dir copy at 2; `refusals` never reached 3.
+  //
+  // Measured 2026-09-05 on 9351ae64, twelve turns: 2,2,2,2,2,2,2,2,2,2,2,2.
+  //
+  // Note the chmod is on the FILE, not the directory. Chmod 500 on the git dir
+  // does NOT reproduce this -- directory write permission is needed to create
+  // or unlink a file, not to rewrite one that already exists, so the git-dir
+  // write keeps succeeding and the fallback is never reached at all. A first
+  // reproduction attempt did exactly that and came back clean.
+  const wt = makeWorktree();
+  addSql(wt);
+  const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: wt, encoding: 'utf8' }).trim();
+  const sessionId = fallbackSid('frozen');
+  const stateFile = path.join(gitDir, `sql-handoff-${sessionId}.json`);
+
+  const codes = [runHook(wt, { message: 'nope', sessionId }).code];
+  codes.push(runHook(wt, { message: 'nope', sessionId }).code);
+
+  assert.equal(
+    JSON.parse(fs.readFileSync(stateFile, 'utf8')).refusals,
+    2,
+    'precondition: the git dir must have taken two writes, or there is nothing to freeze'
+  );
+  fs.chmodSync(stateFile, 0o400);
+
+  try {
+    for (let i = 0; i < 3; i++) codes.push(runHook(wt, { message: 'nope', sessionId }).code);
+    assert.deepEqual(
+      codes,
+      [2, 2, 2, 0, 0],
+      'a stale readable copy must not shadow the count the fallback is now carrying'
+    );
+    assert.equal(
+      JSON.parse(fs.readFileSync(stateFile, 'utf8')).refusals,
+      2,
+      'and the frozen copy must genuinely still say 2 — otherwise the write got in and this proves nothing'
+    );
+  } finally {
+    fs.chmodSync(stateFile, 0o600); // or the scratch dir cannot be cleaned up
+  }
+});
+
+test('a hand-off arriving after the state file froze is recorded, not re-demanded', () => {
+  // The other half of the same read. `handedOff` lives in the same file, so a
+  // file the operator has already been given was demanded again on every turn
+  // for the rest of the session: the turn carrying the block wrote it to the
+  // fallback and the next read went straight back to the stale git-dir copy.
+  //
+  // Measured on 9351ae64 across the three turns below: 0,2,2.
+  const wt = makeWorktree();
+  const file = addSql(wt);
+  const gitDir = execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: wt, encoding: 'utf8' }).trim();
+  const sessionId = fallbackSid('frozenhandoff');
+  const stateFile = path.join(gitDir, `sql-handoff-${sessionId}.json`);
+
+  assert.equal(runHook(wt, { message: 'nope', sessionId }).code, 2);
+  fs.chmodSync(stateFile, 0o400);
+
+  try {
+    const codes = [
+      runHook(wt, { message: renderBlock('add-revisions', file), sessionId }).code,
+      runHook(wt, { message: 'Anything else?', sessionId }).code,
+      runHook(wt, { message: 'Nor here.', sessionId }).code,
+    ];
+    assert.deepEqual(
+      codes,
+      [0, 0, 0],
+      're-demanding a file the operator already has is the other half of the frozen read'
+    );
+  } finally {
+    fs.chmodSync(stateFile, 0o600);
+  }
+});
+
+/**
+ * Two linked worktrees off ONE repo -- the shape a session actually has here.
+ *
+ * `makeWorktree()` above builds one, which is enough for every per-worktree
+ * question but cannot ask the cross-worktree one: one session, two folders,
+ * two git dirs, one machine-wide temp dir between them.
+ */
+function makeTwoWorktrees() {
+  const dir = makeRepo();
+  const a = path.join(dir, 'wtA');
+  const b = path.join(dir, 'wtB');
+  execFileSync('git', ['worktree', 'add', a, '-b', 'add-revisions'], { cwd: dir, stdio: 'ignore' });
+  execFileSync('git', ['worktree', 'add', b, '-b', 'add-other'], { cwd: dir, stdio: 'ignore' });
+  return { a, b };
+}
+
+const absGitDir = (dir) =>
+  execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: dir, encoding: 'utf8' }).trim();
+
+test('a SECOND worktree of the same session keeps its own three refusals', () => {
+  // What sent this ticket back to Rework on 2026-09-06, and the reason the
+  // fallback filename carries a worktree key.
+  //
+  // One session driving several worktrees is normal here (CLAUDE.md, "One
+  // topic, one worktree -- a session may hold more than one"). The fallback
+  // was keyed by session id ALONE, so both worktrees named the same
+  // machine-wide file. Once worktree A's state file froze, A's every write
+  // landed there -- and the merged read then handed A's spent brake to B on
+  // every turn. B did not lose a refusal at the margin; B lost the guard.
+  // DOCTRINE 6.5 simply stopped being enforced in that folder.
+  //
+  // Measured 2026-09-06 with the session-only key, A frozen exactly as below:
+  //
+  //   worktree A (frozen)     2,2,2,0,0    tmpdir file A wrote: {"refusals":3}
+  //   worktree B (healthy)    0,0,0,0,0    0 of its own 3 refusals
+  //
+  // B is HEALTHY throughout -- its own git dir takes every write. The only
+  // thing reaching it is A's leak, which is what makes this a clean test of
+  // the key and not of the freeze.
+  const { a, b } = makeTwoWorktrees();
+  addSql(a);
+  addSql(b);
+  const sessionId = fallbackSid('twowt');
+  const stateA = path.join(absGitDir(a), `sql-handoff-${sessionId}.json`);
+
+  const aCodes = [runHook(a, { message: 'nope', sessionId }).code];
+  aCodes.push(runHook(a, { message: 'nope', sessionId }).code);
+  assert.equal(
+    JSON.parse(fs.readFileSync(stateA, 'utf8')).refusals,
+    2,
+    'precondition: A must have taken two writes, or there is nothing to freeze'
+  );
+  fs.chmodSync(stateA, 0o400);
+
+  try {
+    // A spends its third refusal and stands down, driving its count into the
+    // fallback -- the only way anything of A's reaches B at all.
+    for (let i = 0; i < 3; i++) aCodes.push(runHook(a, { message: 'nope', sessionId }).code);
+    assert.deepEqual(aCodes, [2, 2, 2, 0, 0], 'A must behave exactly as the single-worktree freeze does');
+
+    const bCodes = [];
+    for (let i = 0; i < 5; i++) bCodes.push(runHook(b, { message: 'nope', sessionId }).code);
+    assert.deepEqual(
+      bCodes,
+      [2, 2, 2, 0, 0],
+      "a brake spent in another worktree must not be spent here — B's guard was OFF, not merely short"
+    );
+  } finally {
+    fs.chmodSync(stateA, 0o600);
+  }
+});
+
+test('a hand-off in one worktree is not counted as a hand-off in another', () => {
+  // The second half of the same shared file, and the review's second reason to
+  // key it by worktree. `handedOff` stores REPO-RELATIVE paths, so two
+  // worktrees of one repo naturally collide on `docs/SQL/add_thing.sql`: A
+  // hands its copy off, the write lands in the shared fallback, and B reads
+  // back "already handed off" for SQL the operator has never seen from B.
+  //
+  // This one predates the merged read -- it leaked on main identically -- so
+  // it is not a regression being closed, it is a hole being closed while the
+  // key is being added.
+  const { a, b } = makeTwoWorktrees();
+  const file = addSql(a);
+  addSql(b); // same repo-relative path, B's own, never handed off
+  const sessionId = fallbackSid('twowthandoff');
+  const stateA = path.join(absGitDir(a), `sql-handoff-${sessionId}.json`);
+
+  assert.equal(runHook(a, { message: 'nope', sessionId }).code, 2);
+  fs.chmodSync(stateA, 0o400);
+
+  try {
+    assert.equal(
+      runHook(a, { message: renderBlock('add-revisions', file), sessionId }).code,
+      0,
+      "precondition: A's hand-off must be accepted, and it lands in the fallback"
+    );
+
+    const result = runHook(b, { message: 'nope', sessionId });
+    assert.equal(
+      result.code,
+      2,
+      'B has handed nothing off — inheriting A\'s hand-off is the guard missing its actual job'
+    );
+    assert.match(result.stderr, /add_thing\.sql/, 'and it must still name the outstanding file');
+  } finally {
+    fs.chmodSync(stateA, 0o600);
   }
 });
 
@@ -470,7 +713,7 @@ test('with git off PATH it stands ASIDE — 0,0,0, not 2,2,2', () => {
 });
 
 test('with the cwd outside any git repo it stands aside', () => {
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'norepo-'));
+  const outside = scratchDir('norepo-');
   const codes = [];
   for (let i = 0; i < 5; i++) codes.push(runHook(outside, { message: 'nope', sessionId: 'norepo' }).code);
   assert.deepEqual(codes, [0, 0, 0, 0, 0]);

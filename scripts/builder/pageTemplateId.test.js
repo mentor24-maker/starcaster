@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { buildLandingPagePatch } = require('../../routes/builder');
+const { buildLandingPagePatch, buildLandingPageCreateInput } = require('../../routes/builder');
 const { inputToRow, rowToPage } = require('../../lib/builderPagesStore');
 
 /**
@@ -75,6 +75,91 @@ test('a caller that says nothing about templates still gets the derived legacy i
   const built = buildLandingPagePatch({ name: 'Brand New Page' });
   const patch = built.patch ?? built;
   assert.ok(patch.templateId, 'derivation still applies when nothing is specified');
+});
+
+/**
+ * The CREATE path -- a separate whitelist from the patch above, and it was
+ * missing this field entirely (task 86bbujvq8).
+ *
+ * The symptom was specific and misleading: choosing a Template on a brand new
+ * page and saving reported success, the Theme stuck (themeId WAS in the list),
+ * and the Template came back empty. Setting it again on the now-existing page
+ * worked, because that is a PATCH and the patch whitelist names the field. So
+ * it read as "the first save doesn't take" rather than as a dropped field.
+ */
+
+test('a create carrying pageTemplateId reaches createPage with it', () => {
+  const input = buildLandingPageCreateInput({ name: 'Pricing', slug: 'pricing', pageTemplateId: '47' }, 'Pricing');
+  assert.equal(input.pageTemplateId, '47', 'the create whitelist must carry the chosen template');
+});
+
+test('the create input survives the store, all the way to a row', () => {
+  // Same end-to-end shape the patch path is held to above: the field has to
+  // clear the route AND the store, because either one drops it silently.
+  const input = buildLandingPageCreateInput({ name: 'Pricing', pageTemplateId: '47' }, 'Pricing');
+  const row = inputToRow(input);
+  assert.equal(row.page_template_id, '47');
+  assert.equal(rowToPage({ id: 1, ...row }).pageTemplateId, '47');
+});
+
+test('snake_case on a create is accepted too', () => {
+  const input = buildLandingPageCreateInput({ name: 'Pricing', page_template_id: '12' }, 'Pricing');
+  assert.equal(input.pageTemplateId, '12');
+});
+
+test('a create that names no template still leaves the column NULL', () => {
+  // "No template" is a legal state -- 93 production pages were in it when the
+  // column was added -- so the fix must not start inventing one.
+  const input = buildLandingPageCreateInput({ name: 'Pricing' }, 'Pricing');
+  assert.equal(input.pageTemplateId, '');
+  assert.equal(inputToRow(input).page_template_id, null);
+});
+
+test('a create still derives the legacy templateId, and still honours an explicit one', () => {
+  // Unlike the patch path, deriving here is correct: a new row needs some
+  // template_id and there is nothing to overwrite. But a caller that states
+  // one must keep it.
+  const derived = buildLandingPageCreateInput({ name: 'Brand New Page', slug: 'brand-new' }, 'Brand New Page');
+  assert.match(derived.templateId, /^brand-new-/, 'derived from the slug, with a uniqueness suffix');
+
+  const explicit = buildLandingPageCreateInput(
+    { name: 'Brand New Page', templateId: 'standard-right-form', pageTemplateId: '47' },
+    'Brand New Page'
+  );
+  assert.equal(explicit.templateId, 'standard-right-form', 'an explicit legacy id is never overwritten');
+  assert.equal(explicit.pageTemplateId, '47');
+});
+
+test('the create ROUTE uses the builder, instead of assembling its own list again', () => {
+  // The whole bug was a second, hand-written field list inside the handler
+  // that nothing could test. If a future edit inlines one again, this fails --
+  // otherwise the tests above would keep passing while the route ignored them.
+  const routes = fs.readFileSync(path.join(__dirname, '..', '..', 'routes', 'builder.js'), 'utf8');
+  assert.match(
+    routes,
+    /createPage\(buildLandingPageCreateInput\(body, name\), scope\)/,
+    'POST /api/builder/landing-pages must build its input with buildLandingPageCreateInput'
+  );
+});
+
+test('the create and patch whitelists do not drift apart on the fields the editor sends', () => {
+  // Every field the editor puts in a create body has to be named by BOTH
+  // lists, or the same class of bug reappears on a different setting.
+  const body = {
+    name: 'Pricing',
+    slug: 'pricing',
+    pageTemplateId: '47',
+    themeId: '9',
+    searchPriority: 'pinned',
+    isPublished: true,
+    isPrivate: false,
+  };
+  const created = buildLandingPageCreateInput(body, 'Pricing');
+  const patched = buildLandingPagePatch(body).patch ?? buildLandingPagePatch(body);
+  for (const key of ['pageTemplateId', 'themeId', 'searchPriority', 'isPublished', 'isPrivate', 'slug']) {
+    assert.ok(key in created, `create whitelist is missing ${key}`);
+    assert.ok(key in patched, `patch whitelist is missing ${key}`);
+  }
 });
 
 test('a page with no page template reads as empty, not as its legacy layout', () => {

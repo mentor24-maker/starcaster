@@ -172,6 +172,88 @@ as a rule first, then gets a checker where one is possible.
   scattered Confetti's two rows across three columns).
   *Panel sweep 8/15, ticket 86bbjt1b4.*
 
+  **What a green run on a declared block is, and is not, evidence of
+  (decided 2026-09-05, ticket 86bbufmdt).** The paragraph above ends "so it
+  can never go unmeasured again", and that turned out to be half true. On
+  2026-09-03, while merging the sweep, the Definition of done's break-test
+  step was performed on this very block and **both deliberate breaks came
+  back green** — including reverting the `grid-template-columns` line the
+  sweep had just shipped, which is the 268px notch itself. The question the
+  ticket asked was whether `data-lattice-pairs` should carry an assertion
+  that can fail, or whether it is coverage-only and its green must be
+  labelled as such.
+
+  **The answer is the first, and both halves are now in place.** The cause
+  was not that a within-track defect is unmeasurable — the harness had
+  already computed the number and thrown it away:
+
+  - **The room rule had a floor and no ceiling.** `room = labelW -
+    labelTextW` was failed only when it fell under 30px, the cramped look
+    W0 was written against. Under the reverted grid this block measured a
+    label track of 418px carrying a 56px word — **362px of spare room**,
+    which IS the notch, expressed as a number the check already had.
+    `assertManagerRoom` (`scripts/ui/lattice-room.mjs`) now bounds it at
+    **140px**, and that number is measured on both sides rather than
+    proposed: every one of the 30 declared-manager groups on a correct
+    build sits at exactly 40px with zero variance, the loosest group
+    anywhere in the app is 133px (the `breadcrumb` Content column, whose
+    label track is a shared fixed token and so is legitimately wider than
+    its shortest label), and the defect is 362px.
+  - **Three of the four trigger blocks render ONE row**, and the four other
+    lattice assertions are all `new Set(...).length > 1` comparisons, so on
+    those blocks they cannot fail whatever the CSS does. `check_panels`
+    already knew this trap — it is why a shared lattice needs
+    `shared.length > 1` before it is measured at all — but the declared-
+    manager list carried no such guard. The ceiling is a property of one
+    field set rather than a comparison, so it bites at n=1; and the harness
+    now **prints how many declared pair-columns rendered a single pair**, on
+    green runs as well as red — including when the number is zero — so the
+    count in the closing line can never again be read as a verdict over
+    assertions that had nothing to compare.
+
+  **Every one of those questions is asked per PAIR-COLUMN, and getting that
+  wrong is how the first attempt at this fix failed review.** W0 is a
+  per-column rule: a manager declaring `data-lattice-pairs="2"` puts two
+  label/field pairs on a row, and each column is held to the rule on its own.
+  The ceiling shipped in round 1 took `Math.min` over the whole group and ran
+  outside the loop the floor check runs inside, so on a two-column manager a
+  correct left column pinned the minimum at 40px and a notched right column
+  was **invisible** — and 5 of the 10 declared managers in the fixture are
+  two-column (`feature-cards`, `carousel` Slides and Cards, `program-list`,
+  `blog-tag-cloud`). The assertion added to close a hole could not fail on
+  half the blocks it covered, which is the same shape as the defect. The
+  single-pair count had the mirror of it: measured per group, a two-column
+  manager holding one item counted as comparable while every comparative
+  assertion in both its columns was vacuous.
+  `bucketFields` (`scripts/ui/lattice-room.mjs`) is now the **one** definition
+  of a pair-column, shared with `assertLattice`, so the ceiling and the floor
+  cannot ask different questions about the same geometry. Two definitions of
+  "column" is exactly how one assertion ends up policing a different shape
+  than the one beside it.
+
+  **The scope is the declaration, deliberately.** A block carrying
+  `data-lattice-pairs` is a self-contained lattice sizing its label track
+  from its own content, so room beyond the token is a defect. An axis
+  column's track is a token shared across every panel in the app, so a
+  short label in it legitimately has room to spare; policing those would
+  fail some 600 correct groups for obeying the rule.
+
+  **One of the two original breaks is still not caught, and that is a
+  finding rather than a gap.** `padding-left: 40px` on
+  `.builder-setting-label` passes, scoped to this block or applied to every
+  lattice panel in the app. It takes the room from 40px to 80px — more than
+  the rule asks for, under the ceiling — and inside a block whose labels all
+  carry the same padding it moves every label equally, which is not a
+  stagger. `labelTextX` exists to catch exactly that indent and does so in a
+  **mixed** group (the 2026-08-11 heading incident); in a homogeneous one
+  there is nothing for it to disagree with. Tightening the ceiling under
+  80px to catch it would be picking a number from one break rather than
+  from the measurements, and would leave no room for a manager that later
+  adopts a shared label token as legitimately as the breadcrumb column does.
+  — **[browser-check]** `npm run check:panels`, and
+  `npm run test:builder` for the assertion itself, which is pure and so is
+  the one part of this gate CI can run.
+
   **The OTHER shape is a titled-column grid, and it declares
   `data-lattice-columns="<n>"`.** L6a offers two shapes and the paragraphs
   above only describe one of them. A genuinely tabular manager — the

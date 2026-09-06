@@ -24,6 +24,7 @@
 // The one reading of a local merge verdict, shared with the merge step so the
 // two cannot disagree about it (task 86bbq80j5).
 const { isRealOverlap, isSelfHealing, isPermanent, conflictActor, verdictCopy, conflictVerdictKind } = require('./conflictWork');
+const { stripMachineMarker } = require('./machineComment');
 
 // Every refusal reason, classified terminal/transient/unknown where it is
 // RAISED (task 86bbtqpxd). There is no default: a code absent from that table
@@ -224,7 +225,14 @@ const LEGACY_HAND_OFF_RE = /^conflict hand-off on PR #\d+$/i;
  * ("no \"PR opened:\" comment on this ticket — nothing to merge").
  */
 function parseMergeMarker(text) {
-  const raw = String(text || '');
+  // THE STAMP COMES OFF FIRST (2026-09-06, task 86bbvr0j5). `call()` appends
+  // the `[machine]` line to every comment it posts, this marker included, and
+  // that line ends in "Dane's token — not his word". The ` — <timestamp>` split
+  // below takes the LAST em-dash, so the stamp captured it: the timestamp was
+  // never recovered and the reason came back with the stamp glued on. Neither
+  // ever matched what the next pass compared against, which killed the dedup
+  // and made the stall alarm behind it unreachable.
+  const raw = stripMachineMarker(text);
   if (!raw.startsWith(MERGE_MARKER)) return null;
   let rest = raw.slice(MERGE_MARKER.length).trim();
   let at = '';
@@ -275,6 +283,38 @@ function latestMergeMarker(replies) {
 }
 
 /**
+ * How many times a pass has already refused this authorization FOR THIS REASON.
+ *
+ * WHY IT IS COUNTED (2026-09-06, task 86bbvr0j5, Dane's call). A conflicting
+ * PR retries every relay pass, and the only alarm on that path measured AGE —
+ * 24 hours, chosen when the failure being imagined was a hand-off nobody had
+ * picked up. It is the wrong instrument for a merge that is actively retrying
+ * and failing: PR #628 failed five times in ninety minutes and the clock had
+ * barely moved. Dane noticed by eye and asked why the system had not.
+ *
+ * The attempts need no new storage, because each pass already writes its own
+ * marker reply. Counting the markers that gave THIS reason is the number of
+ * times this exact refusal has been reached — which is the question, and it
+ * survives a restart because the record is on the ticket rather than in
+ * memory.
+ *
+ * Matching on the reason, not merely on the marker, is what keeps it honest: a
+ * PR refused twice for red checks and once for a conflict has not tried the
+ * conflict three times, and an alarm that said so would send somebody looking
+ * for a problem that is not there.
+ */
+function countMergeRefusals(replies, reason) {
+  const want = String(reason == null ? '' : reason).trim();
+  if (!want) return 0;
+  let n = 0;
+  for (const r of replies || []) {
+    const parsed = parseMergeMarker(r && r.comment_text);
+    if (parsed && parsed.kind === 'refused' && String(parsed.reason).trim() === want) n += 1;
+  }
+  return n;
+}
+
+/**
  * Decide what a bus-relay pass should do with one Ready-to-launch ticket.
  *
  * Returns `{ act, reason, ... }` where act is one of:
@@ -295,7 +335,7 @@ function latestMergeMarker(replies) {
  * re-planning costs no extra noise on the ticket. A different reason, or a
  * clean run through to 'merge', is new information and is acted on.
  */
-function mergeDecision({ status, comments, operatorId, handled, refused, refusedAt }) {
+function mergeDecision({ status, comments, operatorId, handled, refused, refusedAt, refusedCount }) {
   const seen = handled instanceof Set ? handled : new Set(handled || []);
   const priorRefusals = refused instanceof Map ? refused : new Map(Object.entries(refused || {}));
   // WHEN the previous refusal was written, carried alongside WHY. A conflict
@@ -303,6 +343,7 @@ function mergeDecision({ status, comments, operatorId, handled, refused, refused
   // has not changed (task 86bbq0fh8) — and the age can only come from the
   // marker, which is the one record of when the pass actually said it.
   const priorRefusalTimes = refusedAt instanceof Map ? refusedAt : new Map(Object.entries(refusedAt || {}));
+  const priorRefusalCounts = refusedCount instanceof Map ? refusedCount : new Map(Object.entries(refusedCount || {}));
   const all = byDateNewestFirst(comments);
 
   // Only Ready to launch. The same word on any other status does nothing —
@@ -332,6 +373,9 @@ function mergeDecision({ status, comments, operatorId, handled, refused, refused
     commentDate: commentDate(authorization),
     priorRefusal: priorRefusals.get(String(authorization.id)),
     priorRefusalAt: priorRefusalTimes.get(String(authorization.id)) || '',
+    // HOW MANY TIMES, alongside why and when. Age alone cannot see a merge
+    // that is retrying and failing every few minutes (task 86bbvr0j5).
+    priorRefusalCount: Number(priorRefusalCounts.get(String(authorization.id))) || 0,
   };
 
   // A refusal we have already given, whose reason is still true, is not news.
@@ -741,6 +785,71 @@ const MAX_IN_PASS_WAITS = 3;
 /** Has this pass already spent its in-pass waits? */
 function mayWaitInPass(waitsUsed, cap = MAX_IN_PASS_WAITS) {
   return Number(waitsUsed || 0) < cap;
+}
+
+/**
+ * How long may THIS pass hold itself open watching a merge land?
+ *
+ * WHY THIS EXISTS (round 2 of task 86bbv35cq). The merge-observation wait was
+ * added taking a 15-minute default, blocking (`Atomics.wait` freezes the event
+ * loop), uncapped per ticket, and charged to nothing — so `inPassBudget` never
+ * saw it and the tested "a pass cannot outlast its own interval" invariant did
+ * not cover it. The relay's schedule is 600s. One enqueued pull request would
+ * have been 900s, several 30-45 minutes, swallowing the relay's own next
+ * firings and everything else that rides its ten-minute wake.
+ *
+ * That is exactly what the comment on the worst-case test already warned
+ * about: "the 15-minute bound this replaces... was picked when the relay ran
+ * hourly, and it survived the change to 10 minutes still permitting a pass
+ * 1.5x longer than the whole interval." It came straight back on a new path.
+ *
+ * So the merge observation is not a second budget. It IS an in-pass wait — the
+ * same slots, the same per-wait ceiling, the same accounting — because two
+ * budgets that must jointly fit under one interval is a sum nobody maintains.
+ * The worst case stays MAX_IN_PASS_WAITS x IN_PASS_WAIT_MS, which
+ * mergeOnComment.test.js already pins against the relay's real interval read
+ * out of install_bus_relay.sh.
+ *
+ * A SPENT BUDGET IS NOT A REFUSAL TO LOOK. It returns `timeoutMs: 0`, which
+ * still takes one read and no sleep — and one read is the whole of the
+ * queue-less path, where `gh pr merge` has already merged synchronously by the
+ * time it returns. So a pass that has spent its waits still observes every
+ * ordinary merge correctly; it just does not linger on one GitHub is holding.
+ *
+ * @param used  waits already spent this pass (inPassBudget.used)
+ * @param cap   how many the pass gets (inPassBudget.cap)
+ * @param waitMs per-wait ceiling
+ * @returns {{ timeoutMs: number, charged: boolean }}
+ */
+function mergeObserveBudget({ used = 0, cap = MAX_IN_PASS_WAITS, waitMs = IN_PASS_WAIT_MS } = {}) {
+  if (!mayWaitInPass(used, cap)) return { timeoutMs: 0, charged: false };
+  return { timeoutMs: waitMs, charged: true };
+}
+
+/**
+ * Did that merge observation actually SPEND one of the pass's waits?
+ *
+ * WHY THIS IS NOT `observeBudget.charged` (round 3 of task 86bbv35cq). The
+ * slot was drawn BEFORE the observation, so a queue-less merge — which returns
+ * on the first read having slept 0ms, and is every merge on this repo today —
+ * still cost one of three. Measured: three ordinary merges in a pass left
+ * `used = 3/3`, and `mayWaitInPass` then refused the fourth ticket its real
+ * review-gate or CI wait and deferred it a whole ten-minute interval. For
+ * waits that never happened.
+ *
+ * That is criterion 5 — "it must work identically with NO queue enabled" —
+ * broken on the live path, by the accounting rather than by the wait.
+ *
+ * So the budget is charged on the way OUT, on evidence: `sleptMs` is what the
+ * observation really blocked for. `charged` still gates it, because a pass
+ * with no slots left is handed `timeoutMs: 0` and must not somehow spend a
+ * fourth.
+ *
+ * @param charged  whether a slot was available (mergeObserveBudget().charged)
+ * @param sleptMs  what the observation actually blocked for (waitForMerge)
+ */
+function mergeObservationSpendsSlot({ charged = false, sleptMs = 0 } = {}) {
+  return Boolean(charged) && Number(sleptMs) > 0;
 }
 
 /**
@@ -1559,11 +1668,14 @@ module.exports = {
   mergedElsewhereNotice,
   IN_PASS_POLL_MS,
   MAX_IN_PASS_WAITS,
+  mergeObserveBudget,
+  mergeObservationSpendsSlot,
   mayWaitInPass,
   afterCatchUpDecision,
   MERGE_PHRASES,
   MERGE_MARKER,
   parseMergeMarker,
+  countMergeRefusals,
   latestMergeMarker,
   normalizeCommand,
   commentDate,
