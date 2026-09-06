@@ -83,6 +83,8 @@ import mergeCompletion from './builder/mergeCompletion.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
 import sendBackRounds from './builder/sendBackRounds.js';
 import pipelinePause from './builder/pipelinePause.js';
+import localWorkReading from './builder/localWorkReading.js';
+import strandedLocalWork from './builder/strandedLocalWork.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
@@ -2749,12 +2751,19 @@ if (cmd === 'whoami') {
   // constant mean the same thing in both steps of one `npm run repair` run,
   // instead of only being the same number.
   let lastActivityMs = null;
+  // The TICKET ITSELF, kept rather than just its status: its `repo:` tag is
+  // what says which checkout to look in for a half-finished build below, and
+  // this is the one read that has it. An unreadable read leaves it null, and
+  // `reconcileDecision` never reaches `handback` from that — see the comment
+  // on `status` just below.
+  let ticket = null;
   if (marker.found && marker.record) {
     const seen = await call('GET', `/api/v2/task/${marker.record.task}`);
     // An unreadable status is NOT a hand-back. Moving a ticket on a reading we
     // did not take is how a live build gets yanked out from under a pass that
     // is genuinely running.
     if (seen.res.ok) {
+      ticket = seen.json;
       status = seen.json.status?.status ?? '';
       const updated = Number(seen.json.date_updated);
       if (Number.isFinite(updated)) lastActivityMs = updated;
@@ -2783,7 +2792,38 @@ if (cmd === 'whoami') {
     const dest = cmts.res.ok
       ? buildStart.resolveBuildStart(cmts.json.comments || [], { lookupPr })
       : { action: 'unknown' };
-    const plan = pipelinePause.strandedBuildDestination(dest.action);
+
+    // BEFORE SAYING "NOTHING WAS BUILT", LOOK (2026-09-06, task 86bbvj44f).
+    //
+    // A pull-request lookup cannot see a worktree with seven uncommitted files
+    // in it, so on the `fresh` answer — the only one that asserts an ABSENCE —
+    // this asks every machine it can reach whether a branch stamped with this
+    // ticket is sitting on a disk somewhere. Exactly the reading the stranded
+    // sweep takes, through the same module, so the two steps of one
+    // `npm run repair` run cannot reach opposite conclusions about one ticket.
+    //
+    // It matters MOST here rather than in the sweep: `repair` runs this first
+    // and the sweep third, so on the Mini — where the loops actually run — a
+    // dead loop-build pass had its ticket moved to `Queued` before the sweep's
+    // guard ever looked at it, and the sweep then found nothing stranded
+    // because the ticket had already gone.
+    //
+    // Only on the Queued path: `continue` and `unknown` already name a PR, so
+    // they assert nothing absent and go to Rework regardless.
+    const provisional = pipelinePause.strandedBuildDestination(dest.action);
+    const local = provisional.status !== 'Queued'
+      ? { verdict: 'none', work: [], unseen: [], unlooked: [] }
+      : localWorkReading.workInProgressFor(ticket || { id: decision.task }, localWorkReading.workProbe());
+    // WHERE it goes given that reading. Unlike the sweep, this may never leave
+    // a ticket in "Building" — that is the invisibility it exists to end — so
+    // `work` and `cannot-tell` both go to Rework, which is claimable and
+    // asserts nothing. `none` is `strandedBuildDestination` unchanged.
+    const plan = pipelinePause.reconciledBuildDestination(dest.action, {
+      verdict: local.verdict,
+      work: local.work,
+      unlookedSeats: strandedLocalWork.describeUnlooked(local.unlooked),
+      blindSpots: strandedLocalWork.describeUnlooked([...(local.unseen || []), ...(local.unlooked || [])]),
+    }, { describeWork: strandedLocalWork.describeWork });
     destination = plan.status;
     const note = await call('POST', `/api/v2/task/${decision.task}/comment`, {
       comment_text: pipelinePause.sweptTicketNote({
