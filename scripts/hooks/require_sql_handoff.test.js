@@ -106,18 +106,30 @@ function runHook(dir, { message = '', sessionId = 's1', stopHookActive, env } = 
  * read merges every candidate rather than stopping at the first that parses
  * (see openState), a fixed id shared with a leftover tmpdir file would be read
  * back on every turn, not only when the git dir refuses the write.
+ *
+ * The sweep matches by PREFIX, not by an exact path, because the fallback
+ * filename now carries a per-worktree key after the session id (see
+ * stateFiles). A list of exact paths silently stopped matching the moment that
+ * key was added -- the same shape of leak this list was added to close, and
+ * invisible, since a test that litters still passes.
  */
-const FALLBACK_STATE_FILES = [];
+const FALLBACK_SIDS = [];
 let sidCounter = 0;
 function fallbackSid(label) {
   const id = `${label}-${process.pid}-${++sidCounter}`;
-  FALLBACK_STATE_FILES.push(path.join(os.tmpdir(), `sql-handoff-${id}.json`));
+  FALLBACK_SIDS.push(id);
   return id;
 }
 
 test.after(() => {
-  for (const file of FALLBACK_STATE_FILES) {
-    try { fs.rmSync(file, { force: true }); } catch { /* best effort */ }
+  for (const id of FALLBACK_SIDS) {
+    const prefix = `sql-handoff-${id}`;
+    let entries = [];
+    try { entries = fs.readdirSync(os.tmpdir()); } catch { /* best effort */ }
+    for (const entry of entries) {
+      if (!entry.startsWith(prefix)) continue;
+      try { fs.rmSync(path.join(os.tmpdir(), entry), { force: true }); } catch { /* best effort */ }
+    }
   }
   for (const dir of SCRATCH_DIRS) {
     // A test that chmods a git dir restores it in its own `finally`; this is
@@ -407,8 +419,21 @@ test('the fallback state file is real, and is read back on the next turn', () =>
       !fs.existsSync(path.join(gitDir, `sql-handoff-${sessionId}.json`)),
       'precondition: the git dir must NOT have taken the write, or this proves nothing'
     );
-    const fallback = path.join(os.tmpdir(), `sql-handoff-${sessionId}.json`);
-    assert.ok(fs.existsSync(fallback), `expected the counter at ${fallback}`);
+    // Found by prefix rather than by an exact name, because the name carries a
+    // per-worktree key this test has no business recomputing -- doing that
+    // would just assert the hook's own arithmetic back at itself.
+    const matches = fs
+      .readdirSync(os.tmpdir())
+      .filter((entry) => entry.startsWith(`sql-handoff-${sessionId}`));
+    assert.deepEqual(matches.length, 1, `expected exactly one fallback file, got ${matches.join(', ') || 'none'}`);
+
+    assert.notEqual(
+      matches[0],
+      `sql-handoff-${sessionId}.json`,
+      'the fallback must be keyed by WORKTREE too — a session-only name is one file shared by every worktree of the session, which switched the guard off in all but the first'
+    );
+
+    const fallback = path.join(os.tmpdir(), matches[0]);
     assert.equal(
       JSON.parse(fs.readFileSync(fallback, 'utf8')).refusals,
       2,
@@ -519,6 +544,116 @@ test('a hand-off arriving after the state file froze is recorded, not re-demande
     );
   } finally {
     fs.chmodSync(stateFile, 0o600);
+  }
+});
+
+/**
+ * Two linked worktrees off ONE repo -- the shape a session actually has here.
+ *
+ * `makeWorktree()` above builds one, which is enough for every per-worktree
+ * question but cannot ask the cross-worktree one: one session, two folders,
+ * two git dirs, one machine-wide temp dir between them.
+ */
+function makeTwoWorktrees() {
+  const dir = makeRepo();
+  const a = path.join(dir, 'wtA');
+  const b = path.join(dir, 'wtB');
+  execFileSync('git', ['worktree', 'add', a, '-b', 'add-revisions'], { cwd: dir, stdio: 'ignore' });
+  execFileSync('git', ['worktree', 'add', b, '-b', 'add-other'], { cwd: dir, stdio: 'ignore' });
+  return { a, b };
+}
+
+const absGitDir = (dir) =>
+  execFileSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: dir, encoding: 'utf8' }).trim();
+
+test('a SECOND worktree of the same session keeps its own three refusals', () => {
+  // What sent this ticket back to Rework on 2026-09-06, and the reason the
+  // fallback filename carries a worktree key.
+  //
+  // One session driving several worktrees is normal here (CLAUDE.md, "One
+  // topic, one worktree -- a session may hold more than one"). The fallback
+  // was keyed by session id ALONE, so both worktrees named the same
+  // machine-wide file. Once worktree A's state file froze, A's every write
+  // landed there -- and the merged read then handed A's spent brake to B on
+  // every turn. B did not lose a refusal at the margin; B lost the guard.
+  // DOCTRINE 6.5 simply stopped being enforced in that folder.
+  //
+  // Measured 2026-09-06 with the session-only key, A frozen exactly as below:
+  //
+  //   worktree A (frozen)     2,2,2,0,0    tmpdir file A wrote: {"refusals":3}
+  //   worktree B (healthy)    0,0,0,0,0    0 of its own 3 refusals
+  //
+  // B is HEALTHY throughout -- its own git dir takes every write. The only
+  // thing reaching it is A's leak, which is what makes this a clean test of
+  // the key and not of the freeze.
+  const { a, b } = makeTwoWorktrees();
+  addSql(a);
+  addSql(b);
+  const sessionId = fallbackSid('twowt');
+  const stateA = path.join(absGitDir(a), `sql-handoff-${sessionId}.json`);
+
+  const aCodes = [runHook(a, { message: 'nope', sessionId }).code];
+  aCodes.push(runHook(a, { message: 'nope', sessionId }).code);
+  assert.equal(
+    JSON.parse(fs.readFileSync(stateA, 'utf8')).refusals,
+    2,
+    'precondition: A must have taken two writes, or there is nothing to freeze'
+  );
+  fs.chmodSync(stateA, 0o400);
+
+  try {
+    // A spends its third refusal and stands down, driving its count into the
+    // fallback -- the only way anything of A's reaches B at all.
+    for (let i = 0; i < 3; i++) aCodes.push(runHook(a, { message: 'nope', sessionId }).code);
+    assert.deepEqual(aCodes, [2, 2, 2, 0, 0], 'A must behave exactly as the single-worktree freeze does');
+
+    const bCodes = [];
+    for (let i = 0; i < 5; i++) bCodes.push(runHook(b, { message: 'nope', sessionId }).code);
+    assert.deepEqual(
+      bCodes,
+      [2, 2, 2, 0, 0],
+      "a brake spent in another worktree must not be spent here — B's guard was OFF, not merely short"
+    );
+  } finally {
+    fs.chmodSync(stateA, 0o600);
+  }
+});
+
+test('a hand-off in one worktree is not counted as a hand-off in another', () => {
+  // The second half of the same shared file, and the review's second reason to
+  // key it by worktree. `handedOff` stores REPO-RELATIVE paths, so two
+  // worktrees of one repo naturally collide on `docs/SQL/add_thing.sql`: A
+  // hands its copy off, the write lands in the shared fallback, and B reads
+  // back "already handed off" for SQL the operator has never seen from B.
+  //
+  // This one predates the merged read -- it leaked on main identically -- so
+  // it is not a regression being closed, it is a hole being closed while the
+  // key is being added.
+  const { a, b } = makeTwoWorktrees();
+  const file = addSql(a);
+  addSql(b); // same repo-relative path, B's own, never handed off
+  const sessionId = fallbackSid('twowthandoff');
+  const stateA = path.join(absGitDir(a), `sql-handoff-${sessionId}.json`);
+
+  assert.equal(runHook(a, { message: 'nope', sessionId }).code, 2);
+  fs.chmodSync(stateA, 0o400);
+
+  try {
+    assert.equal(
+      runHook(a, { message: renderBlock('add-revisions', file), sessionId }).code,
+      0,
+      "precondition: A's hand-off must be accepted, and it lands in the fallback"
+    );
+
+    const result = runHook(b, { message: 'nope', sessionId });
+    assert.equal(
+      result.code,
+      2,
+      'B has handed nothing off — inheriting A\'s hand-off is the guard missing its actual job'
+    );
+    assert.match(result.stderr, /add_thing\.sql/, 'and it must still name the outstanding file');
+  } finally {
+    fs.chmodSync(stateA, 0o600);
   }
 });
 
