@@ -44,12 +44,29 @@
  *
  * WHICH WAY IT FAILS. Detection is deliberately anchored to the LAST non-empty
  * line, which is where the stamp is written and nowhere else. So if Dane
- * pastes a machine card INTO a comment of his own, the marker lands mid-text
- * and his comment is still read as his. If some future quoting put a marker
- * last, his answer would be ignored and the ticket would stay with him — the
- * escalation is not released, he is not told it was handled, and the failure is
- * loud rather than silent. That is the correct direction, and it is the
- * opposite of the bug this replaces.
+ * pastes a machine card ABOVE words of his own, the marker lands mid-text and
+ * his comment is still read as his.
+ *
+ * IT ONLY HOLDS FOR THAT ONE ORDERING, and the qualifier was missing here
+ * until 2026-09-06 (task 86bbv8nvy round 2). Paste the card UNDERNEATH his
+ * words and the stamp is the last line of HIS comment, so the whole thing
+ * reads as machine-written — and quoting below your reply is at least as
+ * natural as quoting above it.
+ *
+ * WHAT THAT COSTS DEPENDS ENTIRELY ON THE CALL SITE, which is why this note
+ * cannot answer for all of them:
+ *
+ *   - HERE, at the escalation and the kill switch, mistaking his word for a
+ *     machine's leaves the escalation unreleased. The ticket stays with him,
+ *     he is not told it was handled, and the failure is LOUD. That is the
+ *     correct direction, and the opposite of the bug this replaces.
+ *
+ *   - AT LANE A's objection filter it is the reverse: a discounted objection
+ *     MERGES the pull request he said hold on, silently, an hour later. That
+ *     site therefore cannot run on the stamp alone, and does not — see
+ *     `quotesMachineText` in scripts/builder/autoMergeLane.js. Any future
+ *     caller whose failure direction is an action rather than a stall owes
+ *     itself the same second question.
  *
  * COMMENTS WRITTEN BEFORE THIS SHIPPED carry no marker and still read as his.
  * Nothing can be done about that from here; the legacy prefixes below catch
@@ -146,13 +163,72 @@ function isMachineComment(text) {
 }
 
 /**
+ * Is this comment machine-written BY THE STAMP ALONE?
+ *
+ * The strict half of `isMachineComment`, for the one call site where a false
+ * "a machine wrote this" discards something Dane said.
+ *
+ * WHY IT IS SEPARATE (2026-09-06, task 86bbv8nvy round 1). `isMachineComment`
+ * answers two questions at once: the tail stamp `call()` writes, and a
+ * head-anchored tag a machine announced itself with before the stamp existed.
+ * The head half is deliberately wide — the bus kill-switch reader and the
+ * reconciler both need it, and it was widened on purpose (task 86bbuv99r)
+ * because the party line carries `[CC-starcaster loop-build]` and
+ * `[reconciler]` all day.
+ *
+ * But a head-anchored tag is exactly what Dane types when he QUOTES a card and
+ * replies under it, which is how he objects. Measured:
+ *
+ *     "[CC-starcaster loop-review] REVIEW: PASSED ...
+ *      wait, do not merge this yet — I want to look"
+ *
+ * — his words, classified as a machine's. Only a body whose LAST line is the
+ * stamp counts here, which is the same choice `isMachineComment` makes for the
+ * stamp, kept and nothing else.
+ *
+ * THIS IS NOT A COMPLETE ANSWER TO QUOTING, and the first version of this note
+ * claimed it was: "a pasted card puts the marker MID-text". That is true only
+ * when he types AFTER the paste. Pasted UNDER his words, the card's stamp is
+ * the last line of his comment and this reader says machine. A caller that
+ * cannot afford that reading needs a second question — Lane A's objection
+ * filter asks `quotesMachineText`; see the note at the head of this file for
+ * why the answer differs by call site.
+ *
+ * IT COSTS NOTHING TO BE THIS STRICT. Sampled 2026-09-06 over 110 real
+ * comments on 40 Loop Queue tickets: 100 classify as machine-written, and
+ * every one of them via the tail stamp. Zero needed the head tag.
+ *
+ * `null`/`undefined` text is NOT machine-written, for the same reason as
+ * above: a read we never made is an unknown, not a verdict.
+ */
+function isStampedMachineComment(text) {
+  if (text == null) return false;
+  const s = unescapeMarkdown(text);
+  if (!s.trim()) return false;
+  return lastNonEmptyLine(s).startsWith(MACHINE_MARKER);
+}
+
+/**
  * Add the stamp. Idempotent — stamping an already-stamped body returns it
  * unchanged, so a caller that stamps and then passes through `call()` (or a
  * retry of the same post) cannot end up with two.
+ *
+ * IDEMPOTENCE IS ON THE STAMP, NOT ON THE WIDE READER (2026-09-06, task
+ * 86bbv8nvy round 1). It used to skip anything `isMachineComment` recognised,
+ * which meant a machine card OPENING with a head tag (`[CC-starcaster ...]`,
+ * `[auto-merge]`) was posted with no stamp at all — it already "looked
+ * machine", so the door saw no work to do. Nothing was wrong while every
+ * reader used the wide form; `isStampedMachineComment` reads the stamp alone,
+ * and would have called such a card Dane's word.
+ *
+ * Measured before changing it: over 125 real Loop Queue comments, 114 machine-
+ * written and all 114 carrying the stamp — so no live comment took that path.
+ * This closes it by construction rather than by sampling, and the change only
+ * ever adds a marker that was missing.
  */
 function stampMachineComment(text) {
   const s = String(text == null ? '' : text);
-  if (isMachineComment(s)) return s;
+  if (isStampedMachineComment(s)) return s;
   const trimmed = s.replace(/\s+$/, '');
   return trimmed ? `${trimmed}\n\n${MACHINE_MARKER_LINE}` : MACHINE_MARKER_LINE;
 }
@@ -226,7 +302,8 @@ function blocksToText(blocks) {
  */
 function stampMachineCommentBlocks(blocks) {
   if (!Array.isArray(blocks)) return blocks;
-  if (isMachineComment(blocksToText(blocks))) return blocks;
+  // The stamp, not the wide reader — same reason as `stampMachineComment`.
+  if (isStampedMachineComment(blocksToText(blocks))) return blocks;
   return blocks.concat([{ text: `\n${MACHINE_MARKER_LINE}` }]);
 }
 
@@ -256,6 +333,7 @@ module.exports = {
   LEGACY_MACHINE_PREFIXES,
   MACHINE_TAG,
   isMachineComment,
+  isStampedMachineComment,
   stampMachineComment,
   stampMachineCommentBlocks,
   stampCommentBody,
