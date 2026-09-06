@@ -1,3 +1,42 @@
+## 2026-09-06 — A pull request that quietly gets no testing at all, and the fix that could not work (#639)
+
+Sometimes a pull request opens and GitHub never runs any of its tests. Nothing
+says so. The page looks like one whose tests simply have not started yet, so
+whoever is watching waits — and nothing ever comes, because nothing was ever
+going to. Work that is finished then sits there unmergeable, because the safety
+gate quite rightly refuses to merge anything nothing has tested.
+
+We already knew one way this happens, and had a fix for it. What we did not know
+is that there is a second way, it looks exactly the same from outside, and the
+fix for the first one does nothing at all for it.
+
+The second way is a merge conflict. Our tests run against the branch *combined
+with* the live site's code — that is the only honest thing to test — and if
+GitHub thinks the two disagree, it cannot build that combination, so it declines
+to run anything. Silently. That is what happened on 6 September: two lots of
+work were pushed eleven minutes apart and neither got a single test, while other
+pull requests in the same repository were being tested normally the whole time.
+The known fix is to push a tiny empty commit to prod GitHub into noticing — and
+it was tried, and it did nothing, because the new commit did not merge either.
+What actually fixed it was pulling the live site's latest code into the branch.
+The moment that happened, the tests started within seconds.
+
+So `npm run ship` now asks GitHub *why* the tests are missing before it settles
+in to wait. If the answer is "this branch conflicts", it stops immediately and
+tells you to pull main in, and says in as many words that the empty-commit trick
+is not the fix here. It is careful about one thing: for the first few seconds
+after any push GitHub genuinely has not worked out yet whether a branch
+conflicts, and treating that "don't know yet" as a conflict would have made ship
+give up on almost every healthy branch — so it asks again instead of guessing.
+It is also careful to only ask while *no* test has appeared, because a branch can
+go stale after its tests have already run and passed, and a green board must
+never be reported as blocked.
+
+The written instructions now carry both causes side by side with a one-command
+way to tell them apart, so the next person to meet a silent pull request does not
+have to work it out from scratch, and does not spend twenty minutes applying the
+wrong remedy.
+
 ## 2026-09-06 — Text you had typed could vanish from the Builder, two different ways (#632)
 
 Back on 29 August, two odd things happened while the Delray header was being
