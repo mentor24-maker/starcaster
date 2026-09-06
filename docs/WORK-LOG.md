@@ -34,6 +34,25 @@ four of those slipped through. And the browser-based rendering check cannot
 look at published pages at all, only at the Builder canvas, so it could never
 have seen any of this.
 
+**Round two.** Review checked the eight fixes, agreed with all of them, and
+then found a ninth the sweep had walked past — and a worse one. A CRM contact
+form can have a dropdown field, and until the site owner types some choices
+into it, the dropdown was falling back to two made-up ones: "Option one" and
+"Option two". A blank Options box is simply what a brand-new dropdown looks
+like, so this was not an unusual setup. Unlike the sample tags, which a visitor
+could only read, these were choosable: someone could pick "Option one" and send
+it into the client's contact list as real information about themselves.
+
+Measuring it in a browser turned up a second problem hiding underneath. If the
+site owner had also ticked "required" on that dropdown, the browser refused to
+send the form at all — every visitor filled it in, pressed Send, and nothing
+happened. So an empty dropdown was not just leaking made-up words; it was
+quietly breaking the form around it. Rather than show an empty dropdown, a
+published page now leaves the field out altogether, and the form works again.
+The Builder still shows the field, sample choices and all, so it is there to
+design. Both of those before-and-after behaviours were measured in a real
+browser on the real published-page code, not reasoned about.
+
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
 Pull requests are merged one at a time here, and the plan is to switch on a

@@ -367,6 +367,30 @@ function crmPreviewInputType(fieldType: string) {
   return fieldType || "text";
 }
 
+/**
+ * The two words a dropdown shows on the Builder canvas when its Options box is
+ * still empty, so the field does not draw as a blank control while the page is
+ * being designed. They are CANVAS ONLY — see crmSelectHasNothingToChoose.
+ */
+const CRM_SELECT_CANVAS_SAMPLE = ["Option one", "Option two"];
+
+function crmConfiguredSelectOptions(field: CrmFormField): string[] {
+  return Array.isArray(field.options) ? field.options : [];
+}
+
+/**
+ * A `select` field the tenant never gave any options to — a dropdown with
+ * nothing in it to choose.
+ *
+ * This is the DEFAULT state of a newly added dropdown, not a misconfiguration:
+ * `select` is a field type any tenant can add (public/js/crm.js), its Options
+ * box is free text with no validation, and lib/crmConfigStore.js defaults
+ * `options` to []. Leave the box blank and the field arrives here.
+ */
+function crmSelectHasNothingToChoose(field: CrmFormField): boolean {
+  return field.type === "select" && crmConfiguredSelectOptions(field).length === 0;
+}
+
 function CrmFormFieldControl({
   field,
   value,
@@ -391,7 +415,12 @@ function CrmFormFieldControl({
   }
 
   if (field.type === "select") {
-    const options = Array.isArray(field.options) && field.options.length ? field.options : ["Option one", "Option two"];
+    // A live page never reaches this fallback: CrmFormPreview drops an
+    // option-less dropdown from a published form entirely (see visibleFields).
+    // Without that filter these two words render to visitors as real choices
+    // they can submit into the tenant's CRM as contact data.
+    const configured = crmConfiguredSelectOptions(field);
+    const options = configured.length ? configured : CRM_SELECT_CANVAS_SAMPLE;
     return (
       <select
         name={field.key}
@@ -570,7 +599,15 @@ function CrmFormPreview({
   const styleSnapshot = resolveCrmFormStyleSnapshot(settings);
   const effectiveStyles = styleSnapshot ?? form.styles;
   const renderStyles = crmFormStylesToRenderStyles(effectiveStyles, form.accentColor, renderContext);
-  const visibleFields = publicFormFields(form.fields ?? []);
+  // A dropdown with nothing to choose is not a usable field on a published
+  // page, so it is left out rather than drawn empty: an empty `<select>` that
+  // the tenant also marked required cannot be satisfied, and browser
+  // constraint validation then blocks the whole form for every visitor —
+  // trading demo data leaking out for a form nobody can submit. On the canvas
+  // the field stays, with its sample options, so it is still there to design.
+  const visibleFields = publicFormFields(form.fields ?? []).filter(
+    (field) => !(liveSite && crmSelectHasNothingToChoose(field))
+  );
   const labelStyle = {
     justifySelf: renderStyles.cssVars['--crm-form-label-justify'],
     textAlign: renderStyles.normalized.labelAlign as CSSProperties['textAlign'],
