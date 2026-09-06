@@ -1,3 +1,38 @@
+## 2026-09-06 — Nine modules were talking to the page builder on the visitor's screen, and now something checks all 61 (#636)
+
+A Builder module has two audiences: whoever is building the page, and whoever
+reads it. Several were addressing the builder on the visitor's screen. Three
+were doing it on live client sites this morning — the Blog Post module showing
+"Post Title" and "Post body will appear here when opened with ?post=slug." on
+delraytennis.starcaster.pro and on a law firm's public site; the Event Detail
+module telling visitors to type "?event=your-event-slug" into their address
+bar; and the Blog Post List naming the Create Post module, on five published
+pages across two tenants. Each now says something a visitor can use — "No post
+selected", "No event selected", "No posts published yet." — and keeps its
+original wording on the Builder canvas, which is where it belongs.
+
+The reason this is worth an entry is the second half. Four rounds of review had
+each closed the placeholder the round before had named and missed the next one,
+because there is no way to close "find all of them" by re-reading a
+twelve-thousand-line file with sixty-one module types in it. So there is now a
+check that renders **every** module as a visitor would see it and reads the
+words that come out. It runs on every commit and every build, and takes about a
+second and a half.
+
+It found six more the moment it existed: an unset image telling visitors to
+"Choose an image", the Player Portal module announcing our own product name on
+a client's site, an empty video box captioned "Video", a merch card whose
+product name was the words "Merch product", and the Confetti module running its
+design-time controls — including a "Test Burst" button — on live pages. All
+fixed here. It also renders each module in three places rather than one, which
+turned out to matter: two containers (a table cell, and the drop-down mega-menu's
+feature slot) were not passing the "this is a real page" flag down at all, so
+every guard inside them was being bypassed.
+
+Every fix was broken on purpose to watch the check go red, and the check's own
+instrument was tested first — which caught it rendering nothing at all in the
+mega-menu, sixty-one assertions passing while measuring nothing.
+
 ## 2026-09-06 — Notes and a test left over after the tag-page fix landed elsewhere (#630)
 
 **Correcting the earlier version of this entry, which was wrong.** It claimed
