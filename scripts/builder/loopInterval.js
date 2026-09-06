@@ -33,6 +33,12 @@
  *      input resolves toward a longer interval, never a shorter one. Guessing
  *      long costs response time, which is visible. Guessing short costs quota,
  *      which is invisible until the month's bill.
+ *
+ *      DOUBT IS NOT THE SAME AS A READING (2026-09-05, task 86bbvh285). This
+ *      bias governs inputs that could not be understood — an unreadable state
+ *      file, a depth of `Infinity`, a queue that would not answer. It does NOT
+ *      govern a clean reading of a deep queue, and `decideInterval` no longer
+ *      treats one as if it did: see the asymmetry documented there.
  *   2. NOTHING IS SILENT. Every answer carries a reason the log can print, so
  *      the cadence is never a mystery the way the WIP cap's bare total was.
  */
@@ -373,18 +379,68 @@ function claimableDepth({ loop, tasks, capReached = false, resolveRepo, blockers
 /**
  * Apply the curve to a reading, with hysteresis.
  *
- * SHORTENING NEEDS TWO CONSECUTIVE READINGS. One burst of tickets must not
- * flip the cadence for the rest of the night — the queue may be drained again
- * before the loop even wakes.
+ * SHORTENING IS IMMEDIATE. LENGTHENING NEEDS TWO CONSECUTIVE READINGS THAT
+ * BOTH WANT IT.
  *
- * LENGTHENING IS IMMEDIATE. Same asymmetry as everywhere else here: the
- * expensive mistake is staying fast, so the cheap direction never waits.
+ * THAT IS THE OPPOSITE OF WHAT THIS FUNCTION DID UNTIL 2026-09-05, and the
+ * inversion is the whole of task 86bbvh285. The original reasoning is kept
+ * here because it was not silly — it was measured against the wrong cost.
+ *
+ *   The original rule: shortening waits for two consecutive readings, because
+ *   one burst of tickets must not flip the cadence for the night; lengthening
+ *   never waits, because the expensive mistake is staying fast and burning
+ *   quota invisibly.
+ *
+ * WHAT THAT MISSED. The two errors are not the same size. Waking sooner than a
+ * wrong reading deserved costs ONE extra pass against a shallow queue. But the
+ * hold is paid AT THE CADENCE THAT IS ALREADY TOO LONG — the loop sleeps the
+ * old interval to earn the right to shorten it — so refusing to shorten from
+ * an hour costs an hour, of the WHOLE pipeline, because the work-in-progress
+ * cap counts `In review` and a slow review lane fills it until `loop-build`
+ * stops claiming at all.
+ *
+ * AND ON A DRIFTING QUEUE THE GUARD WAS EFFECTIVELY UNREACHABLE. This is the
+ * part worth reading slowly, because it is not what it looks like. The rule
+ * compares DIRECTION, not exact values — `lastProposed < current` — so on the
+ * face of it two different short proposals should second each other. They
+ * cannot, because a HELD pass does not move `current`, and an intervening
+ * reading that is not shorter than `current` overwrites `lastProposed` with
+ * itself. So the second reading has to be shorter than the interval in force,
+ * and on a queue drifting across the curve's rows it usually is not.
+ *
+ * MEASURED, from `~/loop-logs/loop-review.log` on the Mini:
+ *
+ *   00:26  4 claimable -> 900s proposed, HELD at 1800s   (lastProposed = 900)
+ *   01:05  3 claimable -> 1800s, which is not < 1800s, so it is adopted as-is
+ *          and lastProposed is reset to 1800 — the 900 reading is discarded
+ *   01:44  2 claimable -> 1800s.  02:24  1 claimable -> 1800s.
+ *
+ * The queue reached the curve's deepest row and the cadence never went there.
+ * That is a ratchet, not hysteresis: alternating readings settle on the SLOWER
+ * rung and stay.
+ *
+ * WHAT THE TICKET GOT WRONG, recorded so the next reader is not misled by it:
+ * it reported the guard as comparing exact seconds ("two readings of the same
+ * value"), and reported `loop-review` as pinned at 3600s for over three hours.
+ * Neither is quite right. The comparison is directional, as above; and of the
+ * three hours at 3600s on 2026-09-05, two passes genuinely read ZERO claimable
+ * — correct behaviour — and only the 14:05 pass was a hold. One hour was lost
+ * to hysteresis that day, not three. The ticket's CONCLUSION survives its
+ * arithmetic: the ratchet above is real, and it is worse than the version
+ * reported, because it can strand the cadence one rung short indefinitely.
+ *
+ * SO BOTH DIRECTIONS NOW COMPARE DIRECTION AGAINST THE INTERVAL IN FORCE, and
+ * the direction that waits is the one where being wrong is cheap. The
+ * anti-thrash property the original rule was written for is NOT lost — it has
+ * moved: a single quiet reading no longer lengthens the cadence, so a queue
+ * that empties for one pass and refills does not cost an hour of sleep. The
+ * ratchet cannot form in that direction either, because a reading that wants
+ * SHORTER is adopted outright rather than merely resetting a counter.
  *
  * With no state at all, the interval in force is taken to be the runner's
- * CONFIGURED fallback, not the proposal. So a first pass against a deep queue
- * holds one cycle at the old hour and shortens on the next — which is the same
- * rule every later pass follows, rather than a special case that skips the
- * guard exactly when nothing is known yet.
+ * CONFIGURED fallback, not the proposal. A first pass against a deep queue
+ * therefore shortens at once — which is the same rule every later pass
+ * follows, rather than a special case.
  *
  * @param {object} opts
  * @param {number} opts.depth
@@ -401,8 +457,8 @@ function decideInterval({ depth, state, fallbackSeconds, blockedNote = '' } = {}
   const current = prev ?? configured;
   const lastProposed = Number.isFinite(Number(state?.lastProposed)) ? Number(state.lastProposed) : null;
 
-  // Same or longer — take it now.
-  if (proposed >= current) {
+  // Unchanged — nothing to decide.
+  if (proposed === current) {
     return {
       seconds: proposed,
       reason: proposal.reason,
@@ -411,22 +467,40 @@ function decideInterval({ depth, state, fallbackSeconds, blockedNote = '' } = {}
     };
   }
 
-  // Shorter, and the previous reading also wanted shorter: two consecutive, so
-  // shorten — to the LATEST proposal, which is the freshest reading of the
-  // queue rather than the more excited older one.
-  if (lastProposed !== null && lastProposed < current) {
+  // SHORTER — take it now, on this one reading. Work is claimable and the loop
+  // is asleep; the cost of being wrong is one extra pass, and the cost of
+  // waiting is an hour of a pipeline that cannot claim past the cap.
+  if (proposed < current) {
     return {
       seconds: proposed,
-      reason: `${proposal.reason}; second consecutive short reading, so the cadence drops from ${current}s`,
+      reason: `${proposal.reason}; shortening on the first reading that asks for it — waking sooner costs one pass, refusing costs an hour`,
       state: { interval: proposed, lastProposed: proposed },
       held: false,
     };
   }
 
-  // Shorter, but this is the first such reading. Hold, and remember it.
+  // LONGER, and the previous reading also wanted longer: two consecutive, so
+  // lengthen — to the LATEST proposal, which is the freshest reading of the
+  // queue rather than the quieter older one.
+  //
+  // DIRECTION, NOT VALUE. `lastProposed > current` asks "did the last reading
+  // want longer too", which stays answerable while the queue drifts between
+  // rows of the curve. Asking whether it proposed this exact number is the
+  // defect this rule was rewritten to remove.
+  if (lastProposed !== null && lastProposed > current) {
+    return {
+      seconds: proposed,
+      reason: `${proposal.reason}; second consecutive quiet reading, so the cadence lengthens from ${current}s`,
+      state: { interval: proposed, lastProposed: proposed },
+      held: false,
+    };
+  }
+
+  // Longer, but this is the first such reading. Hold, and remember it — a
+  // queue that empties for one pass and refills must not cost an hour.
   return {
     seconds: current,
-    reason: `${current}s — holding. ${proposal.reason} would shorten it, but one reading does not (two consecutive do)`,
+    reason: `${current}s — holding. ${proposal.reason} would lengthen it, but one quiet reading does not (two consecutive do)`,
     state: { interval: current, lastProposed: proposed },
     held: true,
   };

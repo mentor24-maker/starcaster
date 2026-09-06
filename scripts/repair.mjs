@@ -60,13 +60,10 @@ if (CHECK) writeStamp(readStamp);
 function firstLineOf(out, step) {
   const all = [out.stdout, out.stderr].map((x) => String(x || '')).join('\n')
     .split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('>'));
-  // The sweep opens with the pipeline banner; its FINDING line is the one a
-  // reader needs on the step line.
-  if (step && step.id === 'stranded') {
-    const finding = all.find((l) => /stranded ticket/i.test(l));
-    if (finding) return finding;
-  }
-  return all[0] || '(the step printed nothing)';
+  // Which of those lines is the FINDING — the decision lives in `repair.js`
+  // with the rest of them, so it can be tested against real sweep output
+  // rather than by reading this file.
+  return repair.findingLine(all, step?.id);
 }
 
 const meanings = [];

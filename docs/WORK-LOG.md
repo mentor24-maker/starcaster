@@ -23,6 +23,348 @@ the ticket and say so on it"), and that instruction is what a newer safeguard
 relies on. Fixed, along with tests that pin the shape rather than the wording:
 if that bundle of facts ever changes form again, the tests go red here rather
 than the sentence going wrong on Dane's board.
+## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
+
+Pull requests are merged one at a time here, and the plan is to switch on a
+**merge queue** — a line, so several can go through in order without each one
+resetting the others. Before that could happen, something had to be fixed that
+only breaks once the queue exists.
+
+When a script tells GitHub to merge, GitHub answers "done" in two completely
+different situations. Today it really has merged. With a queue switched on, it
+means *"I have put it in the line."* Same answer, and our scripts could not tell
+them apart.
+
+They broke in opposite directions. `npm run ship` — the command that takes
+finished work live — looked a second later, saw the pull request still open, and
+stopped with "the merge did not complete". That would have happened on every
+single run, while the merge was in fact perfectly fine, and it would have
+stopped before tidying up. Annoying, but loud, and it changed nothing.
+
+The other one was the dangerous one. When Dane comments `merge` on a ticket, a
+background job does it for him. That job checked only that the *command* worked.
+It then wrote down the current time as the merge time, announced "merged" on the
+party line, and moved the ticket to **Live** — while the pull request was still
+sitting in the line, possibly never to merge at all. A ticket marked done, a
+merge announced, and a time written down as fact, for something that had not
+happened.
+
+Both now ask the same question, through the same piece of code, and wait for a
+real answer: merged, closed, still in the line, or "could not tell". *Still in
+the line* is its own answer — not a success and not a failure. Nothing is
+recorded, no time is invented, the ticket stays where it is, and Dane's `merge`
+word stays unspent so the next pass finishes the job properly. The merge time
+now comes from GitHub itself rather than from our own clock.
+
+It costs an ordinary day nothing: with no queue switched on, the first look
+already says merged and the wait is over before it starts.
+
+**Round 2 — and the first fix had swapped one wrong answer for another.** Review
+caught it. The new code called the pull request *"still in the line"* any time it
+was still open — without ever checking that a line existed. None does; the queue
+has not been switched on yet. So on today's setup every genuinely *refused*
+merge was being announced as a calm queue wait: fifteen minutes of waiting, then
+"nothing has gone wrong, GitHub is still working through the merge queue", about
+a mechanism that is not there. Every word of that was false, and doing what it
+suggested — run it again — just started the same fifteen minutes over.
+
+That mattered because refusals are common. This repo will not merge a branch
+that has fallen behind, and a branch can fall behind in the seconds between its
+checks passing and the merge going through. That used to be a one-second, honest
+"the merge did not complete". It is again: the script now asks GitHub, in the
+same breath as everything else, whether anything is actually holding this pull
+request — a place in the line, or GitHub's own auto-merge. If nothing is, it says
+so at once and tells you to run it again, which genuinely fixes it. If something
+is, and only then, it waits.
+
+The second half was a timing bug in the background job. Its wait could run for
+fifteen minutes; the job itself wakes every ten. One pull request would have
+swallowed the job's own next wake-up, and everything else riding on it. The wait
+is now drawn from the same small allowance every other wait in that job uses, so
+the whole pass still finishes inside its ten minutes — and the test that checks
+that is no longer able to miss a wait standing outside the arithmetic, which is
+exactly how this one got through the first time.
+
+**Round 3 — the shared piece was right; the two places using it were not.**
+Review found five things, and one of them was serious enough that it would have
+gone wrong on the very first day the line was switched on.
+
+There is a rule here that only one branch may be going into `main` at a time —
+a "window". Whoever holds it, holds it until their merge lands, because a merge
+landing shoves every other branch behind it and makes them re-run their checks.
+The background job took the window, told GitHub to merge, and then — on being
+told *"it is in the line"* — handed the window straight back. The next merge
+then moved `main`, pushed the queued branch behind, reset its checks, and it
+never landed. Then the same thing again, forever: the exact traffic jam the
+window exists to prevent, arriving through its own fix. Being in the line is a
+merge that is definitely coming, so it now keeps the window, the same way
+GitHub's own auto-merge already did. Where nothing at all is holding the pull
+request, or where it genuinely could not be read, the two are told apart rather
+than guessed at.
+
+Second, the job's wait allowance was being spent on waits that never happened.
+Today's merges finish instantly, so a merge cost the job one of its three
+allowed pauses for pausing zero seconds — and three merges in one pass left the
+fourth ticket's *real* wait refused and put off for another ten minutes. The
+allowance is now spent on what actually happened, not on what might have.
+
+The other three were in `npm run ship`, and they were all the same shape as
+round 1: the script describing something it could not do. It told you to run it
+again and it would "see the merge and finish tidying up" — and it had no way to
+see an already-merged branch, so running it again opened a *second* pull
+request for work that was already live. It now checks that first, before
+anything else, and needs two independent yeses before it will skip: GitHub
+confirming a merged pull request, and `main` genuinely already containing the
+work. If either one cannot be read, it does not skip. It also stopped
+announcing "queued to merge" one line above "nothing is holding it" — round 1's
+own sentence, still being printed directly above its own correction — and it no
+longer spends twenty minutes retrying a lookup that could never have worked,
+when it can tell that in the first second.
+
+**Round 4 — the script said "GitHub refused it" about something it had not been
+able to look at.** Review found one mistake sitting in two places, and it is the
+same mistake this whole ticket was written about: saying one thing while another
+is true.
+
+When a merge does not happen, the script asks a follow-up question — *is
+anything still holding this pull request?* There are two quite different answers
+it can come back with. One is "no, nothing is holding it", which really does
+mean GitHub turned the merge down. The other is "I could not read that", which
+means nobody knows yet. Both were being reported with the same sentence: *"The
+merge command reported success, so GitHub refused it afterwards."*
+
+So on the second one you got two lines, one under the other. The first said the
+answer could not be read. The second stated a refusal as fact — and then told
+you the usual cause and what to do about it. All of that was invented. Worse,
+`npm run ship` was pointing you at a fix for a problem it had no evidence you
+had, and the background job wrote the same false sentence onto the ticket and
+onto the party line, where Dane reads it.
+
+The odd part is that everything else already had it right. The merge window is
+held, not released, when that answer cannot be read, and the job's own internal
+record marks it as a could-not-tell. The code knew. Only the sentence a human
+reads did not. The two are now written in one place, so they cannot drift apart
+again: a real refusal keeps its old wording and its old advice, and a
+could-not-tell says the merge did not happen, says why it does not know, and
+tells you to look at the pull request before doing anything.
+
+One smaller thing, spotted in the same review. `ship` can now recognise a branch
+whose work is already live and skip straight to tidying up. It needs two yeses
+to do that, but a branch that has changed *nothing at all* was accidentally
+giving one of them for free — so a fresh branch reusing an old topic name whose
+pull request had merged could be waved through as "already live" when it was
+nothing of the sort. Nothing could be lost by it, but it is confusing, and it is
+now asked directly: a branch that has not changed a single file has nothing it
+could have merged.
+
+## 2026-09-05 — The sweep that called a half-built ticket empty (#624)
+
+When a build session dies partway through, its ticket is left sitting in
+"Building" with nothing working on it. A tidy-up pass called the sweep finds
+those and puts them back in the queue so somebody can pick them up again.
+
+Before it moves one, it asks a question: was anything actually built for this?
+The only way it could answer was to check GitHub for a pull request — and a
+pull request only exists once the work has been pushed. So a ticket somebody
+had built two thirds of, in a folder on their machine, with nothing pushed
+yet, looked exactly the same to it as a ticket nobody had ever started. It
+said "nothing has been built for it" and sent both back to the queue.
+
+That happened on 3 September. About two thirds of a piece of work was sitting
+in a folder on the MacBook — seven changed files — and the ticket was returned
+to the line as though it were untouched. Nothing was deleted; the folder is
+still there. What was lost is the connection between the two: the ticket no
+longer pointed at the work, and the next person to pick it up would have built
+the whole thing again from scratch.
+
+The sweep now goes and looks first. Every branch created for a ticket carries
+that ticket's number, so it checks each machine for one, and counts it as work
+in progress if there are unsaved changes in the folder or commits that have not
+gone anywhere yet. If it finds work, it leaves the ticket alone and prints
+where the work is — which machine, which folder, which branch — so you can walk
+straight to it. If it cannot reach one of the machines to look (a laptop asleep,
+say), it says so and still leaves the ticket alone, rather than guessing. And
+if every machine answers and none of them has anything, it does exactly what it
+did before.
+
+The last part matters as much as the first. A safety check that never lets
+anything through is its own kind of broken, so all four behaviours were tested
+by deliberately removing the fix and watching the right test fail.
+
+**Sent back once, and rightly.** The first version of this worked perfectly
+when looking at the machine it was running on, and could not see the other one
+at all — in two separate ways, either of which brought the original problem
+straight back.
+
+The first was a quoting slip. To look at the other machine it has to say
+"look in your own home folder", and it wrote that instruction in a way the
+other machine reads literally instead of filling in — like posting a letter
+addressed to "your house" rather than to the actual street. The far machine
+looked for a folder with that literal name, did not find one, and answered
+"there is no copy of the project here" — confidently, as a real answer rather
+than as a shrug. So every ticket built on the other machine would have been
+declared empty and sent back to the queue: the exact thing this was written to
+stop, just from the other seat.
+
+The second was worse, because it broke the check the other way. The Mini and
+the MacBook are not wired up to talk to each other in both directions — the
+MacBook can reach the Mini, but not the other way round, and that is written
+down in our own inventory of machines. The sweep asked both anyway. From the
+Mini, which is where it actually runs, the MacBook never answers, so the sweep
+said "I could not check" about every single ticket and became unable to move
+anything at all. A safety check that never lets anything through — the exact
+failure the paragraph above says was tested for, arriving through a door the
+test did not cover, because the test was handed a tidy list of one machine
+while the real thing walks the list of both.
+
+Both are fixed, and the second needed a decision rather than a repair. A
+machine that is merely asleep is a reading we failed to take, and the sweep
+still refuses to move a ticket on that basis. A machine there is no way to
+phone at all is a different thing: waiting for it is waiting forever. So the
+sweep now gets on with its job, and every sentence it writes — on screen, in
+the note left on the ticket, and on the party line — names the machine it could
+not look at, so nobody reads a partial answer as a complete one. The real fix
+for that gap is to wire the two machines up; that is separate work, and it is
+now the only thing standing between this and a complete answer.
+
+Three smaller things came back with the send-back and are fixed too: a merged
+branch could pin its own ticket in "Building" forever, because the sweep
+counted commits instead of comparing the actual changes, and squash-merging
+makes those two different questions; the scheduled health report picked the
+wrong line out of the sweep's output and could headline "all is well" over a
+real finding; and a dry run offered to apply a change that would not have done
+anything. Every one of the six was broken on purpose afterwards to watch the
+test that guards it fail.
+## 2026-09-05 — A repair that moves real tickets is now actually tested (#623)
+
+There is a repair in the system called the sweep. When one of the machines dies
+part-way through a job, its ticket is left sitting in a state nothing will ever
+pick up again — it is invisible, not merely late. The sweep is the thing that
+finds those and puts them back in the line.
+
+Three days ago that repair was fixed so it could be run at any time, and that
+fix was right and is still right. But it went in with a strange gap: the tests
+around it never actually ran it. They read the *text* of the program and
+checked that the sweep was mentioned in the right places, the way you might
+confirm a recipe lists flour without ever baking anything. That is a weak
+check on a strong piece of code, because this is the code that genuinely moves
+tickets around the board on its own.
+
+The reason nobody had tested it properly was mundane: the sweep lived inside a
+command-line tool, and there was no way to get hold of it without running the
+whole tool. So it has been moved into its own file, arranged so a test can hand
+it a pretend version of ClickUp and watch what it does. Nothing about how it
+behaves has changed — the same code, in a place a test can reach.
+
+Then the test that was asked for: put some stuck tickets in front of it, run
+the sweep, and check each one went where it should. The pretend ClickUp really
+carries out the changes it is given, so the sweep can be run a second time over
+the board the first run left behind and confirmed to come back clean — which is
+exactly how a person would check it by hand. Seventeen tests in all, covering
+the ordinary case, the four different ways it can fail, and the important one
+where ClickUp says "fine" but nothing actually moved.
+
+The tests were then proved to be worth having by deliberately breaking the
+sweep six different ways and confirming each break was caught. A test that
+cannot fail is decoration.
+
+Worth recording: this ticket turned out to be a duplicate — the same problem
+had been written up twice on the same day, and most of it was already fixed.
+That was checked before any code was written, said so on the ticket, and only
+the part that was genuinely still missing was built.
+
+## 2026-09-05 — The switch that quietly ignored him three times (#621)
+
+Automatic merging can be switched off, and it is switched back on by posting
+one exact line: `resume auto-merging`. The wording has to be the whole message
+and nothing else, on purpose — if it fired whenever the phrase merely came up
+in conversation, the machines would merge something nobody had agreed to.
+
+What went wrong is what happened when Dane got *close*. Nothing at all. On
+3 September he posted the line with bold and backticks around it, copied from a
+card an agent had written for him. It matched nothing, nobody said so, and he
+spent the next thirty-five minutes believing merging was back on. He did the
+same thing twice more on 5 September — at 6:47pm and 8:58pm — while an urgent
+piece of work sat parked waiting for exactly that switch. Three tries, no
+answer to any of them, because a near miss and a message nobody read looked
+identical from where he was sitting.
+
+Now a message that was clearly *meant* to be the switch gets a reply: nothing
+changed, here is what actually arrived, and here is the line to copy — as plain
+text on its own, so the reply cannot hand him another dud.
+
+Rehearsing the fix turned up a second problem underneath it. The system worked
+out which party-line messages were Dane's by keeping a list of the signatures
+the machines sign with, and the list had gone out of date: three signatures in
+daily use were missing from it, so those posts were being read as *his own
+words* on the one channel where the off switch is listened for. It now
+recognises the family of signatures rather than a list of them.
+
+## 2026-09-05 — A ticket you had already said "merge" to sat there waiting for you anyway (#617)
+
+Two of the seven columns on the Loop Queue board belong to you: `Needs your
+input` and `Ready to launch`. Nothing automatic is allowed to move a ticket out
+of either one, and that rule is right — a machine tidying away a ticket that was
+holding a question you had not seen yet would erase the question.
+
+But the rule was being applied by looking only at which column the ticket was
+in, and the column is not really the question. The real question is *is there
+still a decision of Dane's outstanding?* On the morning of 4 September there
+was not: you commented `merge` on a ticket at 8:15, the work went live at 8:57,
+and at 9:00 the ticket was still sitting in `Ready to launch` as though it were
+waiting on you. It was not waiting on anything. Your instruction had been given
+and carried out. The ticket was just stale paperwork by then — and finished work
+parked in one of your columns does not show up on the list of what shipped.
+
+So the tidy-up job can now close exactly one shape of ticket by itself, and only
+when all three of these are true: the ticket is in `Ready to launch`, its pull
+request really did merge, and your own `merge` comment is on the ticket from
+*before* the merge. Miss any one of them and nothing changes — it flags it and
+leaves it alone, exactly as before, and now says which of the three was missing.
+`Needs your input` is never touched at all, whatever merged, because an
+unanswered question is the whole reason the rule exists.
+
+Three things were tightened beyond what was asked for, all of them about not
+closing something on a word that was not really yours. It reads your merge
+command out of the comments rather than guessing from the column or from who is
+assigned. It checks the comment was actually typed by you and not written by one
+of the loops, which all post under your login. And it ignores a `merge` you gave
+before the last review verdict — that one approved an earlier attempt that was
+sent back and rebuilt, so it is a word about work that no longer exists. The
+close is also guarded: if you move the ticket yourself while the job is thinking,
+your move wins.
+
+Every one of those guards was tested by taking it out and watching a named test
+go red, and the note the job leaves on the ticket says whose instruction it
+acted on, when you gave it, and which pull request carried it out — so the claim
+can be checked rather than taken on trust.
+## 2026-09-05 — Merges no longer knock each other back to the start (#616)
+
+Before a pull request can go live, GitHub insists it has the very latest work
+in it. That sounds sensible, and it is — but it means every merge that lands
+makes every other waiting change out of date, and throws away the tests that
+had just passed on it. So when several merges happened close together they kept
+knocking each other back to the beginning, and each one had to be tested all
+over again. Nothing looked broken while it happened: every single step reported
+success, so it just felt slow.
+
+On the night of 3 September a merge Dane approved at 11:25pm did not go live
+until 11:49pm, and the whole twenty-four minutes went on re-running tests that
+had already passed.
+
+The fix is a queue of one. Only a single change at a time is allowed to be on
+its way to going live; the others simply wait their turn, untouched, so nothing
+resets them. Each change is now tested exactly once no matter how many are
+lined up behind it — with eight waiting, the last one used to need eight rounds
+of testing and now needs one.
+
+Two things worth knowing. It was checked first whether that "must have the
+latest work" rule was GitHub's own or something we had chosen ourselves; it is
+GitHub's, and it protects something real, so it was left alone. And one gap is
+left open deliberately: the fast-track lane still merges without taking its
+turn, so it can still interrupt one waiting change. Making the fast track wait
+behind the machines is Dane's call, not a decision to slip in quietly, so it
+has been written up separately.
 
 ## 2026-09-05 — The panel layout checker could not fail on the panel it had just checked (#613)
 

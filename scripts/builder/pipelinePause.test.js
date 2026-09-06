@@ -1064,10 +1064,14 @@ test('a missing or unparseable number still falls back', () => {
 });
 
 test('the resume sweep sends a stranded build back but leaves a stranded review', () => {
-  // Source-level, like the bus-relay wiring tests above: the move itself needs
-  // a live token. What must never come back is one unconditional move for
-  // every stranded ticket regardless of what died on it.
-  const code = withoutComments(read('scripts/pipeline.mjs'));
+  // Source-level, like the bus-relay wiring tests above. It reads the sweep's
+  // own module because that is where the loop lives (task 86bbt204x) — and it
+  // survives alongside the executed end-to-end test at the bottom of this file
+  // rather than being replaced by it: this one pins the SHAPE of the branch, so
+  // a rewrite that happens to pass the behavioural test still has to keep the
+  // review case ahead of the move. What must never come back is one
+  // unconditional move for every stranded ticket regardless of what died on it.
+  const code = withoutComments(read('scripts/builder/pipelineSweep.js'));
   assert.match(code, /const reviewing = s\.kind === 'a review'/,
     'the sweep must branch on what kind of pass died');
   const moved = code.indexOf('status: where.status');
@@ -1090,7 +1094,12 @@ test('the resume sweep hands its report what it left behind, and whether it look
   // and what was LEFT BEHIND is invisible to a function shown only what was
   // taken. Every `continue` in the sweep loop is a ticket that is still
   // stranded, so every one of them has to record itself.
-  const code = withoutComments(read('scripts/pipeline.mjs'));
+  // TWO files since the sweep moved (task 86bbt204x): the loop's own bail-outs
+  // are in its module, and the two reports are built by the callers that print
+  // and announce them. Reading one file for both would have quietly stopped
+  // checking half of this.
+  const code = withoutComments(read('scripts/builder/pipelineSweep.js'));
+  const callers = withoutComments(read('scripts/pipeline.mjs'));
 
   const failureContinues = code.match(/left\.push\(s\.id\);\s*continue;/g) || [];
   assert.equal(failureContinues.length, 3,
@@ -1108,9 +1117,9 @@ test('the resume sweep hands its report what it left behind, and whether it look
 
   // And BOTH reports carry it, so neither can print an all-clear the other
   // contradicts.
-  assert.match(code, /sweptSummary\(swept, \{ \.\.\.sweepState, applied: apply \}\)/,
+  assert.match(callers, /sweptSummary\(swept, \{ \.\.\.sweepState, applied: apply \}\)/,
     'the terminal summary must be told what was left, whether it looked, and whether it acted');
-  assert.match(code, /resumedMessage\(\{ by, pausedForMs, swept, \.\.\.sweepState \}\)/,
+  assert.match(callers, /resumedMessage\(\{ by, pausedForMs, swept, \.\.\.sweepState \}\)/,
     'the party-line message must be told the same thing, or the two disagree');
 });
 
@@ -1360,9 +1369,15 @@ test('"could not tell" never exits 0, whatever else is true of the run', () => {
 test('the sweep is reachable without pausing anything', () => {
   const code = withoutComments(read('scripts/pipeline.mjs'));
   assert.match(code, /} else if \(cmd === 'sweep'\) {/, 'there must be a standalone command');
-  // It must be the SAME sweep, not a second copy that drifts from it.
-  assert.equal((code.match(/async function sweepStranded\(/g) || []).length, 1,
+  // It must be the SAME sweep, not a second copy that drifts from it. Since
+  // task 86bbt204x the one definition lives in its own module — moved so it
+  // could be executed in a test, NOT copied — so this counts it there and
+  // insists this file has none of its own.
+  const sweepModule = withoutComments(read('scripts/builder/pipelineSweep.js'));
+  assert.equal((sweepModule.match(/async function sweepStranded\(/g) || []).length, 1,
     'one sweep exists');
+  assert.doesNotMatch(code, /async function sweepStranded\(/,
+    'and pipeline.mjs must delegate to it rather than keeping a second copy');
   assert.equal((code.match(/await sweepStranded\(/g) || []).length, 3,
     'and exactly three callers: `sweep`, `resume` on a paused pipeline, and `resume` on a running one');
 });
@@ -1384,8 +1399,9 @@ test('a dry run writes nothing at all', () => {
   // The safety property that makes an always-available sweep sound. 90 minutes
   // is longer than any loop pass but SHORTER than a hand-driven fast-track
   // session, which holds a ticket in "Building" for hours without touching it.
-  const code = withoutComments(read('scripts/pipeline.mjs'));
-  const fn = code.slice(code.indexOf('async function sweepStranded('), code.indexOf("const cmd = process.argv[2];"));
+  const code = withoutComments(read('scripts/builder/pipelineSweep.js'));
+  const fn = code.slice(code.indexOf('async function sweepStranded('), code.indexOf('module.exports'));
+  assert.ok(fn.length > 100, 'found the sweep');
   const bail = fn.indexOf('if (!apply) {');
   assert.ok(bail > 0, 'the dry run must bail out explicitly');
   // Every write in the sweep is a tryCall; none may come before the bail-out.
@@ -1428,7 +1444,8 @@ test('the hand-back note names the command that actually ran', () => {
 test('each caller tells the note which command it is', () => {
   const code = withoutComments(read('scripts/pipeline.mjs'));
   assert.match(code, /command: 'npm run pipeline -- sweep --apply'/, 'the standalone command must identify itself');
-  assert.match(code, /kind: s\.kind, command,/, 'and the sweep must pass it through to the note');
+  assert.match(withoutComments(read('scripts/builder/pipelineSweep.js')), /kind: s\.kind, command,/,
+    'and the sweep must pass it through to the note');
 });
 
 test('resume on an already-running pipeline sweeps instead of exiting', () => {
@@ -1458,7 +1475,11 @@ test('both sweeping commands read ONE staleness threshold', () => {
   const code = withoutComments(read('scripts/pipeline.mjs'));
   assert.equal((code.match(/num\('stranded-after-minutes'/g) || []).length, 1,
     'the option is parsed in exactly one place');
-  assert.equal((code.match(/strandedAfterMs \}\)/g) || []).length, 3,
+  // Matched at the CALL rather than by the punctuation that used to follow it:
+  // the old pattern counted `strandedAfterMs })`, so a call site that passed it
+  // and then passed anything else stopped being counted. One did, and the third
+  // match it was silently landing on was inside the sweep itself.
+  assert.equal((code.match(/sweepStranded\(\{[^}]*strandedAfterMs/g) || []).length, 3,
     'and passed to all three sweep call sites (sweep, resume-running, resume-paused)');
 });
 
@@ -1475,4 +1496,110 @@ test('a non-numeric status is printed as the reason it is, not as "HTTP ?"', () 
   // And an ordinary HTTP failure still reads the way it always did.
   assert.equal(store.whyOf({ res: { ok: false, status: 503 } }), 'HTTP 503');
   assert.equal(store.whyOf({ res: { ok: false, status: 0 } }), 'HTTP ?');
+});
+
+// ── a ticket the sweep deliberately did NOT move (task 86bbur9tk) ──────────
+
+test('a preserved ticket is neither an all-clear nor a failure', () => {
+  // The fourth cause of an empty `swept` list. Half-built work left in
+  // "Building" is a CORRECT outcome, so it cannot be counted as a failed
+  // write — and no move happened, so it cannot be counted as unstuck. Left
+  // out of the sentence altogether it produces "No stranded tickets needed
+  // unsticking." over a ticket the same run just refused to touch, which is
+  // the contradicting pair this summary already carries two scars from.
+  const preserved = [{ id: '86bbAAA', verdict: 'work' }, { id: '86bbBBB', verdict: 'cannot-tell' }];
+  const said = pause.sweptSummary([], { checked: true, left: 0, preserved });
+  assert.doesNotMatch(said, /No stranded tickets needed unsticking/,
+    'an all-clear over a ticket that was deliberately left alone is the bug');
+  assert.match(said, /86bbAAA/);
+  assert.match(said, /86bbBBB/);
+  assert.match(said, /still on a machine/, 'half-built work must say what is holding it');
+  assert.match(said, /could NOT be judged/, 'a blind spot must not read like half-built work');
+});
+
+test('preserved work exits 3 — found and deliberately not acted on', () => {
+  // 3 is already what this command means by "stranded work found, nothing
+  // done about it". Exiting 0 would tell a caller the deck is clear while two
+  // tickets are still sitting on it.
+  assert.equal(pause.sweepExitCode({ checked: true, left: 0, found: 1, applied: true, preserved: [{ id: 'x', verdict: 'work' }] }), 3);
+  // …and it still outranks nothing: a real failure is still a 1, an unread
+  // queue is still a 2.
+  assert.equal(pause.sweepExitCode({ checked: true, left: 1, applied: true, preserved: [{ id: 'x', verdict: 'work' }] }), 1);
+  assert.equal(pause.sweepExitCode({ checked: false, applied: true, preserved: [{ id: 'x', verdict: 'work' }] }), 2);
+  assert.equal(pause.sweepExitCode({ checked: true, left: 0, found: 0, applied: true, preserved: [] }), 0);
+});
+
+test('the party line hears about preserved tickets too, in the same words', () => {
+  const preserved = [{ id: '86bbAAA', verdict: 'work' }];
+  const bus = pause.resumedMessage({ by: 'a pass', swept: [], checked: true, left: 0, preserved });
+  assert.match(bus, /86bbAAA/, 'the bus must not be told an all-clear the terminal contradicts');
+  assert.ok(bus.includes(pause.sweptSummary([], { checked: true, left: 0, preserved })),
+    'one sentence, one source');
+});
+
+test('the dry run says what it WOULD have left alone, without claiming it acted', () => {
+  const preserved = [{ id: '86bbAAA', verdict: 'work' }];
+  const dry = pause.sweptSummary([], { checked: true, left: 0, preserved, applied: false });
+  assert.match(dry, /86bbAAA/);
+  // `--apply` IS NOT OFFERED OVER A PRESERVED TICKET (round-1 review of task
+  // 86bbur9tk, finding 5). It would not move it — refusing to move it is the
+  // entire point — so the offer was a sentence contradicting the one before
+  // it, which is the pair this function already carries two scars from.
+  assert.doesNotMatch(dry, /add `--apply` to do it/,
+    '`--apply` would not move a preserved ticket, so it must not be offered as if it would');
+  assert.match(dry, /would not move that one either/);
+});
+
+test('the dry run still offers `--apply` for the tickets it WOULD move, alongside the ones it would not', () => {
+  const dry = pause.sweptSummary(
+    [{ id: '86bbEEE', kind: 'a build', destination: 'Queued' }],
+    { checked: true, left: 0, preserved: [{ id: '86bbAAA', verdict: 'work' }], applied: false },
+  );
+  assert.match(dry, /86bbEEE/);
+  assert.match(dry, /add `--apply` to do it/, 'there IS something --apply would move here');
+  assert.match(dry, /86bbAAA/, '…and the preserved one is still named');
+});
+
+test('preserved sentences read as English in the singular as well as the plural', () => {
+  // "1 ticket ... so it was left exactly where they are" reached a live run
+  // and the bus verbatim (round-1 review, finding 6). This string goes to the
+  // terminal, the scheduled repair report and the party line unedited.
+  const oneBlind = pause.preservedSummary([{ id: '86bbCCC', verdict: 'cannot-tell' }]);
+  assert.match(oneBlind, /it was left exactly where it is/);
+  assert.doesNotMatch(oneBlind, /they are/);
+  const manyBlind = pause.preservedSummary([{ id: 'a', verdict: 'cannot-tell' }, { id: 'b', verdict: 'cannot-tell' }]);
+  assert.match(manyBlind, /they were left exactly where they are/);
+
+  const oneWork = pause.preservedSummary([{ id: '86bbAAA', verdict: 'work' }]);
+  assert.match(oneWork, /1 ticket was left in "Building" because a half-finished build for it is/);
+  const manyWork = pause.preservedSummary([{ id: 'a', verdict: 'work' }, { id: 'b', verdict: 'work' }]);
+  assert.match(manyWork, /2 tickets were left in "Building" because half-finished builds for them are/);
+});
+
+test('a seat that could not be looked at goes INSIDE the sentence that asserts the absence', () => {
+  // The move goes ahead — a machine with no ssh route is a permanent blind
+  // spot, and freezing on it disables the sweep's real job (round-1 review,
+  // finding 2). What must not survive is the flat "nothing has been built".
+  const plain = pause.strandedBuildDestination('fresh');
+  assert.equal(plain.status, 'Queued');
+  assert.equal(plain.why, 'nothing has been built for it that a new branch would duplicate');
+
+  const qualified = pause.strandedBuildDestination('fresh', { unlookedSeats: 'macbook-pro (no ssh route)' });
+  assert.equal(qualified.status, 'Queued', 'the sweep must still do its real job');
+  assert.match(qualified.why, /macbook-pro/, 'the seat it could not see is named');
+  assert.match(qualified.why, /rather than a certainty/);
+  assert.doesNotMatch(qualified.why, /^nothing has been built for it that a new branch would duplicate$/,
+    'the false confident sentence is the whole defect this ticket exists to remove');
+
+  // The other two destinations are unaffected: they already have a PR to
+  // reason from, so nothing is being asserted absent.
+  assert.equal(pause.strandedBuildDestination('continue', { unlookedSeats: 'macbook-pro (x)' }).status, 'Rework');
+  assert.doesNotMatch(pause.strandedBuildDestination('continue', { unlookedSeats: 'macbook-pro (x)' }).why, /macbook-pro/);
+});
+
+test('the hand-back note a ticket receives carries the caveat, not just the terminal', () => {
+  const plan = pause.strandedBuildDestination('fresh', { unlookedSeats: 'macbook-pro (no ssh route)' });
+  const note = pause.sweptTicketNote({ kind: 'a build', destination: plan.status, why: plan.why, command: 'npm run pipeline -- sweep --apply' });
+  assert.match(note, /macbook-pro/, 'the next builder reads the caveat where they read the instruction');
+  assert.match(note, /check there before rebuilding/);
 });
