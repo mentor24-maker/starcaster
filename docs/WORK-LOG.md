@@ -80,6 +80,45 @@ One of the new tests was rewritten during the work because it could not fail.
 It compared two lists that the fix itself had made incapable of overlapping, so
 it would have gone green forever no matter how wrong the sentence a person
 actually reads had become. It now reads the names back out of that sentence.
+## 2026-09-05 — The SQL hand-off check could jam itself shut, and then keep asking for a file you already had (#620)
+
+When an agent finishes a turn on a branch that adds a database script, a check
+makes it hand that script to you properly rather than mentioning it in passing.
+That check is allowed to interrupt at most three times in a session and then
+step aside, because a check that can jam a conversation shut is worse than the
+thing it is guarding against.
+
+It keeps that count in a small file, with a backup location for when the first
+one is unavailable. The two halves of that arrangement disagreed: the part that
+*reads* the count stopped at the first file it could open, while the part that
+*saves* it stopped at the first file it could write to. So if the main file
+stayed readable but stopped accepting writes, every save went to the backup and
+every read came back from the stale original. The count never moved, the
+step-aside never happened, and the check would have interrupted every turn from
+then on — the exact jam the limit exists to prevent, arriving through the limit.
+The same freeze lost the list of scripts already handed over, so a file you had
+already been given got asked for again on every turn afterwards.
+
+Reading and saving now happen in one place, and the read looks at every location
+rather than stopping at the first. Measured against the current live code in the
+same run: twelve turns with the file made read-only part-way through, the live
+code interrupts twelve times out of twelve; this branch interrupts three times
+and then stands aside, which is what it was always meant to do.
+
+Review then caught a second fault of the same shape, and it was the more
+dangerous direction. That backup location is shared by the whole machine, and
+the file in it was named after the session alone. One session here often has
+several folders open at once — that is the normal way of working — so all of
+them were sharing a single count. Once the first folder's own file froze and its
+count spilled into the shared backup, the newly-thorough read handed that
+spent-up count to every other folder, and the check went completely silent in
+them: not interrupting too much, but never interrupting at all, for the rest of
+the session. The same shared file also carried the list of scripts already
+handed over, so a script handed to you from one folder counted as handed over
+from all of them. The backup file is now named after the folder as well as the
+session. Measured against the current live code in one run: a healthy second
+folder gets none of its three interruptions today, and all three with this fix.
+Nothing to look at — this only runs between an agent's turns.
 
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
