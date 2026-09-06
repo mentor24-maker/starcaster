@@ -632,10 +632,20 @@ function sweptTicketPhrase(entry, { applied = true } = {}) {
  * `checked` (was the queue examined at all) have to come from the caller: what
  * was LEFT BEHIND is structurally invisible to a function that is only ever
  * shown what was taken. `why` names the reason nothing was checked.
+ *
+ * A FOURTH CAUSE, added 2026-09-04 (task 86bbur9tk): `preserved` — tickets the
+ * sweep examined and deliberately did NOT move, because a build for them is
+ * still sitting in a worktree, or because a machine could not be looked at.
+ * That is a correct outcome, not a failed write, so it cannot go in `left`;
+ * and no move happened, so it cannot go in `swept`. Left out of the sentence
+ * entirely it would produce "No stranded tickets needed unsticking." over a
+ * ticket the same run had just refused to touch — the exact contradicting
+ * pair this function already carries two scars from.
  */
-function sweptSummary(swept = [], { checked = true, left = 0, why = '', applied = true } = {}) {
+function sweptSummary(swept = [], { checked = true, left = 0, why = '', applied = true, preserved = [] } = {}) {
   const rows = Array.isArray(swept) ? swept : [];
   const stuck = Number.isFinite(left) && left > 0 ? Math.trunc(left) : 0;
+  const kept = preservedSummary(preserved);
 
   if (!checked) {
     return `Whether anything is stranded was NOT checked${why ? ` — ${why}` : ''}.`
@@ -655,18 +665,70 @@ function sweptSummary(swept = [], { checked = true, left = 0, why = '', applied 
   // run the command again, which is the whole failure this ticket is about
   // (`resume` reporting nothing to do and doing nothing being the other half).
   if (!applied) {
+    // `--apply` MOVES THE TICKETS IN `unstuck`. It does not move the ones in
+    // `kept` — refusing to move those is the whole point of preserving them —
+    // so the offer is made only where it is true (finding 5 of the round-1
+    // review). Appending it to a preserved-only summary produced the
+    // contradicting pair this function already carries two scars from: a
+    // sentence saying a ticket was deliberately left alone, followed by an
+    // offer to apply the change that would not touch it.
     const nothingChanged = 'Nothing has been changed — add `--apply` to do it.';
-    return unstuck
-      ? `${unstuck} ${nothingChanged}`
-      : 'No stranded tickets need unsticking.';
+    if (unstuck) return [`${unstuck} ${nothingChanged}`, kept].filter(Boolean).join(' ');
+    if (kept) {
+      const one = preservedCount(preserved) === 1;
+      return `${kept} \`--apply\` would not move ${one ? 'that one' : 'those'} either — leaving `
+        + `${one ? 'it' : 'them'} alone IS the decision.`;
+    }
+    return 'No stranded tickets need unsticking.';
   }
 
-  if (!stuck) return unstuck || 'No stranded tickets needed unsticking.';
+  if (!stuck) return [unstuck, kept].filter(Boolean).join(' ') || 'No stranded tickets needed unsticking.';
 
   const stillStranded = `${stuck} stranded ticket${stuck === 1 ? '' : 's'} could NOT be unstuck`
     + ` and ${stuck === 1 ? 'is' : 'are'} STILL stranded.`
     + ' Run `npm run pipeline -- status` to see which.';
-  return unstuck ? `${unstuck} ${stillStranded}` : stillStranded;
+  return [unstuck, kept, stillStranded].filter(Boolean).join(' ');
+}
+
+/** How many tickets the sweep deliberately left alone. One reader, so the
+ *  count in the sentence and the count in the exit code cannot drift. */
+function preservedCount(preserved = []) {
+  return (Array.isArray(preserved) ? preserved : []).filter(Boolean).length;
+}
+
+/**
+ * The half-sentence for tickets the sweep left alone ON PURPOSE.
+ *
+ * The two reasons are said separately because they need different things from
+ * the reader: half-built work wants finishing (or handing back deliberately),
+ * a blind spot wants somebody to go and look. Collapsing them into "N left
+ * alone" would tell nobody which.
+ */
+function preservedSummary(preserved = []) {
+  const rows = (Array.isArray(preserved) ? preserved : []).filter(Boolean);
+  if (!rows.length) return '';
+  const ids = (v) => rows.filter((r) => r.verdict === v).map((r) => r.id);
+  const halfBuilt = ids('work');
+  const blind = rows.filter((r) => r.verdict !== 'work').map((r) => r.id);
+  const parts = [];
+  // SINGULAR AND PLURAL BOTH READ AS ENGLISH. This string goes to the
+  // terminal, the scheduled repair report and the bus verbatim, and the
+  // singular form shipped as "1 ticket ... so it was left exactly where they
+  // are" — which appeared in a live run before anyone read it (finding 6 of
+  // the round-1 review). Every number/verb pair is chosen here rather than
+  // patched at the join.
+  if (halfBuilt.length) {
+    const one = halfBuilt.length === 1;
+    parts.push(`${halfBuilt.length} ticket${one ? ' was' : 's were'} left in "Building" because `
+      + `${one ? 'a half-finished build for it is' : 'half-finished builds for them are'} still on a machine: `
+      + `${halfBuilt.join(', ')}.`);
+  }
+  if (blind.length) {
+    const one = blind.length === 1;
+    parts.push(`${blind.length} ticket${one ? '' : 's'} could NOT be judged — a machine could not be looked at, so `
+      + `${one ? 'it was left exactly where it is' : 'they were left exactly where they are'}: ${blind.join(', ')}.`);
+  }
+  return parts.join(' ');
 }
 
 /**
@@ -689,10 +751,16 @@ function sweptSummary(swept = [], { checked = true, left = 0, why = '', applied 
  * `found` is how many stranded tickets were SEEN, which is what separates a
  * dry run with work to do from a dry run with none.
  */
-function sweepExitCode({ checked = true, left = 0, found = 0, applied = true } = {}) {
+function sweepExitCode({ checked = true, left = 0, found = 0, applied = true, preserved = [] } = {}) {
   if (!checked) return 2;
   if (Number(left) > 0) return 1;
   if (!applied && Number(found) > 0) return 3;
+  // Stranded work was FOUND and deliberately not acted on (task 86bbur9tk) —
+  // which is what 3 already means here. A half-built ticket left in "Building"
+  // and a ticket nobody could look at both need a decision from somebody, and
+  // exiting 0 would tell the caller the deck is clear when two tickets are
+  // still sitting on it.
+  if ((Array.isArray(preserved) ? preserved.length : Number(preserved) || 0) > 0) return 3;
   return 0;
 }
 
@@ -704,12 +772,12 @@ function sweepExitCode({ checked = true, left = 0, found = 0, applied = true } =
  * left stranded." on the same empty list — so the bus heard an all-clear the
  * terminal had already contradicted. One sentence, one source.
  */
-function resumedMessage({ by, pausedForMs, swept = [], checked = true, left = 0, why = '' } = {}) {
+function resumedMessage({ by, pausedForMs, swept = [], checked = true, left = 0, why = '', preserved = [] } = {}) {
   const mins = Number.isFinite(pausedForMs) ? Math.round(pausedForMs / 60000) : null;
   return '[CC-starcaster] The build pipeline is RUNNING again' +
     (by ? `, resumed by ${by}` : '') +
     (mins != null ? ` after ${mins} min paused` : '') + '.' +
-    `\n${sweptSummary(swept, { checked, left, why })}`;
+    `\n${sweptSummary(swept, { checked, left, why, preserved })}`;
 }
 
 /**
@@ -740,14 +808,32 @@ function resumedMessage({ by, pausedForMs, swept = [], checked = true, left = 0,
  * with the half-built ones. The caller says out loud that it could not read the
  * state.
  */
-function strandedBuildDestination(buildStartAction) {
+function strandedBuildDestination(buildStartAction, { unlookedSeats = '' } = {}) {
+  // WHICH SEATS WERE NEVER LOOKED AT, inside the sentence that asserts the
+  // absence (round-1 review of task 86bbur9tk, 2026-09-05).
+  //
+  // Some machines have no ssh route from here at all — permanently, by the
+  // inventory's own declaration — so the sweep genuinely cannot see them and
+  // genuinely must keep working anyway (`strandedLocalWork`'s header argues
+  // that out). The move goes ahead; what must NOT go ahead is the flat
+  // "nothing has been built for it", because that is the exact false sentence
+  // this ticket exists to remove. A qualified true sentence is a different
+  // thing, and this is where it gets qualified: the string lands in the
+  // ticket's own hand-back note, so the next builder reads the caveat where
+  // they read the instruction.
+  const seats = String(unlookedSeats || '').trim();
+  const freshWhy = seats
+    ? 'nothing that a new branch would duplicate was found on any machine that could be looked at'
+      + ` — but ${seats} could not be, so this is the best reading available rather than a certainty`
+      + ' (check there before rebuilding)'
+    : 'nothing has been built for it that a new branch would duplicate';
   switch (String(buildStartAction || '')) {
     case 'continue':
       return { status: 'Rework', why: 'its pull request is still open, so this is half-built work to be finished' };
     case 'unknown':
       return { status: 'Rework', why: 'it names a pull request whose state could not be read — a ticket that names a PR belongs with the half-built work' };
     case 'fresh':
-      return { status: 'Queued', why: 'nothing has been built for it that a new branch would duplicate' };
+      return { status: 'Queued', why: freshWhy };
     default:
       // An answer nobody anticipated is not a licence to pick one. Rework is
       // the conservative choice for the same reason `unknown` is: it cannot
@@ -965,6 +1051,8 @@ module.exports = {
   resumedMessage,
   sweptTicketPhrase,
   sweptSummary,
+  preservedSummary,
+  preservedCount,
   sweepExitCode,
   strandedBuildDestination,
   sweptTicketNote,

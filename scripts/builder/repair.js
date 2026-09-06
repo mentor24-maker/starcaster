@@ -192,6 +192,40 @@ function readDue({ lastReadAtMs, nowMs, everyMs = READ_EVERY_MS } = {}) {
 }
 
 /** One line per step for the log: meaning first, so a column scans. */
+/**
+ * The sweep's preamble — the lines it prints BEFORE it has said anything about
+ * a ticket. Named exactly, because `findingLine` picks the first line that is
+ * not one of these.
+ */
+const SWEEP_PREAMBLE = Object.freeze([/^The pipeline is /, /^\(counting a ticket stranded /]);
+
+/**
+ * WHICH LINE OF A STEP'S OUTPUT GOES ON THE REPORT.
+ *
+ * For the stranded sweep this is not `all[0]`: the sweep opens with the
+ * pipeline status banner, so the first line of a run that found something is
+ * "The pipeline is RUNNING…", which reads as a clean report.
+ *
+ * It used to be picked by grepping for the phrase "stranded ticket", which the
+ * sweep's summary carries on only SOME of its branches (found in the round-1
+ * review of task 86bbur9tk, 2026-09-05). A run whose whole finding was
+ * "1 ticket was left in Building because a half-finished build for it is still
+ * on a machine" matched nothing, fell back to the banner, and the finding
+ * never reached the report or the bus — an alarm silenced by the wording of
+ * the thing it was alarming about.
+ *
+ * Matching by what a line is NOT is exact where a keyword was a guess: the
+ * preamble is a closed set this repo controls, the findings are open prose.
+ */
+function findingLine(lines, stepId) {
+  const rows = (Array.isArray(lines) ? lines : []).filter(Boolean);
+  if (stepId === 'stranded') {
+    const found = rows.find((l) => !SWEEP_PREAMBLE.some((re) => re.test(l)));
+    if (found) return found;
+  }
+  return rows[0] || '(the step printed nothing)';
+}
+
 function renderStepLine(step, meaning, firstLine) {
   const word = {
     clean: 'ok  ', repaired: 'FIX ', findings: 'HELD', paused: 'SKIP',
@@ -201,6 +235,8 @@ function renderStepLine(step, meaning, firstLine) {
 }
 
 module.exports = {
+  SWEEP_PREAMBLE,
+  findingLine,
   STEPS,
   READ_EVERY_MS,
   POST_EVERY_MS,

@@ -139,6 +139,35 @@ function branchContentIsInMain(branch, base = mergeBase(), cwd = root) {
 }
 
 /**
+ * Did this branch change anything at all since the merge base?
+ *
+ * The narrow reading `branchContentIsInMain` cannot be asked for separately,
+ * because it folds a branch that touched NO files into `true` — correctly for
+ * its own question ("does this branch hold content main lacks?": a branch with
+ * no content trivially does not), and `npm run tidy` depends on that reading.
+ *
+ * But ship's already-live check composes that `true` with "GitHub has a merged
+ * pull request for this branch name", and GitHub deletes the head branch on
+ * merge — so a FRESH branch reusing a topic name that already merged once
+ * scores true on both signals and reads as already live (round 4 of task
+ * 86bbv35cq, spotted in review). Nothing can be lost by it — ship refuses to
+ * run on uncommitted edits and `tidy` protects unshipped commits — but the
+ * reader is told "was already merged into main" about a branch that was not,
+ * and its worktree is removed.
+ *
+ * So the emptiness is asked as its own question rather than inferred from a
+ * signal that deliberately hides it. Returns true, false, or null when a git
+ * probe failed — and null is not false (DOCTRINE 3.2).
+ */
+function branchTouchedFiles(branch, base = mergeBase(), cwd = root) {
+  const mergeBaseSha = git(['merge-base', base, branch.ref], null, cwd);
+  if (!mergeBaseSha) return null;
+  const touchedRaw = git(['diff', '--name-only', mergeBaseSha, branch.ref], null, cwd);
+  if (touchedRaw === null) return null;
+  return lines(touchedRaw).length > 0;
+}
+
+/**
  * Has GitHub already merged a pull request for this branch?
  *
  * Definitive when it answers, because it is independent of merge strategy — a
@@ -337,6 +366,7 @@ module.exports = {
   branchInventory,
   classifyBranch,
   branchContentIsInMain,
+  branchTouchedFiles,
   branchHasMergedPr,
   worktreeInventory,
   mainWorktree,
