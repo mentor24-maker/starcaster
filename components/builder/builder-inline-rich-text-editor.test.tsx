@@ -173,6 +173,36 @@ describe("BuilderInlineRichTextEditor HTML view", () => {
     expect(lastEmitted).toBe("<strong>Blogging</strong>");
   });
 
+  it("emits nothing when the HTML view is opened and closed without typing", async () => {
+    // Round 2 of task 86bbq2y78 measured this: with a stored `<b>Blog</b>`,
+    // one click in and one click out fired onChange("<strong>Blog</strong>").
+    // Looking at the markup is a read-only action; on a saved-section master
+    // that rewrite is what canonical propagation pushes to every linked page.
+    const { emitted, onValue } = track();
+    const container = await mountControlled("<b>Blog</b>", onValue);
+
+    const before = emitted.length;
+
+    await click(codeViewButton(container));
+    await click(codeViewButton(container));
+
+    expect(container.querySelector("textarea")).toBeNull();
+    expect(emitted.slice(before)).toEqual([]);
+  });
+
+  it("keeps a value that arrived while the HTML view was open", async () => {
+    // Nothing was typed, so the code view's opening snapshot is stale: writing
+    // it back over the document would throw away what the page sent in.
+    const { container, render } = await mountDriven("Blog");
+
+    await click(codeViewButton(container));
+    await render("News");
+    await click(codeViewButton(container));
+
+    expect(container.textContent).toContain("News");
+    expect(container.textContent).not.toContain("Blog");
+  });
+
   it("announces the edit even when the page never fed the value back", async () => {
     // The uncontrolled case: nothing re-rendered the editor with the typed
     // value, so the sync effect never ran and the document is still the old

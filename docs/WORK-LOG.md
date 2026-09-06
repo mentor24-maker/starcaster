@@ -41,12 +41,36 @@ brought up to date. So the page could end up holding one spelling of your
 heading while you were looking at another. It now says plainly what it is
 showing, every time you switch back.
 
-The tests are the reason this took two rounds. The first set proved the sync
+**Correcting the earlier version of that last sentence, which was only half
+true.** It said the `</>` view now speaks up every time you switch back — true
+of the heading box, which is where the fix was made, and not of the ordinary
+text box, which is the one you use most. Worse, fixing the *first* fault above
+is what broke it: once the text box compares against what it is really showing
+rather than a remembered note, it gets brought up to date on every keystroke in
+the `</>` view, so by the time you switch back there is nothing left for it to
+announce. Typing `<b>Blogging</b>` there left the page holding `<b>` while the
+screen showed `<strong>` — and with markup the box cannot keep at all, the two
+drifted apart outright. That is the same defect this ticket set out to fix,
+newly created in the busiest module in the Builder. The text box now announces
+its own reading in exactly the way the heading box does.
+
+One more, in both boxes: opening the `</>` view and closing it again **without
+typing anything** used to count as an edit — it rewrote your text into the
+box's preferred spelling and marked the page as changed. Looking is not
+editing. On a shared section that rewrite is the sort of thing that gets pushed
+out to every page using it, so a read-only look now leaves everything alone,
+including anything that arrived while the view was open.
+
+The tests are the reason this took three rounds. The first set proved the sync
 helper and the server, both of which were fine; nothing failed if you put the
 old broken behaviour back. There are now tests that open the two real typing
-boxes, put a value into them and read what appears on screen — and each fix was
-put back the wrong way on purpose to watch the right test fail before it was
-believed.
+boxes, put a value into them and read both what appears on screen *and* what
+the page is told to save — checking only the screen is exactly how the third
+fault got through. Each fix was put back the wrong way on purpose to watch the
+right test fail before it was believed, and the walkthrough in the real Builder
+was checked the same way: typed into the `</>` view of a real text module, saved
+the page, read what the save actually carried, then put the old code back and
+watched the two disagree.
 
 ## 2026-09-06 — Notes and a test left over after the tag-page fix landed elsewhere (#630)
 

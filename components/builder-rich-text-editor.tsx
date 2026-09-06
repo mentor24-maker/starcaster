@@ -201,6 +201,10 @@ export function BuilderRichTextEditor({
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const lastEmittedStorageRef = useRef(prepareRichTextHtmlForStorage(prepareRichTextHtmlForEditor(value) || ""));
   const skipValueSyncRef = useRef(false);
+  // Was anything actually TYPED in the HTML view this visit? Opening and
+  // closing it is a read-only action, and must neither emit a change nor
+  // overwrite the document with a stale reading of itself.
+  const codeViewEditedRef = useRef(false);
   const [isCodeView, setIsCodeView] = useState(false);
   const [codeViewValue, setCodeViewValue] = useState("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -254,6 +258,10 @@ export function BuilderRichTextEditor({
       return;
     }
 
+    // This deliberately keeps running while the HTML view is open, even
+    // though nobody is looking at the document it writes: it is what carries a
+    // value arriving from the page across a read-only visit to that view.
+    // Measured — skipping it loses that value (task 86bbq2y78, round 3).
     const storageFromEditor = prepareRichTextHtmlForStorage(editor.getHTML());
 
     // Ask the DOCUMENT whether it is already showing this value, never a
@@ -418,11 +426,41 @@ export function BuilderRichTextEditor({
     }
 
     if (!isCodeView) {
+      codeViewEditedRef.current = false;
       setCodeViewValue(formatHTML(editor.getHTML()));
       setIsCodeView(true);
-    } else {
-      editor.commands.setContent(prepareRichTextHtmlForStorage(codeViewValue), { emitUpdate: true });
+      return;
+    }
+
+    // Nothing was typed, so there is nothing to apply. Writing the code
+    // view's opening snapshot back over the document would discard any value
+    // that arrived from the page while the view was open, and announcing a
+    // change nobody made dirties the draft on a read-only look.
+    if (!codeViewEditedRef.current) {
       setIsCodeView(false);
+      return;
+    }
+
+    editor.commands.setContent(prepareRichTextHtmlForStorage(codeViewValue), { emitUpdate: false });
+    setIsCodeView(false);
+    codeViewEditedRef.current = false;
+
+    // An edit made in HTML view is the operator's edit and has to reach the
+    // page, so the emission is made HERE rather than left to setContent's
+    // emitUpdate. setContent only emits when it produces a transaction, and
+    // by the time the operator switches back the sync effect above has
+    // usually written the same document already — so emitUpdate fires
+    // nothing and the page keeps only the textarea's raw emission.
+    //
+    // That raw text is not what the operator is now looking at: re-parsing it
+    // can legally change it (`<b>` becomes `<strong>`, markup the schema
+    // cannot hold is dropped). Announcing the editor's own reading is what
+    // keeps the page and the screen describing the same module.
+    const nextFromEditor = prepareRichTextHtmlForStorage(editor.getHTML());
+
+    if (nextFromEditor !== lastEmittedStorageRef.current) {
+      lastEmittedStorageRef.current = nextFromEditor;
+      onChange(nextFromEditor);
     }
   }
   
@@ -821,6 +859,7 @@ export function BuilderRichTextEditor({
           onChange={(e) => {
             const nextValue = e.target.value;
             setCodeViewValue(nextValue);
+            codeViewEditedRef.current = true;
             const storageHtml = prepareRichTextHtmlForStorage(nextValue);
             lastEmittedStorageRef.current = storageHtml;
             onChange(storageHtml);

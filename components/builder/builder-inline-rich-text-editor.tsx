@@ -87,6 +87,10 @@ export function BuilderInlineRichTextEditor({
   fontSizeOptions = ["24", "32", "40", "48", "56", "64", "72", "88", "104", "120", "140", "160"]
 }: BuilderInlineRichTextEditorProps) {
   const [activeFontSize, setActiveFontSize] = useState("");
+  // Was anything actually TYPED in the HTML view this visit? Opening and
+  // closing it is a read-only action, and must neither emit a change nor
+  // overwrite the document with a stale reading of itself.
+  const codeViewEditedRef = useRef(false);
   const [isCodeView, setIsCodeView] = useState(false);
   const [codeViewValue, setCodeViewValue] = useState("");
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
@@ -137,6 +141,10 @@ export function BuilderInlineRichTextEditor({
     // compared the value to a remembered "last emitted" string, which goes
     // stale the moment anything replaces the document without emitting — the
     // HTML-view toggle below used to do exactly that.
+    // This deliberately keeps running while the HTML view is open, even
+    // though nobody is looking at the document it writes: it is what carries a
+    // value arriving from the page across a read-only visit to that view.
+    // Measured — skipping it loses that value (task 86bbq2y78, round 3).
     if (!shouldWriteValueIntoEditor(headingHtmlFromEditor(editor.getHTML()), value)) {
       lastEmittedRef.current = value;
       return;
@@ -231,13 +239,25 @@ export function BuilderInlineRichTextEditor({
     }
 
     if (!isCodeView) {
+      codeViewEditedRef.current = false;
       setCodeViewValue(headingHtmlFromEditor(editor.getHTML()));
       setIsCodeView(true);
       return;
     }
 
+    // Nothing was typed, so there is nothing to apply. Writing the code
+    // view's opening snapshot back over the document would discard any value
+    // that arrived from the page while the view was open, and announcing a
+    // change nobody made dirties the draft on a read-only look — on a
+    // saved-section master that is what canonical propagation pushes out.
+    if (!codeViewEditedRef.current) {
+      setIsCodeView(false);
+      return;
+    }
+
     editor.commands.setContent(prepareHeadingHtmlForEditor(codeViewValue), { emitUpdate: false });
     setIsCodeView(false);
+    codeViewEditedRef.current = false;
 
     // An edit made in HTML view is the operator's edit and has to reach the
     // page, so the emission is made HERE rather than left to setContent's
@@ -361,6 +381,7 @@ export function BuilderInlineRichTextEditor({
           onChange={(event) => {
             const nextValue = event.target.value;
             setCodeViewValue(nextValue);
+            codeViewEditedRef.current = true;
             const storageHtml = headingHtmlFromEditor(nextValue);
             lastEmittedRef.current = storageHtml;
             onChange(storageHtml);
