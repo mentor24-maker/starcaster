@@ -14,6 +14,10 @@ import { type CSSProperties, useEffect, useRef, useState } from "react";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
 import { prepareRichTextHtmlForEditor, prepareRichTextHtmlForStorage } from "@/lib/builder-template";
+import {
+  setEditorContentWithoutHistory,
+  shouldWriteValueIntoEditor
+} from "@/lib/editor-content-sync";
 import { readAdminJson } from "@/lib/admin-fetch";
 import {
   appendRichTextImageToHtml,
@@ -252,18 +256,20 @@ export function BuilderRichTextEditor({
 
     const storageFromEditor = prepareRichTextHtmlForStorage(editor.getHTML());
 
-    if (value === lastEmittedStorageRef.current) {
-      return;
-    }
-
-    if (storageFromEditor === lastEmittedStorageRef.current) {
+    // Ask the DOCUMENT whether it is already showing this value, never a
+    // remembered "last emitted" string. See shouldWriteValueIntoEditor: the
+    // old guard skipped the write whenever the editor still held its own last
+    // emission, which is its state every moment the operator is not typing —
+    // so an outside change was dropped almost always.
+    if (!shouldWriteValueIntoEditor(storageFromEditor, value)) {
+      lastEmittedStorageRef.current = value;
       return;
     }
 
     const normalizedValue = prepareRichTextHtmlForEditor(value) || "<p></p>";
 
     if (editor.getHTML() !== normalizedValue) {
-      editor.commands.setContent(normalizedValue, { emitUpdate: false });
+      setEditorContentWithoutHistory(editor, normalizedValue);
     }
 
     lastEmittedStorageRef.current = value;

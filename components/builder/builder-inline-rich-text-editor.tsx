@@ -9,6 +9,10 @@ import StarterKit from "@tiptap/starter-kit";
 import { useEffect, useRef, useState } from "react";
 import { headingHtmlFromEditor, prepareHeadingHtmlForEditor } from "@/lib/builder-template";
 import {
+  setEditorContentWithoutHistory,
+  shouldWriteValueIntoEditor
+} from "@/lib/editor-content-sync";
+import {
   RichTextClearIcon,
   RichTextCodeIcon,
   RichTextLinkIcon
@@ -129,14 +133,19 @@ export function BuilderInlineRichTextEditor({
       return;
     }
 
-    if (value === lastEmittedRef.current) {
+    // Ask the DOCUMENT whether it already shows this value. The old guard
+    // compared the value to a remembered "last emitted" string, which goes
+    // stale the moment anything replaces the document without emitting — the
+    // HTML-view toggle below used to do exactly that.
+    if (!shouldWriteValueIntoEditor(headingHtmlFromEditor(editor.getHTML()), value)) {
+      lastEmittedRef.current = value;
       return;
     }
 
     const nextContent = prepareHeadingHtmlForEditor(value);
 
     if (editor.getHTML() !== nextContent) {
-      editor.commands.setContent(nextContent, { emitUpdate: false });
+      setEditorContentWithoutHistory(editor, nextContent);
     }
 
     lastEmittedRef.current = value;
@@ -227,7 +236,11 @@ export function BuilderInlineRichTextEditor({
       return;
     }
 
-    editor.commands.setContent(prepareHeadingHtmlForEditor(codeViewValue), { emitUpdate: false });
+    // emitUpdate: true, because an edit made in HTML view is the operator's
+    // edit and has to reach the page. With emitUpdate: false nothing called
+    // onChange, so switching back to WYSIWYG threw the edit away and left
+    // lastEmittedRef describing a document that no longer existed.
+    editor.commands.setContent(prepareHeadingHtmlForEditor(codeViewValue), { emitUpdate: true });
     setIsCodeView(false);
   }
 
