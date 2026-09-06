@@ -302,16 +302,24 @@ function lastAssistantTurn(transcriptPath) {
  * all 1,781 starcaster transcripts on 2026-09-04: exactly ONE is `cli` and
  * 1,780 are `sdk-cli`. That one is a `/loop 30m loop-build` Dane typed at his
  * own terminal on 23 August that then ran unattended until 3 September --
- * eleven days, 10,085 records. So on the mini the single session class this
- * hook can fire in is, on the evidence, an unattended loop lane: precisely the
- * case the fail-open design is written against.
+ * eleven days, 10,085 records.
+ *
+ * THAT READING GLOBBED ONE PROJECT, AND THE GLOB WAS THE POPULATION. Widened
+ * to every project directory on 2026-09-06, the same machine holds 1,887
+ * transcripts of which THREE are `cli` -- two of them in `-Users-daneofearth`
+ * (his home folder), where a `*starcaster*` glob could never see them. So "the
+ * only class this hook can fire in here is an unattended loop lane" was an
+ * artefact of where we looked, and it is withdrawn. What those two sessions
+ * are was not established; the count alone is enough to retire the claim.
  *
  * WHETHER IT FIRES IN DANE'S OWN SESSIONS IS NOT KNOWN. He works interactively
- * on the macbook-pro, whose store this machine cannot read (ssh refused, port
- * 22 closed, measured 2026-09-04). The mini is the loop box; the only thing he
- * starts at a terminal here is a loop. So do not read the numbers above as
- * "the wire is inert for Dane" -- that conclusion has been drawn once already
- * and it is not established. Task 86bbt7n2h carries the macbook-pro reading.
+ * on the macbook-pro, whose store this machine still cannot read -- but not for
+ * the reason first recorded. Port 22 was closed on 2026-09-04; Dane turned
+ * Remote Login on, and measured 2026-09-06 it answers. The block now is that no
+ * key of the mini's is authorized there, leaving only his login password, which
+ * an agent never handles. So do not read the numbers above as "the wire is
+ * inert for Dane" -- that conclusion has been drawn once already and it is not
+ * established. Task 86bbt7n2h carries the macbook-pro reading.
  *
  * That is survivable rather than fine, and only because of two brakes: three
  * refusals in a session and the wire stands down (see

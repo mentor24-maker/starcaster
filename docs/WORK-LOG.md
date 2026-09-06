@@ -1,4 +1,4 @@
-## 2026-09-04 — The safety wire's own numbers now say which machine they came from (#610)
+## 2026-09-06 — The safety wire's numbers named the wrong crowd, twice (#610)
 
 There is a safety wire in this repo that stops an agent from handing you a
 command to paste when it could have run the command itself. It is deliberately
@@ -10,22 +10,27 @@ Two places explained that design by quoting a count of past sessions, and both
 described the count as covering "this project" and "the entire history". It
 covered neither. Claude keeps its session records on the machine that ran them,
 with no shared copy, so those numbers were the Mac Mini's records and nothing
-else. Re-taking the reading there today: 1,781 sessions, of which exactly one
-was started at a terminal — and that one is a loop you typed on 23 August that
-then ran on its own for eleven days.
+else. Both places now say so.
 
-The number itself was never wrong. What was wrong was calling it "everything",
-because the Mini is the loop box and a loop is the only thing anyone ever starts
-at a terminal there. That reading cannot answer the question that matters, which
-is whether the wire fires in **your** sessions, on your laptop. It has already
-been answered wrongly once from exactly this gap: an earlier review pass read
-the Mini's numbers and concluded the wire never fires where you would see it.
+Then the corrected count turned out to be counting the wrong crowd as well. It
+only ever looked inside the Starcaster folder. Widening it to every folder on
+the Mini today: 1,887 sessions, and **three** of them were started at a terminal
+rather than the one previously reported — two of those three live in your home
+folder, where the old search could never have seen them. That retires a
+conclusion this repo had already written down, that the only kind of session the
+wire can fire in here is an unattended loop. It was never a fact about the wire;
+it was a fact about where we looked. The instructions for taking this reading
+now say to search every folder.
 
-So both places now name the machine, carry the corrected figures, and say
-plainly that the answer for your own sessions is not known. Taking that
-measurement needs your laptop — this machine cannot reach it — and it is
-escalated on the ticket rather than guessed at. Nothing about how the wire
-behaves was changed.
+What still is not known is the thing that matters: whether the wire fires in
+**your** sessions, on your laptop. That needs a reading from the MacBook, and
+this machine cannot take it. The reason changed, though, and the old one was
+still written down as if it were current: the laptop used to refuse connections
+outright, and after you turned Remote Login on it now answers. What stops the
+reading today is only that this Mini has no key it is allowed to use there. That
+correction is in the notes too, so nobody re-diagnoses a problem you already
+fixed. Nothing about how the wire behaves was changed.
+
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
 Pull requests are merged one at a time here, and the plan is to switch on a

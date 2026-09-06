@@ -2505,19 +2505,38 @@ Four things it deliberately does **not** do, each for a reason:
   history", and "until 30 August". The reach was wrong — it was one machine —
   and so was the end date; that session ran four days longer than stated.)
 
-  **Does this wire fire in DANE'S OWN sessions? Nobody knows yet — treat it as
-  CANNOT TELL, not as armed and not as inert.** The mini reading cannot answer
-  it: the only thing he ever starts at a terminal on the loop box is a loop, so
-  a store that is 1,780/1,781 headless says almost nothing about his real
-  interactive work, which happens on the **macbook-pro**. That machine's store
-  is unreadable from here — it refuses ssh on port 22 (Remote Login off), and
-  measured 2026-09-04 there is no other route to it. A code-review pass has
-  already drawn the wrong conclusion from this gap once, deciding the hook
-  "exempts every session Dane reads" and is therefore inert; that is not
-  established either, because the `cli` sessions that do exist are ones he
-  personally typed. The two counts wanted are the transcript total and the
-  `entrypoint: "cli"` total under `~/.claude/projects/*starcaster*/` on the
-  macbook-pro. Task 86bbt7n2h carries them.
+  **Count the WHOLE store, not the project.** Every reading above globs
+  `~/.claude/projects/*starcaster*/`, and that glob is why the mini looked like
+  a machine with one `cli` session. Re-measured 2026-09-06 across all three
+  project directories: the mini holds **1,887** transcripts, of which **3** are
+  `cli` and 1,884 `sdk-cli` — and two of those three `cli` sessions sit in the
+  `-Users-daneofearth` project (his home directory), invisible to a
+  starcaster-scoped glob. So "exactly one `cli` session, and it is a loop" was
+  an artefact of where we looked. What those two sessions are is not
+  established — their contents were not read — but the count alone retires the
+  claim that the only class this hook can fire in on the mini is a loop lane.
+  A measurement must name its population (§3.11), and a glob IS the population.
+
+  **Does this wire fire in DANE'S OWN sessions? Still CANNOT TELL — not armed,
+  not inert.** The mini reading cannot answer it: the only thing he ever starts
+  at a terminal on the loop box is a loop, so its store says almost nothing
+  about his real interactive work, which happens on the **macbook-pro**. A
+  code-review pass has already drawn the wrong conclusion from this gap once,
+  deciding the hook "exempts every session Dane reads" and is therefore inert;
+  that is not established either, because the `cli` sessions that do exist are
+  ones he personally typed.
+  **The reason it is unreadable changed on 2026-09-05, and the old reason is no
+  longer true.** It used to be that the macbook refused ssh outright — port 22
+  closed, Remote Login off (measured 2026-09-04). Dane then turned Remote Login
+  ON. Measured from the mini 2026-09-06: port 22 **answers**. What blocks the
+  reading now is narrower and different in kind — no public key of the mini's is
+  authorized on that machine, so ssh offers only
+  `publickey,password,keyboard-interactive` and the mini can satisfy none of
+  them. The remaining credential is his login password, which an agent never
+  handles (§4.1). One `authorized_keys` line closes it permanently; until then
+  the counts wanted are the transcript total and the `entrypoint: "cli"` total
+  under `~/.claude/projects/*/` — **every** project directory, per the
+  correction above — on the macbook-pro. Task 86bbt7n2h carries them.
 - **It fails OPEN, and it has two independent brakes.** This is the opposite
   of the pipeline switch's fail-safe (§6.8) and the asymmetry really is
   reversed: a wrong refusal wedges a turn and can strand an unattended pass in
