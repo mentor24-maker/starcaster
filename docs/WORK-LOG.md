@@ -1,3 +1,41 @@
+## 2026-09-05 — The Mini can tell you a job is switched on. It could not tell you the job ever started. (#626)
+
+The Mac Mini runs jobs on a timer — the thing that relays your comments, the
+hourly pipeline check, the weekly report. `npm run doctor:node` has been able to
+tell you those timers are set up and switched on.
+
+There is a gap between "switched on" and "actually running", and it is the one
+that bites at 3am. Timed jobs on a Mac are *your* jobs, not the machine's, and
+they do not start until somebody logs in. The Mini's disk is encrypted and it
+does not log in by itself — so if the power blips overnight, it comes back up,
+sits at the login screen, and every one of those jobs simply never starts. The
+machine looks completely fine. Nothing is broken, so nothing complains. The
+failure is silence, which is the one thing the rest of this system was built to
+make impossible.
+
+So `doctor:node` now asks a different question — *have this machine's jobs been
+confirmed since it last restarted?* — and gives one of three answers: yes, no,
+or **I cannot tell**. That third one is the default, and it is the honest one.
+A new command, `npm run node:verify`, is what goes and looks: it asks each job
+whether it is really loaded, writes down what it actually saw, and nothing else.
+The two are separate on purpose, because `doctor:node` promises never to change
+anything on your machine, and that promise is what makes it safe to run when
+things are going wrong.
+
+The clever bit is what makes the answer expire on its own. Rather than a "last
+checked" date somebody has to remember to update, it records the machine's own
+statement of when it last started up. Restart the Mini and the recorded start
+time no longer matches — so the report goes straight back to "I cannot tell",
+with nobody having to notice or do anything. Which is exactly the situation it
+exists to catch.
+
+It was proved both ways on the real machine: a job was switched off on purpose
+and the check named it and failed; switched back on and it passed. And writing
+the tests turned up a genuine bug before it shipped — the code that reads the
+machine's start time was also matching a *different* field that happens to end
+in the same three letters, which would have reported a confident, completely
+wrong date.
+
 ## 2026-09-05 — The sweep that called a half-built ticket empty (#624)
 
 When a build session dies partway through, its ticket is left sitting in
