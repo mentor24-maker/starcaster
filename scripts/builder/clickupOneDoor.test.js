@@ -185,7 +185,12 @@ test('the door itself really is the fetch call', () => {
   // its own test fakes comes THROUGH the door rather than around it. What is
   // asserted is still structural: the door is the thing that calls out.
   assert.match(door, /await fetchImpl\(url, init\)/);
-  assert.match(door, /\{ fetchImpl = fetch \} = \{\}/,
+  // Matched loosely on purpose: the options bag has grown since (task
+  // 86bbugd8j added `env` and `now` so the reserve check is testable without a
+  // clock or a real environment), and an exact-shape assertion would fail on
+  // every future option while the thing it actually guards — that the DEFAULT
+  // transport is the real `fetch` — stayed perfectly true.
+  assert.match(door, /fetchImpl = fetch[,\s}]/,
     'the default transport must still be the real fetch');
 });
 

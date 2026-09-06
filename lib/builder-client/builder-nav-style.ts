@@ -62,6 +62,18 @@ export const NAV_STYLE_DEFAULTS = {
   linkPaddingV: 0,
   linkPaddingH: 14,
   linkRadius: 18,
+  /*
+   * "Square bottom when open" (operator, 2026-09-03): while an item's
+   * dropdown is open, the item's BOTTOM corners go square so the pill and the
+   * panel under it read as one shape instead of two stacked pills.
+   *
+   * Off, because every live tenant menu already has a look and this must not
+   * move any of them. That is stronger than a default here can promise on its
+   * own, which is why the variables below are emitted only when it is ON —
+   * see getNavModuleStyle. An untouched menu emits the same set of variables
+   * it emitted before this control existed.
+   */
+  linkRadiusTopOnly: false,
   linkHeight: 48,
   fontSize: 16,
   weight: 700,
@@ -295,6 +307,38 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
     // link's right padding (a shorthand var can't be picked apart in CSS).
     "--site-nav-link-padding-right": `${num(settings.navLinkPaddingRight, NAV_STYLE_DEFAULTS.linkPaddingH, 0, 60)}px`,
     "--site-nav-link-radius": `${num(settings.navBorderRadius, NAV_STYLE_DEFAULTS.linkRadius, 0, 48)}px`,
+
+    /*
+     * "Square bottom when open". THREE variables, and they are emitted only
+     * while the control is ON — which is the whole safety argument for a
+     * change to the most visible element on every published page.
+     *
+     * Every rule that reads one of these spells its own fallback as the value
+     * it uses today (`var(--site-nav-link-radius-bottom, var(--site-nav-link-
+     * radius, 18px))` and so on), so an absent variable is not a special case
+     * in the CSS — it IS today's rendering. An untouched menu therefore emits
+     * the same variables it emitted before this control existed, which is a
+     * stricter guarantee than "the same numbers" and the one the test asserts.
+     *
+     * Three rather than one because the join has three separate parts and CSS
+     * cannot derive any of them from another: the item's bottom corners, the
+     * list panel's top corners, and the gap the mega panel hangs at. A class
+     * would have been the fourth way to say the same thing and would have put
+     * half the nav's look outside the function that owns the rest of it.
+     */
+    ...(squaresNavBottomWhenOpen(settings)
+      ? {
+          // The open item's bottom two corners.
+          "--site-nav-link-radius-bottom": "0px",
+          // The LIST panel's top two corners, so the join has no rounded lip.
+          // (A mega panel has always squared its own top — it hangs off the
+          // bar — so nothing there needs saying.)
+          "--site-nav-dropdown-radius-top": "0px",
+          // The mega panel's 6px drop. Corners cannot make two shapes touch
+          // across a gap, so the gap has to close as well.
+          "--site-nav-mega-gap": "0px"
+        }
+      : {}),
     "--site-nav-link-height": `${num(settings.navLinkHeight, NAV_STYLE_DEFAULTS.linkHeight, 24, 96)}px`,
     "--site-nav-link-weight": String(num(settings.navWeight, NAV_STYLE_DEFAULTS.weight, 100, 900)),
     "--site-nav-link-style": flag(settings.navItalic, false) ? "italic" : "normal",
@@ -420,4 +464,13 @@ export function getNavMegaColumnCount(settings: NavSettings): number {
 /** Whether the ▾ indicator is drawn next to a parent link. */
 export function showsNavDropdownArrow(settings: NavSettings): boolean {
   return flag(settings.navShowArrow, true);
+}
+
+/**
+ * Whether an item squares its bottom corners while its own dropdown is open.
+ * Exported so the settings panel and the nav-control sweep read the setting
+ * through the same function the renderer does.
+ */
+export function squaresNavBottomWhenOpen(settings: NavSettings): boolean {
+  return flag(settings.navLinkRadiusTopOnly, NAV_STYLE_DEFAULTS.linkRadiusTopOnly);
 }

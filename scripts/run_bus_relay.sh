@@ -23,6 +23,15 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO" || exit 1
 
+# ── THIS IS A BACKGROUND JOB, AND IT SAYS SO ─────────────────────────────────
+# The ClickUp budget is one allowance per token for the whole company, and the
+# operator's decision (2026-09-03) is that scheduled jobs yield: "You are never
+# blocked by a background job." Every child process inherits this, so anything
+# this script runs will stop at the reserve instead of spending the budget an
+# interactive session is about to need. See scripts/lib/clickupCaller.cjs —
+# there is no tty guess anywhere; a scheduled job is one that declares itself.
+export STARCASTER_CALLER=scheduled
+
 echo "=== bus-relay $(date '+%Y-%m-%d %H:%M:%S') — $REPO"
 
 # THE UPDATE, AND THE ALARM WHEN IT CANNOT HAPPEN (task 86bbrf2vf).
@@ -158,7 +167,25 @@ npm run --silent clickup -- bus-relay
 status=$?
 echo "=== exit $status"
 
-if [ "$status" -eq 0 ]; then
+# EXIT 7 IS "I STOPPED AT THE CLICKUP RESERVE", NOT "I BROKE" (task 86bbugd8j).
+#
+# A scheduled job that yields has not done its work, so it must not exit 0 and
+# must not beat — a beat means "this job succeeded", and a roll call that
+# counted a yield as a success would report a relay that has read nothing for
+# hours as perfectly healthy. But it has not FAILED either, and routing it to
+# report:failure would post a ClickUp outage to the bus every ten minutes for
+# as long as the budget stayed tight, which is the alarm-fatigue shape every
+# other watchdog in this file is written to avoid.
+#
+# So: no beat, no failure alert, and a line in the log that says plainly what
+# happened. The relay's own output above already names the lists and tickets it
+# did not reach. If this becomes common rather than occasional, the answer is a
+# cheaper pass or a smaller reserve, and both are decisions with measurements
+# behind them (scripts/measure_clickup_headroom.mjs).
+if [ "$status" -eq 7 ]; then
+  echo "=== stopped at the ClickUp reserve — not a failure, and not a success either."
+  echo "=== no beat recorded (this pass did not finish) and no failure alert sent."
+elif [ "$status" -eq 0 ]; then
   # A beat, and only on a real success. Recorded locally every time (free,
   # offline); pushed to the shared roll call at most once a day, which is what
   # keeps this from being channel noise x365 and is the resolution the

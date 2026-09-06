@@ -53,8 +53,27 @@ const { execFileSync, spawnSync } = require('child_process');
 
 const PROTECTED = new Set(['main', 'master']);
 const CI_TIMEOUT_MIN = 20;
+// How long to wait for a merge to actually land after `gh pr merge` returns —
+// and it is only ever SPENT on a pull request GitHub is demonstrably holding
+// (a merge queue entry or auto-merge). An unheld OPEN pull request is a merge
+// that was refused, and ship says so on the first read, in about a second.
+//
+// DERIVED, NOT PICKED (round 2 of task 86bbv35cq). It was 15, a number that
+// traced to nothing but prose. What a merge queue actually does is run `verify`
+// once more on the merged result — the same CI run ship already waits on — so
+// the ceiling is the one already measured for that, not a second guess beside
+// it. If CI gets slower, both move together.
+const MERGE_TIMEOUT_MIN = CI_TIMEOUT_MIN;
 const { pickPullRequestCommit, REPIN_SUBJECT, NUDGE_SUBJECT } = require('./builder/pullRequestCommit');
 const { waitForChecks } = require('./builder/waitForChecks');
+const {
+  waitForMerge, mergeTimeLabel, holdLabel, holdIsPending, classifyMergeHold,
+  notMergedExplanation, prObservationArgv, parsePrObservation,
+} = require('./builder/mergeCompletion');
+const { decideAlreadyLive } = require('./builder/shipAlreadyLive');
+const {
+  branchContentIsInMain, branchTouchedFiles, branchHasMergedPr, mergeBase,
+} = require('./lib/repo_state.cjs');
 const {
   decideTrailWrite, bodyWithTicketLink, describeTrailResult, prUrl: prUrlFor,
 } = require('./builder/shipPrTrail');
@@ -129,6 +148,22 @@ function sleepMs(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+/**
+ * Run a command and parse its stdout as JSON, or null.
+ *
+ * NOT `quiet()`, for the reason `fetchTaskNameFromClickUp` above already
+ * documents: `quiet` concatenates stderr onto stdout, which is right when the
+ * output is for a person to read and fatal when it is about to be parsed. One
+ * `gh` deprecation notice on stderr and `JSON.parse` throws, which this path
+ * would read as "the pull request could not be read" — a cannot-tell
+ * manufactured out of a perfectly good answer.
+ */
+function readJson(cmd, argv, { cwd = root } = {}) {
+  const result = spawnSync(cmd, argv, { cwd, encoding: 'utf8' });
+  if (result.status !== 0) return null;
+  try { return JSON.parse(String(result.stdout || '')); } catch (_) { return null; }
+}
+
 const bucketOf = (check) => String((check && check.bucket) || '').toLowerCase();
 
 /**
@@ -176,6 +211,24 @@ function fail(message) {
   process.exit(1);
 }
 
+/**
+ * Put the Mac back in order once the work is live: main up to date, shipped
+ * branches and finished worktrees gone.
+ *
+ * ONE SPELLING, TWO CALLERS (round 3 of task 86bbv35cq). Step 8 runs it after
+ * a merge this run performed; the already-live check at the top runs it after
+ * a merge GitHub performed while nobody was watching — which is what makes
+ * "run `npm run ship` again and it finishes the tidy-up" a true sentence.
+ * Two copies of a cleanup sequence is how one of them quietly stops matching.
+ */
+function tidyUp() {
+  const commonDir = git(['rev-parse', '--git-common-dir']);
+  const mainRoot = path.dirname(path.resolve(root, commonDir));
+  run('git', ['-C', mainRoot, 'checkout', 'main'], { allowFail: true });
+  run('git', ['-C', mainRoot, 'pull', '--ff-only', '--quiet'], { allowFail: true });
+  run('npm', ['run', 'tidy'], { cwd: mainRoot, allowFail: true });
+}
+
 /* ------------------------------------------------------------- the checks */
 
 const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
@@ -202,10 +255,61 @@ if (git(['status', '--porcelain'])) {
 
 say(`[ship] Branch "${branch}"${DRY ? '  (dry run — nothing will change)' : ''}`);
 
+/* --------------------------------------------- 0. is this already live? */
+
+// WHY THIS IS THE FIRST THING (round 3 of task 86bbv35cq). When GitHub holds a
+// merge — a merge queue entry, or auto-merge — `gh pr merge` returns success
+// and the pull request lands minutes later, with this run long gone. Ship then
+// says "run `npm run ship` again and it will see the merge and carry on with
+// the tidy-up", and until now that sentence was false: ship looks for an OPEN
+// pull request, a merged one is not open, so the rerun fell through to
+// `gh pr create` and opened a SECOND pull request for work already live.
+//
+// It runs BEFORE the catch-up, the rebuild and the push on purpose. Every one
+// of those is wrong on a branch that is already in main — the push would even
+// re-create the head branch GitHub deleted when it merged.
+//
+// The decision is in `builder/shipAlreadyLive`, break-tested: it takes BOTH a
+// local content reading and GitHub's own merged-pull-request answer, and a
+// cannot-tell from either one falls through to the ordinary ship rather than
+// skipping it. The local half is free and answers "no" on any mid-flight
+// branch, so an ordinary ship never makes the GitHub call at all.
+git(['fetch', 'origin', '--quiet']);
+const alreadyLive = (() => {
+  const here = { name: branch, ref: branch };
+  const base = mergeBase();
+  const contentInMain = branchContentIsInMain(here, base, root);
+  if (contentInMain !== true) return decideAlreadyLive({ contentInMain, mergedPr: null });
+  // Only asked on the rare path where the free local reading already said
+  // yes, so an ordinary ship still pays nothing. It vetoes the third way to
+  // reach `live` (round 4): a branch that changed no files reads as
+  // content-in-main, and a reused topic name whose earlier pull request
+  // merged supplies the other signal — two yeses on no evidence.
+  const touchedFiles = branchTouchedFiles(here, base, root);
+  if (touchedFiles === false) return decideAlreadyLive({ contentInMain, mergedPr: null, touchedFiles });
+  return decideAlreadyLive({ contentInMain, mergedPr: branchHasMergedPr(branch), touchedFiles });
+})();
+
+if (alreadyLive.live) {
+  heading('This is already live');
+  say(`    ${alreadyLive.why}.`);
+  if (DRY) {
+    say('    Nothing left to ship. Would clean this folder up and stop.');
+    console.log('\n[ship] Dry run finished. Nothing was changed.\n');
+    process.exit(0);
+  }
+  say('    Nothing left to ship — finishing the tidy-up.');
+  tidyUp();
+  console.log(
+    `\n[ship] Done. "${branch}" was already merged into main, so there was nothing to ship.\n` +
+    `       This folder has been cleaned up — your next \`npm run thread\` starts fresh.\n`
+  );
+  process.exit(0);
+}
+
 /* ------------------------------------------------------- 1. catch up with main */
 
 heading('Catching up with the live branch');
-git(['fetch', 'origin', '--quiet']);
 
 const behind = git(['rev-list', '--count', `HEAD..origin/main`]);
 if (behind === '0') {
@@ -589,20 +693,120 @@ if (state.out === 'DIRTY' || state.out === 'BEHIND') {
 // was both redundant and the actual source of the whole problem.
 run('gh', ['pr', 'merge', prNumber, '--squash'], { allowFail: true });
 
-const merged = quiet('gh', ['pr', 'view', prNumber, '--json', 'state', '--jq', '.state']);
-if (merged.out !== 'MERGED') {
-  fail(`The merge did not complete (PR #${prNumber} is "${merged.out}"). Nothing else has been changed.`);
+// `gh pr merge` EXITING 0 IS NOT A MERGE (task 86bbv35cq). Under a merge queue
+// it enqueues and returns at once, leaving the pull request OPEN for as long as
+// the queue takes — so reading the state back one instant later, as this used
+// to, would fail every single run with "The merge did not complete" while the
+// merge was in fact under way. Wait for the state GitHub actually reports.
+// With no queue — today's state — the first read already says MERGED and this
+// returns before it ever sleeps, so nothing here costs an ordinary ship a
+// second.
+// AND "STILL OPEN" IS NOT "ENQUEUED" (round 2). The observation asks GitHub,
+// in the same read as the state, whether anything is actually holding this
+// pull request — a merge queue entry or auto-merge. If nothing is, the merge
+// was refused and this says so at once, which is the accurate one-second
+// answer ship gave before any of this. Only a pull request GitHub is really
+// holding is worth waiting on.
+//
+// `main`'s protection has `strict: true`, so a branch that falls behind
+// between the CI wait above and the merge call below is refused exactly this
+// way — and it is the commonest refusal there is, which is why announcing it
+// as a queue wait mattered.
+const repoSlug = (() => {
+  const seen = readJson('gh', ['repo', 'view', '--json', 'nameWithOwner']);
+  return (seen && seen.nameWithOwner) || '';
+})();
+
+// A READ THAT CANNOT SUCCEED IS NOT WORTH TWENTY MINUTES (round 3). Without a
+// repository slug every observation below is blind by construction — the
+// GraphQL query is asked about owner "" — so the wait would poll the full
+// MERGE_TIMEOUT_MIN, eighty reads, and then report `unknown` with a message
+// that already named this as the likelier cause. It is knowable before the
+// first poll, so it is answered before the first poll.
+if (!repoSlug) {
+  fail(
+    `This folder's GitHub repository could not be identified (\`gh repo view\` gave nothing),\n` +
+    `so whether PR #${prNumber} merged cannot be read at all — not merged, and not failed either.\n\n` +
+    'The merge command was already sent, so GitHub may well have merged it. Nothing else has\n' +
+    'been changed. Check `gh auth status`, then run `npm run ship` again — it sees an\n' +
+    'already-merged branch now and finishes the tidy-up.'
+  );
 }
-say(`    Merged #${prNumber}. It is live once Vercel finishes deploying.`);
+let lastMergeReport = '';
+const mergeWait = waitForMerge({
+  now: () => Date.now(),
+  sleep: sleepMs,
+  timeoutMs: MERGE_TIMEOUT_MIN * 60 * 1000,
+  readPr: () => parsePrObservation(readJson('gh', prObservationArgv(repoSlug, prNumber))),
+  // IT ONLY ANNOUNCES A WAIT IT IS ACTUALLY TAKING (round 3). This fired on
+  // any `open` read, BEFORE the hold was classified, so a refused merge — the
+  // commonest ending on a repo with no queue — printed "#625 is queued to
+  // merge" and then, one line below, "still OPEN and nothing is holding it".
+  // Two adjacent lines contradicting each other, the false one being round 1's
+  // own sentence surviving one line above its correction. The hold arrives as
+  // the third argument for exactly this: nothing here may name a queue the
+  // observation has not established.
+  onPoll: (state, elapsed, prJson) => {
+    if (state === 'merged' || state === 'closed') return;
+    const mins = Math.round(elapsed / 60000);
+    if (state === 'open' && !holdIsPending(classifyMergeHold(prJson))) return;
+    const line = state === 'open'
+      ? `    #${prNumber} has not merged yet — ${holdLabel(classifyMergeHold(prJson))}. Waiting (${mins}m).`
+      : `    Could not read #${prNumber} from GitHub just now — trying again (${mins}m).`;
+    if (line !== lastMergeReport) { say(line); lastMergeReport = line; }
+  },
+});
+
+if (mergeWait.outcome === 'not-merged') {
+  // A FAILURE, answered promptly and named truthfully — but `not-merged` is
+  // TWO readings, and only one of them is an observed refusal (round 4).
+  // hold 'none' really was refused; hold 'unknown' means the hold field never
+  // came back, so the merge did not happen and WHY is not known. This block
+  // used to assert a refusal for both, one line below a line that had just
+  // said the hold could not be read, and its advice ("main moved again, run
+  // ship again") is misdirection on the reading it could not take. The split
+  // is in mergeCompletion, beside the classifier that creates the two.
+  const said = notMergedExplanation(mergeWait.hold);
+  fail(
+    `The merge did not complete — PR #${prNumber} is still OPEN and ` +
+    `${holdLabel(mergeWait.hold)}.\n\n` +
+    `${said.cause}\n\n` +
+    `Nothing else has been changed. ${said.advice}`
+  );
+}
+if (mergeWait.outcome === 'queued') {
+  // NOT a failure and NOT a success — the third answer, and now only reachable
+  // when GitHub really is holding the pull request. The merge is under way;
+  // nothing here may claim it, and nothing here may undo it.
+  fail(
+    `PR #${prNumber} is QUEUED to merge, not merged yet — ${holdLabel(mergeWait.hold)}, ` +
+    `and it was still open after ${MERGE_TIMEOUT_MIN} minutes.\n\n` +
+    'Nothing has gone wrong and nothing else has been changed. GitHub is still working\n' +
+    'through the merge, and it will land on its own — you do not have to do anything to\n' +
+    'make that happen.\n\n' +
+    'All that is left afterwards is the tidy-up. Run `npm run ship` again once it has\n' +
+    'landed: it checks first whether this branch is already in main, and when it is, it\n' +
+    'cleans this folder up and stops without opening anything.'
+  );
+}
+if (mergeWait.outcome === 'unknown') {
+  fail(
+    `Could not read PR #${prNumber} from GitHub at all (${mergeWait.failedReads} attempt(s) came back blind),\n` +
+    'so whether it merged is unknown — not merged, and not failed either.\n\n' +
+    'Nothing else has been changed. Check `gh auth status`, then run `npm run ship` again:\n' +
+    'if the merge did land, it sees this branch is already in main and finishes the tidy-up;\n' +
+    'if it did not, it picks up where this run stopped.'
+  );
+}
+if (mergeWait.outcome === 'closed') {
+  fail(`PR #${prNumber} was CLOSED without merging. Nothing else has been changed.`);
+}
+say(`    Merged #${prNumber} at ${mergeTimeLabel(mergeWait.mergedAt)}. It is live once Vercel finishes deploying.`);
 
 /* ---------------------------------------------------------------- 8. tidy */
 
 heading('Tidying up');
-const commonDir = git(['rev-parse', '--git-common-dir']);
-const mainRoot = path.dirname(path.resolve(root, commonDir));
-run('git', ['-C', mainRoot, 'checkout', 'main'], { allowFail: true });
-run('git', ['-C', mainRoot, 'pull', '--ff-only', '--quiet'], { allowFail: true });
-run('npm', ['run', 'tidy'], { cwd: mainRoot, allowFail: true });
+tidyUp();
 
 console.log(
   `\n[ship] Done. #${prNumber} is merged and main is up to date.\n` +

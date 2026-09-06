@@ -505,13 +505,38 @@ so there is now a switch:
 npm run pipeline -- status                    is it running? if not, since when, who, and why
 npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
 npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
-npm run pipeline -- resume --operator-asked   hand the deck back (Dane's call, never an agent's)
+npm run pipeline -- resume --operator-asked --why "<his words>"   hand the deck back (Dane's call,
+                                              never an agent's). --why is required: quote him,
+                                              on ONE line — a record keeps one line per field.
 ```
 
 **Type the `--`.** It is not decoration: without it npm swallows every `--flag`
 before the command sees it. Leave it out and `resume --operator-asked` is
 refused for missing the very flag you just typed, and `pause --now` waits the
 full half hour instead of returning at once.
+
+**`resume` also refuses without `--why`, and it wants his words, not a summary**
+(2026-09-01, task 86bbrqa5j). A resume used to record who and when and nothing
+else, so the only question worth asking afterwards — on whose word? — could not
+be answered from the switch ticket at all. That day the line was paused for a
+fast-track; Dane wrote *"I am finished (for now) with the other fast-track
+task"*, and nineteen seconds later a different session resumed. That sentence
+retires the pause's stated reason; it is not "hand the deck back", and he had
+not authorized it. The requirement is the mechanism, not the audit trail: an
+agent that must paste his words has to go find them, and that session would
+have discovered at that moment that no such sentence existed. If you cannot
+find one to paste, that IS the answer — nobody handed the deck back.
+`npm run pipeline -- status` now prints the reason on a RUNNING line too, so an
+unauthorised resume is visible where everyone already looks.
+
+**Quote him on ONE line.** A switch record keeps one line per field, so a
+`--why` that spans lines used to be written whole and read back as its first
+line only — a half-sentence shown on the ticket as his words, with nothing to
+say a half was dropped — and a second line beginning `by:` overwrote the name
+of whoever resumed. `resume` refuses a multi-line `--why` now and says so;
+keep every word and join the lines with spaces. It refuses rather than
+reflowing for you, because his words are the evidence and a script that
+quietly rewrites the evidence is not evidence.
 
 **Every actor asks, not just the loops.** A pause only the loops respected
 would not have prevented the collision it was written for — the session that

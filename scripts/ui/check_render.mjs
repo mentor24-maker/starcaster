@@ -646,7 +646,34 @@ try {
     }
 
     await render(page, contract.section ? documentForSection(contract.section) : documentFor(contract.module));
-    const result = await sample(
+
+    /*
+     * Optional HOVER, for behaviour that only exists while the pointer is on
+     * something. Everything else here reads one static frame, which cannot see
+     * a `:hover` or `:focus-within` rule at all — so a menu item that changes
+     * shape while its dropdown is open was unmeasurable, and the only evidence
+     * available was a unit test on the variable plus somebody's eye on the
+     * page (86bbum0x9).
+     *
+     * `page.hover` moves the real mouse and the position survives the
+     * `page.evaluate` inside sample(), so the frame that gets measured is the
+     * hovered one. A selector that matches nothing FAILS the contract rather
+     * than sampling the un-hovered page — silently measuring the wrong state
+     * is how a check reports green over a dead feature.
+     */
+    let hoverError = null;
+    if (contract.hover) {
+      try {
+        await page.hover(contract.hover, { timeout: 4000 });
+        await page.waitForTimeout(120);
+      } catch (err) {
+        hoverError = `${contract.id}: could not hover \`${contract.hover}\` — ` +
+          'the element the contract needs to put the pointer on did not appear, so the state it ' +
+          `measures was never entered. ${String(err && err.message || err).split('\n')[0]}`;
+      }
+    }
+
+    const result = hoverError ? null : await sample(
       page,
       contract.selector,
       contract.read || [],
@@ -657,6 +684,12 @@ try {
 
     if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });
     if (contract.emulate?.viewport && DEFAULT_VIEWPORT) await page.setViewportSize(DEFAULT_VIEWPORT);
+    if (contract.hover) await page.mouse.move(0, 0);
+
+    if (hoverError) {
+      failures.push(hoverError);
+      continue;
+    }
 
     /*
      * An ABSENCE contract inverts R1: the whole assertion is that nothing

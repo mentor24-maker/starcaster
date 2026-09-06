@@ -350,6 +350,39 @@ function isStrandedBuild(info, nowMs, strandedAfterMs) {
   return Boolean(row && row.stranded);
 }
 
+/**
+ * WHAT IS ACTUALLY HOLDING THE BUILD SLOTS — not a guess at why.
+ *
+ * WHY THIS EXISTS (2026-09-05, task 86bbvh285). The decline message used to
+ * end "Not claiming; the merge side is the bottleneck." That sentence asserts
+ * a CAUSE this function never measured, and on the morning it was written it
+ * was false: merges were landing unattended in about nine minutes, while
+ * `loop-review` sat pinned at an hourly cadence and four tickets waited in
+ * `In review`. Review was the bottleneck. A reader who trusted the message
+ * would have gone looking at the merge lane, which was fine.
+ *
+ * The cap can only see which statuses hold its slots, so that is all it says.
+ * `1 building, 4 in review` is a reading; "the merge side is the bottleneck"
+ * is a diagnosis, and the two are not the same claim.
+ *
+ * A slot held by a status this file does not recognise is reported as such
+ * rather than dropped — a total that does not add up to the cap is how a
+ * partition quietly stops being one.
+ */
+function holdingPhrase(groups) {
+  const building = groups.building.length;
+  const reviewing = groups.reviewing.length;
+  const parts = [];
+  // Both halves are stated even at zero. "4 in review" alone leaves the reader
+  // to work out whether the other slot is a build or something unaccounted
+  // for, and that is exactly the inference the old sentence invited.
+  parts.push(`${building} building`);
+  parts.push(`${reviewing} in review`);
+  const other = groups.inProgress.length - building - reviewing;
+  if (other > 0) parts.push(`${other} in an in-progress status this check does not recognise`);
+  return parts.join(', ');
+}
+
 function classifyPrs({ prs, ticketStatusById, nowMs = Date.now(), strandedAfterMs = resolveStrandedAfterMs() } = {}) {
   const source = ticketStatusById && typeof ticketStatusById === 'object' ? ticketStatusById : {};
   const byId = Object.create(null);
@@ -361,6 +394,12 @@ function classifyPrs({ prs, ticketStatusById, nowMs = Date.now(), strandedAfterM
   // only thing that stopped measuring against it (task 86bbuzzbk).
   const groups = {
     inFlight: [], inProgress: [], operatorHeld: [],
+    // The two halves of `inProgress`, kept as a PARTITION of it rather than as
+    // independent tests, the same way `operatorHeld` is a partition of
+    // `inFlight`. Named because the decline message has to say which of them
+    // is holding the slots (2026-09-05, task 86bbvh285) and a message that
+    // names a cause must be reading the number it names.
+    building: [], reviewing: [],
     strandedBuilds: [], rework: [], queued: [], live: [], unknown: [], unrecognised: [],
   };
   // Whether the discount could be assessed AT ALL. Told apart from "assessed,
@@ -387,7 +426,15 @@ function classifyPrs({ prs, ticketStatusById, nowMs = Date.now(), strandedAfterM
       // partition of `inFlight` rather than as an independent test, so the
       // three counts cannot drift into disagreeing about one pull request.
       if (OPERATOR_HELD_STATUSES.includes(status)) groups.operatorHeld.push(pr.number);
-      else groups.inProgress.push(pr.number);
+      else {
+        groups.inProgress.push(pr.number);
+        // A partition again: `IN_PROGRESS_STATUSES` is exactly `building` and
+        // `in review`, so every ticket landing here goes in one of the two.
+        // If a third is ever added to the taxonomy it lands in neither, and
+        // `holdingPhrase` below says so rather than quietly under-reporting.
+        if (status === loopStatuses.BUILDING) groups.building.push(pr.number);
+        else if (status === loopStatuses.IN_REVIEW) groups.reviewing.push(pr.number);
+      }
     }
     // The REAL status, not "queued means rework". Until task 86bbr1u9v there
     // was no other way to tell, and that guess is the bug this ticket closes.
@@ -452,7 +499,8 @@ function wipDecision({
       limitHit: capped ? 'wip' : null,
       groups: null,
       message: capped
-        ? `WIP cap reached — ${openCount} PR(s) open, cap ${limit}. Not claiming; the merge side is the bottleneck.\n` +
+        ? `WIP cap reached — ${openCount} PR(s) open, cap ${limit}. Not claiming; which stage is holding the\n` +
+          'slots could NOT be determined — ticket statuses were unavailable, so this counted open PRs only.\n' +
           'This is a normal outcome, not a failure. Ticket statuses were NOT available, so every open PR was\n' +
           'counted — the conservative reading, and it means work parked on Dane was counted against the build\n' +
           `cap too, which it normally is not. Raise it with ${CAP_ENV} for an experiment.`
@@ -523,6 +571,8 @@ function wipDecision({
     openCount: countOpenPrs(prs),
     inFlight,
     inProgress,
+    building: groups.building.length,
+    reviewing: groups.reviewing.length,
     operatorHeld,
     rework: groups.rework.length,
     stranded: groups.strandedBuilds.length,
@@ -536,16 +586,19 @@ function wipDecision({
       ...common, claim: false, code: 3, limitHit: 'wip',
       message:
         `WIP cap reached — ${census}. ` +
-        `Not claiming; the merge side is the bottleneck.${tail}\n` +
+        `Not claiming; the slots are held by ${holdingPhrase(groups)}.${tail}\n` +
         'This is a normal outcome, not a failure. Work queued beyond the merge rate does not ship sooner —\n' +
         `it goes stale, and every merge re-dates every open branch. Raise it with ${CAP_ENV} for an experiment.`,
     };
   }
 
-  // The second limit, and it is a DIFFERENT sentence on purpose. "The merge
-  // side is the bottleneck" would be false here — the machines are idle and
-  // the queue is deep; what is full is Dane's own inbox, and only he can empty
-  // it. A reader who cannot tell those two apart cannot act on either.
+  // The second limit, and it is a DIFFERENT sentence on purpose. Naming the
+  // build stages would be false here — the machines are idle and the queue is
+  // deep; what is full is Dane's own inbox, and only he can empty it. A reader
+  // who cannot tell those two apart cannot act on either. (Until 2026-09-05
+  // the sentence this one contrasts with said "the merge side is the
+  // bottleneck"; that was retired for asserting a cause nothing had measured —
+  // task 86bbvh285 — but the contrast it draws here is unchanged.)
   if (operatorHeld >= operatorLimit) {
     return {
       ...common, claim: false, code: 3, limitHit: 'operator',
