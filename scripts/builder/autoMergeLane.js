@@ -368,9 +368,9 @@ function isLaneNotice(text) {
  *      already on the ticket. Compared on WORDS ALONE, not on the raw text —
  *      see `normalizeForQuoting`, and read that note before trusting this one:
  *      the whole sign turned on a formatting difference until 2026-09-06.
- *      Measured with the current normaliser over 6,020 ordered pairs of real
- *      machine cards on one ticket and 87,130 across tickets: ZERO machine
- *      card contains another's words whole, so this costs the lane nothing.
+ *      Its false-positive cost is measured in `normalizeForQuoting`'s note —
+ *      8 cards on the real board, unchanged by the widening, all one legacy
+ *      shape, all in the cancelling direction.
  *
  * WHAT IT DOES NOT COVER, said plainly rather than left to be found again —
  * and note that the first version of this paragraph got the answer wrong. It
@@ -444,9 +444,20 @@ const QUOTED_RUN_MIN = 60;
  *   - It closes the bug: with a rendered copy of each of those 679 cards
  *     pasted under an objection, all 679 are now read as his. The narrow form
  *     caught 216. (456 of the 679, 67%, carry emphasis or code marks at all.)
- *   - It costs nothing: ZERO false positives over 6,020 ordered pairs of real
- *     machine cards on the same ticket, and zero over 87,130 cross-ticket
- *     pairs. No machine card contains another one's words whole.
+ *   - It costs nothing NEW. Driving the real `quotesMachineText` over all 679
+ *     against every comment on their own tickets: 8 are read as assembled by
+ *     a person, and the SAME 8, from the same pairs, under the old narrow
+ *     form. Widening added none. (Measured with the real function rather than
+ *     machine-card pairs, because the filter compares against every comment on
+ *     the ticket, and the pairwise count misses exactly this.)
+ *
+ * THOSE 8 ARE PRE-EXISTING AND ALL ONE SHAPE, recorded here so the next reader
+ * does not re-find them: a card that mentions a PR url swallows the older
+ * bare `PR opened: <url>` comment naming the same PR, which is just over the
+ * length floor. They predate the stamp, so nothing marks them as machine
+ * text. Left alone deliberately — fixing it means moving `QUOTED_RUN_MIN` or
+ * special-casing that line, both of which are their own change with their own
+ * risk, and this one is in the forgiving direction.
  *
  * And the direction is the forgiving one either way: a false positive here
  * reads a machine card as his and CANCELS, which costs a re-announcement. A
