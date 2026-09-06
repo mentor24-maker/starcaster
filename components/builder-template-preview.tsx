@@ -31,6 +31,7 @@ import {
 } from "@/lib/builder-template";
 import { imageProps } from "@/lib/image-renditions";
 import { BuilderBackgroundLayer } from "@/components/builder/builder-background-layer";
+import { BLOG_FEED_PAGE_SIZE, readAllPages } from "@/components/builder/blog-feed-paging";
 
 /** Feature cards sit up to three across the content column. */
 const FEATURE_CARD_SIZES = "(max-width: 700px) 100vw, 400px";
@@ -2565,6 +2566,13 @@ const UNMATCHED_FILTER_VALUE = "__starcaster_unmatched_filter__";
 
 function BlogPostListPreview({ settings }: { settings: Record<string, string> }) {
   const [allPosts, setAllPosts] = useState<BlogPostRecord[]>([]);
+  /*
+   * Whether allPosts is the WHOLE published archive or as much of it as could
+   * be read. Every count and every empty state on this module is a statement
+   * about the archive, and a statement made from a partial read has to say so
+   * (task 86bbup88u).
+   */
+  const [archiveComplete, setArchiveComplete] = useState(true);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
   const [cardTemplate, setCardTemplate] = useState<CardTemplate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2591,6 +2599,13 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
   const layout = settings.layout || "grid";
   const cols = Math.max(1, parseInt(settings.columns || "3", 10) || 3);
   const postsPerPage = Math.max(1, parseInt(settings.postsPerPage || "9", 10) || 9);
+  /*
+   * How many of the matching posts are on screen. Before task 86bbup88u the
+   * list was `filteredPosts.slice(0, postsPerPage)` with no control of any
+   * kind, so a tag matching 13 posts printed "…: 13" over 9 cards and dropped
+   * the other four in silence. Raising postsPerPage only moves that cliff.
+   */
+  const [visibleCount, setVisibleCount] = useState(postsPerPage);
   // postSlug names the post-view page (operator 6/28: the slug field
   // replaces the page-URL field). Legacy postPageUrl still wins when set
   // so no saved page changes behavior.
@@ -2644,9 +2659,25 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
 
   useEffect(() => {
     const headers = getCrmProjectHeaders();
+    /*
+     * Page through the archive rather than taking the first 100 and filtering
+     * those. Every filter this module offers (tag, author, free text, dates)
+     * is applied in the browser, so a post the first page did not reach is a
+     * post no filter can find — and #572's honest empty state would then name
+     * a tag that DOES exist and say nothing carries it.
+     */
+    const readPosts = readAllPages<BlogPostRecord>(async (page, limit) => {
+      const r = await fetch(
+        `/api/blog/posts?status=published&limit=${limit}&page=${page}`,
+        { credentials: "include", headers }
+      );
+      if (!r.ok) throw new Error(`blog posts page ${page}: ${r.status}`);
+      const body = await r.json();
+      return Array.isArray(body?.posts) ? (body.posts as BlogPostRecord[]) : [];
+    }, { pageSize: BLOG_FEED_PAGE_SIZE });
+
     Promise.all([
-      fetch(`/api/blog/posts?status=published&limit=100`, { credentials: "include", headers })
-        .then((r) => (r.ok ? r.json() : null)),
+      readPosts.catch(() => null),
       fetch("/api/blog/categories", { credentials: "include", headers })
         .then((r) => (r.ok ? r.json() : null)),
       fetch("/api/blog/card-template", { credentials: "include", headers })
@@ -2654,9 +2685,11 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
         .catch(() => null),
     ])
       .then(([pd, cd, td]) => {
-        const fetchedPosts = Array.isArray(pd?.posts) ? (pd.posts as BlogPostRecord[]) : [];
+        const fetchedPosts = pd && Array.isArray(pd.items) ? pd.items : [];
         const fetchedCats = Array.isArray(cd?.categories) ? (cd.categories as BlogCategory[]) : [];
         setAllPosts(fetchedPosts);
+        // A read that failed outright is not a complete archive either.
+        setArchiveComplete(pd ? pd.complete : false);
         setCategories(fetchedCats);
         const tplData = td?.template ?? td;
         if (tplData && typeof tplData === "object") setCardTemplate(migrateTemplate(tplData));
@@ -2732,7 +2765,17 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
     });
   }, [allPosts, search, catFilter, missingCatSlug, tagFilter, authorFilter, dateFrom, dateTo]);
 
-  const visiblePosts = filteredPosts.slice(0, postsPerPage);
+  /*
+   * A new filter starts a new list, so it starts at page one again. Without
+   * this, clearing a filter after loading four pages of one tag would drop the
+   * visitor into 36 cards of everything.
+   */
+  useEffect(() => {
+    setVisibleCount(postsPerPage);
+  }, [postsPerPage, search, catFilter, missingCatSlug, tagFilter, authorFilter, dateFrom, dateTo]);
+
+  const visiblePosts = filteredPosts.slice(0, visibleCount);
+  const unreachedPosts = filteredPosts.length - visiblePosts.length;
   const hasActiveFilter =
     search || catFilter || missingCatSlug || tagFilter || authorFilter || dateFrom || dateTo;
 
@@ -2775,6 +2818,16 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
       : authorFilter
         ? `No posts by \u201c${authorFilter}\u201d.`
         : "No posts match your filters.";
+  /*
+   * Said whenever a count or an empty state was computed from a partial read.
+   * "No posts tagged X" is a claim about the whole archive; if the archive was
+   * not all read, the honest sentence names the doubt rather than inheriting
+   * the confidence (#572 replaced a vague message with a confident one, and a
+   * confident wrong one is the worse of the three).
+   */
+  const partialArchiveNote = archiveComplete
+    ? ""
+    : "Not all posts could be read, so there may be more than are shown here.";
 
   if (loading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
@@ -2884,6 +2937,11 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
           ) : (
             <>
               <div>{emptyFilteredMessage}</div>
+              {partialArchiveNote ? (
+                <div className="builder-blog-post-list-partial" style={{ marginTop: "0.5rem", fontSize: "0.8125rem" }}>
+                  {partialArchiveNote}
+                </div>
+              ) : null}
               {hasActiveFilter ? (
                 <button
                   type="button"
@@ -3039,6 +3097,46 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
           })}
         </div>
       )}
+
+      {/*
+        * The list and the count reconcile HERE. Above, the results line states
+        * filteredPosts.length; the grid renders a slice of the same array. This
+        * says which slice, and gives the visitor the rest — so "13" over 9 cards
+        * with no explanation and no way forward cannot happen again.
+        */}
+      {unreachedPosts > 0 ? (
+        <div
+          className="builder-blog-post-list-more"
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.625rem", marginTop: "1.75rem" }}
+        >
+          <button
+            type="button"
+            className="builder-blog-post-list-more-button"
+            onClick={() => setVisibleCount((n) => n + postsPerPage)}
+            style={{
+              ...inputStyle,
+              cursor: "pointer",
+              padding: "0.625rem 1.5rem",
+              fontWeight: 600,
+              color: "#2d3748",
+            }}
+          >
+            Show more posts
+          </button>
+          <span className="builder-blog-post-list-showing" style={{ fontSize: "0.8125rem", color: "#718096" }}>
+            Showing {visiblePosts.length} of {filteredPosts.length}
+            {archiveComplete ? "" : " or more"}
+          </span>
+        </div>
+      ) : null}
+      {unreachedPosts <= 0 && partialArchiveNote && visiblePosts.length > 0 ? (
+        <div
+          className="builder-blog-post-list-partial"
+          style={{ marginTop: "1.25rem", fontSize: "0.8125rem", color: "#718096", textAlign: "center" }}
+        >
+          {partialArchiveNote}
+        </div>
+      ) : null}
     </div>
   );
 }
