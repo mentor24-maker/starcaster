@@ -261,7 +261,15 @@ function getContactFormFields(mode: "squeeze" | "standard" | "custom"): ContactF
   return standardFields;
 }
 
-function ContactFormPreview({ settings, projectId = "" }: { settings: Record<string, string>; projectId?: string }) {
+function ContactFormPreview({
+  settings,
+  projectId = "",
+  liveSite = false,
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+  liveSite?: boolean;
+}) {
   const mode = getContactFormMode(settings);
   const fields = getContactFormFields(mode);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -338,7 +346,9 @@ function ContactFormPreview({ settings, projectId = "" }: { settings: Record<str
         ))}
       </div>
       {mode === "custom" ? (
-        <div className="builder-contact-form-stub">Custom form builder coming soon. Standard fields are shown for now.</div>
+        <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
+          Custom form builder coming soon. Standard fields are shown for now.
+        </BuilderOnlyNote>
       ) : null}
       <button className="builder-contact-form-submit" disabled={isSubmitting} type="submit">
         {isSubmitting ? "Submitting..." : "Submit"}
@@ -2219,7 +2229,7 @@ function BuilderModulePreview({
   }
 
   if (module.type === "contact-form") {
-    return <ContactFormPreview projectId={projectId} settings={module.settings} />;
+    return <ContactFormPreview projectId={projectId} settings={module.settings} liveSite={liveSite} />;
   }
 
   if (module.type === "crm-form") {

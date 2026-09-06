@@ -77,6 +77,39 @@ that question was missing from the form entirely; after, it is there with all
 three answers, and the form sends. A dropdown the owner genuinely left blank is
 still left out, which was the right call and is unchanged.
 
+**Round four — the sweep had walked past a whole module.** The contact form has
+three modes, and one of them is called **Custom**. Pick it from the dropdown in
+its settings — it sits right next to Squeeze and Standard, with nothing to warn
+you — and the published page told every visitor: *"Custom form builder coming
+soon. Standard fields are shown for now."* That is a sentence about our own
+product, aimed at whoever is designing the page, printed on a client's live
+site. The form underneath it works perfectly well; it just came with a note
+about a feature the visitor has never heard of and cannot wait for.
+
+It is exactly the same mistake as the eight above, and the code even said so:
+the note was tagged with the same styling name that this very file wraps in the
+builder-only guard two other places. It simply had never been given the
+switch that tells it whether it is on a live page. Now it has one. The sentence
+is gone from published pages and still there on the canvas, and the form's real
+fields — the ones that collect leads — keep rendering either way. That last
+part is the whole point, so it has its own test: the note stands down, the
+module does not.
+
+The reason three rounds of review kept missing it is the more useful half. The
+automatic check that catches this kind of text works from a list of phrasings,
+and "coming soon" was not on it — the check had been quietly incapable of
+seeing this defect the entire time. It is on the list now, and it was proved by
+putting the leak back and watching the check catch it, then running the old
+version of the check against the same leak and watching it report all clear.
+
+Adding the phrase turned up one more thing worth knowing. Written the obvious
+way, it also flagged the "Coming soon." a visitor sees when they land on a web
+address with no page published on it — which is correct, ordinary copy that
+must keep working. So the rule is narrower than it first looked: "coming soon"
+only counts as a leak when the same sentence also mentions the builder, a
+module or the editor. A club announcing that its new clubhouse is coming soon
+is left alone.
+
 ## 2026-09-05 — "Merged" meant "in the line", and nobody could tell the difference (#625)
 
 Pull requests are merged one at a time here, and the plan is to switch on a

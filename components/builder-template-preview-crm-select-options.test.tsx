@@ -140,3 +140,74 @@ describe("a dropdown's sample options never reach a visitor", () => {
     expect(text()).toContain("Option two");
   });
 });
+
+/**
+ * Round 3 send-back, same ticket.
+ *
+ * `ContactFormPreview` is a different module from the CRM form above — it is
+ * the `contact-form` type in the palette, and it renders its own fixed fields
+ * without fetching anything. In "Custom" mode it printed a sentence written
+ * for whoever is designing the page: "Custom form builder coming soon." It
+ * took no `liveSite` prop at all, so a visitor read it word for word on the
+ * published site. Two clicks reach it — the module is in the palette under
+ * "Contact Forms", and Custom sits in its settings dropdown next to Squeeze
+ * and Standard, with nothing to say it publishes a note about the Builder.
+ *
+ * `npm run check:builder-notes` cannot catch this one: "coming soon" is not in
+ * its phrase list, which is the blind spot round 1 reported and this is a live
+ * instance of it.
+ *
+ * The module must NOT stand down on a live page the way an empty CRM dropdown
+ * does — the standard fields under the note are a real, working form. Only the
+ * sentence goes.
+ */
+
+async function renderContactForm(liveSite: boolean, formMode: string) {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => {
+    root!.render(
+      <BuilderTemplatePreview
+        layoutSections={normalizeLayoutSections([
+          {
+            id: "row-1",
+            title: "Row",
+            layout: "single",
+            modules: [{ id: "m-contact-form", type: "contact-form", column: "main", text: "", settings: { formMode } }]
+          }
+        ])}
+        pageBackground={createDefaultBackgroundSettings()}
+        showShell={false}
+        liveSite={liveSite}
+      />
+    );
+  });
+  await act(async () => { await Promise.resolve(); });
+}
+
+const COMING_SOON = "Custom form builder coming soon";
+
+describe("the contact form's Custom-mode note never reaches a visitor", () => {
+  it("says nothing about the Builder on a published page", async () => {
+    await renderContactForm(true, "custom");
+    expect(text()).not.toContain(COMING_SOON);
+    expect(text()).not.toContain("Standard fields are shown for now");
+  });
+
+  it("still renders the working form underneath it", async () => {
+    // The note is the only thing that goes. These fields collect real leads.
+    await renderContactForm(true, "custom");
+    expect(text()).toContain("First name");
+    expect(text()).toContain("Email");
+    expect(container?.querySelector("form.builder-contact-form")).not.toBeNull();
+    expect(container?.querySelector("button.builder-contact-form-submit")).not.toBeNull();
+  });
+
+  it("still shows the note on the Builder canvas", async () => {
+    // The other half: deleting the sentence would pass the test above and
+    // leave whoever picked "Custom" with no explanation of what they got.
+    await renderContactForm(false, "custom");
+    expect(text()).toContain(COMING_SOON);
+  });
+});
