@@ -33,9 +33,34 @@ Worse, the note he is most likely to quote is the announcement itself, because
 it is the one he is replying to. Quoting it put a second announcement on the
 ticket, dated to his own comment, which quietly restarted the hour — so his
 objection was no longer "after the announcement" and never registered at all.
-An hour later the lane merged the very thing he had said to hold. An
-announcement only counts now if it carries the stamp, so a quote of one arms
+An hour later the lane merged the very thing he had said to hold.
+
+Asking for the stamp closed one half of that and left the other open, which a
+review caught before any of it shipped. The stamp is the LAST line of every
+note a machine writes. Paste a card ABOVE your reply and the stamp lands in the
+middle, so the comment still reads as yours — that is the case the stamp fixed.
+Paste it UNDERNEATH your reply and the stamp is the last line of *your*
+comment, so the whole thing reads as the machine's. Quoting below what you are
+answering is at least as normal as quoting above it, and driving the real lane
+showed exactly what it cost: "no, hold this one" followed by the announcement
+card merged the pull request an hour later, giving "nobody objected" as its
+reason.
+
+Two things close it. The lane now recognises its own announcement by both
+ends — the opening line it writes and the marker it signs off with — which a
+quote cannot keep, because his words displace one end or the other whichever
+way up he pastes it. And a comment that reproduces a note already on the
+ticket, with words around it, is read as his: a machine writes fresh text, it
+does not reprint a card that is already there. Checked against 189 real machine
+notes on the board — not one of them reprints another, so this costs the lane
 nothing.
+
+One paste is still not covered, and it is written down rather than left to be
+found again: a note copied in from a *different* ticket. Closing that means
+changing what every machine note looks like, which is deliberately out of scope
+here. And when the lane does stop because of a quoted card, it now says so in
+those words, rather than telling him he commented when what it really saw was a
+card he had pasted.
 
 ## 2026-09-05 — The sweep that called a half-built ticket empty (#624)
 

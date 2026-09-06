@@ -44,12 +44,29 @@
  *
  * WHICH WAY IT FAILS. Detection is deliberately anchored to the LAST non-empty
  * line, which is where the stamp is written and nowhere else. So if Dane
- * pastes a machine card INTO a comment of his own, the marker lands mid-text
- * and his comment is still read as his. If some future quoting put a marker
- * last, his answer would be ignored and the ticket would stay with him — the
- * escalation is not released, he is not told it was handled, and the failure is
- * loud rather than silent. That is the correct direction, and it is the
- * opposite of the bug this replaces.
+ * pastes a machine card ABOVE words of his own, the marker lands mid-text and
+ * his comment is still read as his.
+ *
+ * IT ONLY HOLDS FOR THAT ONE ORDERING, and the qualifier was missing here
+ * until 2026-09-06 (task 86bbv8nvy round 2). Paste the card UNDERNEATH his
+ * words and the stamp is the last line of HIS comment, so the whole thing
+ * reads as machine-written — and quoting below your reply is at least as
+ * natural as quoting above it.
+ *
+ * WHAT THAT COSTS DEPENDS ENTIRELY ON THE CALL SITE, which is why this note
+ * cannot answer for all of them:
+ *
+ *   - HERE, at the escalation and the kill switch, mistaking his word for a
+ *     machine's leaves the escalation unreleased. The ticket stays with him,
+ *     he is not told it was handled, and the failure is LOUD. That is the
+ *     correct direction, and the opposite of the bug this replaces.
+ *
+ *   - AT LANE A's objection filter it is the reverse: a discounted objection
+ *     MERGES the pull request he said hold on, silently, an hour later. That
+ *     site therefore cannot run on the stamp alone, and does not — see
+ *     `quotesMachineText` in scripts/builder/autoMergeLane.js. Any future
+ *     caller whose failure direction is an action rather than a stall owes
+ *     itself the same second question.
  *
  * COMMENTS WRITTEN BEFORE THIS SHIPPED carry no marker and still read as his.
  * Nothing can be done about that from here; the legacy prefixes below catch
@@ -165,10 +182,17 @@ function isMachineComment(text) {
  *     "[CC-starcaster loop-review] REVIEW: PASSED ...
  *      wait, do not merge this yet — I want to look"
  *
- * — his words, classified as a machine's. The tail stamp cannot be quoted into
- * that position by accident: a pasted card puts the marker MID-text, and only
- * a body whose LAST line is the stamp counts here. That is the same choice
- * `isMachineComment` makes for the stamp, kept and nothing else.
+ * — his words, classified as a machine's. Only a body whose LAST line is the
+ * stamp counts here, which is the same choice `isMachineComment` makes for the
+ * stamp, kept and nothing else.
+ *
+ * THIS IS NOT A COMPLETE ANSWER TO QUOTING, and the first version of this note
+ * claimed it was: "a pasted card puts the marker MID-text". That is true only
+ * when he types AFTER the paste. Pasted UNDER his words, the card's stamp is
+ * the last line of his comment and this reader says machine. A caller that
+ * cannot afford that reading needs a second question — Lane A's objection
+ * filter asks `quotesMachineText`; see the note at the head of this file for
+ * why the answer differs by call site.
  *
  * IT COSTS NOTHING TO BE THIS STRICT. Sampled 2026-09-06 over 110 real
  * comments on 40 Loop Queue tickets: 100 classify as machine-written, and
