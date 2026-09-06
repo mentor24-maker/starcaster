@@ -1,3 +1,27 @@
+## 2026-09-06 — Bulk Create was throwing away the template it built the pages from (#635)
+
+Bulk Create makes a batch of pages from a template. Every page it made read
+**"No template"** in Page Details, even though a template had been picked and
+the pages were plainly built from it.
+
+There are two columns behind that one field: an old one holding a layout *name*
+from years back, and the real one holding the *template* a page was built from.
+Bulk Create was putting the chosen template into the old column and leaving the
+real one empty — and reporting success while it did it.
+
+Three days ago the identical problem was fixed on the *single-page* create
+(#614). That fix was correct, and it could not reach here: the bulk route kept
+its own separate hand-written list of the fields it sends to the database, and
+that list simply did not name the template. Both routes now go through one
+shared function, so there is no longer a second list to fall out of step — and
+a test fails if anyone writes one again, even if the new list happens to be
+correct on the day it is written.
+
+Checked by reading the actual database row before and after, rather than by
+looking at the screen: the same batch that used to store nothing now stores the
+template, and the old column still holds exactly what it always did, so nothing
+else changes behaviour.
+
 ## 2026-09-06 — Notes and a test left over after the tag-page fix landed elsewhere (#630)
 
 **Correcting the earlier version of this entry, which was wrong.** It claimed
