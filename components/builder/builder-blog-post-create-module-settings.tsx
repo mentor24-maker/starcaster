@@ -53,6 +53,22 @@ export function BuilderBlogPostCreateModuleSettings({
               placeholder: "/admin/posts  (leave blank to stay on this page)"
             }
           ],
+          [
+            // Where the editor's thumbnail link opens the post (86bbvtzt1) —
+            // the same page the Blog Manager's View button uses. Auto is the
+            // default post page (/blog-post-view); set it when the site's
+            // post page lives elsewhere.
+            {
+              key: "viewPageUrl",
+              label: "Post Page URL",
+              width: "text-md",
+              control: "picker",
+              source: "pages",
+              valueKind: "path",
+              noneLabel: "Auto",
+              placeholder: "/blog-post-view"
+            }
+          ],
           
           [
             // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
@@ -189,8 +205,11 @@ export function BuilderBlogPostCreateModuleSettings({
         { key: "showSlug", label: "Slug", width: "check", control: "checkbox", fallback: "true" },
         { key: "showFeaturedImage", label: "Featured Image", width: "check", control: "checkbox", fallback: "true" },
         { key: "showExcerpt", label: "Excerpt", width: "check", control: "checkbox", fallback: "true" },
-        // The old Hide option read "Hide (use logged-in user)" — that
-        // nuance moves to a tooltip (L7).
+        // The old Hide option read "Hide (use logged-in user)". Nothing ever
+        // did that — the store writes whatever the form sends, so a hidden
+        // field meant posts with NO author. The tooltip now says what
+        // happens; the field is shown by default and always when editing
+        // (86bbvtzt1).
         {
           key: "showAuthorField",
           label: "Author Field",
@@ -199,8 +218,8 @@ export function BuilderBlogPostCreateModuleSettings({
           render: ({ settings, set }) => (
             <input
               type="checkbox"
-              title="Unchecked: the field is hidden and the logged-in user is the author"
-              checked={(settings.showAuthorField ?? "false") === "true"}
+              title="Unchecked: the create form hides the Author field and new posts are created with no author. The field always shows when editing a post."
+              checked={(settings.showAuthorField ?? "true") !== "false"}
               onChange={(e) => set("showAuthorField", e.target.checked ? "true" : "false")}
             />
           )
