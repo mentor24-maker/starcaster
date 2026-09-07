@@ -36,6 +36,75 @@ The written instructions now carry both causes side by side with a one-command
 way to tell them apart, so the next person to meet a silent pull request does not
 have to work it out from scratch, and does not spend twenty minutes applying the
 wrong remedy.
+## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
+
+When one of the build sessions dies partway through a job — the machine goes to
+sleep, a usage limit cuts it off — the ticket it was working on is left in a
+state nobody picks up from. There is a cleanup that runs every so often to hand
+those tickets back to the queue, and before doing so it asks one question: has
+anything been built for this yet?
+
+It was asking that question of GitHub, which can only see work that has been
+sent there. A job that got as far as writing code and not as far as sending it
+lives in a folder on one of the Macs, where GitHub cannot see it at all. So the
+cleanup would return the ticket to the queue with the words "nothing has been
+built for it", and the next session would start the whole job again from
+scratch while two-thirds of it sat finished on the disk.
+
+Half of this was fixed last week, on the version of the cleanup a person runs by
+hand. The half left unfixed was the one that runs on a timer — and that is the
+one that catches these, because it goes first. The scheduled repair ran the
+unfixed cleanup, which moved the ticket, and then ran the fixed one, which found
+nothing left to look at.
+
+Now both look in the same place, using the same code rather than two copies that
+could drift apart. If there is half-finished work on a Mac, the ticket goes back
+marked as needing rework, and the note on it names the machine, the folder and
+the branch — so whoever picks it up walks to the work instead of repeating it.
+If a machine could not be reached to ask, it says so rather than guessing. And
+if there genuinely is nothing anywhere, it goes back to the queue exactly as
+before: a safety check that never lets anything through is just as broken as no
+check at all, and that one was tested by deliberately breaking it.
+## 2026-09-06 — Bulk Create was throwing away the template it built the pages from (#635)
+
+Bulk Create makes a batch of pages from a template. Every page it made read
+**"No template"** in Page Details, even though a template had been picked and
+the pages were plainly built from it.
+
+There are two columns behind that one field: an old one holding a layout *name*
+from years back, and the real one holding the *template* a page was built from.
+Bulk Create was putting the chosen template into the old column and leaving the
+real one empty — and reporting success while it did it.
+
+Three days ago the identical problem was fixed on the *single-page* create
+(#614). That fix was correct, and it could not reach here.
+
+There turned out to be **three** places that had to be fixed, not one, because
+three different bits of the app each keep their own hand-written list of what
+to send when a page is created — and the same field was missing from all of
+them. One list is used when you pick a "content model" in Bulk Create. Another
+is used when you do not, which is the ordinary case and the one you would have
+been looking at. The third is the Create Page button over in Acquire. Each list
+was written separately, so fixing one never fixed the others; the first attempt
+at this ticket fixed only the first, and Bulk Create still said "No template".
+
+All three now build what they send through a single named function instead of
+a list typed out on the spot, and a test fails if any of them stops — including
+if somebody writes a fresh list that happens to be correct on the day they
+write it.
+
+Checked by reading the actual database row before and after, rather than by
+looking at the screen: the same request that used to store nothing now stores
+the template, and the old column still holds exactly what it always did, so
+nothing else changes behaviour.
+
+One thing we deliberately left alone. If a template is deleted in the seconds
+between opening the Bulk Create box and pressing Generate, the pages still come
+out blank and now also point at a template that is gone. Refusing to record it
+in that case looked like the obvious tidy-up, but it would have broken the
+built-in templates, which are legitimately not in the list the check would have
+used. The blank pages are the bigger half of that problem and belong in their
+own ticket.
 
 ## 2026-09-06 — Text you had typed could vanish from the Builder, two different ways (#632)
 
