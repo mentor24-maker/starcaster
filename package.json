@@ -100,6 +100,7 @@
     "heartbeat": "doppler run --project starcaster --config dev --no-check-version -- node scripts/node_heartbeat.mjs",
     "throughput": "doppler run --project starcaster --config dev --no-check-version -- node scripts/loop_throughput.mjs",
     "stale-ready": "doppler run --project starcaster --config dev --no-check-version -- node scripts/stale_ready.mjs",
+    "stale-answer": "doppler run --project starcaster --config dev --no-check-version -- node scripts/stale_answer.mjs",
     "report:failure": "doppler run --project starcaster --config dev --no-check-version -- node scripts/report_job_failure.mjs",
     "provision:node": "bash scripts/provision_node.sh",
     "provision:node:apply": "bash scripts/provision_node.sh --apply",

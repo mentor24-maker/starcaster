@@ -1,3 +1,46 @@
+## 2026-09-06 — An answer you wrote could go permanently missing if a job died at the wrong second (#640)
+
+When you answer a question on a ticket, a background job does two things with
+your reply: it copies it onto the team chat, and it puts the ticket back into
+the machines' queue so the work can carry on. Those two steps were joined at the
+hip — the second one only ever happened in the same run as the first, and the
+first leaves a permanent "already sent" mark behind. So if the run died in
+between, every later run saw the mark, decided there was nothing new, and did
+nothing at all. For ever. The only thing that could release the ticket had
+already happened and could never happen again.
+
+That is what put your `C` on the Lane A ticket into a hole for three and a half
+hours on Saturday. The 9:46 run delivered your answer, ran out of its ClickUp
+request allowance before it could move the ticket, and reported the problem
+honestly — into a chat message the same allowance then refused to send. You
+found it yourself.
+
+The job now asks a question it can answer every single time it looks: is there
+an answer from you, newer than the newest question, that has reached somebody?
+Both halves are read off the ticket itself, so a crash costs ten minutes rather
+than the work. The safety rule is untouched — a ticket still never moves on an
+answer nobody received.
+
+Two things came with it. A hand-back that fails now writes a short note on the
+ticket saying so, rather than only into a chat message that can vanish. And
+there is a new watchdog, `npm run stale-answer`, that watches for exactly one
+shape: you replied, and nothing moved. None of the four watchdogs already
+running could see it — the relay's own heartbeat was perfectly healthy that
+morning; one ticket had simply fallen out of it. This one notices within half an
+hour, says out loud that it is not waiting on you, and goes quiet again as soon
+as the ticket moves.
+
+**Checked over a second time (2026-09-07), and four things needed fixing before
+it could go live.** The new watchdog's "did your answer actually reach anybody?"
+test was reading the wrong thing entirely, so it never once got an answer — and
+its report would have blamed the wrong part of the system on the one screen you
+read. Quoting the question above your reply, which is a perfectly normal way to
+answer, stopped the ticket being released at all — and the watchdog called that
+same ticket healthy. The alarm could go off once about a ticket and then never
+again about it. And a ticket you had deliberately parked back in "needs your
+input" by hand would have been dragged straight out again within ten minutes,
+with your name taken off it. All four are fixed and each one was proved by
+breaking it on purpose and watching a test catch it.
 ## 2026-09-07 — The pipeline had started filing tickets about itself faster than we could do them (#641)
 
 The tooling that runs the build pipeline checks its own health, and it is good
