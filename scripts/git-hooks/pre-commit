@@ -14,6 +14,8 @@
 #    user's browser — and it kills the whole file, not just that line.
 # 5. Run repo convention checks (stale artifacts, public/js freeze, etc.)
 #    on the staged diff.
+# 6. Render all 61 Builder module types with liveSite set and read the text a
+#    visitor would get, so design-time scaffolding cannot reach a client site.
 #
 # Note: the rebuild uses your WORKING TREE source. If you are committing only
 # part of your edits, the pin reflects everything on disk — CI re-checks pins
@@ -44,3 +46,8 @@ node scripts/check_build_paths.cjs --quiet
 node scripts/pin_asset_versions.cjs --stage
 node scripts/check_syntax.cjs --quiet
 node scripts/check_conventions.cjs
+# 6. Render every Builder module type as a visitor sees it. The sibling of the
+#    grep in check_conventions: three placeholders reached live client sites
+#    through four review rounds because none of them was a phrase a grep could
+#    find (ticket 86bbvqcbk). About a second and a half.
+node scripts/check_live_placeholders.cjs
