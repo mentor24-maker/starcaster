@@ -1,3 +1,31 @@
+## 2026-09-07 — The search box on the tags page told a visitor the wrong thing when it found nothing (#643)
+
+The `/tags` page on the Delray site has a search box that does nothing at all —
+type a word, press Search, and the page does not change by a single character.
+Dane picked the fix on the ticket: switch that page over to the search field the
+post feed already carries, and take the dead box away. Both of those are clicks
+in the Builder on a live client page, so they are his; this is the code half
+they depend on.
+
+The feed's own search field works, but it was not honest about coming up empty.
+Typing a word nothing matched said "No posts match your filters", which never
+tells the visitor *which* word emptied the page — the same complaint that was
+fixed for the tag and category dropdowns back in the summer, one step further
+on. And with a tag also selected it said something worse: "No posts tagged
+'beginner tennis'", while posts carrying that tag were sitting right there. The
+search had emptied the list and the tag was taking the blame. A confidently
+wrong message is worse than a vague one, because nobody thinks to doubt it.
+
+Now the word the visitor typed is named — "No posts match 'zzzz'" — and when a
+tag is also in play both are named, so no filter takes credit for an emptiness
+it did not cause. The "Show all posts" way back was already there and still is,
+and the wording when nothing was typed is untouched.
+
+Deliberately left alone: making the post feed obey a search word arriving in the
+web address. The chosen fix does not need it, and doing it carelessly would let
+a page filter itself with no visible box to clear — that wants its own think
+first.
+
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 
 When one of the build sessions dies partway through a job — the machine goes to
