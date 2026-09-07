@@ -1,3 +1,41 @@
+## 2026-09-07 — The panel checker was passing 35 crooked panels, and now it names them (#653)
+
+Every module in the Builder has a settings panel, and Dane pointed at a problem
+in them back in August: the boxes in the top block and the boxes in the block
+below it don't start at the same place, so an open panel reads as two ragged
+halves rather than one tidy rectangle.
+
+There is an automatic checker that is supposed to catch exactly this. It has
+been reporting a clean pass, every time, for weeks — while 35 of the 37 panels
+were crooked. The reason is a genuinely easy mistake to make: the checker
+looked at the top block and confirmed everything in it agreed with itself, then
+looked at the bottom block and confirmed the same, and called it a pass. It
+never asked whether the two blocks agreed with *each other*. Two halves that
+are each internally tidy can still be badly out of line with one another, and
+that is precisely what was happening.
+
+This change makes the checker ask that question. It does not straighten a
+single panel — that is the next job, and Dane has already chosen how it gets
+done. What it does is turn an invisible problem into a counted one: the 31
+panels currently out of line are written down in a list, and from now on the
+list can only get shorter. A panel that goes crooked and isn't on the list
+fails the check as a new fault; a panel on the list that gets fixed also fails,
+until it is taken off. So the fix cannot be quietly half-done, and nothing can
+slip back.
+
+Two things turned up while measuring that the original description had wrong,
+and both would have sent the repair off in the wrong direction. The top block
+is actually at the *bottom* on 30 of the 35 panels. And one panel that looked
+like the worst offender of all isn't broken at all — its two blocks sit side by
+side rather than stacked, so there is no shared edge for them to miss.
+
+The checker also caught an error of mine while I was writing it. I had measured
+one panel by hand and recorded it as crooked; the moment the new rule ran, it
+objected that the panel was fine. It was right and I was wrong — I had measured
+a full-width box, which by design starts further left than the others. That is
+the check doing its job before the work had even shipped, which is the best
+evidence it works that I could offer.
+
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 
 When one of the build sessions dies partway through a job — the machine goes to
