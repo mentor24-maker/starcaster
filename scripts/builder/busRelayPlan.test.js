@@ -505,8 +505,12 @@ test('a simulated pass sends no write of any kind', () => {
   assert.match(between, /return answer\(deliveryVerdict\(/,
     'the simulation branch must RETURN before the receipt POST, not fall through to it');
 
-  // ...and the dedup marker, which is permanent, is never written.
-  assert.match(RELAY_SRC, /if \(delivery\.ok\) \{ relayed\+\+; fresh\+\+; \}/,
+  // ...and the dedup marker, which is permanent, is never written. The
+  // simulation branch records delivery in `deliveredIds` alongside `fresh`
+  // (task 86bbvr4w3) — both are in-memory counters for THIS pass, and neither
+  // touches ClickUp. What must stay true is that the branch continues rather
+  // than falling through to the marker POST.
+  assert.match(RELAY_SRC, /if \(delivery\.ok\) \{ relayed\+\+; fresh\+\+; deliveredIds\.add\(String\(c\.id\)\); \}/,
     'a simulated pass must continue before the marker write');
 });
 
@@ -747,4 +751,150 @@ test('a merge-capable watch reads every ticket regardless of recency', () => {
   const out = ticketsToRead({ watch: MERGES, tasks: [ancient], mark: 10_000_000 });
   assert.deepEqual(out.read, [ancient], 'a quiet Ready-to-launch ticket must still be re-decided every pass');
   assert.equal(out.skipped, 0);
+});
+
+/* ------------------------------------------------------------------ *
+ * THE HAND-BACK IS RETRIED (2026-09-06, task 86bbvr4w3).
+ *
+ * The trigger used to be "a comment relayed in THIS pass", which is an event
+ * that can happen exactly once: relaying writes a permanent dedup marker, so
+ * every later pass computed fresh = 0 and moved nothing. A pass that died
+ * between the relay and the move stranded its ticket in `Needs your input`
+ * for good — 86bbv8nvy, 3.5 hours, found by Dane rather than by any alarm.
+ *
+ * These pin the durable derivation that replaced it. Each one fails if the
+ * fix is reverted; the ticket's break-test list names which.
+ * ------------------------------------------------------------------ */
+
+const {
+  answerAwaitingHandback, isEscalationCard, ESCALATION_BANNER,
+  HANDBACK_FAILURE_MARKER, handbackFailureText, BUS_RELAY_MARKER: DEDUP_MARKER,
+} = require('./busRelayPlan.js');
+const { stampMachineComment: stampCard } = require('./machineComment.js');
+
+const CARD = stampCard(`Some context.\n\n#############################\n${ESCALATION_BANNER} Which option, A or B?`);
+const card = (id, at) => ({ id, date: String(at), user: { id: DANE }, comment_text: CARD });
+const his = (id, at, text = 'B') => ({ id, date: String(at), user: { id: DANE }, comment_text: text });
+
+const answeredOpts = { operatorId: DANE, isMachine: isMachineComment };
+const allDelivered = () => true;
+const noneDelivered = () => false;
+
+test('the escalation card is recognised by its banner', () => {
+  assert.ok(isEscalationCard(CARD));
+  assert.ok(!isEscalationCard('B, go with the marker'));
+  assert.ok(!isEscalationCard(null), 'an unread comment is an unknown, never a question');
+});
+
+test('an answer already relayed on an EARLIER pass still authorizes the hand-back', () => {
+  // This is the incident exactly: the comment was delivered, the marker was
+  // written, and the move never happened. Nothing about this ticket is "fresh"
+  // any more, and that must not matter.
+  const out = answerAwaitingHandback({
+    comments: [card('c1', 1000), his('a1', 2000)],
+    ...answeredOpts,
+    delivered: allDelivered,
+  });
+  assert.equal(out.state, 'answered');
+  assert.equal(out.delivered, true);
+  assert.equal(out.answer.id, 'a1');
+  assert.equal(handbackTarget(loopQueue, 'needs your input', out.state === 'answered' && out.delivered), 'Queued',
+    'a delivered answer to the newest question releases the ticket, whichever pass delivered it');
+});
+
+test('an answer that reached NOBODY still moves nothing', () => {
+  // The delivery gate is re-pointed, never weakened: a ticket must not move on
+  // an answer nobody ever got.
+  const out = answerAwaitingHandback({
+    comments: [card('c1', 1000), his('a1', 2000)],
+    ...answeredOpts,
+    delivered: noneDelivered,
+  });
+  assert.equal(out.state, 'answered');
+  assert.equal(out.delivered, false);
+  assert.equal(handbackTarget(loopQueue, 'needs your input', out.state === 'answered' && out.delivered), null);
+});
+
+test('an answer from an EARLIER round cannot release a fresh escalation', () => {
+  // The reason the question is anchored on the newest card rather than on a
+  // marker: if a "handled" marker were ever lost, an old answer must still not
+  // release a question asked after it.
+  const out = answerAwaitingHandback({
+    comments: [card('c1', 1000), his('a1', 2000), card('c2', 3000)],
+    ...answeredOpts,
+    delivered: allDelivered,
+  });
+  assert.equal(out.state, 'none');
+  assert.equal(handbackTarget(loopQueue, 'needs your input', out.state === 'answered'), null);
+});
+
+test('his NEWEST word after the question is the one that must have landed', () => {
+  const out = answerAwaitingHandback({
+    comments: [card('c1', 1000), his('a1', 2000, 'B'), his('a2', 4000, 'actually A')],
+    ...answeredOpts,
+    delivered: (c) => c.id === 'a1',
+  });
+  assert.equal(out.answer.id, 'a2', 'the move is made on what he last said');
+  assert.equal(out.delivered, false, 'releasing the ticket while his latest sentence reached nobody is the bug');
+});
+
+test('a machine card under his token is never read as his answer', () => {
+  // The 86bbqx2xe failure, re-pinned here because this derivation is a second
+  // reader of "whose word is it" and would resurrect the bug on its own.
+  const out = answerAwaitingHandback({
+    comments: [card('c1', 1000), itsOwnCard],
+    ...answeredOpts,
+    delivered: allDelivered,
+  });
+  assert.equal(out.state, 'none');
+});
+
+test('no escalation card is `no-question`, never `answered`', () => {
+  // A ticket parked by hand gives no way to tell an answer from something he
+  // said last week. The relay keeps the old fresh-only rule there and
+  // stale-answer reports it as CANNOT TELL — neither guesses.
+  const out = answerAwaitingHandback({
+    comments: [his('a1', 2000)],
+    ...answeredOpts,
+    delivered: allDelivered,
+  });
+  assert.equal(out.state, 'no-question');
+  assert.equal(out.delivered, null, 'delivery is not claimed about an answer that could not be identified');
+});
+
+test('a failed hand-back is recorded on the ticket, under a prefix the dedup check cannot read', () => {
+  const text = handbackFailureText({ target: 'Queued', status: 'needs your input', why: 'HTTP 429', at: 'ISO' });
+  assert.ok(text.startsWith(HANDBACK_FAILURE_MARKER));
+  assert.ok(text.includes('Queued') && text.includes('HTTP 429'), 'the note must name the target and the reason');
+  assert.ok(text.includes('next relay pass'), 'and say the retry does not depend on this note');
+  // THE ONE THAT WOULD HURT: `[bus-relay]` is the marker meaning "this comment
+  // was already relayed". A failure note that started with it would claim a
+  // delivery that never happened and drop the real bus message for good.
+  assert.ok(!text.startsWith(DEDUP_MARKER),
+    'the failure note must not be readable as a delivery marker');
+  assert.ok(isMachineComment(text), 'and it must never come back as Dane\'s own word');
+});
+
+test('the relay reads the durable marker as delivery, which is the whole of the fix', () => {
+  // The pure derivation above is only half of it. The other half is that the
+  // relay tells it about a comment relayed on an EARLIER pass — the branch
+  // that used to `continue` straight past, leaving `fresh` at 0 for ever.
+  // Nothing but the source can pin that, and without it every unit test here
+  // passes while the ticket still strands.
+  assert.match(RELAY_SRC, /if \(already\) \{ deliveredIds\.add\(String\(c\.id\)\); skipped\+\+; continue; \}/,
+    'an already-relayed comment must be recorded as DELIVERED, not merely skipped');
+
+  const authorizedAt = RELAY_SRC.indexOf('const authorized = answered.state ===');
+  const targetAt = RELAY_SRC.indexOf("const target = handbackTarget(watch, t.status?.status, authorized)");
+  assert.ok(authorizedAt > -1 && targetAt > authorizedAt,
+    'the hand-back must be decided from the durable verdict, never from this pass\'s `fresh` count');
+
+  // A ticket with no escalation card keeps the OLD rule, so nothing regresses
+  // where the question cannot be identified.
+  assert.match(RELAY_SRC, /answered\.state === 'no-question'\s*\n?\s*\? fresh/,
+    'without a card the fresh-only rule must still stand — guessing there is worse than the bug');
+
+  // And the failure goes on the ticket (criterion 2), best-effort.
+  assert.match(RELAY_SRC, /comment_text: handbackFailureText\(\{/,
+    'a hand-back that fails must leave a record on the ticket, not only in a bus post a rate limit can swallow');
 });

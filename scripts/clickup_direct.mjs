@@ -89,6 +89,7 @@ import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled, operatorComments,
+  answerAwaitingHandback, handbackFailureText,
   ticketsToRead, markAfterPass, DEFAULT_OVERLAP_MS,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
   SIMULATED_BUS_WHY, simulationGuard, simulationLine, sweepVerdict,
@@ -4480,6 +4481,12 @@ if (cmd === 'whoami') {
       // on the ticket — the gate is re-pointed at a durable surface, never
       // weakened.
       let fresh = 0;
+      // WHICH OF HIS COMMENTS HAVE ACTUALLY REACHED SOMEBODY — by the durable
+      // marker as well as by this pass's own success (task 86bbvr4w3). `fresh`
+      // above is still the count relayed THIS RUN, and it is still what the
+      // pass summary reports; it is no longer the hand-back trigger, because a
+      // trigger that can only fire once is a trigger a crash destroys for good.
+      const deliveredIds = new Set();
       // Merge commands this pass must NOT act on: either terminally acted on
       // (merged, or handed to an agent session for a conflict), or unknowable because
       // the reply read failed. The second case is deliberate — a comment
@@ -4525,7 +4532,11 @@ if (cmd === 'whoami') {
         }
         else if (marker) mergeHandled.add(String(c.id));
         const already = replies.some((r) => (r.comment_text || '').startsWith(BUS_RELAY_MARKER));
-        if (already) { skipped++; continue; }
+        // Already relayed on an EARLIER pass. Nothing more to send — and this
+        // is exactly the state that used to end the story, because `fresh`
+        // stayed 0 and the hand-back could never fire again. The marker is the
+        // durable proof his answer was delivered, so it is read as such.
+        if (already) { deliveredIds.add(String(c.id)); skipped++; continue; }
 
         const when = new Date(Number(c.date)).toISOString().slice(0, 16).replace('T', ' ');
         console.error(`\nRelaying: task "${t.name}" (${t.id}), comment ${c.id} [${when}]`);
@@ -4533,7 +4544,7 @@ if (cmd === 'whoami') {
         // posted and asserts nothing about delivery. Under --simulate-bus-failure
         // it deliberately does NOT stop, because the whole point is to run the
         // fallback path rather than describe it.
-        if (dryRun && !simulateBusFailure) { console.error(`  DRY RUN — would post:\n  ${c.comment_text}`); relayed++; fresh++; continue; }
+        if (dryRun && !simulateBusFailure) { console.error(`  DRY RUN — would post:\n  ${c.comment_text}`); relayed++; fresh++; deliveredIds.add(String(c.id)); continue; }
 
         const busBody = `[CC-starcaster bus-relay] Dane replied on "${t.name}" (${t.url}):\n\n${c.comment_text}`;
         // Chat, then a receipt comment on this very ticket. Only if BOTH fail
@@ -4553,7 +4564,7 @@ if (cmd === 'whoami') {
         // #414 guarantee holds on THIS watch.
         if (simulateBusFailure) {
           console.error(simulationLine({ verdict: delivery, target: simTarget }));
-          if (delivery.ok) { relayed++; fresh++; }
+          if (delivery.ok) { relayed++; fresh++; deliveredIds.add(String(c.id)); }
           else unchecked.push(`${t.id} comment ${c.id}: SIMULATION — not delivered (${delivery.reason || delivery.why}); nothing was marked relayed`);
           continue;
         }
@@ -4580,7 +4591,7 @@ if (cmd === 'whoami') {
         // "already relayed" check reads.
         const markerText = relayMarkerText({ via: delivery.via, channel, at: new Date().toISOString() });
         const markOut = await call('POST', `/api/v2/comment/${c.id}/reply`, { comment_text: markerText });
-        if (!markOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: delivered (via ${delivery.via}) but could not write the dedup marker — will re-relay next run`); relayed++; fresh++; continue; }
+        if (!markOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: delivered (via ${delivery.via}) but could not write the dedup marker — will re-relay next run`); relayed++; fresh++; deliveredIds.add(String(c.id)); continue; }
 
         // Verify the marker actually landed, same discipline as `comment`'s
         // read-back (DOCTRINE 3.10) — a 200 here is not proof it stuck.
@@ -4591,6 +4602,7 @@ if (cmd === 'whoami') {
         console.error(`  delivered via ${delivery.via === 'chat' ? 'the party line' : 'a receipt on the ticket'}, marker ${stuck ? 'verified' : 'UNVERIFIED'}`);
         relayed++;
         fresh++;
+        deliveredIds.add(String(c.id));
       }
 
       // Comment-driven MERGE (task 86bbjd5nn): the other thing an operator
@@ -4685,12 +4697,45 @@ if (cmd === 'whoami') {
         }
       }
 
-      // Comment-driven handback (task 86bbh9g7k): a fresh answer from the
-      // operator on a "needs your input" ticket releases it back to the
-      // machine. His comment is the authorization; no fresh comment, no
-      // move — that is the doctrine checkpoint, enforced in handbackTarget.
-      const target = handbackTarget(watch, t.status?.status, fresh);
+      // Comment-driven handback (task 86bbh9g7k): an answer from the operator
+      // on a "needs your input" ticket releases it back to the machine. His
+      // comment is the authorization; no delivered answer, no move — that is
+      // the doctrine checkpoint, enforced in handbackTarget.
+      //
+      // THE AUTHORIZATION IS NOW DURABLE (2026-09-06, task 86bbvr4w3). It used
+      // to be `fresh` — comments relayed in THIS pass — which made the move a
+      // one-shot event. Relaying writes a permanent marker, so a pass that died
+      // between the relay and the move left a ticket that no later pass could
+      // ever release: `fresh` was 0 for ever after. That is not a hypothetical;
+      // 86bbv8nvy was stranded that way for 3.5 hours on 2026-09-06, and only
+      // Dane noticing broke the loop.
+      //
+      // So the question asked is a property of the TICKET, re-derivable every
+      // pass: is there a delivered answer of his newer than the newest
+      // escalation card? `answerAwaitingHandback` owns that rule and its
+      // reasoning.
+      const answered = answerAwaitingHandback({
+        comments: commentsOut.json.comments || [],
+        operatorId: OPERATOR_ID,
+        isMachine: isMachineComment,
+        delivered: (c) => deliveredIds.has(String(c.id)),
+      });
+      // No escalation card on the trail means there is no way to tell an answer
+      // from something he said last week, so the OLD fresh-only rule stands
+      // there and nothing regresses. `npm run stale-answer` reports those as
+      // CANNOT TELL rather than letting them read as quiet.
+      const authorized = answered.state === 'no-question'
+        ? fresh
+        : (answered.state === 'answered' && answered.delivered);
+      const target = handbackTarget(watch, t.status?.status, authorized);
       if (!target) continue;
+      // A retry is worth a line of its own: it is the whole of this fix, and a
+      // pass that silently repaired yesterday's crash would leave nobody able
+      // to tell the repair had ever run.
+      if (!fresh) {
+        console.error(`  RETRYING a hand-back that an earlier pass did not complete: "${t.name}" -> ${target}`
+          + ` (his answer was delivered at ${new Date(answered.answerAt).toISOString()})`);
+      }
       if (dryRun) {
         console.error(`  DRY RUN — would hand back: "${t.name}" -> ${target}`);
         handedBack++;
@@ -4700,7 +4745,24 @@ if (cmd === 'whoami') {
       // them in the same write, and verify BOTH halves from its response.
       const rem = (t.assignees || []).map((a) => a.id);
       const moveOut = await call('PUT', `/api/v2/task/${t.id}`, { status: target, assignees: { add: [], rem } });
-      if (!moveOut.res.ok) { unchecked.push(`${t.id}: the answer was delivered but the hand-back to "${target}" FAILED — the ticket is still parked in "${t.status?.status}"`); continue; }
+      if (!moveOut.res.ok) {
+        const why = `HTTP ${moveOut.res.status}`;
+        unchecked.push(`${t.id}: the answer was delivered but the hand-back to "${target}" FAILED (${why}) — the ticket is still parked in "${t.status?.status}". The next pass re-derives this and tries again.`);
+        // Criterion 2: the failure goes on the TICKET, not only into a bus post
+        // that a rate limit can swallow. Best effort by design — the retry is
+        // derived from the trail and does NOT depend on this landing, which
+        // matters because the usual reason the move failed is the same budget
+        // this write needs.
+        if (answered.answer) {
+          const noteOut = await call('POST', `/api/v2/comment/${answered.answer.id}/reply`, {
+            comment_text: handbackFailureText({
+              target, status: t.status?.status, why, at: new Date().toISOString(),
+            }),
+          });
+          if (!noteOut.res.ok) console.error(`  (could not record the failed hand-back on ${t.id} either — HTTP ${noteOut.res.status}; the next pass still re-derives it)`);
+        }
+        continue;
+      }
       const now = moveOut.json.status?.status ?? '?';
       if (now.toLowerCase() !== target.toLowerCase()) {
         unchecked.push(`${t.id}: hand-back did not stick (asked "${target}", the write came back "${now}")`);

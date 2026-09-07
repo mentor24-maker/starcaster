@@ -1,5 +1,7 @@
 'use strict';
 
+const { BANNER_LABEL } = require('./operatorCard.js');
+
 /**
  * bus-relay's decision table: which lists it watches, and what a fresh
  * operator comment DOES on each one. Pulled out of clickup_direct.mjs so the
@@ -168,14 +170,154 @@ function operatorComments(comments, { operatorId, isMachine } = {}) {
   });
 }
 
-/** Where a task should be moved after its fresh operator comments were
- *  relayed — or null for "do not touch it". freshRelayed is the count of
- *  comments relayed THIS run: zero means nothing new from the operator,
- *  and a task with nothing new is never moved, ever. */
-function handbackTarget(watch, taskStatus, freshRelayed) {
-  if (!freshRelayed) return null;
+/**
+ * THE ESCALATION CARD — the comment that IS the question.
+ *
+ * `ask` is the only way a ticket reaches `Needs your input` (a bare `status`
+ * move refuses on its own), and every card it writes ends in the banner
+ * `operatorCard.js` draws. That banner is therefore the one durable mark on a
+ * ticket saying "the machine asked something here", which is what lets a later
+ * pass order the trail: anything of Dane's AFTER the newest card is an answer
+ * to it, and anything before it belonged to an earlier round.
+ *
+ * Matched on the label with its trailing space trimmed off, because the label
+ * is drawn with one and a round trip through ClickUp is not guaranteed to keep
+ * it. The `#` rule around it is deliberately NOT part of the test: ClickUp
+ * escapes markdown punctuation on the way back out, so a rule can return as
+ * `\#\#\#...` and a matcher reading it would fail on exactly the tickets it
+ * was written for.
+ */
+const ESCALATION_BANNER = BANNER_LABEL.trim();
+
+function isEscalationCard(text) {
+  if (text == null) return false;
+  return String(text).includes(ESCALATION_BANNER);
+}
+
+/** Epoch ms of a ClickUp comment, or 0 when it has no usable date. */
+function commentAt(comment) {
+  const at = Number(comment && comment.date);
+  return Number.isFinite(at) && at > 0 ? at : 0;
+}
+
+/**
+ * IS AN ANSWER FROM DANE SITTING ON THIS TICKET WITH NOTHING HAVING MOVED?
+ *
+ * WHY THIS EXISTS (2026-09-06, task 86bbvr4w3). The hand-back used to fire on
+ * ONE trigger and one only: a comment relayed to the party line *during this
+ * pass*. That trigger is not repeatable. Relaying writes a permanent dedup
+ * marker, so every later pass reads the comment as already relayed, computes
+ * `fresh = 0`, and hands nothing back — for ever.
+ *
+ * On 2026-09-06 the 09:46 pass relayed Dane's answer on 86bbv8nvy, ran out of
+ * ClickUp request budget between the relay and the move, and reported the
+ * failure honestly into a bus post that the same rate limit then skipped. The
+ * ticket was stranded in `Needs your input` permanently: the only event that
+ * could release it had already happened and could never happen again. He found
+ * it himself three and a half hours later.
+ *
+ * So the trigger moves from "what happened in this pass" to "what is true of
+ * the ticket" — state that is re-derivable on every later pass, which is the
+ * whole of the fix. Two facts, both read off the trail:
+ *
+ *   1. The newest escalation card is the QUESTION. Dane's newest comment after
+ *      it is the ANSWER. Nothing before the card can release the ticket,
+ *      which is what stops an answer from an earlier round releasing a fresh
+ *      escalation if a marker write is ever lost.
+ *   2. That answer must have been DELIVERED — relayed to the party line, or
+ *      receipted on the ticket. That gate is unchanged and not weakened: a
+ *      ticket must never move on an answer nobody ever got. What changes is
+ *      that "delivered" is now read from the durable marker as well as from
+ *      this pass's own success.
+ *
+ * NO CARD MEANS NO ANSWER TO THE QUESTION — `no-question`, never `answered`.
+ * A ticket parked by hand, or one whose card has fallen off the newest page of
+ * comments, gives no way to tell an answer from something he said last week,
+ * and handing such a ticket back on the strength of an old comment is a worse
+ * failure than the one being fixed. The caller keeps the old fresh-only
+ * behaviour there, and `lib/staleAnswer.js` reports it as CANNOT TELL.
+ *
+ * @param comments   the ticket's comments (one page is enough — the card and
+ *                   the answer are both recent by construction)
+ * @param operatorId Dane's ClickUp user id
+ * @param isMachine  (text) => boolean, so a machine card under his token is
+ *                   never mistaken for his word (see operatorComments)
+ * @param delivered  optional (comment) => boolean. Omit it to ask only
+ *                   "has he answered?", which is what the report needs.
+ * @returns { state, answer, answerAt, questionAt, delivered }
+ *          state: 'answered' | 'none' | 'no-question'
+ *          delivered: true/false, or null when no test was supplied
+ */
+function answerAwaitingHandback({ comments, operatorId, isMachine, delivered } = {}) {
+  const all = Array.isArray(comments) ? comments : [];
+  const questionAt = all
+    .filter((c) => isEscalationCard(c && c.comment_text))
+    .reduce((newest, c) => Math.max(newest, commentAt(c)), 0);
+
+  if (!questionAt) {
+    return { state: 'no-question', answer: null, answerAt: 0, questionAt: 0, delivered: null };
+  }
+
+  const answers = operatorComments(all, { operatorId, isMachine })
+    .filter((c) => commentAt(c) > questionAt);
+
+  if (!answers.length) {
+    return { state: 'none', answer: null, answerAt: 0, questionAt, delivered: null };
+  }
+
+  // His NEWEST word after the question. Newest rather than oldest because the
+  // hand-back is a move made on the strength of what he last said: releasing
+  // the ticket while his most recent sentence had reached nobody is the very
+  // thing the delivery gate exists to prevent.
+  const answer = answers.reduce((newest, c) => (commentAt(c) > commentAt(newest) ? c : newest));
+  return {
+    state: 'answered',
+    answer,
+    answerAt: commentAt(answer),
+    questionAt,
+    delivered: typeof delivered === 'function' ? Boolean(delivered(answer)) : null,
+  };
+}
+
+/** Where a task should be moved once its operator answer has been delivered —
+ *  or null for "do not touch it".
+ *
+ *  `authorized` used to be the count of comments relayed THIS RUN, which made
+ *  the move a one-shot event that a crash could destroy for good (see
+ *  `answerAwaitingHandback` for the incident). It is now a durable verdict:
+ *  "there is a delivered answer to the newest question, and the ticket is
+ *  still parked". Falsy means do nothing, exactly as before — the doctrine
+ *  checkpoint that no loop takes a ticket out of `Needs your input` without
+ *  his word is unchanged; only its evidence is now re-readable. */
+function handbackTarget(watch, taskStatus, authorized) {
+  if (!authorized) return null;
   const byStatus = watch.handback || {};
   return byStatus[String(taskStatus || '').toLowerCase()] || null;
+}
+
+/**
+ * THE FAILED HAND-BACK, WRITTEN WHERE THE NEXT PASS CAN SEE IT.
+ *
+ * The retry above does not depend on this note — it is derived from the trail,
+ * which is the point of criterion 4: a bus post that the rate limit swallows
+ * must not be the only record. This is the evidence half. A reader landing on
+ * the ticket cold sees why it did not move and when, rather than an answer
+ * followed by silence.
+ *
+ * Deliberately NOT prefixed `[bus-relay]`: that exact prefix is the dedup
+ * marker the relay reads as "this comment was already relayed", and a note
+ * that accidentally claimed delivery would drop a real bus message for good.
+ * `[bus-relay-handback]` shares the family the machine-comment tag matches
+ * and none of the prefix the dedup check reads.
+ */
+const HANDBACK_FAILURE_MARKER = '[bus-relay-handback]';
+
+function handbackFailureText({ target, status, why, at } = {}) {
+  const where = status ? `"${status}"` : 'the status it was already in';
+  return `${HANDBACK_FAILURE_MARKER} Your answer was delivered, but returning this ticket to `
+    + `"${target}" FAILED (${why || 'reason unknown'}), so it is still parked in ${where}.\n\n`
+    + 'Nothing is lost: the next relay pass re-derives this from the trail above and tries the move '
+    + `again.${at ? ` (Automatic — bus-relay, ${at}.)` : ''}`;
 }
 
 /** May this watch act on a merge command? Ad-hoc `--list` runs are
@@ -495,7 +637,13 @@ module.exports = {
   operatorComments,
   defaultWatches,
   sweepVerdict,
+  ESCALATION_BANNER,
+  isEscalationCard,
+  commentAt,
+  answerAwaitingHandback,
   handbackTarget,
+  HANDBACK_FAILURE_MARKER,
+  handbackFailureText,
   mergeEnabled,
   ticketsToRead,
   markAfterPass,
