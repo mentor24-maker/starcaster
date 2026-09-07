@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const {
   resolveBuildStart, describeBuildStart, describeNextMove,
   needsLocalWorkReading, buildStartExitCode, prLookupArgs,
-  withLocalWork, blindHere, describeFoundWork,
+  withLocalWork, blindHere, describeFoundWork, repoBlocked,
 } = require('./buildStart.js');
 
 /**
@@ -1155,7 +1155,13 @@ test('the doc CLAUDE.md defers to describes the exit 3 a hand session will get',
   const md = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'LOOP_ENGINEERING.md'), 'utf8');
   const i = md.indexOf('**Find the branch.**');
   assert.ok(i > 0, 'the fast-track lane still has its step 4');
-  const step = md.slice(i, i + 2600);
+  // THE SECTION, NOT A CHARACTER COUNT. A fixed 2600 broke the moment round 4
+  // added the third `CONTINUE` shape ahead of the exit-1 paragraph: the
+  // assertions below went red on a doc that had just been made MORE complete,
+  // which is a test measuring length rather than content.
+  const end = md.indexOf('5. **On a send-back', i);
+  assert.ok(end > i, 'step 4 still ends where step 5 begins');
+  const step = md.slice(i, end);
   assert.match(step, /worktree/i, 'the disk half is described');
   assert.match(step, /another machine/i, 'including the seat it cannot reach');
   assert.match(step, /never pushed|does not exist/i, 'and why origin/<branch> is not always there');
@@ -1178,5 +1184,175 @@ test('all three consumer docs describe the same command', () => {
   for (const [name, text] of Object.entries(docs)) {
     assert.match(text, /build-start --task/, `${name} names the command`);
     assert.match(text, /another machine/i, `${name} describes the seat it cannot reach`);
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════════════ *
+ * ROUND-3 REVIEW (2026-09-07) — the two answers where refusing is not the
+ * whole instruction.
+ *
+ *   1  A ticket whose `repo:` tag does not resolve made the reading answer
+ *      `cannot-tell` naming THIS seat, so `build-start` exited 1 and the
+ *      skill's exit-1 branch ("Stop and say so") ended the pass with nothing
+ *      posted anywhere. `reconciledBuildDestination` then returned it to
+ *      `Rework`, `queue --claimable` sorts rework first and oldest-first on a
+ *      key that never changes, and the ticket sat at the head of the claim
+ *      line being claimed and refused by every pass. One mis-tagged ticket
+ *      killed the lane. On `main` this did not happen — `build-start` never
+ *      consulted the reading, so the pass reached the repo rule three
+ *      paragraphs further down and escalated correctly. A regression.
+ *
+ *   2  `CONTINUE` has a THIRD shape — a stamped branch whose worktree was
+ *      removed — and all three docs gave a command that fails on it.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+const localWorkReading = require('./localWorkReading.js');
+
+/**
+ * The reading for a ticket carrying `tags`, taken through the REAL resolver.
+ *
+ * The shell THROWS on purpose: the review asked for a break-test against a tag
+ * that really does not resolve rather than a hand-built row, and a transport
+ * that cannot be used is also the assertion that nothing was probed at all —
+ * which is the fact the escalation's wording rests on.
+ */
+function readingForTags(tags, here = 'mac-mini') {
+  return localWorkReading.workInProgressFor({ id: '86bbvur5a', tags }, {
+    here,
+    shell: () => { throw new Error('no disk should be probed when we do not know where to look'); },
+    routedMachines: [],
+    routesKnown: false,
+  });
+}
+
+test('THE ROUND-3 BUG: a tag that really does not resolve leaves the pass an escalation', () => {
+  // Driven through the real `taskRepo`, so a fleet or a rename that changed
+  // the known repos cannot make this go quietly green.
+  for (const tags of [[{ name: 'repo:does-not-exist' }], [{ name: 'repo:pulse' }, { name: 'repo:normie' }]]) {
+    const decision = resolveBuildStart([], {
+      lookupPr: knows({}),
+      hereId: 'mac-mini',
+      findLocalWork: () => readingForTags(tags),
+    });
+    const label = JSON.stringify(tags);
+    // Exit 1 is still the right ANSWER — it genuinely cannot tell. The defect
+    // was that nothing caught it.
+    assert.equal(decision.action, 'unknown', `${label} still cannot tell`);
+    assert.equal(buildStartExitCode(decision), 1, `${label} is still a stop`);
+
+    const next = describeNextMove(decision, { task: '86bbvur5a' });
+    assert.ok(next, `${label} must leave the pass something to DO, or the lane dies on it`);
+    assert.match(next, /ask --task 86bbvur5a --status "Needs your input"/,
+      `${label} names the escalation command, runnable as printed`);
+    assert.match(next, /every\s+pass|for good/i, `${label} says why waiting does not fix it`);
+    assert.match(next, /repo/i, `${label} names the repo tag as the cause`);
+  }
+});
+
+test('a disk that merely went QUIET gets no escalation — stopping IS the instruction', () => {
+  // The mirror, and the one that matters: an escalation offered here would
+  // send Dane a card every time his laptop was shut, and would turn a blind
+  // spot that clears itself into a ticket taken out of the lane.
+  const { nodes, routes } = realFleet();
+  const here = nodes.filter((n) => routes.machines.includes(n))[0];
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: here,
+    findLocalWork: () => readingFromFleet({ here, quiet: nodes, localOut: 'truncated' }),
+  });
+  assert.equal(decision.action, 'unknown', 'the local disk going unread is still fatal');
+  assert.equal(buildStartExitCode(decision), 1);
+  assert.equal(describeNextMove(decision, { task: '86bbvur5a' }), '',
+    'a seat that will answer on the next pass must not be escalated to Dane');
+});
+
+test('a ticket that could not be READ is transient, not an escalation', () => {
+  // `BLOCKED_TICKET` and `BLOCKED_REPO` both stop the pass, and only one of
+  // them is a ticket a human has to edit. A ClickUp blip must not put work in
+  // front of Dane.
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => localWorkReading.workInProgressFor({ id: 'x' }, { here: 'mac-mini' }),
+  });
+  assert.equal(decision.action, 'unknown');
+  assert.equal(describeNextMove(decision, { task: 'x' }), '',
+    'a transient read failure clears itself; escalating it spends Dane on a retry');
+});
+
+test('the escalation is only offered for a blind spot on THIS seat', () => {
+  // Through the same `blindHere` both other branches ask their seat question
+  // through: a row that did not stop this pass has no business changing what
+  // the pass is told to do.
+  const elsewhereRow = {
+    action: 'unknown',
+    here: 'mac-mini',
+    unseen: [{ machine: 'macbook-pro', blocked: strandedLocalWork.BLOCKED_REPO, why: 'not our seat' }],
+  };
+  assert.equal(repoBlocked(elsewhereRow), null);
+  assert.equal(describeNextMove(elsewhereRow, { task: 'x' }), '');
+
+  const ourRow = { ...elsewhereRow, unseen: [{ machine: 'mac-mini', blocked: strandedLocalWork.BLOCKED_REPO, why: 'ours' }] };
+  assert.ok(repoBlocked(ourRow));
+
+  // And it is only offered on the answer that stops the pass.
+  assert.equal(describeNextMove({ ...ourRow, action: 'fresh' }, { task: 'x' }), '',
+    'a decision that goes ahead needs no way out of a circle it is not in');
+});
+
+test('the marker is a shared constant, not a string spelled twice', () => {
+  // Two files read this field. A bare literal in each is how the `work` and
+  // `cannot-tell` branches came to disagree for a whole round.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(__dirname);
+  for (const f of ['buildStart.js', 'localWorkReading.js']) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
+    assert.doesNotMatch(src, /blocked:\s*'repo'|blocked ===\s*'repo'/,
+      `${f} must reach the marker through strandedLocalWork.BLOCKED_REPO`);
+  }
+  assert.equal(strandedLocalWork.BLOCKED_REPO, 'repo');
+  assert.notEqual(strandedLocalWork.BLOCKED_REPO, strandedLocalWork.BLOCKED_TICKET);
+});
+
+/* ── FINDING 2: the third shape of CONTINUE, and the command that works ── */
+
+test('the branch with no worktree is a shape the renderer really produces', () => {
+  // The premise, asserted rather than assumed: if `describeWork` stops saying
+  // this, the doc assertions below are pinning prose about nothing.
+  const line = strandedLocalWork.describeWork([{ machine: 'mac-mini', branch: 'b', worktree: '', ahead: 1 }])[0];
+  assert.match(line, /no worktree — the branch exists but is not checked out/);
+});
+
+test('all three consumer docs give a command that WORKS on all three shapes', () => {
+  // Three docs, three shapes, and until round 3 every one of them offered two
+  // moves for three cases: `-b <branch> origin/<branch>` fails on a branch
+  // that was never pushed, and "cd into the folder it prints" has no folder.
+  // `git worktree add <path> <branch>` — no -b, no origin/ — is the third.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..', '..');
+  const docs = {
+    'CLAUDE.md': fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'),
+    'docs/LOOP_ENGINEERING.md': fs.readFileSync(path.join(root, 'docs', 'LOOP_ENGINEERING.md'), 'utf8'),
+    '.claude/skills/loop-build/SKILL.md': fs.readFileSync(path.join(root, '.claude', 'skills', 'loop-build', 'SKILL.md'), 'utf8'),
+  };
+  for (const [name, raw] of Object.entries(docs)) {
+    // Wrapped to ~76 columns, so a phrase legitimately straddles a newline.
+    // The assertion is about the WORDS being there, never about where the
+    // paragraph happened to break.
+    const text = raw.replace(/\s+/g, ' ');
+    assert.match(text, /build-start --task/, `${name} names the command`);
+    assert.match(text, /another machine/i, `${name} describes the seat it cannot reach`);
+    assert.match(text, /no worktree — the branch exists but is not checked out/,
+      `${name} names the third shape in the words the command actually prints`);
+    assert.match(text, /worktree add [^\n]*<topic> <branch>/,
+      `${name} gives the move that works on it — no -b, no origin/`);
+    assert.match(text, /[Nn]o `-b`/, `${name} says why -b is wrong there`);
+    // And the exit-1 half, which is the same defect one answer over: a pass
+    // told only to stop leaves a mis-tagged ticket to kill the lane.
+    assert.match(text, /`next:`/, `${name} tells a reader exit 1 can carry an instruction`);
+    assert.match(text, /repo:` tag does not resolve|repo:\*\* tag does not resolve/,
+      `${name} names the exit-1 case that never clears on its own`);
   }
 });

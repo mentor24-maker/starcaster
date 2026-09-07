@@ -640,17 +640,25 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
 4. `npm run clickup -- build-start --task <id>` — it asks whether this ticket
    was already started, and it looks at DISKS as well as at pull requests, so
    exit 3 now comes in two flavours and the printed line says which.
-   **`CONTINUE`** — work exists here. If it names a PR, the branch is pushed:
+   **`CONTINUE`** — work exists here, in one of **three** shapes, and only the
+   first is `origin/<branch>`. A **`pr:`** line means the branch is pushed:
    `git worktree add .claude/worktrees/<topic> -b <branch> origin/<branch>`.
-   If it names a **worktree** instead, that folder already exists on this
-   machine and was never pushed — `cd` into it and carry on; `origin/<branch>`
-   does not exist and that command would fail. Either way, `npm ci`,
-   `npm run build`, `npm run env:local`, and stamp
+   A **`work:`** line ending **`in <folder>`** means that folder is already on
+   this disk — `cd` into it; the branch was never pushed, so `origin/<branch>`
+   does not exist and that command would fail. A **`work:`** line saying
+   **`(no worktree — the branch exists but is not checked out)`** means the
+   branch is here with no folder to `cd` into: attach it with
+   `git worktree add .claude/worktrees/<topic> <branch>` — **no `-b`** (the
+   branch already exists) and **no `origin/`** (it was never pushed). Either
+   way, `npm ci`, `npm run build`, `npm run env:local`, and stamp
    `git config branch.<branch>.clickup-task <id>`.
    **`WORK ON ANOTHER MACHINE`** — the half-built worktree is on a disk this
    one cannot reach. Do not branch and do not hand it back to the claim line;
    the command prints the escalation to run. Exit 1 means it could not tell
-   from here: stop, do not guess. Only exit 0 means
+   from here: stop, do not guess — **but read the `next:` line first.** A disk
+   that went quiet clears itself and prints none; a ticket whose `repo:` tag
+   does not resolve never clears, and would be claimed and refused on every
+   pass forever, so it prints the escalation to run instead. Only exit 0 means
    `npm run thread <topic> <id>`.
 5. **On a send-back, merge `origin/main` in BEFORE touching a line.** The fix
    review asked for may already have landed on `main` under another name —

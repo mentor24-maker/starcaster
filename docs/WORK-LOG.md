@@ -77,6 +77,40 @@ walk into — each line now says which. Finally, the fuller hand-run instruction
 in `docs/LOOP_ENGINEERING.md`, the third and last place this step is written
 down, still described the old single answer, and would have handed Dane a command
 that cannot work on a folder that was never sent to GitHub.
+
+A fourth round found that the new check had introduced a way to stop the
+production line dead — the exact fault it was written to prevent, arriving
+through the fix. Every ticket says which project it belongs to with a small
+label. Get that label wrong — a typo, or two of them on one ticket — and the
+check cannot work out where to go looking, so it honestly answers "I cannot
+tell" and the job stops. That part is right. What was missing is that it stopped
+without telling anybody. The ticket then went back into the queue, at the front,
+because the queue deals with returned work first and oldest first — so the very
+next job picked up the same ticket, could not tell again, and stopped again.
+Every job, all day, on one mistyped label, in silence. The rule that handles a
+mistyped label — send it to Dane and ask him which project he meant — was
+already written down, three paragraphs further down the page than the "stop"
+the job had just obeyed.
+
+The fix separates two things that had been jumbled together. A Mac that went
+quiet will answer next time, so stopping and waiting is the whole of it. A
+mistyped label will still be mistyped tomorrow, so waiting achieves nothing at
+all — and that case now prints the ready-to-run command to hand it to Dane, the
+same way work-on-the-other-Mac already did. The opposite mistake is guarded just
+as hard: a sleeping laptop must never turn into a question in Dane's inbox, and
+neither must a moment's trouble reaching ClickUp.
+
+The last one is a command that could not work. When this check finds unfinished
+work it prints where it is, and there turned out to be three shapes it can
+print, not two — the third being a branch of work that is on the Mac with no
+folder open for it, which is exactly what the tidy-up leaves behind and exactly
+what this whole job is named after. All three places that describe this step
+offered only two moves, and neither of them works on the third shape: one asks
+GitHub for something that was never sent there, the other says "go into the
+folder" when there is no folder. The move that does work is one line, and it is
+now written down in all three, held together by a test so the next edit cannot
+fix two of them and forget the third — which has now happened twice.
+
 ## 2026-09-07 — The search box on the tags page told a visitor the wrong thing when it found nothing (#643)
 
 The `/tags` page on the Delray site has a search box that does nothing at all —

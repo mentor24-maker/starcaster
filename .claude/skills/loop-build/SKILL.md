@@ -232,12 +232,34 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    *   **exit 3** — work already exists. Do NOT start a second branch. Two
        shapes, and the printed line says which one:
        *   **`CONTINUE`** — either a PR is still open, or a half-finished
-           worktree is sitting on THIS machine with no PR yet (since
-           2026-09-07, task 86bbvur5a). Work on what it names. On the PR path,
-           read the send-back that returned the ticket to `Rework`, fix what
-           it named, and push to the SAME PR. On the worktree path the branch
-           was never pushed, so `cd` into the folder it prints rather than
-           trying to check `origin/<branch>` out.
+           build is sitting on THIS machine with no PR yet (since 2026-09-07,
+           task 86bbvur5a). Work on what it names. **Three shapes, and the
+           line says which — the move is different for each, and two of the
+           three are NOT `origin/<branch>`:**
+           *   a **`pr:`** line → the branch is pushed.
+               `git worktree add .claude/worktrees/<topic> -b <branch>
+               origin/<branch>`. Read the send-back that returned the ticket
+               to `Rework`, fix what it named, and push to the SAME PR.
+           *   a **`work:`** line ending **`in <folder>`** → that folder is
+               already on this disk. `cd` into it. The branch was never
+               pushed, so `origin/<branch>` does not exist.
+           *   a **`work:`** line saying **`(no worktree — the branch exists
+               but is not checked out)`** → the branch is on this disk with no
+               folder to `cd` into, which is the shape a `tidy` leaves behind
+               and the one this ticket is named after. Attach the existing
+               local branch:
+
+               ```bash
+               git worktree add .claude/worktrees/<topic> <branch>
+               ```
+
+               **No `-b`** (the branch already exists, and `-b` on an existing
+               branch is a second error) and **no `origin/`** (it was never
+               pushed — `fatal: invalid reference` otherwise).
+
+           Either way: `npm ci`, `npm run build`, `npm run env:local`, and
+           stamp `git config branch.<branch>.clickup-task <id>` if it is
+           missing — that stamp is what `tidy` and `ship` read back.
        *   **`WORK ON ANOTHER MACHINE`** — the worktree is on a disk this one
            cannot reach, so there is nothing here to continue and nothing to
            gain by handing it back: rework is claimed first and oldest-first,
@@ -250,6 +272,23 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    *   **exit 1** — **this machine** could not tell. **Stop and say so.** Do
        not start a branch on a guess; that is the failure this step exists to
        prevent, arriving through the check meant to catch it.
+
+       **But read the `next:` line before you stop, because "stop" is not
+       always the whole instruction.** Exit 1 covers two situations that look
+       identical and want opposite moves. A disk that went quiet — a shut
+       laptop, a timed-out probe — clears itself: stopping is right, and there
+       is no `next:` line. A ticket whose **`repo:` tag does not resolve**
+       never clears: it carries the same tag on every pass, so a pass that
+       just stops leaves the ticket to be returned to `Rework`, claimed
+       first-and-oldest-first, and refused again — **every pass, for good.**
+       One mis-tagged ticket kills the lane, and quietly, which is the
+       2026-09-03 shape CLAUDE.md names. That case prints a `next:` line, and
+       **the `next:` line IS your instruction**: it is this step's own repo
+       rule below — escalate with `ask` to `Needs your input`, quoting the
+       printed line — and then you take the next ticket. Do not stop with
+       nothing posted anywhere. (Round-3 review of task 86bbvur5a: the repo
+       rule was three paragraphs below this stop, so a pass that obeyed the
+       stop never reached it.)
 
    **Exit 1 is about the seat you are standing on, and that is deliberate**
    (round-1 review of task 86bbvur5a). Round 1 stopped the build for ANY

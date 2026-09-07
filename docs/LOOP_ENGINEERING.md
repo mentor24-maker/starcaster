@@ -1920,6 +1920,27 @@ it skips is the queue position.
    If it printed a **`work:`** line naming a worktree instead, that folder is
    already on this machine and **was never pushed** — `cd` into it and carry
    on. `origin/<branch>` does not exist, so the command above would fail.
+
+   And there is a **third shape**, which is the one this whole reading is
+   named after: a **`work:`** line saying **`(no worktree — the branch exists
+   but is not checked out)`**. The branch is on this disk, stamped with the
+   ticket, carrying commits nobody pushed — and there is no folder to `cd`
+   into, because `tidy` removed it or the pass died before creating one. Both
+   documented moves fail here, and until the round-3 review of task 86bbvur5a
+   these three docs offered nothing else: `-b <branch> origin/<branch>` gives
+   `fatal: invalid reference: origin/<branch>` (never pushed) with a second
+   error behind it (`-b` on a branch that already exists), and "cd into the
+   folder it prints" has no folder to name. **Attach the existing local
+   branch:**
+
+   ```
+   git worktree add .claude/worktrees/<topic> <branch>
+   cd .claude/worktrees/<topic> && npm ci && npm run build && npm run env:local
+   ```
+
+   **No `-b`** — the branch already exists, and `-b` on an existing branch is
+   an error in its own right. **No `origin/`** — it was never pushed.
+
    Either way the stamp is what `tidy` and `ship` read back, so set it if it
    is missing.
 
@@ -1929,9 +1950,18 @@ it skips is the queue position.
    claimed first and oldest-first, so it would come back and be refused again
    on every pass. The command prints the escalation to run.
 
-   **Exit 1 is a stop.** Something could not be read *here* — most often the
-   local disk itself. A `work:` line marked *NOT on this machine* is naming
-   somebody else's branch, not yours. Only **exit 0** means
+   **Exit 1 is a stop — unless it prints a `next:` line.** Something could not
+   be read *here*, most often the local disk itself, and a disk that went
+   quiet clears itself on its own: stopping is the whole instruction and no
+   `next:` line is printed. A ticket whose **`repo:` tag does not resolve** is
+   the other half of exit 1 and it never clears — the tag is the same on every
+   pass, so a pass that merely stops leaves the ticket to be returned to
+   `Rework`, claimed first-and-oldest-first on a key that never changes, and
+   refused again on every pass for good. **One mis-tagged ticket kills the
+   lane, silently** — the 2026-09-03 shape. That case prints the escalation to
+   run (`ask` it to `Needs your input`), and the `next:` line is the
+   instruction. A `work:` line marked *NOT on this machine* is naming somebody
+   else's branch, not yours. Only **exit 0** means
    `npm run thread <topic> <id>`.
 
    Then build in that folder, by absolute path (CLAUDE.md, "One topic, one

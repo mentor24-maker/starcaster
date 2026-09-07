@@ -121,6 +121,45 @@ const PROBE_NO_REPO = 'NO-REPO';
 const PROBE_GIT_FAILED = 'GIT-FAILED';
 
 /**
+ * WHY A BLIND SPOT IS BLIND — the two kinds, told apart in a field rather than
+ * in prose.
+ *
+ * An `unseen` row means "a disk that should have answered did not", and every
+ * reader of one used to have nothing but its `why` sentence to go on. That was
+ * enough while the only cause was a machine going quiet. It stopped being
+ * enough the moment `localWorkReading` started writing rows for a reading that
+ * never reached a disk at all — because "I asked and got no answer" and "I
+ * never knew where to look" want DIFFERENT moves, and only the second one can
+ * be fixed by a human editing the ticket.
+ *
+ * THE COST OF NOT DISTINGUISHING THEM (round-3 review, 2026-09-07, finding 1).
+ * A ticket carrying `repo:does-not-exist` made the reading answer `cannot-tell`
+ * naming this seat, `build-start` exit 1, and the loop-build skill's exit-1
+ * branch says "Stop and say so" — so the pass ended with nothing posted
+ * anywhere. `reconciledBuildDestination` then returned the ticket to `Rework`,
+ * `queue --claimable` sorts rework first and oldest-first on a key that never
+ * changes, and the ticket sat at the head of the claim line being claimed and
+ * refused by every pass. One mis-tagged ticket killed the lane, silently. The
+ * rule that handles exactly that ticket — escalate it to `Needs your input` —
+ * already existed in the skill, three paragraphs BELOW the stop.
+ *
+ * These are the marker, not the fix. What each one means to do about it is
+ * `buildStart.describeNextMove`; what it means for a verdict is unchanged, and
+ * deliberately so: both are still `cannot-tell`, so `pass-reconcile` and the
+ * stranded sweep read them exactly as they did before this field existed
+ * (this ticket's non-goals).
+ */
+
+/** The ticket's own `repo:` tag does not resolve, or names a repo with no
+ *  checkout here — so no disk was probed, and no amount of waiting fixes it.
+ *  A human has to correct the ticket. */
+const BLOCKED_REPO = 'repo';
+
+/** The ticket itself could not be read, so which repo to look in is unknown.
+ *  Transient: the next pass may well get an answer. Not an escalation. */
+const BLOCKED_TICKET = 'ticket';
+
+/**
  * The shell one-liner, as text.
  *
  * POSIX `sh`, not bash: it runs through `/bin/sh -c` locally and through a
@@ -533,6 +572,8 @@ function preservedLine({ id, name, verdict, work = [], unseen = [], unlooked = [
 
 module.exports = {
   PROBE_DONE,
+  BLOCKED_REPO,
+  BLOCKED_TICKET,
   PROBE_NO_REPO,
   PROBE_GIT_FAILED,
   probeScript,

@@ -201,6 +201,40 @@ function blindHere(unseen = [], hereId) {
     .filter((m) => !hereId || !m || !m.machine || m.machine === hereId);
 }
 
+/**
+ * OF THE BLIND SPOTS THAT STOPPED THIS PASS, IS ONE OF THEM A TICKET A HUMAN
+ * HAS TO FIX?
+ *
+ * WHY (round-3 review, finding 1, 2026-09-07). `cannot-tell` covers two
+ * situations that look identical on the way out of the reading and want
+ * opposite moves:
+ *
+ *   a disk went quiet     waiting fixes it. The laptop opens, the next pass
+ *                         gets an answer. Stopping is the whole instruction.
+ *   the repo does not     waiting fixes NOTHING. The ticket carries the same
+ *   resolve               bad `repo:` tag on every pass, so every pass claims
+ *                         it, gets exit 1, and stops with nothing posted. The
+ *                         reconcile returns it to `Rework`, rework is claimed
+ *                         first and oldest-first on a key that never changes,
+ *                         and the ticket sits at the head of the claim line
+ *                         killing the lane — silently, which is the shape
+ *                         CLAUDE.md names from 2026-09-03.
+ *
+ * This is the same circle round 1's finding 3 sent this ticket back for, and
+ * it is closed the same way: not by softening the refusal, but by printing the
+ * move OUT of it. `elsewhere` and this one are the two answers where refusing
+ * is not the whole instruction.
+ *
+ * ONLY A BLIND SPOT ON THIS SEAT COUNTS, through the same `blindHere` both
+ * branches above ask their seat question through — a row that did not stop
+ * this pass has no business changing what the pass is told to do.
+ */
+function repoBlocked(decision) {
+  const hereId = decision?.here;
+  return blindHere(decision?.unseen, hereId)
+    .find((m) => m && m.blocked === strandedLocalWork.BLOCKED_REPO) || null;
+}
+
 function withLocalWork(fresh, { findLocalWork, hereId } = {}) {
   if (typeof findLocalWork !== 'function') return fresh;
 
@@ -465,6 +499,22 @@ function needsLocalWorkReading(fromPr) {
  * branch on this disk, and `unknown` means stop and say so.
  */
 function describeNextMove(decision, { task = '<id>' } = {}) {
+  // A TICKET WHOSE REPO DOES NOT RESOLVE IS THE OTHER ANSWER THAT NEEDS A WAY
+  // OUT, and it needs one more badly than `elsewhere` does: `elsewhere` at
+  // least depends on a disk that might come back, and this cannot change until
+  // somebody edits the ticket. Named FIRST because a decision can only be one
+  // action, and this one is `unknown` — the answer whose documented handling is
+  // "stop and say so", which is precisely why the pass used to leave nothing
+  // behind. (Round-3 review, finding 1.)
+  const blocked = decision?.action === 'unknown' ? repoBlocked(decision) : null;
+  if (blocked) {
+    return 'This is not a disk that went quiet — nothing was probed at all, because the ticket does not say '
+      + `which repo to look in (${blocked.why}). Waiting will not change that: the tag is the same on every `
+      + 'pass, so handing this back to the claim line puts it at the head of the rework queue to be claimed '
+      + 'and refused again, on every pass, for good. Escalate it instead — the loop-build skill\'s own repo '
+      + `rule: \`npm run clickup -- ask --task ${task} --status "Needs your input" --body-file -\`, quoting `
+      + 'the line above and asking which repo the ticket means. Then take the next ticket.';
+  }
   if (decision?.action !== 'elsewhere') return '';
   return `Do not hand this back to the claim line — it would be claimed and refused again on every pass. `
     + `Escalate it: \`npm run clickup -- ask --task ${task} --status "Needs your input" --body-file -\`, `
@@ -557,6 +607,7 @@ module.exports = {
   resolveFromPullRequest,
   withLocalWork,
   blindHere,
+  repoBlocked,
   needsLocalWorkReading,
   describeBuildStart,
   describeFoundWork,
