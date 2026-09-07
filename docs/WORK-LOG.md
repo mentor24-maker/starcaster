@@ -35,6 +35,436 @@ objected that the panel was fine. It was right and I was wrong — I had measure
 a full-width box, which by design starts further left than the others. That is
 the check doing its job before the work had even shipped, which is the best
 evidence it works that I could offer.
+## 2026-09-07 — The cleanup found the half-finished work, and the next job branched over it anyway (#644)
+
+Yesterday's fix (#637) taught the overnight cleanup to look on the Macs before
+declaring that nothing had been built for a ticket. It now finds the
+half-finished folder, writes on the ticket which machine and which folder it is
+in, and deliberately leaves the work alone.
+
+What it could not do was stop the next job starting over the top of it. Before a
+session begins work it runs a check whose entire job is to ask "has anybody
+started this already?" — and that check was still asking GitHub, which only sees
+work that has been sent there. A job that wrote code and stopped before sending
+it leaves nothing for GitHub to show. So the check answered "nothing here, go
+ahead", and a second session began a fresh copy of the work, right on top of the
+folder the cleanup had just carefully preserved. The note the cleanup wrote only
+helps somebody who reads it, and the step that acts on it was not reading.
+
+That check now takes exactly the same look at the Macs that the cleanup takes,
+using the same piece of code rather than a second copy of it — so the two can
+never disagree about the same ticket. If it finds unfinished work on the machine
+it is standing on, it refuses and names the folder to carry on in. If the work is
+on the *other* Mac, which it cannot reach into, it refuses differently and says
+where the work is, rather than pretending it can continue it. And if it could not
+get an answer at all, it says so and stops, which is never the same as "there is
+nothing there".
+
+The opposite mistake mattered just as much: a check that refuses everything is a
+production line that has quietly stopped — and the first version of this fix made
+exactly that mistake, which is why it went back for a second round. It treated
+any Mac that did not answer as a reason to stop. Dane's laptop is closed at the
+end of every day, so from the Mac Mini it did not answer all night, and the check
+refused every new job until the laptop was opened again. Overnight is precisely
+when the Mini is supposed to be working.
+
+What settles it is *which* Mac went quiet. The machine the job is standing on is
+the one it is about to start work on: if its own folders cannot be read, it stops,
+because it has no idea whether it is about to bury its own half-finished work. A
+different Mac going quiet is written down by name on an answer that carries on —
+work sitting over there could not have been continued from here in any case. The
+risk left over is real and is stated in plain sight every time: if the sleeping
+Mac was holding unfinished work for that exact job, a second copy gets started.
+That is rare and recoverable — the work is still on that disk, and the cleanup
+names it every run — while a line that is dead every night is neither.
+
+Four smaller things came out of the same review. A ticket that ClickUp failed to
+return was being treated as an ordinary one, which sent the check looking in the
+wrong project's folder and finding nothing there — the same false all-clear,
+arriving through the new check itself. Work found on the unreachable Mac used to
+be refused with nowhere to go, so the queue put the same ticket back at the front
+and refused it again on every pass; it now prints the exact escalation to send to
+Dane and moves on to the next ticket. The two other places that describe this
+step — the hand-run instructions in `CLAUDE.md` and the command's own help — were
+still describing the old single answer. And a job whose earlier pull request had
+already been merged printed that old branch's name directly under the words "no
+open pull request", which is the one branch nobody should check out.
+
+A third round closed the last way the rule could fail — and it was the rule
+failing against itself. Deciding "did *my own* Mac go quiet?" means knowing which
+Mac you are standing on, and the check works that out from a small identity file,
+falling back to the machine's network name if the file is missing. Rename a Mac,
+add a third one, or let the network hand out a name nobody recognises, and the
+answer is a name this system has never heard of. The check then treated *every*
+Mac as somewhere else — including the one under its own feet — asked them all
+over the network, and never looked at the disk it was about to start work on. It
+said "go ahead" having read nothing. It is not live today, because the Mini's
+identity file is correct, but the bug this whole job fixes was latent in exactly
+the same way. Now the look always includes the machine taking it: a seat that
+could not be read is written down as a seat that could not be read, and an
+unrecognised machine is a stop rather than a shrug.
+
+Three smaller ones came with it. Work found while the machine's own name was
+unknown used to be reported as "it is on the other Mac", stated confidently, when
+the truth was that nobody had checked. A refusal that pointed at the other Mac
+did not mention when this Mac's own disk had also gone unread, which is the one
+fact somebody needs to judge it. And the list of folders it prints was written in
+a single voice, so a folder on the *other* Mac looked exactly like one you could
+walk into — each line now says which. Finally, the fuller hand-run instructions
+in `docs/LOOP_ENGINEERING.md`, the third and last place this step is written
+down, still described the old single answer, and would have handed Dane a command
+that cannot work on a folder that was never sent to GitHub.
+
+A fourth round found that the new check had introduced a way to stop the
+production line dead — the exact fault it was written to prevent, arriving
+through the fix. Every ticket says which project it belongs to with a small
+label. Get that label wrong — a typo, or two of them on one ticket — and the
+check cannot work out where to go looking, so it honestly answers "I cannot
+tell" and the job stops. That part is right. What was missing is that it stopped
+without telling anybody. The ticket then went back into the queue, at the front,
+because the queue deals with returned work first and oldest first — so the very
+next job picked up the same ticket, could not tell again, and stopped again.
+Every job, all day, on one mistyped label, in silence. The rule that handles a
+mistyped label — send it to Dane and ask him which project he meant — was
+already written down, three paragraphs further down the page than the "stop"
+the job had just obeyed.
+
+The fix separates two things that had been jumbled together. A Mac that went
+quiet will answer next time, so stopping and waiting is the whole of it. A
+mistyped label will still be mistyped tomorrow, so waiting achieves nothing at
+all — and that case now prints the ready-to-run command to hand it to Dane, the
+same way work-on-the-other-Mac already did. The opposite mistake is guarded just
+as hard: a sleeping laptop must never turn into a question in Dane's inbox, and
+neither must a moment's trouble reaching ClickUp.
+
+The last one is a command that could not work. When this check finds unfinished
+work it prints where it is, and there turned out to be three shapes it can
+print, not two — the third being a branch of work that is on the Mac with no
+folder open for it, which is exactly what the tidy-up leaves behind and exactly
+what this whole job is named after. All three places that describe this step
+offered only two moves, and neither of them works on the third shape: one asks
+GitHub for something that was never sent there, the other says "go into the
+folder" when there is no folder. The move that does work is one line, and it is
+now written down in all three, held together by a test so the next edit cannot
+fix two of them and forget the third — which has now happened twice.
+
+## 2026-09-07 — The search box on the tags page told a visitor the wrong thing when it found nothing (#643)
+
+The `/tags` page on the Delray site has a search box that does nothing at all —
+type a word, press Search, and the page does not change by a single character.
+Dane picked the fix on the ticket: switch that page over to the search field the
+post feed already carries, and take the dead box away. Both of those are clicks
+in the Builder on a live client page, so they are his; this is the code half
+they depend on.
+
+The feed's own search field works, but it was not honest about coming up empty.
+Typing a word nothing matched said "No posts match your filters", which never
+tells the visitor *which* word emptied the page — the same complaint that was
+fixed for the tag and category dropdowns back in the summer, one step further
+on. And with a tag also selected it said something worse: "No posts tagged
+'beginner tennis'", while posts carrying that tag were sitting right there. The
+search had emptied the list and the tag was taking the blame. A confidently
+wrong message is worse than a vague one, because nobody thinks to doubt it.
+
+Now the word the visitor typed is named — "No posts match 'zzzz'" — and when a
+tag is also in play both are named, so no filter takes credit for an emptiness
+it did not cause. The "Show all posts" way back was already there and still is,
+and the wording when nothing was typed is untouched.
+
+The review caught this making the very mistake it was written to stop, in two
+corners it had not covered. The feed can also filter by a date range, and that
+was left out of the new sentence — so setting a date that matched nothing while
+a search word was typed read "No posts match 'Tennis'" with two Tennis posts on
+screen. Same lie, different culprit. Every filter that is narrowing the page now
+names itself, dates included, and several read as one sentence: "No posts tagged
+'beginner tennis' and published on or after 2030-01-01 match 'Level'."
+
+The other corner: if the web address names a category that does not exist, the
+page is empty no matter what else is set, and nothing will bring it back. The
+new message was still naming the search word there, which quietly invited the
+visitor to delete it and try again. It now says only what is true — "No posts in
+the category 'ghost-slug'."
+
+Deliberately left alone: making the post feed obey a search word arriving in the
+web address. The chosen fix does not need it, and doing it carelessly would let
+a page filter itself with no visible box to clear — that wants its own think
+first.
+
+## 2026-09-07 — "Two headers on every new page" was one header placed twice (#642)
+
+Every page built from the Delray site's main template came up with two header
+bars, one of them named after a section everyone believed had been retired
+months ago. Nothing was actually left over. The site has one header, and the
+template simply listed it twice. One of the two copies was still linked to the
+original, so it showed the original's current name, "2a - Public Header"; the
+other had been unlinked at some point and kept the name the original carried
+back then, "2 - Menu Banner". Two names on screen, one section underneath.
+
+The first write-up of this asked for the old section to be deleted. That would
+have stripped the header off all 58 pages of the Delray site, because the row it
+named for deletion is the good header — only renamed. Dane made the two edits
+himself in the Builder instead of letting a machine touch live client content:
+he removed the duplicate slot from the template and cleaned up the one scratch
+page that had picked it up.
+
+This entry records the check that it worked. Read live from production: the
+template lists the header once, no page anywhere holds two copies of it, no page
+carries the old name, and the live site renders a single header on both the home
+page and the scratch page. Two things were left alone on purpose — a test
+fixture that still uses the old name locally, and one stored title on the blog
+template that is stale in the database but never reaches the screen. No code
+changed; the whole thing was data.
+## 2026-09-06 — An answer you wrote could go permanently missing if a job died at the wrong second (#640)
+
+When you answer a question on a ticket, a background job does two things with
+your reply: it copies it onto the team chat, and it puts the ticket back into
+the machines' queue so the work can carry on. Those two steps were joined at the
+hip — the second one only ever happened in the same run as the first, and the
+first leaves a permanent "already sent" mark behind. So if the run died in
+between, every later run saw the mark, decided there was nothing new, and did
+nothing at all. For ever. The only thing that could release the ticket had
+already happened and could never happen again.
+
+That is what put your `C` on the Lane A ticket into a hole for three and a half
+hours on Saturday. The 9:46 run delivered your answer, ran out of its ClickUp
+request allowance before it could move the ticket, and reported the problem
+honestly — into a chat message the same allowance then refused to send. You
+found it yourself.
+
+The job now asks a question it can answer every single time it looks: is there
+an answer from you, newer than the newest question, that has reached somebody?
+Both halves are read off the ticket itself, so a crash costs ten minutes rather
+than the work. The safety rule is untouched — a ticket still never moves on an
+answer nobody received.
+
+Two things came with it. A hand-back that fails now writes a short note on the
+ticket saying so, rather than only into a chat message that can vanish. And
+there is a new watchdog, `npm run stale-answer`, that watches for exactly one
+shape: you replied, and nothing moved. None of the four watchdogs already
+running could see it — the relay's own heartbeat was perfectly healthy that
+morning; one ticket had simply fallen out of it. This one notices within half an
+hour, says out loud that it is not waiting on you, and goes quiet again as soon
+as the ticket moves.
+
+**Checked over a second time (2026-09-07), and four things needed fixing before
+it could go live.** The new watchdog's "did your answer actually reach anybody?"
+test was reading the wrong thing entirely, so it never once got an answer — and
+its report would have blamed the wrong part of the system on the one screen you
+read. Quoting the question above your reply, which is a perfectly normal way to
+answer, stopped the ticket being released at all — and the watchdog called that
+same ticket healthy. The alarm could go off once about a ticket and then never
+again about it. And a ticket you had deliberately parked back in "needs your
+input" by hand would have been dragged straight out again within ten minutes,
+with your name taken off it. All four are fixed and each one was proved by
+breaking it on purpose and watching a test catch it.
+## 2026-09-07 — The pipeline had started filing tickets about itself faster than we could do them (#641)
+
+The tooling that runs the build pipeline checks its own health, and it is good
+at it — good enough that it was writing up more problems with itself than
+anyone could work through. Counted on Saturday: back in mid-August it was
+filing about six of these a day, and by the start of September it was up to
+about sixteen. None of them were wrong. They were all genuine findings about
+genuine gaps. But the client work — Delray, the product itself — was sitting in
+line behind them.
+
+Dane went through and set 31 of them aside that day. Six stayed, and the thing
+that separated the six from the 31 is the whole point: each of the six named a
+failure that had actually happened and actually cost something. A lane that
+stopped. Work that got lost. An alarm nobody heard. The other 31 described gaps
+that were real but had never once bitten us.
+
+So the rule is now written down: the pipeline only opens a ticket on itself
+when something actually went wrong and cost us something, and the ticket has to
+say what that was. A gap somebody merely noticed goes as one line in a parked
+list instead, where it keeps its full write-up and can be brought back any time
+by flipping it to Queued. Nothing is thrown away — it is set aside.
+
+Two things deliberately stayed the way they were, and both are spelled out so
+nobody reads this rule too widely later. A bug on a client's site or in the
+admin app still gets filed the moment it is spotted, no questions asked. And
+the handful of tickets the machinery creates for its own bookkeeping — the
+pause switch, the roll call, the pipeline report — are not affected either.
+
+The second half of this is about names. Dane's words: "your descriptions of
+tickets is so cryptic and full of fanciful turns of phrases that it is
+difficult for me to understand which ones are really important and which ones
+aren't." A ticket's name now has to say in plain words what breaks and who
+feels it, so a list of seventy can be read down at a glance. The clever
+one-line diagnosis still gets written — it just belongs in the description,
+where it helps.
+
+All of this lives in five different documents, which is a lot of prose that
+could quietly get edited away. So there is a test that fails if any of it does.
+Every one of the six files was broken on purpose to confirm the test actually
+notices.
+## 2026-09-06 — Nine modules were talking to the page builder on the visitor's screen, and now something checks all 61 (#636)
+
+A Builder module has two audiences: whoever is building the page, and whoever
+reads it. Several were addressing the builder on the visitor's screen. Three
+were doing it on live client sites this morning — the Blog Post module showing
+"Post Title" and "Post body will appear here when opened with ?post=slug." on
+delraytennis.starcaster.pro and on a law firm's public site; the Event Detail
+module telling visitors to type "?event=your-event-slug" into their address
+bar; and the Blog Post List naming the Create Post module, on five published
+pages across two tenants. Each now says something a visitor can use — "No post
+selected", "No event selected", "No posts published yet." — and keeps its
+original wording on the Builder canvas, which is where it belongs.
+
+The reason this is worth an entry is the second half. Four rounds of review had
+each closed the placeholder the round before had named and missed the next one,
+because there is no way to close "find all of them" by re-reading a
+twelve-thousand-line file with sixty-one module types in it. So there is now a
+check that renders **every** module as a visitor would see it and reads the
+words that come out. It runs on every commit and every build, and takes about a
+second and a half.
+
+It found six more the moment it existed: an unset image telling visitors to
+"Choose an image", the Player Portal module announcing our own product name on
+a client's site, an empty video box captioned "Video", a merch card whose
+product name was the words "Merch product", and the Confetti module running its
+design-time controls — including a "Test Burst" button — on live pages. All
+fixed here. It also renders each module in three places rather than one, which
+turned out to matter: two containers (a table cell, and the drop-down mega-menu's
+feature slot) were not passing the "this is a real page" flag down at all, so
+every guard inside them was being bypassed.
+
+Every fix was broken on purpose to watch the check go red, and the check's own
+instrument was tested first — which caught it rendering nothing at all in the
+mega-menu, sixty-one assertions passing while measuring nothing.
+
+That same trap then caught a quieter version of itself. Review found that in
+those two nested places the check was reading the container's words and the
+module's words run together as one string — "ColumnChoose an image" — so four
+of the ten guards it was built for were passing there without measuring
+anything. It now reads each module's own corner of the page instead, which
+fixes the run-together problem and a second one underneath it, and there are
+new controls that fail if either comes back. Both were broken on purpose and
+watched to fail. The lesson is the one the mega-menu already taught: a check
+that has never been seen to fail is not known to work, and "the words are on
+the page somewhere" is not the same question as "the check can find them".
+
+Round three found the third version of the same trap, and this one had made an
+*older* check worse. There are two guards here, not one: the new renderer that
+reads what comes out on screen, and an older word-search that reads the code
+itself. Fixing a false alarm in the word-search had involved telling it to
+ignore the bits of a line that are plumbing rather than words — but the way it
+was written, "ignore the plumbing" turned into "ignore everything except a
+short list of things we thought of", and ordinary visitor text handed from one
+part of the page to another stopped being read. Two of the exact phrases this
+whole ticket is about were being missed in a shape that appears throughout the
+files it scans. Nothing was leaking, and nothing would have complained; the net
+had simply got a bigger hole in it while everyone was looking elsewhere. It is
+turned around now — it ignores only the handful of things a reader definitely
+cannot see, and keeps everything else — and there are tests pinning it in both
+directions, which is what was missing. The old behaviour was measured, the new
+behaviour was measured, and the phrase was put back on purpose to watch the
+check go red.
+
+The other two are about a check being honest when it cannot do its job. If the
+testing tool was not installed in a folder — which is the normal state of a
+freshly-made folder before it is set up — the new renderer was announcing "a
+module is showing Builder text to visitors" and telling whoever read it to go
+and fix a module. Nothing was wrong with any module; it simply had not run.
+That now says "could not take a reading" in its own words and with its own
+signal, which this repo already distinguishes from both a pass and a failure —
+the difference matters because one of them sends a person hunting for a bug
+that is not there. And if the check ever runs but finds no tests to run, it now
+refuses to report success rather than cheerfully announcing that all sixty-one
+modules are fine. Both were caused on purpose and watched to behave correctly,
+and the old version was run against the same condition to confirm it really did
+call an uninstalled tool a leaking module.
+## 2026-09-07 — The message that told you to do two opposite things at once (#639)
+
+The work above taught `npm run ship` that a pull request can go untested for two
+completely different reasons, and that the cure for one is useless for the
+other. It then went and printed both cures in the same message. The wording was
+assembled in two halves — a paragraph about what it had already tried, and a
+note about what it had found out — and glued together they said "this branch
+needs a new commit" and then, four lines later, "not another commit: pull main
+in". You can do one of those. Nothing on the screen said which.
+
+That is the exact failure this whole piece of work exists to prevent — advice
+that cannot work, handed to somebody who has no way to tell — reproduced inside
+the fix for it. So the repair is not a better paragraph. There is now one place
+that writes this message, it picks its advice from a table, and there is exactly
+one slot for advice to go in. A future edit cannot add a second one by accident,
+because there is nowhere to put it.
+
+While it was being rebuilt, two more things got sorted out. GitHub's opinion
+about whether a branch conflicts is a cached guess and it is wrong here often
+enough to be notorious — it was wrong about this very pull request — so ship now
+asks *git*, on the spot, and the two answers together tell it which of three
+situations it is actually in: a real conflict to resolve by hand, a branch that
+is genuinely behind and needs main pulled in, or GitHub simply holding a stale
+answer, where pulling main in does nothing at all and what is needed is a nudge
+to make it recompute. Telling those apart matters because ship already pulls
+main in as its first step, so the stale-answer case was the one that could send
+you round in a circle. And if one of the non-testing services on a pull request
+has failed — a preview deployment, say — the message now names it, because
+nothing else would have.
+
+## 2026-09-06 — A pull request that quietly gets no testing at all, and the fix that could not work (#639)
+
+Sometimes a pull request opens and GitHub never runs any of its tests. Nothing
+says so. The page looks like one whose tests simply have not started yet, so
+whoever is watching waits — and nothing ever comes, because nothing was ever
+going to. Work that is finished then sits there unmergeable, because the safety
+gate quite rightly refuses to merge anything nothing has tested.
+
+We already knew one way this happens, and had a fix for it. What we did not know
+is that there is a second way, it looks exactly the same from outside, and the
+fix for the first one does nothing at all for it.
+
+The second way is a merge conflict. Our tests run against the branch *combined
+with* the live site's code — that is the only honest thing to test — and if
+GitHub thinks the two disagree, it cannot build that combination, so it declines
+to run anything. Silently. That is what happened on 6 September: two lots of
+work were pushed eleven minutes apart and neither got a single test, while other
+pull requests in the same repository were being tested normally the whole time.
+The known fix is to push a tiny empty commit to prod GitHub into noticing — and
+it was tried, and it did nothing, because the new commit did not merge either.
+What actually fixed it was pulling the live site's latest code into the branch.
+The moment that happened, the tests started within seconds.
+
+So `npm run ship` now asks GitHub *why* the tests are missing before it settles
+in to wait. If the answer is "this branch conflicts", it stops immediately and
+tells you to pull main in, and says in as many words that the empty-commit trick
+is not the fix here. It is careful about one thing: for the first few seconds
+after any push GitHub genuinely has not worked out yet whether a branch
+conflicts, and treating that "don't know yet" as a conflict would have made ship
+give up on almost every healthy branch — so it asks again instead of guessing.
+It is also careful to only ask while *no* test has appeared, because a branch can
+go stale after its tests have already run and passed, and a green board must
+never be reported as blocked.
+
+The written instructions now carry both causes side by side with a one-command
+way to tell them apart, so the next person to meet a silent pull request does not
+have to work it out from scratch, and does not spend twenty minutes applying the
+wrong remedy.
+
+**And then the review caught that all of the above could never actually fire.**
+The new check waited for a pull request with *no test results on it at all*, and
+a pull request here never has none: Vercel, the service that builds the preview
+link, posts its own two rows onto every single one, and they go green on their
+own. So the page for a pull request that had run nothing showed a tidy little
+board of passes. The check looked at that board, saw results, and concluded the
+testing had finished — the exact opposite of the truth, and it never once asked
+GitHub the question the whole change exists to ask.
+
+The same mistake was quietly hiding something worse that had been there all
+along: because those Vercel rows count as passes, `npm run ship` would read a
+pull request with **no testing whatsoever** as fully green and go ahead and try
+to merge it. GitHub itself refused, which is the only reason this never did any
+damage.
+
+Both are fixed by teaching the code the difference between our own tests and
+somebody else's status message — a real test run belongs to one of our test
+workflows and says so; an outside service's row does not. Now "no tests" means
+"none of *ours*", which is what it always meant in English. One more nicety: a
+conflict has to be confirmed by a second reading a moment later before ship acts
+on it, because GitHub caches that answer and can briefly still report the
+conflict you have *just this second fixed* — which would have had ship telling
+you to go and do the thing you had already done.
 
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 

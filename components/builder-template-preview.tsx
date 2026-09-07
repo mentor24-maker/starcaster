@@ -620,6 +620,15 @@ function CrmFormPreview({
   const visibleFields = publicFormFields(form.fields ?? []).filter(
     (field) => !(liveSite && crmSelectHasNothingToChoose(field))
   );
+  /*
+   * Every field was dropped by the filter above. On a published page that is a
+   * heading and a Submit button over nothing — and a click posts, writes an
+   * empty contact row and thanks the visitor for it (ticket 86bbvqcbk,
+   * finding 3). `saveForm` refuses a form with no fields at all, so reaching
+   * this takes a form whose fields are ALL option-less dropdowns: rare, not
+   * impossible. The canvas still draws it, which is where it can be fixed.
+   */
+  if (liveSite && visibleFields.length === 0) return null;
   const labelStyle = {
     justifySelf: renderStyles.cssVars['--crm-form-label-justify'],
     textAlign: renderStyles.normalized.labelAlign as CSSProperties['textAlign'],
@@ -1349,11 +1358,25 @@ function CrmContactsTablePreview({
   );
 }
 
-function MerchProductCard({ settings }: { settings: Record<string, string> }) {
+function MerchProductCard({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
   const productName = settings.productName || "Merch product";
   const imageUrl = resolvePublicBuilderAssetUrl(settings.imageUrl);
   const productUrl = resolvePublicBuilderAssetUrl(settings.productUrl);
   const buttonLabel = settings.buttonLabel || "Buy on Redbubble";
+  /*
+   * Nothing has been filled in, so the card would render the words "Merch
+   * product" as if they were the product — sample copy on a client's shop
+   * (ticket 86bbvqcbk). The canvas keeps it: it is the placeholder that shows
+   * the card is there to configure.
+   */
+  if (liveSite && !settings.productName && !imageUrl && !productUrl) return null;
 
   return (
     <div className="product-card">
@@ -2112,7 +2135,7 @@ function BuilderModulePreview({
   const variant = module.settings.variant ?? "";
 
   if (module.type === "navigation") {
-    return <NavigationModulePreview module={module} previewMode={previewMode} />;
+    return <NavigationModulePreview module={module} previewMode={previewMode} liveSite={liveSite} />;
   }
 
   if (module.type === "heading") {
@@ -2186,7 +2209,7 @@ function BuilderModulePreview({
   }
 
   if (module.type === "merch") {
-    return <MerchProductCard settings={module.settings} />;
+    return <MerchProductCard settings={module.settings} liveSite={liveSite} />;
   }
 
   if (module.type === "quote") {
@@ -2251,6 +2274,15 @@ function BuilderModulePreview({
   }
 
   if (module.type === "player-portal") {
+    /*
+     * StarCaster has no player portal (BUILDER_CAPABILITIES.playerPortal), so
+     * this module renders a stub reading "Player Portal modules are not
+     * available in StarCaster." That is a note to whoever is building the
+     * page — it names our product on a tenant's own site, to a reader who can
+     * do nothing about it (ticket 86bbvqcbk). It stays on the canvas, where
+     * it is the only thing explaining why the module is blank.
+     */
+    if (liveSite) return null;
     return (
       <PlayerPortalAuthForm
         settings={getPlayerPortalAuthSettings(module.settings)}
@@ -2263,6 +2295,12 @@ function BuilderModulePreview({
     const embed = getVideoEmbedSource(module.settings.url);
     const title = module.settings.videoName || module.name || module.text || "Video";
     const opensInNewTab = module.settings.newTab !== "false";
+    /*
+     * No URL: the frame below is empty and the caption falls back to the word
+     * "Video" — an empty box under the module's own name, which is design-time
+     * chrome rather than anything a visitor can use (ticket 86bbvqcbk).
+     */
+    if (liveSite && !embed) return null;
 
     return (
       <figure className="builder-preview-video-card">
@@ -2303,6 +2341,7 @@ function BuilderModulePreview({
           module={module}
           variant={variant}
           placeholder="Choose a floating image"
+          liveSite={liveSite}
         />
       );
     }
@@ -2319,6 +2358,7 @@ function BuilderModulePreview({
             sectionScopedDecor={isSectionScopedOverlayDecor(module)}
             variant={variant}
             placeholder="Choose a floating image"
+            liveSite={liveSite}
           />
         ) : null}
         {usesOverlayHost ? (
@@ -2341,12 +2381,13 @@ function BuilderModulePreview({
         variant={variant}
         placeholder="Choose an image"
         columnWidthPercent={columnWidthPercent}
+        liveSite={liveSite}
       />
     );
   }
 
   if (module.type === "table") {
-    return <TableModulePreview module={module} />;
+    return <TableModulePreview module={module} liveSite={liveSite} />;
   }
 
   if (module.type === "social") {
@@ -2370,7 +2411,14 @@ function BuilderModulePreview({
   }
 
   if (module.type === "confetti") {
-    return <BuilderConfettiRuntime preview settings={module.settings} />;
+    /*
+     * `preview` was hardcoded true, so a published page ran the module's
+     * BUILDER chrome: an on-load confetti told the visitor "Confetti runs when
+     * this page loads" and offered them a Test Burst button, and a game-trigger
+     * module explained that it has no button on the live page — on the live
+     * page (ticket 86bbvqcbk).
+     */
+    return <BuilderConfettiRuntime preview={!liveSite} settings={module.settings} />;
   }
 
   if (module.type === "tractor-nav") {
@@ -2381,7 +2429,7 @@ function BuilderModulePreview({
     if (shouldRenderBlogPostManager(module.settings)) {
       return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
     }
-    return <BlogPostListPreview settings={module.settings} />;
+    return <BlogPostListPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-post-create") {
     return <BlogPostCreatePreview settings={module.settings} />;
@@ -2390,7 +2438,7 @@ function BuilderModulePreview({
     return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
   }
   if (module.type === "event-detail") {
-    return <EventDetailPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
+    return <EventDetailPreview settings={module.settings} theme={theme} themePalette={themePalette} liveSite={liveSite} />;
   }
   if (module.type === "event-calendar") {
     return <EventCalendarPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
@@ -2424,7 +2472,7 @@ function BuilderModulePreview({
     return <BlogPostTagsPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-post") {
-    return <BlogPostViewPreview settings={module.settings} />;
+    return <BlogPostViewPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-newsletter-subscribe") {
     return (
@@ -2487,7 +2535,8 @@ function BuilderModulePreview({
   }
 
   if (module.type === "admin-blog-links") {
-    return <AdminBlogLinksPreview settings={module.settings} projectId={projectId} />;
+    // liveSite: the Auto-tag button is real on the admin site and inert in the Builder.
+    return <AdminBlogLinksPreview settings={module.settings} projectId={projectId} liveSite={liveSite} />;
   }
 
   if (module.type === "admin-support-form") {
@@ -2613,7 +2662,25 @@ function usePostPageUrl(settings: Record<string, string>): string {
  */
 const UNMATCHED_FILTER_VALUE = "__starcaster_unmatched_filter__";
 
-function BlogPostListPreview({ settings }: { settings: Record<string, string> }) {
+/*
+ * "tagged X" + "by Y" -> "tagged X and by Y"; three or more take commas. The
+ * empty-state sentence names EVERY filter that is narrowing the page, because
+ * naming only the first one blames it for an emptiness a later one caused —
+ * which is the defect this whole message was rewritten to stop.
+ */
+function joinFilterPhrases(phrases: string[]): string {
+  if (phrases.length <= 1) return phrases[0] || "";
+  return `${phrases.slice(0, -1).join(", ")} and ${phrases[phrases.length - 1]}`;
+}
+
+function BlogPostListPreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
   const [allPosts, setAllPosts] = useState<BlogPostRecord[]>([]);
   /*
    * Whether allPosts is the WHOLE published archive or as much of it as could
@@ -2860,13 +2927,55 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
     ? `Blog posts matching the ${singleFilter} \u201c${singleFilterValue}\u201d: ${filteredPosts.length}`
     : "";
 
-  const emptyFilteredMessage = tagFilter
-    ? `No posts tagged \u201c${tagFilter}\u201d.`
-    : activeCategoryName
-      ? `No posts in the category \u201c${activeCategoryName}\u201d.`
-      : authorFilter
-        ? `No posts by \u201c${authorFilter}\u201d.`
-        : "No posts match your filters.";
+  /*
+   * The dropdown filters name themselves; the search box did not, and that is
+   * the same defect one step further on. Typing a word nothing matches read
+   * "No posts match your filters." \u2014 which does not say WHICH word emptied
+   * the page (\u00a75.31) \u2014 and typing it while a tag was selected read
+   * "No posts tagged \u201ctennis\u201d.", a sentence that is flatly FALSE when
+   * posts carry that tag and the search is what emptied the list. A confident
+   * wrong message is the worst of the three. So the search term is named, and
+   * a filter only takes credit for an emptiness alongside it, never instead of
+   * it.
+   */
+  const searchTerm = search.trim();
+  /*
+   * The dates are shown exactly as the visitor set them, which is the string
+   * sitting in the date input. Formatting them would mean parsing an ISO date
+   * back through `new Date`, whose midnight is UTC — so "2026-01-01" renders
+   * as December 31 anywhere west of Greenwich, and the sentence would name a
+   * bound the filter is not using.
+   */
+  const dateRangePhrase =
+    dateFrom && dateTo
+      ? `published between ${dateFrom} and ${dateTo}`
+      : dateFrom
+        ? `published on or after ${dateFrom}`
+        : dateTo
+          ? `published on or before ${dateTo}`
+          : "";
+  /*
+   * A ?category= slug matching no category empties the list on its own —
+   * `filteredPosts` drops every post while missingCatSlug is set — so nothing
+   * else had anything to do with it. Naming the search word here would invite
+   * the visitor to clear it, and clearing it brings nothing back.
+   */
+  const activeFilterPhrase = missingCatSlug
+    ? `in the category \u201c${missingCatSlug}\u201d`
+    : joinFilterPhrases([
+        tagFilter ? `tagged \u201c${tagFilter}\u201d` : "",
+        activeCategoryName ? `in the category \u201c${activeCategoryName}\u201d` : "",
+        authorFilter ? `by \u201c${authorFilter}\u201d` : "",
+        dateRangePhrase,
+      ].filter(Boolean));
+  const searchTermIsBlamable = Boolean(searchTerm) && !missingCatSlug;
+  const emptyFilteredMessage = searchTermIsBlamable
+    ? activeFilterPhrase
+      ? `No posts ${activeFilterPhrase} match \u201c${searchTerm}\u201d.`
+      : `No posts match \u201c${searchTerm}\u201d.`
+    : activeFilterPhrase
+      ? `No posts ${activeFilterPhrase}.`
+      : "No posts match your filters.";
   /*
    * Said whenever a count or an empty state was computed from a partial read.
    * "No posts tagged X" is a claim about the whole archive; if the archive was
@@ -2982,7 +3091,16 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
       {visiblePosts.length === 0 ? (
         <div style={{ padding: "2rem", textAlign: "center", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
           {allPosts.length === 0 ? (
-            "No published posts yet. Use the Create Post module to add your first post."
+            /*
+             * "Use the Create Post module" names a tool the visitor cannot
+             * reach — it was unguarded on five published pages across two
+             * tenants (ticket 86bbvqcbk). A visitor gets the reason the list
+             * is empty and nothing else (landmine 17); the builder keeps the
+             * affordance.
+             */
+            liveSite
+              ? "No posts published yet."
+              : "No published posts yet. Use the Create Post module to add your first post."
           ) : (
             <>
               <div>{emptyFilteredMessage}</div>
@@ -5614,10 +5732,13 @@ function EventDetailPreview({
   settings,
   theme,
   themePalette,
+  liveSite = false,
 }: {
   settings: Record<string, string>;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const accent = settings.accentColor || "#0f4f8f";
   const backLinkUrl = (settings.backLinkUrl || "").trim();
@@ -5631,6 +5752,8 @@ function EventDetailPreview({
     || "We could not find that event. It may have been removed.";
 
   const [slug, setSlug] = useState("");
+  /* See BlogPostViewPreview: "" is also the value before the URL is read. */
+  const [urlRead, setUrlRead] = useState(false);
   const [event, setEvent] = useState<DetailEvent | null>(null);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -5640,6 +5763,7 @@ function EventDetailPreview({
   useEffect(() => {
     function syncSlugFromUrl() {
       setSlug(new URLSearchParams(window.location.search).get("event") ?? "");
+      setUrlRead(true);
     }
     syncSlugFromUrl();
     window.addEventListener("popstate", syncSlugFromUrl);
@@ -5720,6 +5844,25 @@ function EventDetailPreview({
   // No slug at all: the page has been opened directly rather than through a
   // calendar link. Said plainly, because a blank panel here reads as broken.
   if (!slug) {
+    /*
+     * A visitor cannot be asked to edit the address bar, so the
+     * "?event=your-event-slug" half of the note below is for whoever is
+     * BUILDING the page — and it was live on
+     * delraytennis.starcaster.pro/events-details (ticket 86bbvqcbk). They get
+     * the plain reason instead, and nothing at all until the URL has been
+     * read, so a valid event link no longer flashes this on its way in.
+     */
+    if (liveSite) {
+      if (!urlRead) return null;
+      return (
+        <div className="builder-event-detail" style={frameStyle}>
+          <p className="builder-event-detail-note">
+            No event selected. Open an event from the calendar to see its details.
+          </p>
+          {backLink}
+        </div>
+      );
+    }
     return (
       <div className="builder-event-detail" style={frameStyle}>
         <p className="builder-event-detail-note">
@@ -8060,7 +8203,14 @@ function BlogPostTagsPreview({
   );
 }
 
-function BlogPostViewPreview({ settings }: { settings: Record<string, string> }) {
+function BlogPostViewPreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
   type LivePost = BlogPostRecord & {
     body?: string;
     author?: string;
@@ -8072,6 +8222,13 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
   };
 
   const [postSlug, setPostSlug] = useState("");
+  /*
+   * Has the URL been read yet? `postSlug` is "" for the first render even when
+   * the address bar carries ?post=slug, so judging "no post" on that empty
+   * first value flashed the builder placeholder over a perfectly good post
+   * (ticket 86bbvqcbk).
+   */
+  const [urlRead, setUrlRead] = useState(false);
   const [post, setPost] = useState<LivePost | null>(null);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -8079,6 +8236,7 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
   useEffect(() => {
     function syncSlugFromUrl() {
       setPostSlug(new URLSearchParams(window.location.search).get("post") ?? "");
+      setUrlRead(true);
     }
     syncSlugFromUrl();
     window.addEventListener("popstate", syncSlugFromUrl);
@@ -8162,6 +8320,26 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
             dangerouslySetInnerHTML={{ __html: formatRichTextContent(post.body) || "" }}
           />
         ) : null}
+      </article>
+    );
+  }
+
+  /*
+   * No ?post= in the URL. Everything below is the BUILDER's placeholder —
+   * "Post Title", "Post body will appear here when opened with ?post=slug." —
+   * and with no liveSite prop it was reaching visitors on
+   * delraytennis.starcaster.pro/blog-post and on a law firm's public site,
+   * brandonmarinoff.com/blog-post-view (ticket 86bbvqcbk).
+   *
+   * A visitor gets plain copy naming the reason instead of a blank panel
+   * (landmine 17) — and nothing at all until the URL has actually been read,
+   * so a valid post link no longer flashes this on its way in.
+   */
+  if (liveSite) {
+    if (!urlRead) return null;
+    return (
+      <article className="blog-post-page">
+        <p className="blog-post-body">No post selected. Open a post from the blog to read it.</p>
       </article>
     );
   }
@@ -10106,7 +10284,8 @@ function NavMegaItem({
   onOpen,
   onClose,
   previewMode,
-  activePath
+  activePath,
+  liveSite = false
 }: {
   item: NavRenderItem;
   columns: NavMegaColumn<NavRenderItem>[];
@@ -10115,6 +10294,8 @@ function NavMegaItem({
   onClose: () => void;
   previewMode: boolean;
   activePath: string;
+  /** The feature slot below renders a whole module (ticket 86bbvqcbk). */
+  liveSite?: boolean;
 }) {
   const panelId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -10225,7 +10406,7 @@ function NavMegaItem({
             */}
           {item.featureModule ? (
             <div className="site-nav-mega-feature-module">
-              <BuilderModulePreview module={item.featureModule} previewMode={previewMode} />
+              <BuilderModulePreview module={item.featureModule} previewMode={previewMode} liveSite={liveSite} />
             </div>
           ) : featureImage || item.featureHeading ? (
             <Link className="site-nav-mega-feature" href={href}>
@@ -10244,10 +10425,13 @@ function NavMegaItem({
 
 function NavigationModulePreview({
   module,
-  previewMode = false
+  previewMode = false,
+  liveSite = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
   previewMode?: boolean;
+  /** A mega-menu column can hold a whole module — see NavMegaItem. */
+  liveSite?: boolean;
 }) {
   const pathname = usePathname();
   const activePath = normalizeNavPath(pathname || "/");
@@ -10379,6 +10563,7 @@ function NavigationModulePreview({
               item={item}
               activePath={activePath}
               previewMode={previewMode}
+              liveSite={liveSite}
               columns={buildMegaColumns(children, childrenOf, megaColumnCount)}
               isOpen={openMegaId === itemId}
               onOpen={() => setOpenMegaId(itemId)}
@@ -10427,7 +10612,18 @@ function NavigationModulePreview({
   );
 }
 
-function TableModulePreview({ module }: { module: import("@/lib/builder-template").BuilderTemplateModule }) {
+function TableModulePreview({
+  module,
+  liveSite = false
+}: {
+  module: import("@/lib/builder-template").BuilderTemplateModule;
+  /**
+   * A table CELL holds ordinary modules, so every liveSite guard in every one
+   * of them was bypassed inside a table until this prop existed — the guard
+   * was there, the prop never arrived (ticket 86bbvqcbk, finding 1).
+   */
+  liveSite?: boolean;
+}) {
   const td = parseTableData(module.settings);
   const borderW = Number.parseInt(module.settings.borderWidth || "1", 10);
   const borderC = module.settings.borderColor || "#cccccc";
@@ -10460,7 +10656,7 @@ function TableModulePreview({ module }: { module: import("@/lib/builder-template
                   <td key={ci} style={{ border: `${borderW}px solid ${borderC}`, padding: `${cellPad}px`, verticalAlign: "top" }}>
                     {cellMods.map((m) => (
                       <div key={m.id} className={`builder-preview-module ${getAlignmentClass(getModuleAlignment(m.settings))}`}>
-                        <BuilderModulePreview module={m} />
+                        <BuilderModulePreview module={m} liveSite={liveSite} />
                       </div>
                     ))}
                   </td>
@@ -12389,6 +12585,32 @@ type BlogLinkArticle = {
   status: string;
 };
 
+/** One tag the Auto-tag run added to a post, with the words that earned it. */
+type AutoTagAdded = { tag: string; evidence: string[] };
+type AutoTagResultRow = { postId: string; title: string; added: AutoTagAdded[] };
+type AutoTagFailure = { postId: string; error: string };
+/**
+ * The Auto-tag run as the panel sees it (ticket 86bbw4dcp). The CLIENT is the
+ * loop: the server takes ten posts per call (lib/blogAutoTagRun.js), so this
+ * state advances one batch at a time and the progress line reads off it.
+ * `runId` is what Undo needs, and it survives a batch failing partway -- the
+ * posts already tagged stay undoable.
+ */
+type AutoTagRun = {
+  step: "idle" | "running" | "done";
+  runId: string;
+  read: number;
+  total: number;
+  results: AutoTagResultRow[];
+  failed: AutoTagFailure[];
+  undone: boolean;
+};
+const AUTO_TAG_IDLE: AutoTagRun = { step: "idle", runId: "", read: 0, total: 0, results: [], failed: [], undone: false };
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
 /**
  * Only a PUBLISHED post is on the website. The manager counts every post
  * carrying a tag, which is the right number for renaming and removing but not
@@ -12451,9 +12673,12 @@ function liveCountTitle(term: BlogLinkTerm): string {
 function AdminBlogLinksPreview({
   settings,
   projectId: projectIdProp = "",
+  liveSite = false,
 }: {
   settings: Record<string, string>;
   projectId?: string;
+  /** True on the published admin site, false inside the Builder's own preview. */
+  liveSite?: boolean;
 }) {
   const panelTitle     = settings.panelTitle || "Blog Links";
   const showTitle      = settings.showTitle !== "false";
@@ -12473,6 +12698,9 @@ function AdminBlogLinksPreview({
    */
   const managerPageUrl = (settings.managerPageUrl || "/admin-blog-manager").trim();
   const postViewUrl    = (settings.postViewUrl || "/blog-post-view").trim();
+  /** The Auto-tag extension's button (ticket 86bbw4dcp). */
+  const showAutoTag    = settings.showAutoTag !== "false";
+  const autoTagLabel   = settings.autoTagButtonLabel || "Auto-tag";
 
   const [terms, setTerms]       = useState<BlogLinkTerm[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
@@ -12485,6 +12713,7 @@ function AdminBlogLinksPreview({
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState("");
   const [note, setNote]     = useState("");
+  const [autoTag, setAutoTag] = useState<AutoTagRun>(AUTO_TAG_IDLE);
 
   /** The tag being renamed, and the box holding the new name. */
   const [editTag, setEditTag]   = useState<string | null>(null);
@@ -12784,8 +13013,116 @@ function AdminBlogLinksPreview({
     }
   }
 
+  /**
+   * One click: read every post, add the clearly matching EXISTING tags, show
+   * what changed. Confirms with the real counts first, then drives the server
+   * in batches (the same shape BlogImportPanel uses -- one long request would
+   * be cut off). A batch that fails leaves the earlier ones applied AND
+   * undoable: the run id is kept, so the Undo button still appears.
+   */
+  async function handleAutoTag() {
+    setError("");
+    setNote("");
+    setBusy(true);
+    let run: AutoTagRun = AUTO_TAG_IDLE;
+    try {
+      const q = projectQuery();
+      const c = await api(`/api/blog/tags/auto-tag/candidates${q ? `?${q}` : ""}`);
+      const cand = (c?.candidates ?? c?.data ?? {}) as { postIds?: string[]; total?: number; tagCount?: number; batchSize?: number };
+      const ids = Array.isArray(cand.postIds) ? cand.postIds.map(String) : [];
+      const tagCount = Number(cand.tagCount ?? 0);
+      const batchSize = Math.max(1, Number(cand.batchSize ?? 10));
+      if (!ids.length) { setError("This project has no blog posts to tag."); return; }
+      if (!tagCount) { setError("No tags exist yet — add one on a post first, and Auto-tag can spread it."); return; }
+      const ok = window.confirm(
+        `Read ${plural(ids.length, "post")} and add matching tags from your ${plural(tagCount, "existing tag")}? Nothing new is invented, and you can undo the run.`
+      );
+      if (!ok) return;
+
+      run = { ...AUTO_TAG_IDLE, step: "running", total: ids.length };
+      setAutoTag(run);
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const slice = ids.slice(i, i + batchSize);
+        const d = await api(`/api/blog/tags/auto-tag`, {
+          method: "POST",
+          body: JSON.stringify({ runId: run.runId || undefined, postIds: slice, projectId: headers["X-Project-ID"] || "" }),
+        });
+        const batch = (d?.run ?? d?.data ?? {}) as { runId?: string; results?: AutoTagResultRow[]; failed?: AutoTagFailure[] };
+        run = {
+          ...run,
+          runId: String(batch.runId || run.runId),
+          read: Math.min(ids.length, i + slice.length),
+          results: [...run.results, ...(Array.isArray(batch.results) ? batch.results : [])],
+          failed: [...run.failed, ...(Array.isArray(batch.failed) ? batch.failed : [])],
+        };
+        setAutoTag(run);
+      }
+      run = { ...run, step: "done" };
+      setAutoTag(run);
+      const tagged = run.results.filter((r) => r.added.length > 0);
+      const tags = tagged.reduce((n, r) => n + r.added.length, 0);
+      const untouched = run.results.length - tagged.length;
+      setNote(
+        tagged.length > 0
+          ? `Added ${plural(tags, "tag")} across ${plural(tagged.length, "post")}.${untouched > 0 ? ` ${plural(untouched, "post")} already had every matching tag.` : ""}${run.failed.length ? ` ${plural(run.failed.length, "post")} could not be saved — listed below.` : ""}`
+          : "No post gained a tag — every clear match was already tagged."
+      );
+      // Read the counts back rather than trusting the response.
+      await loadTerms();
+    } catch (e) {
+      setError((e as Error).message || "Auto-tag could not finish.");
+      // Whatever was tagged before the failure is real and undoable: keep the run visible.
+      if (run.step === "running") setAutoTag({ ...run, step: "done" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Remove exactly what this run added -- the server recomputes the scope now, then confirms with it. */
+  async function handleUndoAutoTag() {
+    const runId = autoTag.runId;
+    if (!runId) return;
+    setError("");
+    setNote("");
+    setBusy(true);
+    try {
+      const q = projectQuery();
+      const d = await api(`/api/blog/tags/auto-tag/${encodeURIComponent(runId)}${q ? `?${q}` : ""}`);
+      const scope = (d?.run ?? d?.data ?? {}) as { tagsStillPresent?: number; postCount?: number; undone?: boolean };
+      if (scope.undone) {
+        setNote("This run was already undone.");
+        setAutoTag((prev) => ({ ...prev, undone: true }));
+        return;
+      }
+      const n = Number(scope.tagsStillPresent ?? 0);
+      const ok = window.confirm(
+        `Remove the ${plural(n, "tag")} this run added across ${plural(Number(scope.postCount ?? 0), "post")}? Tags you added by hand stay.`
+      );
+      if (!ok) return;
+      const u = await api(`/api/blog/tags/auto-tag/${encodeURIComponent(runId)}/undo`, {
+        method: "POST",
+        body: JSON.stringify({ projectId: headers["X-Project-ID"] || "" }),
+      });
+      const result = (u?.undo ?? u?.data ?? {}) as { restored?: unknown[]; failed?: AutoTagFailure[]; undone?: boolean };
+      const restored = Array.isArray(result.restored) ? result.restored.length : 0;
+      const failed = Array.isArray(result.failed) ? result.failed : [];
+      setNote(
+        failed.length
+          ? `Restored ${plural(restored, "post")}; ${plural(failed.length, "post")} could not be restored: ${failed.map((f) => f.error).join("; ")}`
+          : `Restored ${plural(restored, "post")}. The tags this run added are gone.`
+      );
+      setAutoTag((prev) => ({ ...prev, undone: Boolean(result.undone) }));
+      await loadTerms();
+    } catch (e) {
+      setError((e as Error).message || "Could not undo the run.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const tagTerms      = terms.filter((t) => t.kind === "tag");
   const categoryTerms = terms.filter((t) => t.kind === "category");
+  const autoTagged    = autoTag.results.filter((r) => r.added.length > 0);
 
   /*
    * The same three inline-style vocabularies BlogCategoryManagerPreview uses,
@@ -12815,6 +13152,82 @@ function AdminBlogLinksPreview({
       {showTagManager && (
         <section style={{ marginBottom: "1.75rem" }}>
           <h4 style={sectionTitle}>Tags</h4>
+
+          {showAutoTag && (
+            <div className="admin-blog-links-autotag" style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+              <button
+                type="button"
+                className="admin-blog-links-autotag-btn"
+                onClick={() => void handleAutoTag()}
+                disabled={busy || !liveSite || autoTag.step === "running"}
+                style={{
+                  padding: "0.5rem 1rem", background: accent, color: "#fff", border: "none",
+                  borderRadius: 6, fontWeight: 700, fontSize: "0.875rem",
+                  cursor: busy || !liveSite ? "default" : "pointer",
+                  opacity: busy || !liveSite ? 0.45 : 1,
+                }}
+                title={liveSite ? "Add your existing tags to every post that clearly matches them" : "Runs on the admin site, not in the Builder"}
+              >
+                {autoTag.step === "running" ? "Tagging…" : autoTagLabel}
+              </button>
+              {autoTag.step !== "idle" && (
+                <span className="admin-blog-links-autotag-progress" aria-live="polite" style={{ fontSize: "0.8125rem", color: "#4b5563" }}>
+                  {autoTag.read} of {autoTag.total} posts read{autoTag.step === "done" ? " — done" : "…"}
+                </span>
+              )}
+              {autoTag.step === "done" && autoTag.runId && !autoTag.undone && (
+                <button
+                  type="button"
+                  className="admin-blog-links-autotag-undo"
+                  onClick={() => void handleUndoAutoTag()}
+                  disabled={busy}
+                  style={{ padding: "0.45rem 0.9rem", background: "#fff", color: "#b91c1c", border: "1px solid #fca5a5", borderRadius: 6, fontWeight: 600, fontSize: "0.8125rem", cursor: busy ? "default" : "pointer" }}
+                  title="Remove exactly the tags this run added"
+                >
+                  Undo this run
+                </button>
+              )}
+              <BuilderOnlyNote liveSite={liveSite} style={{ margin: 0, padding: "0.4rem 0.75rem", fontSize: "0.8125rem" }}>
+                {autoTagLabel} runs on the admin site, not in the Builder — open the admin page to use it.
+              </BuilderOnlyNote>
+            </div>
+          )}
+
+          {showAutoTag && autoTag.step === "done" && (autoTagged.length > 0 || autoTag.failed.length > 0) && (
+            <div className="admin-blog-links-autotag-results" style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden", marginBottom: "0.75rem" }}>
+              <div style={{ ...headStyle, gridTemplateColumns: "1fr 1.4fr" }}>
+                <span>{autoTag.undone ? "Post (tags removed again)" : "Post"}</span>
+                <span>{autoTag.undone ? "Tags this run had added" : "Tags added"}</span>
+              </div>
+              {autoTagged.map((row, i) => {
+                const editHref = `${managerPageUrl}${managerPageUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(row.postId)}`;
+                return (
+                  <div
+                    key={row.postId}
+                    className="admin-blog-links-autotag-row"
+                    style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "0 12px", padding: "8px 12px", alignItems: "start", borderBottom: i < autoTagged.length - 1 || autoTag.failed.length ? "1px solid #f0f4f8" : undefined, opacity: autoTag.undone ? 0.6 : 1 }}
+                  >
+                    <a href={editHref} style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c", overflowWrap: "anywhere" }}>{row.title || "(untitled)"}</a>
+                    <span style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                      {row.added.map((a) => (
+                        <span
+                          key={a.tag}
+                          className="admin-blog-links-autotag-tag"
+                          title={a.evidence.length ? `Earned by: ${a.evidence.join(", ")}` : undefined}
+                          style={{ fontSize: "0.75rem", fontWeight: 600, padding: "2px 8px", borderRadius: 999, background: "#eef4fb", color: accent, textDecoration: autoTag.undone ? "line-through" : "none" }}
+                        >{a.tag}</span>
+                      ))}
+                    </span>
+                  </div>
+                );
+              })}
+              {autoTag.failed.map((f) => (
+                <div key={f.postId} className="admin-blog-links-autotag-failed" role="alert" style={{ padding: "8px 12px", fontSize: "0.8125rem", color: "#b91c1c", background: "#fef2f2" }}>
+                  Post {f.postId}: {f.error}
+                </div>
+              ))}
+            </div>
+          )}
 
           {loadingTerms ? (
             <div style={{ padding: "1rem", color: "#888", textAlign: "center" }}>Loading…</div>

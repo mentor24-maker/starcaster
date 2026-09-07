@@ -12,9 +12,9 @@ type Props = {
  * D8 logical axes (docs/UI_RULES.md): Content and Structure.
  *
  * PAIRING RULE - a toggle that gates ONE specific sibling field stays adjacent
- * to it in the same strip, toggle first. Two such pairs exist here:
- * `showTitle` gates `panelTitle`, and `showRelate` gates `relateButtonLabel`.
- * Neither is split across strips or axes.
+ * to it in the same strip, toggle first. Three such pairs exist here:
+ * `showTitle` gates `panelTitle`, `showRelate` gates `relateButtonLabel`, and
+ * `showAutoTag` gates `autoTagButtonLabel`. None is split across strips or axes.
  *
  * WHICH AXIS: `showTags` (the tag manager table) and `showCategories` (whether
  * categories are offered in the article picker) change what the page is made
@@ -88,6 +88,27 @@ const SCHEMA: BuilderSettingsSchema = {
             ],
             fallback: "all",
             visibleWhen: (s) => (s.showRelate ?? "true") === "true",
+            rendersVia: RENDERS_VIA
+          }
+        ],
+        [
+          /* The Auto-tag extension's button (ticket 86bbw4dcp): toggle first, then the label it gates. */
+          {
+            key: "showAutoTag",
+            label: "Auto-tag button",
+            width: "check",
+            control: "checkbox",
+            fallback: "true",
+            rendersVia: RENDERS_VIA
+          },
+          {
+            key: "autoTagButtonLabel",
+            label: "Button text",
+            width: "text-md",
+            control: "text",
+            placeholder: "Auto-tag",
+            fallback: "Auto-tag",
+            visibleWhen: (s) => (s.showAutoTag ?? "true") === "true",
             rendersVia: RENDERS_VIA
           }
         ]

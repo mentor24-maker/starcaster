@@ -591,6 +591,34 @@ person standing on it knows whether he is finished. A pause that outlives two
 hours announces itself on the bus and keeps saying so hourly, because a pause
 nobody remembers looks exactly like a pipeline that has broken.
 
+## Filing a ticket about the pipeline itself — only for a real cost
+
+A tool that inspects itself finds more than it can fix. Measured 2026-09-06,
+tickets the pipeline filed **about the pipeline** went from about 6 a day in
+mid-August to about 16 a day in early September, and the paying work queued
+behind them. Dane parked 31 of them that day; the six that stayed all trace to
+a failure that actually happened.
+
+So the gate is not *"is this a real finding?"* — all 31 were. It is **did it
+cost anything.**
+
+- **File a pipeline/self-machinery ticket only when a pipeline failure cost
+  something observable** — lost work, a dead lane, a silent outage, a wrong
+  merge — and name that incident in the description.
+- **A theoretical gap noticed while building or reviewing is not a ticket.**
+  It goes as one plain line in the parked-backlog doc, *The 31 parked tickets*
+  (`https://app.clickup.com/90141423066/docs/2kydhxeu-814`). A pass with no
+  route to that doc says the line in its run report and as a plain comment on
+  the ticket it was already working — it does not file it.
+- **Every ticket title says in plain words what breaks and who feels it**, so
+  the operator can scan a list of seventy. The diagnostic sentence belongs in
+  the description. Dane, verbatim: *"your descriptions of tickets is so cryptic
+  and full of fanciful turns of phrases that it is difficult for me to
+  understand which ones are really important and which ones aren't."*
+
+**Client-facing bugs are unaffected** — file those on sight. The full rule,
+the numbers and the six that stayed: `docs/DOCTRINE.md` §6.24.
+
 ## The fast-track lane — "Let's fast track <ticket-id>"
 
 Said at the start of a session, that sentence is a **complete instruction**
@@ -609,11 +637,28 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
    Leave the priority alone. Two statuses are claimable now, `Rework` and
    `Queued`; a send-back lands in `Rework`, and `queue --claimable` lists them
    in the order they must be drained (all rework first, oldest first).
-4. `npm run clickup -- build-start --task <id>` — exit 3 means a branch
-   already exists; work on THAT branch (`git worktree add
-   .claude/worktrees/<topic> -b <branch> origin/<branch>`, then `npm ci`,
-   `npm run build`, `npm run env:local`, and stamp
-   `git config branch.<branch>.clickup-task <id>`). Otherwise
+4. `npm run clickup -- build-start --task <id>` — it asks whether this ticket
+   was already started, and it looks at DISKS as well as at pull requests, so
+   exit 3 now comes in two flavours and the printed line says which.
+   **`CONTINUE`** — work exists here, in one of **three** shapes, and only the
+   first is `origin/<branch>`. A **`pr:`** line means the branch is pushed:
+   `git worktree add .claude/worktrees/<topic> -b <branch> origin/<branch>`.
+   A **`work:`** line ending **`in <folder>`** means that folder is already on
+   this disk — `cd` into it; the branch was never pushed, so `origin/<branch>`
+   does not exist and that command would fail. A **`work:`** line saying
+   **`(no worktree — the branch exists but is not checked out)`** means the
+   branch is here with no folder to `cd` into: attach it with
+   `git worktree add .claude/worktrees/<topic> <branch>` — **no `-b`** (the
+   branch already exists) and **no `origin/`** (it was never pushed). Either
+   way, `npm ci`, `npm run build`, `npm run env:local`, and stamp
+   `git config branch.<branch>.clickup-task <id>`.
+   **`WORK ON ANOTHER MACHINE`** — the half-built worktree is on a disk this
+   one cannot reach. Do not branch and do not hand it back to the claim line;
+   the command prints the escalation to run. Exit 1 means it could not tell
+   from here: stop, do not guess — **but read the `next:` line first.** A disk
+   that went quiet clears itself and prints none; a ticket whose `repo:` tag
+   does not resolve never clears, and would be claimed and refused on every
+   pass forever, so it prints the escalation to run instead. Only exit 0 means
    `npm run thread <topic> <id>`.
 5. **On a send-back, merge `origin/main` in BEFORE touching a line.** The fix
    review asked for may already have landed on `main` under another name —
