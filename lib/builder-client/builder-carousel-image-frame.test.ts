@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   CAROUSEL_IMAGE_FRAME_DEFAULTS,
+  CAROUSEL_IMAGE_FRAME_LIMITS,
   carouselBorderStyle,
+  carouselShadowAngleFromOffsets,
+  carouselShadowDistanceFromOffsets,
+  carouselShadowOffsetSettings,
+  carouselShadowOffsetsFromPolar,
+  carouselShadowPolar,
   getCarouselImageFrameStyle,
   getCarouselImageShadow,
   getCarouselImageShadowGutter
@@ -147,5 +153,122 @@ describe("border style", () => {
     for (const style of ["none", "solid", "dashed", "dotted", "double"]) {
       expect(carouselBorderStyle(style)).toBe(style);
     }
+  });
+});
+
+/**
+ * SHADOW ANGLE AND SHADOW DISTANCE (operator, 2026-08-25: "there are X/Y
+ * settings AND direction").
+ *
+ * Two views of one pair of stored numbers. The trigonometry is the only part
+ * of a drop shadow a test in this repo can hold still (DOCTRINE §5.14) —
+ * whether the shadow LOOKS right is CSS, which nothing here tests — so the
+ * conversion is where the proof has to live.
+ */
+describe("shadow angle and distance", () => {
+  it("puts 0 degrees to the RIGHT of the picture", () => {
+    expect(carouselShadowOffsetsFromPolar(0, 20)).toEqual({ x: 20, y: 0 });
+  });
+
+  it("puts 90 degrees ABOVE it — a CSS shadow moves up on a negative y", () => {
+    // The one bug here nobody would mistake for a preference: flip this sign
+    // and every shadow lands on the wrong side of every picture.
+    expect(carouselShadowOffsetsFromPolar(90, 20)).toEqual({ x: 0, y: -20 });
+  });
+
+  it("puts 180 degrees to the LEFT and 270 BELOW", () => {
+    expect(carouselShadowOffsetsFromPolar(180, 20)).toEqual({ x: -20, y: 0 });
+    expect(carouselShadowOffsetsFromPolar(270, 20)).toEqual({ x: 0, y: 20 });
+  });
+
+  it("reads those same four back as 0, 90, 180 and 270", () => {
+    expect(carouselShadowAngleFromOffsets(20, 0)).toBe(0);
+    expect(carouselShadowAngleFromOffsets(0, -20)).toBe(90);
+    expect(carouselShadowAngleFromOffsets(-20, 0)).toBe(180);
+    expect(carouselShadowAngleFromOffsets(0, 20)).toBe(270);
+  });
+
+  it("never reports an angle outside 0-359", () => {
+    // atan2 answers in -180..180, and a value that rounds to 360 has to come
+    // back as 0 or the control has an option its own reader cannot produce.
+    for (const [x, y] of [[1, 1], [-1, 1], [-1, -1], [1, -1], [40, 1], [40, -1]]) {
+      const angle = carouselShadowAngleFromOffsets(x, y);
+      expect(angle).toBeGreaterThanOrEqual(0);
+      expect(angle).toBeLessThanOrEqual(359);
+    }
+  });
+
+  it("shows 0 degrees for a shadow sitting exactly under its picture", () => {
+    // x: 0, y: 0 has no direction. 0 is what the control rounds to anyway,
+    // and picking an angle at distance 0 correctly does nothing until there
+    // is a distance to swing.
+    expect(carouselShadowAngleFromOffsets(0, 0)).toBe(0);
+    expect(carouselShadowDistanceFromOffsets(0, 0)).toBe(0);
+    expect(carouselShadowOffsetsFromPolar(135, 0)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("measures a corner shadow at 57, not at the 40 the offsets cap to", () => {
+    // THE FAILURE THIS FEATURE MOST HAD TO AVOID. X and Y reach a square,
+    // angle and distance describe a circle. If Distance capped at 40, opening
+    // a panel on a shadow already saved at the corner would show a clamped
+    // value, re-derive smaller offsets from it, and move a shadow on a live
+    // page without anybody touching a control.
+    expect(carouselShadowDistanceFromOffsets(40, 40)).toBe(57);
+    expect(CAROUSEL_IMAGE_FRAME_LIMITS.shadowDistance.max).toBe(57);
+  });
+
+  it("round-trips the corner shadow back to exactly 40, 40", () => {
+    const { angle, distance } = carouselShadowPolar({ imageShadowX: "40", imageShadowY: "40" });
+    expect(angle).toBe(315);
+    expect(distance).toBe(57);
+    expect(carouselShadowOffsetsFromPolar(angle, distance)).toEqual({ x: 40, y: 40 });
+  });
+
+  it("re-derives the same angle and distance for every quarter of the dial", () => {
+    // Reading the panel and then writing what it shows must be a no-op, or a
+    // stored shadow drifts a pixel at a time each time somebody looks at it.
+    for (const angle of [0, 15, 30, 45, 90, 135, 180, 225, 270, 315, 345]) {
+      const offsets = carouselShadowOffsetsFromPolar(angle, 24);
+      const polar = carouselShadowPolar({
+        imageShadowX: String(offsets.x),
+        imageShadowY: String(offsets.y)
+      });
+      expect(carouselShadowOffsetsFromPolar(polar.angle, polar.distance)).toEqual(offsets);
+    }
+  });
+
+  it("clamps a distance the square cannot reach, and says so honestly", () => {
+    // 57 at 0 degrees wants x: 57, which is off the square. The component is
+    // clamped and the shown distance then recomputes to 40 — reachable only
+    // at the extreme, and widening the X/Y caps would just move the mismatch.
+    expect(carouselShadowOffsetsFromPolar(0, 57)).toEqual({ x: 40, y: 0 });
+    expect(carouselShadowPolar({ imageShadowX: "40", imageShadowY: "0" }).distance).toBe(40);
+  });
+
+  it("describes the shadow the RENDERER is drawing, defaults included", () => {
+    // An untouched module stores nothing, and the panel must still describe
+    // the default shadow the page paints: 6px below.
+    expect(carouselShadowPolar({})).toEqual({ angle: 270, distance: 6 });
+    expect(getCarouselImageShadow({ imageShadow: "true" })).toContain("0px 6px");
+  });
+
+  it("clamps a stored offset an imported document should never have carried", () => {
+    // The same clamp the renderer applies, so the panel cannot describe a
+    // shadow further out than the one being drawn.
+    expect(carouselShadowPolar({ imageShadowX: "900", imageShadowY: "0" })).toEqual({
+      angle: 0,
+      distance: 40
+    });
+  });
+
+  it("writes BOTH offsets as strings, under the keys the renderer reads", () => {
+    expect(carouselShadowOffsetSettings(90, 12)).toEqual({
+      imageShadowX: "0",
+      imageShadowY: "-12"
+    });
+    // And what it writes is what the shadow engine then draws.
+    expect(
+      getCarouselImageShadow({ imageShadow: "true", ...carouselShadowOffsetSettings(180, 30) })
+    ).toContain("-30px 0px");
   });
 });

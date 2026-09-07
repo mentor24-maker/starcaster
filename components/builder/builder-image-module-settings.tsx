@@ -26,6 +26,10 @@ import {
   carouselImageShadowIsOn
 } from "@/lib/builder-carousel-image-frame";
 import {
+  BuilderImageShadowAngleControl,
+  BuilderImageShadowDistanceControl
+} from "./builder-image-shadow-polar";
+import {
   BuilderSchemaModuleSettings,
   paddingFields,
   type BuilderSchemaField,
@@ -56,10 +60,15 @@ type BuilderImageModuleSettingsProps = {
 const SIZE_OPTIONS = ["5", "10", "15", "25", "33", "50", "66", "75", "90", "100"];
 
 /**
- * The five controls behind the Drop Shadow checkbox, each hidden until the
- * box is ticked — a greyed-out row per setting is five rows of noise on a
- * feature most pictures never use (D9: a gated field sits beside what gates
- * it, and does not sit there when it is off).
+ * The controls behind the Drop Shadow checkbox, each hidden until the box is
+ * ticked — a greyed-out row per setting is a column of noise on a feature
+ * most pictures never use (D9: a gated field sits beside what gates it, and
+ * does not sit there when it is off).
+ *
+ * Angle and Distance come FIRST among the numbers (D9 — direction before
+ * fine adjustment), and they are a second view of Shadow X / Shadow Y rather
+ * than settings of their own: nothing new is stored, both pairs are live, and
+ * editing either moves the other. See `builder-image-shadow-polar.tsx`.
  *
  * Every number here reads from the Carousel's frame constants so the two
  * panels cannot drift into two different ideas of the same shadow.
@@ -72,6 +81,36 @@ const IMAGE_SHADOW_DETAIL_FIELDS: BuilderSchemaField[] = [
     control: "theme-color",
     dialogLabel: "Image drop shadow color",
     themeDefault: CAROUSEL_IMAGE_FRAME_DEFAULTS.shadowColor,
+    visibleWhen: carouselImageShadowIsOn,
+    rendersVia: "getImageModuleStyle"
+  },
+  {
+    /*
+     * DERIVED, never stored — so this field carries no settings key of its
+     * own. `key` still has to be unique among its siblings (it is the React
+     * key and the handle `visibleWhen` callers use); the control writes
+     * `imageShadowX` and `imageShadowY` through `setMany`, which is why a
+     * plain `number` field would not do: that one reads and writes the key
+     * it is named after, and would have invented an eighth stored setting.
+     */
+    key: "imageShadowAngle",
+    label: "Shadow Angle",
+    width: "num",
+    control: "custom",
+    render: (ctx) => (
+      <BuilderImageShadowAngleControl settings={ctx.settings} onChange={ctx.setMany} />
+    ),
+    visibleWhen: carouselImageShadowIsOn,
+    rendersVia: "getImageModuleStyle"
+  },
+  {
+    key: "imageShadowDistance",
+    label: "Shadow Distance",
+    width: "num",
+    control: "custom",
+    render: (ctx) => (
+      <BuilderImageShadowDistanceControl settings={ctx.settings} onChange={ctx.setMany} />
+    ),
     visibleWhen: carouselImageShadowIsOn,
     rendersVia: "getImageModuleStyle"
   },

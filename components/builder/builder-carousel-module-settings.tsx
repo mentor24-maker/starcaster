@@ -4,6 +4,10 @@ import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import {
+  BuilderImageShadowAngleControl,
+  BuilderImageShadowDistanceControl
+} from "./builder-image-shadow-polar";
+import {
   BuilderThemeColorControlWithDefault,
   type BuilderThemePalette
 } from "./builder-theme-color-field";
@@ -134,6 +138,12 @@ export function BuilderCarouselModuleSettings({
   const set = (key: string, value: string) =>
     onUpdateModule((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
 
+  // Several settings in ONE update, matching the schema generator's `setMany`.
+  // Shadow Angle and Shadow Distance each write both offsets, and two separate
+  // writes would describe a shadow at neither position in between.
+  const setMany = (values: Record<string, string>) =>
+    onUpdateModule((current) => ({ ...current, settings: { ...current.settings, ...values } }));
+
   const updateItem = (id: string, updates: Partial<BuilderCardItem>) =>
     persist(items.map((item) => (item.id === id ? { ...item, ...updates } : item)));
 
@@ -260,6 +270,18 @@ export function BuilderCarouselModuleSettings({
                   dialogLabel="Image drop shadow color"
                   onChange={(imageShadowColor) => set("imageShadowColor", imageShadowColor)}
                 />
+              </BuilderModuleField>
+              {/* Angle and Distance are the SAME two numbers said the other
+                  way round (operator, 2026-08-25: "there are X/Y settings
+                  AND direction"). Nothing extra is stored and all four are
+                  live — the control is shared with the image module's panel
+                  so the two cannot grow two ideas of one shadow. Direction
+                  before fine adjustment (D9). */}
+              <BuilderModuleField label="Shadow Angle" width="num">
+                <BuilderImageShadowAngleControl settings={settings} onChange={setMany} />
+              </BuilderModuleField>
+              <BuilderModuleField label="Shadow Distance" width="num">
+                <BuilderImageShadowDistanceControl settings={settings} onChange={setMany} />
               </BuilderModuleField>
               <BuilderModuleField label="Shadow X" width="num">
                 <BuilderNumberSelectControl
