@@ -295,6 +295,14 @@ const ALLOWED_DEPENDENCIES = new Map([
   ['scripts/lib/repo_state.cjs',
     'reads branch and worktree state (`git cherry`, worktree lists). It '
     + 'reports what the repo IS; nothing in it decides whether to merge.'],
+  ['scripts/builder/checklessMessage.js',
+    'WORDS ONLY, on a path that has already stopped. It builds the text ship '
+    + 'prints when a pull request has no CI checks, and its single call site '
+    + 'is the argument to `fail(...)` — pinned by "THE COUPLING" in '
+    + 'shipThread.test.js — so it is reached only where the merge has already '
+    + 'been refused. It cannot make ship merge anything; the worst a bad '
+    + 'change here can do is give the operator advice that does not work, '
+    + 'which is loud rather than silent.'],
 ]);
 
 const EXTS = ['', '.js', '.mjs', '.cjs', '.json', '/index.js'];

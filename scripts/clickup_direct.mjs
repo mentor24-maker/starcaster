@@ -447,6 +447,10 @@ function usage(code = 2) {
   console.error('  task --list <id> --name "<name>" --body-file <file|-> [--status S] [--priority urgent|high|normal|low] [--tags a,b] [--id-out <file>]');
   console.error('                                             --priority urgent needs --operator-asked too — Urgent is the');
   console.error('                                             operator\'s lane, agents file at High or below by default');
+  console.error('                                             --name says in PLAIN WORDS what breaks and who feels it — he scans a');
+  console.error('                                             list of 70; the diagnostic sentence goes in the body (DOCTRINE 6.24)');
+  console.error('                                             and a ticket about the PIPELINE needs an incident that actually cost');
+  console.error('                                             something — a theoretical gap is one line in the parked-backlog doc');
   console.error('  priority --task <id> --priority urgent|high|normal|low [--operator-asked]');
   console.error('                                             change an existing task\'s priority, verified by read-back;');
   console.error('                                             same --operator-asked rule as `task` for urgent');

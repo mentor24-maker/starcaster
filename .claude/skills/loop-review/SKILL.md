@@ -183,6 +183,45 @@ spec lane's evidence discipline (task 86bbtujfj):
     named — or to one the build performed and recorded. "It seemed right" is
     the shape that fired on eleven nights in fourteen (2026-09-02).
 
+## Findings outside this PR: park them, do not file them
+
+Reviewing is where the pipeline notices most of its own gaps, so this lane is
+where the queue fills with tickets nobody asked for. Two things belong in your
+verdict and nowhere else:
+
+*   **In scope** — anything wrong with THIS pull request, against THIS
+    ticket's acceptance criteria. That is the send-back or the pass.
+*   **Out of scope** — a gap you noticed in the pipeline, the gates, the
+    scripts, the skills, the schedules, the ClickUp plumbing.
+
+For anything out of scope, **check the rule before filing**: a pipeline or
+self-machinery ticket is filed only when a pipeline failure **actually cost
+something observable** — lost work, a dead lane, a silent outage, a wrong
+merge — and its description names that incident. No incident, no ticket, no
+matter how real the finding is.
+
+Measured 2026-09-06: tickets the pipeline filed about itself went from about
+6 a day in mid-August to about 16 a day in early September, faster than the
+queue drains, with Delray and product work queued behind them. Dane parked 31
+of them that day; the six that stayed all name a failure that actually
+happened. All 31 were genuine findings — which is exactly why *"is it real?"*
+cannot be the gate.
+
+**Where a parked finding goes:** one plain line in the ClickUp doc *The 31
+parked tickets*, `https://app.clickup.com/90141423066/docs/2kydhxeu-814`,
+under **Parked tickets** — what breaks and who feels it, and stop. A headless
+pass has no write route to a ClickUp doc: put the line in your run report and
+as a plain `comment` on the ticket you are reviewing, marked as a parked
+finding, and leave it there.
+
+**Two things this does not change.** A **product** defect — a tenant site, the
+Builder, the admin app — is filed on sight, as always. And a real cost still
+gets a ticket: `docs/DOCTRINE.md` §6.19 (search the queue for the operator's
+own words first) and the evidence rule above both still apply to it.
+
+Canon: `docs/DOCTRINE.md` §6.24; `docs/LOOP_ENGINEERING.md` → "Parking a
+finding instead of filing it".
+
 ## Workflow
 
 1. **Claim the next task — visibly, before you verify anything.** Find the
@@ -342,6 +381,10 @@ spec lane's evidence discipline (task 86bbtujfj):
   genuinely right; it is a written claim, not a way past a refusal you did not
   want. A ticket going round a fourth time is the loop failing to notice it is
   stuck.
+- **A gap you noticed is not a ticket.** Filing a pipeline finding needs an
+  incident that actually cost something; without one it is one plain line in
+  the parked-backlog doc, or in your run report if you cannot reach it. See
+  "Findings outside this PR" above — this lane is where that queue fills up.
 - If the PR has merge conflicts with main, send it back to `Rework` with a note
   to rebase — don't resolve conflicts blind.
 - Keep review comments plain-language and specific enough that the next build
