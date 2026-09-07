@@ -27,6 +27,10 @@ import {
 
 type Settings = Record<string, string | undefined>;
 
+/** The module whose panel is on screen. Every test that drives ONE panel uses
+ *  this; the cross-module test at the bottom is the one that needs two. */
+const MODULE = "module-court-photo";
+
 function optionsIn(markup: string): string[] {
   return [...markup.matchAll(/<option value="(-?\d+)"/g)].map((match) => match[1]);
 }
@@ -45,7 +49,7 @@ describe("shadow angle and distance controls", () => {
   it("swings the shadow round WITHOUT changing how far out it sits", () => {
     // x: 12, y: -9 is 15 away at 37 degrees. Picking 90 must keep the 15.
     const settings = { imageShadowX: "12", imageShadowY: "-9" };
-    expect(shadowAnglePick(settings, null, 90).values).toEqual({ imageShadowX: "0", imageShadowY: "-15" });
+    expect(shadowAnglePick(settings, null, MODULE, 90).values).toEqual({ imageShadowX: "0", imageShadowY: "-15" });
   });
 
   it("keeps the distance at a SHORT one too, where the pixels cannot", () => {
@@ -55,49 +59,49 @@ describe("shadow angle and distance controls", () => {
     // back as 56 degrees and a distance of 4. The operator asked for 60 at 3,
     // so 60 at 3 is what both boxes must go on saying.
     const settings = { imageShadowX: "3", imageShadowY: "0" };
-    const pick = shadowAnglePick(settings, null, 60);
+    const pick = shadowAnglePick(settings, null, MODULE, 60);
     expect(pick.values).toEqual({ imageShadowX: "2", imageShadowY: "-3" });
-    expect(shadowPolarShown(pick.values, pick.memory)).toEqual({ angle: 60, distance: 3 });
+    expect(shadowPolarShown(pick.values, pick.memory, MODULE)).toEqual({ angle: 60, distance: 3 });
     // Without the memory the same offsets read back as something else, which
     // is exactly what the operator saw.
-    expect(shadowPolarShown(pick.values, null)).toEqual({ angle: 56, distance: 4 });
+    expect(shadowPolarShown(pick.values, null, MODULE)).toEqual({ angle: 56, distance: 4 });
   });
 
   it("moves the shadow out and in WITHOUT changing its direction", () => {
     // The mirror of the above, and the same mistake in the other control:
     // taking the angle from anywhere but the shadow's own would swing it.
     const settings = { imageShadowX: "0", imageShadowY: "20" };
-    expect(shadowDistancePick(settings, null, 8).values).toEqual({ imageShadowX: "0", imageShadowY: "8" });
+    expect(shadowDistancePick(settings, null, MODULE, 8).values).toEqual({ imageShadowX: "0", imageShadowY: "8" });
   });
 
   it("carries the DEFAULT shadow's other half when nothing is stored yet", () => {
     // An untouched module stores no offsets and the page still paints 0/6.
     // Picking an angle on it must swing THAT shadow, not one at distance 0.
-    expect(shadowAnglePick({}, null, 0).values).toEqual({ imageShadowX: "6", imageShadowY: "0" });
+    expect(shadowAnglePick({}, null, MODULE, 0).values).toEqual({ imageShadowX: "6", imageShadowY: "0" });
   });
 
   it("remembers NOTHING when the square could not reach the pair asked for", () => {
     // Distance 57 at 270 degrees wants y: 57 and the page draws 40. A box
     // still reading 57 would describe a shadow that is not there — the one
     // case where re-deriving is the honest answer.
-    const pick = shadowDistancePick({ imageShadowX: "0", imageShadowY: "6" }, null, 57);
+    const pick = shadowDistancePick({ imageShadowX: "0", imageShadowY: "6" }, null, MODULE, 57);
     expect(pick.values).toEqual({ imageShadowX: "0", imageShadowY: "40" });
     expect(pick.memory).toBeNull();
-    expect(shadowPolarShown(pick.values, pick.memory).distance).toBe(40);
+    expect(shadowPolarShown(pick.values, pick.memory, MODULE).distance).toBe(40);
   });
 
   it("stops honouring a picked pair once the offsets are somebody else's", () => {
     // THE GUARD. A remembered angle that outlived the offsets it produced
     // would have the panel describing a shadow the page is not drawing.
-    const pick = shadowAnglePick({ imageShadowX: "12", imageShadowY: "-9" }, null, 15);
-    expect(shadowPolarShown(pick.values, pick.memory).angle).toBe(15);
+    const pick = shadowAnglePick({ imageShadowX: "12", imageShadowY: "-9" }, null, MODULE, 15);
+    expect(shadowPolarShown(pick.values, pick.memory, MODULE).angle).toBe(15);
     const editedByHand = { imageShadowX: "30", imageShadowY: "-4" };
-    expect(shadowPolarShown(editedByHand, pick.memory)).toEqual({ angle: 8, distance: 30 });
+    expect(shadowPolarShown(editedByHand, pick.memory, MODULE)).toEqual({ angle: 8, distance: 30 });
   });
 
   it("offers the whole dial in fifteens, and stops short of 360", () => {
     const options = optionsIn(renderToStaticMarkup(
-      <BuilderImageShadowAngleControl settings={{}} onChange={() => {}} />
+      <BuilderImageShadowAngleControl moduleId={MODULE} settings={{}} onChange={() => {}} />
     ));
     expect(options[0]).toBe("0");
     expect(options).toContain("270");
@@ -109,7 +113,7 @@ describe("shadow angle and distance controls", () => {
 
   it("reaches 57 on the distance list, not the 40 the offsets cap to", () => {
     const options = optionsIn(renderToStaticMarkup(
-      <BuilderImageShadowDistanceControl settings={{}} onChange={() => {}} />
+      <BuilderImageShadowDistanceControl moduleId={MODULE} settings={{}} onChange={() => {}} />
     ));
     expect(options.at(-1)).toBe("57");
   });
@@ -117,10 +121,10 @@ describe("shadow angle and distance controls", () => {
   it("shows a corner shadow at 315 and 57 rather than the nearest tidy pair", () => {
     const settings = { imageShadowX: "40", imageShadowY: "40" };
     expect(selectedIn(renderToStaticMarkup(
-      <BuilderImageShadowAngleControl settings={settings} onChange={() => {}} />
+      <BuilderImageShadowAngleControl moduleId={MODULE} settings={settings} onChange={() => {}} />
     ))).toBe("315");
     expect(selectedIn(renderToStaticMarkup(
-      <BuilderImageShadowDistanceControl settings={settings} onChange={() => {}} />
+      <BuilderImageShadowDistanceControl moduleId={MODULE} settings={settings} onChange={() => {}} />
     ))).toBe("57");
   });
 
@@ -132,6 +136,7 @@ describe("shadow angle and distance controls", () => {
     // live page because somebody opened a panel and touched nothing.
     const markup = renderToStaticMarkup(
       <BuilderImageShadowAngleControl
+        moduleId={MODULE}
         settings={{ imageShadowX: "12", imageShadowY: "-9" }}
         onChange={() => {}}
       />
@@ -162,20 +167,33 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 
 /** The two rows as the panel mounts them: one settings object, two controls,
- *  and a plain Shadow X box standing in for the panel's own. */
-function ShadowRows({ initial }: { initial: Settings }) {
+ *  and a plain Shadow X box standing in for the panel's own.
+ *
+ *  `prefix` exists so TWO of these can be on screen at once, which is the
+ *  Builder's normal state and the condition the cross-module test needs. */
+function ShadowRows({
+  initial,
+  moduleId = MODULE,
+  prefix = ""
+}: {
+  initial: Settings;
+  moduleId?: string;
+  prefix?: string;
+}) {
   const [settings, setSettings] = useState<Settings>(initial);
   const merge = (values: Settings) => setSettings((current) => ({ ...current, ...values }));
   return (
     <div>
-      <BuilderImageShadowAngleControl settings={settings} onChange={merge} />
-      <BuilderImageShadowDistanceControl settings={settings} onChange={merge} />
+      <BuilderImageShadowAngleControl moduleId={moduleId} settings={settings} onChange={merge} />
+      <BuilderImageShadowDistanceControl moduleId={moduleId} settings={settings} onChange={merge} />
       <input
-        aria-label="Shadow X"
+        aria-label={`${prefix}Shadow X`}
         value={settings.imageShadowX ?? ""}
         onChange={(event) => merge({ imageShadowX: event.target.value })}
       />
-      <output aria-label="offsets">{`${settings.imageShadowX ?? ""},${settings.imageShadowY ?? ""}`}</output>
+      <output aria-label={`${prefix}offsets`}>
+        {`${settings.imageShadowX ?? ""},${settings.imageShadowY ?? ""}`}
+      </output>
     </div>
   );
 }
@@ -185,6 +203,45 @@ function mount(initial: Settings) {
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => root?.render(<ShadowRows initial={initial} />));
+}
+
+/** Two module cards expanded at once — what the Builder actually looks like. */
+function mountTwo(first: Settings, second: Settings) {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() =>
+    root?.render(
+      <>
+        <div data-panel="a">
+          <ShadowRows initial={first} moduleId="module-slideshow" prefix="A " />
+        </div>
+        <div data-panel="b">
+          <ShadowRows initial={second} moduleId="module-card-slider" prefix="B " />
+        </div>
+      </>
+    )
+  );
+}
+
+/** The same three readers, scoped to one of the two panels above. */
+function inPanel(panel: "a" | "b") {
+  const scope = container?.querySelector(`[data-panel="${panel}"]`);
+  if (!scope) throw new Error(`no panel ${panel}`);
+  return {
+    reads(label: string): string {
+      const found = scope.querySelector(`[aria-label="${label}"]`);
+      if (!found) throw new Error(`no control labelled ${label}`);
+      return (found as HTMLSelectElement | HTMLInputElement).value;
+    },
+    pick(label: string, value: string) {
+      act(() => {
+        const control = scope.querySelector(`[aria-label="${label}"]`) as HTMLSelectElement;
+        control.value = value;
+        control.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
+  };
 }
 
 function box(label: string): HTMLSelectElement | HTMLInputElement {
@@ -272,6 +329,64 @@ describe("the two rows together, driven like the panel", () => {
     expect(offsets()).toBe("30,-4");
     expect(reads("Shadow angle in degrees")).toBe("8");
     expect(reads("Shadow distance in pixels")).toBe("30");
+  });
+
+  it("does not turn the shadow when Distance is DRAGGED past the cap", () => {
+    // SEND-BACK ROUND 2. The operator picks a direction and then walks
+    // Distance up one step at a time, which is how a drag arrives. X and Y
+    // used to be capped separately, so past about 41 the point left the ray
+    // and slid towards the corner of the square: 45 read 17, 50 read 21,
+    // 57 read 27. He touched nothing but Distance and the shadow swung 12
+    // degrees.
+    mount({ imageShadowX: "12", imageShadowY: "-9" });
+    pick("Shadow angle in degrees", "15");
+    expect(reads("Shadow angle in degrees")).toBe("15");
+    for (const step of ["20", "30", "38", "42", "45", "50", "57"]) {
+      pick("Shadow distance in pixels", step);
+      expect(reads("Shadow angle in degrees")).toBe("15");
+    }
+    // Pinned against the cap: as far out as the square goes in that
+    // direction, and the box says the 41 it can actually reach.
+    expect(offsets()).toBe("40,-11");
+    expect(reads("Shadow distance in pixels")).toBe("41");
+    // And back in again, still 15 the whole way.
+    for (const step of ["40", "30", "20"]) {
+      pick("Shadow distance in pixels", step);
+      expect(reads("Shadow angle in degrees")).toBe("15");
+    }
+  });
+
+  it("keeps one module's pick out of another module's boxes", () => {
+    // SEND-BACK ROUND 2, item 2. The remembered pick is ONE variable for the
+    // whole app, and several module cards are expanded at once — so a memory
+    // fingerprinted on the offsets alone was honoured by any module whose
+    // offsets happened to match. Measured: picking 15 on the Slideshow left a
+    // Card Slider hand-set to the same 6,-2 reading 15, when its own offsets
+    // derive to 18.
+    mountTwo({ imageShadowX: "0", imageShadowY: "6" }, { imageShadowX: "0", imageShadowY: "-2" });
+    const a = inPanel("a");
+    const b = inPanel("b");
+    expect(a.reads("Shadow angle in degrees")).toBe("270");
+    expect(b.reads("Shadow angle in degrees")).toBe("90");
+
+    // A's pick lands on 6,-2 — 15 degrees at the distance 6 it already had.
+    a.pick("Shadow angle in degrees", "15");
+    expect(a.reads("Shadow angle in degrees")).toBe("15");
+    // B still describes its OWN page, untouched.
+    expect(b.reads("Shadow angle in degrees")).toBe("90");
+
+    // Now hand-set B's Shadow X to 6, so B's offsets become the very pair A's
+    // pick produced. B never picked anything, so B must re-derive: 6,-2 is 18.
+    act(() => {
+      const control = container?.querySelector('[aria-label="B Shadow X"]') as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(control, "6");
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(b.reads("Shadow angle in degrees")).toBe("18");
+    // A still shows the fifteen it picked — scoping the memory took nothing
+    // away from the module that owns it.
+    expect(a.reads("Shadow angle in degrees")).toBe("15");
   });
 
   it("shows the 40 the square can draw when 57 was asked for at a quarter turn", () => {

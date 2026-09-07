@@ -34,6 +34,10 @@ type Settings = Record<string, string | undefined>;
 
 type PolarControlProps = {
   settings: Settings;
+  /** WHOSE panel this is. The remembered pick is scoped to it — several
+   *  module cards are expanded at once in the Builder, so a memory with no
+   *  owner is one module's pick honoured on another's rows. */
+  moduleId: string;
   /** Both keys in ONE update — an angle edit that wrote X and then Y would
    *  briefly describe a shadow at neither position. */
   onChange: (values: { imageShadowX: string; imageShadowY: string }) => void;
@@ -56,19 +60,36 @@ type PolarControlProps = {
  *     with nothing said (landmine 17's shape).
  *
  * So the pair the operator picked is held in the CONTROL's own memory — not
- * stored, not written to the page, gone when the panel closes. It is honoured
- * only while the offsets are still the ones that pick produced: edit Shadow X
- * or Shadow Y directly and the fingerprint stops matching, so the panel goes
- * straight back to describing what the page is actually drawing. That is the
- * one thing this must never get wrong.
+ * stored, never written to the page. It is honoured only while the offsets
+ * are still the ones that pick produced: edit Shadow X or Shadow Y directly
+ * and the fingerprint stops matching, so the panel goes straight back to
+ * describing what the page is actually drawing. That is the one thing this
+ * must never get wrong.
  *
  * It lives outside React because the two controls are separate rows in the
  * panel's grid with no common ancestor to hang a `useState` on, and because
  * of case 3: a pick at distance 0 writes the offsets it already had, so
  * nothing in the settings changes and only a store of our own can bring the
  * two boxes back to say what was chosen.
+ *
+ * WHICH MEANS IT IS ONE VARIABLE FOR THE WHOLE APP, and the fingerprint has
+ * to say so. Several module cards are expanded at once in the Builder, so a
+ * memory keyed on the offsets alone was honoured by ANY module whose offsets
+ * happened to match: measured on 2026-09-07 (round 2), picking Angle 15 on a
+ * Slideshow left a Card Slider hand-set to the same `6, -2` reading 15 when
+ * its own offsets derive to 18. So the module's id is part of the fingerprint
+ * — a pick belongs to the panel that made it, and every other panel re-derives
+ * from the page as though no pick had happened at all.
+ *
+ * (An earlier version of this comment said the memory "lives in the open
+ * panel and is gone when it closes". It never did — it is module-level state
+ * and it outlives every panel. A comment describing a safety property the
+ * code does not have is the thing that gets believed later, which is why the
+ * measurement above found the bug and the comment did not.)
  */
-export type ShadowPolarMemory = { angle: number; distance: number; x: number; y: number } | null;
+export type ShadowPolarMemory =
+  | { moduleId: string; angle: number; distance: number; x: number; y: number }
+  | null;
 
 let pickedPolar: ShadowPolarMemory = null;
 const pickedPolarListeners = new Set<() => void>();
@@ -101,16 +122,23 @@ function usePickedPolar(): ShadowPolarMemory {
 
 /**
  * What the two boxes SHOW: the remembered pick while it still describes the
- * stored offsets, and the offsets themselves the moment it does not.
+ * stored offsets of the module that made it, and the offsets themselves the
+ * moment it does not.
  *
- * The fingerprint is the whole guard. A remembered angle is at most the
- * rounding of one pixel away from the offsets it produced, so honouring it
- * can never put the panel and the page on different sides of the picture —
- * and a memory whose offsets no longer match is not honoured at all.
+ * The fingerprint is the whole guard, and it has three parts. A remembered
+ * angle is at most the rounding of one pixel away from the offsets it
+ * produced, so honouring it can never put the panel and the page on different
+ * sides of the picture — but only for the module it was picked on, and only
+ * while those offsets are still what the page stores. Anything else
+ * re-derives.
  */
-export function shadowPolarShown(settings: Settings, memory: ShadowPolarMemory): CarouselShadowPolar {
+export function shadowPolarShown(
+  settings: Settings,
+  memory: ShadowPolarMemory,
+  moduleId: string
+): CarouselShadowPolar {
   const { x, y } = carouselShadowOffsets(settings);
-  if (memory && memory.x === x && memory.y === y) {
+  if (memory && memory.moduleId === moduleId && memory.x === x && memory.y === y) {
     return { angle: memory.angle, distance: memory.distance };
   }
   return carouselShadowPolar(settings);
@@ -182,14 +210,20 @@ type ShadowPolarPick = {
  * that is not on the page. The panel then falls back to the offsets and shows
  * the honest 40 — which is what the ticket's acceptance criteria ask for.
  */
-function polarPick(angle: number, distance: number): ShadowPolarPick {
+function polarPick(moduleId: string, angle: number, distance: number): ShadowPolarPick {
   const values = carouselShadowOffsetSettings(angle, distance);
   if (!carouselShadowPolarIsReachable(angle, distance)) {
     return { values, memory: null };
   }
   return {
     values,
-    memory: { angle, distance, x: Number(values.imageShadowX), y: Number(values.imageShadowY) }
+    memory: {
+      moduleId,
+      angle,
+      distance,
+      x: Number(values.imageShadowX),
+      y: Number(values.imageShadowY)
+    }
   };
 }
 
@@ -198,20 +232,30 @@ function polarPick(angle: number, distance: number): ShadowPolarPick {
  * ALREADY has — the SHOWN distance, not a re-derived one, or picking an angle
  * would quietly move the shadow in or out by the pixel the offsets rounded.
  */
-export function shadowAnglePick(settings: Settings, memory: ShadowPolarMemory, angle: number): ShadowPolarPick {
-  return polarPick(angle, shadowPolarShown(settings, memory).distance);
+export function shadowAnglePick(
+  settings: Settings,
+  memory: ShadowPolarMemory,
+  moduleId: string,
+  angle: number
+): ShadowPolarPick {
+  return polarPick(moduleId, angle, shadowPolarShown(settings, memory, moduleId).distance);
 }
 
 /** The mirror: a Distance pick keeps the direction the shadow already shows —
  *  including through 0, where the offsets no longer hold one. */
-export function shadowDistancePick(settings: Settings, memory: ShadowPolarMemory, distance: number): ShadowPolarPick {
-  return polarPick(shadowPolarShown(settings, memory).angle, distance);
+export function shadowDistancePick(
+  settings: Settings,
+  memory: ShadowPolarMemory,
+  moduleId: string,
+  distance: number
+): ShadowPolarPick {
+  return polarPick(moduleId, shadowPolarShown(settings, memory, moduleId).angle, distance);
 }
 
 /** Which way the shadow falls: 0 is right, 90 up, 180 left, 270 below. */
-export function BuilderImageShadowAngleControl({ settings, onChange }: PolarControlProps) {
+export function BuilderImageShadowAngleControl({ settings, moduleId, onChange }: PolarControlProps) {
   const memory = usePickedPolar();
-  const { angle } = shadowPolarShown(settings, memory);
+  const { angle } = shadowPolarShown(settings, memory, moduleId);
   const limits = CAROUSEL_IMAGE_FRAME_LIMITS.shadowAngle;
   return (
     <PolarSelect
@@ -221,7 +265,7 @@ export function BuilderImageShadowAngleControl({ settings, onChange }: PolarCont
       step={CAROUSEL_SHADOW_ANGLE_STEP}
       value={angle}
       onPick={(next) => {
-        const pick = shadowAnglePick(settings, memory, next);
+        const pick = shadowAnglePick(settings, memory, moduleId, next);
         writePickedPolar(pick.memory);
         onChange(pick.values);
       }}
@@ -230,9 +274,9 @@ export function BuilderImageShadowAngleControl({ settings, onChange }: PolarCont
 }
 
 /** How far from the picture it falls — 0 to the square's diagonal, 57. */
-export function BuilderImageShadowDistanceControl({ settings, onChange }: PolarControlProps) {
+export function BuilderImageShadowDistanceControl({ settings, moduleId, onChange }: PolarControlProps) {
   const memory = usePickedPolar();
-  const { distance } = shadowPolarShown(settings, memory);
+  const { distance } = shadowPolarShown(settings, memory, moduleId);
   const limits = CAROUSEL_IMAGE_FRAME_LIMITS.shadowDistance;
   return (
     <PolarSelect
@@ -242,7 +286,7 @@ export function BuilderImageShadowDistanceControl({ settings, onChange }: PolarC
       step={1}
       value={distance}
       onPick={(next) => {
-        const pick = shadowDistancePick(settings, memory, next);
+        const pick = shadowDistancePick(settings, memory, moduleId, next);
         writePickedPolar(pick.memory);
         onChange(pick.values);
       }}

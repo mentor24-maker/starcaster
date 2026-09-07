@@ -98,7 +98,11 @@ const IMAGE_SHADOW_DETAIL_FIELDS: BuilderSchemaField[] = [
     width: "num",
     control: "custom",
     render: (ctx) => (
-      <BuilderImageShadowAngleControl settings={ctx.settings} onChange={ctx.setMany} />
+      <BuilderImageShadowAngleControl
+        moduleId={ctx.module.id}
+        settings={ctx.settings}
+        onChange={ctx.setMany}
+      />
     ),
     visibleWhen: carouselImageShadowIsOn,
     rendersVia: "getImageModuleStyle"
@@ -109,7 +113,11 @@ const IMAGE_SHADOW_DETAIL_FIELDS: BuilderSchemaField[] = [
     width: "num",
     control: "custom",
     render: (ctx) => (
-      <BuilderImageShadowDistanceControl settings={ctx.settings} onChange={ctx.setMany} />
+      <BuilderImageShadowDistanceControl
+        moduleId={ctx.module.id}
+        settings={ctx.settings}
+        onChange={ctx.setMany}
+      />
     ),
     visibleWhen: carouselImageShadowIsOn,
     rendersVia: "getImageModuleStyle"

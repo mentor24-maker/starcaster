@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CAROUSEL_IMAGE_FRAME_DEFAULTS,
   CAROUSEL_IMAGE_FRAME_LIMITS,
+  CAROUSEL_SHADOW_ANGLE_STEP,
   carouselBorderStyle,
   carouselShadowAngleFromOffsets,
   carouselShadowDistanceFromOffsets,
@@ -261,6 +262,69 @@ describe("shadow angle and distance", () => {
     // The corner: 40, 40 sits exactly on the cap, which is inside it.
     expect(carouselShadowPolarIsReachable(315, 57)).toBe(true);
     expect(carouselShadowOffsetsFromPolar(315, 57)).toEqual({ x: 40, y: 40 });
+  });
+
+  /**
+   * THE CAP MUST NOT TURN THE SHADOW. (Send-back, 2026-09-07 round 2.)
+   *
+   * X and Y used to be capped at 40 INDEPENDENTLY, so the moment one of them
+   * hit the cap the point left the ray the angle describes and slid along the
+   * edge of the square towards its corner. Measured in the real panel: pick
+   * Angle 15, then drag Distance up — 42 still read 15, 45 read 17, 50 read
+   * 21, 57 read 27. The operator picked a direction, touched only Distance,
+   * and watched the shadow swing twelve degrees.
+   *
+   * Both components are scaled by ONE factor now — the largest that brings
+   * both inside the square — so the point stays on the ray and only the
+   * distance shortens. That is the requirement in the send-back's own words:
+   * moving Distance must never change the Angle the box is showing, at any
+   * distance, not only at 0.
+   */
+  it("keeps the picked DIRECTION when the cap bites, instead of sliding to the corner", () => {
+    // The exact walk from the send-back. Every one of these used to turn.
+    expect(carouselShadowOffsetsFromPolar(15, 42)).toEqual({ x: 40, y: -11 });
+    expect(carouselShadowOffsetsFromPolar(15, 45)).toEqual({ x: 40, y: -11 });
+    expect(carouselShadowOffsetsFromPolar(15, 50)).toEqual({ x: 40, y: -11 });
+    expect(carouselShadowOffsetsFromPolar(15, 57)).toEqual({ x: 40, y: -11 });
+    // And what the box then SHOWS is still the fifteen that was picked.
+    for (const distance of [42, 45, 50, 57]) {
+      const { x, y } = carouselShadowOffsetsFromPolar(15, distance);
+      expect(carouselShadowAngleFromOffsets(x, y)).toBe(15);
+    }
+  });
+
+  it("holds every direction on the dial, all the way out to 57", () => {
+    // The sweep, because 15 degrees is one of twenty-four and the old bug hit
+    // 189 angle/distance pairs. A clamped pick must re-derive to the angle it
+    // was given, whichever way round the picture it points.
+    const drifted: string[] = [];
+    for (let angle = 0; angle < 360; angle += CAROUSEL_SHADOW_ANGLE_STEP) {
+      for (let distance = 1; distance <= CAROUSEL_IMAGE_FRAME_LIMITS.shadowDistance.max; distance += 1) {
+        if (carouselShadowPolarIsReachable(angle, distance)) continue;
+        const { x, y } = carouselShadowOffsetsFromPolar(angle, distance);
+        const shown = carouselShadowAngleFromOffsets(x, y);
+        if (shown !== angle) drifted.push(`${angle} degrees at ${distance} reads ${shown}`);
+      }
+    }
+    expect(drifted).toEqual([]);
+  });
+
+  it("shortens the distance honestly rather than reporting the one asked for", () => {
+    // The other half: the shadow really is nearer than 57, and the box says so
+    // — 41 for a fifteen-degree shadow pinned against the right-hand cap.
+    const { x, y } = carouselShadowOffsetsFromPolar(15, 57);
+    expect(carouselShadowDistanceFromOffsets(x, y)).toBe(41);
+  });
+
+  it("still lands the two pairs the ticket named, to the pixel", () => {
+    // Scaling both components must not disturb what was already agreed:
+    // straight out to the right, and the exact corner.
+    expect(carouselShadowOffsetsFromPolar(0, 57)).toEqual({ x: 40, y: 0 });
+    expect(carouselShadowOffsetsFromPolar(315, 57)).toEqual({ x: 40, y: 40 });
+    expect(carouselShadowPolar({ imageShadowX: "40", imageShadowY: "40" })).toEqual({
+      angle: 315,
+      distance: 57
+    });
   });
 
   it("says a pair the cap had to bite is NOT reachable", () => {

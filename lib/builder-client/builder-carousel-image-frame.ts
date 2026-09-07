@@ -170,24 +170,63 @@ export function carouselShadowDistanceFromOffsets(x: number, y: number): number 
  * X and Y are each capped at 40, so what they can reach is a SQUARE, while
  * angle and distance describe a CIRCLE. The two do not fit inside each
  * other: distance 57 at 0 degrees wants `x: 57`, which is off the square.
- * The components are clamped, and the shown distance then honestly
- * recomputes to 40. Widening the X/Y caps to "fix" this would only move the
- * same mismatch further out.
+ * Something has to give, and WHICH thing gives is the whole of this function.
+ *
+ * THE DISTANCE GIVES; THE DIRECTION NEVER DOES. Both components are scaled
+ * by ONE factor — the largest that brings both inside the square — so the
+ * point stays on the ray the angle describes and only slides in along it.
+ * The shown distance then honestly recomputes to whatever the square could
+ * actually reach.
+ *
+ * Capping the two SEPARATELY is what it used to do, and it is a rotation
+ * dressed up as a clamp: the moment one component hits 40 the point leaves
+ * the ray and slides along the edge of the square towards its corner. Found
+ * in the panel on 2026-09-07 (round 2) — pick Angle 15, touch nothing but
+ * Distance, and the shadow swung twelve degrees on the way from 42 to 57. It
+ * is round 1's "Distance forgets which way the shadow was pointing" at the
+ * top of the range instead of the bottom.
+ *
+ * Widening the X/Y caps to "fix" the square/circle mismatch would only move
+ * it further out; the mismatch is fine, the rotation was the defect.
  */
 export function carouselShadowOffsetsFromPolar(angle: number, distance: number): { x: number; y: number } {
-  const raw = rawOffsetsFromPolar(angle, distance);
-  return { x: clampOffset(raw.x), y: clampOffset(raw.y) };
+  const rounded = rawOffsetsFromPolar(angle, distance);
+  const l = CAROUSEL_IMAGE_FRAME_LIMITS.shadowOffset;
+  const fits = (value: number) => value >= l.min && value <= l.max;
+  // Inside the square already: nothing to scale, and scaling anyway would
+  // shift the OTHER component's rounding for a pair the cap never touched.
+  if (fits(rounded.x) && fits(rounded.y)) {
+    return { x: clampOffset(rounded.x), y: clampOffset(rounded.y) };
+  }
+  // Scaled from the UNROUNDED components, so the ray is followed at full
+  // precision and only the final pair is rounded to whole pixels.
+  const exact = exactOffsetsFromPolar(angle, distance);
+  const factor = Math.min(
+    SHADOW_OFFSET_MAX / Math.abs(exact.x),
+    SHADOW_OFFSET_MAX / Math.abs(exact.y)
+  );
+  return {
+    x: clampOffset(Math.round(exact.x * factor)),
+    y: clampOffset(Math.round(exact.y * factor))
+  };
 }
 
 /** The components before the square gets a say — the one place the sine and
  *  cosine are written, so "what was asked for" and "what fits" cannot round
  *  differently. */
 function rawOffsetsFromPolar(angle: number, distance: number): { x: number; y: number } {
+  const exact = exactOffsetsFromPolar(angle, distance);
+  return { x: Math.round(exact.x), y: Math.round(exact.y) };
+}
+
+/** The same point, unrounded. Scaling has to happen before the rounding or
+ *  the factor is computed from a pair that has already left the ray. */
+function exactOffsetsFromPolar(angle: number, distance: number): { x: number; y: number } {
   const radians = (angle * Math.PI) / 180;
   return {
-    x: Math.round(distance * Math.cos(radians)),
+    x: distance * Math.cos(radians),
     // Negated: 90 degrees is UP, and a CSS shadow moves up on a NEGATIVE y.
-    y: Math.round(-distance * Math.sin(radians))
+    y: -distance * Math.sin(radians)
   };
 }
 

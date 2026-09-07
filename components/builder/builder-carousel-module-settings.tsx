@@ -278,10 +278,18 @@ export function BuilderCarouselModuleSettings({
                   so the two cannot grow two ideas of one shadow. Direction
                   before fine adjustment (D9). */}
               <BuilderModuleField label="Shadow Angle" width="num">
-                <BuilderImageShadowAngleControl settings={settings} onChange={setMany} />
+                <BuilderImageShadowAngleControl
+                  moduleId={module.id}
+                  settings={settings}
+                  onChange={setMany}
+                />
               </BuilderModuleField>
               <BuilderModuleField label="Shadow Distance" width="num">
-                <BuilderImageShadowDistanceControl settings={settings} onChange={setMany} />
+                <BuilderImageShadowDistanceControl
+                  moduleId={module.id}
+                  settings={settings}
+                  onChange={setMany}
+                />
               </BuilderModuleField>
               <BuilderModuleField label="Shadow X" width="num">
                 <BuilderNumberSelectControl
