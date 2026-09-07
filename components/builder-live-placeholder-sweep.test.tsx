@@ -194,17 +194,46 @@ function bareModule(type: string, settings: Record<string, string> = {}): Builde
   return { id: `m-${type}`, type, column: "main", text: "", settings } as unknown as BuilderTemplateModule;
 }
 
-/** The three placements a module can render in. Each returns the ROW's modules. */
+/**
+ * The three placements a module can render in, each paired with the DOM node
+ * that holds ONLY the module under test.
+ *
+ * Reading the whole container was wrong, and green for the wrong reason. In
+ * both nested placements the fixture's own text ran straight into the module's
+ * with no separator — `textContent` concatenates sibling nodes, so an image in
+ * a table cell read as "ColumnChoose an image". Every phrase anchored with a
+ * `\b` at the START of a module's output therefore never matched, and four of
+ * the ten guards this gate exists for — image, floating-image, merch and
+ * video — passed inside a table cell and a mega-menu slot while measuring
+ * nothing (86bbvqcbk, round 1).
+ *
+ * The fix is to read the module's OWN subtree, and it needs no production
+ * markup because both nested placements already wrap it: a table cell renders
+ * `div.builder-preview-module` around each module it holds, and the mega-menu
+ * feature slot renders `div.site-nav-mega-feature-module`. The FIRST match is
+ * the module under test — a module that renders wrappers of its own nests them
+ * inside, never outside.
+ *
+ * It also settles `video`, which is why that rule keeps its whole-string
+ * anchor: `/^Video$/` cannot match "ColumnVideo", but it matches the subtree
+ * text "Video" in all three placements. De-anchoring it was the alternative
+ * and it is worse — the word would then be flagged wherever a module used it
+ * properly, which is the exact thing the anchor was chosen to avoid.
+ */
 const PLACEMENTS: Array<{
   name: string;
+  /** The node holding only the module under test; the FIRST match is it. */
+  selector: string;
   wrap: (type: string, settings: Record<string, string>) => BuilderTemplateModule[];
 }> = [
   {
     name: "on its own in a row",
+    selector: ".builder-preview-module",
     wrap: (type, settings) => [bareModule(type, settings)],
   },
   {
     name: "inside a table cell",
+    selector: "td .builder-preview-module",
     wrap: (type, settings) => [
       bareModule("table", {
         tableData: JSON.stringify({
@@ -217,6 +246,7 @@ const PLACEMENTS: Array<{
   },
   {
     name: "in a mega-menu feature slot",
+    selector: ".site-nav-mega-feature-module",
     wrap: (type, settings) => [
       bareModule("navigation", {
         navDropdownStyle: "mega",
@@ -235,14 +265,33 @@ const PLACEMENTS: Array<{
   },
 ];
 
-/** What a visitor would read. Stylesheets and scripts are not text on a page. */
-function visitorText(node: HTMLElement): string {
+/**
+ * What a visitor would read from ONE module. Stylesheets and scripts are not
+ * text on a page.
+ *
+ * Text nodes are joined with a space rather than concatenated, which is a
+ * SECOND gluing hole and a different one from the placement chrome above:
+ * `textContent` also welds a module's own sibling nodes together. An
+ * unconfigured blog-post module renders "Post Title" and its body as separate
+ * nodes, so read raw it is "Post TitlePost body will appear here…" — in which
+ * the `\bPost Title\b` rule cannot match either, at any placement including
+ * the top level. Reading the subtree removes the fixture's words; joining
+ * removes the module's internal welds. Both are real and both are needed.
+ */
+function visitorText(node: Element): string {
   const clone = node.cloneNode(true) as HTMLElement;
   for (const el of Array.from(clone.querySelectorAll("style, script, template"))) el.remove();
-  return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
+  const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+  const parts: string[] = [];
+  while (walker.nextNode()) parts.push(walker.currentNode.textContent ?? "");
+  return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
-async function render(modules: BuilderTemplateModule[], liveSite: boolean): Promise<string> {
+async function render(
+  modules: BuilderTemplateModule[],
+  liveSite: boolean,
+  selector: string,
+): Promise<string> {
   stubEmptyApi();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -260,11 +309,27 @@ async function render(modules: BuilderTemplateModule[], liveSite: boolean): Prom
     );
   });
   await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
-  return visitorText(container);
+  /*
+   * A missing wrapper is the instrument being blind, not the module being
+   * clean, so it throws rather than returning "" — an empty string passes
+   * every assertion in this file. This is the same failure the mega-menu
+   * fixture already had once, caught structurally this time instead of by a
+   * control somebody remembered to write.
+   */
+  const target = container.querySelector(selector);
+  if (!target) {
+    throw new Error(
+      `the sweep found no "${selector}" — that placement rendered no module wrapper, ` +
+      `so every reading it takes is meaningless. Fix the fixture, never the assertion.`,
+    );
+  }
+  return visitorText(target);
 }
 
-const renderLive = (modules: BuilderTemplateModule[]) => render(modules, true);
-const renderCanvas = (modules: BuilderTemplateModule[]) => render(modules, false);
+const renderLive = (modules: BuilderTemplateModule[], selector: string) =>
+  render(modules, true, selector);
+const renderCanvas = (modules: BuilderTemplateModule[], selector: string) =>
+  render(modules, false, selector);
 
 function leaksIn(text: string): Array<{ phrase: string; why: string }> {
   return PLACEHOLDER_PHRASES.filter(({ re }) => re.test(text)).map(({ re, why }) => ({
@@ -284,7 +349,7 @@ describe("no module shows a visitor its Builder-time scaffolding", () => {
       for (const variant of variants) {
         const label = `${type}${variant.label ? ` (${variant.label})` : ""} — ${placement.name}`;
         it(allowed ? `${label} (admin: ${allowed.split(" — ")[0]})` : label, async () => {
-          const text = await renderLive(placement.wrap(type, variant.settings));
+          const text = await renderLive(placement.wrap(type, variant.settings), placement.selector);
           const found = leaksIn(text);
           if (allowed) return; // recorded decision; see ADMIN_ALLOWED
           expect(
@@ -308,15 +373,80 @@ describe("the instrument proves itself before its readings are worth anything", 
    */
   for (const placement of PLACEMENTS) {
     it(`${placement.name} really does reach the module`, async () => {
-      expect(await renderCanvas(placement.wrap("image", {}))).toContain("Choose an image");
+      expect(
+        await renderCanvas(placement.wrap("image", {}), placement.selector),
+      ).toContain("Choose an image");
     }, 20000);
   }
+
+  /*
+   * The control above only asks whether the text ARRIVED, and that is exactly
+   * how round 1 got through: in both nested placements the text arrived and
+   * the phrase list still could not match it, because the fixture's own words
+   * were welded to the front. "Choose an image" was present as a substring the
+   * whole time, so a `toContain` control could never see the hole.
+   *
+   * So this asks the question that was actually being got wrong — does the
+   * MATCHING fire? — and it is what turns red if a future placement, or a
+   * future change to visitorText, reintroduces the welding.
+   */
+  for (const placement of PLACEMENTS) {
+    it(`${placement.name} — the phrase list can match what renders there`, async () => {
+      const text = await renderCanvas(placement.wrap("image", {}), placement.selector);
+      // Asserted on the REASON, not the matched substring: the phrase list
+      // reports whatever the regex captured ("Choose an i"), which is a detail
+      // of the pattern rather than the thing being proved.
+      expect(leaksIn(text).map((f) => f.why)).toContain(
+        "a builder affordance — a visitor has nothing to choose",
+      );
+    }, 20000);
+  }
+
+  /*
+   * And the same for a rule anchored to the WHOLE of a module's output.
+   * `/^Video$/` is the only one, and it is the rule a container-wide read can
+   * never satisfy in a nested placement, since "ColumnVideo" is not "Video".
+   * If this goes red, the sweep is reading more than the module again and
+   * `video`'s guard is back to measuring nothing.
+   */
+  for (const placement of PLACEMENTS) {
+    it(`${placement.name} — a whole-string rule still matches there`, async () => {
+      const text = await renderCanvas(placement.wrap("video", {}), placement.selector);
+      expect(text).toBe("Video");
+      expect(leaksIn(text).map((f) => f.why)).toContain(
+        "the module's own name standing alone where a video should be",
+      );
+    }, 20000);
+  }
+
+  /*
+   * A module's OWN sibling nodes are welded by textContent too. That is a
+   * different hole from the placement chrome, and the two controls above are
+   * blind to it by construction — reading the module's subtree already drops
+   * the fixture's words, so they pass whether the nodes are joined or not.
+   *
+   * An unconfigured blog-post renders "Post Title" and its body as separate
+   * nodes: concatenated that is "Post TitlePost body will appear here…", in
+   * which `\bPost Title\b` cannot match at ANY placement, the top level
+   * included. Today it is still caught there by "will appear here", so the
+   * welding costs a phrase rather than a module — which is exactly why it
+   * needs its own control. The day it is the only phrase a module has, the
+   * cost is the module.
+   */
+  it("a module's own sibling text nodes are not welded together", async () => {
+    const [top] = PLACEMENTS;
+    const text = await renderCanvas(top.wrap("blog-post", {}), top.selector);
+    expect(text).toContain("Post Title Post body");
+    expect(leaksIn(text).map((f) => f.phrase)).toContain("Post Title");
+  }, 20000);
 
   it("and the guard under test is what silences it, not the placement", async () => {
     // The same fixture, live: silent because BuilderImagePreview returns null,
     // not because the placement never rendered anything.
     for (const placement of PLACEMENTS) {
-      expect(await renderLive(placement.wrap("image", {}))).not.toContain("Choose an image");
+      expect(
+        await renderLive(placement.wrap("image", {}), placement.selector),
+      ).not.toContain("Choose an image");
     }
   }, 20000);
 });
@@ -347,7 +477,10 @@ describe("...and every one of them still says its piece on the Builder canvas", 
   for (const { type, settings, phrase } of CANVAS_AFFORDANCES) {
     const label = settings ? `${type} (${Object.values(settings).join(", ")})` : type;
     it(`${label} still shows "${phrase.slice(0, 40)}"`, async () => {
-      expect(await renderCanvas([bareModule(type, settings ?? {})])).toContain(phrase);
+      const [top] = PLACEMENTS;
+      expect(
+        await renderCanvas(top.wrap(type, settings ?? {}), top.selector),
+      ).toContain(phrase);
     }, 20000);
   }
 });

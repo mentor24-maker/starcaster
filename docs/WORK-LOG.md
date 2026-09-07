@@ -32,6 +32,18 @@ every guard inside them was being bypassed.
 Every fix was broken on purpose to watch the check go red, and the check's own
 instrument was tested first — which caught it rendering nothing at all in the
 mega-menu, sixty-one assertions passing while measuring nothing.
+
+That same trap then caught a quieter version of itself. Review found that in
+those two nested places the check was reading the container's words and the
+module's words run together as one string — "ColumnChoose an image" — so four
+of the ten guards it was built for were passing there without measuring
+anything. It now reads each module's own corner of the page instead, which
+fixes the run-together problem and a second one underneath it, and there are
+new controls that fail if either comes back. Both were broken on purpose and
+watched to fail. The lesson is the one the mega-menu already taught: a check
+that has never been seen to fail is not known to work, and "the words are on
+the page somewhere" is not the same question as "the check can find them".
+
 ## 2026-09-06 — Bulk Create was throwing away the template it built the pages from (#635)
 
 Bulk Create makes a batch of pages from a template. Every page it made read
