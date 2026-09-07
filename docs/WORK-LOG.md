@@ -24,10 +24,34 @@ get an answer at all, it says so and stops, which is never the same as "there is
 nothing there".
 
 The opposite mistake mattered just as much: a check that refuses everything is a
-production line that has quietly stopped. So the case where there genuinely is
-nothing anywhere still says go ahead, and that is the case that was tested
-hardest — including from the Mac Mini, which has no way to reach into the laptop
-and must not treat that as a reason to refuse every job forever.
+production line that has quietly stopped — and the first version of this fix made
+exactly that mistake, which is why it went back for a second round. It treated
+any Mac that did not answer as a reason to stop. Dane's laptop is closed at the
+end of every day, so from the Mac Mini it did not answer all night, and the check
+refused every new job until the laptop was opened again. Overnight is precisely
+when the Mini is supposed to be working.
+
+What settles it is *which* Mac went quiet. The machine the job is standing on is
+the one it is about to start work on: if its own folders cannot be read, it stops,
+because it has no idea whether it is about to bury its own half-finished work. A
+different Mac going quiet is written down by name on an answer that carries on —
+work sitting over there could not have been continued from here in any case. The
+risk left over is real and is stated in plain sight every time: if the sleeping
+Mac was holding unfinished work for that exact job, a second copy gets started.
+That is rare and recoverable — the work is still on that disk, and the cleanup
+names it every run — while a line that is dead every night is neither.
+
+Four smaller things came out of the same review. A ticket that ClickUp failed to
+return was being treated as an ordinary one, which sent the check looking in the
+wrong project's folder and finding nothing there — the same false all-clear,
+arriving through the new check itself. Work found on the unreachable Mac used to
+be refused with nowhere to go, so the queue put the same ticket back at the front
+and refused it again on every pass; it now prints the exact escalation to send to
+Dane and moves on to the next ticket. The two other places that describe this
+step — the hand-run instructions in `CLAUDE.md` and the command's own help — were
+still describing the old single answer. And a job whose earlier pull request had
+already been merged printed that old branch's name directly under the words "no
+open pull request", which is the one branch nobody should check out.
 
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 
