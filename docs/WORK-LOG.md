@@ -26,6 +26,27 @@ two numbers do. A shadow parked in the far corner is 57 pixels away even though
 neither number goes past 40. Had the dial stopped at 40, opening that panel
 would have shown the wrong figure and quietly pulled the shadow in — a live page
 changing because somebody looked at it. It goes to 57.
+
+Reviewing it in the real panel turned up three things that reading the code
+would never have shown, all from one cause: the direction lives only in those
+two whole-number offsets, and whole numbers cannot hold twenty-four separate
+directions when the shadow is only a few pixels out. So picking **15** left the
+box reading **16** — on sixteen of the twenty-four positions. Taking the
+distance down to nothing and back turned the shadow a quarter of the way round
+on its own, because at zero there is no direction left in the numbers to come
+back to. And at zero, picking a direction did nothing whatsoever and said
+nothing about it.
+
+The panel now simply remembers what was picked, for as long as the numbers
+underneath are still the ones that pick produced. Pick 15 and it says 15; go
+out to nothing and back and the shadow returns the way it was pointing; pick a
+direction before there is any distance and it holds the choice until you give
+it one. Touch Shadow X or Shadow Y by hand and the panel drops what it
+remembered instantly and goes back to describing the picture as it actually is
+— which is the part that matters, because a panel quietly describing a shadow
+that is not on the page is a worse bug than the three it fixes. Nothing extra
+is saved: this lives only in the open panel and is gone when it closes.
+
 ## 2026-09-07 — The message that told you to do two opposite things at once (#639)
 
 The work above taught `npm run ship` that a pull request can go untested for two

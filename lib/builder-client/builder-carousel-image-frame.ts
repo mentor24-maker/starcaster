@@ -175,12 +175,43 @@ export function carouselShadowDistanceFromOffsets(x: number, y: number): number 
  * same mismatch further out.
  */
 export function carouselShadowOffsetsFromPolar(angle: number, distance: number): { x: number; y: number } {
+  const raw = rawOffsetsFromPolar(angle, distance);
+  return { x: clampOffset(raw.x), y: clampOffset(raw.y) };
+}
+
+/** The components before the square gets a say — the one place the sine and
+ *  cosine are written, so "what was asked for" and "what fits" cannot round
+ *  differently. */
+function rawOffsetsFromPolar(angle: number, distance: number): { x: number; y: number } {
   const radians = (angle * Math.PI) / 180;
   return {
-    x: clampOffset(Math.round(distance * Math.cos(radians))),
+    x: Math.round(distance * Math.cos(radians)),
     // Negated: 90 degrees is UP, and a CSS shadow moves up on a NEGATIVE y.
-    y: clampOffset(Math.round(-distance * Math.sin(radians)))
+    y: Math.round(-distance * Math.sin(radians))
   };
+}
+
+/**
+ * Can the square express this direction at this distance, or did the cap bite?
+ *
+ * The panel needs this to know when it may keep showing what the operator
+ * PICKED. Whole-pixel offsets cannot express 24 distinct directions at a
+ * short distance, so picking 15 degrees at distance 15 stores 14, -4 — which
+ * reads back as 16. Showing 16 there overrules a choice the operator just
+ * made from a list of fifteens (send-back, 2026-09-07: 16 of the 24 came back
+ * as something else). Showing 15 is right, because 14, -4 IS the closest the
+ * page can come to it.
+ *
+ * A CLAMPED pair is the opposite case and must not be remembered: distance 57
+ * at 0 degrees wants `x: 57`, the shadow is drawn at 40, and a box still
+ * reading 57 would describe a shadow the page is not drawing. So the question
+ * is asked here, next to the arithmetic that decides it, rather than by the
+ * panel comparing numbers of its own.
+ */
+export function carouselShadowPolarIsReachable(angle: number, distance: number): boolean {
+  const l = CAROUSEL_IMAGE_FRAME_LIMITS.shadowOffset;
+  const { x, y } = rawOffsetsFromPolar(angle, distance);
+  return x >= l.min && x <= l.max && y >= l.min && y <= l.max;
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   carouselShadowOffsetSettings,
   carouselShadowOffsetsFromPolar,
   carouselShadowPolar,
+  carouselShadowPolarIsReachable,
   getCarouselImageFrameStyle,
   getCarouselImageShadow,
   getCarouselImageShadowGutter
@@ -243,6 +244,29 @@ describe("shadow angle and distance", () => {
     // at the extreme, and widening the X/Y caps would just move the mismatch.
     expect(carouselShadowOffsetsFromPolar(0, 57)).toEqual({ x: 40, y: 0 });
     expect(carouselShadowPolar({ imageShadowX: "40", imageShadowY: "0" }).distance).toBe(40);
+  });
+
+  /**
+   * The question the PANEL asks before it may keep showing a picked pair.
+   *
+   * A pair the square can express is one the panel may go on displaying even
+   * though whole pixels read it back a degree out (2026-09-07 send-back:
+   * picking 15 left the box reading 16 on 16 of the 24 positions). A pair the
+   * square CANNOT express is the opposite case: the page draws something
+   * else, so the boxes must re-derive or they describe a shadow nobody sees.
+   */
+  it("says a short-distance direction IS reachable, off by a rounded pixel or not", () => {
+    expect(carouselShadowPolarIsReachable(15, 15)).toBe(true);
+    expect(carouselShadowPolarIsReachable(60, 3)).toBe(true);
+    // The corner: 40, 40 sits exactly on the cap, which is inside it.
+    expect(carouselShadowPolarIsReachable(315, 57)).toBe(true);
+    expect(carouselShadowOffsetsFromPolar(315, 57)).toEqual({ x: 40, y: 40 });
+  });
+
+  it("says a pair the cap had to bite is NOT reachable", () => {
+    expect(carouselShadowPolarIsReachable(0, 57)).toBe(false);
+    expect(carouselShadowPolarIsReachable(270, 57)).toBe(false);
+    expect(carouselShadowPolarIsReachable(90, 41)).toBe(false);
   });
 
   it("describes the shadow the RENDERER is drawing, defaults included", () => {
