@@ -1,3 +1,37 @@
+## 2026-09-07 — Admin buttons are one flat colour now, and a disabled one is actually grey (#648)
+
+Every button in the admin app used to be painted with a gradient — a colour
+that fades from light to dark across the button — and a button you could not
+click was that same gradient turned half see-through. So the only thing telling
+you a button was dead was that it looked a bit washed out, which is not much to
+go on. Dane put it plainly on 30 August: the gradients read as muddy, and this
+was part of why the new Publish step kept getting missed.
+
+Buttons are now one solid colour each, and the colour says what the button is
+for. Bright green means "save this draft" — Save Page, Save as Template, New
+Page. Deep blue means "the main action of this screen" — Preview, Check,
+Publish. Red means delete. And a button you cannot press is now a genuinely
+grey version of its colour at full strength, rather than a faded one.
+
+Two things turned up on the way in that were not in the plan. The first is why
+Publish looked like Save Page in the first place: they were literally the same
+button as far as the styling was concerned — Preview, Check, Publish, Save as
+Template and Save Page all carried an identical set of style names, so nothing
+could have coloured them differently. The four that do not save anything now
+carry a different name, which is what lets Publish stand apart.
+
+The second is worth remembering: the styles that dress the admin Builder also
+reach a client's own published website, because a published page is built by
+the same machinery and loads the same stylesheet. So every rule in this change
+is written to explicitly stop at the admin app's edge. The check that
+photographs a client's pages before and after confirms they come out identical,
+pixel for pixel.
+
+One thing worth a second look, flagged on the ticket: white lettering on the
+bright green is fainter than it should be for comfortable reading. Black
+lettering on the same green would fix it and keep the exact colour. That is
+Dane's call, and it is one line to change.
+
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 
 When one of the build sessions dies partway through a job — the machine goes to
