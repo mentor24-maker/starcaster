@@ -482,8 +482,12 @@ function usage(code = 2) {
   console.error('                                             a hand-driven session claims with this same command, and a marker from');
   console.error('                                             one would let a loop reclaim a ticket a person is building.');
   console.error('  pass-reconcile [--scheduled]               the FIRST thing a loop-build pass runs: if the previous pass left a');
-  console.error('                                             claim marker and its ticket is still "Building", hand it back (Rework');
-  console.error('                                             if a PR is open, else Queued) and clear the marker.');
+  console.error('                                             claim marker and its ticket is still "Building", hand it back and clear');
+  console.error('                                             the marker. It goes to Rework if a pull request is open for it, if');
+  console.error('                                             half-finished work is found on a machine\'s disk, or if either of those');
+  console.error('                                             could not be checked — the note names where the work is. It goes to');
+  console.error('                                             Queued ONLY when the disks WERE looked at and were empty; a machine');
+  console.error('                                             there is no route to is named in the note, never assumed empty.');
   console.error('                                             exit 0 = nothing to do, 1 = a hand-back failed, 2 = could not tell');
   console.error('                                             (never 0), 3 = a hand-back was performed.');
   console.error('                                             --scheduled: the caller is a TIMER, not a new pass, so a firing clock');
