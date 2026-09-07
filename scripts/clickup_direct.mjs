@@ -3592,19 +3592,49 @@ if (cmd === 'whoami') {
     }
   };
 
-  const decision = buildStart.resolveBuildStart(got.json.comments || [], { lookupPr });
+  // AND THEN LOOK AT THE DISK (2026-09-07, task 86bbvur5a). A pull request is
+  // the LAST thing a build produces, so a pass that wrote code and died before
+  // pushing leaves nothing for the lookup above to find — and this command
+  // then said "fresh", exit 0, and the next pass cut a second branch over it.
+  // `pass-reconcile` and the stranded sweep already take this reading before
+  // they assert that nothing was built; the step whose whole job is "has this
+  // been started already?" was the one still answering from comments alone.
+  //
+  // The same module both of those use, so the three cannot disagree about one
+  // ticket. It is only consulted on `fresh` (inside `resolveBuildStart`), which
+  // is the only answer that asserts an absence, so nothing is probed on the
+  // path where a PR is already named.
+  //
+  // The ticket read here is for its TAGS: `workInProgressFor` resolves the
+  // repo from the ticket's own `repo:` tag, so it looks in the checkout the
+  // builder would actually have used. An unreadable ticket is handed on as-is
+  // and `workInProgressFor` answers `cannot-tell` for it — never `none`.
+  const ticketRes = await call('GET', `/api/v2/task/${task}`);
+  const ticket = ticketRes.res.ok ? ticketRes.json : { id: task };
+  const findLocalWork = () => localWorkReading.workInProgressFor(ticket, localWorkReading.workProbe());
+
+  const decision = buildStart.resolveBuildStart(got.json.comments || [], {
+    lookupPr,
+    findLocalWork,
+    hereId: localWorkReading.thisNodeName(),
+  });
   console.log(buildStart.describeBuildStart(decision));
   if (decision.pr) {
     console.log(`pr:     #${decision.pr.number}${decision.pr.branch ? ` (branch ${decision.pr.branch})` : ''}`);
     console.log(`url:    ${decision.pr.url}`);
   }
+  // The branch, the worktree and the machine, one per line — this is the
+  // sentence somebody has to be able to walk to the work with.
+  for (const line of strandedLocalWork.describeWork(decision.work || [])) {
+    console.log(`work:   ${line}`);
+  }
   reportLimits(got.res);
 
   // Exit codes so a shell can branch on this without parsing prose, matching
   // `node:owns`: 0 = go ahead, 3 = somebody else's work, 1 = cannot tell.
-  if (decision.action === 'continue') process.exit(3);
-  if (decision.action === 'unknown') process.exit(1);
-  process.exit(0);
+  // The mapping lives in `buildStart` so this command and its tests cannot
+  // drift; "work on another machine" is a 3 because it is still a refusal.
+  process.exit(buildStart.buildStartExitCode(decision));
 } else if (cmd === 'pr-opened') {
   // The build loop's audit trail, made into a command (task 86bbjt18r).
   // Until now step 7 of loop-build said "add the PR URL as a ClickUp

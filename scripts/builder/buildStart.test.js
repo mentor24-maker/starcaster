@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { resolveBuildStart, describeBuildStart, prLookupArgs } = require('./buildStart.js');
+const { resolveBuildStart, describeBuildStart, buildStartExitCode, prLookupArgs } = require('./buildStart.js');
 
 /**
  * 2026-08-23: a loop-build pass opened two duplicate pull requests in one
@@ -279,4 +279,297 @@ test('the argv refuses to be built without a repo — it cannot silently omit on
   assert.throws(() => prLookupArgs({ number: 1 }), /owner, a repo and a number/);
   assert.throws(() => prLookupArgs({ owner: 'x', number: 1 }), /owner, a repo and a number/);
   assert.throws(() => prLookupArgs(null), /owner, a repo and a number/);
+});
+
+/* ------------------------------------------------------------------ *
+ * THE DISK, NOT JUST THE PULL REQUEST (2026-09-07, task 86bbvur5a)
+ *
+ * A pull request is the LAST thing a build produces. `pass-reconcile` (#637)
+ * and the stranded sweep (#624) both learned to look at a DISK before saying
+ * nothing was built — and both hand the ticket back to `Rework` with a note
+ * naming the machine, worktree and branch they found.
+ *
+ * `build-start` did not. So the next pass claimed that `Rework` ticket, asked
+ * this module, got `fresh` (no PR exists — the pass died before pushing),
+ * exit 0, and cut a second branch off `origin/main` over work the reconcile
+ * had just gone to the trouble of finding. The step whose entire job is "has
+ * this been started already?" was the one place still answering from comments
+ * alone.
+ * ------------------------------------------------------------------ */
+
+/** A reading in the shape `strandedLocalWork.findWorkInProgress` returns. */
+const reading = (verdict, extra = {}) => ({ verdict, work: [], unseen: [], unlooked: [], ...extra });
+
+/** One stamped branch carrying work, as the probe reports it.
+ *
+ *  The worktree paths below are FICTIONAL roots on purpose (`/checkout/...`):
+ *  a real one would name whichever machine this file was written on, which is
+ *  the thing NODES principle P1 forbids and `check_conventions` blocks. What
+ *  the assertions care about is that the path survives into the sentence, not
+ *  where it points. */
+const branch = (machine, name, { dirty = 0, ahead = 0, worktree = '' } = {}) =>
+  ({ machine, branch: name, dirty, ahead, worktree });
+
+test('THE REAL CASE: a half-finished worktree with no PR is no longer "fresh"', () => {
+  // 86bbuhph0 as it actually stood on 2026-09-03: about two-thirds built in
+  // `.claude/worktrees/related-articles-module`, 7 modified files, branch
+  // stamped with the task id, and not one line pushed — so no PR to look up.
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'macbook-pro',
+    findLocalWork: () => reading('work', {
+      work: [branch('macbook-pro', 'related-articles-module', {
+        dirty: 7,
+        worktree: '/checkout/.claude/worktrees/related-articles-module',
+      })],
+    }),
+  });
+
+  assert.equal(decision.action, 'continue', 'the same answer an open PR gets');
+  assert.match(decision.why, /related-articles-module/, 'and it names the branch');
+  assert.match(decision.why, /7 uncommitted files/, 'and what makes it count');
+  assert.match(decision.why, /\.claude\/worktrees\/related-articles-module/, 'and the worktree to walk to');
+  assert.match(decision.why, /do not start a second one/i);
+  assert.equal(buildStartExitCode(decision), 3, 'a refusal, not a green light');
+});
+
+test('unpushed commits count as work too, not only uncommitted files', () => {
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('work', {
+      work: [branch('mac-mini', 'video-backgrounds', { ahead: 3, worktree: '/checkout/wt/video-backgrounds' })],
+    }),
+  });
+  assert.equal(decision.action, 'continue');
+  assert.match(decision.why, /3 commits not on main/);
+});
+
+test('work on ANOTHER machine gets its own answer — refuse, and say where', () => {
+  // This one matters because "continue that branch" would be an instruction
+  // the pass cannot follow: the worktree is on a disk it has no route to. A
+  // pass told to continue something it cannot reach will branch anyway.
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('work', {
+      work: [branch('macbook-pro', 'related-articles-module', { dirty: 7, worktree: '/checkout/wt/related-articles-module' })],
+    }),
+  });
+
+  assert.equal(decision.action, 'elsewhere');
+  assert.match(decision.why, /macbook-pro/, 'it names the machine');
+  assert.match(decision.why, /related-articles-module/, 'and the branch');
+  assert.match(decision.why, /do NOT start a branch here/i);
+  assert.equal(buildStartExitCode(decision), 3, 'still a refusal');
+  assert.notEqual(decision.action, 'fresh');
+});
+
+test('work on this machine wins when both machines are holding some', () => {
+  // If anything is here, the pass can act on it. `elsewhere` is only for the
+  // case where acting is impossible from this seat.
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('work', {
+      work: [branch('macbook-pro', 'there', { dirty: 1 }), branch('mac-mini', 'here', { dirty: 2 })],
+    }),
+  });
+  assert.equal(decision.action, 'continue');
+  assert.match(decision.why, /"here"/, 'and it points at the branch this machine can actually check out');
+});
+
+// ── The mirror-image defect: a guard that never lets anything through ──────
+
+test('nothing anywhere still answers "fresh", and a build proceeds', () => {
+  // This is the case that has to keep working. A guard that refuses every
+  // claim is not a safe guard, it is a dead loop — and this repo has shipped
+  // that one (the sweep, round 1, could not move a single ticket).
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('none'),
+  });
+  assert.equal(decision.action, 'fresh');
+  assert.equal(buildStartExitCode(decision), 0, 'exit 0 — go and build');
+  assert.match(decision.why, /no half-finished build is on any disk/);
+});
+
+test('a stamped branch with NOTHING on it is not work — a fresh worktree must still build', () => {
+  // `npm run thread` stamps the branch it creates. A pass that has just made
+  // one, or one that finished and pushed, is clean and level with main: zero
+  // dirty files, zero commits beyond main. `strandedLocalWork.branchHasWork`
+  // is what draws that line, and the reading hands only real work through.
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('none'),
+  });
+  assert.equal(decision.action, 'fresh');
+});
+
+test('a seat with NO ssh route does not freeze the answer — it is named instead', () => {
+  // From the Mini, which is where the loops actually run, there is no ssh
+  // route to the MacBook at all (docs/ecosystem/inventory.yaml). Treating that
+  // permanent fact as a failed reading would refuse EVERY claim forever —
+  // the round-1 sweep bug, arriving through this door instead.
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('none', {
+      unlooked: [{ machine: 'macbook-pro', why: 'no ssh route to it is declared in docs/ecosystem/inventory.yaml' }],
+    }),
+  });
+  assert.equal(decision.action, 'fresh', 'the loop keeps working from the seat it runs on');
+  assert.equal(buildStartExitCode(decision), 0);
+  assert.match(decision.why, /not looked at: macbook-pro/, 'but the blind spot is stated, never implied');
+  assert.match(decision.why, /no ssh route/);
+});
+
+// ── "Could not tell" is never "nothing there" ─────────────────────────────
+
+test('a machine that SHOULD have answered and did not is CANNOT TELL, never fresh', () => {
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('cannot-tell', {
+      unseen: [{ machine: 'macbook-pro', why: 'it could not be reached' }],
+    }),
+  });
+  assert.equal(decision.action, 'unknown');
+  assert.equal(buildStartExitCode(decision), 1, 'stop, do not branch');
+  assert.match(decision.why, /CANNOT BE TOLD/);
+  assert.match(decision.why, /macbook-pro/, 'and it names the seat that went quiet');
+});
+
+test('a cannot-tell names BOTH kinds of blind spot, not only the failed one', () => {
+  // Once we are not branching anyway, somebody going to look by hand needs
+  // every seat that was not looked at (DOCTRINE 3.11).
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('cannot-tell', {
+      unseen: [{ machine: 'other-a', why: 'it could not be reached' }],
+      unlooked: [{ machine: 'other-b', why: 'no ssh route is declared' }],
+    }),
+  });
+  assert.match(decision.why, /other-a/);
+  assert.match(decision.why, /other-b/);
+});
+
+test('a reading that THROWS, returns nothing, or answers gibberish is never fresh', async (t) => {
+  const broken = {
+    throws: () => { throw new Error('ssh: connection reset'); },
+    'returns null': () => null,
+    'returns no verdict': () => ({ work: [] }),
+    'a verdict nobody taught it': () => reading('probably-fine'),
+  };
+  for (const [label, findLocalWork] of Object.entries(broken)) {
+    await t.test(label, () => {
+      const decision = resolveBuildStart([], { lookupPr: knows({}), hereId: 'mac-mini', findLocalWork });
+      assert.equal(decision.action, 'unknown', 'a check that could not run is not a clean bill of health');
+      assert.equal(buildStartExitCode(decision), 1);
+    });
+  }
+});
+
+// ── It costs nothing on the paths that already refuse ─────────────────────
+
+test('the disk is not probed when a PR already answers the question', async (t) => {
+  // An ssh probe sits on the hot path of every claim. `continue` and
+  // `unknown` already name a pull request and already refuse to branch, so a
+  // reading there could not change the answer — it would be pure cost.
+  for (const [label, lookupPr] of [
+    ['an open PR', knows({ 349: { state: 'OPEN' } })],
+    ['an unreadable PR', () => null],
+  ]) {
+    await t.test(label, () => {
+      let probed = false;
+      resolveBuildStart([c(1, PR_LINE(349), 1_000)], {
+        lookupPr,
+        hereId: 'mac-mini',
+        findLocalWork: () => { probed = true; return reading('none'); },
+      });
+      assert.equal(probed, false, 'nothing on a disk could change this answer');
+    });
+  }
+});
+
+test('a merged or closed PR DOES get the disk reading — it asserts an absence too', () => {
+  let probed = false;
+  const decision = resolveBuildStart([c(1, PR_LINE(408), 1_000)], {
+    lookupPr: knows({ 408: { state: 'MERGED' } }),
+    hereId: 'mac-mini',
+    findLocalWork: () => {
+      probed = true;
+      return reading('work', { work: [branch('mac-mini', 'follow-up', { dirty: 2, worktree: '/w/follow-up' })] });
+    },
+  });
+  assert.equal(probed, true, '"a new branch is right" is a claim about a disk as well');
+  assert.equal(decision.action, 'continue');
+});
+
+test('a caller that does not ask for the reading gets exactly today\'s behaviour', () => {
+  // `pass-reconcile` and the stranded sweep take this reading themselves, at
+  // the point where THEY decide, and this ticket's non-goals say not to touch
+  // either. They call `resolveBuildStart` without `findLocalWork`, so the
+  // omission has to stay a no-op rather than a cannot-tell.
+  assert.equal(resolveBuildStart([], { lookupPr: knows({}) }).action, 'fresh');
+  assert.equal(resolveBuildStart([c(1, PR_LINE(349), 1)], { lookupPr: knows({ 349: { state: 'OPEN' } }) }).action, 'continue');
+});
+
+test('the reading comes from strandedLocalWork, not a second copy of the rule', () => {
+  // The ticket's non-goal, as a test: "Do not add a second definition of
+  // 'was anything built'." Two definitions drift, and then the reconcile that
+  // preserved a ticket and the build-start that branches over it disagree.
+  const source = require('node:fs').readFileSync(require.resolve('./buildStart.js'), 'utf8');
+  assert.match(source, /require\('\.\/strandedLocalWork\.js'\)/);
+  assert.doesNotMatch(source, /function (findWorkInProgress|probeScript|branchHasWork)\s*\(/,
+    'no second copy of the probe or its rule');
+  assert.doesNotMatch(source, /clickup-task/, 'and no second idea of what evidence looks like');
+});
+
+test('the command wires it to the SHARED module and to nothing else', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+  const block = src.slice(src.indexOf("cmd === 'build-start'"), src.indexOf("cmd === 'pr-opened'"));
+  assert.match(block, /localWorkReading\.workInProgressFor/, 'it has to take the reading');
+  assert.match(block, /localWorkReading\.thisNodeName\(\)/, 'and know which machine it is standing on');
+  assert.match(block, /buildStart\.buildStartExitCode\(decision\)/, 'and exit through the pinned mapping');
+});
+
+test('the four decisions map to exit codes, and an unknown action is never a 0', () => {
+  assert.equal(buildStartExitCode({ action: 'fresh' }), 0);
+  assert.equal(buildStartExitCode({ action: 'continue' }), 3);
+  assert.equal(buildStartExitCode({ action: 'elsewhere' }), 3);
+  assert.equal(buildStartExitCode({ action: 'unknown' }), 1);
+  // The default matters: a reader that has not learned a new action must not
+  // fall through to the permissive answer.
+  assert.equal(buildStartExitCode({ action: 'something-new' }), 1);
+  assert.equal(buildStartExitCode(null), 1);
+});
+
+test('"work on another machine" has its own words in the run report', () => {
+  const elsewhere = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('work', { work: [branch('macbook-pro', 'b', { dirty: 1 })] }),
+  });
+  assert.match(describeBuildStart(elsewhere), /^WORK ON ANOTHER MACHINE — /);
+});
+
+test('the skill tells a pass that a worktree with no PR also exits 3', () => {
+  // A module nothing calls is a module that does not run; a refusal a pass has
+  // not been told about is a refusal it will read as a crash and work around.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const skill = fs.readFileSync(
+    path.join(__dirname, '..', '..', '.claude', 'skills', 'loop-build', 'SKILL.md'),
+    'utf8'
+  );
+  const i = skill.indexOf('build-start --task');
+  const step = skill.slice(i, i + 1400);
+  assert.match(step, /worktree/i, 'the disk half is described');
+  assert.match(step, /another machine/i, 'including the seat it cannot reach');
 });

@@ -223,19 +223,40 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    npm run clickup -- build-start --task <id>
    ```
 
-   *   **exit 0** — no PR, or its PR is closed/merged. A fresh branch is right;
-       carry on to step 2.
-   *   **exit 3** — a PR for this ticket is **still open**. Do NOT start a
-       second branch. Check that one out, read the send-back that returned the
-       ticket to `Rework`, fix what it named, and push to the SAME PR. The
-       command prints the branch. The ticket's Loop note says which round
-       this is (`↩ round 3 — <why>`); at round 3, read all of the earlier
-       send-backs before you touch anything — `npm run clickup --
-       send-back-rounds --task <id>` lists what each one found — because a
-       fourth would stop the loop and go to Dane instead.
+   *   **exit 0** — nothing exists: no open PR, and no half-finished worktree
+       on any machine that could be asked. A fresh branch is right; carry on
+       to step 2.
+   *   **exit 3** — work already exists. Do NOT start a second branch. Two
+       shapes, and the printed line says which one:
+       *   **a PR is still open** — check that branch out, read the send-back
+           that returned the ticket to `Rework`, fix what it named, and push
+           to the SAME PR. The command prints the branch.
+       *   **a half-finished worktree, with no PR yet** (since 2026-09-07,
+           task 86bbvur5a) — it prints the machine, the worktree and the
+           branch. If that machine is this one, work on THAT branch. If it is
+           another machine, this one cannot check it out: do not branch here,
+           and say where the work is.
    *   **exit 1** — it could not tell. **Stop and say so.** Do not start a
        branch on a guess; that is the failure this step exists to prevent,
-       arriving through the check meant to catch it.
+       arriving through the check meant to catch it. A machine that should
+       have answered and did not lands here: "I did not look" is never "there
+       is nothing there".
+
+   On the open-PR path, the ticket's Loop note says which round this is
+   (`↩ round 3 — <why>`); at round 3, read all of the earlier send-backs
+   before you touch anything — `npm run clickup -- send-back-rounds --task
+   <id>` lists what each one found — because a fourth would stop the loop and
+   go to Dane instead.
+
+   **The disk reading is the half a pull-request lookup structurally cannot
+   take.** A PR is the LAST thing a build produces, so a pass that wrote code
+   and died before pushing leaves nothing to look up: this step answered
+   "fresh", and the next pass cut a second branch over the work, which is the
+   2026-08-20 double-build shape produced by the system rather than by a second
+   session. `pass-reconcile` and the stranded sweep already took this reading
+   before asserting that nothing was built; the step whose whole job is *"has
+   this been started already?"* was the last one still answering from comments
+   alone.
 
    The claim in the line above and this check answer DIFFERENT questions, and
    conflating them cost two duplicate PRs on 2026-08-23 (#407 beside the still
@@ -522,7 +543,8 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
   is owned by another step or by the operator, and `claim` refuses them.
 - **A `Rework` ticket keeps its branch.** `build-start` will exit 3 and name
   it; fix what the send-back asked for and push to the SAME PR. Never open a
-  second one.
+  second one. It exits 3 for a half-finished **worktree** too, with no PR
+  anywhere — same rule: work on what is there, never a second branch over it.
 - **Never set `Ready to launch` and never clear `Needs your input`.** Those two
   are the operator's; only he moves a task out of them — in person, or through
   the bus-relay pass acting on a comment he wrote (an answer releases

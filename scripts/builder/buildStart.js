@@ -27,20 +27,30 @@
  */
 
 const { findPullRequest } = require('./mergeOnComment.js');
+const strandedLocalWork = require('./strandedLocalWork.js');
 
 /**
- * What a build pass should do with this ticket.
+ * WHAT A BUILD PASS SHOULD DO WITH THIS TICKET — the four answers.
  *
- *   continue   an open PR exists — check that branch out and fix what the
- *              send-back named. Do NOT start a new branch.
- *   fresh      no PR, or the PR is closed/merged. A new branch is right.
- *   unknown    a PR is named but its state could not be read. STOP.
+ *   continue   work already exists that this pass can carry on: an open PR,
+ *              or (since task 86bbvur5a) a half-finished worktree on THIS
+ *              machine. Check that branch out. Do NOT start a new one.
+ *   elsewhere  work exists on ANOTHER machine, which this one cannot check
+ *              out. Refuse, and say where it is. Also a "do not branch".
+ *   fresh      nothing anywhere. A new branch is right.
+ *   unknown    something could not be read. STOP.
  *
  * `unknown` is not a soft `fresh`, and that asymmetry is the whole point: if
  * the lookup fails and we default to starting fresh, we have rebuilt the bug
  * this module exists to prevent. A check that could not run reports "cannot
  * tell", never a pass (the same rule `doctor:node` and the ecosystem drift
  * check follow).
+ *
+ * THE ANSWER IS BUILT IN TWO HALVES. `resolveFromPullRequest` below is the
+ * original, unchanged: it reads the ticket's `PR opened:` trail. `withLocalWork`
+ * is the disk reading, and it is consulted ONLY when the first half says
+ * `fresh` — see its own header for why, and for why it is injected rather than
+ * imported.
  *
  * @param comments  the ticket's comments, as ClickUp returns them
  * @param lookupPr  (pr) => { state, headRefName } | null, where `pr` is the
@@ -65,7 +75,7 @@ const { findPullRequest } = require('./mergeOnComment.js');
  * in, and starcaster's early PRs are all merged, so the wrong answer is nearly
  * always the permissive one: "go ahead and branch".
  */
-function resolveBuildStart(comments, { lookupPr } = {}) {
+function resolveFromPullRequest(comments, lookupPr) {
   const found = findPullRequest(comments);
   if (!found) {
     return {
@@ -127,6 +137,158 @@ function resolveBuildStart(comments, { lookupPr } = {}) {
 }
 
 /**
+ * THE SECOND READING: is a half-finished build sitting on somebody's DISK?
+ *
+ * WHY (2026-09-07, task 86bbvur5a). Everything above is a pull-request lookup,
+ * and a pull request is the LAST thing a build produces. A pass that wrote
+ * seven files and died before pushing leaves no PR at all, so `fresh` came
+ * back — exit 0 — and the next pass cut a second branch off `origin/main`,
+ * orphaning the work.
+ *
+ * That is not hypothetical. `pass-reconcile` (#637) and the stranded sweep
+ * (#624) both learned to take this reading before handing a ticket back, and
+ * both write a note on the ticket naming the machine, worktree and branch they
+ * found. But the note only helps somebody who READS the comments, and
+ * `build-start` — the step whose entire job is "has this been started
+ * already?" — was answering from PR comments alone. So the loop's own
+ * defence ended one step short of the step that acts on it.
+ *
+ * IT IS ONLY CONSULTED ON `fresh`, because `fresh` is the only answer that
+ * asserts an ABSENCE. `continue` and `unknown` already name a pull request and
+ * already refuse to branch; asking a disk could not change either one, and an
+ * ssh probe on a hot path that cannot change the answer is pure cost.
+ *
+ * THE READING IS INJECTED, NOT IMPORTED. `resolveBuildStart` stays pure and
+ * synchronous, and a caller that does not supply `findLocalWork` gets exactly
+ * today's behaviour — which is what keeps `pass-reconcile` and the sweep
+ * unchanged (this ticket's non-goals). They take the same reading themselves,
+ * through the same module, at the point where THEY decide.
+ *
+ * @param fresh          the `fresh` decision the PR reading produced
+ * @param findLocalWork  () => the shape `strandedLocalWork.findWorkInProgress`
+ *                       returns: { verdict, work, unseen, unlooked }
+ * @param hereId         which machine we are standing on, in `nodeRoles` words
+ */
+function withLocalWork(fresh, { findLocalWork, hereId } = {}) {
+  if (typeof findLocalWork !== 'function') return fresh;
+
+  let reading;
+  try {
+    reading = findLocalWork();
+  } catch (err) {
+    return {
+      ...fresh,
+      action: 'unknown',
+      why: `${fresh.why}, but the local-work reading could not be taken (${err?.message || err}) — `
+        + 'a check that did not run is not a clean bill of health, so do NOT start a branch',
+    };
+  }
+
+  if (!reading || !reading.verdict) {
+    return {
+      ...fresh,
+      action: 'unknown',
+      why: `${fresh.why}, but the local-work reading came back with no verdict — do NOT start a branch on a guess`,
+    };
+  }
+
+  const work = Array.isArray(reading.work) ? reading.work : [];
+  const unseen = Array.isArray(reading.unseen) ? reading.unseen : [];
+  const unlooked = Array.isArray(reading.unlooked) ? reading.unlooked : [];
+
+  if (reading.verdict === 'work') {
+    // WHERE the work is decides what a pass can do about it, and the two are
+    // genuinely different instructions. Work on THIS machine is a worktree the
+    // pass can `cd` into — the same answer an open PR gets. Work on another
+    // machine cannot be checked out from here at all, so telling a pass to
+    // "continue that branch" would be an instruction it cannot follow, and it
+    // would very likely cut a branch anyway. It gets its own answer, which
+    // refuses and says where to go.
+    const here = work.filter((w) => w.machine === hereId);
+    const there = work.filter((w) => w.machine !== hereId);
+    if (here.length) {
+      return {
+        action: 'continue',
+        pr: fresh.pr,
+        work,
+        unlooked,
+        why: `no open pull request, but a build is already in progress on this machine — `
+          + `${strandedLocalWork.describeWork(here).join('; ')}. `
+          + 'Work on THAT branch; do not start a second one.',
+      };
+    }
+    return {
+      action: 'elsewhere',
+      pr: fresh.pr,
+      work,
+      unlooked,
+      why: `no open pull request, but a build is already in progress on another machine — `
+        + `${strandedLocalWork.describeWork(there).join('; ')}. `
+        + 'This machine cannot check that out, so do NOT start a branch here: finish it there, '
+        + 'or hand the ticket back with a note saying where the work is.',
+    };
+  }
+
+  if (reading.verdict === 'cannot-tell') {
+    // A machine that SHOULD have answered and did not. Both blind spots are
+    // named — a reader going to look by hand needs every seat that was not
+    // looked at, not only the ones that failed (DOCTRINE 3.11).
+    const blind = strandedLocalWork.describeUnlooked([...unseen, ...unlooked]);
+    return {
+      ...fresh,
+      action: 'unknown',
+      work,
+      unlooked,
+      why: `${fresh.why}, but whether a build is half-finished on a disk CANNOT BE TOLD from here — ${blind}. `
+        + 'Do NOT start a branch on a reading nobody took.',
+    };
+  }
+
+  if (reading.verdict === 'none') {
+    // The reading's real job, and it has to keep working: a guard that never
+    // lets anything through is the mirror-image defect, and this repo has
+    // shipped that one. An `unrouted` seat does NOT freeze this — from the
+    // Mini, which is where the loops actually run, there is no ssh route to
+    // the MacBook at all, so treating that as a failed reading would refuse
+    // EVERY claim forever. It is named in the line instead.
+    const seats = strandedLocalWork.describeUnlooked(unlooked);
+    return {
+      ...fresh,
+      work: [],
+      unlooked,
+      why: seats
+        ? `${fresh.why}, and no half-finished build is on any disk that could be asked `
+          + `(not looked at: ${seats})`
+        : `${fresh.why}, and no half-finished build is on any disk`,
+    };
+  }
+
+  return {
+    ...fresh,
+    action: 'unknown',
+    work,
+    unlooked,
+    why: `${fresh.why}, but the local-work reading returned an unrecognised verdict `
+      + `"${reading.verdict}" — do NOT guess`,
+  };
+}
+
+/**
+ * @param comments       the ticket's comments, as ClickUp returns them
+ * @param lookupPr       see `resolveFromPullRequest`
+ * @param findLocalWork  optional; see `withLocalWork`. Omitted = today's
+ *                       PR-only behaviour, exactly.
+ * @param hereId         optional; which machine this is, for `findLocalWork`
+ */
+function resolveBuildStart(comments, { lookupPr, findLocalWork, hereId } = {}) {
+  const fromPr = resolveFromPullRequest(comments, lookupPr);
+  // Only `fresh` asserts an absence, and an absence is the only claim a disk
+  // can contradict.
+  if (fromPr.action !== 'fresh') return fromPr;
+  return withLocalWork(fromPr, { findLocalWork, hereId });
+}
+
+/**
  * The exact `gh` arguments for looking one pull request up.
  *
  * IT LIVES HERE SO THE `--repo` CANNOT BE DROPPED QUIETLY (task 86bbqyyfn).
@@ -149,10 +311,38 @@ function describeBuildStart(decision) {
   if (!decision) return '';
   const prefix = {
     continue: 'CONTINUE',
+    elsewhere: 'WORK ON ANOTHER MACHINE',
     fresh: 'FRESH BRANCH',
     unknown: 'CANNOT TELL',
   }[decision.action] || decision.action.toUpperCase();
   return `${prefix} — ${decision.why}`;
 }
 
-module.exports = { resolveBuildStart, describeBuildStart, prLookupArgs };
+/**
+ * The exit code for one decision, so the command and its tests cannot drift.
+ *
+ * The dialect is `node:owns`', which the loop-build skill already documents:
+ * 0 = go ahead, 3 = somebody else's work, 1 = cannot tell. `elsewhere` is a 3
+ * rather than a new code on purpose — it IS "somebody else's work", every
+ * caller that branches on 3 already refuses to cut a branch, and the sentence
+ * printed alongside it says which of the two kinds it is. A fourth code would
+ * have to be taught to every reader of this command, and a reader that had not
+ * learned it would fall through to its default, which is the permissive one.
+ */
+function buildStartExitCode(decision) {
+  const action = decision?.action;
+  if (action === 'continue' || action === 'elsewhere') return 3;
+  if (action === 'unknown') return 1;
+  if (action === 'fresh') return 0;
+  // An action nobody taught this function about must not read as "go ahead".
+  return 1;
+}
+
+module.exports = {
+  resolveBuildStart,
+  resolveFromPullRequest,
+  withLocalWork,
+  describeBuildStart,
+  buildStartExitCode,
+  prLookupArgs,
+};
