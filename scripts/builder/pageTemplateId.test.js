@@ -233,6 +233,54 @@ test('the BULK route uses the builder, instead of assembling its own list again'
   );
 });
 
+/**
+ * The path Bulk Create ACTUALLY takes, which is not the bulk route at all.
+ *
+ * Picking a content model posts the batch to bulk-create-with-model (tested
+ * above). Picking none -- the default, and what the ticket's own test steps do
+ * -- posts each page separately to the SINGLE create route from the browser.
+ * That body named `templateId` and not `pageTemplateId`, so the fix above
+ * could not reach it and Bulk Create still read "No template" (task 86bbve4kp,
+ * caught in review of PR #635 by running the real bulk handler).
+ *
+ * These are source guards, the same shape as the two route guards above: the
+ * behaviour is tested in lib/builder-client/bulk-create-page-body.test.ts, and
+ * this is what fails if a caller stops using the builder. Three callers have
+ * now dropped this one field, each in its own hand-written list.
+ */
+
+const CLIENT_FILES = [
+  {
+    label: "the Builder's Bulk Create",
+    file: path.join(__dirname, '..', '..', 'components', 'admin-builder-editor.tsx'),
+    uses: /body: JSON\.stringify\(buildBulkCreatePageBody\(\{/,
+    hint: 'bulkCreatePages must build its body with buildBulkCreatePageBody',
+  },
+  {
+    label: "Acquire's Create Page modal",
+    file: path.join(__dirname, '..', '..', 'public', 'js', 'acquire.js'),
+    uses: /templateId, pageTemplateId: templateId,/,
+    hint: "acquire.js's no-content-model branch must send pageTemplateId alongside templateId",
+  },
+];
+
+for (const target of CLIENT_FILES) {
+  test(`${target.label} sends the page template it was given`, () => {
+    const source = fs.readFileSync(target.file, 'utf8');
+    assert.match(source, target.uses, target.hint);
+  });
+}
+
+test('the client body builder names pageTemplateId', () => {
+  // The guard above proves the caller uses the builder; this proves the
+  // builder still sends the field. Neither is enough on its own.
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'lib', 'builder-client', 'bulk-create-page-body.ts'),
+    'utf8'
+  );
+  assert.match(source, /pageTemplateId: input\.templateId/, 'the browser body must carry the chosen template');
+});
+
 test('the create and patch whitelists do not drift apart on the fields the editor sends', () => {
   // Every field the editor puts in a create body has to be named by BOTH
   // lists, or the same class of bug reappears on a different setting.

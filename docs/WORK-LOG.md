@@ -10,17 +10,35 @@ Bulk Create was putting the chosen template into the old column and leaving the
 real one empty — and reporting success while it did it.
 
 Three days ago the identical problem was fixed on the *single-page* create
-(#614). That fix was correct, and it could not reach here: the bulk route kept
-its own separate hand-written list of the fields it sends to the database, and
-that list simply did not name the template. Both routes now go through one
-shared function, so there is no longer a second list to fall out of step — and
-a test fails if anyone writes one again, even if the new list happens to be
-correct on the day it is written.
+(#614). That fix was correct, and it could not reach here.
+
+There turned out to be **three** places that had to be fixed, not one, because
+three different bits of the app each keep their own hand-written list of what
+to send when a page is created — and the same field was missing from all of
+them. One list is used when you pick a "content model" in Bulk Create. Another
+is used when you do not, which is the ordinary case and the one you would have
+been looking at. The third is the Create Page button over in Acquire. Each list
+was written separately, so fixing one never fixed the others; the first attempt
+at this ticket fixed only the first, and Bulk Create still said "No template".
+
+All three now build what they send through a single named function instead of
+a list typed out on the spot, and a test fails if any of them stops — including
+if somebody writes a fresh list that happens to be correct on the day they
+write it.
 
 Checked by reading the actual database row before and after, rather than by
-looking at the screen: the same batch that used to store nothing now stores the
-template, and the old column still holds exactly what it always did, so nothing
-else changes behaviour.
+looking at the screen: the same request that used to store nothing now stores
+the template, and the old column still holds exactly what it always did, so
+nothing else changes behaviour.
+
+One thing we deliberately left alone. If a template is deleted in the seconds
+between opening the Bulk Create box and pressing Generate, the pages still come
+out blank and now also point at a template that is gone. Refusing to record it
+in that case looked like the obvious tidy-up, but it would have broken the
+built-in templates, which are legitimately not in the list the check would have
+used. The blank pages are the bigger half of that problem and belong in their
+own ticket.
+
 ## 2026-09-06 — Text you had typed could vanish from the Builder, two different ways (#632)
 
 Back on 29 August, two odd things happened while the Delray header was being

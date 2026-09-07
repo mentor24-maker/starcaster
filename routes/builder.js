@@ -1788,6 +1788,17 @@ async function handle(req, res, pathname, method) {
           }
         }
 
+        // Stamped unconditionally, on purpose (decided 2026-09-06, task
+        // 86bbve4kp). `tplResult` above being null does NOT mean the template
+        // is missing: the built-in stubs (`standard-right-form`) have no
+        // database row and are injected only by GET /api/builder/page-templates,
+        // so `listPageTemplates(...).find(...)` returns null for a perfectly
+        // valid id. Gating the stamp on `tplResult` would therefore stop
+        // recording built-in templates, which is the same bug in a new place.
+        // The narrow case it would have caught -- a template deleted between
+        // opening the dialog and pressing Generate -- already produces a page
+        // with no sections at all, which is the louder half of that problem
+        // and is not this ticket's.
         const pageResult = await createPage(buildBulkCreatePageInput({
           name,
           slug,
