@@ -441,6 +441,31 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
      `gh pr checks <pr>` lists a run before pushing it. If none has appeared
      after a couple of minutes, only a new commit can create one —
      `git commit --allow-empty -m "Nudge GitHub into creating a check run"`.
+   - **"No checks" is not an empty list — Vercel posts rows on every PR.** Ask
+     `gh pr checks <pr> --json name,bucket,state,workflow` and look for
+     **`verify`** and **`review-gate`**, the only two rows that mean CI ran.
+     The Vercel rows carry an empty `workflow` and go green on their own, so a
+     pull request with nothing running still shows a board of passes.
+   - **But ask WHY the checks are missing before you reach for that commit —
+     there are two causes and the remedies are opposite** (2026-09-06, PR #630):
+
+     ```bash
+     gh pr view <pr> --json mergeable,mergeStateStatus
+     ```
+
+     `CONFLICTING` / `DIRTY` means GitHub is running nothing on this PR *on
+     purpose*: the workflows here trigger on `pull_request`, which runs against
+     the merge of the branch and main, and it cannot build that merge. The
+     checks are not late — **they are never coming**, and the empty commit
+     cannot help because its new head SHA does not merge either. The remedy is
+     a catch-up merge: `git merge origin/main --no-edit && git push`, and the
+     runs start within seconds. `UNKNOWN` just means GitHub has not worked it
+     out yet; ask again. Only on `MERGEABLE` is the nudge commit the right move.
+
+     **A conflicting head is a CANNOT TELL, not a slow CI run.** Do not spend
+     the pass waiting on it. If you cannot get checks running inside this pass,
+     hand the ticket back to `Rework` with a note naming what is outstanding —
+     a green branch nobody can see is the failure in the guardrails below.
    - **Only ordinary pushes.** If a push is rejected because the branch is
      behind, merge `origin/main` in — never rebase-and-force. That is the same
      choice `npm run ship` makes on purpose (`docs/DOCTRINE.md` §6.6): the
