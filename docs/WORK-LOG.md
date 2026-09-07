@@ -47,6 +47,115 @@ remembered instantly and goes back to describing the picture as it actually is
 that is not on the page is a worse bug than the three it fixes. Nothing extra
 is saved: this lives only in the open panel and is gone when it closes.
 
+## 2026-09-07 — The search box on the tags page told a visitor the wrong thing when it found nothing (#643)
+
+The `/tags` page on the Delray site has a search box that does nothing at all —
+type a word, press Search, and the page does not change by a single character.
+Dane picked the fix on the ticket: switch that page over to the search field the
+post feed already carries, and take the dead box away. Both of those are clicks
+in the Builder on a live client page, so they are his; this is the code half
+they depend on.
+
+The feed's own search field works, but it was not honest about coming up empty.
+Typing a word nothing matched said "No posts match your filters", which never
+tells the visitor *which* word emptied the page — the same complaint that was
+fixed for the tag and category dropdowns back in the summer, one step further
+on. And with a tag also selected it said something worse: "No posts tagged
+'beginner tennis'", while posts carrying that tag were sitting right there. The
+search had emptied the list and the tag was taking the blame. A confidently
+wrong message is worse than a vague one, because nobody thinks to doubt it.
+
+Now the word the visitor typed is named — "No posts match 'zzzz'" — and when a
+tag is also in play both are named, so no filter takes credit for an emptiness
+it did not cause. The "Show all posts" way back was already there and still is,
+and the wording when nothing was typed is untouched.
+
+The review caught this making the very mistake it was written to stop, in two
+corners it had not covered. The feed can also filter by a date range, and that
+was left out of the new sentence — so setting a date that matched nothing while
+a search word was typed read "No posts match 'Tennis'" with two Tennis posts on
+screen. Same lie, different culprit. Every filter that is narrowing the page now
+names itself, dates included, and several read as one sentence: "No posts tagged
+'beginner tennis' and published on or after 2030-01-01 match 'Level'."
+
+The other corner: if the web address names a category that does not exist, the
+page is empty no matter what else is set, and nothing will bring it back. The
+new message was still naming the search word there, which quietly invited the
+visitor to delete it and try again. It now says only what is true — "No posts in
+the category 'ghost-slug'."
+
+Deliberately left alone: making the post feed obey a search word arriving in the
+web address. The chosen fix does not need it, and doing it carelessly would let
+a page filter itself with no visible box to clear — that wants its own think
+first.
+
+## 2026-09-07 — "Two headers on every new page" was one header placed twice (#642)
+
+Every page built from the Delray site's main template came up with two header
+bars, one of them named after a section everyone believed had been retired
+months ago. Nothing was actually left over. The site has one header, and the
+template simply listed it twice. One of the two copies was still linked to the
+original, so it showed the original's current name, "2a - Public Header"; the
+other had been unlinked at some point and kept the name the original carried
+back then, "2 - Menu Banner". Two names on screen, one section underneath.
+
+The first write-up of this asked for the old section to be deleted. That would
+have stripped the header off all 58 pages of the Delray site, because the row it
+named for deletion is the good header — only renamed. Dane made the two edits
+himself in the Builder instead of letting a machine touch live client content:
+he removed the duplicate slot from the template and cleaned up the one scratch
+page that had picked it up.
+
+This entry records the check that it worked. Read live from production: the
+template lists the header once, no page anywhere holds two copies of it, no page
+carries the old name, and the live site renders a single header on both the home
+page and the scratch page. Two things were left alone on purpose — a test
+fixture that still uses the old name locally, and one stored title on the blog
+template that is stale in the database but never reaches the screen. No code
+changed; the whole thing was data.
+## 2026-09-06 — An answer you wrote could go permanently missing if a job died at the wrong second (#640)
+
+When you answer a question on a ticket, a background job does two things with
+your reply: it copies it onto the team chat, and it puts the ticket back into
+the machines' queue so the work can carry on. Those two steps were joined at the
+hip — the second one only ever happened in the same run as the first, and the
+first leaves a permanent "already sent" mark behind. So if the run died in
+between, every later run saw the mark, decided there was nothing new, and did
+nothing at all. For ever. The only thing that could release the ticket had
+already happened and could never happen again.
+
+That is what put your `C` on the Lane A ticket into a hole for three and a half
+hours on Saturday. The 9:46 run delivered your answer, ran out of its ClickUp
+request allowance before it could move the ticket, and reported the problem
+honestly — into a chat message the same allowance then refused to send. You
+found it yourself.
+
+The job now asks a question it can answer every single time it looks: is there
+an answer from you, newer than the newest question, that has reached somebody?
+Both halves are read off the ticket itself, so a crash costs ten minutes rather
+than the work. The safety rule is untouched — a ticket still never moves on an
+answer nobody received.
+
+Two things came with it. A hand-back that fails now writes a short note on the
+ticket saying so, rather than only into a chat message that can vanish. And
+there is a new watchdog, `npm run stale-answer`, that watches for exactly one
+shape: you replied, and nothing moved. None of the four watchdogs already
+running could see it — the relay's own heartbeat was perfectly healthy that
+morning; one ticket had simply fallen out of it. This one notices within half an
+hour, says out loud that it is not waiting on you, and goes quiet again as soon
+as the ticket moves.
+
+**Checked over a second time (2026-09-07), and four things needed fixing before
+it could go live.** The new watchdog's "did your answer actually reach anybody?"
+test was reading the wrong thing entirely, so it never once got an answer — and
+its report would have blamed the wrong part of the system on the one screen you
+read. Quoting the question above your reply, which is a perfectly normal way to
+answer, stopped the ticket being released at all — and the watchdog called that
+same ticket healthy. The alarm could go off once about a ticket and then never
+again about it. And a ticket you had deliberately parked back in "needs your
+input" by hand would have been dragged straight out again within ten minutes,
+with your name taken off it. All four are fixed and each one was proved by
+breaking it on purpose and watching a test catch it.
 ## 2026-09-07 — The pipeline had started filing tickets about itself faster than we could do them (#641)
 
 The tooling that runs the build pipeline checks its own health, and it is good
