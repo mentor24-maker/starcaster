@@ -58,6 +58,13 @@
  * firing it at this one burns the grace window and changes nothing, because
  * the new head SHA still cannot be merged either.
  *
+ * AND "NO CHECK" MEANS NO CHECK OF OURS (round 2, same task). The first version
+ * of that guard was unreachable in this repository and nobody could see it,
+ * because it waited for an EMPTY check list and a pull request here is never
+ * empty — Vercel posts rows on every one of them. `classifyChecks` below is
+ * what fixes it: it now knows which rows came from this repository's own
+ * workflows, so "no checks" means what the guard always meant by it.
+ *
  * ONLY WHILE NO CHECK HAS EVER APPEARED, and that scope is load-bearing. A
  * conflicting head stops GitHub CREATING runs; it does not remove runs it has
  * already made. Measured on 2026-09-06: PR #637 read `CONFLICTING` / `DIRTY`
@@ -74,17 +81,85 @@
  */
 
 /**
- * Classify one `gh pr checks --json bucket` result list.
- *   'none'    — no checks reported yet (empty list)
+ * Is this row one of the repository's OWN workflow runs, rather than a
+ * third-party status posted onto the commit?
+ *
+ * WHY THIS EXISTS (2026-09-06, round 2 of task 86bbvqkr1). The conflicting-head
+ * guard below was written to fire when no check had appeared, and it could
+ * never fire at all — because "no checks" in this repository does not mean an
+ * empty list. Vercel posts its own rows (`Vercel`, `Vercel Preview Comments`)
+ * on every pull request whatever GitHub Actions does, so the incident this
+ * whole file was extended for looked like this:
+ *
+ *   Vercel Preview Comments   completed   success        <- and nothing else
+ *
+ * Four rows of nothing-happened read as `passed`, the probe ran zero times, and
+ * ship fell through to the merge step on a pull request with NO CI green at
+ * all. GitHub then refused the merge on the dirty head — a third message, for
+ * neither of the two causes, which is worse than the bug it replaced.
+ *
+ * THE DISCRIMINATOR IS STRUCTURAL, NOT A LIST OF NAMES. A GitHub Actions check
+ * RUN belongs to a workflow and carries its name; a commit STATUS posted by an
+ * outside service belongs to no workflow and carries an empty one. Measured on
+ * 2026-09-06 with `gh pr checks 639 --json name,bucket,state,workflow`:
+ *
+ *   {"name":"verify",                 "workflow":"CI"}
+ *   {"name":"review-gate",            "workflow":"review-gate"}
+ *   {"name":"Vercel",                 "workflow":""}
+ *   {"name":"Vercel Preview Comments","workflow":""}
+ *
+ * So this asks the structural question rather than matching `verify` and
+ * `review-gate` by name. A named list would be wrong the day a workflow is
+ * added or renamed, and wrong SILENTLY — the new workflow's rows would read as
+ * third-party, which is this same bug with a different trigger.
+ */
+function isWorkflowCheck(check) {
+  return String((check && check.workflow) || '').trim() !== '';
+}
+
+/**
+ * Classify one `gh pr checks --json bucket,workflow` result list.
+ *   'none'    — no run of one of THIS repository's workflows has appeared yet
+ *               (an empty list, or a list holding only third-party rows)
  *   'failed'  — at least one check failed or was cancelled
- *   'pending' — checks exist and at least one is still running
- *   'passed'  — checks exist and all are pass/skip
- * A failing check outranks a pending one: if anything has already failed there
- * is no point waiting for the rest.
+ *   'pending' — the repo's checks exist and at least one is still running
+ *   'passed'  — the repo's checks exist and everything is pass/skip
+ *
+ * TWO ORDERING DECISIONS, both load-bearing.
+ *
+ * Absence of the repo's own checks outranks a third-party verdict. A list of
+ * nothing but Vercel rows is `none` even when one of them failed, because "our
+ * CI has not run" is the truer and more useful statement about that pull
+ * request — and it is the state that lets the conflicting-head probe below ask
+ * why. Neither answer merges anything, so nothing is risked by preferring the
+ * more diagnostic one.
+ *
+ * But once the repo's checks DO exist, a failure anywhere — third-party rows
+ * included — still outranks pending and passed. That is the conservative half
+ * and it is deliberately unchanged: a failed Vercel deployment has always
+ * stopped ship, and a fix aimed at a missing-checks bug does not get to quietly
+ * start merging failed deployments.
+ *
+ * @throws TypeError when given a non-empty list in which no row carries a
+ * `workflow` property at all. That means the caller did not ask `gh` for the
+ * field, so which rows are CI cannot be determined — and the honest answer is
+ * not `none`. Reporting `none` there would tell ship that a fully green pull
+ * request has no checks, which is a CANNOT TELL rendered as a verdict, the
+ * exact defect this round is fixing. It throws rather than returning a fourth
+ * state because it can only happen by editing the `--json` list, so it fires on
+ * the first poll of the first run and can never reach the operator quietly.
  */
 function classifyChecks(checks) {
   if (!Array.isArray(checks) || checks.length === 0) return 'none';
+  if (!checks.some((c) => c && typeof c === 'object' && 'workflow' in c)) {
+    throw new TypeError(
+      'classifyChecks was given check rows with no `workflow` field, so it cannot tell the ' +
+      "repository's own CI runs from third-party rows like Vercel's. Ask `gh pr checks` for it: " +
+      '--json bucket,name,state,workflow'
+    );
+  }
   const buckets = checks.map((c) => String((c && c.bucket) || '').toLowerCase());
+  if (!checks.some(isWorkflowCheck)) return 'none';
   if (buckets.some((b) => b === 'fail' || b === 'cancel')) return 'failed';
   if (buckets.some((b) => b === 'pending')) return 'pending';
   return 'passed';
@@ -142,6 +217,12 @@ function classifyMergeable(reading) {
  *                     the behaviour is exactly what it was before this existed.
  *                     It may return null, or throw, when no reading can be
  *                     taken — that is treated as "unknown", never as "clean".
+ * @param conflictingConfirmations how many CONSECUTIVE conflicting readings it
+ *                     takes to return `blocked_conflicting`. Defaults to 2,
+ *                     because GitHub's mergeability is cached and the first
+ *                     reading after a push can describe the branch as it was
+ *                     before it — which would make the catch-up merge that
+ *                     FIXES a conflicting head look like it had not worked.
  *
  * @returns { outcome, checks, nudged, mergeable } where outcome is one of:
  *   'passed'              — safe to merge
@@ -170,6 +251,7 @@ function waitForChecks({
   nudge,
   nudgeGraceMs,
   queryMergeable,
+  conflictingConfirmations = 2,
 } = {}) {
   if (typeof queryChecks !== 'function') throw new TypeError('waitForChecks needs a queryChecks function');
   if (typeof sleep !== 'function') throw new TypeError('waitForChecks needs a sleep function');
@@ -181,6 +263,7 @@ function waitForChecks({
   let nudged = false;
   let nudgedAt = 0;
   let mergeable = null;
+  let conflictingReadings = 0;
 
   for (;;) {
     const checks = queryChecks();
@@ -209,7 +292,25 @@ function waitForChecks({
       }
       if (reading) mergeable = reading;
       if (classifyMergeable(reading) === 'conflicting') {
-        return { outcome: 'blocked_conflicting', checks, nudged, mergeable };
+        // CONFIRM IT BEFORE ACTING ON IT. GitHub's mergeability is a cached
+        // computation, so the reading taken in the first seconds after a push
+        // can still describe the branch as it was BEFORE that push. The costly
+        // case is precisely the recovery: you merge origin/main in to fix a
+        // conflicting head, ship polls immediately, GitHub answers with the
+        // stale CONFLICTING, and ship stops to tell you to do the thing you
+        // just did. A second agreeing reading one poll later costs one poll
+        // interval on a genuinely conflicting pull request — which is stopping
+        // anyway — and removes that whole false stop.
+        conflictingReadings += 1;
+        if (conflictingReadings >= conflictingConfirmations) {
+          return { outcome: 'blocked_conflicting', checks, nudged, mergeable };
+        }
+      } else {
+        // Any other answer — mergeable, UNKNOWN, or no reading at all — breaks
+        // the run. Confirmation means CONSECUTIVE readings; counting them
+        // cumulatively would let two conflicting answers half an hour apart,
+        // with a clean one in between, add up to a verdict.
+        conflictingReadings = 0;
       }
     }
 
@@ -252,4 +353,4 @@ function waitForChecks({
   }
 }
 
-module.exports = { classifyChecks, classifyMergeable, waitForChecks };
+module.exports = { classifyChecks, classifyMergeable, isWorkflowCheck, waitForChecks };

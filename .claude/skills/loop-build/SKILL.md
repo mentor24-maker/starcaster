@@ -441,6 +441,11 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
      `gh pr checks <pr>` lists a run before pushing it. If none has appeared
      after a couple of minutes, only a new commit can create one —
      `git commit --allow-empty -m "Nudge GitHub into creating a check run"`.
+   - **"No checks" is not an empty list — Vercel posts rows on every PR.** Ask
+     `gh pr checks <pr> --json name,bucket,state,workflow` and look for
+     **`verify`** and **`review-gate`**, the only two rows that mean CI ran.
+     The Vercel rows carry an empty `workflow` and go green on their own, so a
+     pull request with nothing running still shows a board of passes.
    - **But ask WHY the checks are missing before you reach for that commit —
      there are two causes and the remedies are opposite** (2026-09-06, PR #630):
 

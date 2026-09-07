@@ -2530,10 +2530,45 @@ still has real checks with a real verdict, and the merge gate refuses a `DIRTY`
 head on its own anyway. Firing on any conflicting reading would report a fully
 green board as blocked.
 
-**A pass waiting on checks by hand owes the same question.** If `gh pr checks`
-shows nothing, run the `gh pr view` line above *before* waiting. A conflicting
-head is a **CANNOT TELL**, not a slow CI run: the checks are not late, they are
-never coming, and waiting out the pass's budget on one is how a finished green
+### "No checks" never looks like no checks — Vercel is always there
+
+This is what made the guard above ship **unreachable**, and it is the trap a
+pass reading `gh pr checks` by hand falls into as well. A checkless pull
+request in this repository is not an empty list. Vercel posts its own rows on
+every pull request whatever GitHub Actions does, and `gh` reports them as
+passing, so the #630 board looked like this:
+
+```
+Vercel Preview Comments   completed   success        <- and nothing else
+```
+
+Two green rows. Nothing had run. **The count of rows tells you nothing; only
+which rows tells you anything.** Ask for the `workflow` field and the
+distinction is immediate — a GitHub Actions check *run* belongs to a workflow
+and carries its name, a status posted by an outside service does not:
+
+```
+$ gh pr checks <pr> --json name,bucket,state,workflow
+{"name":"verify",                 "workflow":"CI"}            <- ours
+{"name":"review-gate",            "workflow":"review-gate"}   <- ours
+{"name":"Vercel",                 "workflow":""}              <- not a check run
+{"name":"Vercel Preview Comments","workflow":""}              <- not a check run
+```
+
+The two rows that decide anything are **`verify`** and **`review-gate`**. If
+neither is present, no CI has run, however green the board looks.
+
+`waitForChecks` classifies on exactly that (`isWorkflowCheck`), which is what
+makes the conflicting-head guard reachable at all. It also closes a second,
+older hole the same finding uncovered: before this, a pull request carrying
+nothing but Vercel rows classified as fully **passed**, so `ship` would walk
+past its CI gate and try to merge a pull request with no CI green whatsoever.
+
+**A pass waiting on checks by hand owes the same question.** If `verify` and
+`review-gate` are absent — *not* "if the list is empty", which it never is —
+run the `gh pr view` line above *before* waiting. A conflicting head is a
+**CANNOT TELL**, not a slow CI run: the checks are not late, they are never
+coming, and waiting out the pass's budget on one is how a finished green
 branch ends up sitting in `Building` overnight.
 
 **Avoiding it in the first place:** do not push again in the seconds right after

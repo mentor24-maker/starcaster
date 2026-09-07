@@ -36,6 +36,31 @@ The written instructions now carry both causes side by side with a one-command
 way to tell them apart, so the next person to meet a silent pull request does not
 have to work it out from scratch, and does not spend twenty minutes applying the
 wrong remedy.
+
+**And then the review caught that all of the above could never actually fire.**
+The new check waited for a pull request with *no test results on it at all*, and
+a pull request here never has none: Vercel, the service that builds the preview
+link, posts its own two rows onto every single one, and they go green on their
+own. So the page for a pull request that had run nothing showed a tidy little
+board of passes. The check looked at that board, saw results, and concluded the
+testing had finished — the exact opposite of the truth, and it never once asked
+GitHub the question the whole change exists to ask.
+
+The same mistake was quietly hiding something worse that had been there all
+along: because those Vercel rows count as passes, `npm run ship` would read a
+pull request with **no testing whatsoever** as fully green and go ahead and try
+to merge it. GitHub itself refused, which is the only reason this never did any
+damage.
+
+Both are fixed by teaching the code the difference between our own tests and
+somebody else's status message — a real test run belongs to one of our test
+workflows and says so; an outside service's row does not. Now "no tests" means
+"none of *ours*", which is what it always meant in English. One more nicety: a
+conflict has to be confirmed by a second reading a moment later before ship acts
+on it, because GitHub caches that answer and can briefly still report the
+conflict you have *just this second fixed* — which would have had ship telling
+you to go and do the thing you had already done.
+
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 
 When one of the build sessions dies partway through a job — the machine goes to

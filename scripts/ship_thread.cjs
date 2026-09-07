@@ -65,7 +65,7 @@ const CI_TIMEOUT_MIN = 20;
 // it. If CI gets slower, both move together.
 const MERGE_TIMEOUT_MIN = CI_TIMEOUT_MIN;
 const { pickPullRequestCommit, REPIN_SUBJECT, NUDGE_SUBJECT } = require('./builder/pullRequestCommit');
-const { waitForChecks } = require('./builder/waitForChecks');
+const { waitForChecks, classifyMergeable } = require('./builder/waitForChecks');
 const {
   waitForMerge, mergeTimeLabel, holdLabel, holdIsPending, classifyMergeHold,
   notMergedExplanation, prObservationArgv, parsePrObservation,
@@ -172,9 +172,19 @@ const bucketOf = (check) => String((check && check.bucket) || '').toLowerCase();
  * rather than a non-zero exit when there are no checks — so "none yet" arrives
  * here as `[]`, never as a thrown failure. A genuinely broken `gh` call (auth,
  * network) is different: it stops ship rather than being read as "no checks".
+ *
+ * `workflow` IS NOT OPTIONAL IN THAT FIELD LIST. It is the only thing that
+ * tells this repository's own CI runs (`verify`, `review-gate`, which carry
+ * their workflow's name) from the rows Vercel posts on every pull request
+ * (which carry an empty one). Without it `classifyChecks` cannot see the
+ * difference and a pull request with nothing but Vercel rows reads as fully
+ * green — which is how the conflicting-head guard came to be unreachable in
+ * the one repository it was written for (2026-09-06, round 2 of 86bbvqkr1).
+ * `classifyChecks` throws rather than guessing if the field is missing, and
+ * `shipThread.test.js` asserts this list still asks for it.
  */
 function queryPullRequestChecks(prNumber) {
-  const result = spawnSync('gh', ['pr', 'checks', String(prNumber), '--json', 'bucket,name,state'], {
+  const result = spawnSync('gh', ['pr', 'checks', String(prNumber), '--json', 'bucket,name,state,workflow'], {
     cwd: root, encoding: 'utf8',
   });
   const stdout = (result.stdout || '').trim();
@@ -638,13 +648,50 @@ if (wait.outcome === 'blocked_conflicting') {
     `Look at: ${prUrl}`
   );
 }
+// WHICH OF THE TWO CAUSES, OR NEITHER THAT WE CAN NAME (round 2 of 86bbvqkr1).
+// `waitForChecks` carries its last mergeability reading out precisely so this
+// caller can say which remedy applies "instead of listing both and letting a
+// person guess" — its own words — and this branch used to ignore the field
+// entirely and print the Actions-are-disabled advice unconditionally. That is
+// the #630 misdiagnosis, reproduced by the code written to prevent it, in the
+// two cases that matter most: when the probe could take no reading at all, and
+// when GitHub never got past UNKNOWN.
+const mergeNote = (() => {
+  const seen = wait.mergeable || {};
+  const spelling = `mergeable: ${seen.mergeable || '(none)'}, mergeStateStatus: ${seen.mergeStateStatus || '(none)'}`;
+  switch (classifyMergeable(wait.mergeable)) {
+    case 'conflicting':
+      return (
+        `\n\nAND GITHUB SAYS THIS PULL REQUEST CONFLICTS WITH MAIN (${spelling}).\n` +
+        `That on its own explains the missing checks — it will not build a merge ref for a\n` +
+        `conflicting pull request, so it runs nothing. The remedy is a catch-up merge, not\n` +
+        `another commit: run \`npm run ship\` again and it merges origin/main in first.`
+      );
+    case 'mergeable':
+      return (
+        `\n\nGitHub does NOT think this pull request conflicts (${spelling}), so a stale branch\n` +
+        `is not the cause here. Check that Actions is enabled for the repository and that the\n` +
+        `workflow files are present on this branch.`
+      );
+    default:
+      return (
+        `\n\nWHY THE CHECKS ARE MISSING WAS NEVER ESTABLISHED. There are two causes and they\n` +
+        `need opposite remedies, and the reading that tells them apart could not be taken\n` +
+        `(${spelling}). Do NOT act on a guess — ask GitHub directly:\n\n` +
+        `  gh pr view ${prNumber} --json mergeable,mergeStateStatus\n\n` +
+        `CONFLICTING/DIRTY means merge origin/main in (\`npm run ship\` again). MERGEABLE means\n` +
+        `the run was dropped and a new commit is what creates one. UNKNOWN means GitHub has\n` +
+        `not worked it out yet — ask again in a few seconds.`
+      );
+  }
+})();
+
 if (wait.outcome === 'never_appeared') {
   fail(
-    wait.nudged
+    (wait.nudged
       ? `No checks appeared on this pull request, and pushing an extra commit did not produce\n` +
-        `one either. That is not a delay — something is stopping GitHub Actions from running\n` +
-        `on this branch. Nothing was merged; the work is safe. Check that Actions is enabled\n` +
-        `for the repository and that the workflow file is present on the branch.\n\n` +
+        `one either. That is not a delay — nothing is creating a run on this branch.\n` +
+        `Nothing was merged; the work is safe.\n\n` +
         `Look at: ${prUrl}`
       // The nudge is only skipped when it could not be made — and the two ways
       // it can fail need OPPOSITE advice, so they get their own sentences. The
@@ -663,7 +710,7 @@ if (wait.outcome === 'never_appeared') {
           `one could not be made (see the reason above). Nothing was merged; the work is safe\n` +
           `on the branch. Re-running \`npm run ship\` on its own will NOT help — the branch\n` +
           `needs a new commit before GitHub will make a run.\n\n` +
-          `Look at: ${prUrl}`
+          `Look at: ${prUrl}`) + mergeNote
   );
 }
 if (wait.outcome === 'timed_out_pending') {

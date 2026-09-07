@@ -263,6 +263,50 @@ test('a conflicting head gets its own message, and it is NOT the nudge advice', 
     'the conflicting case is a "no checks appeared" case too — it has to be tested first');
 });
 
+test('ship asks gh for the `workflow` field — without it, CI cannot be told from Vercel', () => {
+  // Round 2 of 86bbvqkr1, and the reason the guard above shipped unreachable.
+  // A pull request here is never checkless in the literal sense: Vercel posts
+  // its rows on every one, and they carry an empty `workflow` while our own
+  // runs carry `CI` / `review-gate`. Drop this field from the --json list and
+  // classifyChecks cannot see the difference — a board with nothing but Vercel
+  // rows reads as fully green and ship walks into the merge with no CI at all.
+  // classifyChecks throws rather than guessing, so this is belt and braces:
+  // the throw catches it at runtime, this catches it at commit.
+  const from = code.indexOf('function queryPullRequestChecks');
+  assert.ok(from > -1, 'ship must still have its check reader');
+  const q = code.slice(from, code.indexOf('\n}\n', from));
+  assert.match(q, /'bucket,name,state,workflow'/,
+    'the --json list must ask for workflow, or the CI/third-party distinction is unavailable');
+});
+
+test('never_appeared consults the mergeability reading instead of asserting a cause', () => {
+  // waitForChecks carries `mergeable` out precisely so this caller "can say
+  // WHICH remedy applies instead of listing both and letting a person guess"
+  // (its own JSDoc), and this branch used to ignore it and print the
+  // Actions-are-disabled advice unconditionally — the #630 misdiagnosis,
+  // reproduced by the code written to prevent it.
+  const idx = source.indexOf('const mergeNote');
+  assert.ok(idx > -1, 'the never_appeared path must derive a note from the reading');
+  const block = source.slice(idx, source.indexOf('if (wait.outcome === \'never_appeared\')', idx));
+  assert.match(block, /classifyMergeable\(wait\.mergeable\)/, 'it must read the reading, not guess');
+  // The three answers need three different remedies, and the cannot-tell one
+  // is the whole point: it must not hand out either remedy as though it knew.
+  assert.match(block, /case 'conflicting'/);
+  assert.match(block, /case 'mergeable'/);
+  assert.match(block, /NEVER ESTABLISHED/,
+    'an unreadable or UNKNOWN probe must say a reading could not be taken');
+  assert.match(block, /gh pr view \$\{prNumber\} --json mergeable,mergeStateStatus/,
+    'and hand over the command that settles it');
+  // "Actions is enabled" is now a CONDITIONAL diagnosis, only stated when
+  // GitHub has actually said the pull request is mergeable.
+  const conflictCase = block.slice(block.indexOf("case 'conflicting'"), block.indexOf("case 'mergeable'"));
+  assert.doesNotMatch(conflictCase, /Actions is enabled/,
+    'a conflicting head is not an Actions problem');
+  const unknownCase = block.slice(block.indexOf('default:'));
+  assert.doesNotMatch(unknownCase, /Actions is enabled/,
+    'a reading that could not be taken must not be reported as a broken Actions');
+});
+
 test('a broken gh call still stops ship — absence must not swallow a real error', () => {
   // queryPullRequestChecks returns [] for "no checks yet" but must fail() when
   // gh itself is broken (auth/network), or a dead endpoint would look like an

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { classifyChecks, classifyMergeable, waitForChecks } = require('./waitForChecks');
+const { classifyChecks, classifyMergeable, isWorkflowCheck, waitForChecks } = require('./waitForChecks');
 
 /**
  * The bug this guards (PRs #356/#358, 2026-08-20): ship reached CI seconds
@@ -21,6 +21,7 @@ function harness(script, {
   nudge,
   nudgeGraceMs,
   queryMergeable,
+  conflictingConfirmations,
 } = {}) {
   let clock = 0;
   let i = 0;
@@ -32,6 +33,7 @@ function harness(script, {
     nudge,
     nudgeGraceMs,
     queryMergeable,
+    conflictingConfirmations,
     now: () => clock,
     sleep: (ms) => { clock += ms; },
     queryChecks: () => {
@@ -45,10 +47,23 @@ function harness(script, {
   return { outcome, polls: i, states: polled };
 }
 
-const pass = [{ bucket: 'pass' }];
-const pending = [{ bucket: 'pending' }];
-const fail = [{ bucket: 'fail' }];
+// Fixtures carry `workflow`, because the real rows do and because
+// classifyChecks now reads it to tell this repository's CI runs from the rows
+// Vercel posts on every pull request. A row with an empty `workflow` is a
+// third-party status; one naming a workflow is ours. Measured shapes are in
+// the isWorkflowCheck docblock.
+const pass = [{ bucket: 'pass', workflow: 'CI' }];
+const pending = [{ bucket: 'pending', workflow: 'CI' }];
+const fail = [{ bucket: 'fail', workflow: 'CI' }];
 const none = [];
+
+// What a pull request in THIS repository looks like while GitHub has run
+// nothing: not empty at all. This is the #630 board, and the list that used to
+// read as 'passed'.
+const vercelOnly = [
+  { bucket: 'pass', name: 'Vercel Preview Comments', workflow: '' },
+  { bucket: 'pass', name: 'Vercel', workflow: '' },
+];
 
 test('classifyChecks: empty list is "none", never a failure', () => {
   assert.equal(classifyChecks([]), 'none');
@@ -57,16 +72,16 @@ test('classifyChecks: empty list is "none", never a failure', () => {
 });
 
 test('classifyChecks: a failure outranks a pending — no point waiting for the rest', () => {
-  assert.equal(classifyChecks([{ bucket: 'pending' }, { bucket: 'fail' }]), 'failed');
-  assert.equal(classifyChecks([{ bucket: 'cancel' }, { bucket: 'pass' }]), 'failed');
+  assert.equal(classifyChecks([{ bucket: 'pending', workflow: 'CI' }, { bucket: 'fail', workflow: 'CI' }]), 'failed');
+  assert.equal(classifyChecks([{ bucket: 'cancel', workflow: 'CI' }, { bucket: 'pass', workflow: 'CI' }]), 'failed');
 });
 
 test('classifyChecks: pending outranks passed', () => {
-  assert.equal(classifyChecks([{ bucket: 'pass' }, { bucket: 'pending' }]), 'pending');
+  assert.equal(classifyChecks([{ bucket: 'pass', workflow: 'CI' }, { bucket: 'pending', workflow: 'CI' }]), 'pending');
 });
 
 test('classifyChecks: all pass (or skip) is "passed"', () => {
-  assert.equal(classifyChecks([{ bucket: 'pass' }, { bucket: 'skipping' }]), 'passed');
+  assert.equal(classifyChecks([{ bucket: 'pass', workflow: 'CI' }, { bucket: 'skipping', workflow: 'review-gate' }]), 'passed');
 });
 
 test('THE ACCEPTANCE PATH: no checks, no checks, then passing → proceeds (passed)', () => {
@@ -245,15 +260,46 @@ test('classifyMergeable: UNKNOWN is not conflicting — it is the normal state a
   assert.equal(classifyMergeable(clean), 'mergeable');
 });
 
-test('THE #630 PATH: no checks + a conflicting head → blocked_conflicting, on the FIRST poll', () => {
+test('THE #630 PATH: no checks + a conflicting head → blocked_conflicting, as soon as it is confirmed', () => {
   const { outcome, polls } = harness([none], {
     appearGraceMs: 60 * 1000,
     pollIntervalMs: 20 * 1000,
     queryMergeable: () => conflicting,
   });
   assert.equal(outcome.outcome, 'blocked_conflicting');
-  assert.equal(polls, 1, 'it stops at once rather than waiting out a window that cannot end well');
+  // Two polls, not one: GitHub's mergeability is cached, so a lone reading can
+  // describe the branch as it was before the last push. It still stops long
+  // before the grace window, which is the behaviour that matters.
+  assert.equal(polls, 2, 'it confirms, then stops — rather than waiting out a window that cannot end well');
   assert.deepEqual(outcome.mergeable, conflicting, 'the reading rides along so the caller can name the remedy');
+});
+
+test('A SINGLE conflicting reading is not a verdict — the stale-cache false stop', () => {
+  // The costly case is the RECOVERY. You merge origin/main in to fix a
+  // conflicting head and push; ship polls a second later; GitHub answers out
+  // of its cache with the pre-push CONFLICTING. Acting on that one reading
+  // stops ship to advise the catch-up merge that just happened.
+  const readings = [conflicting, clean, clean];
+  let i = 0;
+  const { outcome } = harness([none, none, pass], {
+    appearGraceMs: 10 * 60 * 1000,
+    pollIntervalMs: 20 * 1000,
+    queryMergeable: () => readings[Math.min(i++, readings.length - 1)],
+  });
+  assert.equal(outcome.outcome, 'passed', 'one stale reading must not abandon a pull request that is fine');
+});
+
+test('confirmation means CONSECUTIVE — a clean reading in between resets the count', () => {
+  // Otherwise two conflicting answers half an hour apart, with a clean one
+  // between them, would add up to a verdict neither of them supports.
+  const readings = [conflicting, clean, conflicting, clean, clean];
+  let i = 0;
+  const { outcome } = harness([none, none, none, none, pass], {
+    appearGraceMs: 10 * 60 * 1000,
+    pollIntervalMs: 20 * 1000,
+    queryMergeable: () => readings[Math.min(i++, readings.length - 1)],
+  });
+  assert.equal(outcome.outcome, 'passed');
 });
 
 test('a conflicting head is never NUDGED — the nudge is the other cause\'s remedy', () => {
@@ -267,6 +313,8 @@ test('a conflicting head is never NUDGED — the nudge is the other cause\'s rem
     nudge: () => { nudges += 1; return true; },
     queryMergeable: () => conflicting,
   });
+  // The conflict is confirmed at the second poll, still inside the grace
+  // window, so the nudge is never reached.
   assert.equal(outcome.outcome, 'blocked_conflicting');
   assert.equal(nudges, 0, 'pushing an empty commit at a conflicting head is the wrong remedy');
   assert.equal(outcome.nudged, false);
@@ -287,7 +335,7 @@ test('a mergeable head with no checks still nudges — the old behaviour is unto
 test('UNKNOWN then CONFLICTING → it keeps asking, and catches the conflict when GitHub says so', () => {
   // GitHub computes mergeability lazily, so the first reading after a push is
   // routinely UNKNOWN. Reading it ONCE would miss every real conflict.
-  const readings = [notYetKnown, notYetKnown, conflicting];
+  const readings = [notYetKnown, notYetKnown, conflicting, conflicting];
   let i = 0;
   const { outcome, polls } = harness([none], {
     appearGraceMs: 10 * 60 * 1000,
@@ -295,7 +343,7 @@ test('UNKNOWN then CONFLICTING → it keeps asking, and catches the conflict whe
     queryMergeable: () => readings[Math.min(i++, readings.length - 1)],
   });
   assert.equal(outcome.outcome, 'blocked_conflicting');
-  assert.equal(polls, 3, 'it waited through the two UNKNOWN readings rather than giving up');
+  assert.equal(polls, 4, 'it waited through the two UNKNOWN readings rather than giving up');
 });
 
 test('a probe that throws or returns nothing is "cannot tell" — never a conflict, never a pass', () => {
@@ -328,4 +376,111 @@ test('no queryMergeable at all → every previous outcome is byte-for-byte what 
   assert.equal(harness([none], { appearGraceMs: 60 * 1000 }).outcome.outcome, 'never_appeared');
   assert.equal(harness([none, none, pass]).outcome.outcome, 'passed');
   assert.equal(harness([fail]).outcome.outcome, 'failed');
+});
+
+/* ---------------------------------------------------------------------------
+ * ROUND 2: "no checks" means none of OURS.
+ *
+ * The guard above shipped unreachable. It waited for an empty check list, and
+ * a pull request in this repository is never empty — Vercel posts rows on
+ * every one — so on the very incident it was written for it classified four
+ * rows of nothing-happened as `passed` and probed zero times.
+ * ------------------------------------------------------------------------- */
+
+test('isWorkflowCheck: a run belongs to a workflow, a third-party status does not', () => {
+  assert.equal(isWorkflowCheck({ name: 'verify', workflow: 'CI' }), true);
+  assert.equal(isWorkflowCheck({ name: 'review-gate', workflow: 'review-gate' }), true);
+  assert.equal(isWorkflowCheck({ name: 'Vercel', workflow: '' }), false);
+  assert.equal(isWorkflowCheck({ name: 'Vercel Preview Comments', workflow: '   ' }), false);
+  assert.equal(isWorkflowCheck({ name: 'Vercel' }), false);
+  assert.equal(isWorkflowCheck(null), false);
+});
+
+test('THE ROUND-2 DEFECT: a board of nothing but Vercel rows is "none", not "passed"', () => {
+  // The exact rollup from PR #630, replayed. This returning 'passed' is what
+  // made the conflicting-head guard unreachable AND let ship walk into the
+  // merge step with no CI green at all.
+  assert.equal(classifyChecks(vercelOnly), 'none');
+});
+
+test('a third-party row does not make a half-finished board look finished', () => {
+  // Vercel green + our CI still running is 'pending', not 'passed'.
+  assert.equal(classifyChecks([...vercelOnly, { bucket: 'pending', workflow: 'CI' }]), 'pending');
+  // And our CI green alongside them is a real pass.
+  assert.equal(
+    classifyChecks([...vercelOnly, { bucket: 'pass', workflow: 'CI' }, { bucket: 'pass', workflow: 'review-gate' }]),
+    'passed'
+  );
+});
+
+test('once OUR checks exist, a failure anywhere still outranks — including a third-party one', () => {
+  // The conservative half, deliberately unchanged: a failed Vercel deployment
+  // has always stopped ship, and a missing-checks fix does not get to quietly
+  // start merging failed deployments.
+  assert.equal(
+    classifyChecks([{ bucket: 'fail', name: 'Vercel', workflow: '' }, { bucket: 'pass', workflow: 'CI' }]),
+    'failed'
+  );
+});
+
+test('with NO checks of ours, absence outranks a third-party failure', () => {
+  // "Our CI has not run" is the truer statement about that pull request, and
+  // it is the state that lets the conflicting-head probe ask why. Neither
+  // answer merges anything, so preferring the diagnostic one costs nothing.
+  assert.equal(classifyChecks([{ bucket: 'fail', name: 'Vercel', workflow: '' }]), 'none');
+});
+
+test('check rows with no `workflow` field at all THROW — a cannot-tell is not a verdict', () => {
+  // Only reachable by editing the `--json` list in ship_thread.cjs. Reporting
+  // 'none' there would tell ship that a fully green pull request has no checks
+  // — this round's defect, in the other direction and just as silent.
+  assert.throws(
+    () => classifyChecks([{ bucket: 'pass' }, { bucket: 'pass' }]),
+    /workflow/,
+    'it must refuse to classify rows it cannot classify'
+  );
+  // An empty list is still an honest 'none' — there is nothing to misread.
+  assert.equal(classifyChecks([]), 'none');
+});
+
+test('THE #630 PATH END TO END: Vercel rows + a conflicting head → blocked_conflicting', () => {
+  // The whole point of the round. Before this fix these exact inputs returned
+  // outcome 'passed' with zero probes, and ship went on to try to merge a pull
+  // request with no CI green.
+  let probes = 0;
+  const { outcome } = harness([vercelOnly], {
+    appearGraceMs: 60 * 1000,
+    pollIntervalMs: 20 * 1000,
+    queryMergeable: () => { probes += 1; return conflicting; },
+  });
+  assert.equal(outcome.outcome, 'blocked_conflicting');
+  assert.equal(probes, 2, 'the probe runs and confirms, on a board that used to read as green');
+  assert.deepEqual(outcome.mergeable, conflicting);
+});
+
+test('Vercel rows and a MERGEABLE head → the other cause, so it nudges', () => {
+  // The same board with the opposite reading gets the opposite remedy.
+  let nudges = 0;
+  const { outcome } = harness([vercelOnly], {
+    appearGraceMs: 60 * 1000,
+    pollIntervalMs: 20 * 1000,
+    nudge: () => { nudges += 1; return true; },
+    queryMergeable: () => clean,
+  });
+  assert.equal(nudges, 1, 'a checkless-but-mergeable PR still gets its nudge commit');
+  assert.equal(outcome.outcome, 'never_appeared');
+  assert.equal(outcome.nudged, true);
+});
+
+test('Vercel rows, then our CI appears and passes → passed, and it never nudged', () => {
+  const ciGreen = [...vercelOnly, { bucket: 'pass', workflow: 'CI' }, { bucket: 'pass', workflow: 'review-gate' }];
+  let nudges = 0;
+  const { outcome } = harness([vercelOnly, vercelOnly, ciGreen], {
+    appearGraceMs: 10 * 60 * 1000,
+    pollIntervalMs: 20 * 1000,
+    nudge: () => { nudges += 1; return true; },
+    queryMergeable: () => clean,
+  });
+  assert.equal(outcome.outcome, 'passed');
+  assert.equal(nudges, 0, 'the checks arrived on their own — nothing to nudge');
 });
