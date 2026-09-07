@@ -186,6 +186,20 @@ function operatorComments(comments, { operatorId, isMachine } = {}) {
  * escapes markdown punctuation on the way back out, so a rule can return as
  * `\#\#\#...` and a matcher reading it would fail on exactly the tickets it
  * was written for.
+ *
+ * THIS IS THE BANNER TEST AND NOTHING ELSE — authorship is a SEPARATE question
+ * and the caller owes it (2026-09-07, round 1 review). The banner is just text,
+ * so a comment of Dane's that QUOTES the card above his reply matched here, and
+ * the quote is newer than the card it quotes. `answerAwaitingHandback` then
+ * anchored the question on HIS OWN comment, found nothing of his after it, and
+ * returned `none`: the relay handed nothing back — a regression against the old
+ * fresh-only rule, which would have moved it — while `lib/staleAnswer.js` filed
+ * the same ticket as healthy. Stranded, with the watchdog saying all-clear.
+ *
+ * So `answerAwaitingHandback` requires a card to be MACHINE-WRITTEN, through
+ * the same `isMachine` predicate it filters his answers with. One predicate,
+ * asked once, which makes the two sets disjoint by construction: a comment can
+ * never be both the question and the answer to it.
  */
 const ESCALATION_BANNER = BANNER_LABEL.trim();
 
@@ -244,14 +258,24 @@ function commentAt(comment) {
  *                   never mistaken for his word (see operatorComments)
  * @param delivered  optional (comment) => boolean. Omit it to ask only
  *                   "has he answered?", which is what the report needs.
+ * @param handled    optional (comment) => boolean: does this answer already
+ *                   carry the marker a COMPLETED hand-back writes? An answer
+ *                   that does is spent, so a ticket re-parked by hand is left
+ *                   where he put it.
  * @returns { state, answer, answerAt, questionAt, delivered }
- *          state: 'answered' | 'none' | 'no-question'
+ *          state: 'answered' | 'handled' | 'none' | 'no-question'
  *          delivered: true/false, or null when no test was supplied
  */
-function answerAwaitingHandback({ comments, operatorId, isMachine, delivered } = {}) {
+function answerAwaitingHandback({ comments, operatorId, isMachine, delivered, handled } = {}) {
   const all = Array.isArray(comments) ? comments : [];
+  // A card must be MACHINE-WRITTEN as well as carry the banner — the same
+  // predicate `operatorComments` filters his answers with, so no comment can
+  // be both the question and an answer to it. Without `isMachine` nothing can
+  // be a card at all, which falls through to `no-question`: the old fresh-only
+  // rule at the relay and CANNOT TELL in the report, both safe.
+  const machine = typeof isMachine === 'function' ? isMachine : () => false;
   const questionAt = all
-    .filter((c) => isEscalationCard(c && c.comment_text))
+    .filter((c) => isEscalationCard(c && c.comment_text) && machine(c && c.comment_text))
     .reduce((newest, c) => Math.max(newest, commentAt(c)), 0);
 
   if (!questionAt) {
@@ -270,6 +294,22 @@ function answerAwaitingHandback({ comments, operatorId, isMachine, delivered } =
   // the ticket while his most recent sentence had reached nobody is the very
   // thing the delivery gate exists to prevent.
   const answer = answers.reduce((newest, c) => (commentAt(c) > commentAt(newest) ? c : newest));
+  // ALREADY ACTED ON, so this ticket is parked on purpose (2026-09-07, round 1
+  // review). The authorization above is a property of the ticket with no memory
+  // of the move ever having been made, so a ticket answered, released, and then
+  // re-parked in `Needs your input` BY HAND still satisfies "delivered answer
+  // newer than the newest card" — and the relay would move it straight back out
+  // and strip his assignment inside ten minutes. The old fresh-only rule left
+  // such a ticket alone, and `Needs your input` is a status only Dane may be
+  // taken out of, on the strength of a comment he wrote FOR IT.
+  //
+  // So a completed hand-back writes its own durable marker on the answer, and
+  // an answer carrying one is spent: `handled`, never `answered`. If that write
+  // fails the behaviour degrades to exactly what it was before this paragraph —
+  // it can cost a re-release, never a stranding.
+  if (typeof handled === 'function' && handled(answer)) {
+    return { state: 'handled', answer, answerAt: commentAt(answer), questionAt, delivered: null };
+  }
   return {
     state: 'answered',
     answer,
@@ -311,6 +351,53 @@ function handbackTarget(watch, taskStatus, authorized) {
  * and none of the prefix the dedup check reads.
  */
 const HANDBACK_FAILURE_MARKER = '[bus-relay-handback]';
+
+/**
+ * THE COMPLETED HAND-BACK, WRITTEN WHERE THE NEXT PASS CAN SEE IT.
+ *
+ * The other half of the failure note above, and the reason both exist: this
+ * whole fix decides what to do from the TICKET's trail, so anything the trail
+ * cannot say is a thing no later pass can know. "The move already happened" is
+ * one of those, and without it a hand-parked ticket is dragged back out of
+ * `Needs your input` within ten minutes (see `answerAwaitingHandback`).
+ *
+ * `[bus-relay-handback-done]`, distinct from BOTH neighbours by construction:
+ * it does not start with `[bus-relay]`, the dedup prefix that would falsely
+ * claim delivery and drop a real bus message, and it does not start with
+ * `[bus-relay-handback]` either — the failure marker ends in `]` where this
+ * one carries `-done`, so `startsWith` tells them apart and a completed move
+ * can never read as a failed one.
+ */
+const HANDBACK_DONE_MARKER = '[bus-relay-handback-done]';
+
+function handbackDoneText({ target, at } = {}) {
+  return `${HANDBACK_DONE_MARKER} Your answer was delivered and this ticket was returned to `
+    + `"${target}", so it is back with the machines.\n\n`
+    + 'This note is what stops a later pass acting on the same answer twice — park the ticket here '
+    + `again and it will be left where you put it.${at ? ` (Automatic — bus-relay, ${at}.)` : ''}`;
+}
+
+/**
+ * THE THREE THINGS A REPLY THREAD CAN SAY, read in ONE place.
+ *
+ * The relay reads these off replies it already has in hand; `stale_answer.mjs`
+ * reads them off a fetch of its own. Two `startsWith` calls written twice are
+ * two definitions that drift silently in the direction of "nothing found",
+ * which reads as healthy — so they live here and both callers ask.
+ */
+function repliesSay(replies, marker) {
+  return (Array.isArray(replies) ? replies : [])
+    .some((r) => String((r && r.comment_text) || '').startsWith(marker));
+}
+
+/** Was the comment this thread hangs off relayed to the party line? */
+const repliesShowRelayed = (replies) => repliesSay(replies, BUS_RELAY_MARKER);
+
+/** Did a hand-back on this answer already COMPLETE? */
+const repliesShowHandbackDone = (replies) => repliesSay(replies, HANDBACK_DONE_MARKER);
+
+/** Has a failed hand-back on this answer already been noted on the ticket? */
+const repliesShowHandbackFailure = (replies) => repliesSay(replies, HANDBACK_FAILURE_MARKER);
 
 function handbackFailureText({ target, status, why, at } = {}) {
   const where = status ? `"${status}"` : 'the status it was already in';
@@ -644,6 +731,11 @@ module.exports = {
   handbackTarget,
   HANDBACK_FAILURE_MARKER,
   handbackFailureText,
+  HANDBACK_DONE_MARKER,
+  handbackDoneText,
+  repliesShowRelayed,
+  repliesShowHandbackDone,
+  repliesShowHandbackFailure,
   mergeEnabled,
   ticketsToRead,
   markAfterPass,

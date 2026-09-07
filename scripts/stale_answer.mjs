@@ -123,21 +123,29 @@ function writeStamp(key, at) {
 }
 
 /**
- * Clear every stamp for a ticket that is no longer stuck, or no longer in the
- * stage at all — CRITERION 4 in the ticket's own words: the alarm must clear
- * itself so the condition is re-derived rather than announced once. A stamp
- * that is never cleared is an alarm that fires once and then goes quiet for
- * ever.
+ * Clear every stamp EXCEPT the ones belonging to a ticket that is stuck right
+ * now — CRITERION 4 in the ticket's own words: the alarm must clear itself so
+ * the condition is re-derived rather than announced once.
+ *
+ * KEEP-LIST, NOT A CLEAR-LIST (2026-09-07, round 1 review). It used to be
+ * handed the ids of tickets still IN `Needs your input` and not stuck, which
+ * left out the normal healthy ending — a ticket that leaves the stage
+ * altogether. Its stamp was therefore never cleared, so getting stuck, getting
+ * fixed, and sticking again for the same reason inside six hours was silently
+ * suppressed: the fire-once alarm this criterion was written against, in the
+ * code written to prevent it.
+ *
+ * Safe to invert, because the caller only reaches this line having read the
+ * whole list, and a ticket whose comments would not read is a FINDING (so it
+ * is in the keep-list). A stamp that is not a current finding has no job:
+ * `duePosts` reads them only to hold back a finding that already went out.
  */
-function clearStampsFor(taskIds) {
-  const ids = new Set((taskIds || []).map(String));
-  if (!ids.size) return;
+function clearStampsExcept(keepTaskIds) {
   let entries = [];
   try { entries = fs.readdirSync(STAMP_DIR); } catch { return; }
-  for (const file of entries) {
-    const id = staleAnswer.stampKeyTaskId(file.replace(/\.stamp$/, ''));
-    if (!ids.has(id)) continue;
-    try { fs.rmSync(path.join(STAMP_DIR, file), { force: true }); } catch { /* nothing to clear */ }
+  const keys = entries.filter((f) => f.endsWith('.stamp')).map((f) => f.replace(/\.stamp$/, ''));
+  for (const key of staleAnswer.stampsToClear(keys, keepTaskIds)) {
+    try { fs.rmSync(stampPath(key), { force: true }); } catch { /* nothing to clear */ }
   }
 }
 
@@ -179,19 +187,24 @@ async function readComments(taskId) {
 }
 
 /**
- * Was this comment relayed? Read off the same durable marker the relay writes
- * and reads, through one extra request per answer.
+ * What this answer's reply thread says: was it relayed, and has a hand-back on
+ * it already completed? Both off ONE request, and off the markers the relay
+ * itself writes and reads.
  *
  * A read that FAILS returns null, not false. "I could not check" and "it was
  * not delivered" are different findings — the second names the party line as
  * the problem — and conflating them is the DOCTRINE 3.11 failure this whole
  * family of checks is written against.
+ *
+ * The envelope is unwrapped in `lib/staleAnswer.js`, not here, because the
+ * three lines that used to do it here read `out.res.ok` — the OTHER ClickUp
+ * client's shape — and so answered "could not tell" on every reading ever
+ * taken. Pure and unit-tested is the only way that stays fixed.
  */
-async function wasRelayed(commentId) {
-  const out = await clickup.call('GET', `/api/v2/comment/${commentId}/reply`);
-  if (!out?.res?.ok) return null;
-  const replies = out.json?.comments || out.json?.replies || [];
-  return replies.some((r) => String(r?.comment_text || '').startsWith(busRelayPlan.BUS_RELAY_MARKER));
+async function readAnswerMarkers(commentId) {
+  return staleAnswer.markersFromReplyEnvelope(
+    await clickup.call('GET', `/api/v2/comment/${commentId}/reply`),
+  );
 }
 
 // --- the pipeline switch ----------------------------------------------------
@@ -293,11 +306,16 @@ for (const task of parked) {
   // finding prints, and a fresh ticket has no finding to be specific about.
   if (answered.state === 'answered' && Number.isFinite(answerMinutes)
       && answerMinutes > STALE_AFTER_MINUTES) {
-    let relayed = null;
-    try { relayed = await wasRelayed(answered.answer.id); } catch { relayed = null; }
+    let markers = null;
+    try { markers = await readAnswerMarkers(answered.answer.id); } catch { markers = null; }
     // null stays null: unknown delivery falls through to the general
     // "the hand-back is failing" finding rather than blaming the party line.
-    if (relayed === false) record.delivered = false;
+    if (markers && markers.delivered === false) record.delivered = false;
+    // ...and an answer a hand-back already completed on means this ticket was
+    // parked here again on purpose. The relay reads the same marker and will
+    // not move it either, so a finding would fire every six hours about a
+    // deliberate act. Quiet, through the one state both halves agree on.
+    if (markers && markers.handbackDone === true) record.state = 'handled';
   }
 
   records.push(record);
@@ -321,11 +339,12 @@ const code = staleAnswer.exitCodeFor(findings);
 
 if (!CHECK) process.exit(code);
 
-// A ticket that is no longer stuck loses its stamps, so the next time it does
-// stick it is announced at once rather than swallowed by a window an earlier
-// finding opened.
-const stuckIds = new Set(findings.map((f) => String(f.taskId)));
-clearStampsFor(parked.map((t) => String(t.id)).filter((id) => !stuckIds.has(id)));
+// A ticket that is no longer stuck loses its stamps — including one that has
+// left `Needs your input` entirely, which is the normal healthy ending and the
+// case the first cut of this missed. The next time it sticks it is announced
+// at once rather than swallowed by a window an earlier finding opened.
+const stuckIds = findings.map((f) => String(f.taskId));
+clearStampsExcept(stuckIds);
 
 if (!findings.length) process.exit(code);
 

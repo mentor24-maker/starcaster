@@ -30,6 +30,18 @@ morning; one ticket had simply fallen out of it. This one notices within half an
 hour, says out loud that it is not waiting on you, and goes quiet again as soon
 as the ticket moves.
 
+**Checked over a second time (2026-09-07), and four things needed fixing before
+it could go live.** The new watchdog's "did your answer actually reach anybody?"
+test was reading the wrong thing entirely, so it never once got an answer — and
+its report would have blamed the wrong part of the system on the one screen you
+read. Quoting the question above your reply, which is a perfectly normal way to
+answer, stopped the ticket being released at all — and the watchdog called that
+same ticket healthy. The alarm could go off once about a ticket and then never
+again about it. And a ticket you had deliberately parked back in "needs your
+input" by hand would have been dragged straight out again within ten minutes,
+with your name taken off it. All four are fixed and each one was proved by
+breaking it on purpose and watching a test catch it.
+
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 
 When one of the build sessions dies partway through a job — the machine goes to

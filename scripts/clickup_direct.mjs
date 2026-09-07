@@ -89,7 +89,8 @@ import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled, operatorComments,
-  answerAwaitingHandback, handbackFailureText,
+  answerAwaitingHandback, handbackFailureText, handbackDoneText,
+  repliesShowRelayed, repliesShowHandbackDone, repliesShowHandbackFailure,
   ticketsToRead, markAfterPass, DEFAULT_OVERLAP_MS,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
   SIMULATED_BUS_WHY, simulationGuard, simulationLine, sweepVerdict,
@@ -4487,6 +4488,12 @@ if (cmd === 'whoami') {
       // pass summary reports; it is no longer the hand-back trigger, because a
       // trigger that can only fire once is a trigger a crash destroys for good.
       const deliveredIds = new Set();
+      // ...and which of his answers a hand-back has ALREADY completed on, and
+      // which already carry a failure note. Both are read off the very same
+      // reply fetch `deliveredIds` uses, so they cost nothing: the request was
+      // already being spent (2026-09-07, round 1 review).
+      const handbackDoneIds = new Set();
+      const handbackNotedIds = new Set();
       // Merge commands this pass must NOT act on: either terminally acted on
       // (merged, or handed to an agent session for a conflict), or unknowable because
       // the reply read failed. The second case is deliberate — a comment
@@ -4531,7 +4538,13 @@ if (cmd === 'whoami') {
           mergeRefusedCount.set(String(c.id), countMergeRefusals(replies, marker.reason));
         }
         else if (marker) mergeHandled.add(String(c.id));
-        const already = replies.some((r) => (r.comment_text || '').startsWith(BUS_RELAY_MARKER));
+        // Read BEFORE the `already` branch below returns: the answer that a
+        // hand-back acts on is by definition one that was relayed on an
+        // earlier pass, so anything read after that `continue` is never read
+        // on the comment that matters.
+        if (repliesShowHandbackDone(replies)) handbackDoneIds.add(String(c.id));
+        if (repliesShowHandbackFailure(replies)) handbackNotedIds.add(String(c.id));
+        const already = repliesShowRelayed(replies);
         // Already relayed on an EARLIER pass. Nothing more to send — and this
         // is exactly the state that used to end the story, because `fresh`
         // stayed 0 and the hand-back could never fire again. The marker is the
@@ -4719,6 +4732,12 @@ if (cmd === 'whoami') {
         operatorId: OPERATOR_ID,
         isMachine: isMachineComment,
         delivered: (c) => deliveredIds.has(String(c.id)),
+        // An answer a hand-back has already completed on is SPENT, so a ticket
+        // he parks here again by hand is left where he put it rather than
+        // dragged back out ten minutes later on words he wrote for an earlier
+        // round. `Needs your input` is his; the only thing that may take a
+        // ticket out of it is a comment he wrote FOR the card it is parked on.
+        handled: (c) => handbackDoneIds.has(String(c.id)),
       });
       // No escalation card on the trail means there is no way to tell an answer
       // from something he said last week, so the OLD fresh-only rule stands
@@ -4753,7 +4772,16 @@ if (cmd === 'whoami') {
         // derived from the trail and does NOT depend on this landing, which
         // matters because the usual reason the move failed is the same budget
         // this write needs.
-        if (answered.answer) {
+        //
+        // ONCE PER ANSWER, NOT ONCE PER PASS (2026-09-07, round 1 review). A
+        // persistent non-429 failure — a renamed status, a permission error —
+        // keeps the status write failing while comment writes keep succeeding,
+        // so an unconditional note is ~144 identical comments a day on the very
+        // ticket he is reading. Everything else in this family throttles; this
+        // is the same discipline, off a read this pass already paid for.
+        if (answered.answer && handbackNotedIds.has(String(answered.answer.id))) {
+          console.error(`  (the failed hand-back on ${t.id} is already noted on his answer — not repeating it)`);
+        } else if (answered.answer) {
           const noteOut = await call('POST', `/api/v2/comment/${answered.answer.id}/reply`, {
             comment_text: handbackFailureText({
               target, status: t.status?.status, why, at: new Date().toISOString(),
@@ -4770,6 +4798,18 @@ if (cmd === 'whoami') {
       }
       const leftover = (moveOut.json.assignees || []).map((a) => a.id);
       if (leftover.length) unchecked.push(`${t.id}: handed back to "${now}" but assignees did not clear ([${leftover.join(', ')}])`);
+      // The move stuck, so the answer that authorized it is spent. Written AFTER
+      // the verification and never before it: a marker on a move that did not
+      // happen would suppress the retry this whole ticket exists to add.
+      // Best-effort — if it fails, the behaviour degrades to what it was before
+      // the marker existed (a hand-park could be re-released), never to a
+      // stranding.
+      if (answered.answer) {
+        const doneOut = await call('POST', `/api/v2/comment/${answered.answer.id}/reply`, {
+          comment_text: handbackDoneText({ target: now, at: new Date().toISOString() }),
+        });
+        if (!doneOut.res.ok) console.error(`  (handed back, but could not mark his answer as acted on — HTTP ${doneOut.res.status}; re-parking this ticket by hand could release it again)`);
+      }
       console.error(`  handed back: "${t.name}" -> "${now}" (verified from the write response)`);
       handedBack++;
     }

@@ -769,6 +769,8 @@ test('a merge-capable watch reads every ticket regardless of recency', () => {
 const {
   answerAwaitingHandback, isEscalationCard, ESCALATION_BANNER,
   HANDBACK_FAILURE_MARKER, handbackFailureText, BUS_RELAY_MARKER: DEDUP_MARKER,
+  HANDBACK_DONE_MARKER, handbackDoneText,
+  repliesShowRelayed, repliesShowHandbackDone, repliesShowHandbackFailure,
 } = require('./busRelayPlan.js');
 const { stampMachineComment: stampCard } = require('./machineComment.js');
 
@@ -897,4 +899,119 @@ test('the relay reads the durable marker as delivery, which is the whole of the 
   // And the failure goes on the ticket (criterion 2), best-effort.
   assert.match(RELAY_SRC, /comment_text: handbackFailureText\(\{/,
     'a hand-back that fails must leave a record on the ticket, not only in a bus post a rate limit can swallow');
+});
+
+/* ------------------------------------------------------------------ *
+ * ROUND 1 REVIEW (2026-09-07). Three defects in the derivation above,
+ * each one reproduced before it was fixed.
+ * ------------------------------------------------------------------ */
+
+test('a comment of HIS that quotes the card is not the question', () => {
+  // Finding 3. `isEscalationCard` looked only for the banner text, on any
+  // comment from anyone — and quoting the card above your reply is how people
+  // answer. His quote is NEWER than the card it quotes, so the question was
+  // anchored on his own comment, nothing of his came after it, and the verdict
+  // was `none`: the relay handed nothing back — a REGRESSION against the old
+  // fresh-only rule, which would have moved it — while stale-answer filed the
+  // same ticket as healthy. Stranded, with the watchdog saying all-clear.
+  const quoted = {
+    id: 'a1',
+    date: '2000',
+    user: { id: DANE },
+    comment_text: `> ${ESCALATION_BANNER} Which option, A or B?\n\nB`,
+  };
+  assert.ok(isEscalationCard(quoted.comment_text), 'the banner really is in his text — that is the trap');
+  assert.ok(!isMachineComment(quoted.comment_text), 'and it is still his word');
+
+  const out = answerAwaitingHandback({
+    comments: [card('c1', 1000), quoted],
+    ...answeredOpts,
+    delivered: allDelivered,
+  });
+  assert.equal(out.state, 'answered', 'only a MACHINE card may be the question');
+  assert.equal(out.answer.id, 'a1');
+});
+
+test('without an isMachine test nothing can be a card — the safe direction', () => {
+  // A caller that forgets the predicate must fall through to `no-question`,
+  // which keeps the old fresh-only rule at the relay and CANNOT TELL in the
+  // report. Both are safe; guessing a question is not.
+  const out = answerAwaitingHandback({ comments: [card('c1', 1000), his('a1', 2000)], operatorId: DANE });
+  assert.equal(out.state, 'no-question');
+});
+
+test('an answer a hand-back already completed on is spent, so a hand-park is left alone', () => {
+  // The judgment call from round 1, decided. The authorization is a property of
+  // the ticket with no memory of the move: a ticket answered, released, and then
+  // re-parked in `Needs your input` BY HAND still satisfies "delivered answer
+  // newer than the newest card", so the next pass dragged it back out and
+  // stripped his assignment inside ten minutes. The old rule left it alone, and
+  // `Needs your input` is a status only he may be taken out of.
+  const comments = [card('c1', 1000), his('a1', 2000)];
+  const out = answerAwaitingHandback({
+    comments, ...answeredOpts, delivered: allDelivered, handled: (c) => c.id === 'a1',
+  });
+  assert.equal(out.state, 'handled');
+  assert.equal(handbackTarget(loopQueue, 'needs your input', out.state === 'answered' && out.delivered), null,
+    'a spent answer must not move the ticket again');
+
+  // ...and a NEW escalation on the same ticket is unaffected: the question is
+  // anchored on the newest card, so his next answer is a different comment.
+  const again = answerAwaitingHandback({
+    comments: [...comments, card('c2', 3000), his('a2', 4000)],
+    ...answeredOpts,
+    delivered: allDelivered,
+    handled: (c) => c.id === 'a1',
+  });
+  assert.equal(again.state, 'answered');
+  assert.equal(again.answer.id, 'a2');
+});
+
+test('the three reply markers are told apart by the one reader both halves use', () => {
+  const done = handbackDoneText({ target: 'Queued', at: 'ISO' });
+  const failed = handbackFailureText({ target: 'Queued', status: 'needs your input', why: 'HTTP 429', at: 'ISO' });
+  assert.ok(done.startsWith(HANDBACK_DONE_MARKER));
+  assert.ok(!done.startsWith(DEDUP_MARKER), 'a completed hand-back must not claim a bus delivery');
+  assert.ok(!done.startsWith(HANDBACK_FAILURE_MARKER), 'a completed hand-back must not read as a failed one');
+  assert.ok(!failed.startsWith(HANDBACK_DONE_MARKER), 'and a failed one must not read as completed');
+  assert.ok(isMachineComment(done), 'it must never come back as Dane\'s own word');
+
+  assert.equal(repliesShowHandbackDone([{ comment_text: done }]), true);
+  assert.equal(repliesShowHandbackFailure([{ comment_text: done }]), false);
+  assert.equal(repliesShowHandbackFailure([{ comment_text: failed }]), true);
+  assert.equal(repliesShowRelayed([{ comment_text: `${DEDUP_MARKER} sent to channel x` }]), true);
+  assert.equal(repliesShowRelayed([{ comment_text: done }]), false);
+  assert.equal(repliesShowRelayed(null), false, 'no replies is not a delivery');
+});
+
+test('the failed hand-back note is written once per answer, not once per pass', () => {
+  // Finding 4. It was written unconditionally. On a persistent NON-429 failure
+  // — a renamed status, a permission error — the status write keeps failing
+  // while comment writes keep succeeding, so the relay adds a fresh note every
+  // ten minutes: ~144 a day on the ticket Dane is reading. Everything else in
+  // this family throttles once per reason per 6h.
+  assert.match(RELAY_SRC, /if \(repliesShowHandbackFailure\(replies\)\) handbackNotedIds\.add\(String\(c\.id\)\);/,
+    'the pass must record which answers already carry a note — off a read it already paid for');
+  assert.match(RELAY_SRC, /if \(answered\.answer && handbackNotedIds\.has\(String\(answered\.answer\.id\)\)\)/,
+    'and must consult it before posting another');
+
+  // Both marker reads must happen BEFORE the already-relayed `continue`, or
+  // they are never run on the one comment that matters — a hand-back always
+  // acts on an answer relayed by an earlier pass.
+  const doneAt = RELAY_SRC.indexOf('repliesShowHandbackDone(replies)');
+  const notedAt = RELAY_SRC.indexOf('repliesShowHandbackFailure(replies)');
+  const skipAt = RELAY_SRC.indexOf('if (already) { deliveredIds.add');
+  assert.ok(doneAt > -1 && notedAt > -1 && skipAt > -1, 'the relay moved — re-point this test');
+  assert.ok(doneAt < skipAt && notedAt < skipAt,
+    'a marker read after the already-relayed `continue` never runs on the answer a hand-back acts on');
+});
+
+test('a completed hand-back marks the answer, and only after the move verified', () => {
+  const marker = RELAY_SRC.indexOf('comment_text: handbackDoneText({');
+  const verified = RELAY_SRC.indexOf("unchecked.push(`${t.id}: hand-back did not stick");
+  assert.ok(marker > -1 && verified > -1, 'the relay moved — re-point this test');
+  assert.ok(marker > verified,
+    'marking an answer spent before the move is verified would suppress the retry this ticket exists to add');
+  assert.match(RELAY_SRC, /handled: \(c\) => handbackDoneIds\.has\(String\(c\.id\)\)/,
+    'and the relay must READ that marker, or writing it changes nothing');
 });

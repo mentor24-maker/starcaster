@@ -11,6 +11,7 @@ const busRelayPlan = require('./busRelayPlan.js');
 const {
   answerFindings, classifyAnswer, duePosts, exitCodeFor, postKey, stampKeyTaskId,
   renderReport, renderStalePost, STALE_AFTER_MINUTES, MACHINE, CANNOT_TELL,
+  markersFromReplyEnvelope, stampsToClear,
 } = staleAnswer;
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -135,13 +136,84 @@ test('a finding inside the window is held, and one outside it posts again', () =
 test('the check clears its own stamps, so a bus post is not the only record', () => {
   // The incident's fourth criterion in one line: the pass that could not post
   // must leave the condition re-derivable, and the stamp for a ticket that is
-  // no longer stuck must go. Pinned on the source because the clearing lives
-  // in the IO half, where a unit test cannot reach it.
+  // no longer stuck must go.
+  const keys = ['86bbaaa:answer-unhandled', '86bbbbb:answer-undelivered'];
+  assert.deepEqual(stampsToClear(keys, ['86bbaaa']), ['86bbbbb:answer-undelivered'],
+    'a ticket that is no longer stuck must lose its stamps');
+  assert.deepEqual(stampsToClear(keys, ['86bbaaa', '86bbbbb']), [],
+    'a ticket that IS still stuck keeps its stamp, or the 6h window means nothing');
+
   const src = fs.readFileSync(path.join(ROOT, 'scripts', 'stale_answer.mjs'), 'utf8');
-  assert.match(src, /clearStampsFor\(parked\.map/,
-    'every ticket in the stage that is not stuck must lose its stamps');
   assert.match(src, /Not stamping it as sent, so the next pass tries again/,
     'a bus post that FAILED must not be recorded as said');
+});
+
+test('a ticket that LEAVES the stage loses its stamp — the healthy ending counts too', () => {
+  // Round 1 review, finding 2. The clearing used to be handed only the ids of
+  // tickets still parked in `Needs your input`, so the normal healthy ending —
+  // the ticket moving on — never cleared anything. Get stuck, get fixed, get
+  // re-escalated and stick again for the same reason inside six hours, and the
+  // alarm is silently suppressed: fire-once, which is what criterion 4 forbids.
+  const keys = ['86bbgone:answer-unhandled'];
+  assert.deepEqual(stampsToClear(keys, []), ['86bbgone:answer-unhandled'],
+    'a ticket no longer in the stage at all must lose its stamps');
+});
+
+/* ------------------------------------------------------------------ *
+ * The delivery reading, off the envelope this client ACTUALLY returns.
+ * ------------------------------------------------------------------ */
+
+test('the delivery check reads the envelope scripts/lib/clickup.cjs returns', () => {
+  // Round 1 review, finding 1 — the BLOCKER. This tested `out.res.ok`, which is
+  // the OTHER ClickUp client's shape; `call()` here returns `{ ok, status, json,
+  // text }` and has no `res`. So it answered null on every reading ever taken:
+  // `delivered` could never be false, the `answer-undelivered` finding was
+  // unreachable in production, and every finding printed "the answer was
+  // delivered ... the hand-back is failing" — the exact mis-diagnosis this
+  // module says it exists to prevent, on the one surface Dane reads.
+  const relayed = {
+    ok: true,
+    status: 200,
+    json: { comments: [{ comment_text: `${busRelayPlan.BUS_RELAY_MARKER} sent to channel x at ...` }] },
+  };
+  assert.equal(markersFromReplyEnvelope(relayed).delivered, true);
+
+  const silent = { ok: true, status: 200, json: { comments: [{ comment_text: 'something else' }] } };
+  assert.equal(markersFromReplyEnvelope(silent).delivered, false,
+    'an answer that reached nobody must be able to say so — that finding names the party line');
+
+  assert.equal(markersFromReplyEnvelope({ ok: false, status: 429, json: {} }), null,
+    '"I could not check" and "it was not delivered" are different findings');
+  assert.equal(markersFromReplyEnvelope(null), null);
+
+  // The shape it used to read. If someone reintroduces it, this is what they get.
+  assert.equal(markersFromReplyEnvelope({ res: { ok: true }, json: { comments: [] } }), null,
+    'the wrong envelope must come back as CANNOT TELL, never as a reading');
+});
+
+test('answerFindings returns nothing the report never mentions', () => {
+  // Round 1 review, finding 5. `unmeasured` was declared, documented as "the
+  // report says so", returned — and never populated and never read. It could
+  // not be populated: it was meant for a ticket inside the clock whose comments
+  // would not read, and an unreadable ticket is a finding at ANY age. A bucket
+  // nothing renders is a silence dressed as coverage, which is this module's
+  // own thesis turned on itself.
+  assert.deepEqual(
+    Object.keys(answerFindings([ticket()])).sort(),
+    ['findings', 'fresh', 'staleAfterMinutes'],
+    'every bucket this returns must reach the report, or it is not coverage',
+  );
+});
+
+test('an answer already acted on is quiet, not an alarm every six hours', () => {
+  // The judgment call from round 1, decided: a completed hand-back marks the
+  // answer, so a ticket parked here again by hand is left where it was put.
+  // The relay reads the same marker, so an alarm here would fire for as long
+  // as he chose to leave it — about a deliberate act, on the ticket he parked.
+  const { findings, fresh } = answerFindings([ticket({ state: 'handled', answerMinutes: 900 })]);
+  assert.deepEqual(findings, []);
+  assert.deepEqual(fresh, ['86bbv8nvy']);
+  assert.equal(exitCodeFor(findings), 0);
 });
 
 /* ------------------------------------------------------------------ *
