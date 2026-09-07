@@ -23,9 +23,9 @@ import { BuilderTemplatePreview } from "./builder-template-preview";
  */
 
 const POSTS = [
-  { id: "p1", slug: "levels", title: "What Level Player Are You?", excerpt: "Find your level.", tags: ["beginner tennis"], categoryIds: [], status: "published" },
-  { id: "p2", slug: "open",   title: "Delray Beach Open",          excerpt: "ATP week.",        tags: ["ATP tennis"],      categoryIds: [], status: "published" },
-  { id: "p3", slug: "clinic", title: "Adult Clinics",              excerpt: "Weekly clinics.",  tags: ["beginner tennis"], categoryIds: [], status: "published" }
+  { id: "p1", slug: "levels", title: "What Level Player Are You?", excerpt: "Find your level.", tags: ["beginner tennis"], categoryIds: [], status: "published", published_at: "2026-03-01" },
+  { id: "p2", slug: "open",   title: "Delray Beach Open",          excerpt: "ATP week.",        tags: ["ATP tennis"],      categoryIds: [], status: "published", published_at: "2026-04-01" },
+  { id: "p3", slug: "clinic", title: "Adult Clinics",              excerpt: "Weekly clinics.",  tags: ["beginner tennis"], categoryIds: [], status: "published", published_at: "2026-05-01" }
 ];
 
 // react-dom 18 wants this flag before act(); without it every render warns.
@@ -93,6 +93,21 @@ async function typeInSearchBox(text: string) {
   });
 }
 
+/*
+ * The date bounds are two <input type="date"> in the filter bar, titled From
+ * and To. Same native-setter dance as the search box: React ignores a plain
+ * `.value =`.
+ */
+async function setDateBound(title: "From" | "To", value: string) {
+  const input = document.querySelector(`input[type="date"][title="${title}"]`) as HTMLInputElement | null;
+  if (!input) throw new Error(`the feed rendered no ${title} date field`);
+  const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+  await act(async () => {
+    setValue.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 function cardTitles(): string {
   return Array.from(document.querySelectorAll("h3, h2")).map((h) => h.textContent ?? "").join(" ");
 }
@@ -147,5 +162,67 @@ describe("Post Feed search that finds nothing", () => {
 
     expect(document.body.textContent).toContain("No posts tagged “junior tennis”.");
     expect(document.body.textContent).not.toContain("match “");
+  });
+});
+
+/*
+ * Round 1 of 86bbvqhp6 came back: the message above named the search word for
+ * an emptiness the DATE filter had caused, and offered to un-empty a page that
+ * an unknown ?category= slug had emptied for good. Both are the original
+ * defect with the roles swapped — a specific, confident, false sentence where
+ * the vague-but-true one used to be — so both are regressions, not polish.
+ */
+describe("Post Feed empty state — every filter that narrowed the page names itself", () => {
+  it("does not blame the search word for an emptiness a date bound caused", async () => {
+    // Every post is published in 2026, so a From of 2030 empties the list on
+    // its own while "Clinics" still matches a post sitting right there.
+    await renderFeed("", { showDateFilter: "true" });
+    await typeInSearchBox("Clinics");
+    expect(cardTitles()).toContain("Adult Clinics");
+
+    await setDateBound("From", "2030-01-01");
+
+    expect(document.body.textContent)
+      .toContain("No posts published on or after 2030-01-01 match “Clinics”.");
+    expect(document.body.textContent).not.toContain("No posts match “Clinics”.");
+  });
+
+  it("names a date bound on its own when nothing was typed", async () => {
+    await renderFeed("", { showDateFilter: "true" });
+    await setDateBound("To", "2020-01-01");
+
+    expect(document.body.textContent).toContain("No posts published on or before 2020-01-01.");
+    expect(document.body.textContent).not.toContain("No posts match your filters.");
+  });
+
+  it("names both bounds as one range", async () => {
+    await renderFeed("", { showDateFilter: "true" });
+    await setDateBound("From", "2030-01-01");
+    await setDateBound("To", "2030-12-31");
+
+    expect(document.body.textContent)
+      .toContain("No posts published between 2030-01-01 and 2030-12-31.");
+  });
+
+  it("names a tag and a date together, in one sentence, alongside the search", async () => {
+    await renderFeed("?tag=beginner%20tennis", { filterMode: "tag", showDateFilter: "true" });
+    await typeInSearchBox("Level");
+    expect(cardTitles()).toContain("What Level Player Are You?");
+
+    await setDateBound("From", "2030-01-01");
+
+    expect(document.body.textContent).toContain(
+      "No posts tagged “beginner tennis” and published on or after 2030-01-01 match “Level”."
+    );
+  });
+
+  it("does not invite clearing a search that an unknown category slug made irrelevant", async () => {
+    // missingCatSlug drops every post whatever else is set, so "…match “Tennis”."
+    // would promise that deleting the word brings posts back. Nothing will.
+    await renderFeed("?category=ghost-slug");
+    await typeInSearchBox("Tennis");
+
+    expect(document.body.textContent).toContain("No posts in the category “ghost-slug”.");
+    expect(document.body.textContent).not.toContain("match “Tennis”.");
   });
 });

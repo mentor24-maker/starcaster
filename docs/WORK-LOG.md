@@ -21,10 +21,25 @@ tag is also in play both are named, so no filter takes credit for an emptiness
 it did not cause. The "Show all posts" way back was already there and still is,
 and the wording when nothing was typed is untouched.
 
+The review caught this making the very mistake it was written to stop, in two
+corners it had not covered. The feed can also filter by a date range, and that
+was left out of the new sentence — so setting a date that matched nothing while
+a search word was typed read "No posts match 'Tennis'" with two Tennis posts on
+screen. Same lie, different culprit. Every filter that is narrowing the page now
+names itself, dates included, and several read as one sentence: "No posts tagged
+'beginner tennis' and published on or after 2030-01-01 match 'Level'."
+
+The other corner: if the web address names a category that does not exist, the
+page is empty no matter what else is set, and nothing will bring it back. The
+new message was still naming the search word there, which quietly invited the
+visitor to delete it and try again. It now says only what is true — "No posts in
+the category 'ghost-slug'."
+
 Deliberately left alone: making the post feed obey a search word arriving in the
 web address. The chosen fix does not need it, and doing it carelessly would let
 a page filter itself with no visible box to clear — that wants its own think
 first.
+
 ## 2026-09-06 — An answer you wrote could go permanently missing if a job died at the wrong second (#640)
 
 When you answer a question on a ticket, a background job does two things with
