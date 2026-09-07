@@ -2503,7 +2503,7 @@ gh pr view <pr> --json mergeable,mergeStateStatus
 
 | Reading | Cause | Remedy |
 |---|---|---|
-| `CONFLICTING` / `DIRTY` | GitHub will not build a merge ref, so it runs nothing | **Merge the base in** — `git merge origin/main --no-edit && git push`, or just `npm run ship`, which does the catch-up first |
+| `CONFLICTING` / `DIRTY` | GitHub will not build a merge ref, so it runs nothing | **Ask git too, then see the three cases below** — usually a catch-up merge (`npm run ship`) |
 | `MERGEABLE` / anything else | The `opened` run and a too-quick second push were both dropped (#387/#389) | **Push any new commit** — `git commit --allow-empty -m "Nudge GitHub into creating a check run" && git push` |
 | `UNKNOWN` | GitHub has not worked it out yet — normal for a few seconds after a push | **Ask again.** Never read this as either of the above |
 
@@ -2512,14 +2512,61 @@ that changes nothing, and then reports the wrong diagnosis. On #630 that ended
 in "check that Actions is enabled for the repository", about a repository whose
 Actions were running other people's pull requests at that exact minute.
 
+### `CONFLICTING` is one reading with three different remedies
+
+"Merge the base in" is the right answer *when the branch is actually behind*,
+and on a branch that is already current it is a **no-op loop** — `ship` merges
+`origin/main` in at step 1, so a pull request whose only problem is GitHub's
+stale computation gets told to do the thing `ship` just did, does it, changes
+nothing, and comes back round. That is not hypothetical: GitHub's mergeability
+is a cached background computation and it is wrong here often enough to have
+its own note in doctrine (PRs #567 and #585, and #639 — the pull request that
+carried this very fix, which read `CONFLICTING` while git merged it cleanly).
+
+So a conflicting reading is met with a **second source**, the same cross-check
+`mergeOnComment`'s gate already makes:
+
+```
+git rev-parse --verify origin/main^{commit}     # both refs FIRST — see below
+git rev-parse --verify HEAD^{commit}
+git merge-tree --write-tree origin/main HEAD    # 0 = merges clean, 1 = conflicts
+git rev-list --count HEAD..origin/main          # 0 = the branch already has main
+```
+
+| GitHub | git | What it is | Remedy |
+|---|---|---|---|
+| `CONFLICTING` | conflicts | A real conflict; both sources agree | **Resolve it** — `git merge origin/main`, fix the files, commit, `npm run ship` |
+| `CONFLICTING` | clean, branch behind main | The #630 case: stale branch, phantom reading | **Catch up** — `npm run ship` merges `origin/main` in first |
+| `CONFLICTING` | clean, branch already current | GitHub is holding a stale computation and there is nothing to catch up | **Make it recompute** — `git commit --allow-empty -m "Recompute mergeability" && git push` |
+| `CONFLICTING` | no reading could be taken | Unconfirmed | **Catch up** — the measured remedy, and safe against an unconfirmed conflict |
+
+**Resolve both refs before the exit code means anything.** `git merge-tree
+--write-tree` exits **1** for a ref it cannot resolve as well as for a conflict
+(measured on git 2.50.1: `merge-tree: nosuchref - not something we can merge`).
+Reading that bare `1` as a conflict sends you to resolve one that does not
+exist, over a typo. Every unreadable case here is a **CANNOT TELL** that falls
+back to the catch-up merge — never "clean".
+
 **`npm run ship` asks this itself now.** `scripts/builder/waitForChecks.js`
 polls mergeability while no check has ever appeared, and returns its own
 `blocked_conflicting` outcome the moment GitHub says `CONFLICTING` — before the
 grace window, and before the nudge, because reaching either of those first
-hands out the wrong remedy. The message names the catch-up merge and says out
-loud that the nudge is not the fix here. `UNKNOWN` is deliberately not treated
-as a conflict: it is the ordinary answer for the first seconds after every
-push, so it is polled rather than read once.
+hands out the wrong remedy. `UNKNOWN` is deliberately not treated as a
+conflict: it is the ordinary answer for the first seconds after every push, so
+it is polled rather than read once.
+
+**And the message it prints names exactly ONE remedy.** Both checkless outcomes
+— the conflicting head and "nothing ever appeared" — go through one builder,
+`scripts/builder/checklessMessage.js`, which fills a single remedy slot from
+the table above. It is written that way because the first version assembled the
+message by CONCATENATION, appending a note about mergeability to a paragraph
+chosen from the nudge's outcome, and two of those pairings contradicted
+themselves outright — "the branch needs a new commit before GitHub will make a
+run", immediately followed by "the remedy is a catch-up merge, not another
+commit". The operator can do one of those, and nothing in the message said
+which: this section's own failure mode, reproduced inside the fix for it. One
+slot, filled by a table, is what makes a second remedy something a future edit
+cannot add by accident.
 
 **A conflicting head blocks runs from being CREATED; it does not remove runs
 that already exist.** Measured on 2026-09-06: PR #637 read `CONFLICTING` /

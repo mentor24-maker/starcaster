@@ -247,20 +247,27 @@ test('ship asks WHY the checks are absent before waiting or nudging (PR #630)', 
     'this probe only ADDS a diagnosis — an unreadable reading must never stop ship');
 });
 
-test('a conflicting head gets its own message, and it is NOT the nudge advice', () => {
-  // The two causes of a checkless PR have opposite remedies, and the cost of
-  // #630 was twenty minutes of the wrong one. The conflicting branch must name
-  // the catch-up merge; the nudge advice belongs to the other branch alone.
-  const idx = source.indexOf("outcome === 'blocked_conflicting'");
-  assert.ok(idx > -1, 'ship must handle the blocked_conflicting outcome');
-  const branch = source.slice(idx, idx + 1600);
-  assert.match(branch, /npm run ship/, 'it names the catch-up merge as the remedy');
-  assert.match(branch, /does NOT fix this one/i, 'it says out loud that the nudge is the wrong remedy here');
-  assert.doesNotMatch(branch, /Actions is enabled/,
-    'the "check whether Actions is enabled" advice belongs to never_appeared, not to a conflict');
-  // And it must be decided BEFORE never_appeared, or the wrong message wins.
-  assert.ok(idx < source.indexOf("outcome === 'never_appeared'"),
-    'the conflicting case is a "no checks appeared" case too — it has to be tested first');
+test('BOTH checkless outcomes go through ONE message builder, and ship writes no prose', () => {
+  // Round 3 of 86bbvqkr1. `blocked_conflicting` and `never_appeared` used to be
+  // two hand-written blocks here, and the second was assembled by APPENDING a
+  // mergeability note to a nudge paragraph — a concatenation that told the
+  // operator to do two opposite things in one message. The structural fix is
+  // that ship no longer has any message strings to append to: it hands the
+  // facts to `checklessMessage`, which fills exactly one remedy slot.
+  assert.match(code, /require\('\.\/builder\/checklessMessage'\)/,
+    'ship must get the message from the one place that decides it');
+  const idx = code.indexOf("outcome === 'blocked_conflicting'");
+  assert.ok(idx > -1, 'ship must still handle the blocked_conflicting outcome');
+  const branch = code.slice(idx, code.indexOf("if (wait.outcome === 'timed_out_pending')", idx));
+  assert.match(branch, /checklessMessage\(\{/, 'the branch builds its message with the builder');
+  // The prose that used to live here, in both its spellings. Either one back in
+  // this file is a second remedy waiting to be appended to the first.
+  assert.doesNotMatch(branch, /Actions is enabled/);
+  assert.doesNotMatch(branch, /will NOT help/);
+  assert.doesNotMatch(branch, /catch-up merge/);
+  // And it handles BOTH outcomes, so neither can drift away from the other.
+  assert.match(branch, /outcome === 'never_appeared'/,
+    'never_appeared is the same situation and must share the same builder');
 });
 
 test('ship asks gh for the `workflow` field — without it, CI cannot be told from Vercel', () => {
@@ -279,32 +286,46 @@ test('ship asks gh for the `workflow` field — without it, CI cannot be told fr
     'the --json list must ask for workflow, or the CI/third-party distinction is unavailable');
 });
 
-test('never_appeared consults the mergeability reading instead of asserting a cause', () => {
-  // waitForChecks carries `mergeable` out precisely so this caller "can say
-  // WHICH remedy applies instead of listing both and letting a person guess"
-  // (its own JSDoc), and this branch used to ignore it and print the
-  // Actions-are-disabled advice unconditionally — the #630 misdiagnosis,
-  // reproduced by the code written to prevent it.
-  const idx = source.indexOf('const mergeNote');
-  assert.ok(idx > -1, 'the never_appeared path must derive a note from the reading');
-  const block = source.slice(idx, source.indexOf('if (wait.outcome === \'never_appeared\')', idx));
-  assert.match(block, /classifyMergeable\(wait\.mergeable\)/, 'it must read the reading, not guess');
-  // The three answers need three different remedies, and the cannot-tell one
-  // is the whole point: it must not hand out either remedy as though it knew.
-  assert.match(block, /case 'conflicting'/);
-  assert.match(block, /case 'mergeable'/);
-  assert.match(block, /NEVER ESTABLISHED/,
-    'an unreadable or UNKNOWN probe must say a reading could not be taken');
-  assert.match(block, /gh pr view \$\{prNumber\} --json mergeable,mergeStateStatus/,
-    'and hand over the command that settles it');
-  // "Actions is enabled" is now a CONDITIONAL diagnosis, only stated when
-  // GitHub has actually said the pull request is mergeable.
-  const conflictCase = block.slice(block.indexOf("case 'conflicting'"), block.indexOf("case 'mergeable'"));
-  assert.doesNotMatch(conflictCase, /Actions is enabled/,
-    'a conflicting head is not an Actions problem');
-  const unknownCase = block.slice(block.indexOf('default:'));
-  assert.doesNotMatch(unknownCase, /Actions is enabled/,
-    'a reading that could not be taken must not be reported as a broken Actions');
+test('THE COUPLING: the built message is what ship actually prints', () => {
+  // The round-2 test asserted the mergeability note's three cases and nothing
+  // asserted the note was USED — deleting `+ mergeNote` from the fail() call
+  // left all 63 tests green while the operator got no cause diagnosis at all,
+  // which was the round-1 defect back again. So the assertion is on the wiring:
+  // one fail() in the branch, and its argument is the builder's own text.
+  const idx = code.indexOf("outcome === 'blocked_conflicting'");
+  const branch = code.slice(idx, code.indexOf("if (wait.outcome === 'timed_out_pending')", idx));
+  assert.equal(branch.split('fail(').length - 1, 1, 'exactly one fail() in the checkless branch');
+  assert.match(branch, /fail\(checklessMessage\(\{[\s\S]*\}\)\.text\)/,
+    'the message ship prints must BE the built one, not a string beside it');
+  // And it must be handed every fact the remedy is chosen from. A missing one
+  // does not throw — it silently collapses the table onto a default.
+  for (const field of ['outcome:', 'nudged:', 'nudgeFailedAt', 'mergeable:', 'localMerge:', 'checks:']) {
+    assert.ok(branch.includes(field), `the builder must be given ${field}`);
+  }
+});
+
+test('a conflicting reading is cross-checked against git before ship names a remedy', () => {
+  // GitHub's mergeability is a cached computation and it is wrong here often
+  // enough to have doctrine of its own (#567, #585, and PR #639 — this fix's
+  // own pull request). "Bring main in" is the right answer on a stale branch
+  // and a no-op loop on a current one, and ship merges main in at step 1, so
+  // the phantom case is exactly the one that comes back round.
+  assert.match(code, /function localMergeReading/);
+  const from = code.indexOf('function localMergeReading');
+  const probe = code.slice(from, code.indexOf('\n}\n', from));
+  assert.match(probe, /merge-tree/, 'it asks git the same question GitHub answered');
+  assert.match(probe, /classifyLocalMerge\(/, 'and classifies the answer in the tested place');
+  assert.doesNotMatch(probe, /fail\(/,
+    'a cross-check that cannot be taken must never stop ship — it is a diagnosis, not a gate');
+  // Both refs resolved before the exit code is read: merge-tree exits 1 for an
+  // unresolvable ref as well as for a conflict, and reading that bare 1 would
+  // send the operator to resolve a conflict that does not exist.
+  assert.match(probe, /\['rev-parse', '--verify', 'origin\/main/);
+  assert.match(probe, /\['rev-parse', '--verify', 'HEAD/);
+  assert.match(probe, /baseResolved/);
+  assert.match(probe, /headResolved/);
+  // Only paid for when GitHub has actually claimed a conflict.
+  assert.match(code, /classifyMergeable\(wait\.mergeable\) === 'conflicting' \? localMergeReading\(\) : null/);
 });
 
 test('a broken gh call still stops ship — absence must not swallow a real error', () => {
@@ -325,33 +346,29 @@ test('the comment-stripper does not defeat the test it feeds', () => {
   assert.ok(code.length > 2000, 'stripping left a plausible amount of code');
 });
 
-test('a failed nudge says WHICH step failed, because the advice is opposite', () => {
+test('a failed nudge records WHICH step failed, because the advice is opposite', () => {
   // `nudgeChecks` returns false for two different situations. If the commit
   // failed, the branch really does need a new one. If the commit SUCCEEDED and
   // only the push failed, the commit is sitting on the branch locally and an
   // ordinary `git push` sends it. One message served both, and in the push case
   // it told the operator "re-running ship will NOT help" — the exact opposite
   // of the truth, in a script whose whole purpose is making these messages true.
+  //
+  // Ship's job is now only to RECORD which step failed; which advice follows
+  // from it is decided and tested in checklessMessage.test.js, where every
+  // combination is a real unit test rather than a slice of this file.
   assert.match(source, /nudgeFailedAt/, 'the failing step has to be recorded somewhere');
 
   const nudge = source.slice(source.indexOf('function nudgeChecks'));
   const body = nudge.slice(0, nudge.indexOf('\n}\n'));
   assert.match(body, /nudgeFailedAt = 'commit'/, 'a failed commit is recorded as such');
   assert.match(body, /nudgeFailedAt = 'push'/, 'a failed push is recorded as such');
+  assert.match(body, /nudgeFailedAt = null/, 'and a successful nudge clears it');
 
-  const neverAppeared = source.slice(source.indexOf("outcome === 'never_appeared'"));
-  const message = neverAppeared.slice(0, 1800);
-  assert.match(message, /nudgeFailedAt === 'push'/, 'the message must branch on which step failed');
-
-  // The push case must offer the recovery, not forbid it.
-  const pushBranch = message.slice(message.indexOf("nudgeFailedAt === 'push'"));
-  const pushCase = pushBranch.slice(0, pushBranch.indexOf(': `No checks ever appeared'));
-  assert.match(pushCase, /git push/, 'the push case names the command that recovers it');
-  assert.doesNotMatch(
-    pushCase,
-    /will NOT help/,
-    'the push case must not repeat the commit-failed advice — re-running ship DOES help here'
-  );
+  // And the record has to REACH the decision, or the two cases collapse.
+  const idx = code.indexOf("outcome === 'blocked_conflicting'");
+  const branch = code.slice(idx, code.indexOf("if (wait.outcome === 'timed_out_pending')", idx));
+  assert.match(branch, /nudgeFailedAt,?/, 'the recorded step is handed to the message builder');
 });
 
 test('LOOP_ENGINEERING names BOTH causes of a checkless PR, and a remedy for each', () => {
