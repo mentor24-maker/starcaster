@@ -1,3 +1,32 @@
+## 2026-09-07 — A drop shadow can now be pointed, not just nudged (#645)
+
+A shadow under a picture was set by two numbers: how far right it sat, and how
+far down. That is fine for nudging one a few pixels, and awkward for the thing
+people actually want, which is to swing the shadow round to the other side of
+the picture while keeping it the same distance away. Doing that meant working
+out two new numbers in your head.
+
+There are now two more controls beside the old ones — **Shadow Angle**, which
+way it falls, and **Shadow Distance**, how far out. All four are live at the
+same time and they move together: pick an angle and the old two change to
+match, type into the old two and the angle and distance follow. Both places
+that frame a picture get them, the image module and the Carousel, from one
+shared control so the two can never grow apart.
+
+Nothing new is saved. The angle and the distance are worked out from the two
+numbers already stored, each time the panel is opened, so there is still one
+answer to where a shadow sits rather than two that could disagree. That is also
+what makes this safe on sites already running: every shadow anyone has ever
+saved keeps its exact look, and the check that photographs pages before and
+after confirmed it — a picture with a shadow at each of the four quarters comes
+out pixel for pixel identical to the version live today.
+
+The one thing that took care was the distance dial reaching further than the
+two numbers do. A shadow parked in the far corner is 57 pixels away even though
+neither number goes past 40. Had the dial stopped at 40, opening that panel
+would have shown the wrong figure and quietly pulled the shadow in — a live page
+changing because somebody looked at it. It goes to 57.
+
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 
 When one of the build sessions dies partway through a job — the machine goes to
