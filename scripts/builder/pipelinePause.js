@@ -843,6 +843,66 @@ function strandedBuildDestination(buildStartAction, { unlookedSeats = '' } = {})
 }
 
 /**
+ * Where a stranded build belongs ONCE THE DISK HAS ALSO BEEN LOOKED AT.
+ *
+ * WHY THIS IS A SECOND FUNCTION AND NOT A FLAG ON THE FIRST (2026-09-06, task
+ * 86bbvj44f). `strandedBuildDestination` answers from a PULL REQUEST lookup,
+ * which cannot see a worktree with seven uncommitted files in it. The stranded
+ * sweep closed that hole by taking a local reading as well — but when the
+ * reading says work exists the sweep's answer is to LEAVE THE TICKET IN
+ * "Building" and print where the work is, which `pass-reconcile` may never do:
+ * its entire purpose is to un-hide a ticket that is invisible there.
+ *
+ * So the two callers genuinely need different answers to the same reading, and
+ * the reading itself — `strandedLocalWork.findWorkInProgress` — stays the one
+ * definition both share. This is the mapping for the caller that must always
+ * move the ticket somewhere claimable:
+ *
+ *   work         REWORK, with the machine, worktree and branch in the note, so
+ *                the next claimant is told where the half-finished build is
+ *                instead of rebuilding it (the 2026-08-20 double-build shape).
+ *   cannot-tell  REWORK too. A machine that should have answered did not, so
+ *                nothing may be asserted absent (DOCTRINE 3.11). Rework is the
+ *                direction that cannot lose work: `build-start` asks the same
+ *                question again before a line is written, and the only thing
+ *                at stake is which queue it waits in.
+ *   none         `strandedBuildDestination`'s answer, unchanged, carrying its
+ *                unlooked-seat caveat. This is the path that must keep
+ *                working — a guard that never lets anything through is the
+ *                mirror-image defect and this repo has shipped it before.
+ *
+ * `describeWork` produces the sentence naming where the work is; it is passed
+ * in rather than imported so this module stays free of `strandedLocalWork`'s
+ * ssh-shaped dependencies, exactly as `pipelineSweep` injects its probe.
+ */
+function reconciledBuildDestination(buildStartAction, local = {}, { describeWork = () => [] } = {}) {
+  const verdict = String(local?.verdict || 'none');
+  const unlookedSeats = String(local?.unlookedSeats || '').trim();
+
+  if (verdict === 'work') {
+    const where = describeWork(local.work || []).join('; ');
+    return {
+      status: 'Rework',
+      why: 'a half-finished build for it is sitting on a machine'
+        + (where ? ` — ${where}` : '')
+        + '. Nothing has been pushed or committed for you: finish it there rather than starting over',
+    };
+  }
+
+  if (verdict === 'cannot-tell') {
+    const blind = String(local?.blindSpots || '').trim();
+    return {
+      status: 'Rework',
+      why: 'whether anything was built for it could NOT be checked'
+        + (blind ? ` — ${blind}` : '')
+        + '. It is in the claim line rather than asserted unbuilt; look there before starting over',
+    };
+  }
+
+  return strandedBuildDestination(buildStartAction, { unlookedSeats });
+}
+
+/**
  * The note left on a ticket the sweep unstuck.
  *
  * A returned ticket with no explanation is how a builder rebuilds work that
@@ -1055,6 +1115,7 @@ module.exports = {
   preservedCount,
   sweepExitCode,
   strandedBuildDestination,
+  reconciledBuildDestination,
   sweptTicketNote,
   resumeAuthorization,
   numericOption,
