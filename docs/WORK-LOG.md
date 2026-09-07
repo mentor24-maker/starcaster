@@ -1,3 +1,34 @@
+## 2026-09-07 — The cleanup found the half-finished work, and the next job branched over it anyway (#644)
+
+Yesterday's fix (#637) taught the overnight cleanup to look on the Macs before
+declaring that nothing had been built for a ticket. It now finds the
+half-finished folder, writes on the ticket which machine and which folder it is
+in, and deliberately leaves the work alone.
+
+What it could not do was stop the next job starting over the top of it. Before a
+session begins work it runs a check whose entire job is to ask "has anybody
+started this already?" — and that check was still asking GitHub, which only sees
+work that has been sent there. A job that wrote code and stopped before sending
+it leaves nothing for GitHub to show. So the check answered "nothing here, go
+ahead", and a second session began a fresh copy of the work, right on top of the
+folder the cleanup had just carefully preserved. The note the cleanup wrote only
+helps somebody who reads it, and the step that acts on it was not reading.
+
+That check now takes exactly the same look at the Macs that the cleanup takes,
+using the same piece of code rather than a second copy of it — so the two can
+never disagree about the same ticket. If it finds unfinished work on the machine
+it is standing on, it refuses and names the folder to carry on in. If the work is
+on the *other* Mac, which it cannot reach into, it refuses differently and says
+where the work is, rather than pretending it can continue it. And if it could not
+get an answer at all, it says so and stops, which is never the same as "there is
+nothing there".
+
+The opposite mistake mattered just as much: a check that refuses everything is a
+production line that has quietly stopped. So the case where there genuinely is
+nothing anywhere still says go ahead, and that is the case that was tested
+hardest — including from the Mac Mini, which has no way to reach into the laptop
+and must not treat that as a reason to refuse every job forever.
+
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 
 When one of the build sessions dies partway through a job — the machine goes to
