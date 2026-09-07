@@ -104,6 +104,17 @@ write any code here. You produce well-formed tasks.
    low | medium | high — and one line on the blast radius.
    ````
 
+   **The task NAME says in plain words what breaks and who feels it.** It is
+   read by the operator scanning a list of seventy, so it has to be legible at
+   a glance; the clever diagnostic sentence goes in the description, where it
+   is useful. Dane, verbatim (2026-09-06): *"your descriptions of tickets is so
+   cryptic and full of fanciful turns of phrases that it is difficult for me to
+   understand which ones are really important and which ones aren't."*
+
+   Good: *"The /tags search box ignores what a visitor types"*.
+   Not: *"Tag search: the query parameter is read but never applied to the
+   predicate"* — true, and it tells him nothing about whether it matters.
+
    Tag each task with the feature/epic name so the queue stays legible.
 
    To rewrite an existing task's description, use the direct script — it
@@ -263,6 +274,35 @@ Two requirements, checked by the review loop on the other end:
     criterion. The 2026-09-02 recency-alarm ticket died precisely there: 189
     real closures showed its proposed threshold firing on eleven nights in
     fourteen.
+
+## A pipeline ticket needs a COST, not a gap
+
+Before filing anything about the pipeline or the loop machinery itself — the
+skills, the scripts, the gates, the schedules, the ClickUp plumbing — ask one
+question: **did a pipeline failure actually cost something observable?** Lost
+work, a dead lane, a silent outage, a wrong merge. If yes, file it and name
+that incident in the description. If no, it is not a ticket, however real the
+finding is.
+
+Measured 2026-09-06: tickets the pipeline filed about itself went from about
+6 a day in mid-August to about 16 a day in early September — faster than the
+queue drains — and the paying work queued behind them. Dane parked 31 of them
+that day; the six that stayed all name a failure that actually happened. So
+*"is this a real finding?"* is the wrong gate. All 31 passed it.
+
+**A gap with no incident goes as one plain line** in the ClickUp doc *The 31
+parked tickets* — `https://app.clickup.com/90141423066/docs/2kydhxeu-814`,
+under **Parked tickets** — saying what breaks and who feels it. If you have no
+route to write that doc, say the line in your report to the operator instead.
+Do not file it.
+
+**This is about the pipeline's tickets on ITSELF.** A defect on a tenant site,
+in the Builder or in the admin app is filed on sight, exactly as before, and
+nothing in this section relaxes the evidence rule above for the ones you do
+file.
+
+Canon: `docs/DOCTRINE.md` §6.24; the same rule in the loop's own terms is
+`docs/LOOP_ENGINEERING.md` → "Parking a finding instead of filing it".
 
 ## Guardrails
 
