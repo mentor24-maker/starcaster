@@ -26,6 +26,98 @@ two numbers do. A shadow parked in the far corner is 57 pixels away even though
 neither number goes past 40. Had the dial stopped at 40, opening that panel
 would have shown the wrong figure and quietly pulled the shadow in — a live page
 changing because somebody looked at it. It goes to 57.
+## 2026-09-07 — The message that told you to do two opposite things at once (#639)
+
+The work above taught `npm run ship` that a pull request can go untested for two
+completely different reasons, and that the cure for one is useless for the
+other. It then went and printed both cures in the same message. The wording was
+assembled in two halves — a paragraph about what it had already tried, and a
+note about what it had found out — and glued together they said "this branch
+needs a new commit" and then, four lines later, "not another commit: pull main
+in". You can do one of those. Nothing on the screen said which.
+
+That is the exact failure this whole piece of work exists to prevent — advice
+that cannot work, handed to somebody who has no way to tell — reproduced inside
+the fix for it. So the repair is not a better paragraph. There is now one place
+that writes this message, it picks its advice from a table, and there is exactly
+one slot for advice to go in. A future edit cannot add a second one by accident,
+because there is nowhere to put it.
+
+While it was being rebuilt, two more things got sorted out. GitHub's opinion
+about whether a branch conflicts is a cached guess and it is wrong here often
+enough to be notorious — it was wrong about this very pull request — so ship now
+asks *git*, on the spot, and the two answers together tell it which of three
+situations it is actually in: a real conflict to resolve by hand, a branch that
+is genuinely behind and needs main pulled in, or GitHub simply holding a stale
+answer, where pulling main in does nothing at all and what is needed is a nudge
+to make it recompute. Telling those apart matters because ship already pulls
+main in as its first step, so the stale-answer case was the one that could send
+you round in a circle. And if one of the non-testing services on a pull request
+has failed — a preview deployment, say — the message now names it, because
+nothing else would have.
+
+## 2026-09-06 — A pull request that quietly gets no testing at all, and the fix that could not work (#639)
+
+Sometimes a pull request opens and GitHub never runs any of its tests. Nothing
+says so. The page looks like one whose tests simply have not started yet, so
+whoever is watching waits — and nothing ever comes, because nothing was ever
+going to. Work that is finished then sits there unmergeable, because the safety
+gate quite rightly refuses to merge anything nothing has tested.
+
+We already knew one way this happens, and had a fix for it. What we did not know
+is that there is a second way, it looks exactly the same from outside, and the
+fix for the first one does nothing at all for it.
+
+The second way is a merge conflict. Our tests run against the branch *combined
+with* the live site's code — that is the only honest thing to test — and if
+GitHub thinks the two disagree, it cannot build that combination, so it declines
+to run anything. Silently. That is what happened on 6 September: two lots of
+work were pushed eleven minutes apart and neither got a single test, while other
+pull requests in the same repository were being tested normally the whole time.
+The known fix is to push a tiny empty commit to prod GitHub into noticing — and
+it was tried, and it did nothing, because the new commit did not merge either.
+What actually fixed it was pulling the live site's latest code into the branch.
+The moment that happened, the tests started within seconds.
+
+So `npm run ship` now asks GitHub *why* the tests are missing before it settles
+in to wait. If the answer is "this branch conflicts", it stops immediately and
+tells you to pull main in, and says in as many words that the empty-commit trick
+is not the fix here. It is careful about one thing: for the first few seconds
+after any push GitHub genuinely has not worked out yet whether a branch
+conflicts, and treating that "don't know yet" as a conflict would have made ship
+give up on almost every healthy branch — so it asks again instead of guessing.
+It is also careful to only ask while *no* test has appeared, because a branch can
+go stale after its tests have already run and passed, and a green board must
+never be reported as blocked.
+
+The written instructions now carry both causes side by side with a one-command
+way to tell them apart, so the next person to meet a silent pull request does not
+have to work it out from scratch, and does not spend twenty minutes applying the
+wrong remedy.
+
+**And then the review caught that all of the above could never actually fire.**
+The new check waited for a pull request with *no test results on it at all*, and
+a pull request here never has none: Vercel, the service that builds the preview
+link, posts its own two rows onto every single one, and they go green on their
+own. So the page for a pull request that had run nothing showed a tidy little
+board of passes. The check looked at that board, saw results, and concluded the
+testing had finished — the exact opposite of the truth, and it never once asked
+GitHub the question the whole change exists to ask.
+
+The same mistake was quietly hiding something worse that had been there all
+along: because those Vercel rows count as passes, `npm run ship` would read a
+pull request with **no testing whatsoever** as fully green and go ahead and try
+to merge it. GitHub itself refused, which is the only reason this never did any
+damage.
+
+Both are fixed by teaching the code the difference between our own tests and
+somebody else's status message — a real test run belongs to one of our test
+workflows and says so; an outside service's row does not. Now "no tests" means
+"none of *ours*", which is what it always meant in English. One more nicety: a
+conflict has to be confirmed by a second reading a moment later before ship acts
+on it, because GitHub caches that answer and can briefly still report the
+conflict you have *just this second fixed* — which would have had ship telling
+you to go and do the thing you had already done.
 
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 
