@@ -1964,3 +1964,209 @@ test('a type this fake cannot check still throws rather than being read past', (
     /cannot check a value against/,
   );
 });
+
+// ── A falsy enum value coerced to the default under a 201 (86bbmpj9r) ───────
+//
+// Follow-up from the review pass on this ticket's parent (86bbjv681, PR #422).
+// Not a blocker there, and the same family of failure that ticket spent six
+// rounds closing: an input the caller did supply, replaced by a value they
+// never asked for, reported as a success.
+//
+// The two create paths substituted their default with `||`, which reads
+// `false` as "not supplied" and swaps the default in BEFORE the value is ever
+// validated. Both update paths had always used `readField(...).present` and
+// refused `false` correctly, so the same junk was a 400 on one path and a 201
+// on the other — which is what makes this worth fixing rather than documenting.
+
+test('a falsy layerRole is refused, not silently replaced with the default', async () => {
+  const { sessions, sources, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+
+    // BEFORE: `normalizeLayerRole(suppliedRole.value || 'reference')` answered
+    // ok/201 for both of these and stored 'reference'. Reproduced against the
+    // fake and, on the ticket, against real Postgres with the row read back.
+    for (const junk of [false, 0, '', null]) {
+      const created = await sources.createSource(
+        { sessionId: session.id, layerRole: junk }, SCOPE_A);
+      assert.equal(created.ok, false,
+        `layerRole: ${JSON.stringify(junk)} was accepted and stored `
+        + `'${created.ok ? created.data.layerRole : ''}' — a value the caller never sent`);
+      assert.equal(created.status, 400);
+      assert.match(created.error, /layerRole must be one of/);
+    }
+
+    // The default itself must survive the fix: ABSENT is the only thing that
+    // means "use the default", and it still does.
+    const defaulted = await sources.createSource({ sessionId: session.id }, SCOPE_A);
+    assert.equal(defaulted.ok, true, defaulted.error);
+    assert.equal(defaulted.data.layerRole, 'reference');
+  } finally {
+    restore();
+  }
+});
+
+test('a falsy state is refused on BOTH create paths, matching their updates', async () => {
+  const { sessions, sources, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+
+    // The ticket named createSession; createSource had the same defect in the
+    // same shape, found while reproducing it. `safeText(false, 40)` is '' and
+    // `'' || 'new'` is 'new', so both stored 'new' under a 201.
+    for (const junk of [false, 0, '', null]) {
+      const source = await sources.createSource(
+        { sessionId: session.id, state: junk }, SCOPE_A);
+      assert.equal(source.ok, false, `createSource state: ${JSON.stringify(junk)} was accepted`);
+      assert.equal(source.status, 400);
+
+      const created = await sessions.createSession({ title: 't', state: junk }, SCOPE_A);
+      assert.equal(created.ok, false, `createSession state: ${JSON.stringify(junk)} was accepted`);
+      assert.equal(created.status, 400);
+    }
+
+    const defaulted = await sessions.createSession({ title: 't' }, SCOPE_A);
+    assert.equal(defaulted.ok, true, defaulted.error);
+    assert.equal(defaulted.data.state, 'new');
+  } finally {
+    restore();
+  }
+});
+
+/**
+ * The rule, stated as a rule rather than as four examples.
+ *
+ * `false` is the only value that is both falsy and not blank, so it is the one
+ * that slipped through — every other junk value was already a 400 by accident
+ * of `safeText` stringifying it. A test that only pinned `false` would go green
+ * again the moment someone reinstated `|| 'default'` for a different field, so
+ * what is asserted is that CREATE and UPDATE give the same verdict on the same
+ * input. That is the property; the examples are how it is measured.
+ */
+test('create and update agree on every junk enum value, which is the actual rule', async () => {
+  const { sessions, sources, restore } = withDb();
+  try {
+    const session = await seedSession(sessions);
+    const seed = await sources.createSource(
+      { sessionId: session.id, layerRole: 'subject' }, SCOPE_A);
+    assert.equal(seed.ok, true, seed.error);
+
+    for (const junk of [false, 0, '', 'bogus', {}]) {
+      const created = await sources.createSource(
+        { sessionId: session.id, layerRole: junk }, SCOPE_A);
+      const patched = await sources.updateSource(seed.data.id, { layerRole: junk }, SCOPE_A);
+      assert.equal(created.ok, patched.ok,
+        `createSource and updateSource disagree about layerRole: ${JSON.stringify(junk)} `
+        + `(create ok=${created.ok}, update ok=${patched.ok})`);
+      assert.equal(created.status, patched.status);
+    }
+  } finally {
+    restore();
+  }
+});
+
+/**
+ * The last of the four minor items on 86bbmpj9r.
+ *
+ * `isDuplicateHashError` OR'd three signals together, so the bare substring
+ * `duplicate key` matched on its own — meaning ANY unique violation on this
+ * table would be reported as "already in the catalog for this project (same
+ * content hash)", a message about a column the collision never touched. Only
+ * the primary key can reach it today (a gen_random_uuid collision), which is
+ * why it was latent; slice 2/8 adds the second unique index that makes it live.
+ */
+test('a unique violation on a DIFFERENT index is not called a duplicate hash', () => {
+  const { isDuplicateHashError, CONTENT_HASH_INDEX } = require('../../lib/videoSourcesStore.js');
+
+  const other = {
+    status: 409,
+    error: 'duplicate key value violates unique constraint "video_sources_pkey" (23505)',
+    raw: { code: '23505', constraint: 'video_sources_pkey' },
+  };
+  assert.equal(isDuplicateHashError(other), false,
+    'a primary-key collision was reported as a duplicate content hash');
+
+  // The one it IS still matches, by name, under both shapes PostgREST can send
+  // it: the constraint named in the message, and named only in the payload.
+  const inMessage = {
+    status: 409,
+    error: `duplicate key value violates unique constraint "${CONTENT_HASH_INDEX}"`,
+  };
+  assert.equal(isDuplicateHashError(inMessage), true);
+
+  const inPayload = {
+    status: 409,
+    error: 'duplicate key value violates a unique constraint',
+    raw: { code: '23505', constraint: CONTENT_HASH_INDEX },
+  };
+  assert.equal(isDuplicateHashError(inPayload), true);
+
+  // And the index this matcher names must be the one the SQL actually creates,
+  // or every assertion above is pinned to a string the database never sends.
+  const sql = fs.readFileSync(SQL_PATH, 'utf8');
+  assert.match(sql, new RegExp(`create unique index[^;]*${CONTENT_HASH_INDEX}`, 'i'));
+});
+
+/**
+ * The fourth minor item on 86bbmpj9r, and the one nothing can reach through
+ * the API.
+ *
+ * `createSession` read `readField(input, 'title').value` and
+ * `readField(input, 'state').value` without checking `.ok`, unlike every other
+ * call site in either store. It is safe ONLY because neither field has a
+ * distinct snake_case spelling — `snakeCase('title')` is `'title'`, so
+ * `readField` can never return its supplied-twice refusal for them, and there
+ * is no input that makes this misbehave today. It becomes a live bug the
+ * moment a field like `recordedAt` joins SESSION_CREATE_FIELDS and its 400 is
+ * swallowed into an `undefined` value.
+ *
+ * So the property is asserted where it lives — in the source — rather than
+ * with a test that cannot fail. A test that can only pass is the thing this
+ * ticket's parent spent six rounds removing.
+ */
+test('every readField in the create paths has its .ok checked', () => {
+  for (const [file, start, end] of [
+    ['../../lib/videoSessionsStore.js', 'async function createSession', 'async function getSessionById'],
+    ['../../lib/videoSourcesStore.js', 'async function createSource', 'async function getSourceById'],
+  ]) {
+    const src = fs.readFileSync(path.join(__dirname, file), 'utf8');
+    const from = src.indexOf(start);
+    const to = src.indexOf(end);
+    assert.ok(from >= 0 && to > from, `${file}: could not find ${start}`);
+    // Comments in these functions quote the defect by name, so they are not the
+    // subject; only executable lines are.
+    const body = src.slice(from, to).split('\n')
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join('\n');
+    assert.ok(body.includes('readField('), `${file}: ${start} no longer reads any field`);
+    assert.doesNotMatch(
+      body,
+      /readField\([^)]*\)\s*\.\s*(value|present)/,
+      `${file}: ${start} reads a readField result inline, so its 400 is discarded`,
+    );
+  }
+});
+
+/**
+ * And the same question for the DEFAULTS, which is the ticket's main fix.
+ *
+ * `suppliedX.value || 'default'` is the whole defect: it reads `false` as "not
+ * supplied" and substitutes before validating. Pinned as a source property
+ * because it can reappear on any field added later — where the behavioural
+ * tests above would not be looking, and would still be green.
+ */
+test('no create path substitutes a default with || on a readField value', () => {
+  for (const file of ['../../lib/videoSessionsStore.js', '../../lib/videoSourcesStore.js']) {
+    const src = fs.readFileSync(path.join(__dirname, file), 'utf8');
+    for (const line of src.split('\n')) {
+      // Comments explain the defect by name; only real code is the subject.
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue;
+      assert.doesNotMatch(
+        line,
+        /supplied\w*\.value\s*\|\|/,
+        `${file}: a default is substituted by truthiness, so a falsy value is `
+        + `silently replaced instead of validated: ${line.trim()}`,
+      );
+    }
+  }
+});
