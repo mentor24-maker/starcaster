@@ -1,4 +1,4 @@
-## 2026-09-07 — "Two headers on every new page" was one header placed twice (#PRNUM)
+## 2026-09-07 — "Two headers on every new page" was one header placed twice (#642)
 
 Every page built from the Delray site's main template came up with two header
 bars, one of them named after a section everyone believed had been retired
