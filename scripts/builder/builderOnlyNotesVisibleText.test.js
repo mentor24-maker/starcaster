@@ -19,6 +19,20 @@ const { visibleText, BUILDER_PHRASES } = require('../check_builder_only_notes.cj
  * A false positive is the expensive direction here: it teaches people to reach
  * for SKIP_CONVENTIONS, and then the check is off for everything. So the
  * phrases are tested against the text a visitor would SEE — not the raw line.
+ *
+ * BOTH DIRECTIONS ARE PINNED BELOW, and for one round only the first was.
+ * The original fix kept a short allow-list of "visible" attributes and blanked
+ * every other `name="…"` pair — which silently included ordinary React props
+ * carrying visitor copy, a shape that appears throughout the scanned files:
+ *
+ *   caught on main, MISSED by the allow-list:
+ *     <EmptyState message="No posts found. Add posts in the Messaging section." />
+ *     <Note text="Set a Form ID in module settings" />
+ *
+ * Both are landmine 16's own example phrases. The tests here only asserted
+ * that the four false positives stayed clean, so the gate got narrower with
+ * nothing watching (round-2 review of this ticket). It is deny-by-default now
+ * — only machinery is blanked — and the recovered direction has its own test.
  */
 
 const hits = (line) => BUILDER_PHRASES.some((re) => re.test(visibleText(line)));
@@ -54,4 +68,32 @@ test('machinery attributes are stripped, values and all', () => {
   assert.equal(
     visibleText('<p className={`builder-${kind}-module`}>Coming soon.</p>'),
     '<p className=>Coming soon.</p>');
+});
+
+test('a phrase passed as a PROP is still caught — the strip is deny-by-default', () => {
+  // The regression the round-2 review measured, verbatim. A component prop can
+  // be called anything, so an allow-list of "visible" attributes can never be
+  // complete; only the list of things a visitor definitely cannot read can be.
+  assert.equal(
+    hits('<EmptyState message="No posts found. Add posts in the Messaging section." />'), true);
+  assert.equal(hits('<Note text="Set a Form ID in module settings" />'), true);
+  // Any prop name at all, not just the two the review happened to name.
+  assert.equal(hits('<Empty emptyText="Add posts in module settings" />'), true);
+  assert.equal(hits('<Card caption="Custom form builder coming soon" />'), true);
+});
+
+test('machinery keeps its value blanked even when a phrase is hiding in it', () => {
+  // The other direction of the same rule: these cannot reach a reader, so a
+  // phrase inside one is not a leak and must not block a commit.
+  assert.equal(hits('<a href="/help/add-tags-in-the-messaging-section">Tags</a>'), false);
+  assert.equal(hits('<div data-hint="Set a Form ID in module settings" />'), false);
+  assert.equal(hits('<div className="builder-note" id="set-a-form-id-in-module-settings" />'), false);
+});
+
+test('aria-label and aria-description are read to a person, so they stay in scope', () => {
+  // aria-* is machinery as a family, with two exceptions: a screen-reader user
+  // RECEIVES these two, which makes them text a person reads.
+  assert.equal(hits('<button aria-label="Set a Form ID in module settings" />'), true);
+  assert.equal(hits('<div aria-description="Add tags in the Messaging section" />'), true);
+  assert.equal(hits('<div aria-controls="add-tags-in-the-messaging-section" />'), false);
 });

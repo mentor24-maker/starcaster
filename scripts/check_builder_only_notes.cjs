@@ -82,48 +82,63 @@ function sh(cmd) {
 }
 
 /*
- * Attributes whose value IS text a visitor reads. Everything else on a JSX
- * line — className, href, style, data-* — is machinery, and matching against
- * it is how the "coming soon" rule below turned every `builder-*` CSS class
- * into evidence that a line names our tooling:
+ * Attributes that are MACHINERY — the value is never read by a visitor, so a
+ * phrase found inside one is not a leak. Everything else on a JSX line is kept
+ * and tested.
+ *
+ * The list is deny-by-default on purpose, and it was allow-by-default for one
+ * round (ticket 86bbvqcbk, round-2 review). Blanking every attribute except a
+ * short "visible" list also blanked ordinary React props that carry visitor
+ * copy, which is a shape that appears throughout the scanned files:
+ *
+ *   caught on main, MISSED by an allow-list:
+ *     <EmptyState message="No posts found. Add posts in the Messaging section." />
+ *     <Note text="Set a Form ID in module settings" />
+ *
+ * Both phrases are landmine 16's own examples. A prop name cannot be predicted
+ * — message, text, label, emptyText, caption, whatever the component chose —
+ * so the only list that can be complete is the list of things a visitor
+ * definitely cannot read.
+ *
+ * What this list has to keep out is the case it was added for: className etc.
+ * turned every `builder-*` CSS class into evidence that a line "names our
+ * tooling", so the coming-soon rule matched ordinary tenant copy —
  *
  *   no     <p>Coming soon.</p>
  *   MATCH  <p className="builder-public-site-empty">Coming soon.</p>      <- wrong
  *   MATCH  <div className="builder-preview-module">Our clubhouse is coming soon.</div>
  *
- * "Our new clubhouse is coming soon" is ordinary copy for a tenant site, and
- * the gate would have blocked it the first time it landed on a line carrying a
- * builder- class (ticket 86bbvqcbk, finding 2). So the phrases are tested
- * against the text a visitor would SEE. The allow-list is deliberately not
- * "strip all attributes": a leak pasted into a placeholder= or an aria-label=
- * reaches the visitor just as surely as one between the tags.
+ * scripts/builder/builderOnlyNotesVisibleText.test.js pins BOTH directions:
+ * those four stay clean, and a phrase passed as a prop is still caught.
  */
-const VISIBLE_ATTRS = new Set([
-  'placeholder', 'title', 'alt', 'label', 'aria-label', 'aria-description', 'value', 'content',
+const MACHINERY_ATTRS = new Set([
+  'classname', 'style', 'href', 'src', 'srcset', 'key', 'id', 'ref', 'type', 'role',
+  'target', 'rel', 'name', 'htmlfor', 'width', 'height', 'loading', 'method', 'action',
 ]);
 
-/*
- * JSX attribute: name = "…" | '…' | {…}.
+/**
+ * Is this attribute machinery — something a visitor can never read?
  *
- * The brace form allows ONE level of nesting, because a computed class is
- * usually a template literal — `className={`builder-${kind}-module`}` — and a
- * flat [^{}] run stops at the `${`, leaves the whole attribute on the line and
- * hands the "names our tooling" half of the coming-soon rule the two words it
- * was looking for. A test in scripts/builder/ pins that exact case. Deeper
- * nesting than one level is not handled and does not need to be: this is a
- * heuristic over source text, and the render sweep
- * (scripts/check_live_placeholders.cjs) is what catches what a heuristic
- * cannot.
+ * `data-*` always is. `aria-*` mostly is, but aria-label and aria-description
+ * are spoken to a screen-reader user, so they are text a person receives and
+ * stay in scope.
  */
+function isMachineryAttr(name) {
+  const attr = name.toLowerCase();
+  if (attr === 'aria-label' || attr === 'aria-description') return false;
+  if (attr.startsWith('data-') || attr.startsWith('aria-')) return true;
+  return MACHINERY_ATTRS.has(attr);
+}
+
 const ATTR = /([A-Za-z][A-Za-z0-9_:-]*)\s*=\s*("[^"]*"|'[^']*'|\{(?:[^{}]|\{[^{}]*\})*\})/g;
 
 /**
  * The part of a line a visitor would actually read: text between the tags,
- * plus the value of any attribute that renders as text.
+ * plus every attribute value that is not machinery.
  */
 function visibleText(line) {
   return line.replace(ATTR, (match, name) =>
-    (VISIBLE_ATTRS.has(name.toLowerCase()) ? match : `${name}=`));
+    (isMachineryAttr(name) ? `${name}=` : match));
 }
 
 /**
