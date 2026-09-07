@@ -21,6 +21,257 @@ Checked by reading the actual database row before and after, rather than by
 looking at the screen: the same batch that used to store nothing now stores the
 template, and the old column still holds exactly what it always did, so nothing
 else changes behaviour.
+## 2026-09-06 — Text you had typed could vanish from the Builder, two different ways (#632)
+
+Back on 29 August, two odd things happened while the Delray header was being
+worked on. You added a paragraph reading "Wut?" to the home page and the
+Builder showed the box empty — even though the text really was saved. And a
+"Blog" heading you had put on the site header quietly went blank. Both were
+written down at the time and neither had an explanation.
+
+They turn out to be the same two boxes — the two typing boxes the Builder uses
+for rich text — and neither of the guesses on the ticket was right. The saving
+side was innocent all along: whatever the browser sends, the server keeps it,
+for every kind of module. There are now twenty-one tests that hold it to that,
+which is what proved the trouble was happening in the browser before anything
+reached the database.
+
+The first fault: the typing box keeps a note of the last thing it sent out, so
+that your own keystrokes do not bounce back and throw the cursor to the end of
+the line. But it was using that note to decide whether to show you a *new*
+value too — and since the box is holding "the last thing it sent" during every
+moment you are not actually typing, a value arriving from anywhere else got
+ignored almost every time. A box that opened empty stayed empty no matter what
+the page really held. It now checks what is actually in the box instead, which
+leaves your cursor alone and still lets a genuine change through.
+
+The second fault is the nastier one, because it destroyed work rather than
+hiding it. When the Builder loads text into a box behind the scenes, that quiet
+load was being recorded in the undo history as though you had typed it. So a
+single Ctrl+Z undid the *loading*, and the box then reported itself as empty —
+and empty got saved over your heading. That also explains why only the heading
+went blank while the buttons beside it were fine: the heading is the only one
+of them that uses a rich-text box at all. Loading is not typing, so it no
+longer goes in the undo history.
+
+While in there, one more: editing a heading through the `</>` HTML view and
+switching back used to throw the edit away without a word. It sticks now — and
+writing the test for it turned up that the first attempt at this fix did not
+actually work. Switching back re-reads the markup you typed, which can legally
+change it (typing `<b>` gives you the same bold text written as `<strong>`), and
+the box was only told to speak up in the rare case where it had not already been
+brought up to date. So the page could end up holding one spelling of your
+heading while you were looking at another. It now says plainly what it is
+showing, every time you switch back.
+
+**Correcting the earlier version of that last sentence, which was only half
+true.** It said the `</>` view now speaks up every time you switch back — true
+of the heading box, which is where the fix was made, and not of the ordinary
+text box, which is the one you use most. Worse, fixing the *first* fault above
+is what broke it: once the text box compares against what it is really showing
+rather than a remembered note, it gets brought up to date on every keystroke in
+the `</>` view, so by the time you switch back there is nothing left for it to
+announce. Typing `<b>Blogging</b>` there left the page holding `<b>` while the
+screen showed `<strong>` — and with markup the box cannot keep at all, the two
+drifted apart outright. That is the same defect this ticket set out to fix,
+newly created in the busiest module in the Builder. The text box now announces
+its own reading in exactly the way the heading box does.
+
+One more, in both boxes: opening the `</>` view and closing it again **without
+typing anything** used to count as an edit — it rewrote your text into the
+box's preferred spelling and marked the page as changed. Looking is not
+editing. On a shared section that rewrite is the sort of thing that gets pushed
+out to every page using it, so a read-only look now leaves everything alone,
+including anything that arrived while the view was open.
+
+The tests are the reason this took three rounds. The first set proved the sync
+helper and the server, both of which were fine; nothing failed if you put the
+old broken behaviour back. There are now tests that open the two real typing
+boxes, put a value into them and read both what appears on screen *and* what
+the page is told to save — checking only the screen is exactly how the third
+fault got through. Each fix was put back the wrong way on purpose to watch the
+right test fail before it was believed, and the walkthrough in the real Builder
+was checked the same way: typed into the `</>` view of a real text module, saved
+the page, read what the save actually carried, then put the old code back and
+watched the two disagree.
+## 2026-09-04 — The machine can now merge its own tooling overnight, within a boundary Dane drew (#599)
+
+Overnight on 3 September, nine pieces of finished work were merged and the
+automatic merge lane merged none of them. Every one of those merges was Dane's
+own hand on a button, and the times show it: a cluster while he was up, then
+three and a half hours of nothing, then a merge at 4:29am when he happened to be
+awake, then nearly four more hours of nothing. Seven hours of a ten-hour night
+with no merges at all. The rate at which work reached the live site was not a
+property of the pipeline; it was a property of his sleep schedule.
+
+The cause was narrow and correct behaviour. The automatic lane only accepts
+changes where every file is a test or a document, and that night the pipeline
+had been working almost entirely on itself — on the scripts that run the
+pipeline. Not one of those changes could ever have qualified, so the lane
+considered them and correctly declined, every ten minutes, all night.
+
+The fix is a second lane for the pipeline's own tooling. Dane picked the
+boundary himself rather than accepting the one that was proposed: scripts,
+documents and tests only, with the shared library folder deliberately left out,
+because the live web server loads that folder directly and part of it is what
+draws clients' published pages. A bad automatic merge there would reach a
+client's website with nobody in the way.
+
+Building it turned up something the boundary alone did not cover. The scripts
+folder is also where the merging machinery itself lives, and the rule protecting
+that machinery had only ever listed its *tests* — the machinery's own code
+needed no rule while the lane refused everything that was not a test or a
+document. Widening the lane quietly removed that protection, and the very first
+thing it would have done is merge a change to the merge step. So the rule now
+covers the code as well, along with every automated check, every startup script,
+and the git hooks, which have no file extension and would have slipped past
+every existing pattern.
+
+Dane attached one condition to his answer: that the boundary must not be allowed
+to expire silently, because nothing stops a future change from making a script
+reachable from the live server. That is now a check running on every pull
+request. It traces what the server actually loads and fails if anything
+auto-mergeable turns up in there, naming the exact import that did it.
+
+Two numbers worth recording. Of 413 files under scripts, 63 are now permanently
+off-limits to automatic merging and 350 are eligible. And on the fourteen
+changes merged over the 3rd and 4th, this new lane would have merged none of
+them — not because the boundary is wrong, but because that night's work was
+almost entirely the merge machinery itself, which no lane may touch. It would
+have carried five of the last sixty.
+
+One more thing was measured and is not fixed here: the original lane has never
+once armed. In 573 passes since 23 August it considered 640 tickets, announced
+nothing and merged nothing. That is recorded on the ticket and needs its own
+look.
+
+A postscript, and it is the best possible advertisement for the check Dane
+asked for. This work sat on its branch for a day while he considered whether to
+switch it on. Catching the branch up with everything that had landed
+meanwhile, that new check went red straight away: the shared ClickUp helper
+that arrived in the meantime is loaded, through three steps, by the live web
+server — and it in turn loads a small file deciding how long to wait before
+retrying a failed call. That file was automatically mergeable, and it was now
+running on a live path. Nobody did anything wrong; two reasonable changes met
+and the boundary quietly moved. That file is now off-limits to automatic
+merging alongside the door it sits behind. The condition Dane attached to his
+answer caught a real crossing within a day of being written, which is exactly
+what he said it was for.
+
+A second postscript, on 5 September, and it says the same thing twice. Catching
+the branch up again — a second day of waiting, a second batch of other people's
+finished work to absorb — the same check went red again, on two more files.
+Nobody moved the boundary this time either. The same shared ClickUp helper now
+hands off two more decisions: one file holds this machine's spending budget
+against ClickUp's limit, and another decides whether this process is a scheduled
+background job or a session Dane is talking to. Between them they can silence
+every automatic message the pipeline sends, including the lane's own
+announcements and the stop switch — and they sit on the same path from the live
+server that caught the first one. Both are now off-limits to automatic merging.
+Three crossings in two catch-up merges, none of them anybody's mistake: this is
+simply what a boundary drawn by folder does over time, and the reason Dane's
+condition was the right condition.
+
+The other half of this day's work is bookkeeping that is not optional. The
+ratified company doctrine still says this second lane is "not shipped" and still
+lists the shared library folder — the one Dane deliberately excluded — as part of
+it. The pipeline's own engineering notes carry a rule saying that when the two
+disagree, the doctrine wins and the notes are what to fix. Left alone, that rule
+would have instructed the next reader to undo Dane's decision. So the
+disagreement is now written down at that exact rule, in a box that says plainly
+which way it goes and why, and a proposal to amend the doctrine has been filed in
+the vault for Dane to ratify. It asks for four things: record his ruling and the
+reason for the exclusion; state that the protection around the merge machinery
+covers its code and not just its tests; require a check behind any boundary drawn
+by folder; and — the substantive one — change the condition holding this lane
+back so that it stops the lane from *merging* rather than from *existing*. The
+concern behind that condition is right and survives untouched: the older lane has
+still never completed a single announce-wait-merge cycle, so nothing has yet
+shown the objection window works. But holding the code on a branch is not what
+makes that safe. It is the same hold, paid for in repeated catch-up merges, and
+it hides the hold from the switch where everyone looks for it. Dane's answer on
+5 September was to clear the latch and keep the hold, which is exactly that
+distinction.
+
+A third postscript, on 6 September, and this time the check Dane asked for could
+not see the problem — so the branch grew a second one. Dane answered "1" on the
+ticket that morning: merge it now, drop the hold. Catching the branch up before
+doing that pulled in two more days of finished work, and six modules had been
+lifted out of the merge step into files of their own — one that answers "did
+that pull request actually merge?", one that decides which branch may go next,
+its store on disk, one that answers "is this already live?", and the two halves
+of the repair pass that moves tickets between columns when a build dies. Every
+one of them landed inside the lane and outside the list of things the lane may
+not touch. Measured straight after the merge: the machine would have
+auto-merged a change to any of them.
+
+Nobody moved the boundary this time either, and this is the third time in three
+days that sentence has been written. The list of protected machinery is kept by
+hand, and a hand-kept list cannot name a file that did not exist when it was
+written. Refactoring behind a boundary is simply how a boundary expires. Dane's
+condition catches one direction of this — an automatically-mergeable file
+becoming reachable from the live server — and by design it says nothing about a
+file becoming part of the merge step, because the merge step does not run on
+the website.
+
+So there is now a matching check pointing the other way, and it asks two
+questions. Can this file run the command that merges a pull request? And does
+the merge step load it? A file that fails either test must be protected, or
+listed by name with a written reason — three are listed today, all of them
+concerned with naming a pull request rather than merging one. Both halves were
+broken on purpose before being believed: removing the protections put the right
+filenames back on screen, and a fresh throwaway file that runs the merge
+command was caught the moment it appeared. The guard also flagged itself on its
+first run, because its own examples contain real merge commands, and that is
+the correct answer for the correct reason — a file that decides what may merge
+automatically must not merge automatically.
+
+Twenty-two files are newly off-limits, counted rather than estimated: the
+number of automatically-mergeable files in the repository went from 797 to 775.
+They are the six above, the runner behind `npm run ship`, three more the merge
+step consults about conflicts, about retrying, and about whether a "merge"
+comment came from Dane or from a machine, the record of which machine may run
+which job — named by hand in the ratified doctrine, and until now protected
+only by the accident of sitting in a folder the lane does not reach — and each
+of their tests, because a test that decides what merging means governs merging
+just as much as the code does.
+
+A fourth postscript, later on 6 September, from the review that sent this back.
+The new guard asks its question about the merge step — and the pipeline
+protects three kinds of machinery, not one. There is the merge step; there is
+the referee, which decides whether a piece of work passed review at all; and
+there are the checks the work is judged by. Only the merge step was being
+asked what it loads. So the same rot this guard was written to stop was still
+wide open for the other two, and this branch is what exposed it: before the
+wider lane, everything in the scripts folder was refused by accident.
+
+Four files were found that way, and each one decides something the machinery
+above then acts on — what the referee reads back from ClickUp to see whether a
+ticket passed, what counts as a pull request naming its ticket, the trail the
+referee reads, and the checks' own definition of which files are generated by
+the build. All four could have been merged by machine, unwatched.
+
+The review suggested naming the missing files in the guard by hand. They are
+derived instead, from the very rules that already mark those files as
+protected — because a hand-written list of four filenames is the same defect
+one door over: the sixteenth check added to this repository would be protected
+on arrival and what it loads would still never be asked about. Deriving them
+was not a matter of taste. It immediately found a fifth file the suggested
+list would have missed: the checker that verifies asset stamps gets both its
+list of files to check and its method of checking from another file, and that
+file was automatically mergeable — so a machine could have changed what that
+check even looks at.
+
+Seven files are newly off-limits, counted rather than estimated: 775 down to
+768. The lane still carries 167 files, so this did not quietly narrow it into
+uselessness — which is worth stating, because a boundary drawn slightly too
+tight refuses everything and looks exactly like the problem this ticket was
+filed to fix. Broken on purpose in three directions before being believed:
+removing each new protection put the right filenames back on screen; making
+the derivation blind failed with a message saying so rather than passing
+silently; and restoring the old, narrower guard made it report all-clear while
+the files really were mergeable — which is precisely the silence the review
+found, reproduced on demand.
 
 ## 2026-09-06 — Notes and a test left over after the tag-page fix landed elsewhere (#630)
 
