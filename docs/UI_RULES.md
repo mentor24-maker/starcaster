@@ -355,6 +355,51 @@ as a rule first, then gets a checker where one is possible.
   control renders to the RIGHT of its own label, which fails a slipped pair
   without needing anything to measure the outline.
 
+  **The seam between the chrome and the columns, measured since 2026-09-07.**
+  The blind spot above had a twin, one level up: `check_panels` scored the
+  chrome strip as one lattice group and each settings column as another, and
+  **two groups that each agree internally both pass while disagreeing with
+  each other**. Measured on 2026-09-07, 35 of the 37 panels carrying both put
+  their controls on two different vertical lines — from -25px on `image` to
+  +78px on `breadcrumb` — while the check reported a clean pass over all 224
+  panels, as it had for weeks. That is the defect the operator pointed at on
+  2026-08-13: *"notice in the left column how the column width varies
+  arbitrarily between the Settings fields and the Layout fields."*
+
+  `check_panels` compares the two directly now, and the panels known to be
+  staggered are recorded in `scripts/ui/panel-seam-baseline.json`. **That
+  record may only ever shrink:** a staggered panel not in it fails as a new
+  regression, and a panel in it that lines up fails as a stale entry. Every
+  run prints how many are recorded and which ticket owns them, so a bounded
+  check never reads as a clean sweep. Ticket `86bbq065f` empties the file.
+
+  Two things about the geometry, both measured and both counter-intuitive:
+  the chrome is **below** the settings columns on 30 of the 35, not above
+  them (a module with its own settings editor renders the editor first and
+  the shared chrome after it), and a column sitting **beside** the chrome —
+  `carousel`'s Image Border — is a separate lattice by design and is not
+  compared at all. The check names each panel it skips and why, rather than
+  dropping it in silence.
+
+  **Named exemption — the heading and floating-image chromes are flowing
+  bars, not lattice columns.** `.builder-heading-module-chrome` and
+  `.builder-floating-image-module-chrome` are one flowing line of
+  module-level settings (D1/D2). They have no tracks to line anything up
+  with, so the 40px of trailing room and the stretched control that W0 gives
+  a lattice label buy nothing there and cost correctness: when Heading joined
+  the lattice on 2026-08-11 the Background select stretched to 100% of the
+  bar and the word "Alignment" printed on top of it (L5). They are excluded
+  by name from the shared label rule in `src/css/_builder-react-overrides.css`
+  (`.builder-react-root .is-lattice :is(...):not(.builder-heading-module-chrome *,
+  .builder-floating-image-module-chrome *)`).
+
+  **These two are the only chrome exemptions, and the shared
+  `.builder-module-chrome` is deliberately NOT one of them** — it is measured
+  as a lattice group on purpose, and the seam assertion above holds it to the
+  column stacked with it. Recorded here because Panel sweep 7/15 asked for
+  it: until 2026-09-07 both exemptions lived only in a CSS comment, and an
+  undocumented exemption is indistinguishable from an oversight.
+
 ## D — Density and layout of panels
 
 *Umbrella: compact forms — no wasted screen, no scrolling that a better

@@ -39,6 +39,7 @@
  *   npm run seed:ui-fixture           # once
  *   npm run check:panels
  */
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
@@ -461,6 +462,278 @@ function assertCeiling(overflows, width) {
   );
 }
 
+/* ---------------------------------------------------------------------------
+ * THE SEAM — the chrome and the settings column stacked with it
+ * (ticket 86bbw8643, 2026-09-07. The instrument half of 86bbq065f.)
+ *
+ * Everything above measures each lattice group against ITSELF. Two groups
+ * that each agree internally both pass while disagreeing with EACH OTHER,
+ * and that blind spot is not hypothetical: measured on 2026-09-07, 35 of the
+ * 37 panels carrying both a chrome strip and a settings column put their
+ * controls on two different vertical lines — from -25px on `image` to +78px
+ * on `breadcrumb` — while this check reported a clean pass over all 224
+ * panels, as it had for weeks.
+ *
+ * `measure()` already has a cross-group unit for the two editors that opted
+ * in by placing both halves on the `lattice-start` grid line. That is the
+ * FIX declaring itself, so it can only ever measure a panel already fixed:
+ * `feature-cards` and `program-list` are the only two, and they are the only
+ * two that line up. An assertion that can only see the panels that pass is
+ * not an assertion. This one reads geometry instead, so it sees every panel
+ * whether or not it has been fixed.
+ *
+ * WHICH COLUMN IS "THE FIRST SETTINGS COLUMN". Not `columns[0]` — that was
+ * the first thing tried and it is wrong twice over:
+ *
+ *   · The chrome is BELOW the settings columns on 30 of the 35, not above
+ *     them. A module with its own settings editor renders the editor first
+ *     and the shared chrome after it (builder-module-card.tsx). The panels
+ *     with the chrome on top are the minority — `image`, `speech-bubble`,
+ *     `crm-form`, `text` — so an assertion written for "the strip across the
+ *     top" would have been written for a layout most panels do not have.
+ *
+ *   · `carousel` puts its Image Border column BESIDE the chrome, in its own
+ *     track of a three-column editor. Nothing is stacked with the chrome
+ *     there, so there is nothing to share an edge WITH, and comparing them
+ *     reports a 389px "stagger" on a panel that is laid out correctly. A
+ *     side-by-side column is a different lattice by design.
+ *
+ * So: a column is stacked with the chrome when their vertical bands are
+ * DISJOINT — one genuinely above or below the other — and the leftmost such
+ * column is the one that shares the panel's left edge with it. A panel where
+ * no column is stacked is skipped, and named in the note rather than dropped
+ * in silence.
+ * ------------------------------------------------------------------------ */
+function measureSeam(page) {
+  return page.evaluate(() => {
+    const panels = [...document.querySelectorAll('.is-lattice')]
+      .filter((el) => !el.parentElement?.closest('.is-lattice'));
+
+    /*
+     * The box's two track offsets: where its LABEL track starts and where its
+     * CONTROL track starts.
+     *
+     * They are read from different rows on purpose, and that is not a
+     * shortcut. A `full` field spans both tracks by design, so its control
+     * begins in the LABEL track — comparing one would report a stagger on a
+     * row that is obeying the rule. But its LABEL is still an ordinary
+     * occupant of the label track, and on `speech-bubble` the leftmost
+     * column holds exactly one field and it is `full` ("Content"). Excluding
+     * the whole row dropped that panel out of the comparison entirely while
+     * it sat in the baseline as a recorded defect — recorded, and never
+     * looked at, which is the shape of failure this whole check exists to
+     * stop. So the label offset comes from the first labelled row of any
+     * kind, and the control offset from the first row that actually occupies
+     * the control track.
+     */
+    function trackOffsets(root, origin) {
+      const rows = [...root.querySelectorAll('.builder-module-field, .builder-setting-row, .builder-setting-row-full')]
+        // An item manager runs its own lattice (L6a) and is not part of the
+        // panel column's tracks — the same exclusion `measure()` makes.
+        .filter((el) => !el.closest('[data-lattice-pairs]'));
+
+      const or = origin.getBoundingClientRect();
+      const found = { name: null, labelX: null, controlX: null, controlName: null };
+
+      for (const f of rows) {
+        const label = f.querySelector('.builder-module-field-label, .builder-setting-label');
+        if (!label) continue;
+        const lr = label.getBoundingClientRect();
+        if (!lr.width) continue;
+
+        if (found.labelX === null) {
+          found.name = (label.textContent || '').trim() || '(unlabelled)';
+          found.labelX = Math.round(lr.left - or.left);
+        }
+
+        if (found.controlX !== null) continue;
+        if (f.classList.contains('builder-module-field--full')) continue;
+
+        let control = f.querySelector('.builder-module-field-control, .builder-setting-value');
+        if (!control) continue;
+        // A wrapper flattened into the grid (`display: contents`) has no box:
+        // its rect is 0x0 at the viewport origin, which would turn the offset
+        // into a raw coordinate. Descend to the first thing with a box.
+        while (control && control.getBoundingClientRect().width === 0 && control.firstElementChild) {
+          control = control.firstElementChild;
+        }
+        if (!control || control.getBoundingClientRect().width === 0) continue;
+        found.controlName = (label.textContent || '').trim() || '(unlabelled)';
+        found.controlX = Math.round(control.getBoundingClientRect().left - or.left);
+      }
+
+      return found.labelX === null ? null : found;
+    }
+
+    return panels.flatMap((panel, index) => {
+      const panelName = (
+        [...panel.classList].find((c) => c.startsWith('builder-module-editor--'))
+          ?.replace('builder-module-editor--', '')
+        || [...panel.classList].find((c) => c !== 'is-lattice' && c.endsWith('-settings'))
+        || [...panel.classList].find((c) => c !== 'is-lattice')
+        || ''
+      );
+
+      // The chrome's own strip, by DIRECT child — the same selector
+      // `measure()` settled on, and for the same reason: the background
+      // picker brings a strip of its own, and any-descendant would measure
+      // that instead of the chrome.
+      const chromeStrip = panel.querySelector('.builder-module-chrome > .builder-module-field-strip');
+      const columns = [...panel.querySelectorAll('.builder-schema-panel-column')];
+      if (!chromeStrip || !columns.length) return [];
+
+      const cr = chromeStrip.getBoundingClientRect();
+      if (!cr.width || !cr.height) return [];
+
+      const stacked = columns
+        .filter((c) => {
+          const r = c.getBoundingClientRect();
+          if (!r.width || !r.height) return false;
+          // Vertically disjoint — one is genuinely above or below the other.
+          // 2px of slack for sub-pixel rounding, not for judgement.
+          return r.top >= cr.bottom - 2 || r.bottom <= cr.top + 2;
+        })
+        .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+
+      if (!stacked.length) {
+        return [{ index, panelName, besideOnly: true }];
+      }
+
+      const column = stacked[0];
+      const chrome = trackOffsets(chromeStrip, panel);
+      const settings = trackOffsets(column, panel);
+      if (!chrome || !settings) {
+        return [{ index, panelName, nothingToCompare: true }];
+      }
+
+      const bothControls = chrome.controlX !== null && settings.controlX !== null;
+      return [{
+        index,
+        panelName,
+        chromeBelow: cr.top >= column.getBoundingClientRect().bottom - 2,
+        chrome,
+        settings,
+        labelOut: settings.labelX - chrome.labelX,
+        // Null, never 0, when one side has no row in the control track. A 0
+        // here would read as "they agree" on a comparison that never happened.
+        controlOut: bothControls ? settings.controlX - chrome.controlX : null
+      }];
+    });
+  });
+}
+
+/**
+ * The seam verdict, against the recorded baseline.
+ *
+ * A BASELINE, AND WHY IT IS NOT A SILENT CAP. Asserting this outright today
+ * fails 35 panels, which would leave `check:panels` red for every other lane
+ * until 86bbq065f lands — a permanently red gate is a gate everybody learns
+ * to ignore, and that is a worse outcome than the stagger. So the panels
+ * known to be staggered are recorded in `panel-seam-baseline.json`, and this
+ * check enforces movement in one direction only:
+ *
+ *   · a staggered panel that is NOT recorded    -> FAIL, a new regression
+ *   · a recorded panel that now LINES UP        -> FAIL, the record is stale
+ *   · a recorded panel that is still staggered  -> counted, and named on
+ *                                                  every run, green or red
+ *
+ * The second rule is what makes the list shrink rather than rot: a panel
+ * cannot be fixed and left in the record, so the record can only ever get
+ * shorter, and 86bbq065f's pull request empties it. The third is the reason
+ * the whole ticket exists — a bounded check that does not say what it
+ * excluded reads as a clean sweep, which is exactly the report this check
+ * has been filing while the defect was in front of the operator.
+ *
+ * Aggregated BY PANEL NAME, not per instance: `event-calendar` renders twice
+ * on the fixture page. A name is recorded if ANY instance of it is staggered,
+ * and is stale only when EVERY instance lines up — otherwise fixing one of
+ * two copies would report the record as stale and as a regression at once.
+ */
+function assertSeam(seams, width, baseline) {
+  const failures = [];
+  const skipped = [];
+  const byName = new Map();
+
+  for (const s of seams) {
+    const name = s.panelName || `panel #${s.index}`;
+    if (s.besideOnly) {
+      skipped.push(`${name} — every settings column sits BESIDE the chrome, not stacked with it, `
+        + 'so there is no shared edge to hold it to (a side-by-side column is its own lattice)');
+      continue;
+    }
+    if (s.nothingToCompare) {
+      skipped.push(`${name} — the chrome or the column rendered no comparable label/control pair`);
+      continue;
+    }
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push(s);
+  }
+
+  for (const [name, instances] of byName) {
+    const off = instances.filter((s) => s.labelOut !== 0 || (s.controlOut !== null && s.controlOut !== 0));
+    const recorded = baseline.includes(name);
+
+    if (off.length && !recorded) {
+      const s = off[0];
+      const control = s.controlOut === null
+        ? 'its control track could not be compared (no row of either box occupies it)'
+        : `${s.controlOut >= 0 ? '+' : ''}${s.controlOut}px on the control track`;
+      failures.push(
+        `${width}px panel #${s.index} (${name}): the chrome and the settings column ${s.chromeBelow ? 'above' : 'below'} it `
+        + `do not share an edge — the chrome's "${s.chrome.name}" starts its label at ${s.chrome.labelX}, the column's `
+        + `"${s.settings.name}" at ${s.settings.labelX} `
+        + `(${s.labelOut >= 0 ? '+' : ''}${s.labelOut}px on the label track, ${control}). `
+        + 'L8: the panel is one rectangle, so the chrome and the column stacked with it share one lattice. '
+        + 'The mechanism is subgrid onto editor-owned tracks — see THE CHROME AND THE SETTINGS COLUMN SHARE ONE '
+        + 'LATTICE in src/css/_builder-react-overrides.css, which is how feature-cards and program-list do it. '
+        + 'If this panel is a NEW one that has simply never been straightened, add it to '
+        + 'scripts/ui/panel-seam-baseline.json with the others and say so on ticket 86bbq065f.'
+      );
+    }
+
+    if (!off.length && recorded) {
+      failures.push(
+        `${width}px panel #${instances[0].index} (${name}): recorded in panel-seam-baseline.json as staggered, but its `
+        + 'chrome and settings column now share an edge. Take it out of the baseline — the record may only ever '
+        + 'shrink, and a fixed panel left in it is room for the next regression to hide in.'
+      );
+    }
+  }
+
+  /*
+   * A RECORDED PANEL THAT WAS NEVER REACHED IS NOT A PASS.
+   *
+   * Both rules above are driven by what the run measured, so a baseline entry
+   * the run never saw — the module missing from the fixture, its panel
+   * skipped, its name changed — costs nothing and says nothing. That is the
+   * silence this ticket is about, one level down: the record would keep
+   * asserting a defect exists on a panel nobody has looked at since it was
+   * written down. `speech-bubble` was in exactly that state on the first run
+   * of this check.
+   */
+  const unreached = baseline.filter((name) => !byName.has(name));
+
+  /*
+   * Panels held to the LABEL track only. Where one side of the seam has no
+   * row occupying the control track — `speech-bubble`'s leftmost column is a
+   * single `full` field — half the comparison did not happen, and a panel
+   * that passed on half a comparison must not be counted with the ones that
+   * passed on all of it.
+   */
+  const labelTrackOnly = [...byName.entries()]
+    .filter(([, insts]) => insts.every((s) => s.controlOut === null))
+    .map(([name]) => name);
+
+  return {
+    failures,
+    skipped,
+    unreached,
+    labelTrackOnly,
+    compared: byName.size,
+    recordedSeen: [...byName.keys()].filter((n) => baseline.includes(n)).length
+  };
+}
+
 function assertLattice(panels, width) {
   const failures = [];
 
@@ -796,7 +1069,31 @@ function assertColumnGrids(managers, width) {
   return failures;
 }
 
+/*
+ * The recorded stagger. Read rather than imported so a malformed or missing
+ * file is a CANNOT TELL with the filename in it, not a raw JSON stack: the
+ * baseline is the instrument's own calibration, and a check that cannot read
+ * its calibration has not measured anything.
+ */
+const SEAM_BASELINE_PATH = path.join(ROOT, 'scripts', 'ui', 'panel-seam-baseline.json');
+let SEAM_BASELINE;
+try {
+  SEAM_BASELINE = JSON.parse(fs.readFileSync(SEAM_BASELINE_PATH, 'utf8')).staggered;
+  if (!Array.isArray(SEAM_BASELINE)) throw new Error('no "staggered" array');
+} catch (err) {
+  cannotTell('check:panels',
+    `scripts/ui/panel-seam-baseline.json could not be read — ${err.message}.\n\n` +
+    'It records the panels whose chrome and settings column are known not to share\n' +
+    'an edge (ticket 86bbq065f). Without it the seam assertion cannot tell a new\n' +
+    'regression from the backlog, so this run would grade nothing.');
+}
+
 const allFailures = [];
+const seamSkipped = new Map();     // panel name -> the widths it was skipped at
+const seamUnreached = new Map();   // baselined panel name -> the widths it was never seen at
+const seamLabelOnly = new Map();   // panel name -> widths where only the label track was comparable
+let seamCompared = 0;
+let seamRecorded = 0;
 let panelsSeen = 0;
 let cardsSeen = 0;
 let columnGridsSeen = 0;
@@ -851,6 +1148,31 @@ for (const width of WIDTHS) {
     // W9 runs at every width on purpose: a ceiling is only interesting on the
     // wide end, and 1440 alone would let a 1600px-only overflow through.
     allFailures.push(...assertCeiling(await measureWidths(page), width));
+    // The seam runs at every width for the same reason W9 does: these tracks
+    // are `max-content`, so the stagger is content-driven and identical at
+    // 1440 and 1920 today — but a future width-dependent rule would show up
+    // at one width only, and a check that samples one width could not see it.
+    const seam = assertSeam(await measureSeam(page), width, SEAM_BASELINE);
+    allFailures.push(...seam.failures);
+    seamCompared = Math.max(seamCompared, seam.compared);
+    seamRecorded = Math.max(seamRecorded, seam.recordedSeen);
+    // Keyed by name, not summed: three widths would otherwise report three
+    // times the truth, which is the mistake the manager note above already
+    // paid for once (review round 1, 2026-09-05).
+    for (const note of seam.skipped) {
+      const key = note.split(' — ')[0];
+      if (!seamSkipped.has(key)) seamSkipped.set(key, { note, widths: [] });
+      seamSkipped.get(key).widths.push(width);
+    }
+    for (const name of seam.unreached) {
+      if (!seamUnreached.has(name)) seamUnreached.set(name, []);
+      seamUnreached.get(name).push(width);
+    }
+    for (const name of seam.labelTrackOnly) {
+      if (!seamLabelOnly.has(name)) seamLabelOnly.set(name, []);
+      seamLabelOnly.get(name).push(width);
+    }
+
     const columnGrids = await measureColumnGrids(page);
     columnGridsSeen += columnGrids.length;
     allFailures.push(...assertColumnGrids(columnGrids, width));
@@ -927,6 +1249,69 @@ function uncomparableNote() {
     + rows;
 }
 
+/*
+ * WHAT THE SEAM CHECK MEASURED, AND WHAT IT IS STILL LETTING THROUGH —
+ * printed on EVERY run, green or red, including when the record is empty.
+ *
+ * This is the point of ticket 86bbw8643. A bounded check that does not
+ * announce its bound reads as a clean sweep: this check printed
+ * "OK — W0 and W9 hold across 224 panel(s)" for weeks while 35 panels were
+ * visibly staggered, and the pass was read as verification. A recorded
+ * defect that says nothing is the same failure with a JSON file in front of
+ * it, so the count and the owning ticket go out on every single run.
+ */
+function seamNote() {
+  const lines = [];
+  const recorded = SEAM_BASELINE.length;
+
+  if (!seamCompared) {
+    lines.push('[check:panels] NOTE — no panel presented both a chrome strip and a settings column');
+    lines.push('  stacked with it, so the chrome/column seam was not measured at all. That is not a');
+    lines.push('  pass: it means the fixture rendered no such panel (`npm run seed:ui-fixture`).');
+    return lines.join('\n');
+  }
+
+  if (recorded) {
+    lines.push(`[check:panels] NOTE — the chrome/column seam was compared on ${seamCompared} panel(s), of which`);
+    lines.push(`  ${seamRecorded} are RECORDED AS STAGGERED in scripts/ui/panel-seam-baseline.json (${recorded} entries in all).`);
+    lines.push('  Those are a known, open defect owned by ticket 86bbq065f — the chrome and the');
+    lines.push('  settings column stacked with it do not share one left edge. THIS RUN DID NOT');
+    lines.push('  VERIFY THEM; it only held them where they are. A new panel joining them fails,');
+    lines.push('  and so does one of them being fixed and left in the record.');
+  } else {
+    lines.push(`[check:panels] NOTE — the chrome/column seam was compared on ${seamCompared} panel(s) and`);
+    lines.push('  every one of them shares one left edge, with nothing recorded as staggered.');
+    lines.push('  scripts/ui/panel-seam-baseline.json is empty, which is what 86bbq065f was for.');
+  }
+
+  if (seamUnreached.size) {
+    lines.push(`  ${seamUnreached.size} recorded panel(s) were NEVER REACHED by this run, so nothing about them`);
+    lines.push('  was verified — not that they are still staggered, and not that they are fixed:');
+    for (const [name, widths] of seamUnreached) {
+      lines.push(`      \u00b7 ${name} [not seen at ${[...new Set(widths)].join('/')}px]`);
+    }
+    lines.push('    Either the fixture no longer renders that module, or its panel was skipped');
+    lines.push('    for a reason listed below. A record nobody reads is how a defect outlives its ticket.');
+  }
+
+  if (seamLabelOnly.size) {
+    lines.push(`  ${seamLabelOnly.size} panel(s) were held to the LABEL track only — one side of the seam has no`);
+    lines.push('  row occupying the control track, so half the comparison did not happen:');
+    for (const [name, widths] of seamLabelOnly) {
+      lines.push(`      \u00b7 ${name} [${[...new Set(widths)].join('/')}px]`);
+    }
+  }
+
+  if (seamSkipped.size) {
+    lines.push(`  ${seamSkipped.size} panel(s) were SKIPPED, and the reason is not "it passed":`);
+    for (const { note: text, widths } of seamSkipped.values()) {
+      lines.push(`      \u00b7 ${text} [${[...new Set(widths)].join('/')}px]`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
 const code = verdict({ failures: allFailures.length, blind: blind.length });
 
 if (code === EXIT_FAIL) {
@@ -939,7 +1324,8 @@ if (code === EXIT_FAIL) {
       blind.map((b) => `  • ${b.split('\n')[0]}`).join('\n') + '\n'
     );
   }
-  console.error(`\n${uncomparableNote()}\n`);
+  console.error(`\n${uncomparableNote()}`);
+  console.error(`${seamNote()}\n`);
   console.error(
     '\nW0: one label width and one field width per panel. The two numbers live in\n' +
     'src/css/_variables.css (--builder-field-label-w / --builder-field-control-w).\n' +
@@ -957,3 +1343,4 @@ console.log(
 );
 
 console.log(uncomparableNote());
+console.log(seamNote());
