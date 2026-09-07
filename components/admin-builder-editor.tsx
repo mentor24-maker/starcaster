@@ -1,6 +1,7 @@
 "use client";
 
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
+import { buildBulkCreatePageBody } from "@/lib/bulk-create-page-body";
 import {
   ALREADY_UNDONE_MESSAGE,
   confirmUndoMessage,
@@ -2532,16 +2533,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           const response = await builderAdminFetch("/api/admin/pages", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+            // The field list is built by a named function, not inline here:
+            // this path posts to the SINGLE create route, and the template it
+            // was sending went into the legacy column only, so every page a
+            // batch made read "No template" (#635).
+            body: JSON.stringify(buildBulkCreatePageBody({
               name: item.name,
               slug: item.slug,
               templateId,
-              themeId: themeId || undefined,
-              templateKind: "modular",
+              themeId,
               pageBackground: template?.pageBackground ?? createDefaultBackgroundSettings(),
               theme: effectiveTheme,
               layoutSections: templateSections
-            })
+            }))
           });
           const data = await readAdminJson<{ page?: BuilderPageRecord; error?: string }>(response, "Failed to create page.");
           return { name: item.name, slug: item.slug, page: data.page };

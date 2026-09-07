@@ -6957,9 +6957,15 @@ App.acquire = (function () {
             body: JSON.stringify({ templateId, themeId: themeId || undefined, contentModelId, runId, items: [{ name: pageTitle || pageSlug, slug: pageSlug }] }),
           });
         } else {
+          // pageTemplateId is the real "which template was this built from"
+          // column; templateId is the legacy layout NAME column this path has
+          // always written. Sending only the legacy one is why pages created
+          // here read "No template" in Page Details (#635) — the same field
+          // was missing on the Builder's own Bulk Create and on the single
+          // create's server whitelist (#614).
           await api('/api/builder/landing-pages', {
             method: 'POST',
-            body: JSON.stringify({ name: pageTitle || pageSlug, slug: pageSlug, templateId, themeId: themeId || undefined, templateKind: 'modular' }),
+            body: JSON.stringify({ name: pageTitle || pageSlug, slug: pageSlug, templateId, pageTemplateId: templateId, themeId: themeId || undefined, templateKind: 'modular' }),
           });
         }
         closeModal();
