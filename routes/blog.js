@@ -7,6 +7,9 @@ const { getCardTemplate, saveCardTemplate } = require('../lib/blogCardTemplateSt
 const { listTags, listPostsWithTag, renameTag, removeTag } = require('../lib/blogTagsStore');
 const { listRelations, listRelatedPostIds, relatePosts, setRelatedPosts, unrelatePosts } = require('../lib/blogPostRelationsStore');
 const { listImportCandidates, importPosts, IMPORT_BATCH_SIZE } = require('../lib/blogImportStore');
+const { getAdminSession } = require('../lib/projectAdminStore');
+const { readAdminSessionToken } = require('./projectAdmin');
+const { canPreviewDraft, isPublishedPost } = require('../lib/blogDraftPreview');
 const { getPublicProjectById } = require('../lib/projectsStore');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { logActivity } = require('../lib/activityLog');
@@ -134,8 +137,17 @@ async function handle(req, res, pathname, method) {
       : await getPost(id, requestScope(req));
     if (!post) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
     const isPublicSlugRead = bySlug && !req.authUser;
-    if (isPublicSlugRead && String(post.status || '').trim() !== 'published') {
-      return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
+    if (isPublicSlugRead && !isPublishedPost(post)) {
+      // A by-slug read is a public route, so the tenant admin's session is
+      // deliberately not folded into req.authUser (lib/projectAdminApiAuth.js).
+      // "Preview draft" in the Blog Manager opens exactly this address as the
+      // tenant admin, so ask for that session here — and serve the draft only
+      // to an admin of THIS post's project. Everyone else is a visitor: 404,
+      // in the same words, so a draft's existence is not announced (86bbvtzt1).
+      const adminSession = await getAdminSession(readAdminSessionToken(req));
+      if (!canPreviewDraft(post, adminSession)) {
+        return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
+      }
     }
     return sendOk(res, 200, post, { post }), true;
   }

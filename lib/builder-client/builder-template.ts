@@ -3893,7 +3893,7 @@ export function createEmptyModule(
                             showCategories: "true",
                             showTags: "true",
                             showSeoFields: "false",
-                            showAuthorField: "false",
+                            showAuthorField: "true",
                             successMessage: "Post created successfully.",
                             redirectAfterCreate: "",
                             accentColor: "#0f4f8f"

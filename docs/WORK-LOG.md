@@ -44,6 +44,35 @@ watched to fail. The lesson is the one the mega-menu already taught: a check
 that has never been seen to fail is not known to work, and "the words are on
 the page somewhere" is not the same question as "the check can find them".
 
+## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
+
+When one of the build sessions dies partway through a job — the machine goes to
+sleep, a usage limit cuts it off — the ticket it was working on is left in a
+state nobody picks up from. There is a cleanup that runs every so often to hand
+those tickets back to the queue, and before doing so it asks one question: has
+anything been built for this yet?
+
+It was asking that question of GitHub, which can only see work that has been
+sent there. A job that got as far as writing code and not as far as sending it
+lives in a folder on one of the Macs, where GitHub cannot see it at all. So the
+cleanup would return the ticket to the queue with the words "nothing has been
+built for it", and the next session would start the whole job again from
+scratch while two-thirds of it sat finished on the disk.
+
+Half of this was fixed last week, on the version of the cleanup a person runs by
+hand. The half left unfixed was the one that runs on a timer — and that is the
+one that catches these, because it goes first. The scheduled repair ran the
+unfixed cleanup, which moved the ticket, and then ran the fixed one, which found
+nothing left to look at.
+
+Now both look in the same place, using the same code rather than two copies that
+could drift apart. If there is half-finished work on a Mac, the ticket goes back
+marked as needing rework, and the note on it names the machine, the folder and
+the branch — so whoever picks it up walks to the work instead of repeating it.
+If a machine could not be reached to ask, it says so rather than guessing. And
+if there genuinely is nothing anywhere, it goes back to the queue exactly as
+before: a safety check that never lets anything through is just as broken as no
+check at all, and that one was tested by deliberately breaking it.
 ## 2026-09-06 — Bulk Create was throwing away the template it built the pages from (#635)
 
 Bulk Create makes a batch of pages from a template. Every page it made read

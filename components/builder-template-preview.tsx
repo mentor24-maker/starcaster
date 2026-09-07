@@ -16,6 +16,7 @@ import {
 } from "@/lib/media-manager-filters";
 import type { BuilderTemplateSection } from "@/lib/builder-template";
 import { relatedIdsFor, relationChangesForPost, type PostRelationPair } from "@/lib/blog-post-relations";
+import { blogPostViewHref, blogPostViewLink, dateInputToPublishedAt, pickPostPagePath, publishedAtToDateInput } from "@/lib/blog-post-editor-meta";
 import {
   builderBackgroundParallaxActive,
   createDefaultBackgroundSettings,
@@ -2597,11 +2598,59 @@ function resolveBlogPostManagerSettings(settings: Record<string, string>): Recor
     if (autoEdit) resolved.editPageUrl = autoEdit;
   }
 
-  if (!String(resolved.viewPageUrl || "").trim()) {
-    const postPageUrl = String(resolved.postPageUrl || "").trim();
-    resolved.viewPageUrl = postPageUrl || defaultBlogPostViewPath();
-  }
+  // viewPageUrl is deliberately NOT filled with the default here: the manager
+  // resolves a blank one against the pages the site actually has
+  // (usePostPageUrl), and a pre-filled default would read as a choice.
 
+  return resolved;
+}
+
+/**
+ * One probe per project, shared by every module on the page that needs the
+ * post page's address — the manager list and the editor sit side by side and
+ * would otherwise each ask twice.
+ */
+const postPagePathProbes = new Map<string, Promise<string | null>>();
+
+function probePostPagePath(projectId: string): Promise<string | null> {
+  const cached = postPagePathProbes.get(projectId);
+  if (cached) return cached;
+  const probe = pickPostPagePath(async (slug) => {
+    const res = await fetch(
+      `/api/public/page?projectId=${encodeURIComponent(projectId)}&slug=${encodeURIComponent(slug)}`,
+      { credentials: "include" }
+    );
+    return res.ok;
+  });
+  postPagePathProbes.set(projectId, probe);
+  return probe;
+}
+
+/**
+ * The post page's address for links out of an admin module. A module setting
+ * (viewPageUrl, or the older postPageUrl) wins outright. Otherwise the site is
+ * asked which of the known post-page slugs it has — Delray has `/blog-post`
+ * and not the platform default `/blog-post-view`, so links built from the
+ * default there went nowhere (86bbvtzt1). Until the probe answers, and when
+ * the site has neither page, the default stands so nothing is worse than
+ * before.
+ */
+function usePostPageUrl(settings: Record<string, string>): string {
+  const explicit = blogManagerViewBaseUrl(settings, "");
+  const [resolved, setResolved] = useState<string>(explicit || defaultBlogPostViewPath());
+  useEffect(() => {
+    if (explicit) {
+      setResolved(explicit);
+      return;
+    }
+    const projectId = resolveSessionProjectId();
+    if (!projectId) return;
+    let cancelled = false;
+    probePostPagePath(projectId)
+      .then((path) => { if (!cancelled && path) setResolved(path); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [explicit]);
   return resolved;
 }
 
@@ -3211,7 +3260,6 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
   const showSlug = (settings.showSlug ?? "true") !== "false";
   const showFeaturedImage = (settings.showFeaturedImage ?? "true") !== "false";
   const showExcerpt = (settings.showExcerpt ?? "true") !== "false";
-  const showAuthorField = settings.showAuthorField === "true";
   const showCategories = (settings.showCategories ?? "true") !== "false";
   const showTags = (settings.showTags ?? "true") !== "false";
   const showRelatedPosts = (settings.showRelatedPosts ?? "true") !== "false";
@@ -3230,8 +3278,23 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
   const formTitle = isEditMode
     ? "Edit Post"
     : (settings.formTitle || "Create New Post");
+  // Author: hidden on the CREATE form only when the module says so. Editing
+  // always shows it — the byline is a fact about the post on screen, and
+  // there is no "logged-in user" fallback to hide behind (the store writes
+  // whatever the form sends, and nothing else).
+  const showAuthorField = isEditMode || (settings.showAuthorField ?? "true") !== "false";
+  // Where the public post page lives, for the thumbnail link (86bbvtzt1).
+  const viewBaseUrl = usePostPageUrl(settings);
 
   const [values, setValues] = useState<Record<string, string>>({});
+  // The post date, as the picker holds it (a local day) and as the store
+  // had it when the post loaded — the two are compared at save time so an
+  // untouched day never rewrites the stored time of day.
+  const [postDate, setPostDate] = useState("");
+  const [loadedPublishedAt, setLoadedPublishedAt] = useState<string | null>(null);
+  // What is SAVED (slug + status), which is what the thumbnail links to —
+  // never the slug being typed, which is not an address until it is saved.
+  const [savedPost, setSavedPost] = useState<{ slug: string; status: string } | null>(null);
   const [loadingPost, setLoadingPost] = useState(isEditMode);
   const [statusMsg, setStatusMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -3279,6 +3342,10 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
             seoTitle: String(post.seoTitle ?? post.seo_title ?? ""),
             seoDescription: String(post.seoDescription ?? post.seo_description ?? ""),
           });
+          const storedPublishedAt = String(post.publishedAt ?? post.published_at ?? "") || null;
+          setLoadedPublishedAt(storedPublishedAt);
+          setPostDate(publishedAtToDateInput(storedPublishedAt));
+          setSavedPost({ slug: String(post.slug ?? ""), status: String(post.status ?? "draft") });
           // Held as ids until the category list arrives — the field shows
           // slugs, so it cannot be filled in until both are here.
           const catIds = post.categoryIds ?? post.category_ids;
@@ -3417,6 +3484,11 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
       } else {
         delete payload.categoryIds;
       }
+      // Only when the day actually changed (or was cleared): an untouched
+      // field leaves the stored stamp alone, blank on a new draft lets the
+      // store stamp the moment of publishing.
+      const publishedAt = dateInputToPublishedAt(postDate, loadedPublishedAt);
+      if (publishedAt !== undefined) payload.publishedAt = publishedAt;
       const url = isEditMode ? `/api/blog/posts/${encodeURIComponent(editId)}` : "/api/blog/posts";
       const method = isEditMode ? "PUT" : "POST";
       const res = await fetch(url, {
@@ -3438,6 +3510,15 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
       const savedRecord = ((data as Record<string, unknown>)?.data
         ?? (data as Record<string, unknown>)?.post) as Record<string, unknown> | undefined;
       const savedPostId = isEditMode ? editId : String(savedRecord?.id ?? "");
+      if (isEditMode && savedRecord) {
+        // The stored stamp and address may differ from what was sent (the
+        // store fills a date in at publish time and normalises the slug), so
+        // the link and the next save's comparison follow the RESPONSE.
+        const storedNow = String(savedRecord.publishedAt ?? savedRecord.published_at ?? "") || null;
+        setLoadedPublishedAt(storedNow);
+        setPostDate(publishedAtToDateInput(storedNow));
+        setSavedPost({ slug: String(savedRecord.slug ?? ""), status: String(savedRecord.status ?? status) });
+      }
 
       let relationsMsg = "";
       if (showRelatedPosts && savedPostId && relationsLoaded) {
@@ -3475,6 +3556,7 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
       setStatusMsg((isEditMode ? "Post updated successfully." : successMessage) + relationsMsg);
       if (!isEditMode) {
         setValues({});
+        setPostDate("");
         setRelatedIds([]);
         setPickerOpen(false);
         setPickerFilter("");
@@ -3608,18 +3690,35 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
             </div>
           ) : null}
 
-          {showAuthorField ? (
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Author</label>
+          <div style={{ ...fieldStyle, display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+            {showAuthorField ? (
+              <div style={{ flex: "1 1 12rem", minWidth: 0 }}>
+                <label style={labelStyle}>Author</label>
+                <input
+                  style={inputStyle}
+                  type="text"
+                  value={values.author || ""}
+                  onChange={(e) => setField("author", e.target.value)}
+                  placeholder="Author name"
+                />
+              </div>
+            ) : null}
+            <div style={{ flex: "0 1 12rem", minWidth: 0 }}>
+              <label style={labelStyle}>Post date</label>
               <input
                 style={inputStyle}
-                type="text"
-                value={values.author || ""}
-                onChange={(e) => setField("author", e.target.value)}
-                placeholder="Author name"
+                type="date"
+                value={postDate}
+                onChange={(e) => setPostDate(e.target.value)}
+                aria-describedby="blog-post-date-hint"
               />
+              {!postDate ? (
+                <span id="blog-post-date-hint" style={{ display: "block", marginTop: 4, fontSize: "0.75rem", color: "#6b7280" }}>
+                  Blank: stamped the moment the post is published.
+                </span>
+              ) : null}
             </div>
-          ) : null}
+          </div>
 
           {showFeaturedImage ? (
             <div style={fieldStyle}>
@@ -3636,18 +3735,42 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
         {showFeaturedImage ? (
           <div style={{ flex: 1, minWidth: 0, paddingTop: "1.6rem" }}>
             {values.featuredImageUrl ? (
-              <img
-                alt="Featured image preview"
-                src={values.featuredImageUrl}
-                style={{
-                  width: "100%",
-                  aspectRatio: "16 / 9",
-                  objectFit: "cover",
-                  borderRadius: 6,
-                  border: "1px solid #e5e7eb",
-                  display: "block"
-                }}
-              />
+              (() => {
+                const image = (
+                  <img
+                    alt="Featured image preview"
+                    src={values.featuredImageUrl}
+                    style={{
+                      width: "100%",
+                      aspectRatio: "16 / 9",
+                      objectFit: "cover",
+                      borderRadius: 6,
+                      border: "1px solid #e5e7eb",
+                      display: "block"
+                    }}
+                  />
+                );
+                // The thumbnail opens the post as a reader sees it — live if
+                // published, otherwise the same page as a signed-in preview.
+                // No link until the post has been saved: it has no address.
+                const link = blogPostViewLink(viewBaseUrl, savedPost);
+                if (!link) return image;
+                return (
+                  <a
+                    className="builder-blog-post-create-thumb-link"
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={link.title}
+                    style={{ display: "block", textDecoration: "none" }}
+                  >
+                    {image}
+                    <span style={{ display: "block", marginTop: 6, fontSize: "0.78rem", fontWeight: 600, color: accent, textAlign: "center" }}>
+                      {link.label} ↗
+                    </span>
+                  </a>
+                );
+              })()
             ) : (
               <div style={{
                 width: "100%",
@@ -4019,12 +4142,12 @@ function buildBlogPostEditHref(baseUrl: string, postId: string): string {
   return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(postId)}`;
 }
 
-function blogManagerViewBaseUrl(settings: Record<string, string>): string {
+function blogManagerViewBaseUrl(settings: Record<string, string>, fallback = defaultBlogPostViewPath()): string {
   const fromSettings = String(settings.viewPageUrl || "").trim();
   if (fromSettings) return fromSettings;
   const postPageUrl = String(settings.postPageUrl || "").trim();
   if (postPageUrl) return postPageUrl;
-  return defaultBlogPostViewPath();
+  return fallback;
 }
 
 type BlogImportCandidate = {
@@ -4308,7 +4431,7 @@ function BlogImportPanel({ onImported, onClose }: { onImported: () => void; onCl
 
 function BlogPostManagerPreview({ settings }: { settings: Record<string, string> }) {
   const editBaseUrl = useMemo(() => blogManagerEditBaseUrl(settings), [settings.editPageUrl]);
-  const viewBaseUrl = useMemo(() => blogManagerViewBaseUrl(settings), [settings.viewPageUrl, settings.postPageUrl]);
+  const viewBaseUrl = usePostPageUrl(settings);
   const showStatus = (settings.showStatus ?? "true") !== "false";
   const showDate = (settings.showDate ?? "true") !== "false";
   const showDelete = (settings.showDelete ?? "true") !== "false";
@@ -4317,6 +4440,7 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
     status?: string;
     created_at?: string;
     createdAt?: string;
+    publishedAt?: string;
     featuredImageUrl?: string;
   };
   const [posts, setPosts] = useState<PostRow[]>([]);
@@ -4441,11 +4565,12 @@ function BlogPostManagerPreview({ settings }: { settings: Record<string, string>
       <div className="builder-blog-post-manager-list">
         {posts.map((post) => {
           const editHref = buildBlogPostEditHref(editBaseUrl, post.id);
-          const viewSep = viewBaseUrl.includes("?") ? "&" : "?";
-          const viewHref = viewBaseUrl
-            ? `${viewBaseUrl}${viewSep}post=${encodeURIComponent(post.slug)}`
-            : undefined;
-          const dateStr = post.published_at ?? post.created_at ?? post.createdAt ?? "";
+          const viewHref = blogPostViewHref(viewBaseUrl, post.slug) || undefined;
+          // The API answers in camelCase (publishedAt); the snake_case names
+          // are kept for older rows. Reading only published_at here meant
+          // every post showed the day it was CREATED, not its post date —
+          // an imported 2018 post read "Sep 2, 2026" (86bbvtzt1).
+          const dateStr = post.publishedAt ?? post.published_at ?? post.createdAt ?? post.created_at ?? "";
           const displayDate = dateStr
             ? new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
             : "—";
