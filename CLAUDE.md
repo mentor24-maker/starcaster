@@ -591,6 +591,34 @@ person standing on it knows whether he is finished. A pause that outlives two
 hours announces itself on the bus and keeps saying so hourly, because a pause
 nobody remembers looks exactly like a pipeline that has broken.
 
+## Filing a ticket about the pipeline itself — only for a real cost
+
+A tool that inspects itself finds more than it can fix. Measured 2026-09-06,
+tickets the pipeline filed **about the pipeline** went from about 6 a day in
+mid-August to about 16 a day in early September, and the paying work queued
+behind them. Dane parked 31 of them that day; the six that stayed all trace to
+a failure that actually happened.
+
+So the gate is not *"is this a real finding?"* — all 31 were. It is **did it
+cost anything.**
+
+- **File a pipeline/self-machinery ticket only when a pipeline failure cost
+  something observable** — lost work, a dead lane, a silent outage, a wrong
+  merge — and name that incident in the description.
+- **A theoretical gap noticed while building or reviewing is not a ticket.**
+  It goes as one plain line in the parked-backlog doc, *The 31 parked tickets*
+  (`https://app.clickup.com/90141423066/docs/2kydhxeu-814`). A pass with no
+  route to that doc says the line in its run report and as a plain comment on
+  the ticket it was already working — it does not file it.
+- **Every ticket title says in plain words what breaks and who feels it**, so
+  the operator can scan a list of seventy. The diagnostic sentence belongs in
+  the description. Dane, verbatim: *"your descriptions of tickets is so cryptic
+  and full of fanciful turns of phrases that it is difficult for me to
+  understand which ones are really important and which ones aren't."*
+
+**Client-facing bugs are unaffected** — file those on sight. The full rule,
+the numbers and the six that stayed: `docs/DOCTRINE.md` §6.24.
+
 ## The fast-track lane — "Let's fast track <ticket-id>"
 
 Said at the start of a session, that sentence is a **complete instruction**
