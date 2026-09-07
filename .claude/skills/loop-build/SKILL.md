@@ -223,24 +223,43 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    npm run clickup -- build-start --task <id>
    ```
 
-   *   **exit 0** — nothing exists: no open PR, and no half-finished worktree
-       on any machine that could be asked. A fresh branch is right; carry on
-       to step 2.
+   *   **exit 0** — nothing exists on any disk that could be asked, and no
+       open PR. A fresh branch is right; carry on to step 2. **Read the line
+       anyway**: if it ends `(not looked at: <machine> ...)`, a seat was
+       skipped — a laptop that is shut, a machine with no ssh route — and that
+       belongs in your run report, because it is the one case where a second
+       branch could still be cut over somebody's work.
    *   **exit 3** — work already exists. Do NOT start a second branch. Two
        shapes, and the printed line says which one:
-       *   **a PR is still open** — check that branch out, read the send-back
-           that returned the ticket to `Rework`, fix what it named, and push
-           to the SAME PR. The command prints the branch.
-       *   **a half-finished worktree, with no PR yet** (since 2026-09-07,
-           task 86bbvur5a) — it prints the machine, the worktree and the
-           branch. If that machine is this one, work on THAT branch. If it is
-           another machine, this one cannot check it out: do not branch here,
-           and say where the work is.
-   *   **exit 1** — it could not tell. **Stop and say so.** Do not start a
-       branch on a guess; that is the failure this step exists to prevent,
-       arriving through the check meant to catch it. A machine that should
-       have answered and did not lands here: "I did not look" is never "there
-       is nothing there".
+       *   **`CONTINUE`** — either a PR is still open, or a half-finished
+           worktree is sitting on THIS machine with no PR yet (since
+           2026-09-07, task 86bbvur5a). Work on what it names. On the PR path,
+           read the send-back that returned the ticket to `Rework`, fix what
+           it named, and push to the SAME PR. On the worktree path the branch
+           was never pushed, so `cd` into the folder it prints rather than
+           trying to check `origin/<branch>` out.
+       *   **`WORK ON ANOTHER MACHINE`** — the worktree is on a disk this one
+           cannot reach, so there is nothing here to continue and nothing to
+           gain by handing it back: rework is claimed first and oldest-first,
+           so the next pass would claim it and refuse it again, every pass,
+           forever. The command prints a `next:` line with the escalation to
+           run — `ask` it to `Needs your input`, naming the machine and branch
+           and the two moves that exist (finish it there by hand, or abandon
+           that work so the loop can rebuild it) — then **take the next
+           ticket**.
+   *   **exit 1** — **this machine** could not tell. **Stop and say so.** Do
+       not start a branch on a guess; that is the failure this step exists to
+       prevent, arriving through the check meant to catch it.
+
+   **Exit 1 is about the seat you are standing on, and that is deliberate**
+   (round-1 review of task 86bbvur5a). Round 1 stopped the build for ANY
+   machine that went quiet, and `docs/ecosystem/inventory.yaml` gives Dane's
+   laptop an ssh route while saying in the same entry that it sleeps and
+   travels — so a closed laptop refused every new build on the Mini, all night,
+   which is exactly when the loops work. A disk this pass cannot read HERE is
+   fatal, because it is the disk the pass is about to branch on. Another
+   machine going quiet is a blind spot **named** on an answer that goes ahead:
+   its work was unreachable from here whatever the reading said.
 
    On the open-PR path, the ticket's Loop note says which round this is
    (`↩ round 3 — <why>`); at round 3, read all of the earlier send-backs

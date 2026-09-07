@@ -3,7 +3,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { resolveBuildStart, describeBuildStart, buildStartExitCode, prLookupArgs } = require('./buildStart.js');
+const {
+  resolveBuildStart, describeBuildStart, describeNextMove,
+  needsLocalWorkReading, buildStartExitCode, prLookupArgs,
+} = require('./buildStart.js');
 
 /**
  * 2026-08-23: a loop-build pass opened two duplicate pull requests in one
@@ -158,7 +161,11 @@ test('the skill actually tells a pass to run this, and what each exit means', ()
   );
   assert.match(skill, /npm run clickup -- build-start --task/, 'the command is in the skill');
 
-  const step = skill.slice(skill.indexOf('build-start --task'), skill.indexOf('build-start --task') + 1400);
+  // A generous window on purpose: this step gained the two flavours of exit 3
+  // and the seat rule behind exit 1 (round-1 review), and a window sized to
+  // yesterday's prose fails on prose that got MORE complete, which trains the
+  // next reader to shrink the doc.
+  const step = skill.slice(skill.indexOf('build-start --task'), skill.indexOf('build-start --task') + 3200);
   assert.match(step, /exit 3/, 'and exit 3 is explained');
   assert.match(step, /Do NOT start a\s+second branch/i, 'as "continue the existing one"');
   assert.match(step, /exit 1/, 'and exit 1 is explained');
@@ -428,33 +435,222 @@ test('a seat with NO ssh route does not freeze the answer — it is named instea
 
 // ── "Could not tell" is never "nothing there" ─────────────────────────────
 
-test('a machine that SHOULD have answered and did not is CANNOT TELL, never fresh', () => {
+test('THIS machine going unreadable is CANNOT TELL, never fresh', () => {
+  // The seat the pass is standing on is the disk it is about to cut a branch
+  // on. Not being able to read it means not knowing whether the pass is about
+  // to orphan its OWN half-finished worktree, which is this module's whole job.
   const decision = resolveBuildStart([], {
     lookupPr: knows({}),
     hereId: 'mac-mini',
     findLocalWork: () => reading('cannot-tell', {
-      unseen: [{ machine: 'macbook-pro', why: 'it could not be reached' }],
+      unseen: [{ machine: 'mac-mini', why: 'git there would not answer about the checkout' }],
     }),
   });
   assert.equal(decision.action, 'unknown');
   assert.equal(buildStartExitCode(decision), 1, 'stop, do not branch');
   assert.match(decision.why, /CANNOT BE TOLD/);
-  assert.match(decision.why, /macbook-pro/, 'and it names the seat that went quiet');
+  assert.match(decision.why, /mac-mini/, 'and it names the seat that went quiet');
 });
 
-test('a cannot-tell names BOTH kinds of blind spot, not only the failed one', () => {
+test('a blind spot with NO machine named on it is treated as this seat', () => {
+  // A row that does not say where it is could be here, and "could be here" has
+  // to take the careful answer.
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('cannot-tell', { unseen: [{ why: 'the probe could not be run' }] }),
+  });
+  assert.equal(decision.action, 'unknown');
+});
+
+test('a caller that never said WHERE it is standing gets the careful answer', () => {
+  // Without `hereId` the seats cannot be told apart at all, so none of them
+  // can be waved past.
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    findLocalWork: () => reading('cannot-tell', {
+      unseen: [{ machine: 'macbook-pro', why: 'ssh exited 255' }],
+    }),
+  });
+  assert.equal(decision.action, 'unknown');
+  assert.equal(buildStartExitCode(decision), 1);
+});
+
+test('a cannot-tell about THIS seat names BOTH kinds of blind spot, not only the failed one', () => {
   // Once we are not branching anyway, somebody going to look by hand needs
   // every seat that was not looked at (DOCTRINE 3.11).
   const decision = resolveBuildStart([], {
     lookupPr: knows({}),
     hereId: 'mac-mini',
     findLocalWork: () => reading('cannot-tell', {
-      unseen: [{ machine: 'other-a', why: 'it could not be reached' }],
+      unseen: [{ machine: 'mac-mini', why: 'git there would not answer' }, { machine: 'other-a', why: 'it could not be reached' }],
       unlooked: [{ machine: 'other-b', why: 'no ssh route is declared' }],
     }),
   });
+  assert.equal(decision.action, 'unknown');
   assert.match(decision.why, /other-a/);
   assert.match(decision.why, /other-b/);
+});
+
+/* ── THE SLEEPING LAPTOP (round-1 review of this ticket, 2026-09-07) ──────
+ *
+ * Round 1 made ANY machine that went quiet fatal. `inventory.yaml` gives
+ * `macbook-pro` `probe: ssh` — so from the Mini it is ROUTED, not `unrouted` —
+ * and the same entry says it "sleeps and travels" and is closed at the end of
+ * the day. A shut laptop is therefore `unseen`: a machine that should have
+ * answered and did not. Round 1 turned that into exit 1, which loop-build
+ * reads as "stop", so EVERY new build was refused on the Mini for as long as
+ * the laptop was shut — which is its overnight state, and overnight is when
+ * the loops work. The lane dead with every surface quiet: the 2026-09-03 shape.
+ */
+
+test('ANOTHER machine going quiet does not freeze the lane — it is named instead', () => {
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('cannot-tell', {
+      unseen: [{ machine: 'macbook-pro', why: 'ssh exited 255' }],
+    }),
+  });
+  assert.equal(decision.action, 'fresh', 'the loop keeps working from the seat it runs on');
+  assert.equal(buildStartExitCode(decision), 0);
+  assert.match(decision.why, /not looked at: macbook-pro/, 'but the blind spot is stated, never implied');
+  assert.match(decision.why, /ssh exited 255/, 'with the reason it went quiet');
+});
+
+test('a quiet remote seat is still named when another seat had no route at all', () => {
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('cannot-tell', {
+      unseen: [{ machine: 'other-a', why: 'ssh exited 255' }],
+      unlooked: [{ machine: 'other-b', why: 'no ssh route is declared' }],
+    }),
+  });
+  assert.equal(decision.action, 'fresh');
+  assert.match(decision.why, /other-a/);
+  assert.match(decision.why, /other-b/);
+});
+
+/* ── DRIVEN FROM THE FLEET AS inventory.yaml ACTUALLY DECLARES IT ─────────
+ *
+ * The tests above hand `withLocalWork` a reading they built themselves, which
+ * is right for the decision rule and WRONG for the question round 1 got wrong.
+ * Round 1's covering test hand-built its `unlooked` row, so it never touched
+ * the real inventory and could not have failed on the real fleet: the sleeping
+ * laptop arrives as `unseen`, not `unlooked`, and only the real file says so.
+ * A test that cannot go red against the fleet is the green the next reader
+ * inherits (round-1 review, finding 1).
+ *
+ * So this drives the WHOLE reading — the real `nodeRoles.KNOWN_NODES`, the
+ * real `docs/ecosystem/inventory.yaml`, the real `findWorkInProgress` — and
+ * fakes only the transport, which is the one thing a test cannot have: an ssh
+ * hop to a machine that may or may not be awake.
+ */
+
+const nodeRoles = require('../../lib/nodeRoles.js');
+const strandedLocalWork = require('./strandedLocalWork.js');
+
+/** The fleet, exactly as the committed inventory declares it. */
+function realFleet() {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const text = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'docs', 'ecosystem', 'inventory.yaml'),
+    'utf8'
+  );
+  return { nodes: nodeRoles.KNOWN_NODES, routes: strandedLocalWork.sshRoutedMachines(text) };
+}
+
+/**
+ * Take the real reading with a transport that answers the way a shut laptop
+ * does. `quiet` is the set of machines whose ssh hop fails.
+ *
+ * The home directory is fictional on purpose — a real one would name the
+ * machine this file was written on, which NODES principle P1 forbids and
+ * `check_conventions` blocks.
+ */
+function readingFromFleet({ here, quiet = [], localOut = `${strandedLocalWork.PROBE_DONE}\n` }) {
+  const { nodes, routes } = realFleet();
+  const homedir = '/home/somebody';
+  return strandedLocalWork.findWorkInProgress({
+    taskId: '86bbvur5a',
+    repoHome: `${homedir}/WebApps/starcaster`,
+    nodes,
+    hereId: here,
+    homedir,
+    routedMachines: routes.machines,
+    routesKnown: routes.known,
+    shell: (machine) => (quiet.includes(machine)
+      ? { ran: false, why: 'ssh exited 255; not treated as drift' }
+      : { ran: true, out: localOut }),
+  });
+}
+
+test('the fleet really does contain a routed machine other than the one running the loops', () => {
+  // The premise every test below rests on, asserted against the file rather
+  // than assumed. If this ever fails, the inventory changed and the two tests
+  // under it are aimed at a fleet that no longer exists — re-aim them, do not
+  // delete them. A silent pass here is how round 1 shipped.
+  const { nodes, routes } = realFleet();
+  assert.ok(routes.known, 'docs/ecosystem/inventory.yaml must be readable and declare objects');
+  const others = nodes.filter((n) => routes.machines.includes(n));
+  assert.ok(others.length >= 2,
+    `at least two machines must carry \`probe: ssh\` for the unseen path to exist at all; found ${JSON.stringify(others)}`);
+});
+
+test('THE ROUND-1 BUG: a sleeping machine must not refuse every fresh claim', () => {
+  // Driven from every seat the loops could run on, because "it works from the
+  // Mini" is the assumption that produced the bug in the other direction.
+  const { nodes, routes } = realFleet();
+  for (const here of nodes.filter((n) => routes.machines.includes(n))) {
+    const quiet = nodes.filter((n) => n !== here);
+    const decision = resolveBuildStart([], {
+      lookupPr: knows({}),
+      hereId: here,
+      findLocalWork: () => readingFromFleet({ here, quiet }),
+    });
+    assert.equal(decision.action, 'fresh',
+      `standing on ${here} with ${quiet.join(', ')} asleep, a ticket nobody has built must still be buildable`);
+    assert.equal(buildStartExitCode(decision), 0);
+    for (const m of quiet) {
+      assert.match(decision.why, new RegExp(m), `and ${m} is named as a seat that was not looked at`);
+    }
+  }
+});
+
+test('...but the seat it is STANDING on going quiet still stops it', () => {
+  // The mirror image, from the same fleet: an unreadable local probe is the
+  // disk this pass is about to branch on.
+  const { nodes, routes } = realFleet();
+  for (const here of nodes.filter((n) => routes.machines.includes(n))) {
+    const decision = resolveBuildStart([], {
+      lookupPr: knows({}),
+      hereId: here,
+      // Local probe output with no PROBE-DONE line: output that stopped early
+      // looks exactly like output that found nothing, and only one is an answer.
+      findLocalWork: () => readingFromFleet({ here, quiet: nodes.filter((n) => n !== here), localOut: '' }),
+    });
+    assert.equal(decision.action, 'unknown', `standing on ${here}, an unreadable local disk is a stop`);
+    assert.equal(buildStartExitCode(decision), 1);
+  }
+});
+
+test('work found on the fleet still refuses, seats quiet or not', () => {
+  // The guard has to keep guarding: this is the same fleet, same transport,
+  // with the local probe reporting a stamped branch carrying uncommitted work.
+  const { nodes, routes } = realFleet();
+  const here = nodes.filter((n) => routes.machines.includes(n))[0];
+  const out = `BRANCH\tbuild-start-local-work\t4\t0\t/home/somebody/WebApps/starcaster/.claude/worktrees/build-start-local-work\n${strandedLocalWork.PROBE_DONE}\n`;
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: here,
+    findLocalWork: () => readingFromFleet({ here, quiet: nodes.filter((n) => n !== here), localOut: out }),
+  });
+  assert.equal(decision.action, 'continue');
+  assert.equal(buildStartExitCode(decision), 3);
+  assert.match(decision.why, /build-start-local-work/);
+  assert.match(decision.why, /4 uncommitted files/);
 });
 
 test('a reading that THROWS, returns nothing, or answers gibberish is never fresh', async (t) => {
@@ -530,13 +726,165 @@ test('the reading comes from strandedLocalWork, not a second copy of the rule', 
 });
 
 test('the command wires it to the SHARED module and to nothing else', () => {
-  const fs = require('node:fs');
-  const path = require('node:path');
-  const src = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
-  const block = src.slice(src.indexOf("cmd === 'build-start'"), src.indexOf("cmd === 'pr-opened'"));
+  const block = buildStartCommandSource();
   assert.match(block, /localWorkReading\.workInProgressFor/, 'it has to take the reading');
   assert.match(block, /localWorkReading\.thisNodeName\(\)/, 'and know which machine it is standing on');
   assert.match(block, /buildStart\.buildStartExitCode\(decision\)/, 'and exit through the pinned mapping');
+});
+
+/** The `build-start` branch of the command, as text. */
+function buildStartCommandSource() {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+  return src.slice(src.indexOf("cmd === 'build-start'"), src.indexOf("cmd === 'pr-opened'"));
+}
+
+/* ── FINDING 2: an unreadable ticket probed the WRONG repo, and said "fresh" ─
+ *
+ * The command fell back to `{ id: task }` when the ticket GET failed. That
+ * fabrication has no `tags`; `resolveTaskRepo` answers `starcaster` for a task
+ * with none — because no tag legitimately MEANS starcaster — so on any
+ * transient ClickUp failure a `repo:pulse` ticket was probed against the
+ * STARCASTER checkout, found nothing, and exited 0. The exact false all-clear
+ * this reading exists to close, arriving through the reading itself, and the
+ * second time this file has been bitten by "which repo?" (task 86bbqyyfn).
+ */
+
+test('a ticket that could not be read is CANNOT TELL, never "no work anywhere"', () => {
+  const { workInProgressFor } = require('./localWorkReading.js');
+  const probe = { here: 'mac-mini', shell: () => { throw new Error('nothing should be probed'); }, routedMachines: [], routesKnown: true };
+  for (const [label, task] of [
+    ['the fabrication the command used to build', { id: '86bbq83j0' }],
+    ['no task at all', null],
+    ['tags that are not a list', { id: '86bbq83j0', tags: 'repo:pulse' }],
+  ]) {
+    const reading = workInProgressFor(task, probe);
+    assert.equal(reading.verdict, 'cannot-tell', label);
+    assert.equal(reading.work.length, 0);
+    assert.match(reading.unseen[0].why, /not read|could not be resolved/);
+  }
+});
+
+test('a ticket with NO repo tag is still a real ticket — starcaster, and it gets probed', () => {
+  // The mirror image. "No `repo:` tag" legitimately means starcaster, and
+  // hardening the unread case must not turn every untagged ticket into a stop.
+  const { workInProgressFor } = require('./localWorkReading.js');
+  let probed = false;
+  const probe = {
+    here: 'mac-mini',
+    shell: () => { probed = true; return { ran: true, out: `${strandedLocalWork.PROBE_DONE}\n` }; },
+    routedMachines: [],
+    routesKnown: true,
+  };
+  const reading = workInProgressFor({ id: '86bbvur5a', tags: [] }, probe);
+  assert.equal(probed, true, 'an untagged ticket is looked at, not refused');
+  assert.equal(reading.verdict, 'none');
+});
+
+test('the blind spot names the SEAT, so a caller can tell here from there', () => {
+  // `build-start` draws its whole line on this. A literal 'this machine' can
+  // never equal `hereId`, so the fatal/named split could not be made against it.
+  const { workInProgressFor } = require('./localWorkReading.js');
+  const reading = workInProgressFor({ id: 'x' }, { here: 'mac-mini', shell: () => ({ ran: true }), routedMachines: [], routesKnown: true });
+  assert.equal(reading.unseen[0].machine, 'mac-mini');
+});
+
+test('the command no longer fabricates a ticket when ClickUp will not answer', () => {
+  const block = buildStartCommandSource();
+  assert.doesNotMatch(block, /\{\s*id:\s*task\s*\}/, 'a fabricated ticket is a guess about which repo to probe');
+  assert.match(block, /throw new Error\([^)]*could not be read/, 'it refuses out loud instead');
+});
+
+/* ── The extra ClickUp read is only spent when it can change the answer ──── */
+
+test('the ticket is read ONLY on the path that asks a disk', () => {
+  assert.equal(needsLocalWorkReading({ action: 'fresh' }), true);
+  for (const action of ['continue', 'elsewhere', 'unknown', 'something-new']) {
+    assert.equal(needsLocalWorkReading({ action }), false, `${action} already refuses to branch`);
+  }
+  assert.equal(needsLocalWorkReading(null), false);
+  // And the command gates the read on that predicate rather than a copy of it.
+  const block = buildStartCommandSource();
+  const gate = block.indexOf('buildStart.needsLocalWorkReading(fromPr)');
+  assert.ok(gate > 0, 'the command asks the module when the disk is worth asking');
+  assert.ok(block.indexOf('/api/v2/task/${task}`') > gate,
+    'and the second ClickUp read sits INSIDE that gate, not above it');
+});
+
+test('resolveBuildStart and the command agree on when the disk is asked', () => {
+  // One predicate, two callers. Two copies drift, and the drift here is either
+  // a wasted read on every claim or a reading that never happens.
+  const source = require('node:fs').readFileSync(require.resolve('./buildStart.js'), 'utf8');
+  assert.match(source, /if \(!needsLocalWorkReading\(fromPr\)\) return fromPr;/);
+});
+
+/* ── FINDING 3: `elsewhere` had no way out ─────────────────────────────── */
+
+test('"work on another machine" prints a decided next move, not just a refusal', () => {
+  // The claim happens BEFORE this check, so the ticket is already in
+  // "Building"; the reconcile returns it to "Rework"; rework is claimed first
+  // and oldest-first; the next pass refuses it again. Without a way out the
+  // lane spends every pass on the one ticket it can never build.
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('work', { work: [branch('macbook-pro', 'b', { dirty: 1, worktree: '/w/b' })] }),
+  });
+  const next = describeNextMove(decision, { task: '86bbvur5a' });
+  assert.match(next, /ask --task 86bbvur5a/, 'the escalation, in runnable form');
+  assert.match(next, /Needs your input/);
+  assert.match(next, /not hand this back to the claim line/i, 'and why a hand-back is the wrong move');
+  assert.match(next, /take the next ticket/i, 'so the lane keeps moving');
+});
+
+test('the answers where refusing IS the instruction get no next move', () => {
+  for (const action of ['continue', 'fresh', 'unknown']) {
+    assert.equal(describeNextMove({ action }), '', `${action} already says what to do`);
+  }
+  assert.equal(describeNextMove(null), '');
+});
+
+test('the command prints the next move, and the skill tells a pass to follow it', () => {
+  const block = buildStartCommandSource();
+  assert.match(block, /buildStart\.describeNextMove\(decision, \{ task \}\)/);
+  assert.match(block, /next:/);
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const skill = fs.readFileSync(path.join(__dirname, '..', '..', '.claude', 'skills', 'loop-build', 'SKILL.md'), 'utf8');
+  const i = skill.indexOf('build-start --task');
+  const step = skill.slice(i, i + 3200);
+  assert.match(step, /WORK ON ANOTHER MACHINE/, 'the flavour is named');
+  assert.match(step, /take the next\s+ticket/i, 'and the pass is told to move on rather than stall');
+});
+
+/* ── FINDING 5: a merged PR plus local work printed a stale `pr:` line ──── */
+
+test('a closed PR is named in words, never in the `pr:` field the reader follows', () => {
+  // `fresh` is reached with a MERGED pull request as well as with none, and
+  // carrying that `pr` through printed `pr: #408 (branch old-branch)` directly
+  // under "no open pull request" — naming the one branch that must NOT be
+  // checked out, which is exactly what CLAUDE.md step 4 tells a session to do
+  // with a `pr:` line.
+  const decision = resolveBuildStart([c(1, PR_LINE(408), 1_000)], {
+    lookupPr: knows({ 408: { state: 'MERGED' } }),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('work', { work: [branch('mac-mini', 'follow-up', { dirty: 2, worktree: '/w/follow-up' })] }),
+  });
+  assert.equal(decision.action, 'continue');
+  assert.equal(decision.pr, null, 'nothing for the command to print as "the branch to continue"');
+  assert.match(decision.why, /PR #408 is closed or merged/, 'the fact is kept');
+  assert.match(decision.why, /not the branch to work on/, 'and disarmed');
+  assert.match(decision.why, /follow-up/, 'while the branch that IS the work is named');
+});
+
+test('with no PR at all the sentence stays the short one', () => {
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: 'mac-mini',
+    findLocalWork: () => reading('work', { work: [branch('mac-mini', 'wt', { dirty: 1 })] }),
+  });
+  assert.match(decision.why, /^no open pull request, but a build is already in progress/);
 });
 
 test('the four decisions map to exit codes, and an unknown action is never a 0', () => {
@@ -559,6 +907,25 @@ test('"work on another machine" has its own words in the run report', () => {
   assert.match(describeBuildStart(elsewhere), /^WORK ON ANOTHER MACHINE — /);
 });
 
+test('the fast-track lane Dane runs by hand describes the exit 3 he will actually get', () => {
+  // CLAUDE.md step 4 said exit 3 means `git worktree add ... origin/<branch>`.
+  // On the worktree shape the branch was NEVER PUSHED, so `origin/<branch>`
+  // does not exist and that command fails; on the other-machine shape the work
+  // is on a disk this one cannot reach at all. SKILL.md was updated in round 1
+  // and this consumer was not (round-1 review, finding 4) — and this is the
+  // copy a person follows, with no exit code to fall back on.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const md = fs.readFileSync(path.join(__dirname, '..', '..', 'CLAUDE.md'), 'utf8');
+  const i = md.indexOf('build-start --task <id>`');
+  assert.ok(i > 0, 'the fast-track lane still names the command');
+  const step = md.slice(i, i + 1600);
+  assert.match(step, /worktree/i, 'the disk half is described');
+  assert.match(step, /another machine/i, 'including the seat it cannot reach');
+  assert.match(step, /never pushed|does not exist/i, 'and why origin/<branch> is not always there');
+  assert.doesNotMatch(step, /exit 3 means a branch\s+already exists/, 'the single-shape sentence is gone');
+});
+
 test('the skill tells a pass that a worktree with no PR also exits 3', () => {
   // A module nothing calls is a module that does not run; a refusal a pass has
   // not been told about is a refusal it will read as a crash and work around.
@@ -569,7 +936,7 @@ test('the skill tells a pass that a worktree with no PR also exits 3', () => {
     'utf8'
   );
   const i = skill.indexOf('build-start --task');
-  const step = skill.slice(i, i + 1400);
+  const step = skill.slice(i, i + 3200);
   assert.match(step, /worktree/i, 'the disk half is described');
   assert.match(step, /another machine/i, 'including the seat it cannot reach');
 });

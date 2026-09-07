@@ -505,9 +505,12 @@ function usage(code = 2) {
   console.error('                                             upload image(s) onto a task — the before/after pair');
   console.error("                                             the approval queue runs on; verified by reading the");
   console.error("                                             task's attachment list back");
-  console.error('  build-start --task <id>                    BEFORE branching: is a PR for this ticket already open?');
-  console.error('                                             exit 0 = start fresh, 3 = continue the existing branch,');
-  console.error('                                             1 = could not tell (do NOT guess)');
+  console.error('  build-start --task <id>                    BEFORE branching: has this ticket been started already —');
+  console.error('                                             an open PR, or a half-finished worktree on any disk?');
+  console.error('                                             exit 0 = start fresh, 3 = do NOT branch (the line says');
+  console.error('                                             which: continue the named branch, or the work is on');
+  console.error('                                             another machine — escalate, do not hand it back),');
+  console.error('                                             1 = could not tell here (do NOT guess)');
   console.error('  wip-check [--repo owner/name]              is the merge side already full? 0 = room to claim,');
   console.error('                                             3 = capped (a normal decline), 1 = could not tell.');
   console.error('                                             Reads only; a capped pass writes nothing.');
@@ -3601,23 +3604,44 @@ if (cmd === 'whoami') {
   // been started already?" was the one still answering from comments alone.
   //
   // The same module both of those use, so the three cannot disagree about one
-  // ticket. It is only consulted on `fresh` (inside `resolveBuildStart`), which
-  // is the only answer that asserts an absence, so nothing is probed on the
-  // path where a PR is already named.
+  // ticket.
   //
-  // The ticket read here is for its TAGS: `workInProgressFor` resolves the
-  // repo from the ticket's own `repo:` tag, so it looks in the checkout the
-  // builder would actually have used. An unreadable ticket is handed on as-is
-  // and `workInProgressFor` answers `cannot-tell` for it — never `none`.
-  const ticketRes = await call('GET', `/api/v2/task/${task}`);
-  const ticket = ticketRes.res.ok ? ticketRes.json : { id: task };
-  const findLocalWork = () => localWorkReading.workInProgressFor(ticket, localWorkReading.workProbe());
+  // THE PULL REQUEST ANSWER FIRST, AND THE TICKET IS READ ONLY IF IT MATTERS.
+  // `needsLocalWorkReading` is the module's own predicate rather than a second
+  // copy of it here. Round 1 read the ticket unconditionally, so `continue` and
+  // `unknown` — the paths where `findLocalWork` is never called — each paid an
+  // extra ClickUp read on every claim, and the comment above claiming nothing
+  // is probed on those paths was contradicted by the line under it.
+  const fromPr = buildStart.resolveFromPullRequest(got.json.comments || [], lookupPr);
+  let decision = fromPr;
+  if (buildStart.needsLocalWorkReading(fromPr)) {
+    // The ticket read here is for its TAGS: `workInProgressFor` resolves the
+    // repo from the ticket's own `repo:` tag, so it looks in the checkout the
+    // builder would actually have used.
+    //
+    // AN UNREADABLE TICKET IS NOT HANDED ON AS `{ id }` (round-1 review,
+    // finding 2). That fabrication has no `tags`, `resolveTaskRepo` answers
+    // `starcaster` for a task with none — because no tag legitimately means
+    // starcaster — and a `repo:pulse` ticket was therefore probed against the
+    // STARCASTER checkout on any transient ClickUp failure, found nothing, and
+    // exited 0 "fresh". The false all-clear this whole reading exists to close,
+    // arriving through the reading itself, and the same scar the `lookupPr`
+    // comment above already carries from task 86bbqyyfn. It throws instead:
+    // `withLocalWork` turns that into CANNOT TELL, exit 1.
+    const ticketRes = await call('GET', `/api/v2/task/${task}`);
+    const findLocalWork = () => {
+      if (!ticketRes.res.ok) {
+        throw new Error(`the ticket itself could not be read (HTTP ${ticketRes.res.status}), `
+          + 'so which repo to look in is unknown and nothing was probed');
+      }
+      return localWorkReading.workInProgressFor(ticketRes.json, localWorkReading.workProbe());
+    };
+    decision = buildStart.withLocalWork(fromPr, {
+      findLocalWork,
+      hereId: localWorkReading.thisNodeName(),
+    });
+  }
 
-  const decision = buildStart.resolveBuildStart(got.json.comments || [], {
-    lookupPr,
-    findLocalWork,
-    hereId: localWorkReading.thisNodeName(),
-  });
   console.log(buildStart.describeBuildStart(decision));
   if (decision.pr) {
     console.log(`pr:     #${decision.pr.number}${decision.pr.branch ? ` (branch ${decision.pr.branch})` : ''}`);
@@ -3628,6 +3652,13 @@ if (cmd === 'whoami') {
   for (const line of strandedLocalWork.describeWork(decision.work || [])) {
     console.log(`work:   ${line}`);
   }
+  // AND WHAT TO DO ABOUT IT, where refusing is not the whole instruction.
+  // `elsewhere` used to be a bare refusal with no way out: the ticket is
+  // already in "Building", the reconcile returns it to "Rework", rework is
+  // claimed first and oldest-first, and the lane then spends every pass on the
+  // one ticket it can never build.
+  const next = buildStart.describeNextMove(decision, { task });
+  if (next) console.log(`next:   ${next}`);
   reportLimits(got.res);
 
   // Exit codes so a shell can branch on this without parsing prose, matching

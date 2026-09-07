@@ -38,13 +38,19 @@ const strandedLocalWork = require('./strandedLocalWork.js');
  *   elsewhere  work exists on ANOTHER machine, which this one cannot check
  *              out. Refuse, and say where it is. Also a "do not branch".
  *   fresh      nothing anywhere. A new branch is right.
- *   unknown    something could not be read. STOP.
+ *   unknown    something could not be read HERE. STOP.
  *
  * `unknown` is not a soft `fresh`, and that asymmetry is the whole point: if
  * the lookup fails and we default to starting fresh, we have rebuilt the bug
  * this module exists to prevent. A check that could not run reports "cannot
  * tell", never a pass (the same rule `doctor:node` and the ecosystem drift
  * check follow).
+ *
+ * WITH ONE LINE DRAWN THROUGH IT, and it is the line round 1 got wrong: the
+ * rule holds for the seat this pass is standing on. Another machine going
+ * quiet is a blind spot NAMED on an answer that goes ahead, not a stop — see
+ * `withLocalWork`'s cannot-tell branch, and the sleeping laptop that refused
+ * every build on the Mini until it was drawn.
  *
  * THE ANSWER IS BUILT IN TWO HALVES. `resolveFromPullRequest` below is the
  * original, unchanged: it reads the ticket's `PR opened:` trail. `withLocalWork`
@@ -206,51 +212,108 @@ function withLocalWork(fresh, { findLocalWork, hereId } = {}) {
     // refuses and says where to go.
     const here = work.filter((w) => w.machine === hereId);
     const there = work.filter((w) => w.machine !== hereId);
+    // THE PULL REQUEST IS DROPPED FROM THIS ANSWER ON PURPOSE (round-1 review,
+    // finding 5). `fresh` is reached with a MERGED or CLOSED pull request as
+    // well as with none at all, and carrying that `pr` through made the command
+    // print `pr: #408 (branch old-branch)` directly under the sentence "no open
+    // pull request" — naming a branch that is emphatically not the one to work
+    // on, which is exactly the branch a fast-track session following CLAUDE.md
+    // step 4 would then check out. The decision here is about a DISK, so the
+    // closed PR is named in the prose and never in the `pr:` field, which every
+    // reader takes to mean "the branch to continue".
+    const closed = fresh.pr ? ` (PR #${fresh.pr.number} is closed or merged, and is not the branch to work on)` : '';
     if (here.length) {
       return {
         action: 'continue',
-        pr: fresh.pr,
+        pr: null,
         work,
         unlooked,
-        why: `no open pull request, but a build is already in progress on this machine — `
+        why: `no open pull request${closed}, but a build is already in progress on this machine — `
           + `${strandedLocalWork.describeWork(here).join('; ')}. `
           + 'Work on THAT branch; do not start a second one.',
       };
     }
     return {
       action: 'elsewhere',
-      pr: fresh.pr,
+      pr: null,
       work,
       unlooked,
-      why: `no open pull request, but a build is already in progress on another machine — `
+      why: `no open pull request${closed}, but a build is already in progress on another machine — `
         + `${strandedLocalWork.describeWork(there).join('; ')}. `
-        + 'This machine cannot check that out, so do NOT start a branch here: finish it there, '
-        + 'or hand the ticket back with a note saying where the work is.',
+        + 'This machine cannot check that out, so do NOT start a branch here.',
     };
   }
 
   if (reading.verdict === 'cannot-tell') {
-    // A machine that SHOULD have answered and did not. Both blind spots are
-    // named — a reader going to look by hand needs every seat that was not
-    // looked at, not only the ones that failed (DOCTRINE 3.11).
+    // A machine that SHOULD have answered and did not — and WHICH machine
+    // decides whether that stops the build or is merely stated.
+    //
+    // ROUND 1 STOPPED THE BUILD FOR ALL OF THEM, AND THAT KILLED THE LANE
+    // (round-1 review, finding 1, 2026-09-07). `docs/ecosystem/inventory.yaml`
+    // gives `macbook-pro` `probe: ssh`, so from the Mini it is ROUTED — and the
+    // same entry says in its own words that it "sleeps and travels" and is
+    // closed at the end of the day. A shut laptop is therefore not `unrouted`,
+    // it is `unseen`: a machine that should have answered and did not. Round 1
+    // turned that into `unknown`, exit 1, which loop-build reads as "stop and
+    // say so" — so EVERY new build, on every pass, was refused for as long as
+    // Dane's laptop was shut. That is its overnight state, and overnight is
+    // when the loops do their work. It is the 2026-09-03 shape from CLAUDE.md:
+    // the lane dead for sixteen hours with every surface quiet.
+    //
+    // THE LINE THAT IS DRAWN INSTEAD is which SEAT went quiet, because the two
+    // are not the same question:
+    //
+    //   this machine   the disk this pass is about to cut a branch on. Not
+    //                  being able to read it means not knowing whether the
+    //                  pass is about to orphan its OWN half-finished worktree,
+    //                  which is the whole defect this module exists to close.
+    //                  Fatal — exit 1, and criterion 3 is about this seat.
+    //   another        a disk this pass could not use whatever the answer was.
+    //                  Work found there yields `elsewhere`, which is itself a
+    //                  refusal this pass cannot act on. Named as a blind spot
+    //                  on an answer that goes ahead — the same treatment
+    //                  `unrouted` already gets, for the same reason.
+    //
+    // THE RESIDUAL RISK IS REAL AND IS STATED RATHER THAN ARGUED AWAY: if the
+    // sleeping machine IS holding unpushed work for this exact ticket, a second
+    // branch gets cut. That window is narrow and recoverable — the work is
+    // still on that disk, and the sweep and `pass-reconcile` both name it every
+    // run. The alternative is a lane that is dead every night by design.
+    // Certain and total beats rare and recoverable in only one direction.
     const blind = strandedLocalWork.describeUnlooked([...unseen, ...unlooked]);
+    // A row with no machine, or one naming the seat we are standing on, is
+    // this machine's. So is EVERY row when the caller did not say where it is
+    // standing: without `hereId` there is no way to tell the seats apart, and
+    // the answer then has to be the careful one.
+    const fatal = unseen.filter((m) => !hereId || !m.machine || m.machine === hereId);
+    if (fatal.length) {
+      return {
+        ...fresh,
+        action: 'unknown',
+        work,
+        unlooked,
+        why: `${fresh.why}, but whether a build is half-finished on a disk CANNOT BE TOLD from here — ${blind}. `
+          + 'Do NOT start a branch on a reading nobody took.',
+      };
+    }
     return {
       ...fresh,
-      action: 'unknown',
-      work,
+      work: [],
       unlooked,
-      why: `${fresh.why}, but whether a build is half-finished on a disk CANNOT BE TOLD from here — ${blind}. `
-        + 'Do NOT start a branch on a reading nobody took.',
+      unseen,
+      why: `${fresh.why}, and no half-finished build is on any disk that could be asked `
+        + `(not looked at: ${blind})`,
     };
   }
 
   if (reading.verdict === 'none') {
     // The reading's real job, and it has to keep working: a guard that never
     // lets anything through is the mirror-image defect, and this repo has
-    // shipped that one. An `unrouted` seat does NOT freeze this — from the
-    // Mini, which is where the loops actually run, there is no ssh route to
-    // the MacBook at all, so treating that as a failed reading would refuse
-    // EVERY claim forever. It is named in the line instead.
+    // shipped that one. A seat with no ssh route declared does NOT freeze this;
+    // it is named in the line instead. (Round 1 justified that by saying there
+    // is no route from the Mini to the MacBook — `inventory.yaml` gives one
+    // now, so the sleeping-laptop case arrives as `unseen` and is handled in
+    // the branch above. The rule outlives the example.)
     const seats = strandedLocalWork.describeUnlooked(unlooked);
     return {
       ...fresh,
@@ -282,10 +345,56 @@ function withLocalWork(fresh, { findLocalWork, hereId } = {}) {
  */
 function resolveBuildStart(comments, { lookupPr, findLocalWork, hereId } = {}) {
   const fromPr = resolveFromPullRequest(comments, lookupPr);
-  // Only `fresh` asserts an absence, and an absence is the only claim a disk
-  // can contradict.
-  if (fromPr.action !== 'fresh') return fromPr;
+  if (!needsLocalWorkReading(fromPr)) return fromPr;
   return withLocalWork(fromPr, { findLocalWork, hereId });
+}
+
+/**
+ * Is this PR answer worth asking a disk about?
+ *
+ * Only `fresh` asserts an ABSENCE, and an absence is the only claim a disk can
+ * contradict. `continue` and `unknown` already name a pull request and already
+ * refuse to branch, so a reading there could not change the answer.
+ *
+ * IT IS A FUNCTION SO THE COMMAND AND THIS MODULE CANNOT DISAGREE (round-1
+ * review, "also worth a look"). `clickup_direct.mjs` has to know the answer
+ * BEFORE it decides whether to spend a second ClickUp read on the ticket — the
+ * reading needs the ticket's `repo:` tag, and reading it unconditionally
+ * doubled this command's ClickUp calls on every claim while contradicting the
+ * comment three lines above it, which said nothing is probed on that path. The
+ * predicate lives here so there is one answer to "when is the disk worth
+ * asking", not two that drift.
+ */
+function needsLocalWorkReading(fromPr) {
+  return fromPr?.action === 'fresh';
+}
+
+/**
+ * WHAT A PASS SHOULD DO NEXT, for the answers where refusing is not enough.
+ *
+ * WHY (round-1 review, finding 3). `elsewhere` had no way out. The claim
+ * happens before `build-start`, so the ticket is already in `Building`; a pass
+ * that gets `elsewhere` refuses and stops; `reconciledBuildDestination` later
+ * returns it to `Rework`; `queue --claimable` puts all rework first, oldest
+ * first; the next pass claims it and refuses it again. The lane spends every
+ * pass on the one ticket it can never build.
+ *
+ * The move out is an ESCALATION rather than another hand-back, because the
+ * decision genuinely is not a loop's: work sitting on another machine can only
+ * be finished on that machine (the loops run on one), so somebody has to say
+ * whether to go and finish it there or abandon it and let the loop rebuild.
+ * Handing it back to a claimable status just re-enters the same circle.
+ *
+ * Returns '' where refusing IS the whole instruction — `continue` names a
+ * branch on this disk, and `unknown` means stop and say so.
+ */
+function describeNextMove(decision, { task = '<id>' } = {}) {
+  if (decision?.action !== 'elsewhere') return '';
+  return `Do not hand this back to the claim line — it would be claimed and refused again on every pass. `
+    + `Escalate it: \`npm run clickup -- ask --task ${task} --status "Needs your input" --body-file -\`, `
+    + 'naming the machine, worktree and branch above, and offering the two moves that exist — '
+    + 'finish it on that machine with the fast-track lane, or abandon that work so the loop can rebuild it. '
+    + 'Then take the next ticket.';
 }
 
 /**
@@ -342,7 +451,9 @@ module.exports = {
   resolveBuildStart,
   resolveFromPullRequest,
   withLocalWork,
+  needsLocalWorkReading,
   describeBuildStart,
+  describeNextMove,
   buildStartExitCode,
   prLookupArgs,
 };

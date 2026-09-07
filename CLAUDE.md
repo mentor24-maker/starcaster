@@ -609,11 +609,20 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
    Leave the priority alone. Two statuses are claimable now, `Rework` and
    `Queued`; a send-back lands in `Rework`, and `queue --claimable` lists them
    in the order they must be drained (all rework first, oldest first).
-4. `npm run clickup -- build-start --task <id>` — exit 3 means a branch
-   already exists; work on THAT branch (`git worktree add
-   .claude/worktrees/<topic> -b <branch> origin/<branch>`, then `npm ci`,
+4. `npm run clickup -- build-start --task <id>` — it asks whether this ticket
+   was already started, and it looks at DISKS as well as at pull requests, so
+   exit 3 now comes in two flavours and the printed line says which.
+   **`CONTINUE`** — work exists here. If it names a PR, the branch is pushed:
+   `git worktree add .claude/worktrees/<topic> -b <branch> origin/<branch>`.
+   If it names a **worktree** instead, that folder already exists on this
+   machine and was never pushed — `cd` into it and carry on; `origin/<branch>`
+   does not exist and that command would fail. Either way, `npm ci`,
    `npm run build`, `npm run env:local`, and stamp
-   `git config branch.<branch>.clickup-task <id>`). Otherwise
+   `git config branch.<branch>.clickup-task <id>`.
+   **`WORK ON ANOTHER MACHINE`** — the half-built worktree is on a disk this
+   one cannot reach. Do not branch and do not hand it back to the claim line;
+   the command prints the escalation to run. Exit 1 means it could not tell
+   from here: stop, do not guess. Only exit 0 means
    `npm run thread <topic> <id>`.
 5. **On a send-back, merge `origin/main` in BEFORE touching a line.** The fix
    review asked for may already have landed on `main` under another name —
