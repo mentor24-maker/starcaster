@@ -1,3 +1,79 @@
+## 2026-09-06 — Nine modules were talking to the page builder on the visitor's screen, and now something checks all 61 (#636)
+
+A Builder module has two audiences: whoever is building the page, and whoever
+reads it. Several were addressing the builder on the visitor's screen. Three
+were doing it on live client sites this morning — the Blog Post module showing
+"Post Title" and "Post body will appear here when opened with ?post=slug." on
+delraytennis.starcaster.pro and on a law firm's public site; the Event Detail
+module telling visitors to type "?event=your-event-slug" into their address
+bar; and the Blog Post List naming the Create Post module, on five published
+pages across two tenants. Each now says something a visitor can use — "No post
+selected", "No event selected", "No posts published yet." — and keeps its
+original wording on the Builder canvas, which is where it belongs.
+
+The reason this is worth an entry is the second half. Four rounds of review had
+each closed the placeholder the round before had named and missed the next one,
+because there is no way to close "find all of them" by re-reading a
+twelve-thousand-line file with sixty-one module types in it. So there is now a
+check that renders **every** module as a visitor would see it and reads the
+words that come out. It runs on every commit and every build, and takes about a
+second and a half.
+
+It found six more the moment it existed: an unset image telling visitors to
+"Choose an image", the Player Portal module announcing our own product name on
+a client's site, an empty video box captioned "Video", a merch card whose
+product name was the words "Merch product", and the Confetti module running its
+design-time controls — including a "Test Burst" button — on live pages. All
+fixed here. It also renders each module in three places rather than one, which
+turned out to matter: two containers (a table cell, and the drop-down mega-menu's
+feature slot) were not passing the "this is a real page" flag down at all, so
+every guard inside them was being bypassed.
+
+Every fix was broken on purpose to watch the check go red, and the check's own
+instrument was tested first — which caught it rendering nothing at all in the
+mega-menu, sixty-one assertions passing while measuring nothing.
+
+That same trap then caught a quieter version of itself. Review found that in
+those two nested places the check was reading the container's words and the
+module's words run together as one string — "ColumnChoose an image" — so four
+of the ten guards it was built for were passing there without measuring
+anything. It now reads each module's own corner of the page instead, which
+fixes the run-together problem and a second one underneath it, and there are
+new controls that fail if either comes back. Both were broken on purpose and
+watched to fail. The lesson is the one the mega-menu already taught: a check
+that has never been seen to fail is not known to work, and "the words are on
+the page somewhere" is not the same question as "the check can find them".
+
+Round three found the third version of the same trap, and this one had made an
+*older* check worse. There are two guards here, not one: the new renderer that
+reads what comes out on screen, and an older word-search that reads the code
+itself. Fixing a false alarm in the word-search had involved telling it to
+ignore the bits of a line that are plumbing rather than words — but the way it
+was written, "ignore the plumbing" turned into "ignore everything except a
+short list of things we thought of", and ordinary visitor text handed from one
+part of the page to another stopped being read. Two of the exact phrases this
+whole ticket is about were being missed in a shape that appears throughout the
+files it scans. Nothing was leaking, and nothing would have complained; the net
+had simply got a bigger hole in it while everyone was looking elsewhere. It is
+turned around now — it ignores only the handful of things a reader definitely
+cannot see, and keeps everything else — and there are tests pinning it in both
+directions, which is what was missing. The old behaviour was measured, the new
+behaviour was measured, and the phrase was put back on purpose to watch the
+check go red.
+
+The other two are about a check being honest when it cannot do its job. If the
+testing tool was not installed in a folder — which is the normal state of a
+freshly-made folder before it is set up — the new renderer was announcing "a
+module is showing Builder text to visitors" and telling whoever read it to go
+and fix a module. Nothing was wrong with any module; it simply had not run.
+That now says "could not take a reading" in its own words and with its own
+signal, which this repo already distinguishes from both a pass and a failure —
+the difference matters because one of them sends a person hunting for a bug
+that is not there. And if the check ever runs but finds no tests to run, it now
+refuses to report success rather than cheerfully announcing that all sixty-one
+modules are fine. Both were caused on purpose and watched to behave correctly,
+and the old version was run against the same condition to confirm it really did
+call an uninstalled tool a leaking module.
 ## 2026-09-07 — The message that told you to do two opposite things at once (#639)
 
 The work above taught `npm run ship` that a pull request can go untested for two

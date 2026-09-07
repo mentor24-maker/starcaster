@@ -54,16 +54,22 @@ export function BuilderConfettiRuntime({ preview = false, settings }: BuilderCon
   }
 
   if (trigger === "on-load") {
+    /*
+     * The burst has already been queued by the effect above. Off the canvas
+     * there is nothing to draw: the sentence and the Test Burst button are
+     * both addressed to whoever is building the page (ticket 86bbvqcbk), and
+     * an empty bordered box in their place is the same defect wearing a hat.
+     */
+    if (!preview) return null;
+
     return (
       <div className="builder-confetti-module">
         <p className="panel-copy builder-confetti-module-copy">
           Confetti runs when this page loads.
         </p>
-        {preview ? (
-          <button className="secondary-button" onClick={fireBurst} type="button">
-            Test Burst
-          </button>
-        ) : null}
+        <button className="secondary-button" onClick={fireBurst} type="button">
+          Test Burst
+        </button>
       </div>
     );
   }

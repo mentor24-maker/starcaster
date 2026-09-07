@@ -27,6 +27,14 @@ type BuilderImagePreviewProps = {
   variant?: string;
   imageClassName?: string;
   placeholder?: string;
+  /**
+   * True on a real published page. "Choose an image" is an instruction to
+   * whoever is BUILDING the page; a visitor has nothing to choose and gets a
+   * grey box telling them so. With no picture there is nothing else in the
+   * figure either, so the whole module goes rather than leaving an empty frame
+   * (ticket 86bbvqcbk).
+   */
+  liveSite?: boolean;
   /** Render in the full-screen game overlay host (above the translucent backdrop). */
   gameOverlayHost?: boolean;
   /** Button-trigger mascot row (stack above poll pods; Z-Index from module settings). */
@@ -44,11 +52,13 @@ export function BuilderImagePreview({
   variant,
   imageClassName = "builder-preview-image",
   placeholder = "Choose an image",
+  liveSite = false,
   gameOverlayHost = false,
   sectionScopedDecor = false,
   columnWidthPercent = 100
 }: BuilderImagePreviewProps) {
   const mediaUrl = resolvePublicBuilderAssetUrl(module.settings.url);
+  if (liveSite && !mediaUrl) return null;
   const linkUrl = isFloatingImageModule(module) ? "" : resolvePublicBuilderAssetUrl(module.settings.linkUrl);
   const floating = isFloatingImageModule(module);
   const imageStyle = floating ? getFloatingImageModuleStyle(module.settings) : getImageModuleStyle(module.settings);
