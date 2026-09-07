@@ -2860,13 +2860,32 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
     ? `Blog posts matching the ${singleFilter} \u201c${singleFilterValue}\u201d: ${filteredPosts.length}`
     : "";
 
-  const emptyFilteredMessage = tagFilter
-    ? `No posts tagged \u201c${tagFilter}\u201d.`
+  /*
+   * The dropdown filters name themselves; the search box did not, and that is
+   * the same defect one step further on. Typing a word nothing matches read
+   * "No posts match your filters." \u2014 which does not say WHICH word emptied
+   * the page (\u00a75.31) \u2014 and typing it while a tag was selected read
+   * "No posts tagged \u201ctennis\u201d.", a sentence that is flatly FALSE when
+   * posts carry that tag and the search is what emptied the list. A confident
+   * wrong message is the worst of the three. So the search term is named, and
+   * a filter only takes credit for an emptiness alongside it, never instead of
+   * it.
+   */
+  const searchTerm = search.trim();
+  const activeFilterPhrase = tagFilter
+    ? `tagged \u201c${tagFilter}\u201d`
     : activeCategoryName
-      ? `No posts in the category \u201c${activeCategoryName}\u201d.`
+      ? `in the category \u201c${activeCategoryName}\u201d`
       : authorFilter
-        ? `No posts by \u201c${authorFilter}\u201d.`
-        : "No posts match your filters.";
+        ? `by \u201c${authorFilter}\u201d`
+        : "";
+  const emptyFilteredMessage = searchTerm
+    ? activeFilterPhrase
+      ? `No posts ${activeFilterPhrase} match \u201c${searchTerm}\u201d.`
+      : `No posts match \u201c${searchTerm}\u201d.`
+    : activeFilterPhrase
+      ? `No posts ${activeFilterPhrase}.`
+      : "No posts match your filters.";
   /*
    * Said whenever a count or an empty state was computed from a partial read.
    * "No posts tagged X" is a claim about the whole archive; if the archive was
