@@ -18,6 +18,42 @@
   --btn-text: #ffffff;
 
   /*
+   * ADMIN ACTION BUTTONS — flat, one colour, obviously grey when disabled
+   * (operator, 2026-08-30, task 86bbq5jvz: "the gradients read as muddy, and
+   * a disabled button is hard to tell from a live one, which is part of why
+   * the new Publish step keeps getting missed").
+   *
+   * These are ADMIN chrome and deliberately NOT tenant-themed — the same
+   * exception --preview-strip-bg takes. A client's own site keeps its theme
+   * colours; every rule that uses these tokens is scoped away from
+   * .builder-public-site so it cannot reach a published page.
+   *
+   * Two hues carry meaning and nothing else does: GREEN = "commit this work"
+   * (Save Page, Save Template, Save Section, Add), BLUE = "primary action"
+   * (Preview, Publish, .btn-primary, every other .submit-button). Disabled is
+   * an actual colour change rather than opacity, because a half-transparent
+   * bright colour still reads as bright.
+   *
+   * Contrast, measured: white on #0000CC is 15.0:1 (comfortable). White on
+   * #00CC00 is 2.2:1, which is below the 4.5:1 body-text floor — the operator
+   * chose that pair explicitly on 2026-08-30 and it is recorded here so the
+   * next person to touch it knows it was a decision, not an oversight. Black
+   * on the same green measures 9.6:1 if it is ever revisited.
+   */
+  --btn-green: #00cc00;
+  --btn-green-hover: #00a300;
+  --btn-green-disabled: #aaccaa;
+  --btn-blue: #0000cc;
+  --btn-blue-hover: #0000a3;
+  --btn-blue-disabled: #aaaacc;
+  --btn-danger-flat: #cc0000;
+  --btn-danger-flat-hover: #a30000;
+  --btn-danger-flat-disabled: #ccaaaa;
+  --btn-warn-flat: #cc6600;
+  --btn-warn-flat-hover: #a35200;
+  --btn-flat-ink: #ffffff;
+
+  /*
    * Type that sits on top of a photograph, and the scrim under it.
    *
    * Deliberately NOT theme-following, which is the one exception R3 allows

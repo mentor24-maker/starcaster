@@ -8869,3 +8869,141 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   font-size: var(--text-base);
   color: var(--ink-primary);
 }
+
+/* ==================================================================== */
+/* FLAT ADMIN BUTTONS — one colour, no gradient, grey when disabled      */
+/* (operator, 2026-08-30, task 86bbq5jvz)                               */
+/*                                                                      */
+/* Dane: the gradients read as muddy, and a disabled button is hard to   */
+/* tell from a live one — part of why the new Publish step keeps getting */
+/* missed. So: GREEN = save this draft (Save Page / Save Template /      */
+/* Save Section / Save Cell / New Page / Bulk Create), BLUE = the        */
+/* primary action of the screen (Preview, Check, Publish, Refresh, and   */
+/* every other `.submit-button`), and disabled is a real colour change   */
+/* rather than a fade.                                                   */
+/*                                                                      */
+/* WHICH CLASS DECIDES: `.admin-blog-add-button` is the green face.      */
+/* Every button in the Builder header carried it — Preview, Check,       */
+/* Publish and Save Page were one identical class string, so no          */
+/* stylesheet could tell them apart. That is why the ticket's "find      */
+/* where the green comes from" had no hex to find, and why Publish       */
+/* looked like one more routine save. The four that do not save a draft  */
+/* dropped the class and fall through to the base blue; the markup       */
+/* carries the reasoning at builder-publish-panel.tsx.                    */
+/*                                                                      */
+/* SCOPE — read this before adding a rule here. `.builder-react-root` is */
+/* NOT admin-only: builder-react-entry.tsx mounts a published tenant     */
+/* site as `<div class="builder-react-root builder-public-site">`, and   */
+/* site.html loads this same stylesheet. So every rule below carries     */
+/* `:not(.builder-public-site)`, which is what makes "tenant public      */
+/* pages are pixel-unchanged" a structural guarantee rather than a       */
+/* promise. The in-editor preview of a client's page uses the same       */
+/* `builder-public-site` class, so a client's own buttons keep their     */
+/* theme colours there too.                                             */
+/*                                                                      */
+/* `!important` is this file's documented convention (see the header):   */
+/* the generated rules reach 0,5,0 on the polls action bar, and matching */
+/* every one of those selectors by hand is how they drift apart.        */
+/*                                                                      */
+/* Deliberately NOT flattened: `.builder-preview-*` (that is the user's  */
+/* page content, not editor chrome) and `.admin-blog-rainbow-button`,    */
+/* whose conic-gradient IS its meaning — it is the "any colour" swatch,  */
+/* and one flat colour would be a different control.                     */
+/* ==================================================================== */
+
+/* --- BLUE: primary actions --------------------------------------- */
+.builder-react-root:not(.builder-public-site) .submit-button,
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .secondary-button.admin-polls-settings-button,
+.builder-react-root:not(.builder-public-site) .admin-gallery-action-button.secondary-button {
+  background: var(--btn-blue) !important;
+  color: var(--btn-flat-ink) !important;
+}
+
+.builder-react-root:not(.builder-public-site) .submit-button:hover:not(:disabled),
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .secondary-button.admin-polls-settings-button:hover:not(:disabled),
+.builder-react-root:not(.builder-public-site) .admin-gallery-action-button.secondary-button:hover:not(:disabled) {
+  background: var(--btn-blue-hover) !important;
+  color: var(--btn-flat-ink) !important;
+  transform: none !important;
+}
+
+/* --- GREEN: commit this work -------------------------------------- */
+.builder-react-root:not(.builder-public-site) .admin-save-button.submit-button,
+.builder-react-root:not(.builder-public-site) .admin-blog-add-button.submit-button,
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .submit-button.admin-blog-add-button.admin-polls-create-button,
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .secondary-button.admin-polls-import-button,
+.builder-react-root:not(.builder-public-site) .polls-icon-button-success {
+  background: var(--btn-green) !important;
+  color: var(--btn-flat-ink) !important;
+}
+
+.builder-react-root:not(.builder-public-site) .admin-save-button.submit-button:hover:not(:disabled),
+.builder-react-root:not(.builder-public-site) .admin-blog-add-button.submit-button:hover:not(:disabled),
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .submit-button.admin-blog-add-button.admin-polls-create-button:hover:not(:disabled),
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .secondary-button.admin-polls-import-button:hover:not(:disabled),
+.builder-react-root:not(.builder-public-site) .polls-icon-button-success:not(:disabled):hover {
+  background: var(--btn-green-hover) !important;
+  color: var(--btn-flat-ink) !important;
+  transform: none !important;
+}
+
+/* --- RED: destructive --------------------------------------------- */
+.builder-react-root:not(.builder-public-site) .danger-button,
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .secondary-button.admin-polls-import-button.admin-polls-import-button-is-open,
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .secondary-button.admin-polls-purge-button.admin-polls-purge-button-is-open {
+  background: var(--btn-danger-flat) !important;
+  color: var(--btn-flat-ink) !important;
+}
+
+.builder-react-root:not(.builder-public-site) .danger-button:hover:not(:disabled),
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .secondary-button.admin-polls-import-button.admin-polls-import-button-is-open:hover:not(:disabled),
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .secondary-button.admin-polls-purge-button.admin-polls-purge-button-is-open:hover:not(:disabled) {
+  background: var(--btn-danger-flat-hover) !important;
+  color: var(--btn-flat-ink) !important;
+  transform: none !important;
+}
+
+/* --- AMBER: the one "are you sure?" toggle ------------------------- */
+/* Purge is armed by a second click, so its resting state is a warning  */
+/* rather than a destruction — the red rule above takes over once it is */
+/* open, and outranks this one on specificity.                          */
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .secondary-button.admin-polls-purge-button {
+  background: var(--btn-warn-flat) !important;
+  color: var(--btn-flat-ink) !important;
+}
+
+.builder-react-root:not(.builder-public-site) .admin-polls-action-bar .secondary-button.admin-polls-purge-button:hover:not(:disabled) {
+  background: var(--btn-warn-flat-hover) !important;
+  color: var(--btn-flat-ink) !important;
+  transform: none !important;
+}
+
+/* --- DISABLED: a colour, never a fade ------------------------------ */
+/* The generated rule fades these to `opacity: 0.6`, which leaves a     */
+/* bright button looking bright. `opacity: 1` here is the whole point.  */
+/* Green first, blue second: the green selectors below carry the higher */
+/* specificity, so a disabled Save Page reads grey-green and every      */
+/* other disabled submit-button reads grey-blue.                        */
+.builder-react-root:not(.builder-public-site) .submit-button:disabled {
+  background: var(--btn-blue-disabled) !important;
+  color: var(--btn-flat-ink) !important;
+  opacity: 1 !important;
+}
+
+.builder-react-root:not(.builder-public-site) .admin-save-button.submit-button:disabled,
+.builder-react-root:not(.builder-public-site) .admin-blog-add-button.submit-button:disabled,
+.builder-react-root:not(.builder-public-site) .polls-icon-button-success:disabled {
+  background: var(--btn-green-disabled) !important;
+  color: var(--btn-flat-ink) !important;
+  opacity: 1 !important;
+}
+
+/* Red gets the same treatment for the same reason. The spec named green and  */
+/* blue only, but leaving danger on `opacity: 0.6` would mean two of the three */
+/* button colours answer "am I clickable?" with a colour and the third still   */
+/* answers with a fade — which is the ambiguity the whole ticket is about.     */
+.builder-react-root:not(.builder-public-site) .danger-button:disabled {
+  background: var(--btn-danger-flat-disabled) !important;
+  color: var(--btn-flat-ink) !important;
+  opacity: 1 !important;
+}
