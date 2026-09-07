@@ -441,6 +441,31 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
      `gh pr checks <pr>` lists a run before pushing it. If none has appeared
      after a couple of minutes, only a new commit can create one —
      `git commit --allow-empty -m "Nudge GitHub into creating a check run"`.
+   - **"No checks" is not an empty list — Vercel posts rows on every PR.** Ask
+     `gh pr checks <pr> --json name,bucket,state,workflow` and look for
+     **`verify`** and **`review-gate`**, the only two rows that mean CI ran.
+     The Vercel rows carry an empty `workflow` and go green on their own, so a
+     pull request with nothing running still shows a board of passes.
+   - **But ask WHY the checks are missing before you reach for that commit —
+     there are two causes and the remedies are opposite** (2026-09-06, PR #630):
+
+     ```bash
+     gh pr view <pr> --json mergeable,mergeStateStatus
+     ```
+
+     `CONFLICTING` / `DIRTY` means GitHub is running nothing on this PR *on
+     purpose*: the workflows here trigger on `pull_request`, which runs against
+     the merge of the branch and main, and it cannot build that merge. The
+     checks are not late — **they are never coming**, and the empty commit
+     cannot help because its new head SHA does not merge either. The remedy is
+     a catch-up merge: `git merge origin/main --no-edit && git push`, and the
+     runs start within seconds. `UNKNOWN` just means GitHub has not worked it
+     out yet; ask again. Only on `MERGEABLE` is the nudge commit the right move.
+
+     **A conflicting head is a CANNOT TELL, not a slow CI run.** Do not spend
+     the pass waiting on it. If you cannot get checks running inside this pass,
+     hand the ticket back to `Rework` with a note naming what is outstanding —
+     a green branch nobody can see is the failure in the guardrails below.
    - **Only ordinary pushes.** If a push is rejected because the branch is
      behind, merge `origin/main` in — never rebase-and-force. That is the same
      choice `npm run ship` makes on purpose (`docs/DOCTRINE.md` §6.6): the
@@ -536,4 +561,22 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
   description with `describe` to match his answer before you start. A ticket
   handed back to the claim line still carrying its original wide scope is how the
   risky half gets built by accident (Sync 6/7, 2026-08-22).
+- **A gap you notice while building is not a ticket — check the rule before
+  filing.** A pipeline or self-machinery ticket is filed only when a pipeline
+  failure **actually cost something observable** — lost work, a dead lane, a
+  silent outage, a wrong merge — and its description names that incident.
+  Without one it goes as one plain line in the ClickUp doc *The 31 parked
+  tickets* (`https://app.clickup.com/90141423066/docs/2kydhxeu-814`), under
+  **Parked tickets**; a pass with no route to write that doc says the line in
+  its run report and stops. Measured 2026-09-06, these tickets went from about
+  6 a day to about 16 a day, faster than the queue drains; 31 were parked and
+  the six that stayed all named a real failure. All 31 were genuine findings,
+  so "is it real?" is the wrong gate. **Product defects are unaffected** — a
+  tenant-site or admin-app bug is filed on sight. Canon: `docs/DOCTRINE.md`
+  §6.24.
+- **Ticket titles say in plain words what breaks and who feels it**, wherever
+  you create or rename one — the operator scans a list of seventy. The
+  diagnostic sentence goes in the description. This also applies to the PR
+  title only in the sense that it must match the ticket name byte for byte
+  (step 7): fix a cryptic name on the TICKET first, then copy it.
 - Leave the worktree in place until the PR merges; `loop-review` may reuse it.

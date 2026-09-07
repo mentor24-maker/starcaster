@@ -693,6 +693,51 @@ on mouse-over (`+ New status` there creates inline, skipping the broken
 dialog), and statuses live on the **list**, not the space — the space
 settings' generic `TO DO / IN PROGRESS / COMPLETE` are not this board.
 
+### Parking a finding instead of filing it (2026-09-06, task 86bbvtnfn)
+
+`wont-do` above is for work that was **decided against**. There is a second,
+much commoner case: a finding that is perfectly real and simply is not worth a
+queue slot. That one is **parked**, not killed, and the difference is the tag.
+
+**The stopping rule.** A pipeline or self-machinery ticket is filed only when a
+pipeline failure **actually cost something observable** — lost work, a dead
+lane, a silent outage, a wrong merge — and the description names that incident.
+A theoretical gap noticed while specifying, building or reviewing is not a
+ticket, however correct it is.
+
+Why it is a rule: measured 2026-09-06, tickets the pipeline filed about itself
+accelerated from about **6 a day in mid-August to about 16 a day in early
+September** — faster than the queue drains — and Delray and product work queued
+behind them. Dane parked **31** of them that day. The **six** that stayed all
+name a failure that actually happened (86bbuzyra, 86bbvr5zv, 86bbvr5ym,
+86bbvr4w3, 86bbvqkr1, 86bbvj44f). Not one of the 31 could. *"Is this a real
+finding?"* is therefore the wrong gate — all 31 passed it.
+
+**Where a parked finding goes:** one plain line in the ClickUp doc *The 31
+parked tickets*, `https://app.clickup.com/90141423066/docs/2kydhxeu-814`, under
+**Parked tickets** — what breaks and who feels it, and stop. A headless loop
+pass has no write route to a ClickUp doc; it says the line in its run report
+and as a plain comment on the ticket it was already working, marked as a parked
+finding. **What no pass does is file it.**
+
+**Parking an existing ticket:** close it as `Live` with the tag **`deferred`**
+— *not* `wont-do` — keeping its description and comments. Reviving one is
+setting its status back to `Queued`; the loops pick it up again. That is the
+whole procedure.
+
+**Client-facing defects are not in scope here.** A bug on a tenant site or in
+the admin app is filed on sight, as always. This rule governs the pipeline's
+tickets about itself.
+
+**Titles, wherever a ticket is created.** The name says in plain words **what
+breaks and who feels it**, readable by the operator scanning a list of seventy;
+the diagnostic sentence goes in the description. Dane, verbatim: *"your
+descriptions of tickets is so cryptic and full of fanciful turns of phrases
+that it is difficult for me to understand which ones are really important and
+which ones aren't."*
+
+Canon: `docs/DOCTRINE.md` §6.24, cross-referenced from `CLAUDE.md`.
+
 ## How to run it
 
 **They are already running.** Since 2026-09-02 (task 86bbtuje2, PR #537) both
@@ -2446,11 +2491,177 @@ Two things follow, and both used to be got wrong:
   `nudge` hook). It does that at most once, and if a run still does not appear
   it says plainly that this is no longer a delay.
 
-**Recovering a checkless PR by hand** — any new commit will do:
+**Recovering a checkless PR by hand** — any new commit will do, *for this cause*:
 
 ```
 git commit --allow-empty -m "Nudge GitHub into creating a check run" && git push
 ```
+
+### The OTHER cause, whose remedy is the opposite one (2026-09-06, PR #630)
+
+For a long time the paragraphs above were the whole story, and they are only
+half of it. A checkless pull request has **two** causes, they look completely
+identical from outside, and **the remedy for each does nothing for the other.**
+
+On PR #630 two commits were pushed eleven minutes apart — `8ef87761` at 16:26
+and `47f0b6c0` at 16:37 — and GitHub created no workflow runs for either:
+
+```
+$ gh api repos/mentor24-maker/starcaster/commits/8ef87761/check-runs
+Vercel Preview Comments   completed   success        <- and nothing else
+```
+
+Actions was healthy the whole time: other pull requests in the same repository
+got full `CI` + `review-gate` runs at 16:34 and 16:37, in between those two
+pushes. And the documented remedy was tried and did nothing — the nudge commit
+was pushed and produced no run either.
+
+**The cause is the pull request's merge state.**
+
+```
+$ gh pr view 630 --json mergeable,mergeStateStatus
+{"mergeable":"CONFLICTING","mergeStateStatus":"DIRTY"}
+```
+
+Both workflows here trigger on `pull_request` (`.github/workflows/ci.yml`,
+`review-gate.yml`), and a `pull_request` workflow runs against the **merge ref**
+— the branch merged into its base. GitHub cannot build that ref for a pull
+request it believes conflicts, so it runs **nothing at all**. No error, no
+skipped run, no annotation; the checks are simply absent. That is why the nudge
+cannot help: the empty commit does move the head SHA, but the new SHA does not
+merge either.
+
+`git merge-tree --write-tree origin/main HEAD` exited **0** with a clean tree,
+so this was the phantom kind of conflict rather than a real disagreement. What
+was not known before #630 is that a phantom conflict is not merely untidy —
+**it switches the pull request's checks off entirely.** The thing that fixed it
+was merging `origin/main` in: the moment the branch was current, `mergeable`
+flipped to `MERGEABLE` and both workflows started within seconds.
+
+### Which remedy applies — ask, do not guess
+
+One command tells the two apart, and it costs a second:
+
+```
+gh pr view <pr> --json mergeable,mergeStateStatus
+```
+
+| Reading | Cause | Remedy |
+|---|---|---|
+| `CONFLICTING` / `DIRTY` | GitHub will not build a merge ref, so it runs nothing | **Ask git too, then see the three cases below** — usually a catch-up merge (`npm run ship`) |
+| `MERGEABLE` / anything else | The `opened` run and a too-quick second push were both dropped (#387/#389) | **Push any new commit** — `git commit --allow-empty -m "Nudge GitHub into creating a check run" && git push` |
+| `UNKNOWN` | GitHub has not worked it out yet — normal for a few seconds after a push | **Ask again.** Never read this as either of the above |
+
+Applying the wrong one is not a no-op: it burns a grace window, adds a commit
+that changes nothing, and then reports the wrong diagnosis. On #630 that ended
+in "check that Actions is enabled for the repository", about a repository whose
+Actions were running other people's pull requests at that exact minute.
+
+### `CONFLICTING` is one reading with three different remedies
+
+"Merge the base in" is the right answer *when the branch is actually behind*,
+and on a branch that is already current it is a **no-op loop** — `ship` merges
+`origin/main` in at step 1, so a pull request whose only problem is GitHub's
+stale computation gets told to do the thing `ship` just did, does it, changes
+nothing, and comes back round. That is not hypothetical: GitHub's mergeability
+is a cached background computation and it is wrong here often enough to have
+its own note in doctrine (PRs #567 and #585, and #639 — the pull request that
+carried this very fix, which read `CONFLICTING` while git merged it cleanly).
+
+So a conflicting reading is met with a **second source**, the same cross-check
+`mergeOnComment`'s gate already makes:
+
+```
+git rev-parse --verify origin/main^{commit}     # both refs FIRST — see below
+git rev-parse --verify HEAD^{commit}
+git merge-tree --write-tree origin/main HEAD    # 0 = merges clean, 1 = conflicts
+git rev-list --count HEAD..origin/main          # 0 = the branch already has main
+```
+
+| GitHub | git | What it is | Remedy |
+|---|---|---|---|
+| `CONFLICTING` | conflicts | A real conflict; both sources agree | **Resolve it** — `git merge origin/main`, fix the files, commit, `npm run ship` |
+| `CONFLICTING` | clean, branch behind main | The #630 case: stale branch, phantom reading | **Catch up** — `npm run ship` merges `origin/main` in first |
+| `CONFLICTING` | clean, branch already current | GitHub is holding a stale computation and there is nothing to catch up | **Make it recompute** — `git commit --allow-empty -m "Recompute mergeability" && git push` |
+| `CONFLICTING` | no reading could be taken | Unconfirmed | **Catch up** — the measured remedy, and safe against an unconfirmed conflict |
+
+**Resolve both refs before the exit code means anything.** `git merge-tree
+--write-tree` exits **1** for a ref it cannot resolve as well as for a conflict
+(measured on git 2.50.1: `merge-tree: nosuchref - not something we can merge`).
+Reading that bare `1` as a conflict sends you to resolve one that does not
+exist, over a typo. Every unreadable case here is a **CANNOT TELL** that falls
+back to the catch-up merge — never "clean".
+
+**`npm run ship` asks this itself now.** `scripts/builder/waitForChecks.js`
+polls mergeability while no check has ever appeared, and returns its own
+`blocked_conflicting` outcome the moment GitHub says `CONFLICTING` — before the
+grace window, and before the nudge, because reaching either of those first
+hands out the wrong remedy. `UNKNOWN` is deliberately not treated as a
+conflict: it is the ordinary answer for the first seconds after every push, so
+it is polled rather than read once.
+
+**And the message it prints names exactly ONE remedy.** Both checkless outcomes
+— the conflicting head and "nothing ever appeared" — go through one builder,
+`scripts/builder/checklessMessage.js`, which fills a single remedy slot from
+the table above. It is written that way because the first version assembled the
+message by CONCATENATION, appending a note about mergeability to a paragraph
+chosen from the nudge's outcome, and two of those pairings contradicted
+themselves outright — "the branch needs a new commit before GitHub will make a
+run", immediately followed by "the remedy is a catch-up merge, not another
+commit". The operator can do one of those, and nothing in the message said
+which: this section's own failure mode, reproduced inside the fix for it. One
+slot, filled by a table, is what makes a second remedy something a future edit
+cannot add by accident.
+
+**A conflicting head blocks runs from being CREATED; it does not remove runs
+that already exist.** Measured on 2026-09-06: PR #637 read `CONFLICTING` /
+`DIRTY` with all four of its checks passing, because they were created before
+the branch went stale. That is the whole reason the guard above only fires when
+**no check has ever appeared** — a pull request that goes conflicting mid-run
+still has real checks with a real verdict, and the merge gate refuses a `DIRTY`
+head on its own anyway. Firing on any conflicting reading would report a fully
+green board as blocked.
+
+### "No checks" never looks like no checks — Vercel is always there
+
+This is what made the guard above ship **unreachable**, and it is the trap a
+pass reading `gh pr checks` by hand falls into as well. A checkless pull
+request in this repository is not an empty list. Vercel posts its own rows on
+every pull request whatever GitHub Actions does, and `gh` reports them as
+passing, so the #630 board looked like this:
+
+```
+Vercel Preview Comments   completed   success        <- and nothing else
+```
+
+Two green rows. Nothing had run. **The count of rows tells you nothing; only
+which rows tells you anything.** Ask for the `workflow` field and the
+distinction is immediate — a GitHub Actions check *run* belongs to a workflow
+and carries its name, a status posted by an outside service does not:
+
+```
+$ gh pr checks <pr> --json name,bucket,state,workflow
+{"name":"verify",                 "workflow":"CI"}            <- ours
+{"name":"review-gate",            "workflow":"review-gate"}   <- ours
+{"name":"Vercel",                 "workflow":""}              <- not a check run
+{"name":"Vercel Preview Comments","workflow":""}              <- not a check run
+```
+
+The two rows that decide anything are **`verify`** and **`review-gate`**. If
+neither is present, no CI has run, however green the board looks.
+
+`waitForChecks` classifies on exactly that (`isWorkflowCheck`), which is what
+makes the conflicting-head guard reachable at all. It also closes a second,
+older hole the same finding uncovered: before this, a pull request carrying
+nothing but Vercel rows classified as fully **passed**, so `ship` would walk
+past its CI gate and try to merge a pull request with no CI green whatsoever.
+
+**A pass waiting on checks by hand owes the same question.** If `verify` and
+`review-gate` are absent — *not* "if the list is empty", which it never is —
+run the `gh pr view` line above *before* waiting. A conflicting head is a
+**CANNOT TELL**, not a slow CI run: the checks are not late, they are never
+coming, and waiting out the pass's budget on one is how a finished green
+branch ends up sitting in `Building` overnight.
 
 **Avoiding it in the first place:** do not push again in the seconds right after
 `gh pr create`. Open the PR, wait until `gh pr checks <pr>` lists a run, and

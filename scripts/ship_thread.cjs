@@ -65,7 +65,8 @@ const CI_TIMEOUT_MIN = 20;
 // it. If CI gets slower, both move together.
 const MERGE_TIMEOUT_MIN = CI_TIMEOUT_MIN;
 const { pickPullRequestCommit, REPIN_SUBJECT, NUDGE_SUBJECT } = require('./builder/pullRequestCommit');
-const { waitForChecks } = require('./builder/waitForChecks');
+const { waitForChecks, classifyMergeable } = require('./builder/waitForChecks');
+const { checklessMessage, classifyLocalMerge } = require('./builder/checklessMessage');
 const {
   waitForMerge, mergeTimeLabel, holdLabel, holdIsPending, classifyMergeHold,
   notMergedExplanation, prObservationArgv, parsePrObservation,
@@ -172,9 +173,19 @@ const bucketOf = (check) => String((check && check.bucket) || '').toLowerCase();
  * rather than a non-zero exit when there are no checks — so "none yet" arrives
  * here as `[]`, never as a thrown failure. A genuinely broken `gh` call (auth,
  * network) is different: it stops ship rather than being read as "no checks".
+ *
+ * `workflow` IS NOT OPTIONAL IN THAT FIELD LIST. It is the only thing that
+ * tells this repository's own CI runs (`verify`, `review-gate`, which carry
+ * their workflow's name) from the rows Vercel posts on every pull request
+ * (which carry an empty one). Without it `classifyChecks` cannot see the
+ * difference and a pull request with nothing but Vercel rows reads as fully
+ * green — which is how the conflicting-head guard came to be unreachable in
+ * the one repository it was written for (2026-09-06, round 2 of 86bbvqkr1).
+ * `classifyChecks` throws rather than guessing if the field is missing, and
+ * `shipThread.test.js` asserts this list still asks for it.
  */
 function queryPullRequestChecks(prNumber) {
-  const result = spawnSync('gh', ['pr', 'checks', String(prNumber), '--json', 'bucket,name,state'], {
+  const result = spawnSync('gh', ['pr', 'checks', String(prNumber), '--json', 'bucket,name,state,workflow'], {
     cwd: root, encoding: 'utf8',
   });
   const stdout = (result.stdout || '').trim();
@@ -195,6 +206,34 @@ function queryPullRequestChecks(prNumber) {
     `${stderr || 'gh returned no output.'}`
   );
   return []; // unreachable; fail() exits.
+}
+
+/**
+ * Ask GitHub whether this pull request conflicts with its base.
+ *
+ * WHY (2026-09-06, PR #630). Both workflows here trigger on `pull_request`,
+ * which GitHub runs against the MERGE of the branch and main. When it believes
+ * the two conflict it cannot build that merge, so it creates no run at all —
+ * silently. The pull request then looks exactly like one whose checks are
+ * merely early, and the remedy for THAT case (an empty nudge commit) cannot
+ * help, because the nudge's new head SHA does not merge either.
+ *
+ * Unlike `queryPullRequestChecks` this never stops ship. It only ever adds a
+ * diagnosis to a wait that was going to happen anyway, so a reading that cannot
+ * be taken returns null and the wait carries on as it always did — "cannot
+ * tell" must not become "conflicting", and it must not become a failure.
+ */
+function queryPullRequestMergeable(prNumber) {
+  const result = spawnSync('gh', ['pr', 'view', String(prNumber), '--json', 'mergeable,mergeStateStatus'], {
+    cwd: root, encoding: 'utf8',
+  });
+  const stdout = (result.stdout || '').trim();
+  if (!stdout) return null;
+  try {
+    const parsed = JSON.parse(stdout);
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch (_) { /* an unreadable answer is not a verdict */ }
+  return null;
 }
 
 // The PR URL spelling moved into `shipPrTrail` (task 86bbq7z1k, round 2). It
@@ -562,11 +601,48 @@ function nudgeChecks() {
   return true;
 }
 
+/**
+ * GIT'S OWN ANSWER TO "DOES THIS BRANCH CONFLICT?" — a second source, taken
+ * only when GitHub has claimed one.
+ *
+ * GitHub's mergeability is a cached background computation and it is wrong here
+ * often enough to have its own doctrine: PRs #567 and #585 read CONFLICTING
+ * while git merged the same two commits cleanly, and so did #639, the pull
+ * request that carried this very fix. The advice differs completely between the
+ * three cases — resolve a real conflict, bring main in, or push a commit so
+ * GitHub recomputes — and "bring main in" is a no-op loop on a branch that is
+ * already current, which is precisely the branch a phantom reading lands on.
+ *
+ * Every failure is a cannot-tell, never "clean": `classifyLocalMerge` returns
+ * null and the message falls back to the catch-up advice, which is the measured
+ * remedy (#630) and safe against an unconfirmed conflict.
+ */
+function localMergeReading() {
+  const fetched = quiet('git', ['fetch', '--quiet', 'origin', 'main']);
+  // Both refs are resolved BEFORE the exit code is read, because
+  // `git merge-tree --write-tree` exits 1 for a ref it cannot resolve as well
+  // as for a conflict (measured, git 2.50.1) — and reading that as a conflict
+  // would send the operator to resolve one that does not exist.
+  const base = quiet('git', ['rev-parse', '--verify', 'origin/main^{commit}']);
+  const head = quiet('git', ['rev-parse', '--verify', 'HEAD^{commit}']);
+  const tree = quiet('git', ['merge-tree', '--write-tree', 'origin/main', 'HEAD']);
+  const behind = quiet('git', ['rev-list', '--count', 'HEAD..origin/main']);
+  return classifyLocalMerge({
+    baseResolved: base.ok,
+    headResolved: head.ok,
+    mergeTreeCode: tree.code,
+    mergeTreeOut: tree.out,
+    behindCount: behind.ok ? Number(behind.out.trim()) : null,
+    baseIsFresh: fetched.ok,
+  });
+}
+
 const wait = waitForChecks({
   totalBudgetMs: CI_TIMEOUT_MIN * 60 * 1000,
   now: () => Date.now(),
   sleep: sleepMs,
   queryChecks: () => queryPullRequestChecks(prNumber),
+  queryMergeable: () => queryPullRequestMergeable(prNumber),
   nudge: nudgeChecks,
   onPoll: (state, list, elapsed) => {
     // One honest progress line per poll, only when the picture changes, so a
@@ -585,33 +661,29 @@ const wait = waitForChecks({
   },
 });
 
-if (wait.outcome === 'never_appeared') {
-  fail(
-    wait.nudged
-      ? `No checks appeared on this pull request, and pushing an extra commit did not produce\n` +
-        `one either. That is not a delay — something is stopping GitHub Actions from running\n` +
-        `on this branch. Nothing was merged; the work is safe. Check that Actions is enabled\n` +
-        `for the repository and that the workflow file is present on the branch.\n\n` +
-        `Look at: ${prUrl}`
-      // The nudge is only skipped when it could not be made — and the two ways
-      // it can fail need OPPOSITE advice, so they get their own sentences. The
-      // single message that used to stand here gave the commit-failed advice in
-      // both cases, which in the push case told the operator not to do the one
-      // thing that works.
-      : nudgeFailedAt === 'push'
-        ? `No checks ever appeared on the branch. The extra commit that would create one was\n` +
-          `made, but pushing it failed (see the reason above), so it is sitting on this branch\n` +
-          `locally and GitHub has not seen it. Nothing was merged; the work is safe.\n\n` +
-          `Push it and the run should start:\n` +
-          `  git push\n` +
-          `or just run \`npm run ship\` again — it picks up where it got to.\n\n` +
-          `Look at: ${prUrl}`
-        : `No checks ever appeared on the branch, and the extra commit that would have created\n` +
-          `one could not be made (see the reason above). Nothing was merged; the work is safe\n` +
-          `on the branch. Re-running \`npm run ship\` on its own will NOT help — the branch\n` +
-          `needs a new commit before GitHub will make a run.\n\n` +
-          `Look at: ${prUrl}`
-  );
+// A CHECKLESS PULL REQUEST — ONE MESSAGE, ONE REMEDY (round 3 of 86bbvqkr1).
+// `blocked_conflicting` and `never_appeared` are the same situation described
+// twice: no run of this repository's own workflows exists, and the operator
+// needs to be told the ONE thing that fixes it. They used to be two blocks of
+// prose here, one of them assembled by appending a mergeability note to a
+// nudge paragraph — a concatenation that could, and did, tell him to do two
+// opposite things in one message. The decision now lives in
+// `checklessMessage`, which fills exactly one remedy slot from a table; this
+// caller carries no message strings of its own, so there is nothing here for a
+// future edit to append a second remedy to.
+if (wait.outcome === 'blocked_conflicting' || wait.outcome === 'never_appeared') {
+  fail(checklessMessage({
+    outcome: wait.outcome,
+    nudged: wait.nudged,
+    nudgeFailedAt,
+    mergeable: wait.mergeable,
+    // Only worth the round-trip when GitHub has actually claimed a conflict:
+    // that is the one verdict a second source changes the advice for.
+    localMerge: classifyMergeable(wait.mergeable) === 'conflicting' ? localMergeReading() : null,
+    checks: wait.checks,
+    prNumber,
+    prUrl,
+  }).text);
 }
 if (wait.outcome === 'timed_out_pending') {
   fail(
