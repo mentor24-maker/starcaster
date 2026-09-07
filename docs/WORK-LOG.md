@@ -45,7 +45,30 @@ it one. Touch Shadow X or Shadow Y by hand and the panel drops what it
 remembered instantly and goes back to describing the picture as it actually is
 — which is the part that matters, because a panel quietly describing a shadow
 that is not on the page is a worse bug than the three it fixes. Nothing extra
-is saved: this lives only in the open panel and is gone when it closes.
+is saved.
+
+A second look at the real panel found two more, and they are the reason this
+went round twice. The first: **dragging the distance slider out past about 41
+turned the shadow all by itself.** Pick a direction, touch nothing but the
+distance, and by the far end the shadow had swung twelve degrees. The cause is
+worth stating plainly, because it looked like a safety feature. Neither of the
+two stored numbers may go past 40, and each was being trimmed to 40 on its own
+— so once one of them hit the limit the shadow stopped travelling along the
+line the angle described and started sliding around the edge of the box towards
+its corner. Trimming both by the same amount instead keeps the shadow pointing
+exactly where it was told to; it simply stops getting further away, and the
+distance box says so honestly rather than drifting. Checked at every one of the
+twenty-four directions, at every distance: it no longer moves at all, where
+before it moved on 189 of them.
+
+The second was quieter and had no visible symptom on a page. The panel's memory
+of what was picked was a single note with no name on it, and in the Builder
+several modules are open at once — so a direction picked on one module was being
+shown by another module that happened to sit at the same offsets. The note now
+carries the name of the module that wrote it. And the comment in that file said
+the memory "lives in the open panel and is gone when it closes", which was never
+true; it is corrected, because a note claiming a safety that does not exist is
+the thing somebody trusts later.
 
 ## 2026-09-07 — The search box on the tags page told a visitor the wrong thing when it found nothing (#643)
 
