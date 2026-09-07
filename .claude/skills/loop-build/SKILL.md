@@ -536,4 +536,22 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
   description with `describe` to match his answer before you start. A ticket
   handed back to the claim line still carrying its original wide scope is how the
   risky half gets built by accident (Sync 6/7, 2026-08-22).
+- **A gap you notice while building is not a ticket — check the rule before
+  filing.** A pipeline or self-machinery ticket is filed only when a pipeline
+  failure **actually cost something observable** — lost work, a dead lane, a
+  silent outage, a wrong merge — and its description names that incident.
+  Without one it goes as one plain line in the ClickUp doc *The 31 parked
+  tickets* (`https://app.clickup.com/90141423066/docs/2kydhxeu-814`), under
+  **Parked tickets**; a pass with no route to write that doc says the line in
+  its run report and stops. Measured 2026-09-06, these tickets went from about
+  6 a day to about 16 a day, faster than the queue drains; 31 were parked and
+  the six that stayed all named a real failure. All 31 were genuine findings,
+  so "is it real?" is the wrong gate. **Product defects are unaffected** — a
+  tenant-site or admin-app bug is filed on sight. Canon: `docs/DOCTRINE.md`
+  §6.24.
+- **Ticket titles say in plain words what breaks and who feels it**, wherever
+  you create or rename one — the operator scans a list of seventy. The
+  diagnostic sentence goes in the description. This also applies to the PR
+  title only in the sense that it must match the ticket name byte for byte
+  (step 7): fix a cryptic name on the TICKET first, then copy it.
 - Leave the worktree in place until the PR merges; `loop-review` may reuse it.
