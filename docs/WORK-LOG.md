@@ -1,3 +1,27 @@
+## 2026-09-07 — "Two headers on every new page" was one header placed twice (#642)
+
+Every page built from the Delray site's main template came up with two header
+bars, one of them named after a section everyone believed had been retired
+months ago. Nothing was actually left over. The site has one header, and the
+template simply listed it twice. One of the two copies was still linked to the
+original, so it showed the original's current name, "2a - Public Header"; the
+other had been unlinked at some point and kept the name the original carried
+back then, "2 - Menu Banner". Two names on screen, one section underneath.
+
+The first write-up of this asked for the old section to be deleted. That would
+have stripped the header off all 58 pages of the Delray site, because the row it
+named for deletion is the good header — only renamed. Dane made the two edits
+himself in the Builder instead of letting a machine touch live client content:
+he removed the duplicate slot from the template and cleaned up the one scratch
+page that had picked it up.
+
+This entry records the check that it worked. Read live from production: the
+template lists the header once, no page anywhere holds two copies of it, no page
+carries the old name, and the live site renders a single header on both the home
+page and the scratch page. Two things were left alone on purpose — a test
+fixture that still uses the old name locally, and one stored title on the blog
+template that is stale in the database but never reaches the screen. No code
+changed; the whole thing was data.
 ## 2026-09-06 — An answer you wrote could go permanently missing if a job died at the wrong second (#640)
 
 When you answer a question on a ticket, a background job does two things with
