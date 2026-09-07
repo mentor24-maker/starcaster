@@ -1,3 +1,33 @@
+## 2026-09-07 — The message that told you to do two opposite things at once (#639)
+
+The work above taught `npm run ship` that a pull request can go untested for two
+completely different reasons, and that the cure for one is useless for the
+other. It then went and printed both cures in the same message. The wording was
+assembled in two halves — a paragraph about what it had already tried, and a
+note about what it had found out — and glued together they said "this branch
+needs a new commit" and then, four lines later, "not another commit: pull main
+in". You can do one of those. Nothing on the screen said which.
+
+That is the exact failure this whole piece of work exists to prevent — advice
+that cannot work, handed to somebody who has no way to tell — reproduced inside
+the fix for it. So the repair is not a better paragraph. There is now one place
+that writes this message, it picks its advice from a table, and there is exactly
+one slot for advice to go in. A future edit cannot add a second one by accident,
+because there is nowhere to put it.
+
+While it was being rebuilt, two more things got sorted out. GitHub's opinion
+about whether a branch conflicts is a cached guess and it is wrong here often
+enough to be notorious — it was wrong about this very pull request — so ship now
+asks *git*, on the spot, and the two answers together tell it which of three
+situations it is actually in: a real conflict to resolve by hand, a branch that
+is genuinely behind and needs main pulled in, or GitHub simply holding a stale
+answer, where pulling main in does nothing at all and what is needed is a nudge
+to make it recompute. Telling those apart matters because ship already pulls
+main in as its first step, so the stale-answer case was the one that could send
+you round in a circle. And if one of the non-testing services on a pull request
+has failed — a preview deployment, say — the message now names it, because
+nothing else would have.
+
 ## 2026-09-06 — A pull request that quietly gets no testing at all, and the fix that could not work (#639)
 
 Sometimes a pull request opens and GitHub never runs any of its tests. Nothing
