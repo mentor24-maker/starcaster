@@ -1900,16 +1900,39 @@ it skips is the queue position.
    ticket is still claimable by a loop pass; only the status is, and only
    `--if-status` makes the write refuse if a pass got there first (the same
    check-then-act guard the loops use). Leave the priority where it is.
-4. **Find the branch.** `npm run clickup -- build-start --task <id>`: exit 3
-   means a PR is already open, so the work continues on THAT branch, not a
-   fresh one. `npm run thread` only creates new branches, so for an existing
-   one it is by hand:
+4. **Find the branch.** `npm run clickup -- build-start --task <id>`. It asks
+   whether this ticket was already started, and since task 86bbvur5a it looks
+   at **disks as well as at pull requests** — because a pull request is the
+   last thing a build produces, so a pass that wrote code and died before
+   pushing leaves nothing for a PR lookup to find. **Exit 3 therefore comes in
+   two flavours, and the line it prints says which.**
+
+   **`CONTINUE`** — work exists on this machine, and that branch is the one to
+   work on. `npm run thread` only creates new branches, so it is by hand. If
+   the command printed a `pr:` line, the branch is pushed:
 
    ```
    git worktree add .claude/worktrees/<topic> -b <branch> origin/<branch>
    cd .claude/worktrees/<topic> && npm ci && npm run build && npm run env:local
    git config branch.<branch>.clickup-task <id>     # what tidy reads back
    ```
+
+   If it printed a **`work:`** line naming a worktree instead, that folder is
+   already on this machine and **was never pushed** — `cd` into it and carry
+   on. `origin/<branch>` does not exist, so the command above would fail.
+   Either way the stamp is what `tidy` and `ship` read back, so set it if it
+   is missing.
+
+   **`WORK ON ANOTHER MACHINE`** — also exit 3. The half-built worktree is on
+   a disk this one cannot reach, so there is nothing to check out here. Do not
+   branch, and do not hand the ticket back to the claim line: rework is
+   claimed first and oldest-first, so it would come back and be refused again
+   on every pass. The command prints the escalation to run.
+
+   **Exit 1 is a stop.** Something could not be read *here* — most often the
+   local disk itself. A `work:` line marked *NOT on this machine* is naming
+   somebody else's branch, not yours. Only **exit 0** means
+   `npm run thread <topic> <id>`.
 
    Then build in that folder, by absolute path (CLAUDE.md, "One topic, one
    worktree — a session may hold more than one", rule 2). The hand-off to a
@@ -2933,9 +2956,17 @@ listed as **not measured**, never silently skipped.
 
 **Shape 4 is the dangerous one, and the reason this check reads both
 directions.** `build-start` decides whether a branch already exists by reading
-*the ticket*. A link that exists only on the PR side is invisible to it, so the
-next pass opens a second branch for work that already has one — exactly how
-duplicate PRs #407 and #408 were born. Real case: PR #373 ↔ 86bbjj6qb, found
+*the ticket* — so a link that exists only on the PR side is invisible to it,
+and the next pass opens a second branch for work that already has one, exactly
+how duplicate PRs #407 and #408 were born.
+
+Since task 86bbvur5a it takes a second reading, of the **disks**, which narrows
+this shape without closing it: a stamped branch still sitting on a machine the
+probe can reach is found whether or not the ticket knows about its PR. What
+that reading cannot see is a branch that exists only on GitHub — tidied away
+locally, or built on a machine now unreachable — and it says which seats it
+could not look at rather than answering for them. This check is still the one
+that reads the PR side. Real case: PR #373 ↔ 86bbjj6qb, found
 while writing the design and since repaired by hand.
 
 Two distinctions cost false positives on the first production run, and both are

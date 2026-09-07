@@ -52,6 +52,31 @@ step — the hand-run instructions in `CLAUDE.md` and the command's own help —
 still describing the old single answer. And a job whose earlier pull request had
 already been merged printed that old branch's name directly under the words "no
 open pull request", which is the one branch nobody should check out.
+
+A third round closed the last way the rule could fail — and it was the rule
+failing against itself. Deciding "did *my own* Mac go quiet?" means knowing which
+Mac you are standing on, and the check works that out from a small identity file,
+falling back to the machine's network name if the file is missing. Rename a Mac,
+add a third one, or let the network hand out a name nobody recognises, and the
+answer is a name this system has never heard of. The check then treated *every*
+Mac as somewhere else — including the one under its own feet — asked them all
+over the network, and never looked at the disk it was about to start work on. It
+said "go ahead" having read nothing. It is not live today, because the Mini's
+identity file is correct, but the bug this whole job fixes was latent in exactly
+the same way. Now the look always includes the machine taking it: a seat that
+could not be read is written down as a seat that could not be read, and an
+unrecognised machine is a stop rather than a shrug.
+
+Three smaller ones came with it. Work found while the machine's own name was
+unknown used to be reported as "it is on the other Mac", stated confidently, when
+the truth was that nobody had checked. A refusal that pointed at the other Mac
+did not mention when this Mac's own disk had also gone unread, which is the one
+fact somebody needs to judge it. And the list of folders it prints was written in
+a single voice, so a folder on the *other* Mac looked exactly like one you could
+walk into — each line now says which. Finally, the fuller hand-run instructions
+in `docs/LOOP_ENGINEERING.md`, the third and last place this step is written
+down, still described the old single answer, and would have handed Dane a command
+that cannot work on a folder that was never sent to GitHub.
 ## 2026-09-07 — "Two headers on every new page" was one header placed twice (#642)
 
 Every page built from the Delray site's main template came up with two header

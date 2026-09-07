@@ -58,6 +58,13 @@
  *                nothing there" (DOCTRINE 3.11). The ticket is reported with
  *                the command to look by hand, and NOT moved.
  *
+ * AND ONE SEAT IS ALWAYS ASKED ABOUT, WHETHER OR NOT IT IS IN THE NODE LIST —
+ * the one this reading is being taken FROM. A `hereId` that matches no known
+ * machine used to make every seat remote, so the local disk was never probed
+ * and no row could carry `hereId`; the answer read as a confident reading of a
+ * fleet with the reader's own disk missing from it. `findWorkInProgress` now
+ * adds an `unseen` row for that seat itself (round-2 review, 2026-09-07).
+ *
  * A FOURTH MACHINE STATE, AND IT IS NOT A VERDICT — `unrouted` (round-1
  * review, 2026-09-05). Some machines have no ssh route at all: the inventory
  * declares the Mini reachable "key-based, from the MacBook", one direction
@@ -428,6 +435,43 @@ function findWorkInProgress({
       continue;
     }
     rows.push(machineVerdict({ machine, ran: res?.ran !== false, why: res?.why, out: res?.out }));
+  }
+  // THE SEAT THIS READING IS TAKEN FROM — WAS ITS OWN DISK ACTUALLY READ?
+  //
+  // WHY (round-2 review, 2026-09-07, finding 1). Everything above walks
+  // `nodes`, and `repoPathOn` calls a machine local only when it equals
+  // `hereId`. So a `hereId` that is in no row — a machine this system cannot
+  // NAME — makes every seat remote, including the disk under our feet: each
+  // one is ssh'd, none of them is known to be this one, and no `unseen` row
+  // can ever carry `hereId`. `build-start`'s "this seat going quiet is fatal"
+  // rule is then empty by construction, and the answer came back `fresh`,
+  // exit 0, with not one disk read. Reproduced with `hereId: 'danes-new-mac'`:
+  //
+  //   verdict = cannot-tell  unseen = ["macbook-pro","mac-mini"]  action = fresh
+  //
+  // That is not exotic. `nodeRoles.thisNode()` falls back to the HOSTNAME when
+  // `~/.alphire-node` is missing, so a renamed Mac, a third node, or a DHCP
+  // name gets there — and `thisNodeName()` hands on the literal string
+  // "an unidentified machine" when even that is empty.
+  //
+  // The question is therefore asked as the reading's own, not as a caller's
+  // policy: is there a row for the seat we are standing on? No row means the
+  // local disk was never looked at, which is `unseen` — a reading that was
+  // owed and not taken — and never "there is nothing here" (DOCTRINE 3.11).
+  // It is CLAUDE.md's standing fleet rule in the one place both callers come
+  // through: "a machine whose name is not recognised does not quietly skip;
+  // it refuses out loud, because 'another machine is doing it' and 'nobody is
+  // doing it' look identical otherwise, and only one of them is safe."
+  if (!rows.some((r) => r.machine === hereId)) {
+    rows.push({
+      machine: hereId || '',
+      seen: false,
+      why: hereId
+        ? `this machine calls itself "${hereId}", which is not one of the machines this system knows`
+          + `${nodes.length ? ` (${nodes.join(', ')})` : ''} — so every seat was treated as remote and its OWN disk was never looked at`
+        : 'the reading was not told which machine it is standing on, so this machine\'s own disk was never looked at',
+      work: [],
+    });
   }
   return combineVerdicts(rows);
 }

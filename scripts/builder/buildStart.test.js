@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const {
   resolveBuildStart, describeBuildStart, describeNextMove,
   needsLocalWorkReading, buildStartExitCode, prLookupArgs,
+  withLocalWork, blindHere, describeFoundWork,
 } = require('./buildStart.js');
 
 /**
@@ -939,4 +940,243 @@ test('the skill tells a pass that a worktree with no PR also exits 3', () => {
   const step = skill.slice(i, i + 3200);
   assert.match(step, /worktree/i, 'the disk half is described');
   assert.match(step, /another machine/i, 'including the seat it cannot reach');
+});
+
+/* ══════════════════════════════════════════════════════════════════════ *
+ * ROUND-2 REVIEW (2026-09-07) — one question, asked in four places.
+ *
+ * Round 2 drew the right line: the seat this pass is STANDING on going quiet
+ * is fatal, another machine going quiet is named and stepped past. The review
+ * found four ways that line did not hold, and they are one missing question —
+ * WAS THE DISK UNDER OUR FEET ACTUALLY READ?
+ *
+ *   1  a machine this system cannot NAME made every seat remote, so no row
+ *      could carry `hereId`, so `fatal` was empty BY CONSTRUCTION and a
+ *      reading in which not one disk was read exited 0;
+ *   2  a third consumer doc still described the single-shape exit 3;
+ *   3  the `work` branch never asked the question at all, so a caller that
+ *      omitted `hereId` had LOCAL work reported as another machine's;
+ *   4  the same branch dropped `unseen`, so an `elsewhere` card omitted that
+ *      the local disk had not been read.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+/* ── FINDING 1: a machine with a name this system does not know ─────────── */
+
+test('THE ROUND-2 BUG: a machine this system cannot NAME never reads as fresh', () => {
+  // `nodeRoles.thisNode()` falls back to the HOSTNAME when `~/.alphire-node`
+  // is missing, so a renamed Mac, a third node or a DHCP name lands here. Then
+  // `repoPathOn` calls every seat remote — including the disk about to be
+  // branched on — every one is ssh'd, and no `unseen` row can carry `hereId`.
+  //
+  // Driven through the REAL fleet with only the transport faked, and with a
+  // `hereId` the real KNOWN_NODES does not contain: a hand-built one-machine
+  // node list is what let round 1's mirror bug through, and the review asked
+  // for this test specifically to be able to go red against the real file.
+  const { nodes } = realFleet();
+  const here = 'danes-new-mac';
+  assert.ok(!nodes.includes(here), 'the premise: this name is genuinely unknown to the fleet');
+
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: here,
+    findLocalWork: () => readingFromFleet({ here, quiet: nodes }),
+  });
+  assert.equal(decision.action, 'unknown', 'not one disk was read, so this cannot be a go-ahead');
+  assert.equal(buildStartExitCode(decision), 1);
+  assert.match(decision.why, new RegExp(here), 'and the seat that was never looked at is NAMED');
+  assert.match(decision.why, /own disk was never looked at/i);
+});
+
+test('...and it is caught even when every OTHER machine answers happily', () => {
+  // The sneakier half, and the one no failing ssh makes visible: the remote
+  // hops all succeed and report nothing, so the reading looks like a complete
+  // sweep of a fleet — with the reader's own disk missing from it. `unseen`
+  // would be empty here but for the row the reading adds for its own seat.
+  const here = 'danes-new-mac';
+  const decision = resolveBuildStart([], {
+    lookupPr: knows({}),
+    hereId: here,
+    findLocalWork: () => readingFromFleet({ here, quiet: [] }),
+  });
+  assert.equal(decision.action, 'unknown');
+  assert.equal(buildStartExitCode(decision), 1);
+  assert.match(decision.why, new RegExp(here));
+});
+
+test('the reading itself is what names the unread seat, so BOTH callers get it', () => {
+  // The rule belongs to the reading, not to `build-start`'s policy: the sweep
+  // and `pass-reconcile` take the same reading and must not assert an absence
+  // on a fleet whose local disk was never in it either. Asserted on the
+  // reading directly so a future `withLocalWork` rewrite cannot hide it.
+  const here = 'danes-new-mac';
+  const r = readingFromFleet({ here, quiet: [] });
+  assert.equal(r.verdict, 'cannot-tell', 'a reading missing its own seat is not "none"');
+  assert.ok(r.unseen.some((m) => m.machine === here), 'and the seat is a row, not a footnote');
+});
+
+test('a KNOWN seat is not given a duplicate row — the mirror image', () => {
+  // The guard must not fire on the ordinary case, or every build on a properly
+  // named machine stops. One row per machine, and the local seat's row is the
+  // real probe's.
+  const { nodes, routes } = realFleet();
+  for (const here of nodes.filter((n) => routes.machines.includes(n))) {
+    const r = readingFromFleet({ here, quiet: [] });
+    assert.equal(r.verdict, 'none', `standing on ${here}, a clean sweep is still a clean sweep`);
+    assert.equal(r.unseen.length, 0, 'and nothing is reported unseen');
+  }
+});
+
+/* ── FINDINGS 3 AND 4: the `work` branch never asked the same question ──── */
+
+test('a caller that omits hereId is never told LOCAL work is on another machine', () => {
+  // Finding 3. Every line in the `work` branch turns on `w.machine === hereId`,
+  // so an absent `hereId` made the comparison meaningless rather than false:
+  // a worktree sitting underfoot came back "WORK ON ANOTHER MACHINE ... this
+  // machine cannot check that out", which escalates to Dane over work in front
+  // of it. The honest answer is that the seat is unknown.
+  const decision = withLocalWork(
+    { action: 'fresh', pr: null, why: 'no "PR opened:" line on this ticket — nothing has been built for it yet' },
+    { findLocalWork: () => reading('work', { work: [branch('mac-mini', 'b', { dirty: 2, worktree: '/w' })] }) }
+  );
+  assert.equal(decision.action, 'unknown', 'the seat is unknown, so the attribution is too');
+  assert.equal(buildStartExitCode(decision), 1);
+  assert.doesNotMatch(decision.why, /cannot check that out/, 'and it does not claim to know where the work is');
+  assert.match(decision.why, /never told which machine it is standing on/i);
+  assert.match(decision.why, /branch "b"/, 'while still naming what was found');
+});
+
+test('an `elsewhere` card says when THIS machine\'s disk was not read', () => {
+  // Finding 4. The direction was already safe — `elsewhere` is a refusal
+  // either way — but the card that reaches Dane said "the work is over there"
+  // when the truth was "the work is over there AND nobody looked here", and
+  // that second half is the deciding fact for whoever acts on it.
+  const decision = withLocalWork(
+    { action: 'fresh', pr: null, why: 'no "PR opened:" line on this ticket — nothing has been built for it yet' },
+    {
+      hereId: 'mac-mini',
+      findLocalWork: () => reading('work', {
+        work: [branch('macbook-pro', 'b', { dirty: 2, worktree: '/w' })],
+        unseen: [{ machine: 'mac-mini', why: 'its probe did not finish, so its answer is not trustworthy' }],
+      }),
+    }
+  );
+  assert.equal(decision.action, 'elsewhere', 'still a refusal, and still exit 3');
+  assert.equal(buildStartExitCode(decision), 3);
+  assert.match(decision.why, /disk on this machine was NOT read/i);
+  assert.match(decision.why, /probe did not finish/, 'with the reason, not just the fact');
+  assert.ok(decision.unseen?.some((m) => m.machine === 'mac-mini'), 'and `unseen` survives to the caller');
+});
+
+test('a quiet REMOTE seat does not add that clause — it could not change this answer', () => {
+  // The mirror image of finding 4: `elsewhere` is already a refusal to branch,
+  // so a remote seat going quiet cannot change it, and a clause on every card
+  // is a clause nobody reads. Only the seat we are standing on earns one.
+  const decision = withLocalWork(
+    { action: 'fresh', pr: null, why: 'nothing built yet' },
+    {
+      hereId: 'mac-mini',
+      findLocalWork: () => reading('work', {
+        work: [branch('macbook-pro', 'b', { dirty: 1, worktree: '/w' })],
+        unseen: [{ machine: 'some-third-box', why: 'ssh exited 255' }],
+      }),
+    }
+  );
+  assert.equal(decision.action, 'elsewhere');
+  assert.doesNotMatch(decision.why, /disk on this machine was NOT read/i);
+});
+
+test('both branches ask the seat question through ONE predicate', () => {
+  // The two branches disagreed for a whole round because the rule was spelled
+  // out inline in one of them and nowhere in the other. `blindHere` is the
+  // shared answer; this pins that it really is shared.
+  assert.equal(blindHere([{ machine: 'mac-mini', why: 'x' }], 'mac-mini').length, 1, 'the seat we are on');
+  assert.equal(blindHere([{ machine: 'macbook-pro', why: 'x' }], 'mac-mini').length, 0, 'not another seat');
+  assert.equal(blindHere([{ machine: '', why: 'x' }], 'mac-mini').length, 1, 'a row with no machine is ours');
+  assert.equal(blindHere([{ machine: 'macbook-pro', why: 'x' }]).length, 1, 'with no hereId, every row is ours');
+
+  const source = require('node:fs').readFileSync(require.resolve('./buildStart.js'), 'utf8');
+  const inline = source.match(/unseen\.filter\(\(m\) => !hereId/g) || [];
+  assert.equal(inline.length, 0, 'no branch may re-spell the rule inline');
+});
+
+/* ── "ALSO WORTH A LOOK": every branch printed in one voice ─────────────── */
+
+test('a `work:` line on ANOTHER machine cannot be read as one to check out', () => {
+  // The command printed `describeWork(decision.work)` — every branch found, on
+  // every machine, in identical lines under a heading a reader takes to mean
+  // "the work to continue". CLAUDE.md step 4 tells a session to check a named
+  // branch out, so an unlabelled remote line is an instruction it cannot follow.
+  const decision = withLocalWork(
+    { action: 'fresh', pr: null, why: 'nothing built yet' },
+    {
+      hereId: 'mac-mini',
+      findLocalWork: () => reading('work', {
+        work: [
+          branch('mac-mini', 'mine', { dirty: 2, worktree: '/w/mine' }),
+          branch('macbook-pro', 'theirs', { dirty: 1, worktree: '/w/theirs' }),
+        ],
+      }),
+    }
+  );
+  assert.equal(decision.action, 'continue');
+  const lines = describeFoundWork(decision);
+  assert.equal(lines.length, 2, 'nothing is dropped — hiding the remote row would hide a real fact');
+  assert.match(lines[0], /branch "mine"/);
+  assert.doesNotMatch(lines[0], /NOT on this machine/, 'the local one carries no caveat');
+  assert.match(lines[1], /NOT on this machine, so not a branch this pass can check out/);
+});
+
+test('with no seat known, every `work:` line says the attribution is unknown', () => {
+  const lines = describeFoundWork({ work: [branch('mac-mini', 'b', { dirty: 1, worktree: '/w' })] });
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /not known whether this is a branch it could check out/i);
+});
+
+test('the command prints the LABELLED lines, not the bare ones', () => {
+  // The label is worthless if the command still renders `describeWork` itself.
+  const source = buildStartCommandSource();
+  assert.match(source, /buildStart\.describeFoundWork\(decision\)/,
+    'the command asks the module for its work lines');
+  assert.doesNotMatch(source, /strandedLocalWork\.describeWork\(decision\.work/,
+    'and never re-renders them unlabelled');
+});
+
+/* ── FINDING 2: the THIRD consumer doc ─────────────────────────────────── */
+
+test('the doc CLAUDE.md defers to describes the exit 3 a hand session will get', () => {
+  // Round 1 named two consumers and round 2 fixed both; there is a third, and
+  // it is the one CLAUDE.md calls "the full version, with the incidents behind
+  // each step". Its step 4 still said exit 3 means a PR is open and gave
+  // `git worktree add ... origin/<branch>` as the only move — which fails on
+  // the worktree shape, because that branch was never pushed. Same defect as
+  // round 1's finding 4, one doc further out.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const md = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'LOOP_ENGINEERING.md'), 'utf8');
+  const i = md.indexOf('**Find the branch.**');
+  assert.ok(i > 0, 'the fast-track lane still has its step 4');
+  const step = md.slice(i, i + 2600);
+  assert.match(step, /worktree/i, 'the disk half is described');
+  assert.match(step, /another machine/i, 'including the seat it cannot reach');
+  assert.match(step, /never pushed|does not exist/i, 'and why origin/<branch> is not always there');
+  assert.match(step, /exit 1/i, 'and exit 1 is named as a stop');
+  assert.doesNotMatch(step, /exit 3\s*\n?\s*means a PR is already open, so the work continues on THAT branch, not a\s+fresh one/,
+    'the single-shape sentence is gone');
+});
+
+test('all three consumer docs describe the same command', () => {
+  // Three docs drifted one at a time, one round each. This asserts them
+  // together so the next edit cannot fix two and leave the third.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..', '..');
+  const docs = {
+    'CLAUDE.md': fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'),
+    'docs/LOOP_ENGINEERING.md': fs.readFileSync(path.join(root, 'docs', 'LOOP_ENGINEERING.md'), 'utf8'),
+    '.claude/skills/loop-build/SKILL.md': fs.readFileSync(path.join(root, '.claude', 'skills', 'loop-build', 'SKILL.md'), 'utf8'),
+  };
+  for (const [name, text] of Object.entries(docs)) {
+    assert.match(text, /build-start --task/, `${name} names the command`);
+    assert.match(text, /another machine/i, `${name} describes the seat it cannot reach`);
+  }
 });

@@ -3655,7 +3655,15 @@ if (cmd === 'whoami') {
   }
   // The branch, the worktree and the machine, one per line — this is the
   // sentence somebody has to be able to walk to the work with.
-  for (const line of strandedLocalWork.describeWork(decision.work || [])) {
+  //
+  // EACH ONE SAYS WHETHER THIS PASS CAN ACT ON IT (round-2 review, "also worth
+  // a look"). This printed every branch the reading found, on every machine, in
+  // identical lines under a heading a reader takes to mean "the work to
+  // continue" — so a `continue` here also listed the other machine's branch in
+  // the same voice, and CLAUDE.md step 4 tells a session to check a named
+  // branch out. The list is unchanged; only the attribution is added, and it
+  // is built in `buildStart` so a test can pin the wording.
+  for (const line of buildStart.describeFoundWork(decision)) {
     console.log(`work:   ${line}`);
   }
   // AND WHAT TO DO ABOUT IT, where refusing is not the whole instruction.

@@ -175,6 +175,32 @@ function resolveFromPullRequest(comments, lookupPr) {
  *                       returns: { verdict, work, unseen, unlooked }
  * @param hereId         which machine we are standing on, in `nodeRoles` words
  */
+/**
+ * THE ONE QUESTION BOTH BRANCHES BELOW ASK: was the disk this pass is standing
+ * on actually read?
+ *
+ * WHY IT IS A FUNCTION (round-2 review, findings 3 and 4, 2026-09-07). Round 2
+ * asked it only on `cannot-tell`, inline. The `work` branch never asked it at
+ * all, and the two failures that produced were the same missing question:
+ *
+ *   - a caller that omitted `hereId` had every found branch compared against
+ *     `undefined`, so LOCAL work came back "WORK ON ANOTHER MACHINE ... this
+ *     machine cannot check that out" — an escalation to Dane over a worktree
+ *     sitting in front of it;
+ *   - a failed LOCAL probe plus work found remotely produced an `elsewhere`
+ *     card that never mentioned the local disk had not been read, which is the
+ *     one fact the reader needs to judge it.
+ *
+ * A row with no machine, or one naming the seat we are standing on, is this
+ * machine's. So is EVERY row when the caller did not say where it is standing:
+ * without `hereId` there is no way to tell the seats apart, and the answer
+ * then has to be the careful one.
+ */
+function blindHere(unseen = [], hereId) {
+  return (Array.isArray(unseen) ? unseen : [])
+    .filter((m) => !hereId || !m || !m.machine || m.machine === hereId);
+}
+
 function withLocalWork(fresh, { findLocalWork, hereId } = {}) {
   if (typeof findLocalWork !== 'function') return fresh;
 
@@ -210,6 +236,25 @@ function withLocalWork(fresh, { findLocalWork, hereId } = {}) {
     // "continue that branch" would be an instruction it cannot follow, and it
     // would very likely cut a branch anyway. It gets its own answer, which
     // refuses and says where to go.
+    // BEFORE ATTRIBUTING ANY OF IT: do we know which seat we are on, and was
+    // that seat read? (round-2 review, findings 3 and 4.) Every line below
+    // turns on `w.machine === hereId`, so a `hereId` that names nothing makes
+    // the comparison meaningless rather than false — and answering `elsewhere`
+    // on a meaningless comparison escalates a worktree that may be underfoot.
+    const localBlind = blindHere(unseen, hereId);
+    if (!hereId) {
+      return {
+        ...fresh,
+        action: 'unknown',
+        work,
+        unseen,
+        unlooked,
+        here: hereId,
+        why: `${fresh.why}, and a build IS in progress somewhere — ${strandedLocalWork.describeWork(work).join('; ')} — `
+          + 'but this reading was never told which machine it is standing on, so whether that is a worktree '
+          + 'underfoot or one on a disk this pass cannot reach is unknown. Do NOT start a branch on a guess.',
+      };
+    }
     const here = work.filter((w) => w.machine === hereId);
     const there = work.filter((w) => w.machine !== hereId);
     // THE PULL REQUEST IS DROPPED FROM THIS ANSWER ON PURPOSE (round-1 review,
@@ -227,20 +272,35 @@ function withLocalWork(fresh, { findLocalWork, hereId } = {}) {
         action: 'continue',
         pr: null,
         work,
+        unseen,
         unlooked,
+        here: hereId,
         why: `no open pull request${closed}, but a build is already in progress on this machine — `
           + `${strandedLocalWork.describeWork(here).join('; ')}. `
           + 'Work on THAT branch; do not start a second one.',
       };
     }
+    // THE LOCAL DISK GOING UNREAD IS THE DECIDING FACT ON THIS CARD, and it
+    // used to be dropped (round-2 review, finding 4). The direction is already
+    // safe — `elsewhere` is a refusal either way — but the card that reaches
+    // Dane says "the work is over there" and he has no way to know it is
+    // really "the work is over there AND nobody looked here". Only the local
+    // seat is named: a quiet REMOTE seat cannot change this answer, which is
+    // a refusal to branch already.
+    const alsoBlind = localBlind.length
+      ? ` The disk on this machine was NOT read (${strandedLocalWork.describeUnlooked(localBlind)}), `
+        + 'so there may be work here as well.'
+      : '';
     return {
       action: 'elsewhere',
       pr: null,
       work,
+      unseen,
       unlooked,
+      here: hereId,
       why: `no open pull request${closed}, but a build is already in progress on another machine — `
         + `${strandedLocalWork.describeWork(there).join('; ')}. `
-        + 'This machine cannot check that out, so do NOT start a branch here.',
+        + `This machine cannot check that out, so do NOT start a branch here.${alsoBlind}`,
     };
   }
 
@@ -281,17 +341,29 @@ function withLocalWork(fresh, { findLocalWork, hereId } = {}) {
     // run. The alternative is a lane that is dead every night by design.
     // Certain and total beats rare and recoverable in only one direction.
     const blind = strandedLocalWork.describeUnlooked([...unseen, ...unlooked]);
-    // A row with no machine, or one naming the seat we are standing on, is
-    // this machine's. So is EVERY row when the caller did not say where it is
-    // standing: without `hereId` there is no way to tell the seats apart, and
-    // the answer then has to be the careful one.
-    const fatal = unseen.filter((m) => !hereId || !m.machine || m.machine === hereId);
+    // The seat rule, asked through the ONE predicate the `work` branch above
+    // asks it through. It used to be spelled out here and nowhere else, which
+    // is how the `work` branch came to be missing it entirely.
+    //
+    // A MACHINE THIS SYSTEM CANNOT NAME ARRIVES HERE TOO, and it is the reason
+    // this exit was reachable but empty until 2026-09-07: with `hereId`
+    // matching no known machine, every seat was probed as remote and no row
+    // could ever carry `hereId`, so `fatal` was empty BY CONSTRUCTION and a
+    // reading in which not one disk was read exited 0. The reading itself now
+    // adds an `unseen` row for the seat it was taken from
+    // (`strandedLocalWork.findWorkInProgress`), so the question below has
+    // something to find. The guard is kept here as well as there because they
+    // answer to different owners: the reading owes an honest row, this owes
+    // the refusal.
+    const fatal = blindHere(unseen, hereId);
     if (fatal.length) {
       return {
         ...fresh,
         action: 'unknown',
         work,
+        unseen,
         unlooked,
+        here: hereId,
         why: `${fresh.why}, but whether a build is half-finished on a disk CANNOT BE TOLD from here — ${blind}. `
           + 'Do NOT start a branch on a reading nobody took.',
       };
@@ -301,6 +373,7 @@ function withLocalWork(fresh, { findLocalWork, hereId } = {}) {
       work: [],
       unlooked,
       unseen,
+      here: hereId,
       why: `${fresh.why}, and no half-finished build is on any disk that could be asked `
         + `(not looked at: ${blind})`,
     };
@@ -319,6 +392,7 @@ function withLocalWork(fresh, { findLocalWork, hereId } = {}) {
       ...fresh,
       work: [],
       unlooked,
+      here: hereId,
       why: seats
         ? `${fresh.why}, and no half-finished build is on any disk that could be asked `
           + `(not looked at: ${seats})`
@@ -330,7 +404,9 @@ function withLocalWork(fresh, { findLocalWork, hereId } = {}) {
     ...fresh,
     action: 'unknown',
     work,
+    unseen,
     unlooked,
+    here: hereId,
     why: `${fresh.why}, but the local-work reading returned an unrecognised verdict `
       + `"${reading.verdict}" — do NOT guess`,
   };
@@ -415,6 +491,35 @@ function prLookupArgs(pr) {
   return ['pr', 'view', String(pr.number), '--repo', `${pr.owner}/${pr.repo}`, '--json', 'state,headRefName'];
 }
 
+/**
+ * THE `work:` LINES, each one saying whether THIS pass can act on it.
+ *
+ * WHY (round-2 review, "also worth a look"). The command printed
+ * `describeWork(decision.work)` — every branch the reading found, on every
+ * machine, in identical lines under a heading a reader takes to mean "the work
+ * to continue". A `continue` on this machine therefore listed the other
+ * machine's branch in exactly the same voice, and CLAUDE.md step 4 tells a
+ * session to check a named branch out. Honest and unlabelled is still a line
+ * somebody can act on wrongly.
+ *
+ * The whole list is kept, because dropping the remote row would hide a real
+ * fact; only the attribution is added. `strandedLocalWork.describeWork` stays
+ * the one renderer of a branch, so the two cannot describe one differently.
+ */
+function describeFoundWork(decision) {
+  const work = Array.isArray(decision?.work) ? decision.work : [];
+  const here = decision?.here;
+  return work.map((w) => {
+    const line = strandedLocalWork.describeWork([w])[0];
+    if (!here) {
+      return `${line} — which machine this pass is standing on is not known, so it is not known whether this is a branch it could check out`;
+    }
+    return w.machine === here
+      ? line
+      : `${line} — NOT on this machine, so not a branch this pass can check out`;
+  });
+}
+
 /** One line for a run report, so the choice is visible rather than implied. */
 function describeBuildStart(decision) {
   if (!decision) return '';
@@ -451,8 +556,10 @@ module.exports = {
   resolveBuildStart,
   resolveFromPullRequest,
   withLocalWork,
+  blindHere,
   needsLocalWorkReading,
   describeBuildStart,
+  describeFoundWork,
   describeNextMove,
   buildStartExitCode,
   prLookupArgs,
