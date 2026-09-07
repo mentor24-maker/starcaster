@@ -693,6 +693,51 @@ on mouse-over (`+ New status` there creates inline, skipping the broken
 dialog), and statuses live on the **list**, not the space — the space
 settings' generic `TO DO / IN PROGRESS / COMPLETE` are not this board.
 
+### Parking a finding instead of filing it (2026-09-06, task 86bbvtnfn)
+
+`wont-do` above is for work that was **decided against**. There is a second,
+much commoner case: a finding that is perfectly real and simply is not worth a
+queue slot. That one is **parked**, not killed, and the difference is the tag.
+
+**The stopping rule.** A pipeline or self-machinery ticket is filed only when a
+pipeline failure **actually cost something observable** — lost work, a dead
+lane, a silent outage, a wrong merge — and the description names that incident.
+A theoretical gap noticed while specifying, building or reviewing is not a
+ticket, however correct it is.
+
+Why it is a rule: measured 2026-09-06, tickets the pipeline filed about itself
+accelerated from about **6 a day in mid-August to about 16 a day in early
+September** — faster than the queue drains — and Delray and product work queued
+behind them. Dane parked **31** of them that day. The **six** that stayed all
+name a failure that actually happened (86bbuzyra, 86bbvr5zv, 86bbvr5ym,
+86bbvr4w3, 86bbvqkr1, 86bbvj44f). Not one of the 31 could. *"Is this a real
+finding?"* is therefore the wrong gate — all 31 passed it.
+
+**Where a parked finding goes:** one plain line in the ClickUp doc *The 31
+parked tickets*, `https://app.clickup.com/90141423066/docs/2kydhxeu-814`, under
+**Parked tickets** — what breaks and who feels it, and stop. A headless loop
+pass has no write route to a ClickUp doc; it says the line in its run report
+and as a plain comment on the ticket it was already working, marked as a parked
+finding. **What no pass does is file it.**
+
+**Parking an existing ticket:** close it as `Live` with the tag **`deferred`**
+— *not* `wont-do` — keeping its description and comments. Reviving one is
+setting its status back to `Queued`; the loops pick it up again. That is the
+whole procedure.
+
+**Client-facing defects are not in scope here.** A bug on a tenant site or in
+the admin app is filed on sight, as always. This rule governs the pipeline's
+tickets about itself.
+
+**Titles, wherever a ticket is created.** The name says in plain words **what
+breaks and who feels it**, readable by the operator scanning a list of seventy;
+the diagnostic sentence goes in the description. Dane, verbatim: *"your
+descriptions of tickets is so cryptic and full of fanciful turns of phrases
+that it is difficult for me to understand which ones are really important and
+which ones aren't."*
+
+Canon: `docs/DOCTRINE.md` §6.24, cross-referenced from `CLAUDE.md`.
+
 ## How to run it
 
 **They are already running.** Since 2026-09-02 (task 86bbtuje2, PR #537) both
