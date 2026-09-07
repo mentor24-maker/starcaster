@@ -5,7 +5,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { buildLandingPagePatch, buildLandingPageCreateInput } = require('../../routes/builder');
+const {
+  buildLandingPagePatch,
+  buildLandingPageCreateInput,
+  buildBulkCreatePageInput,
+} = require('../../routes/builder');
 const { inputToRow, rowToPage } = require('../../lib/builderPagesStore');
 
 /**
@@ -140,6 +144,141 @@ test('the create ROUTE uses the builder, instead of assembling its own list agai
     /createPage\(buildLandingPageCreateInput\(body, name\), scope\)/,
     'POST /api/builder/landing-pages must build its input with buildLandingPageCreateInput'
   );
+});
+
+/**
+ * BULK create -- the other caller of createPage, and the one #614 did not reach
+ * (task 86bbve4kp).
+ *
+ * Measured on 2026-09-05: a bulk run with `templateId: "47"` wrote 47 into the
+ * legacy `template_id` and left `page_template_id` NULL, and answered 200. So
+ * every page a batch made read "No template" in Page Details even though the
+ * operator had picked one.
+ */
+
+test('a bulk-created page carries the chosen page template', () => {
+  const input = buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: '47',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  });
+  assert.equal(input.pageTemplateId, '47', 'bulk create must carry the template it built the page from');
+});
+
+test('a bulk-created page still writes the legacy templateId it always has', () => {
+  // The bulk route has always put the chosen id in template_id too. Anything
+  // reading that column must see exactly what it saw before this fix.
+  const input = buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: '47',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  });
+  assert.equal(input.templateId, '47', 'the legacy column must be unchanged by this fix');
+});
+
+test('the bulk create input survives the store, all the way to a row', () => {
+  // Same end-to-end shape the single create is held to: route whitelist AND
+  // store, because either one drops the field silently.
+  const row = inputToRow(buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: '47',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  }));
+  assert.equal(row.page_template_id, '47');
+  assert.equal(row.template_id, '47');
+  assert.equal(rowToPage({ id: 1, ...row }).pageTemplateId, '47');
+});
+
+test('a built-in template id reaches the column too, not just a numeric row id', () => {
+  // BUILT_IN_PAGE_TEMPLATES ids are legal page_template_id values -- the
+  // migration claims them by name -- so bulk create must not assume digits.
+  const input = buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: 'standard-right-form',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  });
+  assert.equal(input.pageTemplateId, 'standard-right-form');
+});
+
+test('the BULK route uses the builder, instead of assembling its own list again', () => {
+  // The bug was a third hand-written field list inside the bulk handler. If a
+  // future edit inlines one again this fails -- otherwise the tests above keep
+  // passing while the route ignores them, which is exactly what happened
+  // between #614 and this fix.
+  const routes = fs.readFileSync(path.join(__dirname, '..', '..', 'routes', 'builder.js'), 'utf8');
+  assert.match(
+    routes,
+    /createPage\(buildBulkCreatePageInput\(\{/,
+    'bulk-create-with-model must build its input with buildBulkCreatePageInput'
+  );
+});
+
+/**
+ * The path Bulk Create ACTUALLY takes, which is not the bulk route at all.
+ *
+ * Picking a content model posts the batch to bulk-create-with-model (tested
+ * above). Picking none -- the default, and what the ticket's own test steps do
+ * -- posts each page separately to the SINGLE create route from the browser.
+ * That body named `templateId` and not `pageTemplateId`, so the fix above
+ * could not reach it and Bulk Create still read "No template" (task 86bbve4kp,
+ * caught in review of PR #635 by running the real bulk handler).
+ *
+ * These are source guards, the same shape as the two route guards above: the
+ * behaviour is tested in lib/builder-client/bulk-create-page-body.test.ts, and
+ * this is what fails if a caller stops using the builder. Three callers have
+ * now dropped this one field, each in its own hand-written list.
+ */
+
+const CLIENT_FILES = [
+  {
+    label: "the Builder's Bulk Create",
+    file: path.join(__dirname, '..', '..', 'components', 'admin-builder-editor.tsx'),
+    uses: /body: JSON\.stringify\(buildBulkCreatePageBody\(\{/,
+    hint: 'bulkCreatePages must build its body with buildBulkCreatePageBody',
+  },
+  {
+    label: "Acquire's Create Page modal",
+    file: path.join(__dirname, '..', '..', 'public', 'js', 'acquire.js'),
+    uses: /templateId, pageTemplateId: templateId,/,
+    hint: "acquire.js's no-content-model branch must send pageTemplateId alongside templateId",
+  },
+];
+
+for (const target of CLIENT_FILES) {
+  test(`${target.label} sends the page template it was given`, () => {
+    const source = fs.readFileSync(target.file, 'utf8');
+    assert.match(source, target.uses, target.hint);
+  });
+}
+
+test('the client body builder names pageTemplateId', () => {
+  // The guard above proves the caller uses the builder; this proves the
+  // builder still sends the field. Neither is enough on its own.
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'lib', 'builder-client', 'bulk-create-page-body.ts'),
+    'utf8'
+  );
+  assert.match(source, /pageTemplateId: input\.templateId/, 'the browser body must carry the chosen template');
 });
 
 test('the create and patch whitelists do not drift apart on the fields the editor sends', () => {
