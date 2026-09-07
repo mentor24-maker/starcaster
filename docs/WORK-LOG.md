@@ -1,3 +1,44 @@
+## 2026-09-07 — The pipeline had started filing tickets about itself faster than we could do them (#641)
+
+The tooling that runs the build pipeline checks its own health, and it is good
+at it — good enough that it was writing up more problems with itself than
+anyone could work through. Counted on Saturday: back in mid-August it was
+filing about six of these a day, and by the start of September it was up to
+about sixteen. None of them were wrong. They were all genuine findings about
+genuine gaps. But the client work — Delray, the product itself — was sitting in
+line behind them.
+
+Dane went through and set 31 of them aside that day. Six stayed, and the thing
+that separated the six from the 31 is the whole point: each of the six named a
+failure that had actually happened and actually cost something. A lane that
+stopped. Work that got lost. An alarm nobody heard. The other 31 described gaps
+that were real but had never once bitten us.
+
+So the rule is now written down: the pipeline only opens a ticket on itself
+when something actually went wrong and cost us something, and the ticket has to
+say what that was. A gap somebody merely noticed goes as one line in a parked
+list instead, where it keeps its full write-up and can be brought back any time
+by flipping it to Queued. Nothing is thrown away — it is set aside.
+
+Two things deliberately stayed the way they were, and both are spelled out so
+nobody reads this rule too widely later. A bug on a client's site or in the
+admin app still gets filed the moment it is spotted, no questions asked. And
+the handful of tickets the machinery creates for its own bookkeeping — the
+pause switch, the roll call, the pipeline report — are not affected either.
+
+The second half of this is about names. Dane's words: "your descriptions of
+tickets is so cryptic and full of fanciful turns of phrases that it is
+difficult for me to understand which ones are really important and which ones
+aren't." A ticket's name now has to say in plain words what breaks and who
+feels it, so a list of seventy can be read down at a glance. The clever
+one-line diagnosis still gets written — it just belongs in the description,
+where it helps.
+
+All of this lives in five different documents, which is a lot of prose that
+could quietly get edited away. So there is a test that fails if any of it does.
+Every one of the six files was broken on purpose to confirm the test actually
+notices.
+
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 
 When one of the build sessions dies partway through a job — the machine goes to
