@@ -1,3 +1,39 @@
+## 2026-09-07 — A part of the video catalog accepted junk and quietly stored something else (#646)
+
+The video catalog is the part of the Studio that keeps track of recording
+sessions and the media files in them. Some of its fields only accept a short
+list of words — a file has to be one of "background", "subject", "plate" or
+"reference", nothing else.
+
+Those checks worked for every wrong answer but one. If a caller sent the value
+`false`, the catalog decided that meant "nothing was sent at all", filled in the
+default, saved the row, and reported success. So the caller said one thing, the
+database recorded another, and nothing anywhere mentioned the difference. It was
+inconsistent as well as wrong: sending zero, or an empty box, or a made-up word
+was correctly turned away — only `false` got through — and the matching *edit*
+calls turned it away properly the whole time. Only the *create* calls did this.
+
+That is worth fixing rather than writing down, because a wrong value that
+announces itself is a bug you find in minutes, and a wrong value that reports
+success is one you find in a month.
+
+Four smaller things in the same files were fixed with it. The most visible: a
+date carrying an impossible time-zone offset was correctly refused, but the
+refusal said "has second 61, which does not exist" — about a date that had no
+seconds in it. It named the wrong field, which sends whoever reads it looking in
+the wrong place. Also fixed: a date written in a slightly unusual but perfectly
+legal style was being handed to a part of the language that is allowed to
+interpret it differently on different computers, so the same date could have
+been stored as two different moments depending on which Mac did the work; a
+"this file is already in the catalog" message that would have been given for
+collisions that had nothing to do with duplicate files; and one place that
+ignored an error result it should have been reading.
+
+Every one of these fixes was undone on purpose afterwards, to watch the test
+written for it fail — seven of them, seven failures, then put back. A test that
+cannot fail is not a test, and this part of the code has been sent back for that
+before.
+
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 
 When one of the build sessions dies partway through a job — the machine goes to
