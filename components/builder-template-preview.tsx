@@ -2661,6 +2661,17 @@ function usePostPageUrl(settings: Record<string, string>): string {
  */
 const UNMATCHED_FILTER_VALUE = "__starcaster_unmatched_filter__";
 
+/*
+ * "tagged X" + "by Y" -> "tagged X and by Y"; three or more take commas. The
+ * empty-state sentence names EVERY filter that is narrowing the page, because
+ * naming only the first one blames it for an emptiness a later one caused —
+ * which is the defect this whole message was rewritten to stop.
+ */
+function joinFilterPhrases(phrases: string[]): string {
+  if (phrases.length <= 1) return phrases[0] || "";
+  return `${phrases.slice(0, -1).join(", ")} and ${phrases[phrases.length - 1]}`;
+}
+
 function BlogPostListPreview({
   settings,
   liveSite = false
@@ -2915,13 +2926,55 @@ function BlogPostListPreview({
     ? `Blog posts matching the ${singleFilter} \u201c${singleFilterValue}\u201d: ${filteredPosts.length}`
     : "";
 
-  const emptyFilteredMessage = tagFilter
-    ? `No posts tagged \u201c${tagFilter}\u201d.`
-    : activeCategoryName
-      ? `No posts in the category \u201c${activeCategoryName}\u201d.`
-      : authorFilter
-        ? `No posts by \u201c${authorFilter}\u201d.`
-        : "No posts match your filters.";
+  /*
+   * The dropdown filters name themselves; the search box did not, and that is
+   * the same defect one step further on. Typing a word nothing matches read
+   * "No posts match your filters." \u2014 which does not say WHICH word emptied
+   * the page (\u00a75.31) \u2014 and typing it while a tag was selected read
+   * "No posts tagged \u201ctennis\u201d.", a sentence that is flatly FALSE when
+   * posts carry that tag and the search is what emptied the list. A confident
+   * wrong message is the worst of the three. So the search term is named, and
+   * a filter only takes credit for an emptiness alongside it, never instead of
+   * it.
+   */
+  const searchTerm = search.trim();
+  /*
+   * The dates are shown exactly as the visitor set them, which is the string
+   * sitting in the date input. Formatting them would mean parsing an ISO date
+   * back through `new Date`, whose midnight is UTC — so "2026-01-01" renders
+   * as December 31 anywhere west of Greenwich, and the sentence would name a
+   * bound the filter is not using.
+   */
+  const dateRangePhrase =
+    dateFrom && dateTo
+      ? `published between ${dateFrom} and ${dateTo}`
+      : dateFrom
+        ? `published on or after ${dateFrom}`
+        : dateTo
+          ? `published on or before ${dateTo}`
+          : "";
+  /*
+   * A ?category= slug matching no category empties the list on its own —
+   * `filteredPosts` drops every post while missingCatSlug is set — so nothing
+   * else had anything to do with it. Naming the search word here would invite
+   * the visitor to clear it, and clearing it brings nothing back.
+   */
+  const activeFilterPhrase = missingCatSlug
+    ? `in the category \u201c${missingCatSlug}\u201d`
+    : joinFilterPhrases([
+        tagFilter ? `tagged \u201c${tagFilter}\u201d` : "",
+        activeCategoryName ? `in the category \u201c${activeCategoryName}\u201d` : "",
+        authorFilter ? `by \u201c${authorFilter}\u201d` : "",
+        dateRangePhrase,
+      ].filter(Boolean));
+  const searchTermIsBlamable = Boolean(searchTerm) && !missingCatSlug;
+  const emptyFilteredMessage = searchTermIsBlamable
+    ? activeFilterPhrase
+      ? `No posts ${activeFilterPhrase} match \u201c${searchTerm}\u201d.`
+      : `No posts match \u201c${searchTerm}\u201d.`
+    : activeFilterPhrase
+      ? `No posts ${activeFilterPhrase}.`
+      : "No posts match your filters.";
   /*
    * Said whenever a count or an empty state was computed from a partial read.
    * "No posts tagged X" is a claim about the whole archive; if the archive was
