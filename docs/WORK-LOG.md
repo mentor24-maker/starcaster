@@ -38,6 +38,29 @@ plan reads the same today as it did yesterday when everything worked, so
 nobody is being asked to buy anything — and the message the system now prints
 says so, and names the earlier day, so the next person to see it does not go
 down that road a third time.
+Sent back once by review, for a fault that was the same shape as the one it was
+fixing. The **Undelivered alarms** ticket is created in the "Live" column so
+that no pass tries to build it — but "Live" is how a finished ticket looks, so
+ClickUp marks it finished the moment it exists, and the report that watches
+whether work is actually shipping counted it as a ticket that shipped. On a
+quiet day during an outage, saving one alarm would have been enough to make
+that report say the queue was moving when nothing had moved at all — the alarm
+silencing the very check that was supposed to notice. Two other standing
+tickets, *Node roll call* and *Pipeline pulse*, were being counted the same
+way. All three are now listed in one place as noticeboards rather than work,
+and a test fails if a fourth one is ever added and left off the list. Measured
+against the real queue: today's count of finished tickets goes from 3 to 2, and
+the two it drops were never work.
+
+Four smaller things from the same review: a deliberate stop — the system
+standing down to leave ClickUp capacity for whoever is actually at the keyboard
+— was being reported as a failure and losing its own exit code; the fallback
+could crash instead of reporting a clean "nothing was delivered" if ClickUp
+answered with something that was not proper data; the alarm comment was losing
+its blank lines, which turned a dividing rule into a heading; and two machines
+falling back in the same minute could have made two noticeboards, so they now
+agree on the older one and say out loud that a duplicate needs deleting.
+
 ## 2026-09-07 — The panel checker was passing 35 crooked panels, and now it names them (#653)
 
 Every module in the Builder has a settings panel, and Dane pointed at a problem

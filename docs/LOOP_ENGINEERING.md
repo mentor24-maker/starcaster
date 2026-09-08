@@ -2838,6 +2838,66 @@ What did **not** change: a message that reached neither surface is still
 undelivered, still lands in "Could not fully verify", still exits 1, and still
 moves no ticket. The gate was re-pointed, not weakened.
 
+### And on 2026-09-07 it happened again — where an alarm goes now
+
+Same symptoms, symptom for symptom: every chat write on the party line
+returning `HTTP 400 Invalid Request` — a one-word body fails identically —
+while reads on that same channel with that same token return 200, and every
+custom-field write returning `usages exceeded`. Last message that landed
+before the gap: **2026-09-07T21:39:49Z**. The plan was checked again and was
+again unchanged (`Free Forever`, `plan_id` 13). **Nobody should be asked to
+pay for this**; see the paragraphs above, which is the whole reason they are
+written down.
+
+What that outage exposed is that the receipt chain above covers **relayed
+messages only**. A relayed message has a ticket to fall back to, because the
+message is about one. The pipeline's *alarms* have no ticket, so they had no
+fallback, and every one of them was discarded — each of these posts to the
+party line and nowhere else:
+
+* `heartbeat --check` / `--stale-check` — a scheduled job stopped firing
+* `throughput --check` — the queue is STALLED, or a reading could not be taken
+* `report_job_failure.mjs` — any scheduled job that failed
+* `reconcile --check` — ClickUp and the branches disagree
+* the pause reminder — a pipeline paused and forgotten
+
+**They now go to a standing ticket called "Undelivered alarms"** in the Loop
+Queue, found by name and created on first need, in the same shape the roll call
+and the pulse digest use. Each alarm arrives as one comment carrying the alarm
+text verbatim, which machine raised it, and the reason the bus refused it.
+**Do not close it and do not delete it** — a comment on it means something else
+is broken, so read the alarm, not the ticket.
+
+The fallback lives in the `chat` command itself
+(`saveUndeliveredAlarm`, `lib/busFallback.js`), not in each of the seven
+callers. `postBusMessage` shells out to exactly that command, and every calling
+job already treats *the command threw* as "not delivered, do not stamp the
+suppression window, retry next pass" and *it returned* as delivered. Sitting
+behind that contract covers all seven without touching a line of throttle
+logic. Three consequences worth knowing:
+
+* The comment is **read back** before the delivery counts. If both the bus and
+  the noticeboard refuse, the command exits non-zero so the caller retries
+  rather than going quiet for six hours on a message nobody received.
+* `--no-fallback` gets the raw verdict, for a caller keeping its own durable
+  record.
+* **Reaching the ClickUp reserve is not a refusal** and does not fall back: it
+  is this pipeline standing down on purpose, and it keeps its own words and its
+  own exit code (7).
+
+**The noticeboard is not work, and nothing may count it as work.** It is
+created in `Live`, which is a closed-type status, so ClickUp stamps
+`date_closed` on it the instant it exists — and `npm run throughput` counts a
+closure off `date_closed` and nothing else. Unexcluded, saving a single alarm
+during an outage read as a ticket that shipped, and because the verdict
+short-circuits to `MOVING` the moment anything closed inside the window, it
+would have flipped `STALLED` to `MOVING` for the following 24 hours. The stall
+detector silenced by the alarm it was trying to save, on exactly the day it is
+most needed. All three standing tickets are registered in
+**`lib/loopNoticeboards.js`** and excluded there; a fourth one written in the
+same shape and left out of that registry fails
+`scripts/builder/loopNoticeboards.test.js`.
+
 ### Running the relay by hand
 
 `bus-relay` belongs to the Mac Mini (`lib/nodeRoles.js`), so every hand-run of

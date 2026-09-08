@@ -823,9 +823,16 @@ async function saveUndeliveredAlarm({ text, channel, why }) {
   if (!task) {
     const listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
     if (!listed.tasks) return { ok: false, why: `could not read the Loop Queue to find it (${listed.failed || 'no reason given'})` };
-    task = listed.tasks.find(
+    // OLDEST WINS, not first-paged. If two machines ever raced the create (see
+    // below), `find()` would hand each caller whichever copy its paging turned
+    // up first and the record would go on splitting for good. Choosing by
+    // creation date is an answer every machine reaches independently.
+    const matches = listed.tasks.filter(
       (t) => String(t.name || '').trim().toLowerCase() === busFallback.FALLBACK_TASK_NAME.toLowerCase(),
-    ) || null;
+    );
+    task = matches.length
+      ? matches.reduce((a, b) => (Number(a.date_created || 0) <= Number(b.date_created || 0) ? a : b))
+      : null;
   }
 
   if (!task) {
@@ -843,7 +850,37 @@ async function saveUndeliveredAlarm({ text, channel, why }) {
           + ' to one it has that no loop claims from.',
       };
     }
+    // A 200 IS NOT PROOF OF A PARSED BODY (review round 1, 2026-09-08).
+    // `clickupFetch` returns `json: null` on a 200 whose body is not JSON — a
+    // proxy's error page, a truncated response — and `made.json.id` on that is
+    // a TypeError escaping a function whose contract says it never throws. The
+    // caller would get a stack trace where it was promised "nothing was
+    // delivered", which is the difference between an alarm it knows to retry
+    // and a pass that simply dies. `fetchAllTasks` guards the same shape at
+    // its own page loop, and the comment there says it cost a review round.
+    if (!made.json || !made.json.id) {
+      return { ok: false, why: 'it was created but ClickUp\'s reply was not the expected JSON, so there is no id to comment on' };
+    }
     task = made.json;
+
+    // TWO MACHINES FALLING BACK IN THE SAME MINUTE (review round 1). Find-or-
+    // create is check-then-act, so the Mini and the MacBook can both miss the
+    // lookup and both create a noticeboard, after which `find()` takes
+    // whichever pages first and the record splits in two. Re-reading the list
+    // and keeping the OLDEST is not a lock and does not pretend to be one —
+    // the create has already happened — but it makes every later comment land
+    // on one ticket, which is the part that matters. A read that fails here
+    // changes nothing: the ticket just made is a perfectly good destination.
+    const again = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+    const all = (again.tasks || []).filter(
+      (t) => String(t.name || '').trim().toLowerCase() === busFallback.FALLBACK_TASK_NAME.toLowerCase(),
+    );
+    if (all.length > 1) {
+      const oldest = all.reduce((a, b) => (Number(a.date_created || 0) <= Number(b.date_created || 0) ? a : b));
+      console.error(`Two "${busFallback.FALLBACK_TASK_NAME}" tickets exist — two machines fell back at once.`);
+      console.error(`Using the older one (${oldest.id}); the duplicate can be deleted by hand.`);
+      task = oldest;
+    }
   }
 
   const at = new Date().toISOString();
@@ -858,7 +895,12 @@ async function saveUndeliveredAlarm({ text, channel, why }) {
   // stamp its suppression window and stay quiet for the next six hours.
   const id = out.json && out.json.id;
   const back = await call('GET', `/api/v2/task/${task.id}/comment`);
-  const stuck = Boolean(back.res.ok && (back.json.comments || []).some((c) => String(c.id) === String(id)));
+  // `back.json` is null on a 200 that did not parse, and `null.comments` threw
+  // out of a function documented "Never throws" (review round 1, 2026-09-08).
+  // An unreadable body is exactly the case this read-back exists for, so it
+  // reads as "could not confirm" rather than as a crash.
+  const comments = (back.res.ok && back.json && Array.isArray(back.json.comments)) ? back.json.comments : null;
+  const stuck = Boolean(comments && comments.some((c) => String(c.id) === String(id)));
   if (!stuck) return { ok: false, why: 'the comment was accepted but could not be read back' };
 
   return { ok: true, url: task.url || `https://app.clickup.com/t/${task.id}` };
@@ -2832,6 +2874,24 @@ if (cmd === 'whoami') {
   if (out.res.ok) {
     console.log(`\n${busFallback.renderRouteLine({ via: 'chat', channel })} Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
     reportLimits(out.res);
+  } else if (out.yielded || out.res.status === YIELDED_STATUS) {
+    // A YIELD IS NOT A REFUSAL, AND IT MUST NOT ENTER THE FALLBACK (review
+    // round 1, 2026-09-08). Reaching the ClickUp reserve is this file stopping
+    // on purpose, and `die` has carried its own words and its own exit code
+    // for it since task 86bbugd8j — exit 7, which `scripts/run_bus_relay.sh`
+    // reads to tell "I stood down" from "I broke".
+    //
+    // A yielded result travels in the ordinary `{res}` shape with
+    // `res.ok === false`, so the fallback branch below swallowed it: its own
+    // calls yielded too, and a deliberate healthy stop printed "Nothing was
+    // delivered. This alarm is lost" and exited 1. That is a monitor reporting
+    // a wrong diagnosis, which is the fault this whole ticket is about.
+    //
+    // Nothing is lost by declining to fall back here. The reserve exists so a
+    // scheduled job leaves budget for the sessions Dane is in; the next
+    // scheduled pass raises the same alarm, and spending the reserve on a
+    // noticeboard write would defeat the point of yielding at all.
+    die('send chat message', out);
   } else if (flag('no-fallback')) {
     die('send chat message', out);
   } else {

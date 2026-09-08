@@ -166,3 +166,77 @@ test('the auto-merge lane\'s soft stamp reports WHICH refusal it hit, not just t
   assert.match(fn, /out of custom-field usages/,
     'the plan-exhausted case must say so in the words the reader gets');
 });
+
+// ---------------------------------------------------------------------------
+// Review round 1, 2026-09-08 — five defects, each with the mistake it made.
+// ---------------------------------------------------------------------------
+
+/** The `chat` command's body, comments already stripped by `codeOnly`. */
+function chatCommand() {
+  return src.slice(src.indexOf("} else if (cmd === 'chat') {"), src.indexOf("} else if (cmd === 'pass-reconcile')"));
+}
+
+/** A named function's body, comments already stripped. */
+function bodyOf(name) {
+  const at = src.indexOf(name);
+  return src.slice(at, src.indexOf('\n}\n', at));
+}
+
+test('reaching the ClickUp reserve stops with its own exit code — it is not a refusal to fall back from', () => {
+  const cmd = chatCommand();
+  const yieldAt = cmd.search(/out\.yielded \|\| out\.res\.status === YIELDED_STATUS/);
+  const fallbackAt = cmd.indexOf('await saveUndeliveredAlarm(');
+  assert.ok(
+    yieldAt !== -1,
+    'a yielded result travels with res.ok === false, so without this check it lands in the fallback — whose own calls yield too, printing "this alarm is lost" and exiting 1 for a deliberate, healthy stop',
+  );
+  assert.ok(yieldAt < fallbackAt, 'the yield has to be told apart BEFORE the fallback, or it is already too late');
+  assert.ok(
+    cmd.slice(yieldAt, fallbackAt).includes("die('send chat message'"),
+    'die() is what carries the reserve\'s words and EXIT_YIELDED (7) — run_bus_relay.sh reads that code to tell "I stood down" from "I broke"',
+  );
+});
+
+test('the fallback never throws on a 200 whose body did not parse', () => {
+  const fn = bodyOf('async function saveUndeliveredAlarm');
+  assert.ok(
+    /if \(!made\.json \|\| !made\.json\.id\)/.test(fn),
+    'made.json is null on a 200 carrying a proxy error page, and made.json.id on that is a TypeError escaping a function documented "Never throws"',
+  );
+  assert.ok(
+    /back\.json && Array\.isArray\(back\.json\.comments\)/.test(fn),
+    '(back.json.comments || []) throws the same way when the read-back body did not parse',
+  );
+  assert.ok(!/\(back\.json\.comments \|\| \[\]\)/.test(fn), 'the unguarded read-back must be gone, not merely commented about');
+});
+
+test('two machines creating two noticeboards converge on one, oldest first', () => {
+  const fn = bodyOf('async function saveUndeliveredAlarm');
+  assert.ok(
+    /date_created/.test(fn),
+    'find-or-create is check-then-act, so both machines can create one; choosing the oldest is an answer each reaches independently, which first-paged is not',
+  );
+  assert.ok(
+    fn.includes('Two "') || /Two \$\{/.test(fn) || /Two .*tickets exist/.test(fn),
+    'a split record has to be said out loud — it needs a hand to delete the duplicate',
+  );
+});
+
+test('the deliberate blank lines survive, so the alarm keeps its horizontal rule', () => {
+  const body = busFallback.renderFallbackComment({
+    text: 'ALARM', channel: 'c', why: 'HTTP 400', node: 'mac-mini', at: '2026-09-08T12:00:00.000Z',
+  });
+  assert.ok(
+    body.includes('The alarm itself, unchanged:\n\n---\n\n'),
+    'without the blank line Markdown reads `---` as a setext underline: the rule disappears and the line above it becomes a heading',
+  );
+  assert.ok(body.includes('**\n\n*   raised by:'), 'the header keeps its blank line too');
+});
+
+test('an absent `at` or `channel` still drops out, which is what the filter was for', () => {
+  const body = busFallback.renderFallbackComment({ text: 'ALARM', why: 'HTTP 400' });
+  assert.ok(!body.includes('*   at:'), 'no timestamp, no line');
+  assert.ok(!body.includes('*   channel:'), 'no channel, no line');
+  assert.ok(body.includes('The alarm itself, unchanged:\n\n---\n\n'), 'and the separators still survive');
+  assert.ok(!/\n\n\n/.test(body), 'dropping an optional field must not leave a double gap behind it');
+});
