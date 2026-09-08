@@ -367,11 +367,38 @@ as a rule first, then gets a checker where one is possible.
   arbitrarily between the Settings fields and the Layout fields."*
 
   `check_panels` compares the two directly now, and the panels known to be
-  staggered are recorded in `scripts/ui/panel-seam-baseline.json`. **That
+  staggered were recorded in `scripts/ui/panel-seam-baseline.json`. **That
   record may only ever shrink:** a staggered panel not in it fails as a new
   regression, and a panel in it that lines up fails as a stale entry. Every
   run prints how many are recorded and which ticket owns them, so a bounded
-  check never reads as a clean sweep. Ticket `86bbq065f` empties the file.
+  check never reads as a clean sweep.
+
+  **Closed 2026-09-08 (ticket `86bbq065f`) — the file is empty and the
+  assertion is not.** The fix is one mechanism applied once: the shared chrome
+  is rendered INTO the panel's first settings column and flattened with
+  `display: contents`, so its labels and controls are grid items of that
+  column and `max-content` measures the chrome and the column at the same
+  time. Reasoning, and why it is a slot rather than a CSS rule, is in
+  `components/builder/builder-module-chrome-slot.tsx`; the short version is
+  that two grids cannot share a track, `subgrid` needs an unbroken grid chain,
+  and `.builder-schema-panel-columns` is a wrapping FLEX container in between —
+  deliberately, because wrapping outranks the column count (L4/W5) and ten of
+  these panels already wrap at 1440. `feature-cards` and `program-list` reach
+  the same place with subgrid instead, because their single column is a direct
+  grid item of the editor.
+
+  **A shared lattice takes the LARGER of the two tracks, and that is visible.**
+  On a panel whose first column is wide, the chrome's own controls move out to
+  the column's control track — on `blog-search` from 207px to that column's
+  846px track, with the controls themselves still bounded by
+  `--builder-field-long-max`. That is what "one rectangle" costs and it is the
+  intended outcome, not a side effect: an edge is shared by one side moving.
+
+  **An entry added to that file from now on is a REGRESSION being recorded,
+  never an exemption.** The assertion did not retire with the list — a merged
+  panel is measured by comparing the chrome's own rows against the column's
+  other rows, so losing the flattening, or adding a settings panel that never
+  renders a `BuilderModuleChromeSlot`, fails on that panel's name.
 
   Two things about the geometry, both measured and both counter-intuitive:
   the chrome is **below** the settings columns on 30 of the 35, not above
@@ -395,10 +422,18 @@ as a rule first, then gets a checker where one is possible.
 
   **These two are the only chrome exemptions, and the shared
   `.builder-module-chrome` is deliberately NOT one of them** — it is measured
-  as a lattice group on purpose, and the seam assertion above holds it to the
-  column stacked with it. Recorded here because Panel sweep 7/15 asked for
-  it: until 2026-09-07 both exemptions lived only in a CSS comment, and an
-  undocumented exemption is indistinguishable from an oversight.
+  as a lattice group on purpose, and since 2026-09-08 it is a member of the
+  first settings column's lattice rather than a group beside it. Recorded here
+  because Panel sweep 7/15 asked for it: until 2026-09-07 both exemptions
+  lived only in a CSS comment, and an undocumented exemption is
+  indistinguishable from an oversight.
+
+  Neither is reached by the seam assertion at all, which is why neither needs
+  recording in the baseline: they carry no `.builder-module-chrome` strip.
+  `carousel` is the third panel the assertion does not judge, and for a
+  different reason — its settings column sits BESIDE the chrome rather than
+  stacked with it, so there is no shared edge to hold it to. The check names
+  that skip on every run rather than dropping it in silence.
 
 ## D — Density and layout of panels
 
