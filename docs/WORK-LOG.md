@@ -1,3 +1,29 @@
+## 2026-09-07 — The tag page stops telling visitors a number that is not the tag's (#659)
+
+On the Delray tags page, a visitor who clicked "beginner tennis" saw a heading
+counting the posts with that tag. Three of them. Then they typed "Clinics" into
+the search box, the list narrowed to one — and the heading changed to say the
+tag had one post. It does not. Three posts still carry it; the search is what
+put the other two out of sight. The heading was naming one thing and counting
+another, confidently, on a live client site.
+
+The number is the half that stays, because it is the one a visitor can count for
+themselves against the cards in front of them. So the sentence widens to cover
+it: "Blog posts matching the tag 'beginner tennis' and the search 'Clinics': 1".
+Anything else narrowing the list gets named the same way, because the search is
+not the only way in — a link can set an author or a date range alongside the
+tag, and each of those could produce the same false sentence.
+
+The second fix is the message you get when nothing comes back at all. Ninety-
+seven of Delray's tags have no published post behind them — they are all on
+drafts — and the tag cloud links to every one. Ask for one of those and then
+type a word, and the page used to say "No posts tagged 'junior tennis' match
+'tennis'", which reads as an invitation to delete the word and try again.
+Deleting it brings nothing back; the tag was empty before you typed. Now the
+page names the tag alone and leaves the "Show all posts" button where it was.
+Where a search genuinely is what emptied the page, it is still named — that part
+was right and is untouched.
+
 ## 2026-09-07 — Every dropdown that lists your pages now lists them A to Z (#656)
 
 Pick a page anywhere in the admin app — the Post Page on a Blog Post List
