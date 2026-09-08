@@ -78,6 +78,23 @@ const firstOptions = () =>
   Array.from(document.querySelectorAll("select")).map((s) => s.options[0]?.textContent ?? "");
 const resultsLine = () =>
   document.querySelector(".builder-blog-post-list-results-line")?.textContent ?? "";
+const cardCount = () => document.querySelectorAll("article").length;
+
+/*
+ * React tracks an input's value on the DOM node, so assigning `.value` and
+ * firing "input" is ignored — the native setter is what makes onChange run.
+ * This is the visitor typing, which is what put the two numbers in the results
+ * line out of step with each other.
+ */
+async function typeInSearchBox(text: string) {
+  const input = document.querySelector('input[type="search"]') as HTMLInputElement | null;
+  if (!input) throw new Error("the feed rendered no search field");
+  const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+  await act(async () => {
+    setValue.call(input, text);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
 
 describe("Post Feed filterMode", () => {
   it("tag mode shows only the tag selector and titles the results", async () => {
@@ -150,5 +167,73 @@ describe("Post Feed filterMode", () => {
     // Its default and the renderer's fallback must agree, or a brand-new feed
     // behaves differently from every feed already on a page.
     expect(createEmptyModule("blog-post-list").settings.filterMode).toBe("all");
+  });
+});
+
+/*
+ * Task 86bbw4j6e, live on the client's /tags page. The results line names ONE
+ * filter and prints `filteredPosts.length`, which is the count after every
+ * filter — so the moment anything else narrowed the list, the sentence made a
+ * claim about the tag using a number the tag had nothing to do with. The A2
+ * change on 86bbvyr6d put showSearch on that page on 2026-09-07, which is what
+ * made the two able to disagree in front of visitors.
+ *
+ * Two honest answers were available: count the tag alone, or say what the
+ * number counts. The second is the one taken, because the number stays equal
+ * to the cards on screen — the only half of the sentence a visitor can check.
+ */
+describe("Post Feed results line — the count and the sentence describe the same list", () => {
+  it("names the search once it is narrowing the count", async () => {
+    // Two posts carry "beginner tennis"; "Clinics" matches one of them.
+    await renderFeed("?tag=beginner%20tennis", { filterMode: "tag" });
+    expect(resultsLine()).toBe("Blog posts matching the tag “beginner tennis”: 2");
+
+    await typeInSearchBox("Clinics");
+
+    expect(resultsLine()).toBe(
+      "Blog posts matching the tag “beginner tennis” and the search “Clinics”: 1"
+    );
+    // The defect exactly: the old sentence with the new number.
+    expect(resultsLine()).not.toBe("Blog posts matching the tag “beginner tennis”: 1");
+  });
+
+  it("keeps the printed count equal to the cards on the page", async () => {
+    // The check a visitor can actually make, and the one that failed live.
+    await renderFeed("?tag=beginner%20tennis", { filterMode: "tag" });
+    await typeInSearchBox("Clinics");
+
+    expect(cardCount()).toBe(1);
+    expect(resultsLine().endsWith(`: ${cardCount()}`)).toBe(true);
+  });
+
+  it("does the same in author mode", async () => {
+    await renderFeed("?author=Jeff%20Bingo", { filterMode: "author" });
+    await typeInSearchBox("Clinics");
+
+    expect(resultsLine()).toBe(
+      "Blog posts matching the author “Jeff Bingo” and the search “Clinics”: 1"
+    );
+  });
+
+  it("names another filter the URL set, not only the typed word", async () => {
+    /*
+     * ?tag=, ?category= and ?author= each seed their filter whatever filterMode
+     * says, so a tag-results page can be narrowed by an author it never shows a
+     * control for. Same false sentence, no typing required.
+     */
+    await renderFeed("?tag=beginner%20tennis&author=Rich%20Benvin", { filterMode: "tag" });
+
+    expect(resultsLine()).toBe(
+      "Blog posts matching the tag “beginner tennis” and the author “Rich Benvin”: 0"
+    );
+  });
+
+  it("leaves the sentence alone while nothing else is narrowing it", async () => {
+    // The wording Dane asked for, unchanged on the page he asked for it on.
+    await renderFeed("?tag=beginner%20tennis", { filterMode: "tag" });
+    await typeInSearchBox("Clinics");
+    await typeInSearchBox("");
+
+    expect(resultsLine()).toBe("Blog posts matching the tag “beginner tennis”: 2");
   });
 });

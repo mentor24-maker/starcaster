@@ -2871,10 +2871,22 @@ function BlogPostListPreview({
     );
   }, [allAuthors, authorFilter]);
 
-  const filteredPosts = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  /*
+   * The dropdown filters on their own, with the search box left out of it.
+   * Two sentences on this module are statements about THIS list rather than
+   * about the one on screen, and neither could be written while the only list
+   * in scope had the typed word already folded into it (task 86bbw4j6e):
+   *
+   *   - whether the search term had anything to do with an empty page. If the
+   *     dropdowns alone leave nothing, clearing the word brings nothing back,
+   *     so naming it is an invitation the page cannot honour.
+   *   - what the results line is allowed to claim its count is a count OF.
+   *
+   * The search is applied to this array below rather than beside it, so the
+   * two can never drift into filtering by different rules.
+   */
+  const postsBeforeSearch = useMemo(() => {
     return allPosts.filter((post) => {
-      if (q && !`${post.title} ${post.excerpt || ""}`.toLowerCase().includes(q)) return false;
       if (missingCatSlug) return false;
       if (catFilter && !post.categoryIds?.includes(catFilter)) return false;
       if (tagFilter && !post.tags?.includes(tagFilter)) return false;
@@ -2883,7 +2895,15 @@ function BlogPostListPreview({
       if (dateTo && (!post.published_at || new Date(post.published_at) > new Date(dateTo + "T23:59:59"))) return false;
       return true;
     });
-  }, [allPosts, search, catFilter, missingCatSlug, tagFilter, authorFilter, dateFrom, dateTo]);
+  }, [allPosts, catFilter, missingCatSlug, tagFilter, authorFilter, dateFrom, dateTo]);
+
+  const filteredPosts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return postsBeforeSearch;
+    return postsBeforeSearch.filter((post) =>
+      `${post.title} ${post.excerpt || ""}`.toLowerCase().includes(q)
+    );
+  }, [postsBeforeSearch, search]);
 
   /*
    * A new filter starts a new list, so it starts at page one again. Without
@@ -2916,32 +2936,6 @@ function BlogPostListPreview({
    * parameter that did nothing — which is exactly how a working page read as a
    * broken one on 2026-09-03. Name the value that emptied the page.
    */
-  /*
-   * "Blog posts matching the tag \u201cjunior tennis\u201d: 13" — the operator's
-   * wording, 2026-09-03. It renders only when the mode HAS a value: with
-   * nothing selected there is nothing to describe, and "matching the tag
-   * \u201c\u201d: 55" would be noise on a page that is simply showing everything.
-   */
-  const singleFilterValue =
-    singleFilter === "tag" ? tagFilter
-      : singleFilter === "category" ? activeCategoryName
-        : singleFilter === "author" ? authorFilter
-          : "";
-  const resultsLine = singleFilterValue
-    ? `Blog posts matching the ${singleFilter} \u201c${singleFilterValue}\u201d: ${filteredPosts.length}`
-    : "";
-
-  /*
-   * The dropdown filters name themselves; the search box did not, and that is
-   * the same defect one step further on. Typing a word nothing matches read
-   * "No posts match your filters." \u2014 which does not say WHICH word emptied
-   * the page (\u00a75.31) \u2014 and typing it while a tag was selected read
-   * "No posts tagged \u201ctennis\u201d.", a sentence that is flatly FALSE when
-   * posts carry that tag and the search is what emptied the list. A confident
-   * wrong message is the worst of the three. So the search term is named, and
-   * a filter only takes credit for an emptiness alongside it, never instead of
-   * it.
-   */
   const searchTerm = search.trim();
   /*
    * The dates are shown exactly as the visitor set them, which is the string
@@ -2959,6 +2953,65 @@ function BlogPostListPreview({
           ? `published on or before ${dateTo}`
           : "";
   /*
+   * "Blog posts matching the tag \u201cjunior tennis\u201d: 13" — the operator's
+   * wording, 2026-09-03. It renders only when the mode HAS a value: with
+   * nothing selected there is nothing to describe, and "matching the tag
+   * \u201c\u201d: 55" would be noise on a page that is simply showing everything.
+   */
+  const singleFilterValue =
+    singleFilter === "tag" ? tagFilter
+      : singleFilter === "category" ? activeCategoryName
+        : singleFilter === "author" ? authorFilter
+          : "";
+  /*
+   * Everything narrowing the list BEYOND the one filter this line is titled
+   * after. The number printed is `filteredPosts.length` — the count of cards
+   * actually on the page — so a sentence naming only the tag was claiming a
+   * count of tag matches while printing a number something else had already
+   * cut down. On the client's live /tags page (2026-09-07): three posts carry
+   * "beginner tennis", the visitor types "Clinics", and the line went on
+   * reading `matching the tag "beginner tennis": 1`. Both halves confident,
+   * one of them false, and the two screens counting the same thing differently
+   * with neither saying what it counts (landmine 17, \u00a75.31).
+   *
+   * The number is the half that stays, because it is the one a visitor can
+   * check against the cards in front of them. The sentence widens to cover it.
+   *
+   * The search is not the only route in. `?tag=`, `?category=` and `?author=`
+   * each seed their filter from the URL whatever `filterMode` says, so
+   * `?tag=X&author=Y` on a tag-results page narrows the count exactly as a
+   * typed word does, and the date bounds do too wherever the operator has
+   * turned that filter on. Naming only the search would leave the identical
+   * false sentence reachable three other ways.
+   */
+  const otherNarrowingPhrases = [
+    singleFilter !== "tag" && tagFilter ? `the tag \u201c${tagFilter}\u201d` : "",
+    singleFilter !== "category" && activeCategoryName
+      ? `the category \u201c${activeCategoryName}\u201d`
+      : "",
+    singleFilter !== "author" && authorFilter ? `the author \u201c${authorFilter}\u201d` : "",
+    dateRangePhrase,
+    searchTerm ? `the search \u201c${searchTerm}\u201d` : "",
+  ].filter(Boolean);
+  const resultsLine = singleFilterValue
+    ? `Blog posts matching ${joinFilterPhrases([
+        `the ${singleFilter} \u201c${singleFilterValue}\u201d`,
+        ...otherNarrowingPhrases,
+      ])}: ${filteredPosts.length}`
+    : "";
+
+  /*
+   * The dropdown filters name themselves; the search box did not, and that is
+   * the same defect one step further on. Typing a word nothing matches read
+   * "No posts match your filters." \u2014 which does not say WHICH word emptied
+   * the page (\u00a75.31) \u2014 and typing it while a tag was selected read
+   * "No posts tagged \u201ctennis\u201d.", a sentence that is flatly FALSE when
+   * posts carry that tag and the search is what emptied the list. A confident
+   * wrong message is the worst of the three. So the search term is named, and
+   * a filter only takes credit for an emptiness alongside it, never instead of
+   * it.
+   */
+  /*
    * A ?category= slug matching no category empties the list on its own —
    * `filteredPosts` drops every post while missingCatSlug is set — so nothing
    * else had anything to do with it. Naming the search word here would invite
@@ -2972,7 +3025,28 @@ function BlogPostListPreview({
         authorFilter ? `by \u201c${authorFilter}\u201d` : "",
         dateRangePhrase,
       ].filter(Boolean));
-  const searchTermIsBlamable = Boolean(searchTerm) && !missingCatSlug;
+  /*
+   * Whether the typed word had anything to do with the page being empty.
+   * `postsBeforeSearch` is the dropdowns on their own: when it is already
+   * empty, the word is innocent, and naming it — "No posts tagged \u201cjunior
+   * tennis\u201d match \u201ctennis\u201d." — invites the visitor to clear
+   * something whose clearing brings nothing back.
+   *
+   * #643 wrote exactly that reason above the `missingCatSlug` carve-out and
+   * then applied it to that one case. Every dropdown can empty the list on its
+   * own: 97 tags on the Delray project carry no published post at all (22 are
+   * published in total) and the live tag cloud links to all of them, an
+   * `?author=` naming nobody does the same, and so does a date bound outside
+   * the archive. So the carve-out becomes the general rule it was always
+   * describing, and `missingCatSlug` falls out of it — that slug drops every
+   * post, so `postsBeforeSearch` is empty and the word is innocent by the same
+   * arithmetic (task 86bbw4j6e).
+   *
+   * The other direction is unchanged and is what #643 exists to protect: while
+   * the dropdowns DO leave posts standing, the search is what emptied the page
+   * and the sentence names it alongside them, never instead of them.
+   */
+  const searchTermIsBlamable = Boolean(searchTerm) && postsBeforeSearch.length > 0;
   const emptyFilteredMessage = searchTermIsBlamable
     ? activeFilterPhrase
       ? `No posts ${activeFilterPhrase} match \u201c${searchTerm}\u201d.`
