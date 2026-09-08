@@ -336,6 +336,86 @@ function handbackTarget(watch, taskStatus, authorized) {
 }
 
 /**
+ * WHERE an answered ticket GOES — read off the ticket, not off a flat map.
+ * (2026-09-08, task 86bbw596q.)
+ *
+ * `handbackTarget` above answers "may this watch release this status at all,
+ * and where does a ticket with nothing built behind it go" — that is the
+ * doctrine checkpoint and the ordinary case, and neither changes here. What it
+ * could not answer is where a ticket whose work is ALREADY BUILT goes, because
+ * it reads nothing about the ticket: every answered `Needs your input` ticket
+ * went to `Queued`, unconditionally.
+ *
+ * `Queued` is a status `loop-build` claims from. So on 2026-09-07 ticket
+ * 86bbw4dch — merged as PR #650, its last step a SQL file for Dane to run —
+ * was answered ("Success. No rows returned"), handed back to `Queued`, and sat
+ * there as claimable work with its pull request already merged and its branch
+ * already deleted. An operator session caught it in minutes. Unwatched, a build
+ * pass claims it, `build-start` finds a PR trail for a branch GitHub deleted at
+ * merge, and the pass is in undefined territory having already moved live work
+ * to `Building`. The claim itself cannot catch this — it guards on status,
+ * which is exactly what makes it atomic.
+ *
+ * The repo already held the same judgement in another voice:
+ * `npm run clickup -- migrate-rework` exists to move tickets that are `Queued`
+ * WITH AN OPEN PR into `Rework`, because a queued ticket with a branch behind it
+ * is a ticket a build pass will misread. A merged PR is further along still and
+ * was landing in the same wrong place.
+ *
+ * `pr` is this ticket's own `PR opened:` trail, already resolved by the caller:
+ *
+ *   null / undefined        no trail — nothing was ever built. `Queued`, as before.
+ *   { state: 'MERGED' }     the work is live. `Live`, which is where the relay's
+ *                           own merge path already puts a merged ticket.
+ *   { state: 'OPEN' }       the branch behind it IS the work. `Rework` — the
+ *                           status `migrate-rework` already says this belongs in.
+ *   { state: 'CLOSED' }     abandoned without merging; GitHub deleted the branch,
+ *                           so there is nothing to continue. `Queued`, to rebuild.
+ *   { state: '' , why }     the state could NOT be read. Act 'cannot-tell': the
+ *                           ticket is left exactly where it is and the caller
+ *                           reports it, because "could not check" must never
+ *                           read as "clear" (DOCTRINE 3.11) and the wrong guess
+ *                           here is the very bug this function exists to stop.
+ *
+ * Returns `{ act, target, why }`. `act` is 'move' (target is set), 'skip'
+ * (this watch does not release this status, or nothing authorized it) or
+ * 'cannot-tell' (a reading failed — say so, move nothing).
+ */
+function handbackDestination(watch, taskStatus, authorized, pr) {
+  const unbuilt = handbackTarget(watch, taskStatus, authorized);
+  if (!unbuilt) return { act: 'skip', target: null, why: '' };
+  if (!pr) {
+    return {
+      act: 'move',
+      target: unbuilt,
+      why: 'nothing has been built for this ticket (no "PR opened:" line on it)',
+    };
+  }
+  const which = pr.number ? `PR #${pr.number}` : 'its pull request';
+  const state = String(pr.state || '').trim().toUpperCase();
+  if (state === 'MERGED') {
+    return { act: 'move', target: 'Live', why: `${which} is already merged — this work is live` };
+  }
+  if (state === 'OPEN') {
+    return { act: 'move', target: 'Rework', why: `${which} is still open — the branch behind it is the work` };
+  }
+  if (state === 'CLOSED') {
+    return {
+      act: 'move',
+      target: unbuilt,
+      why: `${which} was closed without merging — there is nothing to continue`,
+    };
+  }
+  return {
+    act: 'cannot-tell',
+    target: null,
+    why: `${which} is on this ticket's trail but its state could not be read`
+      + ` (${pr.why || 'reason unknown'}), so where this ticket belongs is unknown`
+      + ` — it is left in "${taskStatus}" rather than risking a build loop claiming merged work`,
+  };
+}
+
+/**
  * THE FAILED HAND-BACK, WRITTEN WHERE THE NEXT PASS CAN SEE IT.
  *
  * The retry above does not depend on this note — it is derived from the trail,
@@ -729,6 +809,7 @@ module.exports = {
   commentAt,
   answerAwaitingHandback,
   handbackTarget,
+  handbackDestination,
   HANDBACK_FAILURE_MARKER,
   handbackFailureText,
   HANDBACK_DONE_MARKER,

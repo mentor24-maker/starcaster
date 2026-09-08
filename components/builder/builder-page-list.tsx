@@ -973,6 +973,14 @@ export function BuilderPageList({
               <BuilderBackgroundControls
                 label="Background"
                 background={pageBackground}
+                /*
+                 * A page can wear a video the same way a row can. The whole
+                 * layer is shared (`BuilderBackgroundLayer`, mounted by
+                 * `BuilderViewportShellLayout`), so this flag is the only
+                 * difference between the two panels — no new control, no new
+                 * default, and the same names the Row Background picker uses.
+                 */
+                allowVideo
                 compact
                 hideClear
                 showColorFieldLabel={false}
