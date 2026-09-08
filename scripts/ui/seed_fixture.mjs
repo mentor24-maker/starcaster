@@ -264,6 +264,18 @@ const buildTuned = (ids) => ({
       effect: 'tumbleweed', effectRotationRate: '40', effectFrequency: '6',
       effectBounceHeight: '150', effectDirection: 'rtl',
       effectSpeed: '16', effectRepeat: 'once', effectDelay: '2',
+      // Drop shadow ON for the same reason the carousel's is: the shadow
+      // controls are visibleWhen-gated behind the tickbox, so an unticked
+      // fixture measures the Frame axis without them and reports OK on rows
+      // it never saw. Shadow Angle and Shadow Distance joined that run on
+      // 2026-08-25, which is two more rows nothing would otherwise look at.
+      // 12 / -9 is deliberately OFF the 15-degree grid — it derives to 37
+      // degrees at a distance of 15, which is the case where the Angle
+      // control has to show a value its own option list does not contain
+      // rather than snap it and rewrite the page.
+      imageShadow: 'true',
+      imageShadowX: '12', imageShadowY: '-9',
+      imageShadowBlur: '24', imageShadowSpread: '2', imageShadowOpacity: '40',
     },
   },
   // The rich-text module's Structure / Text / Placement / Frame axes
@@ -837,25 +849,48 @@ const buildTuned = (ids) => ({
     settings: { showTitle: 'true', panelTitle: LONG },
   },
   /*
-   * Every gating toggle is ON deliberately. Three of this panel's fields are
+   * Every gating toggle is ON deliberately. Two of this panel's fields are
    * `visibleWhen`-gated — `panelTitle` behind `showTitle`, and
-   * `relateButtonLabel` + `articleStatus` behind `showRelate` — so seeding
-   * either toggle off would measure the panel three controls short and still
-   * report green. That is exactly how the proximity-effects panel passed
-   * while two gated fields went unseen.
+   * `autoTagButtonLabel` behind `showAutoTag` — so seeding either toggle off
+   * would measure the panel two controls short and still report green. That is
+   * exactly how the proximity-effects panel passed while two gated fields went
+   * unseen.
    *
    * The tag NAMES here are long on purpose, and they are the real ones from
    * the Delray blog. The first version of this module truncated them with an
    * ellipsis ("Delray Te…", "advanced…"), which is the defect 86bbue8ux was
    * filed for — a fixture of short words could not have shown it.
+   *
+   * The relate settings moved to `admin-related-articles` (86bbuhph0) and are
+   * seeded there now. `showAutoTag` arrived with the Auto-tag extension
+   * (86bbw4dcp) and had never been seeded, so its gated label field was one of
+   * the unseen ones this comment warns about.
    */
   'admin-blog-links': {
     name: 'Blog Links',
     settings: {
       showTitle: 'true', panelTitle: LONG,
-      showCategories: 'true', showTags: 'true',
-      showRelate: 'true', relateButtonLabel: 'Relate the checked articles',
+      showTags: 'true',
+      showAutoTag: 'true', autoTagButtonLabel: 'Auto-tag every untagged post',
+    },
+  },
+
+  /*
+   * The Related Articles half, its own module since 86bbuhph0.
+   *
+   * `panelTitle` is gated behind `showTitle`, so that toggle is on for the
+   * same reason as above. The other three fields are ungated here — on the
+   * combined module `relateButtonLabel` and `articleStatus` sat behind
+   * `showRelate`, and this module has no such toggle: it IS the relate
+   * feature, so hiding its contents would leave a heading over empty space.
+   */
+  'admin-related-articles': {
+    name: 'Related Articles',
+    settings: {
+      showTitle: 'true', panelTitle: LONG,
+      relateButtonLabel: 'Relate the checked articles',
       articleStatus: 'published',
+      showCategories: 'true',
     },
   },
   'admin-login': {
