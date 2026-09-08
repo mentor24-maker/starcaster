@@ -1,8 +1,13 @@
 import Image from "next/image";
-import { type CSSProperties, type DragEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type DragEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BuilderCenteredModal } from "./builder-centered-modal";
+import {
+  BuilderModuleChromeSlotProvider,
+  type BuilderModuleChromeSlotRegistrar
+} from "./builder-module-chrome-slot";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderImageModuleSettings } from "./builder-image-module-settings";
 import { BuilderFeatureCardsModuleSettings } from "./builder-feature-cards-module-settings";
@@ -3194,6 +3199,37 @@ export function BuilderModuleCard({
   themePrimaryColor
 }: BuilderModuleCardProps) {
     const [isPopped, setIsPopped] = useState(false);
+    /**
+     * Where this panel wants the shared chrome (ticket 86bbq065f). Null until
+     * a settings panel renders a `BuilderModuleChromeSlot`; while it is null
+     * the chrome renders exactly where it always has, which is what keeps a
+     * panel that never opts in working rather than losing its Label and
+     * margins. See builder-module-chrome-slot.tsx for why it is a slot.
+     */
+    const [chromeSlot, setChromeSlot] = useState<HTMLElement | null>(null);
+    const chromeSlotsRef = useRef<HTMLElement[]>([]);
+    /*
+     * A card can end up holding more than one slot — a table module renders a
+     * cell editor that is a schema panel in its own right — so the winner is
+     * chosen by DOCUMENT ORDER rather than by which effect happened to run
+     * first. Effects fire child-before-parent, so "first to register" would
+     * hand the chrome to the innermost nested panel, which is the one place it
+     * does not belong.
+     */
+    const registerChromeSlot = useCallback<BuilderModuleChromeSlotRegistrar>((element, present) => {
+      const slots = chromeSlotsRef.current;
+      const at = slots.indexOf(element);
+      if (present && at === -1) slots.push(element);
+      if (!present && at !== -1) slots.splice(at, 1);
+      const first = slots.reduce<HTMLElement | null>((best, candidate) => {
+        if (!best) return candidate;
+        // DOCUMENT_POSITION_PRECEDING (2) — `candidate` comes before `best`.
+        return best.compareDocumentPosition(candidate) & Node.DOCUMENT_POSITION_PRECEDING
+          ? candidate
+          : best;
+      }, null);
+      setChromeSlot(first);
+    }, []);
     const moduleHeaderRef = useRef<HTMLDivElement | null>(null);
     const moduleMountedRef = useRef(false);
 
@@ -3875,16 +3911,31 @@ export function BuilderModuleCard({
               </div>
             </div>
           ) : (
-          <>
+          <BuilderModuleChromeSlotProvider value={registerChromeSlot}>
           {showModuleTriggerSettings ? (
             <BuilderModuleTriggerSettings module={module} onUpdateModule={onUpdateModule} />
           ) : null}
-          {moduleSettingsEditor}
+          {/* 86bbq065f: when a settings panel below has offered a slot, the
+              chrome goes THERE — into the first settings column, so the two
+              share one grid and therefore one label track and one control
+              track. Until it does, this renders the chrome exactly where it
+              has always been. `moduleSettingsEditor` IS `sharedModuleChrome`
+              on a module with no editor of its own, so it has to be held back
+              here too or the chrome would render twice. */}
+          {chromeSlot && moduleSettingsEditor === sharedModuleChrome ? null : moduleSettingsEditor}
 
           {/* F13: the chrome the settings-editor ternary above swallowed —
               rendered here for modules whose renderer honours background and
               margins but whose own editor never offered them. */}
-          {needsRestoredChrome ? sharedModuleChrome : null}
+          {needsRestoredChrome && !chromeSlot ? sharedModuleChrome : null}
+
+          {/* The portal moves the DOM parent and nothing else: the chrome stays
+              exactly where it is in the React tree, so every handler, every
+              `onUpdateModule` and every event that bubbles through it is
+              unchanged. Only its box moves, which is the one thing that has to
+              move for `max-content` to measure the chrome and the column at
+              once. */}
+          {chromeSlot && showsSharedChrome ? createPortal(sharedModuleChrome, chromeSlot) : null}
 
           {/* The image module's offsets moved into the chrome strip above (see
               MODULE_NUDGE_SIDES); its URL, Link, New Tab and gallery buttons
@@ -4255,7 +4306,7 @@ export function BuilderModuleCard({
               )}
             </label>
           ) : null}
-          </>
+          </BuilderModuleChromeSlotProvider>
           )}
         </ModuleEditorWrapper>
       ) : null}

@@ -5,6 +5,7 @@ import { BuilderImagePickerField } from "./builder-image-picker-field";
 import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip, type BuilderModuleFieldWidth } from "./builder-module-field";
+import { BuilderModuleChromeSlot } from "./builder-module-chrome-slot";
 import {
   BuilderSpacingPairFields,
   MODULE_MARGIN_SIDES,
@@ -782,10 +783,28 @@ export function BuilderSchemaModuleSettings({
     );
     const trackStyle = { "--builder-axis-count": String(axisCount) } as CSSProperties;
 
+    /*
+     * Which column receives the shared chrome (ticket 86bbq065f).
+     *
+     * The FIRST column that actually renders something, not `axes[0]`. An axis
+     * whose every field is hidden by `visibleWhen` still renders — as an empty
+     * placeholder that holds the column position — and an empty column has no
+     * lattice to join, no width, and is skipped by `check_panels` when it looks
+     * for the column stacked with the chrome. Putting the chrome in one would
+     * line it up with nothing while the first column a person can see stayed
+     * staggered, and the check would agree with the panel rather than with the
+     * rule.
+     */
+    const chromeSlotAxis = axes.findIndex(
+      (axis) =>
+        visibleStrips(axis.strips).length > 0 ||
+        (axis.sections ?? []).some((section) => visibleStrips(section.strips).length > 0)
+    );
+
     return (
       <>
         <div className="builder-schema-panel-columns" style={trackStyle}>
-          {axes.map((axis) => {
+          {axes.map((axis, axisIndex) => {
             const visible = visibleStrips(axis.strips);
             const sections = (axis.sections ?? [])
               .map((section) => ({ title: section.title, strips: visibleStrips(section.strips) }))
@@ -803,6 +822,7 @@ export function BuilderSchemaModuleSettings({
                     {renderStrips(section.strips, ctx)}
                   </div>
                 ))}
+                {axisIndex === chromeSlotAxis ? <BuilderModuleChromeSlot /> : null}
               </div>
             );
           })}
@@ -838,12 +858,24 @@ export function BuilderSchemaModuleSettings({
     );
   }
 
-  function renderColumns(names: Array<"content" | "layout" | "style">, key: string | number) {
+  function renderColumns(
+    names: Array<"content" | "layout" | "style">,
+    key: string | number,
+    // Only the FIRST block of a panel carries the chrome. A panel can render
+    // several `panel-columns` blocks (a stacked group, then Advanced), and the
+    // chrome belongs to the one at the top — the block whose first column is
+    // the panel's own left edge.
+    withChromeSlot = false
+  ) {
+    const chromeSlotName = withChromeSlot
+      ? names.find((name) => renderGroup(name) !== null)
+      : undefined;
     return (
       <div className="builder-schema-panel-columns" key={key}>
         {names.map((name) => (
           <div className="builder-schema-panel-column" key={name}>
             {renderGroup(name)}
+            {name === chromeSlotName ? <BuilderModuleChromeSlot /> : null}
           </div>
         ))}
       </div>
@@ -857,6 +889,10 @@ export function BuilderSchemaModuleSettings({
     const stacked = GROUP_ORDER.filter(
       (name) => name === "advanced" || !columnNames.includes(name as Exclude<BuilderSchemaGroupName, "advanced">)
     );
+    // Same rule as the axes branch: the first column that renders anything.
+    const chromeSlotColumn = schema.panelColumns.findIndex((names) =>
+      names.some((name) => renderGroup(name) !== null)
+    );
     return (
       <>
         {schema.panelColumns.length ? (
@@ -864,6 +900,7 @@ export function BuilderSchemaModuleSettings({
             {schema.panelColumns.map((names, index) => (
               <div className="builder-schema-panel-column" key={index}>
                 {names.map((name) => renderGroup(name))}
+                {index === chromeSlotColumn ? <BuilderModuleChromeSlot /> : null}
               </div>
             ))}
           </div>
@@ -875,9 +912,18 @@ export function BuilderSchemaModuleSettings({
 
   return (
     <>
-      {derivePanelBlocks(schema).map((block, index) =>
-        block.kind === "columns" ? renderColumns(block.names, index) : renderGroup(block.name)
-      )}
+      {(() => {
+        const blocks = derivePanelBlocks(schema);
+        // The chrome goes in the first COLUMNS block; a panel that stacks its
+        // groups instead has no settings column to share an edge with, and
+        // `check_panels` skips it for exactly that reason.
+        const firstColumnsBlock = blocks.findIndex((block) => block.kind === "columns");
+        return blocks.map((block, index) =>
+          block.kind === "columns"
+            ? renderColumns(block.names, index, index === firstColumnsBlock)
+            : renderGroup(block.name)
+        );
+      })()}
       {renderGroup("advanced")}
     </>
   );

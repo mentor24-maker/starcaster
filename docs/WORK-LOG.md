@@ -57,6 +57,48 @@ why uploading a video to a ROW background turns it into an image background and
 throws the clip away — a real fault, filed separately as its own job. The
 column's upload does not do that, and the piece that gets it right is written
 to be shared, so fixing the row is a one-line change when that job is picked up.
+## 2026-09-08 — Module settings panels now line up top to bottom (#667)
+
+Open any module's settings in the Builder and you are really looking at two
+stacks of fields: the strip that every module shares — Label, Background,
+Alignment, the margins — and the module's own settings columns underneath. Those
+two stacks have never started on the same vertical line. Not by much: 25px one
+way on the image panel, 78px the other on breadcrumb. Enough to see, and enough
+to make a panel read as assembled rather than built. 32 of the 35 panels that
+have both were out. They line up now, so a panel is one rectangle from the Label
+row down to the last setting.
+
+The reason it took this long is worth writing down, because it is not what the
+ticket assumed. The two stacks were two separate layout grids, and a grid can
+only line things up with things inside it — no measurement passes between two of
+them. Two panels in the whole builder already lined up, and they did it by a
+trick that needs the two halves to be close relatives in the page structure;
+everywhere else there is a wrapper in between whose job is to let columns wrap
+onto a second row on a narrow panel, and that wrapper is exactly what blocks the
+trick. Ten of these panels already wrap, so removing it to close the seam would
+have broken something more important than the thing being fixed.
+
+So the fix stopped trying to make two grids agree and put the shared strip
+inside the first settings column instead. One grid, one measurement, no
+agreement needed. One module — the CRM form — already owned its own copy of that
+strip, so it simply moved. And one module, Social, has quietly been doing this
+by hand since long before anyone noticed; it is the only one that never had the
+problem.
+
+One thing you will see and should look at: when two stacks share a measurement,
+they both get the wider of the two. On panels with a wide first column the
+shared strip's own boxes widen to match — on the blog search panel they go from
+a fairly tight box out to the full width of the column above them. That is what
+sharing an edge costs, and it is the intended outcome rather than a side effect,
+but it is a real change in how those panels look. Before-and-after photographs
+of six panels are on the ticket.
+
+Two smaller notes. On four panels the shared strip used to sit above the
+settings and now sits below them, inside the first column — where the other
+thirty already had it. And the check that measures all this did not retire when
+the list of broken panels was emptied: it now watches the merged panels instead,
+and it was deliberately broken twice and watched to fail before the list was
+cleared, so a future panel that quietly stops joining in gets caught by name.
 
 ## 2026-09-08 — The Builder now says when a background video is too heavy (#664)
 

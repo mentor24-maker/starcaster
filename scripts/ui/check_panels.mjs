@@ -526,11 +526,16 @@ function measureSeam(page) {
      * kind, and the control offset from the first row that actually occupies
      * the control track.
      */
-    function trackOffsets(root, origin) {
+    function trackOffsets(root, origin, without) {
       const rows = [...root.querySelectorAll('.builder-module-field, .builder-setting-row, .builder-setting-row-full')]
         // An item manager runs its own lattice (L6a) and is not part of the
         // panel column's tracks — the same exclusion `measure()` makes.
-        .filter((el) => !el.closest('[data-lattice-pairs]'));
+        .filter((el) => !el.closest('[data-lattice-pairs]'))
+        // On a MERGED panel the chrome's rows are rows of this column, which is
+        // the whole point — but they are the other half of the comparison, so
+        // measuring the column with them in it would compare the merged set to
+        // itself and could never fail (ticket 86bbq065f).
+        .filter((el) => !without || !without.contains(el));
 
       const or = origin.getBoundingClientRect();
       const found = { name: null, labelX: null, controlX: null, controlName: null };
@@ -581,6 +586,45 @@ function measureSeam(page) {
       const chromeStrip = panel.querySelector('.builder-module-chrome > .builder-module-field-strip');
       const columns = [...panel.querySelectorAll('.builder-schema-panel-column')];
       if (!chromeStrip || !columns.length) return [];
+
+      /*
+       * MERGED — the chrome is INSIDE a settings column (ticket 86bbq065f).
+       *
+       * This is what the fix looks like: the card portals the chrome into a
+       * slot in the first settings column and the boxes between are
+       * `display: contents`, so the chrome's labels and controls are grid
+       * items of that column and the two tracks are one measurement. There is
+       * no seam left to measure across, because there are no longer two grids.
+       *
+       * It still has to be able to FAIL, or this branch would be a way of
+       * passing by disappearing — the exact shape of the blind spot this whole
+       * assertion was written against. So it is measured, not waved through:
+       * the chrome's own rows against the column's other rows. Take the
+       * flattening out and the chrome becomes ONE cell of the column that lays
+       * its rows out inside itself, its offsets stop matching, and this fails
+       * with the same message every other staggered panel gets.
+       *
+       * Read before the strip's box, because a `display: contents` element
+       * measures 0x0 and the `!cr.width` guard below would drop the panel out
+       * of the run entirely — silently, and taking its baseline entry with it.
+       */
+      const owningColumn = chromeStrip.closest('.builder-schema-panel-column');
+      if (owningColumn) {
+        const chrome = trackOffsets(chromeStrip, panel);
+        const settings = trackOffsets(owningColumn, panel, chromeStrip);
+        if (!chrome || !settings) return [{ index, panelName, nothingToCompare: true }];
+        const bothControls = chrome.controlX !== null && settings.controlX !== null;
+        return [{
+          index,
+          panelName,
+          merged: true,
+          chromeBelow: chromeStrip.getBoundingClientRect().top >= owningColumn.getBoundingClientRect().bottom - 2,
+          chrome,
+          settings,
+          labelOut: settings.labelX - chrome.labelX,
+          controlOut: bothControls ? settings.controlX - chrome.controlX : null
+        }];
+      }
 
       const cr = chromeStrip.getBoundingClientRect();
       if (!cr.width || !cr.height) return [];
@@ -701,10 +745,16 @@ function assertSeam(seams, width, baseline) {
         + `"${s.settings.name}" at ${s.settings.labelX} `
         + `(${s.labelOut >= 0 ? '+' : ''}${s.labelOut}px on the label track, ${control}). `
         + 'L8: the panel is one rectangle, so the chrome and the column stacked with it share one lattice. '
-        + 'The mechanism is subgrid onto editor-owned tracks — see THE CHROME AND THE SETTINGS COLUMN SHARE ONE '
-        + 'LATTICE in src/css/_builder-react-overrides.css, which is how feature-cards and program-list do it. '
-        + 'If this panel is a NEW one that has simply never been straightened, add it to '
-        + 'scripts/ui/panel-seam-baseline.json with the others and say so on ticket 86bbq065f.'
+        + (s.merged
+          ? 'This panel HAS the chrome in its settings column, so the two are already one box — what is broken is the '
+            + 'flattening that puts the chrome\'s rows on the column\'s tracks. See THE CHROME JOINS THE FIRST '
+            + 'SETTINGS COLUMN in src/css/_builder-react-overrides.css; the chrome, the slot and the strip inside it '
+            + 'all have to be `display: contents` or the chrome takes one cell and lays its own rows out inside it.'
+          : 'The mechanism is a chrome slot in the first settings column — see '
+            + 'components/builder/builder-module-chrome-slot.tsx and THE CHROME JOINS THE FIRST SETTINGS COLUMN in '
+            + 'src/css/_builder-react-overrides.css. A panel that renders no `BuilderModuleChromeSlot` keeps its '
+            + 'chrome outside every column, which is what this is measuring. feature-cards and program-list reach '
+            + 'the same place with subgrid instead, because their column is a direct grid item of the editor.')
       );
     }
 
