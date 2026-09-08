@@ -2539,6 +2539,10 @@ function BuilderModulePreview({
     return <AdminBlogLinksPreview settings={module.settings} projectId={projectId} liveSite={liveSite} />;
   }
 
+  if (module.type === "admin-related-articles") {
+    return <AdminRelatedArticlesPreview settings={module.settings} projectId={projectId} />;
+  }
+
   if (module.type === "admin-support-form") {
     return <AdminSupportFormPreview settings={module.settings} projectId={projectId} />;
   }
@@ -12559,6 +12563,45 @@ function AdminModulesPreview({
   );
 }
 
+/*
+ * The fetch plumbing both blog admin modules need. ONE definition on purpose:
+ * the memoisation below is not a tidiness preference, it is the fix for an
+ * unbounded request loop, and two copies of it would be two places for that
+ * discipline to rot.
+ *
+ * getCrmProjectHeaders() builds a fresh object on every call, so an unmemoised
+ * `headers` is a new identity each render — which makes every dependent
+ * useCallback new, which makes the load effect fire again, which sets state,
+ * which renders again. The browser gave up with ERR_INSUFFICIENT_RESOURCES
+ * rather than a React warning.
+ */
+function useBlogAdminApi(projectIdProp: string) {
+  const headers = useMemo(() => getCrmProjectHeaders(projectIdProp), [projectIdProp]);
+  const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
+
+  const projectQuery = useCallback(() => {
+    const projectId = headers["X-Project-ID"] || "";
+    return projectId ? `projectId=${encodeURIComponent(projectId)}` : "";
+  }, [headers]);
+
+  const api = useCallback(async (path: string, init?: RequestInit) => {
+    const r = await fetch(path, {
+      credentials: "include",
+      ...init,
+      headers: { ...(init?.body ? { "Content-Type": "application/json" } : {}), ...headers, ...(init?.headers || {}) },
+    });
+    if (r.status === 401 && !isPreview) {
+      window.location.href = "/admin-login";
+      return null;
+    }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(readApiErrorMessage(d, `Request failed (${r.status})`));
+    return d;
+  }, [headers, isPreview]);
+
+  return { headers, api, projectQuery };
+}
+
 // ── Blog Links manager (admin-blog-links) ───────────────────────────────────
 
 type BlogLinkTerm = {
@@ -12680,15 +12723,16 @@ function AdminBlogLinksPreview({
   /** True on the published admin site, false inside the Builder's own preview. */
   liveSite?: boolean;
 }) {
-  const panelTitle     = settings.panelTitle || "Blog Links";
+  /*
+   * "Tag Manager" is what this module now is (86bbuhph0), and it is the
+   * fallback its own settings panel declares. It used to default to "Blog
+   * Links" while the panel said "Tag Manager", so the panel showed the
+   * operator an effective title the page did not render.
+   */
+  const panelTitle     = settings.panelTitle || "Tag Manager";
   const showTitle      = settings.showTitle !== "false";
   /** The tag table. Keeps the original `showTags` key so saved pages carry over. */
   const showTagManager = settings.showTags !== "false";
-  /** Whether categories are offered in the article picker (they are never edited here). */
-  const offerCategories = settings.showCategories !== "false";
-  const showRelate     = settings.showRelate !== "false";
-  const relateLabel    = settings.relateButtonLabel || "Relate Checked";
-  const articleStatus  = settings.articleStatus || "all";
   const accent         = settings.accentColor || "#0f4f8f";
   /*
    * Where a post in the "posts with this tag" popup opens. The default is the
@@ -12703,13 +12747,8 @@ function AdminBlogLinksPreview({
   const autoTagLabel   = settings.autoTagButtonLabel || "Auto-tag";
 
   const [terms, setTerms]       = useState<BlogLinkTerm[]>([]);
-  const [selectedKey, setSelectedKey] = useState("");
-  const [articles, setArticles] = useState<BlogLinkArticle[]>([]);
-  const [checked, setChecked]   = useState<Set<string>>(new Set());
-  const [relatedTitles, setRelatedTitles] = useState<Record<string, string[]>>({});
 
   const [loadingTerms, setLoadingTerms]       = useState(true);
-  const [loadingArticles, setLoadingArticles] = useState(false);
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState("");
   const [note, setNote]     = useState("");
@@ -12731,36 +12770,7 @@ function AdminBlogLinksPreview({
   const [tagPostsLoading, setTagPostsLoading] = useState(false);
   const [tagPostsError, setTagPostsError] = useState("");
 
-  /*
-   * MEMOISED, and it has to be. getCrmProjectHeaders() builds a fresh object
-   * on every call, so an unmemoised `headers` is a new identity each render —
-   * which makes every useCallback below new, which makes the load effect fire
-   * again, which sets state, which renders again. That is an unbounded request
-   * loop, and it is not subtle: the browser gave up with
-   * ERR_INSUFFICIENT_RESOURCES rather than a React warning.
-   */
-  const headers = useMemo(() => getCrmProjectHeaders(projectIdProp), [projectIdProp]);
-  const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
-
-  const projectQuery = useCallback(() => {
-    const projectId = headers["X-Project-ID"] || "";
-    return projectId ? `projectId=${encodeURIComponent(projectId)}` : "";
-  }, [headers]);
-
-  const api = useCallback(async (path: string, init?: RequestInit) => {
-    const r = await fetch(path, {
-      credentials: "include",
-      ...init,
-      headers: { ...(init?.body ? { "Content-Type": "application/json" } : {}), ...headers, ...(init?.headers || {}) },
-    });
-    if (r.status === 401 && !isPreview) {
-      window.location.href = "/admin-login";
-      return null;
-    }
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(readApiErrorMessage(d, `Request failed (${r.status})`));
-    return d;
-  }, [headers, isPreview]);
+  const { headers, api, projectQuery } = useBlogAdminApi(projectIdProp);
 
   /*
    * Open the popup for one tag and load its posts. The same endpoint the
@@ -12809,25 +12819,20 @@ function AdminBlogLinksPreview({
     return () => document.removeEventListener("keydown", onKey);
   }, [postsTag, closeTagPosts]);
 
-  /** Reload both taxonomies. Called after every write, so counts stay true. */
+  /*
+   * Reload the tags. Called after every write, so counts stay true.
+   *
+   * Tags only. This module used to fetch the categories as well, because it
+   * also held the article picker, which offered either taxonomy. The picker
+   * moved to `admin-related-articles` (86bbuhph0) and the category rows were
+   * left being fetched and then dropped on the floor -- a request on every
+   * load for rows that reach nothing, since the table below renders
+   * `tagTerms` alone.
+   */
   const loadTerms = useCallback(async () => {
     setLoadingTerms(true);
     try {
       const next: BlogLinkTerm[] = [];
-      if (offerCategories) {
-        const d = await api(`/api/blog/categories?${projectQuery()}`);
-        const rows = (d?.categories ?? d?.data ?? []) as Array<Record<string, unknown>>;
-        for (const row of Array.isArray(rows) ? rows : []) {
-          next.push({
-            kind: "category",
-            key: String(row.id || ""),
-            label: String(row.name || "(untitled)"),
-            slug: String(row.slug || ""),
-            postCount: 0,
-            livePostCount: null,
-          });
-        }
-      }
       const d = await api(`/api/blog/tags?${projectQuery()}`);
       const rows = (d?.tags ?? d?.data ?? []) as Array<Record<string, unknown>>;
       for (const row of Array.isArray(rows) ? rows : []) {
@@ -12848,108 +12853,13 @@ function AdminBlogLinksPreview({
       setTerms(next);
       setError("");
     } catch (e) {
-      setError((e as Error).message || "Could not load the blog taxonomy.");
+      setError((e as Error).message || "Could not load the blog tags.");
     } finally {
       setLoadingTerms(false);
     }
-  }, [api, projectQuery, offerCategories]);
+  }, [api, projectQuery]);
 
   useEffect(() => { void loadTerms(); }, [loadTerms]);
-
-  /** Articles under a term, plus each one's existing relations. */
-  const loadArticles = useCallback(async (term: BlogLinkTerm) => {
-    setLoadingArticles(true);
-    setChecked(new Set());
-    try {
-      const q = projectQuery();
-      const path = term.kind === "category"
-        ? `/api/blog/posts?category=${encodeURIComponent(term.slug)}&limit=100${q ? `&${q}` : ""}`
-        : `/api/blog/tags/posts?tag=${encodeURIComponent(term.slug)}${q ? `&${q}` : ""}`;
-      const d = await api(path);
-      const rows = (d?.posts ?? d?.data ?? []) as Array<Record<string, unknown>>;
-      let list: BlogLinkArticle[] = (Array.isArray(rows) ? rows : []).map((row) => ({
-        id: String(row.id || ""),
-        title: String(row.title || "(untitled)"),
-        slug: String(row.slug || ""),
-        status: String(row.status || ""),
-      })).filter((a) => a.id);
-      if (articleStatus !== "all") list = list.filter((a) => a.status === articleStatus);
-      setArticles(list);
-
-      // ONE request for the whole project's relations, not one per article: a
-      // per-article loop is N+1 requests, and on a blog of any size that is a
-      // request storm rather than a page load. The pairing arithmetic is the
-      // same tested helper the store uses, so the two cannot disagree.
-      const all = await api(`/api/blog/relations${q ? `?${q}` : ""}`);
-      const pairs = (Array.isArray(all?.relations) ? all.relations : Array.isArray(all?.data) ? all.data : []) as PostRelationPair[];
-      const byId = new Map(list.map((a) => [a.id, a.title]));
-      const titles: Record<string, string[]> = {};
-      for (const article of list) {
-        titles[article.id] = relatedIdsFor(article.id, pairs)
-          .map((id) => byId.get(String(id)) || "")
-          .filter(Boolean);
-      }
-      setRelatedTitles(titles);
-      setError("");
-    } catch (e) {
-      setError((e as Error).message || "Could not load the articles.");
-      setArticles([]);
-    } finally {
-      setLoadingArticles(false);
-    }
-  }, [api, projectQuery, articleStatus]);
-
-  const selected = terms.find((t) => t.key === selectedKey) || null;
-
-  function selectTerm(key: string) {
-    setSelectedKey(key);
-    setNote("");
-    const term = terms.find((t) => t.key === key);
-    if (term) void loadArticles(term);
-    else { setArticles([]); setRelatedTitles({}); setChecked(new Set()); }
-  }
-
-  function toggleChecked(id: string) {
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-    setNote("");
-  }
-
-  async function handleRelate() {
-    const ids = [...checked];
-    if (ids.length < 2) {
-      setError("Check at least two articles to relate them to each other.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    setNote("");
-    try {
-      const d = await api(`/api/blog/relations`, {
-        method: "POST",
-        body: JSON.stringify({ postIds: ids, projectId: headers["X-Project-ID"] || "" }),
-      });
-      const result = (d?.result ?? d?.data ?? {}) as { added?: number; alreadyRelated?: number };
-      const added = Number(result.added ?? 0);
-      const already = Number(result.alreadyRelated ?? 0);
-      setNote(
-        added > 0
-          ? `Linked ${ids.length} articles${already > 0 ? ` (${already} link${already === 1 ? "" : "s"} already existed)` : ""}.`
-          : "Those articles were already related to each other."
-      );
-      // Read the relations back rather than trusting the response: this is the
-      // list the module will actually render.
-      if (selected) await loadArticles(selected);
-      setChecked(new Set(ids));
-    } catch (e) {
-      setError((e as Error).message || "Could not save the relations.");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   function startRenameTag(tag: string) {
     setEditTag(tag);
@@ -12981,7 +12891,6 @@ function AdminBlogLinksPreview({
       );
       cancelRenameTag();
       await loadTerms();
-      if (selected?.kind === "tag") { setSelectedKey(""); setArticles([]); }
     } catch (err) {
       setError((err as Error).message || "Could not rename the tag.");
     } finally {
@@ -13005,7 +12914,6 @@ function AdminBlogLinksPreview({
       setNote(`Removed the tag from ${Number(result.updated ?? 0)} post${Number(result.updated ?? 0) === 1 ? "" : "s"}.`);
       if (editTag === tag) cancelRenameTag();
       await loadTerms();
-      if (selected?.kind === "tag") { setSelectedKey(""); setArticles([]); }
     } catch (err) {
       setError((err as Error).message || "Could not remove the tag.");
     } finally {
@@ -13121,7 +13029,6 @@ function AdminBlogLinksPreview({
   }
 
   const tagTerms      = terms.filter((t) => t.kind === "tag");
-  const categoryTerms = terms.filter((t) => t.kind === "category");
   const autoTagged    = autoTag.results.filter((r) => r.added.length > 0);
 
   /*
@@ -13372,109 +13279,6 @@ function AdminBlogLinksPreview({
         </section>
       )}
 
-      {showRelate && (
-        <section>
-          <h4 style={sectionTitle}>Related Articles</h4>
-
-          {/* Full width, and a select rather than a narrow sidebar list — the
-              old two-column layout cut every term name off with an ellipsis. */}
-          <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "0.9rem" }}>
-            <div style={{ flex: "1 1 320px", minWidth: 0 }}>
-              <label style={labelStyle} htmlFor="admin-blog-links-term">Show articles filed under</label>
-              <select
-                id="admin-blog-links-term"
-                style={{ ...inputStyle, background: "#fff" }}
-                value={selectedKey}
-                onChange={(e) => selectTerm(e.target.value)}
-                disabled={loadingTerms}
-              >
-                <option value="">Choose a category or tag…</option>
-                {categoryTerms.length > 0 && (
-                  <optgroup label="Categories">
-                    {categoryTerms.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-                  </optgroup>
-                )}
-                {tagTerms.length > 0 && (
-                  <optgroup label="Tags">
-                    {tagTerms.map((t) => (
-                      <option key={t.key} value={t.key}>{t.label} ({t.postCount})</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            </div>
-            <button
-              type="button"
-              onClick={handleRelate}
-              disabled={busy || checked.size < 2}
-              style={{
-                padding: "0.5rem 1rem", background: accent, color: "#fff", border: "none",
-                borderRadius: 6, fontWeight: 700, fontSize: "0.875rem",
-                cursor: checked.size < 2 ? "default" : "pointer",
-                opacity: busy || checked.size < 2 ? 0.45 : 1,
-                marginBottom: "0.75rem",
-              }}
-              title={checked.size < 2 ? "Check at least two articles" : `Relate the ${checked.size} checked articles to each other`}
-            >
-              {busy ? "Linking…" : relateLabel}
-            </button>
-          </div>
-
-          {!selected ? (
-            <div style={{ padding: "1rem", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
-              Pick a category or tag above to see the articles filed under it, then tick the ones
-              that belong together and press {relateLabel}.
-            </div>
-          ) : loadingArticles ? (
-            <div style={{ padding: "1rem", color: "#888", textAlign: "center" }}>Loading…</div>
-          ) : articles.length === 0 ? (
-            <div style={{ padding: "1rem", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
-              No articles are filed under “{selected.label}”.
-            </div>
-          ) : (
-            <>
-              <div style={{ fontSize: "0.8125rem", color: "#718096", marginBottom: "0.5rem" }}>
-                {articles.length} article{articles.length === 1 ? "" : "s"} under “{selected.label}”
-                {checked.size > 0 ? ` · ${checked.size} checked` : ""}
-              </div>
-              <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
-                {articles.map((article, i) => (
-                  <label
-                    key={article.id}
-                    className="admin-blog-links-article"
-                    style={{
-                      display: "flex", alignItems: "flex-start", gap: 10,
-                      padding: "9px 12px", cursor: "pointer",
-                      borderBottom: i < articles.length - 1 ? "1px solid #f0f4f8" : undefined,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked.has(article.id)}
-                      onChange={() => toggleChecked(article.id)}
-                    />
-                    <span style={{ display: "flex", flexDirection: "column", gap: 2, flex: "1 1 auto", minWidth: 0 }}>
-                      <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c", overflowWrap: "anywhere" }}>
-                        {article.title}
-                      </span>
-                      {article.status && article.status !== "published" && (
-                        <span style={{ alignSelf: "flex-start", padding: "1px 6px", borderRadius: 999, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: "0.6875rem", textTransform: "capitalize", color: "#718096" }}>
-                          {article.status}
-                        </span>
-                      )}
-                      {(relatedTitles[article.id]?.length ?? 0) > 0 && (
-                        <span style={{ fontSize: "0.75rem", color: "#718096", overflowWrap: "anywhere" }}>
-                          Related to: {relatedTitles[article.id].join(", ")}
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
-      )}
 
       {/*
         The posts carrying one tag. Portalled to <body> through
@@ -13594,6 +13398,315 @@ function AdminBlogLinksPreview({
           </div>
         </BuilderBodyPortal>
       )}
+    </div>
+  );
+}
+
+/**
+ * Related Articles (`admin-related-articles`).
+ *
+ * Split out of `admin-blog-links` on 2026-09-03 (86bbuhph0) at the operator's
+ * request: "The Related Articles section is part of the Tag Manager module.
+ * That should be a separate module." They had shared a component only because
+ * the original spec described one "blog links" panel — they share no state,
+ * and each already had its own on/off setting.
+ *
+ * Categories appear here ONLY as a way to choose which articles to relate.
+ * Creating, renaming and deleting them belongs to `blog-category-manager`,
+ * which already does it properly — shipping a second, worse category list is
+ * a mistake this feature has already made once (86bbue8ux).
+ *
+ * Relations are MUTUAL: relating A to B relates B to A, which is why the
+ * button reads "Relate Checked" rather than "Relate to".
+ */
+function AdminRelatedArticlesPreview({
+  settings,
+  projectId: projectIdProp = "",
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+}) {
+  const panelTitle     = settings.panelTitle || "Related Articles";
+  const showTitle      = settings.showTitle !== "false";
+  /** Whether categories are offered in the picker (they are never edited here). */
+  const offerCategories = settings.showCategories !== "false";
+  const relateLabel    = settings.relateButtonLabel || "Relate Checked";
+  const articleStatus  = settings.articleStatus || "all";
+  const accent         = settings.accentColor || "#0f4f8f";
+
+  const [terms, setTerms]       = useState<BlogLinkTerm[]>([]);
+  const [selectedKey, setSelectedKey] = useState("");
+  const [articles, setArticles] = useState<BlogLinkArticle[]>([]);
+  const [checked, setChecked]   = useState<Set<string>>(new Set());
+  const [relatedTitles, setRelatedTitles] = useState<Record<string, string[]>>({});
+
+  const [loadingTerms, setLoadingTerms]       = useState(true);
+  const [loadingArticles, setLoadingArticles] = useState(false);
+  const [busy, setBusy]     = useState(false);
+  const [error, setError]   = useState("");
+  const [note, setNote]     = useState("");
+
+  const { headers, api, projectQuery } = useBlogAdminApi(projectIdProp);
+
+  /** Both taxonomies, because either can be used to choose articles. */
+  const loadTerms = useCallback(async () => {
+    setLoadingTerms(true);
+    try {
+      const next: BlogLinkTerm[] = [];
+      if (offerCategories) {
+        const d = await api(`/api/blog/categories?${projectQuery()}`);
+        const rows = (d?.categories ?? d?.data ?? []) as Array<Record<string, unknown>>;
+        for (const row of Array.isArray(rows) ? rows : []) {
+          next.push({
+            kind: "category",
+            key: String(row.id || ""),
+            label: String(row.name || "(untitled)"),
+            slug: String(row.slug || ""),
+            postCount: 0,
+            livePostCount: null,
+          });
+        }
+      }
+      const d = await api(`/api/blog/tags?${projectQuery()}`);
+      const rows = (d?.tags ?? d?.data ?? []) as Array<Record<string, unknown>>;
+      for (const row of Array.isArray(rows) ? rows : []) {
+        const tag = String(row.tag || "");
+        if (!tag) continue;
+        // This picker never shows a live count, but the field is part of the
+        // shared term shape. Null, not 0, when the server does not send one —
+        // 0 would be a claim that the tag has no published posts.
+        const live = row.livePostCount;
+        next.push({
+          kind: "tag",
+          key: `tag:${tag}`,
+          label: tag,
+          slug: tag,
+          postCount: Number(row.postCount ?? 0),
+          livePostCount: live === undefined || live === null ? null : Number(live),
+        });
+      }
+      setTerms(next);
+      setError("");
+    } catch (e) {
+      setError((e as Error).message || "Could not load the blog taxonomy.");
+    } finally {
+      setLoadingTerms(false);
+    }
+  }, [api, projectQuery, offerCategories]);
+
+  useEffect(() => { void loadTerms(); }, [loadTerms]);
+
+
+  /** Articles under a term, plus each one's existing relations. */
+  const loadArticles = useCallback(async (term: BlogLinkTerm) => {
+    setLoadingArticles(true);
+    setChecked(new Set());
+    try {
+      const q = projectQuery();
+      const path = term.kind === "category"
+        ? `/api/blog/posts?category=${encodeURIComponent(term.slug)}&limit=100${q ? `&${q}` : ""}`
+        : `/api/blog/tags/posts?tag=${encodeURIComponent(term.slug)}${q ? `&${q}` : ""}`;
+      const d = await api(path);
+      const rows = (d?.posts ?? d?.data ?? []) as Array<Record<string, unknown>>;
+      let list: BlogLinkArticle[] = (Array.isArray(rows) ? rows : []).map((row) => ({
+        id: String(row.id || ""),
+        title: String(row.title || "(untitled)"),
+        slug: String(row.slug || ""),
+        status: String(row.status || ""),
+      })).filter((a) => a.id);
+      if (articleStatus !== "all") list = list.filter((a) => a.status === articleStatus);
+      setArticles(list);
+
+      // ONE request for the whole project's relations, not one per article: a
+      // per-article loop is N+1 requests, and on a blog of any size that is a
+      // request storm rather than a page load. The pairing arithmetic is the
+      // same tested helper the store uses, so the two cannot disagree.
+      const all = await api(`/api/blog/relations${q ? `?${q}` : ""}`);
+      const pairs = (Array.isArray(all?.relations) ? all.relations : Array.isArray(all?.data) ? all.data : []) as PostRelationPair[];
+      const byId = new Map(list.map((a) => [a.id, a.title]));
+      const titles: Record<string, string[]> = {};
+      for (const article of list) {
+        titles[article.id] = relatedIdsFor(article.id, pairs)
+          .map((id) => byId.get(String(id)) || "")
+          .filter(Boolean);
+      }
+      setRelatedTitles(titles);
+      setError("");
+    } catch (e) {
+      setError((e as Error).message || "Could not load the articles.");
+      setArticles([]);
+    } finally {
+      setLoadingArticles(false);
+    }
+  }, [api, projectQuery, articleStatus]);
+
+  const selected = terms.find((t) => t.key === selectedKey) || null;
+
+  function selectTerm(key: string) {
+    setSelectedKey(key);
+    setNote("");
+    const term = terms.find((t) => t.key === key);
+    if (term) void loadArticles(term);
+    else { setArticles([]); setRelatedTitles({}); setChecked(new Set()); }
+  }
+
+  function toggleChecked(id: string) {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setNote("");
+  }
+
+  async function handleRelate() {
+    const ids = [...checked];
+    if (ids.length < 2) {
+      setError("Check at least two articles to relate them to each other.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setNote("");
+    try {
+      const d = await api(`/api/blog/relations`, {
+        method: "POST",
+        body: JSON.stringify({ postIds: ids, projectId: headers["X-Project-ID"] || "" }),
+      });
+      const result = (d?.result ?? d?.data ?? {}) as { added?: number; alreadyRelated?: number };
+      const added = Number(result.added ?? 0);
+      const already = Number(result.alreadyRelated ?? 0);
+      setNote(
+        added > 0
+          ? `Linked ${ids.length} articles${already > 0 ? ` (${already} link${already === 1 ? "" : "s"} already existed)` : ""}.`
+          : "Those articles were already related to each other."
+      );
+      // Read the relations back rather than trusting the response: this is the
+      // list the module will actually render.
+      if (selected) await loadArticles(selected);
+      setChecked(new Set(ids));
+    } catch (e) {
+      setError((e as Error).message || "Could not save the relations.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const tagTerms      = terms.filter((t) => t.kind === "tag");
+  const categoryTerms = terms.filter((t) => t.kind === "category");
+
+  const labelStyle: CSSProperties = { display: "block", fontSize: "0.8125rem", fontWeight: 600, color: "#374151", marginBottom: "0.25rem" };
+  const inputStyle: CSSProperties = { width: "100%", padding: "0.5rem 0.625rem", border: "1px solid #d1d5db", borderRadius: 6, fontSize: "0.875rem", boxSizing: "border-box" };
+  const sectionTitle: CSSProperties = { margin: "0 0 0.75rem", fontSize: "1rem", fontWeight: 700, color: "#1a202c" };
+
+  return (
+    <div className="admin-blog-links" style={{ fontFamily: "sans-serif" }}>
+      {showTitle && <h3 className="admin-blog-links-title">{panelTitle}</h3>}
+
+      {error && <div className="admin-blog-links-error" role="alert">{error}</div>}
+      {note && !error && <div className="admin-blog-links-note">{note}</div>}
+
+      <section>
+        <h4 style={sectionTitle}>Related Articles</h4>
+
+        {/* Full width, and a select rather than a narrow sidebar list — the
+            old two-column layout cut every term name off with an ellipsis. */}
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "0.9rem" }}>
+          <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+            <label style={labelStyle} htmlFor="admin-blog-links-term">Show articles filed under</label>
+            <select
+              id="admin-blog-links-term"
+              style={{ ...inputStyle, background: "#fff" }}
+              value={selectedKey}
+              onChange={(e) => selectTerm(e.target.value)}
+              disabled={loadingTerms}
+            >
+              <option value="">Choose a category or tag…</option>
+              {categoryTerms.length > 0 && (
+                <optgroup label="Categories">
+                  {categoryTerms.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                </optgroup>
+              )}
+              {tagTerms.length > 0 && (
+                <optgroup label="Tags">
+                  {tagTerms.map((t) => (
+                    <option key={t.key} value={t.key}>{t.label} ({t.postCount})</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={handleRelate}
+            disabled={busy || checked.size < 2}
+            style={{
+              padding: "0.5rem 1rem", background: accent, color: "#fff", border: "none",
+              borderRadius: 6, fontWeight: 700, fontSize: "0.875rem",
+              cursor: checked.size < 2 ? "default" : "pointer",
+              opacity: busy || checked.size < 2 ? 0.45 : 1,
+              marginBottom: "0.75rem",
+            }}
+            title={checked.size < 2 ? "Check at least two articles" : `Relate the ${checked.size} checked articles to each other`}
+          >
+            {busy ? "Linking…" : relateLabel}
+          </button>
+        </div>
+
+        {!selected ? (
+          <div style={{ padding: "1rem", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
+            Pick a category or tag above to see the articles filed under it, then tick the ones
+            that belong together and press {relateLabel}.
+          </div>
+        ) : loadingArticles ? (
+          <div style={{ padding: "1rem", color: "#888", textAlign: "center" }}>Loading…</div>
+        ) : articles.length === 0 ? (
+          <div style={{ padding: "1rem", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
+            No articles are filed under “{selected.label}”.
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: "0.8125rem", color: "#718096", marginBottom: "0.5rem" }}>
+              {articles.length} article{articles.length === 1 ? "" : "s"} under “{selected.label}”
+              {checked.size > 0 ? ` · ${checked.size} checked` : ""}
+            </div>
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+              {articles.map((article, i) => (
+                <label
+                  key={article.id}
+                  className="admin-blog-links-article"
+                  style={{
+                    display: "flex", alignItems: "flex-start", gap: 10,
+                    padding: "9px 12px", cursor: "pointer",
+                    borderBottom: i < articles.length - 1 ? "1px solid #f0f4f8" : undefined,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked.has(article.id)}
+                    onChange={() => toggleChecked(article.id)}
+                  />
+                  <span style={{ display: "flex", flexDirection: "column", gap: 2, flex: "1 1 auto", minWidth: 0 }}>
+                    <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c", overflowWrap: "anywhere" }}>
+                      {article.title}
+                    </span>
+                    {article.status && article.status !== "published" && (
+                      <span style={{ alignSelf: "flex-start", padding: "1px 6px", borderRadius: 999, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: "0.6875rem", textTransform: "capitalize", color: "#718096" }}>
+                        {article.status}
+                      </span>
+                    )}
+                    {(relatedTitles[article.id]?.length ?? 0) > 0 && (
+                      <span style={{ fontSize: "0.75rem", color: "#718096", overflowWrap: "anywhere" }}>
+                        Related to: {relatedTitles[article.id].join(", ")}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
   serializeTableData,
   type ParsedTableData
 } from "@/lib/builder-table-data";
+import { sortPagesByName } from "../../public/shared/pageSort.js";
 import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
@@ -217,7 +218,7 @@ function TableCellModules({
                               }}
                             >
                               <option value="">— Page —</option>
-                              {pages.map((p) => (
+                              {sortPagesByName(pages).map((p: BuilderPageRecord) => (
                                 <option key={p.id} value={`/${p.slug}`}>{p.name}</option>
                               ))}
                             </select>
