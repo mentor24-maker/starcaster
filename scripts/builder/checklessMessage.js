@@ -71,11 +71,26 @@ function attemptOf({ nudged, nudgeFailedAt } = {}) {
  * What git says about the same question GitHub answered — as one word.
  *
  * 'conflicting' — git finds conflicts merging the base into the head
- * 'clean'       — it merges cleanly and the head is BEHIND the base, so a
- *                 catch-up merge is a real change
+ * 'clean'       — it merges cleanly and the head is MEASURED to be behind the
+ *                 base, so a catch-up merge is a real change
+ * 'clean-unconfirmed'
+ *               — it merges cleanly, but whether the head is behind the base
+ *                 was never established: either the base ref could not be
+ *                 refreshed this run, or the distance could not be counted.
+ *                 Same remedy as 'clean', a different evidence line.
  * 'current'     — it merges cleanly and the head already contains the base, so
  *                 a catch-up merge would do nothing at all
  * null          — no reading could be taken; never treated as clean
+ *
+ * WHY 'clean-unconfirmed' EXISTS (task 86bbvyfuu, 2026-09-07). It used to
+ * return plain 'clean' in both unmeasured cases, and the message renders
+ * 'clean' as "this branch is behind it" under a heading that says WHAT WAS
+ * READ — a CANNOT TELL printed as a measurement, which is the defect class
+ * this whole file was written against. The remedy was and stays right; what
+ * the operator lost was the second pass: when the catch-up merge turns out to
+ * be a no-op, nothing told him the reading had never been taken, so he could
+ * not tell that the other remedy (push a commit so GitHub recomputes) is the
+ * one he needs.
  *
  * THE TRAP THIS GUARDS: `git merge-tree --write-tree` exits 1 for conflicts AND
  * for a ref it cannot resolve ("nosuchref - not something we can merge",
@@ -95,8 +110,11 @@ function classifyLocalMerge({
   // against one this run actually refreshed. A stale origin/main would report
   // a branch as current when main has moved, which sends the phantom-conflict
   // remedy to a pull request whose real remedy is the catch-up merge.
-  if (!baseIsFresh) return 'clean';
-  if (typeof behindCount !== 'number' || Number.isNaN(behindCount)) return 'clean';
+  // ...and it is equally a claim not to make in the OTHER direction: with no
+  // refreshed base, or no readable count, nothing established that the branch
+  // is behind main either. Same remedy, stated honestly.
+  if (!baseIsFresh) return 'clean-unconfirmed';
+  if (typeof behindCount !== 'number' || Number.isNaN(behindCount)) return 'clean-unconfirmed';
   return behindCount === 0 ? 'current' : 'clean';
 }
 
@@ -113,8 +131,11 @@ function chooseRemedy({ mergeable, localMerge, nudged, nudgeFailedAt } = {}) {
     case 'conflicting':
       if (localMerge === 'conflicting') return 'resolve-the-conflict';
       if (localMerge === 'current') return 'recompute-mergeability';
-      // 'clean', or no local reading at all: bringing main in is both the
-      // measured remedy (#630) and the safe default when git could not answer.
+      // 'clean', 'clean-unconfirmed', or no local reading at all: bringing main
+      // in is both the measured remedy (#630) and the safe default when git
+      // could not answer. The three differ in their EVIDENCE line, never here —
+      // changing which remedy an unconfirmed reading gets would regress
+      // 86bbvqkr1.
       return 'catch-up-merge';
     case 'mergeable':
       switch (attemptOf({ nudged, nudgeFailedAt })) {
@@ -226,6 +247,10 @@ function evidenceLines({ mergeable, localMerge }) {
   } else if (localMerge === 'clean') {
     lines.push('  git, asked the same question here: origin/main merges in cleanly, and this');
     lines.push('    branch is behind it');
+  } else if (localMerge === 'clean-unconfirmed') {
+    lines.push('  git, asked the same question here: origin/main merges in cleanly, but whether');
+    lines.push('    this branch is BEHIND it was NOT established — the base ref could not be');
+    lines.push('    refreshed, or the distance could not be counted');
   } else if (localMerge === 'current') {
     lines.push('  git, asked the same question here: origin/main merges in cleanly, and this');
     lines.push('    branch already contains all of it');
