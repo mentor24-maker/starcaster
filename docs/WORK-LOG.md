@@ -1,3 +1,41 @@
+## 2026-09-08 — When a push spares your hand edit, it now says so (#662)
+
+A shared section is one block you build once and reuse on many pages. When you
+change the master and push it out, the builder deliberately does NOT flatten a
+copy you have since hand-edited on its own page — your edit wins — and it
+reports which pages it left alone, so you know.
+
+A single page can carry more than one copy of the same shared section. When one
+of those copies was clean and another had been hand-edited, the push did exactly
+the right thing — rewrote the clean one, left your edit alone — and then said
+nothing whatsoever about the copy it had spared. It fell out of the report
+entirely. So the one message that exists to tell you your edit survived was the
+one message you never saw.
+
+The cause was that the engine asked "did anything on this page have a hand
+edit?" and "did anything on this page get rewritten?" as two yes/no questions
+about the whole page, when the real question is about each copy. It counts
+copies now.
+
+The report keeps the two facts apart on purpose, because they are different
+things and reading them as one is what produced the wrong message in the first
+place. "Skipped" still means what it has always meant — **pages this push did
+not write at all**, every copy on them hand-edited — and those are the pages
+the "Overwrite anyway?" button offers you. A page that WAS rewritten, and still
+carries an edit of yours the push stepped around, is now reported separately
+and counted in copies, so the message reads *"updated 2 pages. A hand-edited
+copy on 1 of the pages just updated was left as it is"* rather than implying a
+third page you never had.
+
+That message says "the pages just updated" rather than "those pages" for a
+reason worth a sentence. When a save updates one page, skips another, and
+spares an edit on the one it updated, all three numbers are 1 — and "1 of those
+pages" then reads as the page that was *skipped*, which is the opposite of
+where your surviving edit actually is. Naming the set outright is what makes
+the message point at the right page every time.
+
+Nothing about what gets written changed — hand edits were always safe. This was
+the builder failing to tell you so.
 ## 2026-09-08 — A whole page can now sit on a video, not just one band (#663)
 
 A row on a page could already carry a video behind it. A page could not: the
