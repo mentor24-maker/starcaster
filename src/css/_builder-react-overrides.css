@@ -7419,6 +7419,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * setting, and the operator is allowed to save without one.
  */
 .builder-video-background-warning,
+.builder-video-background-size,
 .builder-video-background-note,
 .builder-parallax-background-note {
   margin: 6px 0 0;
@@ -7428,9 +7429,30 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-secondary, #4a5568);
 }
 
-.builder-video-background-warning {
+.builder-video-background-warning,
+.builder-video-background-size-warn {
   color: var(--ink-primary, #1a202c);
   font-weight: 600;
+}
+
+/*
+ * The background video's file size. Advice, so it is deliberately NOT a red
+ * error box and nothing near it is disabled — an oversized video still saves
+ * and still plays, and the operator overrules this whenever he has a reason
+ * to. Under the threshold it is a quiet grey number (the shared rule above);
+ * over it, `-warn` gives it the same weight the missing-poster sentence has
+ * and nothing more.
+ */
+.builder-video-background-size {
+  /*
+   * These two are not decoration: this is one long sentence in a narrow
+   * settings column, and it has to wrap rather than widen the column's shared
+   * grid track (docs/UI_RULES.md — a panel is one rectangle top to bottom, so
+   * no field may push its column wider than its siblings). A long unbroken
+   * file name in the sentence is what `overflow-wrap` is guarding against.
+   */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ── Event Manager (admin module) ──────────────────────────────────────────
