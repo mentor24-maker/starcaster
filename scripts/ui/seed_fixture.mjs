@@ -837,25 +837,48 @@ const buildTuned = (ids) => ({
     settings: { showTitle: 'true', panelTitle: LONG },
   },
   /*
-   * Every gating toggle is ON deliberately. Three of this panel's fields are
+   * Every gating toggle is ON deliberately. Two of this panel's fields are
    * `visibleWhen`-gated — `panelTitle` behind `showTitle`, and
-   * `relateButtonLabel` + `articleStatus` behind `showRelate` — so seeding
-   * either toggle off would measure the panel three controls short and still
-   * report green. That is exactly how the proximity-effects panel passed
-   * while two gated fields went unseen.
+   * `autoTagButtonLabel` behind `showAutoTag` — so seeding either toggle off
+   * would measure the panel two controls short and still report green. That is
+   * exactly how the proximity-effects panel passed while two gated fields went
+   * unseen.
    *
    * The tag NAMES here are long on purpose, and they are the real ones from
    * the Delray blog. The first version of this module truncated them with an
    * ellipsis ("Delray Te…", "advanced…"), which is the defect 86bbue8ux was
    * filed for — a fixture of short words could not have shown it.
+   *
+   * The relate settings moved to `admin-related-articles` (86bbuhph0) and are
+   * seeded there now. `showAutoTag` arrived with the Auto-tag extension
+   * (86bbw4dcp) and had never been seeded, so its gated label field was one of
+   * the unseen ones this comment warns about.
    */
   'admin-blog-links': {
     name: 'Blog Links',
     settings: {
       showTitle: 'true', panelTitle: LONG,
-      showCategories: 'true', showTags: 'true',
-      showRelate: 'true', relateButtonLabel: 'Relate the checked articles',
+      showTags: 'true',
+      showAutoTag: 'true', autoTagButtonLabel: 'Auto-tag every untagged post',
+    },
+  },
+
+  /*
+   * The Related Articles half, its own module since 86bbuhph0.
+   *
+   * `panelTitle` is gated behind `showTitle`, so that toggle is on for the
+   * same reason as above. The other three fields are ungated here — on the
+   * combined module `relateButtonLabel` and `articleStatus` sat behind
+   * `showRelate`, and this module has no such toggle: it IS the relate
+   * feature, so hiding its contents would leave a heading over empty space.
+   */
+  'admin-related-articles': {
+    name: 'Related Articles',
+    settings: {
+      showTitle: 'true', panelTitle: LONG,
+      relateButtonLabel: 'Relate the checked articles',
       articleStatus: 'published',
+      showCategories: 'true',
     },
   },
   'admin-login': {
