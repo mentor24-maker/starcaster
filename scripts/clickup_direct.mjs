@@ -68,6 +68,7 @@ import operatorCard from './builder/operatorCard.js';
 import machineComment from './builder/machineComment.js';
 import nodeRoles from '../lib/nodeRoles.js';
 import busFallback from '../lib/busFallback.js';
+import loopNoticeboards from '../lib/loopNoticeboards.js';
 import taskRepo from './builder/taskRepo.js';
 import loopInterval from './builder/loopInterval.js';
 import branchCatchUp from './builder/branchCatchUp.js';
@@ -388,6 +389,23 @@ function yieldedResult(yielded) {
 }
 
 /**
+ * Did this result stop at the ClickUp reserve rather than fail?
+ *
+ * A yield travels in the ordinary `{res}` shape with `res.ok === false`, which
+ * is indistinguishable from a refusal to any caller that only asks `ok`. Every
+ * place that branches on failure and means something different by "the server
+ * said no" has to ask this first. Written once because it was got wrong twice
+ * on the same call path: at the chat POST (review round 1) and then one level
+ * down inside the fallback (review round 2).
+ *
+ * Accepts both `call()` results and `fetchAllTasks`'s non-fatal return, which
+ * carries the same `res` and `yielded` fields.
+ */
+function stoppedAtReserve(out) {
+  return Boolean(out && (out.yielded || (out.res && out.res.status === YIELDED_STATUS)));
+}
+
+/**
  * Exit 7 means "I stopped on purpose at the ClickUp reserve", and it is not
  * 1. A scheduled job that yields has NOT done its work — so it must not exit 0
  * (the ticket's Non-goal) — but it also has not failed, and reporting it as a
@@ -634,7 +652,11 @@ async function fetchAllTasks(list, { includeClosed = false, fatal = true } = {})
   for (let page = 0; page < 50; page++) {
     const out = await call('GET', `/api/v2/list/${list}/task?archived=false${closedParam}&page=${page}`);
     if (!out.res.ok) {
-      if (!fatal) return { tasks: null, res: out.res, failed: `HTTP ${out.res.status}` };
+      // `yielded` travels with the failure so a non-fatal caller can tell a
+      // deliberate stop at the ClickUp reserve from a refusal. Without it the
+      // only signal was `res.status`, and the shape `die()` needs to print the
+      // reserve's own words was lost (task 86bbwab1n, review round 2).
+      if (!fatal) return { tasks: null, res: out.res, json: null, text: out.text, yielded: out.yielded, failed: `HTTP ${out.res.status}` };
       die('list tasks', out);
     }
     // A 200 carrying a body that is not the expected JSON — a proxy's error
@@ -831,11 +853,28 @@ async function postToBus(channel, content, { simulate } = {}) {
  * alarm's suppression window on the strength of a comment nobody received.
  */
 async function saveUndeliveredAlarm({ text, channel, why }) {
+  // A RESERVE STOP IS NOT A FAILED SAVE (task 86bbwab1n, review round 2).
+  // Every `call()` below can come back yielded — `res.ok === false` with the
+  // reserve's own status — and the caller's failure branch says "Nothing was
+  // delivered. This alarm is lost unless the caller retries" and exits 1. That
+  // is a monitor printing a wrong diagnosis about a deliberate, healthy stand-
+  // down, which is the fault this whole ticket was opened about; round 1 fixed
+  // it at the chat POST and this is the same thing one level further down.
+  //
+  // So a yield returns `{ ok: false, stopped: <the yielded result> }`, and the
+  // caller `die()`s on it exactly as it does for the primary POST: the
+  // reserve's own words, exit 7, and `run_bus_relay.sh` reads "I stood down"
+  // rather than "I broke". Nothing is lost by not spending the reserve here —
+  // the next scheduled pass raises the same alarm, and the reserve exists to
+  // leave budget for the sessions Dane is actually in.
+  const stop = (out) => ({ ok: false, stopped: out, why: 'it stopped at the ClickUp reserve' });
+
   const shortcut = process.env.CLICKUP_ALARM_TASK || '';
   let task = null;
 
   if (shortcut) {
     const got = await call('GET', `/api/v2/task/${shortcut}`);
+    if (stoppedAtReserve(got)) return stop(got);
     if (got.res.ok && got.json && got.json.id) task = got.json;
     // A 401 covers both a bad token and a task this token cannot see, deleted
     // ones included — so fall through to the name rather than conclude.
@@ -843,6 +882,7 @@ async function saveUndeliveredAlarm({ text, channel, why }) {
 
   if (!task) {
     const listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+    if (stoppedAtReserve(listed)) return stop(listed);
     if (!listed.tasks) return { ok: false, why: `could not read the Loop Queue to find it (${listed.failed || 'no reason given'})` };
     // OLDEST WINS, not first-paged. If two machines ever raced the create (see
     // below), `find()` would hand each caller whichever copy its paging turned
@@ -863,6 +903,7 @@ async function saveUndeliveredAlarm({ text, channel, why }) {
       status,
       markdown_description: busFallback.renderFallbackSeed(),
     });
+    if (stoppedAtReserve(made)) return stop(made);
     if (!made.res.ok) {
       return {
         ok: false,
@@ -893,6 +934,12 @@ async function saveUndeliveredAlarm({ text, channel, why }) {
     // on one ticket, which is the part that matters. A read that fails here
     // changes nothing: the ticket just made is a perfectly good destination.
     const again = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+    // Guarded like every other call here even though this read is best-effort:
+    // the reserve gate is sticky within a process, so a yield reaching this
+    // line means the comment post below yields too. Standing down now says so
+    // one call earlier and leaves no ClickUp call in this function that can
+    // return a yield dressed as a refusal.
+    if (stoppedAtReserve(again)) return stop(again);
     const all = (again.tasks || []).filter(
       (t) => String(t.name || '').trim().toLowerCase() === busFallback.FALLBACK_TASK_NAME.toLowerCase(),
     );
@@ -909,13 +956,25 @@ async function saveUndeliveredAlarm({ text, channel, why }) {
     text, channel, why, node: nodeRoles.thisNode().name, at,
   });
   const out = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body, notify_all: false });
+  if (stoppedAtReserve(out)) return stop(out);
   if (!out.res.ok) return { ok: false, why: `could not comment on it (HTTP ${out.res.status})` };
 
   // Read it back before calling it delivered. A 200 proves a write happened,
   // not that this one stuck — and this verdict is what lets the calling job
   // stamp its suppression window and stay quiet for the next six hours.
+  //
+  // A COMMENT THAT LANDED BUT COULD NOT BE READ BACK RETURNS ok:false, exactly
+  // like one that was never written, and the caller then re-posts on its next
+  // pass. Over a long outage that is a duplicate every pass — roughly 96 of
+  // them across the sixteen hours of 2026-08-23. THAT IS THE PRICE AND IT WAS
+  // CHOSEN ON PURPOSE (review round 2): the alternative is stamping the six-
+  // hour suppression window on an alarm nobody can prove is anywhere, which
+  // silences the monitor for six hours on the strength of an unread 200. A
+  // duplicate is noise; a swallowed alarm is the failure this ticket exists
+  // about. Do not "fix" this into an optimistic pass.
   const id = out.json && out.json.id;
   const back = await call('GET', `/api/v2/task/${task.id}/comment`);
+  if (stoppedAtReserve(back)) return stop(back);
   // `back.json` is null on a 200 that did not parse, and `null.comments` threw
   // out of a function documented "Never throws" (review round 1, 2026-09-08).
   // An unreadable body is exactly the case this read-back exists for, so it
@@ -2895,7 +2954,7 @@ if (cmd === 'whoami') {
   if (out.res.ok) {
     console.log(`\n${busFallback.renderRouteLine({ via: 'chat', channel })} Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
     reportLimits(out.res);
-  } else if (out.yielded || out.res.status === YIELDED_STATUS) {
+  } else if (stoppedAtReserve(out)) {
     // A YIELD IS NOT A REFUSAL, AND IT MUST NOT ENTER THE FALLBACK (review
     // round 1, 2026-09-08). Reaching the ClickUp reserve is this file stopping
     // on purpose, and `die` has carried its own words and its own exit code
@@ -2918,6 +2977,16 @@ if (cmd === 'whoami') {
   } else {
     const why = `HTTP ${out.res.status} ${String(out.json?.err || out.json?.error || out.text || '').slice(0, 200)}`.trim();
     const saved = await saveUndeliveredAlarm({ text: body, channel, why });
+    if (saved.stopped) {
+      // The bus refused AND the fallback reached the ClickUp reserve. Nothing
+      // was delivered, but this is a stand-down, not a break: exit 7 with the
+      // reserve's own words, so `run_bus_relay.sh` reads it as the yield it is
+      // and the next scheduled pass raises the alarm again. The bus failure is
+      // printed first so the reader knows what was being saved when it stopped.
+      console.error(`\nsend chat message FAILED — ${why}`);
+      console.error(`The "${busFallback.FALLBACK_TASK_NAME}" fallback did not run to the end either:`);
+      die('saving the alarm to the fallback ticket', saved.stopped);
+    }
     if (!saved.ok) {
       // BOTH surfaces refused, so nothing was delivered and the caller must
       // not stamp this as announced. Exiting non-zero is what tells it that.
@@ -3464,7 +3533,15 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
 
-  const { tasks } = await fetchAllTasks(list, { includeClosed: true });
+  // THE NOTICEBOARDS ARE NOT WORK, AND THIS READER COUNTED THEM (task
+  // 86bbwab1n, review round 2). `lib/loopThroughput.js` was taught to exclude
+  // them; this command was not, and `scripts/weekly_report.mjs` feeds off
+  // exactly these three numbers — so the weekly report would have credited
+  // "Undelivered alarms", created inside its own window, as a ticket that
+  // shipped, and inflated `total` by one per standing ticket. Same filter,
+  // same registry, applied before anything is derived from the array.
+  const { tasks: allTasks } = await fetchAllTasks(list, { includeClosed: true });
+  const tasks = loopNoticeboards.workTickets(allTasks);
   const byStatus = {};
   for (const t of tasks) {
     const key = (t.status?.status ?? 'unknown').toLowerCase();

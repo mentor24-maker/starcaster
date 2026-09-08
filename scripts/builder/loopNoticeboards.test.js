@@ -16,16 +16,35 @@ const noticeboards = require('../../lib/loopNoticeboards.js');
 const throughput = require('../../lib/loopThroughput.js');
 const busFallback = require('../../lib/busFallback.js');
 
-const LIB = path.join(__dirname, '..', '..', 'lib');
+const ROOT = path.join(__dirname, '..', '..');
+const LIB = path.join(ROOT, 'lib');
+const BUILDER = __dirname;
+const SCRIPTS = path.join(ROOT, 'scripts');
+
+/**
+ * The trees the require-based scan below can actually reach: plain CommonJS
+ * modules with no side effects on load. `scripts/` at large is NOT one of them
+ * — most of it is ESM entry points that run their whole program on import — so
+ * a second test asserts the seed sentence never appears there.
+ */
+const REQUIRABLE_DIRS = [LIB, BUILDER];
+
+/** Every hand-written source file under a directory, one level deep. */
+function sourceFiles(dir) {
+  return fs.readdirSync(dir)
+    .filter((f) => f.endsWith('.js'))
+    .filter((f) => !f.endsWith('.test.js'))
+    .map((f) => path.join(dir, f));
+}
 
 // ---------------------------------------------------------------------------
 // The registry itself
 // ---------------------------------------------------------------------------
 
-test('all three standing tickets are registered', () => {
+test('all four standing tickets are registered', () => {
   assert.deepEqual(
     [...noticeboards.NOTICEBOARD_NAMES].sort(),
-    ['Node roll call', 'Pipeline pulse', 'Undelivered alarms'],
+    ['Node roll call', 'Pipeline pause switch', 'Pipeline pulse', 'Undelivered alarms'],
   );
 });
 
@@ -52,40 +71,86 @@ test('workTickets keeps the work and drops the noticeboards, and survives a non-
 });
 
 /**
- * THE ENFORCING ONE — a fourth noticeboard cannot be added and forgotten.
+ * THE ENFORCING ONE — a fifth noticeboard cannot be added and forgotten.
  *
  * Every standing ticket's seed description opens with the same sentence, so
  * the noticeboards can be found by their own words rather than by a list
- * somebody has to remember to update. Write a fourth in the same shape, leave
+ * somebody has to remember to update. Write a fifth in the same shape, leave
  * it out of the registry, and this fails.
+ *
+ * IT SCANS `scripts/builder/` AS WELL AS `lib/`, because round 1's version did
+ * not and shipped stale on the day it was written (task 86bbwab1n, review
+ * round 2). The pause switch — the fourth standing ticket, live in the queue
+ * the whole time — is seeded from `scripts/pipeline.mjs`, so a `lib/`-only
+ * scan found three of four and passed, while `docs/LOOP_ENGINEERING.md` told
+ * the next reader they were covered.
  */
-test('every lib module that seeds a standing ticket is in the registry', () => {
-  const files = fs.readdirSync(LIB)
-    .filter((f) => f.endsWith('.js'))
-    .filter((f) => fs.readFileSync(path.join(LIB, f), 'utf8').includes(noticeboards.SEED_PHRASE))
-    // The registry itself quotes the phrase to search for it.
-    .filter((f) => f !== 'loopNoticeboards.js');
+test('every module that seeds a standing ticket is in the registry', () => {
+  const files = REQUIRABLE_DIRS.flatMap(sourceFiles)
+    .filter((f) => fs.readFileSync(f, 'utf8').includes(noticeboards.SEED_PHRASE))
+    // The registry itself quotes the phrase in order to search for it.
+    .filter((f) => path.basename(f) !== 'loopNoticeboards.js');
 
   assert.ok(
-    files.length >= 3,
-    `the scan found ${files.length} standing-ticket modules; it should find at least the three known ones — `
+    files.length >= 4,
+    `the scan found ${files.length} standing-ticket modules; it should find at least the four known ones — `
     + 'if the seed wording changed, SEED_PHRASE has to change with it or this test stops checking anything',
   );
 
   for (const file of files) {
-    const mod = require(path.join(LIB, file));
+    const mod = require(file);
     const names = Object.entries(mod)
       .filter(([key, value]) => key.endsWith('TASK_NAME') && typeof value === 'string')
       .map(([, value]) => value);
-    assert.ok(names.length, `${file} seeds a standing ticket but exports no *_TASK_NAME to register`);
+    assert.ok(names.length, `${path.basename(file)} seeds a standing ticket but exports no *_TASK_NAME to register`);
     for (const name of names) {
       assert.ok(
         noticeboards.NOTICEBOARD_NAMES.includes(name),
-        `${file} keeps a standing ticket called "${name}" and it is NOT in loopNoticeboards.NOTICEBOARD_NAMES — `
-        + 'the throughput report will count its creation as a ticket that shipped',
+        `${path.basename(file)} keeps a standing ticket called "${name}" and it is NOT in `
+        + 'loopNoticeboards.NOTICEBOARD_NAMES — the throughput report will count its creation as a '
+        + 'ticket that shipped',
       );
     }
   }
+});
+
+/**
+ * AND THE SEED SENTENCE MAY NOT BE WRITTEN WHERE THAT SCAN CANNOT REACH.
+ *
+ * The scan above works by requiring a module and reading its `*_TASK_NAME`
+ * exports. An ESM script under `scripts/` runs its whole program on import, so
+ * it can never be scanned that way — which is precisely how the pause switch
+ * stayed invisible. Widening the scan alone would fix that one ticket and
+ * leave the hole; this closes the hole, by making "seed text lives beside the
+ * name it seeds" a rule with a failing test behind it rather than a habit.
+ */
+test('the seed sentence appears only in modules the registry scan can require', () => {
+  const stray = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules') continue;
+        walk(full);
+        continue;
+      }
+      if (!/\.(js|mjs|cjs)$/.test(entry.name)) continue;
+      if (entry.name.endsWith('.test.js')) continue;
+      if (REQUIRABLE_DIRS.includes(dir)) continue;
+      if (fs.readFileSync(full, 'utf8').includes(noticeboards.SEED_PHRASE)) {
+        stray.push(path.relative(ROOT, full));
+      }
+    }
+  };
+  walk(SCRIPTS);
+
+  assert.deepEqual(
+    stray, [],
+    `these files seed a standing ticket where the registry scan cannot see them: ${stray.join(', ')}. `
+    + 'Move the seed text into the CommonJS module that exports its *_TASK_NAME (as '
+    + 'scripts/builder/pipelinePause.js does with SWITCH_SEED_DESCRIPTION) and import it here, or the '
+    + 'registry can go stale again with every test still green.',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -161,4 +226,30 @@ test('the throughput script filters the noticeboards before its own derivations'
   const src = fs.readFileSync(path.join(__dirname, '..', 'loop_throughput.mjs'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
   assert.match(src, /const tasks = throughput\.workTickets\(queueRead\.tasks\)/);
+});
+
+/**
+ * THE OTHER READER, WHICH ROUND 1 DID NOT TOUCH (review round 2).
+ *
+ * `stage-counts` counts the whole Loop Queue by status and counts closures in
+ * a date window, and `scripts/weekly_report.mjs` feeds off all three of its
+ * numbers. It filtered on `date_closed` alone — so the weekly report would
+ * have credited "Undelivered alarms", a ticket created inside its own window
+ * by the very change that fixed this everywhere else, as a ticket that
+ * shipped, and inflated `total` by one per standing ticket.
+ */
+test('the stage-counts command counts work, not noticeboards', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+  const cmd = src.slice(src.indexOf("cmd === 'stage-counts'"), src.indexOf("cmd === 'get'"));
+  assert.ok(cmd.length, 'the stage-counts command must still exist to be checked');
+  assert.match(
+    cmd,
+    /const tasks = loopNoticeboards\.workTickets\(/,
+    'stage-counts must apply the registry before it derives total, byStatus or closedInWindow — the weekly report reads all three',
+  );
+  assert.ok(
+    !/const \{ tasks \} = await fetchAllTasks/.test(cmd),
+    'the raw array must not be bound to `tasks`, or a later edit derives from the unfiltered list without noticing',
+  );
 });

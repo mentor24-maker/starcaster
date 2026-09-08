@@ -61,6 +61,34 @@ its blank lines, which turned a dividing rule into a heading; and two machines
 falling back in the same minute could have made two noticeboards, so they now
 agree on the older one and say out loud that a duplicate needs deleting.
 
+Sent back a second time, and the finding was the same shape again — a check
+that says it is guarding something and is not. There was a **fourth** standing
+ticket nobody had counted: the *Pipeline pause switch*, the ticket that records
+when Dane takes the deck. It is made the same way, in the same column, opening
+with the same "do not build this" sentence, and it was being counted as a
+finished ticket exactly like the other three. The test written last round to
+make that impossible could not see it: it looked only in one folder, and the
+pause switch is created from a file in a different one. So the registry shipped
+already out of date, the test passed, and the written notes said in as many
+words that a fourth one would be caught.
+
+The switch is registered now, and the two ways that could happen again are shut.
+The sentence the test searches for was moved to sit beside the name it belongs
+to, so the search can reach it; and a second test fails if that sentence is ever
+written somewhere the search cannot look. The rule is now one line: the wording
+that creates a standing ticket lives with the name of the ticket it creates.
+
+Two more from the same review. The weekly report was reading a different counter
+that had never been told about noticeboards at all — so this week's report would
+have credited *Undelivered alarms*, a ticket this very change created, as a
+piece of work that shipped. And the "standing down to leave capacity for whoever
+is at the keyboard" fix from last round only covered the first step of sending
+an alarm; if the system ran out of capacity a moment later, while saving the
+alarm to the ticket instead, it went back to announcing the alarm as lost. Every
+step of that save now knows the difference between "ClickUp said no" and "I
+stopped on purpose", and a test counts the steps so a new one cannot be added
+without one.
+
 ## 2026-09-08 — Module settings panels now line up top to bottom (#667)
 
 Open any module's settings in the Builder and you are really looking at two

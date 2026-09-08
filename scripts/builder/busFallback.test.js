@@ -184,7 +184,7 @@ function bodyOf(name) {
 
 test('reaching the ClickUp reserve stops with its own exit code — it is not a refusal to fall back from', () => {
   const cmd = chatCommand();
-  const yieldAt = cmd.search(/out\.yielded \|\| out\.res\.status === YIELDED_STATUS/);
+  const yieldAt = cmd.search(/stoppedAtReserve\(out\)/);
   const fallbackAt = cmd.indexOf('await saveUndeliveredAlarm(');
   assert.ok(
     yieldAt !== -1,
@@ -194,6 +194,59 @@ test('reaching the ClickUp reserve stops with its own exit code — it is not a 
   assert.ok(
     cmd.slice(yieldAt, fallbackAt).includes("die('send chat message'"),
     'die() is what carries the reserve\'s words and EXIT_YIELDED (7) — run_bus_relay.sh reads that code to tell "I stood down" from "I broke"',
+  );
+});
+
+/**
+ * ROUND 2's FINDING: the guard above covers the PRIMARY chat POST only.
+ *
+ * `saveUndeliveredAlarm` then makes two to four calls of its own, and each one
+ * yields the moment the reserve is reached. Those came back as an ordinary
+ * `{ ok: false }`, so the chat command printed "Nothing was delivered. This
+ * alarm is lost unless the caller retries" and exited 1 — a healthy stand-down
+ * reported as a failure, with `run_bus_relay.sh` reading 1 where 7 was true.
+ * The window is narrow (the reserve has to be crossed between the chat POST
+ * and the fallback's own calls) and it is the same wrong diagnosis.
+ */
+test('a reserve stop INSIDE the fallback is a stand-down too, not a lost alarm', () => {
+  const fn = bodyOf('async function saveUndeliveredAlarm');
+
+  // Every call the fallback makes has to be asked, or the one that is not is
+  // the one that reports a yield as a lost alarm.
+  const guards = fn.match(/stoppedAtReserve\(/g) || [];
+  const calls = fn.match(/await (call\(|fetchAllTasks\()/g) || [];
+  assert.ok(
+    guards.length >= calls.length,
+    `the fallback makes ${calls.length} ClickUp calls but guards only ${guards.length} of them against `
+    + 'the reserve — an unguarded one returns ok:false and is reported as "this alarm is lost"',
+  );
+
+  assert.ok(
+    /stopped: out/.test(fn),
+    'a yield has to be reported DISTINCTLY from a refusal; { ok: false } alone is what the caller mistook',
+  );
+});
+
+test('the chat command dies on a fallback reserve stop before it calls the alarm lost', () => {
+  const cmd = chatCommand();
+  const stoppedAt = cmd.indexOf('if (saved.stopped)');
+  const lostAt = cmd.indexOf('if (!saved.ok)');
+  assert.ok(stoppedAt !== -1, 'the fallback\'s yield verdict must be read');
+  assert.ok(
+    stoppedAt < lostAt,
+    'the stand-down must be told apart BEFORE the "nothing was delivered" branch, or exit 7 is lost to exit 1',
+  );
+  assert.ok(
+    cmd.slice(stoppedAt, lostAt).includes('die('),
+    'die() is what carries the reserve\'s own words and EXIT_YIELDED (7)',
+  );
+});
+
+test('a non-fatal list read carries its yield out rather than flattening it to an HTTP status', () => {
+  const fn = src.slice(src.indexOf('async function fetchAllTasks'), src.indexOf('\nfunction assigneeNames'));
+  assert.ok(
+    /yielded: out\.yielded/.test(fn),
+    'without this the non-fatal return keeps only res.status, and die() cannot print the reserve\'s own reason',
   );
 });
 

@@ -2893,10 +2893,34 @@ during an outage read as a ticket that shipped, and because the verdict
 short-circuits to `MOVING` the moment anything closed inside the window, it
 would have flipped `STALLED` to `MOVING` for the following 24 hours. The stall
 detector silenced by the alarm it was trying to save, on exactly the day it is
-most needed. All three standing tickets are registered in
-**`lib/loopNoticeboards.js`** and excluded there; a fourth one written in the
+most needed. All **four** standing tickets are registered in
+**`lib/loopNoticeboards.js`** and excluded there — the roll call, the pipeline
+pulse, this noticeboard, and the **pause switch**; a fifth one written in the
 same shape and left out of that registry fails
 `scripts/builder/loopNoticeboards.test.js`.
+
+**That sentence said "three" and was wrong on the day it was written**, which
+is worth keeping because of how it was wrong rather than by how much. The
+pause switch (`npm run pipeline -- pause`, created on first need in `Live`,
+opening with the same "Do not build this…" sentence) had been the fourth one
+all along, and the test that was supposed to make an omission impossible
+scanned `lib/` only — the switch is seeded from `scripts/pipeline.mjs`. So the
+registry shipped stale, the suite was green, and this paragraph told the next
+reader they were covered. Two things changed: the seed text moved to
+`scripts/builder/pipelinePause.js`, beside the `SWITCH_TASK_NAME` it seeds, and
+the test now scans `scripts/builder/` as well as `lib/` **and fails if the seed
+sentence appears anywhere it cannot require** — an ESM script runs on import,
+so it can never be scanned that way, and widening the scan without closing that
+door would have fixed one ticket and left the hole. Standing rule: **seed text
+lives in the CommonJS module that exports its `*_TASK_NAME`.**
+
+The reach is wider than the throughput check, too. `stage-counts` — which
+`scripts/weekly_report.mjs` reads for its stage table, its total and its
+"closed this week" figure — filtered on `date_closed` alone, so the weekly
+report would have credited a noticeboard's creation as a shipped ticket.
+It applies the same registry now. When you add a reader of the Loop Queue,
+the question to ask is not "does this count closures" but **"does this count
+tickets at all"**.
 
 ### Running the relay by hand
 
