@@ -1,3 +1,26 @@
+## 2026-09-08 — When a push spares your hand edit, it now says so (#662)
+
+A shared section is one block you build once and reuse on many pages. When you
+change the master and push it out, the builder deliberately does NOT flatten a
+copy you have since hand-edited on its own page — your edit wins — and it
+reports which pages it left alone, so you know.
+
+A single page can carry more than one copy of the same shared section. When one
+of those copies was clean and another had been hand-edited, the push did exactly
+the right thing — rewrote the clean one, left your edit alone — and then said
+nothing whatsoever about the copy it had spared. It fell out of the report
+entirely. So the one message that exists to tell you your edit survived was the
+one message you never saw.
+
+The cause was that the engine asked "did anything on this page have a hand
+edit?" and "did anything on this page get rewritten?" as two yes/no questions
+about the whole page, when the real question is about each copy. It now counts
+copies instead, so a page can be reported as rewritten and as partly-left-alone
+at the same time, which is what actually happened.
+
+Nothing about what gets written changed — hand edits were always safe. This was
+the builder failing to tell you so.
+
 ## 2026-09-07 — A drop shadow can now be pointed, not just nudged (#645)
 
 A shadow under a picture was set by two numbers: how far right it sat, and how
