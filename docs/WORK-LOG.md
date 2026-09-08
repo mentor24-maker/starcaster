@@ -50,6 +50,39 @@ else here already uses when an instrument cannot see. It matters most over the
 next few weeks: the straightening job empties that list as it goes, and a
 checker that had gone blind would make an emptied list look exactly like
 success.
+
+Review sent it back a second time, and the second catch was the same shape as
+the first with the polarity reversed: the answers were right and the sentences
+printed beside them were wrong. On a run that failed, the closing note said
+every panel lined up — printed directly underneath the list of panels that
+didn't. That is not a corner case, because it only appeared once the list was
+empty, and emptying the list is precisely what the straightening job is going to
+do; a fault introduced during that work would have announced itself as the work
+succeeding. A second note told the reader the run "could not take a reading"
+when it had in fact failed outright, which are two different answers that people
+here rely on telling apart. And the run checks three screen widths but was
+quietly reporting the best of the three as though it spoke for all of them, so a
+width that measured nothing could sit inside a green pass unnoticed. All three
+are fixed, and each one was reproduced on purpose first: I made a width go blind
+and watched the old code report a cheerful pass over it, then watched the new
+code stop and name the width.
+
+Two smaller things went in alongside. When the check reports a panel as crooked
+it quotes the boxes it measured, and it had been quoting the wrong pair — the
+right numbers attached to the wrong names, which sends whoever reads it to the
+wrong place. And it will no longer demand a panel be struck off the list on half
+a measurement: where it can only see one of the two edges it needs, it now says
+so and stops, rather than declaring the panel fixed on evidence it doesn't have.
+
+One thing the check caught on its own while all this was going on, which is
+worth recording because it is the first time it has earned its keep unprompted.
+A new module landed on the live code this morning — the Related Articles panel,
+split out of the Tag manager earlier today — and the moment this branch caught
+up with it, the check stopped and reported it as a newly crooked panel that
+nobody had straightened. It was right. Nothing had gone wrong; a new panel had
+simply arrived with the same old fault, and for the first time something noticed
+on the day rather than a month later. It has been written onto the list with the
+others.
 ## 2026-09-07 — Every dropdown that lists your pages now lists them A to Z (#656)
 
 Pick a page anywhere in the admin app — the Post Page on a Blog Post List

@@ -652,6 +652,12 @@ function measureSeam(page) {
 function assertSeam(seams, width, baseline) {
   const failures = [];
   const skipped = [];
+  /*
+   * Recorded panels this run could only measure on HALF the seam — the label
+   * track lines up and no row of either box occupies the control track. Not a
+   * failure and emphatically not a pass: see the guard on the stale rule below.
+   */
+  const recordedHalfMeasured = [];
   const byName = new Map();
 
   for (const s of seams) {
@@ -677,7 +683,18 @@ function assertSeam(seams, width, baseline) {
       const s = off[0];
       const control = s.controlOut === null
         ? 'its control track could not be compared (no row of either box occupies it)'
-        : `${s.controlOut >= 0 ? '+' : ''}${s.controlOut}px on the control track`;
+        // NAME THE ROWS THE NUMBER CAME FROM. The label offsets above are read
+        // from the first LABELLED row of each box and the control offset from
+        // the first row that actually OCCUPIES the control track, and those are
+        // routinely different rows (a leading `full` field has a label and no
+        // control). Quoting only the label-track names beside a control-track
+        // delta invites the reader to measure two rows that did not produce it —
+        // review round 2 hit exactly that, reading "Label"/"Separator" beside a
+        // +78px delta that came from elsewhere. `controlName` was computed for
+        // this and never read; it is read now.
+        : `${s.controlOut >= 0 ? '+' : ''}${s.controlOut}px on the control track, `
+          + `where the chrome's "${s.chrome.controlName}" and the column's "${s.settings.controlName}" `
+          + `start their controls at ${s.chrome.controlX} and ${s.settings.controlX}`;
       failures.push(
         `${width}px panel #${s.index} (${name}): the chrome and the settings column ${s.chromeBelow ? 'above' : 'below'} it `
         + `do not share an edge — the chrome's "${s.chrome.name}" starts its label at ${s.chrome.labelX}, the column's `
@@ -692,11 +709,31 @@ function assertSeam(seams, width, baseline) {
     }
 
     if (!off.length && recorded) {
-      failures.push(
-        `${width}px panel #${instances[0].index} (${name}): recorded in panel-seam-baseline.json as staggered, but its `
-        + 'chrome and settings column now share an edge. Take it out of the baseline — the record may only ever '
-        + 'shrink, and a fixed panel left in it is room for the next regression to hide in.'
-      );
+      /*
+       * STALE ON HALF A MEASUREMENT IS NOT STALE.
+       *
+       * `off` counts a null `controlOut` as agreement, which is right for the
+       * regression rule — you cannot fail a panel on a comparison that did not
+       * happen — and wrong for this one, which DEMANDS a name be deleted from
+       * the record. A recorded panel whose labels line up while its control
+       * track was never compared has been half looked at, and this file's own
+       * rule is that the baseline may only ever shrink for a reason the check
+       * actually MEASURED. Deleting it on that evidence retires a recorded
+       * defect nobody has seen.
+       *
+       * Latent until now only because `speech-bubble` was deliberately kept
+       * OUT of the baseline for precisely this reason; the next label-track-only
+       * panel that gets recorded walks straight into it (review round 2).
+       */
+      if (instances.every((s) => s.controlOut === null)) {
+        recordedHalfMeasured.push(name);
+      } else {
+        failures.push(
+          `${width}px panel #${instances[0].index} (${name}): recorded in panel-seam-baseline.json as staggered, but its `
+          + 'chrome and settings column now share an edge. Take it out of the baseline — the record may only ever '
+          + 'shrink, and a fixed panel left in it is room for the next regression to hide in.'
+        );
+      }
     }
   }
 
@@ -729,6 +766,7 @@ function assertSeam(seams, width, baseline) {
     skipped,
     unreached,
     labelTrackOnly,
+    recordedHalfMeasured,
     compared: byName.size,
     recordedSeen: [...byName.keys()].filter((n) => baseline.includes(n)).length
   };
@@ -1092,10 +1130,28 @@ const allFailures = [];
 const seamSkipped = new Map();     // panel name -> the widths it was skipped at
 const seamUnreached = new Map();   // baselined panel name -> the widths it was never seen at
 const seamLabelOnly = new Map();   // panel name -> widths where only the label track was comparable
-let seamCompared = 0;
-let seamRecorded = 0;
+const seamHalfMeasured = new Map();  // recorded panel name -> widths where only half the seam was comparable
+
+/*
+ * PER WIDTH, NOT `Math.max` ACROSS THEM.
+ *
+ * These two used to be `Math.max(...)` over the three widths, which reports
+ * the BEST width's numbers as the whole run's. A run blind at 1920 and fine at
+ * 1440 then printed "compared on 34 panel(s)" and exited 0, because the
+ * zero-comparison refusal below only fired when EVERY width measured nothing.
+ *
+ * The per-entry unreached guard covered that by accident today — a width that
+ * reaches nothing leaves every baseline name unreached — but that cover
+ * disappears the moment 86bbq065f empties the baseline, which is the one
+ * window this instrument was built for (review round 2).
+ */
+const seamByWidth = new Map();    // width -> { compared, recorded }
 let panelsSeen = 0;
 let cardsSeen = 0;
+// Seam failures counted on their own, apart from `allFailures`. The seam note
+// has to be able to say whether ITS assertion found anything, and an
+// unrelated W0 or W9 violation must not answer that question for it.
+let seamFailureCount = 0;
 let columnGridsSeen = 0;
 /*
  * Declared managers that rendered a SINGLE label/field pair.
@@ -1154,8 +1210,8 @@ for (const width of WIDTHS) {
     // at one width only, and a check that samples one width could not see it.
     const seam = assertSeam(await measureSeam(page), width, SEAM_BASELINE);
     allFailures.push(...seam.failures);
-    seamCompared = Math.max(seamCompared, seam.compared);
-    seamRecorded = Math.max(seamRecorded, seam.recordedSeen);
+    seamFailureCount += seam.failures.length;
+    seamByWidth.set(width, { compared: seam.compared, recorded: seam.recordedSeen });
     // Keyed by name, not summed: three widths would otherwise report three
     // times the truth, which is the mistake the manager note above already
     // paid for once (review round 1, 2026-09-05).
@@ -1171,6 +1227,10 @@ for (const width of WIDTHS) {
     for (const name of seam.labelTrackOnly) {
       if (!seamLabelOnly.has(name)) seamLabelOnly.set(name, []);
       seamLabelOnly.get(name).push(width);
+    }
+    for (const name of seam.recordedHalfMeasured) {
+      if (!seamHalfMeasured.has(name)) seamHalfMeasured.set(name, []);
+      seamHalfMeasured.get(name).push(width);
     }
 
     const columnGrids = await measureColumnGrids(page);
@@ -1221,14 +1281,49 @@ if (panelsSeen === 0) {
  * under an `OK` headline. The exit code is what gets read, so the exit code is
  * what has to move.
  */
-if (!seamCompared) {
+/*
+ * AND IT IS ASKED PER WIDTH. A width that measured nothing is a blind width
+ * even when the other two were fine — the seam runs at every width precisely
+ * because a future width-dependent rule would show up at one of them only, so
+ * a run that could not look at one of them has not run the assertion it claims.
+ */
+const seamBlindWidths = WIDTHS.filter((w) => !(seamByWidth.get(w)?.compared > 0));
+
+if (seamBlindWidths.length) {
+  const everyWidth = seamBlindWidths.length === WIDTHS.length;
+  const measuredAt = WIDTHS.filter((w) => !seamBlindWidths.includes(w));
   blind.push(
-    'The chrome/column seam was NOT MEASURED — no panel presented both a chrome strip\n' +
-    `and a settings column stacked with it, so all ${SEAM_BASELINE.length} recorded panel(s) went ungraded.\n` +
-    'Zero comparisons is never a green result. Either the fixture rendered no such panel\n' +
-    '(`npm run seed:ui-fixture`), or the chrome selector stopped matching anything — which\n' +
-    'a rename under components/builder/ does silently. An instrument problem either way,\n' +
-    'which is why this is a 2 rather than a 1.');
+    (everyWidth
+      ? 'The chrome/column seam was NOT MEASURED AT ANY WIDTH — no panel presented both a\n'
+      : `The chrome/column seam was NOT MEASURED at ${seamBlindWidths.join('/')}px (it was measured\n`
+        + `at ${measuredAt.join('/')}px) — at those widths no panel presented both a\n`) +
+    `chrome strip and a settings column stacked with it, so all ${SEAM_BASELINE.length} recorded panel(s)\n` +
+    'went ungraded there. Zero comparisons is never a green result, and the widths that DID\n' +
+    'measure do not answer for the ones that did not. Four things do this: the fixture\n' +
+    'rendered no such panel (`npm run seed:ui-fixture`); the chrome selector stopped matching\n' +
+    'anything, which a rename under components/builder/ does silently; EVERY settings column\n' +
+    'landed beside its chrome rather than stacked with it; or that width never opened its\n' +
+    'panels at all. The seam note below lists what was skipped and why. An instrument problem\n' +
+    'in every case, which is why this is a 2 rather than a 1.');
+}
+
+/*
+ * A RECORDED PANEL MEASURED ON HALF THE SEAM IS A 2 TOO.
+ *
+ * `assertSeam` refuses to call such a panel STALE, because deleting a name
+ * from the record on a comparison that did not happen retires a defect nobody
+ * has looked at. Refusing to fail it is only half the answer: staying silent
+ * would leave it reading as a recorded panel duly held where it is, when in
+ * fact only its label track was compared (review round 2).
+ */
+if (seamHalfMeasured.size) {
+  blind.push(
+    `${seamHalfMeasured.size} panel(s) recorded in scripts/ui/panel-seam-baseline.json were measured on\n` +
+    `HALF the seam only: ${[...seamHalfMeasured.keys()].join(', ')}.\n` +
+    'Their label tracks line up and no row of either box occupies the control track, so this\n' +
+    'run can say neither that they are still staggered nor that they are fixed. They were NOT\n' +
+    'reported as stale — the record may only ever shrink for a reason this check actually\n' +
+    'MEASURED. Seed a row that occupies the control track in scripts/ui/seed_fixture.mjs.');
 }
 
 /*
@@ -1303,27 +1398,91 @@ function uncomparableNote() {
  * defect that says nothing is the same failure with a JSON file in front of
  * it, so the count and the owning ticket go out on every single run.
  */
-function seamNote() {
+/*
+ * WHAT THIS RUN ACTUALLY DID ABOUT A BLIND SPOT — read off the verdict, never
+ * asserted.
+ *
+ * Round 2 of this ticket printed, verbatim, "so this run refuses too — COULD
+ * NOT TAKE A READING (exit 2), never a green pass" underneath a FAILED headline
+ * that then exited 1. `verdict()` ranks failures above blindness on purpose
+ * (DOCTRINE §5.33), so that sentence was wrong on every run where both were
+ * true — and the pull request quoted that very run as proof a real failure
+ * outranks a blind spot. The exit code was right; the sentence beside it said
+ * the opposite. A check that misreports its own exit number is this ticket's
+ * own defect, one level in, so the number is now taken FROM the verdict.
+ */
+function blindVerdictSentence(code) {
+  if (code === EXIT_FAIL) {
+    return '    This run does not report that as a pass. It exits 1 for the failures listed above,\n'
+      + '    which outrank a blind spot — the blindness is ON TOP OF them, not instead of them,\n'
+      + '    and it means there may be more failures that went unmeasured.';
+  }
+  if (code === EXIT_CANNOT_TELL) {
+    return '    This run does not report that as a pass. It refuses with COULD NOT TAKE A READING\n'
+      + '    (exit 2), and the refusal printed above says how to fix it.';
+  }
+  return '    This run exited 0, which it should NOT have — a blind spot has to move the exit code.\n'
+    + '    Read that as a defect in check:panels itself, not as a clean sweep.';
+}
+
+function seamNote(code) {
   const lines = [];
   const recorded = SEAM_BASELINE.length;
 
-  if (!seamCompared) {
-    lines.push('[check:panels] NOTE — no panel presented both a chrome strip and a settings column');
-    lines.push(`  stacked with it, so the chrome/column seam was not measured at all and all ${recorded}`);
-    lines.push('  recorded panel(s) went ungraded. That is not a pass, and this run does not report it');
-    lines.push('  as one — it refuses with COULD NOT TAKE A READING (exit 2); the refusal says how to fix it.');
-    return lines.join('\n');
-  }
+  // Per width, because `seamByWidth` is per width. Collapsing to one number is
+  // only honest when the widths agree; when they do not, saying so IS the
+  // finding.
+  const comparedCounts = WIDTHS.map((w) => seamByWidth.get(w)?.compared ?? 0);
+  const recordedCounts = WIDTHS.map((w) => seamByWidth.get(w)?.recorded ?? 0);
+  const agree = (counts) => new Set(counts).size === 1;
+  const spread = (counts) => counts.map((n, i) => `${n} at ${WIDTHS[i]}px`).join(', ');
+  const comparedText = agree(comparedCounts)
+    ? `${comparedCounts[0]} panel(s) at each of ${WIDTHS.join('/')}px`
+    : `a DIFFERENT number of panels at each width (${spread(comparedCounts)})`;
+  const recordedText = agree(recordedCounts)
+    ? `${recordedCounts[0]}`
+    : `${spread(recordedCounts)}`;
 
-  if (recorded) {
-    lines.push(`[check:panels] NOTE — the chrome/column seam was compared on ${seamCompared} panel(s), of which`);
-    lines.push(`  ${seamRecorded} are RECORDED AS STAGGERED in scripts/ui/panel-seam-baseline.json (${recorded} entries in all).`);
+  if (!comparedCounts.some((n) => n > 0)) {
+    lines.push('[check:panels] NOTE — no panel presented both a chrome strip and a settings column');
+    lines.push(`  stacked with it at ANY width, so the chrome/column seam was not measured at all and all ${recorded}`);
+    lines.push('  recorded panel(s) went ungraded. Three things do that, and the lists below say which:');
+    lines.push('  the fixture rendered no such panel, the chrome selector stopped matching anything, or');
+    lines.push('  every settings column landed BESIDE its chrome rather than stacked with it.');
+    lines.push(blindVerdictSentence(code));
+  } else if (seamBlindWidths.length) {
+    lines.push(`[check:panels] NOTE — the chrome/column seam was NOT MEASURED at ${seamBlindWidths.join('/')}px, and`);
+    lines.push(`  was compared on ${spread(comparedCounts)}. The widths that measured do not answer for the`);
+    lines.push('  ones that did not: these tracks are content-driven today, but the seam is asserted at');
+    lines.push('  every width precisely so a width-dependent rule cannot hide at the width nobody looked at.');
+    lines.push(blindVerdictSentence(code));
+  } else if (recorded) {
+    lines.push(`[check:panels] NOTE — the chrome/column seam was compared on ${comparedText}, of which`);
+    lines.push(`  ${recordedText} are RECORDED AS STAGGERED in scripts/ui/panel-seam-baseline.json (${recorded} entries in all).`);
     lines.push('  Those are a known, open defect owned by ticket 86bbq065f — the chrome and the');
     lines.push('  settings column stacked with it do not share one left edge. THIS RUN DID NOT');
     lines.push('  VERIFY THEM; it only held them where they are. A new panel joining them fails,');
     lines.push('  and so does one of them being fixed and left in the record.');
+    if (seamFailureCount) {
+      lines.push(`  ${seamFailureCount} seam comparison(s) FAILED on this run and are listed above. This note says`);
+      lines.push('  what was EXCLUDED from the assertion; it is not a verdict on the run.');
+    }
+  } else if (seamFailureCount) {
+    /*
+     * THE EMPTY BASELINE, WITH FAILURES. Round 2 printed "every one of them
+     * shares one left edge, with nothing recorded as staggered" underneath 62
+     * listed seam failures — a flat false all-clear, and not a corner case:
+     * this branch fires exactly when 86bbq065f has emptied the file, which is
+     * the one job this instrument exists to grade. A regression during that
+     * work read as the fix having succeeded.
+     */
+    lines.push(`[check:panels] NOTE — the chrome/column seam was compared on ${comparedText}, and`);
+    lines.push(`  ${seamFailureCount} of those comparison(s) FAILED — they are listed above. The record in`);
+    lines.push('  scripts/ui/panel-seam-baseline.json is EMPTY, so every one of them is a NEW regression:');
+    lines.push('  nothing is being excused here, and this note vouches for nothing lining up.');
+    lines.push('  Straighten the panel, or record it and say why on ticket 86bbq065f.');
   } else {
-    lines.push(`[check:panels] NOTE — the chrome/column seam was compared on ${seamCompared} panel(s) and`);
+    lines.push(`[check:panels] NOTE — the chrome/column seam was compared on ${comparedText} and`);
     lines.push('  every one of them shares one left edge, with nothing recorded as staggered.');
     lines.push('  scripts/ui/panel-seam-baseline.json is empty, which is what 86bbq065f was for.');
   }
@@ -1335,8 +1494,18 @@ function seamNote() {
       lines.push(`      \u00b7 ${name} [not seen at ${[...new Set(widths)].join('/')}px]`);
     }
     lines.push('    Either the fixture no longer renders that module, or its panel was skipped');
-    lines.push('    for a reason listed below. A record nobody reads is how a defect outlives its ticket,');
-    lines.push('    so this run refuses too — COULD NOT TAKE A READING (exit 2), never a green pass.');
+    lines.push('    for a reason listed below. A record nobody reads is how a defect outlives its ticket.');
+    lines.push(blindVerdictSentence(code));
+  }
+
+  if (seamHalfMeasured.size) {
+    lines.push(`  ${seamHalfMeasured.size} recorded panel(s) were measured on HALF the seam — their labels line up and`);
+    lines.push('  no row of either box occupies the control track, so they were NOT called stale:');
+    for (const [name, widths] of seamHalfMeasured) {
+      lines.push(`      \u00b7 ${name} [${[...new Set(widths)].join('/')}px]`);
+    }
+    lines.push('    The record may only ever shrink for a reason this check actually MEASURED.');
+    lines.push(blindVerdictSentence(code));
   }
 
   if (seamLabelOnly.size) {
@@ -1370,7 +1539,7 @@ if (code === EXIT_FAIL) {
     );
   }
   console.error(`\n${uncomparableNote()}`);
-  console.error(`${seamNote()}\n`);
+  console.error(`${seamNote(code)}\n`);
   console.error(
     '\nW0: one label width and one field width per panel. The two numbers live in\n' +
     'src/css/_variables.css (--builder-field-label-w / --builder-field-control-w).\n' +
@@ -1386,7 +1555,7 @@ if (code === EXIT_CANNOT_TELL) {
   // reaches — leaving them out would make that comment describe the opposite
   // of its code, which this file has already paid for once.
   console.error(`\n${uncomparableNote()}`);
-  console.error(seamNote());
+  console.error(seamNote(code));
   cannotTell('check:panels', blind.join('\n\n'));
 }
 
@@ -1396,4 +1565,4 @@ console.log(
 );
 
 console.log(uncomparableNote());
-console.log(seamNote());
+console.log(seamNote(code));
