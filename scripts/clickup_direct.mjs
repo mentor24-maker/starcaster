@@ -67,6 +67,7 @@ import buildStart from './builder/buildStart.js';
 import operatorCard from './builder/operatorCard.js';
 import machineComment from './builder/machineComment.js';
 import nodeRoles from '../lib/nodeRoles.js';
+import busFallback from '../lib/busFallback.js';
 import taskRepo from './builder/taskRepo.js';
 import loopInterval from './builder/loopInterval.js';
 import branchCatchUp from './builder/branchCatchUp.js';
@@ -790,6 +791,77 @@ async function postToBus(channel, content, { simulate } = {}) {
     type: 'message', content, content_format: 'text/md',
   });
   return { ok: out.res.ok, why: out.res.ok ? '' : `HTTP ${out.res.status}` };
+}
+
+/**
+ * Put an alarm the party line refused somewhere durable, and PROVE it landed.
+ *
+ * The destination is a standing ticket found by its NAME (task 86bbwab1n).
+ * Not an id in an env var or a constant: an id rots the moment somebody
+ * deletes the ticket, and a destination that cannot be resolved fails in
+ * precisely the way this fallback exists to prevent. The roll call
+ * (`lib/nodeHeartbeat.js`) and the pulse digest (`lib/pulseDigest.js`) both
+ * make the same choice; `CLICKUP_ALARM_TASK` is a shortcut, never the
+ * definition, so a shortcut pointing at a deleted task falls through to the
+ * name rather than reporting the destination gone.
+ *
+ * Never throws. Returns { ok, url, why } — `ok` is the caller's whole verdict,
+ * because a fallback reported as delivered when it was not would silence the
+ * alarm's suppression window on the strength of a comment nobody received.
+ */
+async function saveUndeliveredAlarm({ text, channel, why }) {
+  const shortcut = process.env.CLICKUP_ALARM_TASK || '';
+  let task = null;
+
+  if (shortcut) {
+    const got = await call('GET', `/api/v2/task/${shortcut}`);
+    if (got.res.ok && got.json && got.json.id) task = got.json;
+    // A 401 covers both a bad token and a task this token cannot see, deleted
+    // ones included — so fall through to the name rather than conclude.
+  }
+
+  if (!task) {
+    const listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+    if (!listed.tasks) return { ok: false, why: `could not read the Loop Queue to find it (${listed.failed || 'no reason given'})` };
+    task = listed.tasks.find(
+      (t) => String(t.name || '').trim().toLowerCase() === busFallback.FALLBACK_TASK_NAME.toLowerCase(),
+    ) || null;
+  }
+
+  if (!task) {
+    const status = process.env.CLICKUP_ALARM_TASK_STATUS || busFallback.FALLBACK_TASK_STATUS;
+    const made = await call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
+      name: busFallback.FALLBACK_TASK_NAME,
+      status,
+      markdown_description: busFallback.renderFallbackSeed(),
+    });
+    if (!made.res.ok) {
+      return {
+        ok: false,
+        why: `could not create it (HTTP ${made.res.status} ${String(made.json?.err || made.text || '').slice(0, 160)})`
+          + `. If that names the status, this list has no "${status}" status — set CLICKUP_ALARM_TASK_STATUS`
+          + ' to one it has that no loop claims from.',
+      };
+    }
+    task = made.json;
+  }
+
+  const at = new Date().toISOString();
+  const body = busFallback.renderFallbackComment({
+    text, channel, why, node: nodeRoles.thisNode().name, at,
+  });
+  const out = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body, notify_all: false });
+  if (!out.res.ok) return { ok: false, why: `could not comment on it (HTTP ${out.res.status})` };
+
+  // Read it back before calling it delivered. A 200 proves a write happened,
+  // not that this one stuck — and this verdict is what lets the calling job
+  // stamp its suppression window and stay quiet for the next six hours.
+  const id = out.json && out.json.id;
+  const back = await call('GET', `/api/v2/task/${task.id}/comment`);
+  const stuck = Boolean(back.res.ok && (back.json.comments || []).some((c) => String(c.id) === String(id)));
+  if (!stuck) return { ok: false, why: 'the comment was accepted but could not be read back' };
+
+  return { ok: true, url: task.url || `https://app.clickup.com/t/${task.id}` };
 }
 
 /**
@@ -2431,7 +2503,20 @@ async function stampLoopNoteSoftly(taskId, text, unchecked) {
     return;
   }
   const out = await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text });
-  if (!out.res.ok) unchecked.push(`${taskId}: the Loop note write failed — the queue will not show the auto-merge state`);
+  if (!out.res.ok) {
+    // Name the cause, not just the failure (task 86bbwab1n). "The write
+    // failed" is the same sentence for a field nobody created and a field the
+    // workspace has run out of usages for, and only one of those is somebody's
+    // to fix. `unchecked` is read by a human; give them the deciding fact.
+    const refusal = busFallback.classifyFieldRefusal({
+      status: out.res.status,
+      body: String(out.json?.err || out.json?.error || out.text || ''),
+    });
+    const why = refusal.kind === 'plan-exhausted'
+      ? 'ClickUp is out of custom-field usages on this plan, so the field exists but refuses every write — this needs Dane, not a retry'
+      : `HTTP ${out.res.status}`;
+    unchecked.push(`${taskId}: the Loop note write failed (${why}) — the queue will not show the auto-merge state`);
+  }
 }
 
 /**
@@ -2719,16 +2804,49 @@ if (cmd === 'whoami') {
   }
 
 } else if (cmd === 'chat') {
+  // THE ONE DOOR EVERY ALARM GOES THROUGH (task 86bbwab1n).
+  //
+  // `scripts/lib/clickup.cjs` -> postBusMessage shells out to exactly this
+  // command, and seven scheduled jobs shell out to that: the heartbeat, the
+  // stale check, the throughput check, the job-failure reporter, the
+  // reconciler, the stale-answer sweep and the checkout-currency check. Every
+  // one of them raises its alarm on the party line and NOWHERE ELSE.
+  //
+  // So the fallback lives here rather than in each caller. That is not merely
+  // less code: each of those callers already treats "this command threw" as
+  // "the alarm was not delivered, do not stamp the suppression window, try
+  // again next pass", and "it returned" as delivered. Putting the fallback
+  // behind that contract fixes all seven without touching one line of their
+  // throttle logic — which is the logic it would be easiest to get wrong.
+  //
+  // `--no-fallback` is for a caller that keeps a durable record of its own and
+  // wants the raw verdict instead.
   const channel = arg('channel'), bodyFile = arg('body-file');
   if (!channel || !bodyFile) usage();
+  const body = readBody(bodyFile);
   const out = await call('POST', `/api/v3/workspaces/${WORKSPACE}/chat/channels/${channel}/messages`, {
     type: 'message',
-    content: readBody(bodyFile),
+    content: body,
     content_format: 'text/md',
   });
-  if (!out.res.ok) die('send chat message', out);
-  console.log(`\nPosted to channel ${channel}. Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
-  reportLimits(out.res);
+  if (out.res.ok) {
+    console.log(`\n${busFallback.renderRouteLine({ via: 'chat', channel })} Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
+    reportLimits(out.res);
+  } else if (flag('no-fallback')) {
+    die('send chat message', out);
+  } else {
+    const why = `HTTP ${out.res.status} ${String(out.json?.err || out.json?.error || out.text || '').slice(0, 200)}`.trim();
+    const saved = await saveUndeliveredAlarm({ text: body, channel, why });
+    if (!saved.ok) {
+      // BOTH surfaces refused, so nothing was delivered and the caller must
+      // not stamp this as announced. Exiting non-zero is what tells it that.
+      console.error(`\nsend chat message FAILED — ${why}`);
+      console.error(`and the "${busFallback.FALLBACK_TASK_NAME}" fallback ALSO failed — ${saved.why}`);
+      console.error('Nothing was delivered. This alarm is lost unless the caller retries.');
+      process.exit(1);
+    }
+    console.log(busFallback.renderRouteLine({ via: 'ticket', channel, why, url: saved.url }));
+  }
 
 } else if (cmd === 'pass-reconcile') {
   // THE FIRST THING A LOOP-BUILD PASS DOES (2026-09-02, task 86bbtmbpc).
@@ -5718,7 +5836,28 @@ async function stampLoopNote(taskId, text) {
     process.exit(1);
   }
   const out = await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text });
-  if (!out.res.ok) die('set loop-note field', out);
+  if (!out.res.ok) {
+    // TWO CAUSES THAT USED TO PRINT THE SAME THING (task 86bbwab1n).
+    //
+    // The field being ABSENT is benign and the skills say so: the pass carries
+    // on, only the note is missing. The field EXISTING and refusing writes is
+    // the opposite — the pass's claim is invisible and another pass may take
+    // the ticket. On 2026-09-08 the workspace ran out of custom-field usages
+    // and every stamp began failing with `Custom field usages exceeded for
+    // your plan`, which read exactly like "not set up yet" to anyone following
+    // the skill. busFallback.classifyFieldRefusal owns the distinction so the
+    // words can be tested without a network.
+    const refusal = busFallback.classifyFieldRefusal({
+      status: out.res.status,
+      body: String(out.json?.err || out.json?.error || out.text || ''),
+    });
+    if (refusal.kind === 'plan-exhausted') {
+      console.error(`\nset loop-note field FAILED — HTTP ${out.res.status}`);
+      for (const line of refusal.lines) console.error(line);
+      process.exit(1);
+    }
+    die('set loop-note field', out);
+  }
 
   // Verify from a fresh read — a 200 is not proof the value stuck.
   const after = await call('GET', `/api/v2/task/${taskId}`);

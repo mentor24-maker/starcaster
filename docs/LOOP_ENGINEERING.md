@@ -3228,6 +3228,24 @@ the round counting and both sides of the round-3/round-4 boundary).
 1. On the Loop Queue list: Columns → + → Create field → **Text**, named
    exactly **Loop note**. Add it to the List view. Until it exists the loops
    print `CANNOT STAMP` and carry on — the note is missing, nothing else is.
+
+   **A stamp can refuse for a second reason, and it is not benign.** On
+   2026-09-08 the workspace ran out of custom-field usages and every write to
+   the field began failing with `Custom field usages exceeded for your plan`
+   (task 86bbwab1n). The field EXISTS; it just will not take a value. That is
+   the opposite of "not set up yet": the Loop note is the only surface on
+   which a pass in flight is visible to another pass, so a refusal here means
+   the claim is **invisible** and a second pass may take the ticket — which is
+   the 2026-08-22 double-review failure (PR #362) with the guard switched off.
+   The two now print different things (`lib/busFallback.js`
+   → `classifyFieldRefusal`), and the exhausted one says outright what the
+   move is — which is **not** to pay for anything. Both times this has happened
+   the chat 400s and the field refusals arrived together, on an unchanged
+   *Free Forever* plan, and 2026-08-23's cleared itself in about sixteen hours;
+   the section below ("The party line is not the only way out") records that an
+   upgrade was proposed then and would have fixed nothing. Say it in the run
+   report, treat no empty Loop note as proof a ticket is free, and check
+   whether it is a window before you go looking for a permission.
 2. Create one ticket named **Loop heartbeat** in the list; put its id in
    `CLICKUP_HEARTBEAT_TASK` (Doppler) so `loop-heartbeat` has a home.
 
