@@ -1562,6 +1562,25 @@ export function getShellPageBackgroundStyle(
 export type ShellBackgroundLayers = {
   inlineBackground?: CSSProperties;
   backdrop?: { style: CSSProperties; opacity: number };
+  /**
+   * The resolved page background when it is a video with a clip to play, for
+   * the surface that can mount a real <video> layer for it.
+   *
+   * It is reported ALONGSIDE `inlineBackground` rather than instead of it: a
+   * video background paints its poster as an ordinary CSS background
+   * (`getBuilderBackgroundStyle`), and that still is the whole of the phone,
+   * reduced-motion and refused-autoplay fallback. So the surface keeps
+   * painting exactly what it painted before this field existed and the layer
+   * draws on top of it — the same arrangement section rows use, which is why
+   * the fallback cannot drift away from the real thing.
+   *
+   * A caller that cannot play video — the editor canvas, the theme wizard's
+   * pod, an email — simply ignores this field and shows the poster. That is
+   * not a gap: the builder canvas shows a SECTION's video background as its
+   * poster too, so the page background behaves the way an operator has already
+   * learnt a row background behaves.
+   */
+  video?: BackgroundSettings;
 };
 
 export function getShellBackgroundLayers(
@@ -1569,13 +1588,19 @@ export function getShellBackgroundLayers(
   theme: ThemeShellBackgroundSource
 ): ShellBackgroundLayers {
   const background = resolveShellPageBackground(pageBackground, theme);
+  // A video with no clip chosen yet is not a video layer — it is whatever its
+  // poster says, exactly as a section row treats the same half-filled setting.
+  const video =
+    background.mode === "video" && background.videoUrl ? { video: background } : {};
   const style = getBuilderBackgroundStyle(background);
-  if (!style) return {};
+  // No CSS answer at all — a video whose poster has not been chosen. The layer
+  // still has something to play, so it must survive this early return.
+  if (!style) return video;
   const layerOpacity = getBuilderBackgroundLayerOpacity(background);
   if (layerOpacity < 1) {
-    return { backdrop: { style, opacity: layerOpacity } };
+    return { backdrop: { style, opacity: layerOpacity }, ...video };
   }
-  return { inlineBackground: style };
+  return { inlineBackground: style, ...video };
 }
 
 function readBuilderThemeMargins(styles: BuilderThemeStyles | undefined) {

@@ -1,3 +1,31 @@
+## 2026-09-08 — A whole page can now sit on a video, not just one band (#663)
+
+A row on a page could already carry a video behind it. A page could not: the
+only way to get moving footage behind a whole site was to put one video row at
+the top and leave everything below it flat.
+
+Page Details → Background now offers **Video**, exactly the way a row's
+background does — same clip picker, same poster, same speed, trim, blur and
+focal point, with the same names in the same order. Choose one and the clip
+fills the browser window while the page's sections scroll over the top of it.
+A section that carries its own colour or picture still paints over the video,
+so the clip shows through only where the page is transparent, and that is what
+lets a page mix the two.
+
+There is exactly **one** video background in the whole system — the same piece
+of code a row uses (`BuilderBackgroundLayer`). That matters more than it
+sounds: it means the careful parts cannot drift apart. Phones still get the
+still picture instead of the clip, so nobody is charged for megabytes of
+someone else's decoration; a visitor who has asked their computer to reduce
+motion still gets the still picture; the layer still cannot swallow a click or
+be read out by a screen reader; and it still stops playing when it is not on
+screen. None of that had to be written a second time, so none of it can be
+fixed in one place and forgotten in the other.
+
+Four new checks drive a real browser over a page wearing a video and prove the
+two things that were new: that the clip stays put in the window while the page
+moves over it, and that the page's own content paints in front of it rather
+than behind. Each was broken on purpose first and watched to fail.
 ## 2026-09-07 — The tag page stops telling visitors a number that is not the tag's (#659)
 
 On the Delray tags page, a visitor who clicked "beginner tennis" saw a heading
