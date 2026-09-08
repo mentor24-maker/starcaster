@@ -14,9 +14,18 @@ one message you never saw.
 
 The cause was that the engine asked "did anything on this page have a hand
 edit?" and "did anything on this page get rewritten?" as two yes/no questions
-about the whole page, when the real question is about each copy. It now counts
-copies instead, so a page can be reported as rewritten and as partly-left-alone
-at the same time, which is what actually happened.
+about the whole page, when the real question is about each copy. It counts
+copies now.
+
+The report keeps the two facts apart on purpose, because they are different
+things and reading them as one is what produced the wrong message in the first
+place. "Skipped" still means what it has always meant — **pages this push did
+not write at all**, every copy on them hand-edited — and those are the pages
+the "Overwrite anyway?" button offers you. A page that WAS rewritten, and still
+carries an edit of yours the push stepped around, is now reported separately
+and counted in copies, so the message reads *"updated 2 pages. A hand-edited
+copy on 1 of those pages was left as it is"* rather than implying a third page
+you never had.
 
 Nothing about what gets written changed — hand edits were always safe. This was
 the builder failing to tell you so.

@@ -159,6 +159,45 @@ describe('what the operator reads', () => {
     // No skipped key at all (an older caller) must read exactly as before.
     expect(describePropagationOutcome('Menu', { updated: 5, failed: 0 }))
       .toBe('Saved "Menu" and updated 5 pages.');
+    // One page, singular verb. It read "1 page has local changes and were
+    // skipped" for as long as the clause has existed.
+    expect(describePropagationOutcome('Menu', { updated: 4, failed: 0, skipped: [{ name: 'Rates' }] }))
+      .toBe('Saved "Menu" and updated 4 pages. 1 page has local changes and was skipped.');
+  });
+
+  it('a preserved hand edit on a page that WAS written is counted in copies, and never added to the page count', () => {
+    // The arithmetic that sent the first attempt back. There is ONE page here:
+    // it was written for a clean copy's sake, and the hand-edited copy on it
+    // was left alone. Reporting it as "1 page ... was skipped" beside
+    // "updated 1 page" reads as two pages, and a Save & Publish had just put
+    // that same page live.
+    expect(describePropagationOutcome('Menu', {
+      updated: 1,
+      failed: 0,
+      skipped: [],
+      writtenWithPreservedEdits: [{ pageId: '1446', name: 'Block States', copies: 1 }],
+    })).toBe('Saved "Menu" and updated 1 page. A hand-edited copy on 1 of those pages was left as it is.');
+
+    // Copies, not pages: one page can preserve several.
+    expect(describePropagationOutcome('Menu', {
+      updated: 3,
+      failed: 0,
+      writtenWithPreservedEdits: [{ pageId: '1446', name: 'Block States', copies: 2 }],
+    })).toBe('Saved "Menu" and updated 3 pages. 2 hand-edited copies on 1 of those pages were left as they are.');
+
+    // Both facts at once, and they stay separate sentences about separate
+    // sets: `skipped` pages were NOT written, these ones were.
+    expect(describePropagationOutcome('Menu', {
+      updated: 2,
+      failed: 0,
+      skipped: [{ name: 'Rates' }],
+      writtenWithPreservedEdits: [{ pageId: '1', name: 'Block States', copies: 1 }, { pageId: '2', name: 'Home', copies: 1 }],
+    })).toBe('Saved "Menu" and updated 2 pages. 1 page has local changes and was skipped.'
+      + ' 2 hand-edited copies on 2 of those pages were left as they are.');
+
+    // An older route response with no such key reads exactly as before.
+    expect(describePropagationOutcome('Menu', { updated: 2, failed: 0, writtenWithPreservedEdits: [] }))
+      .toBe('Saved "Menu" and updated 2 pages.');
   });
 });
 

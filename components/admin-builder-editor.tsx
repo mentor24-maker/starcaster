@@ -1679,6 +1679,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           propagation?: {
             ok?: boolean; total?: number; updated?: number; failed?: number; runId?: string;
             skipped?: Array<{ pageId?: string; name?: string }>;
+            writtenWithPreservedEdits?: Array<{ pageId?: string; name?: string; copies?: number }>;
           };
         };
       }>(response, "Failed to save saved section.");
@@ -1693,6 +1694,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       // The route has always returned this tally; it used to be dropped, so a
       // fan-out that half failed reported the same "Saved." as a clean one.
       const outcome = describePropagationOutcome(data.savedSection.name, data.meta?.propagation);
+      // Armed off `skipped` — PAGES THIS PUSH DID NOT WRITE — and only off
+      // that. "Overwrite anyway?" must never offer a page this same save just
+      // wrote and (on a Save & Publish) already published; a page that was
+      // written while a hand edit on it was preserved is reported in the
+      // sentence above instead, from `writtenWithPreservedEdits`.
       const skippedForDrift = data.meta?.propagation?.skipped ?? [];
       setDriftedSkip(
         skippedForDrift.length
