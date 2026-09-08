@@ -1,3 +1,28 @@
+## 2026-09-08 — Video can now play behind a single column, not just a whole row (#665)
+
+A row in the Builder can be split into columns. A background video could only
+go behind a whole row or a whole page, so "footage behind just this half"
+was not something you could ask for — you had to fake it by splitting the
+content into two rows and hoping the seam did not show.
+
+Each column can now carry its own video. One column plays a clip while the
+column beside it stays completely plain, with a clean edge between them and no
+footage spilling across the gap. It is the same Video setting you already know
+from the row background, offered on the cell — nothing new to learn.
+
+Under the hood it is the same single piece of video machinery the row and page
+backgrounds already use, rather than a second copy written for cells. That
+matters for the things nobody sees until they matter: the clip still pauses
+when it scrolls off the screen, still gives way to a still picture for people
+who have asked their computer to reduce motion, and still falls back to the
+poster image on phones instead of spending someone's mobile data on decoration.
+All of that works per column now because it was never rewritten.
+
+One thing worth knowing before reaching for it: a row of four video cells is
+noticeably rough. A background clip is drawn twice so it can dissolve smoothly
+at the loop point, so four video columns means eight videos playing at once.
+Two or three is comfortable; four is not, and that is noted rather than fixed.
+
 ## 2026-09-07 — A drop shadow can now be pointed, not just nudged (#645)
 
 A shadow under a picture was set by two numbers: how far right it sat, and how
