@@ -215,6 +215,17 @@ export type BackgroundSettings = {
    * supply a size — see the Video URL box in builder-background-controls. A
    * size left behind from the previous clip would name the wrong number with
    * complete confidence, which is worse than saying nothing.
+   *
+   * ON A ROW (SECTION) BACKGROUND IT IS INERT UNTIL 86bbwfc8n LANDS, and so is
+   * every other video key. The vanilla builder's save serializer rebuilds each
+   * row background from scratch — `normalizeBackgroundSettings` in
+   * `public/js/builder.js`, whose mode whitelist has no `video` in it — so a
+   * row video background is turned back into `none` on every Save Page and the
+   * video keys are dropped with it. Nothing here causes that and nothing here
+   * can work around it; it predates this field. The page background is not put
+   * through that serializer at all — the vanilla save payload never rebuilds it
+   * — so this is a row-background problem rather than a universal one. The
+   * measurements are on 86bbwfc8n.
    */
   videoBytes?: number;
   /** Playback rate, 0.25–2. */

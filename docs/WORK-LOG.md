@@ -22,6 +22,13 @@ And it is thrown away the moment you type a different video into the box, which
 matters more than it sounds: a leftover number would confidently describe the
 wrong file, and a wrong number nobody can spot is worse than no number at all.
 
+**One thing to know while you use it.** A video set as a *row* background does
+not survive pressing Save Page — it comes back as None — and it has never
+survived, on this change or before it. That is a separate bug, already written
+up and waiting its turn, and this work neither caused it nor could fix it. Until
+that one lands, the size warning is doing its job in the moment you pick the
+clip; it just has nothing left to describe after a save.
+
 ## 2026-09-07 — A drop shadow can now be pointed, not just nudged (#645)
 
 A shadow under a picture was set by two numbers: how far right it sat, and how
