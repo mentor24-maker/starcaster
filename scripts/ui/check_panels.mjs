@@ -1211,6 +1211,49 @@ if (panelsSeen === 0) {
 }
 
 /*
+ * A SEAM SWEEP THAT MEASURED NOTHING IS A 2, NOT A GREEN RUN.
+ *
+ * Round 1 of this ticket printed a note reading "That is not a pass" beside
+ * exit 0 — the exact shape `harness-exit.mjs` and DOCTRINE §5.33 were written
+ * against, reproduced inside the check built to close it. Renaming the chrome
+ * selector to something that matches no element (the shape a React refactor
+ * takes) left all 31 recorded panels ungraded and the whole assertion dead,
+ * under an `OK` headline. The exit code is what gets read, so the exit code is
+ * what has to move.
+ */
+if (!seamCompared) {
+  blind.push(
+    'The chrome/column seam was NOT MEASURED — no panel presented both a chrome strip\n' +
+    `and a settings column stacked with it, so all ${SEAM_BASELINE.length} recorded panel(s) went ungraded.\n` +
+    'Zero comparisons is never a green result. Either the fixture rendered no such panel\n' +
+    '(`npm run seed:ui-fixture`), or the chrome selector stopped matching anything — which\n' +
+    'a rename under components/builder/ does silently. An instrument problem either way,\n' +
+    'which is why this is a 2 rather than a 1.');
+}
+
+/*
+ * A RECORDED PANEL THE RUN NEVER REACHED IS A 2 AS WELL — the same rule, per
+ * entry. `assertSeam` states it over the code that computes `unreached`
+ * ("A RECORDED PANEL THAT WAS NEVER REACHED IS NOT A PASS") and round 1 then
+ * reported it as a note beside exit 0, so the code disagreed with its own
+ * comment. A module that stops being seeded, or is renamed, leaves a recorded
+ * defect permanently unverifiable while the gate stays green.
+ *
+ * It matters most while this baseline is EMPTYING. 86bbq065f straightens these
+ * panels and deletes their entries as it goes; a run that quietly stopped
+ * reaching them would read exactly like the fix succeeding.
+ */
+if (seamUnreached.size) {
+  blind.push(
+    `${seamUnreached.size} panel(s) recorded in scripts/ui/panel-seam-baseline.json were NEVER\n` +
+    `REACHED by this run: ${[...seamUnreached.keys()].join(', ')}.\n` +
+    'Nothing about them was verified — not that they are still staggered, and not that they\n' +
+    'are fixed. Either the fixture no longer renders that module, or its panel was skipped,\n' +
+    'or its name changed. Re-seed (`npm run seed:ui-fixture`) or correct the entry: the\n' +
+    'baseline may only ever shrink for a reason this check actually MEASURED.');
+}
+
+/*
  * FAILURES FIRST, THEN THE REFUSAL. Both guards above used to exit 2 on the
  * spot, ahead of this block — so a partial fixture plus a genuine W0/W9
  * violation on the panels that DID render reported as a broken instrument and
@@ -1266,8 +1309,9 @@ function seamNote() {
 
   if (!seamCompared) {
     lines.push('[check:panels] NOTE — no panel presented both a chrome strip and a settings column');
-    lines.push('  stacked with it, so the chrome/column seam was not measured at all. That is not a');
-    lines.push('  pass: it means the fixture rendered no such panel (`npm run seed:ui-fixture`).');
+    lines.push(`  stacked with it, so the chrome/column seam was not measured at all and all ${recorded}`);
+    lines.push('  recorded panel(s) went ungraded. That is not a pass, and this run does not report it');
+    lines.push('  as one — it refuses with COULD NOT TAKE A READING (exit 2); the refusal says how to fix it.');
     return lines.join('\n');
   }
 
@@ -1291,7 +1335,8 @@ function seamNote() {
       lines.push(`      \u00b7 ${name} [not seen at ${[...new Set(widths)].join('/')}px]`);
     }
     lines.push('    Either the fixture no longer renders that module, or its panel was skipped');
-    lines.push('    for a reason listed below. A record nobody reads is how a defect outlives its ticket.');
+    lines.push('    for a reason listed below. A record nobody reads is how a defect outlives its ticket,');
+    lines.push('    so this run refuses too — COULD NOT TAKE A READING (exit 2), never a green pass.');
   }
 
   if (seamLabelOnly.size) {
@@ -1335,7 +1380,15 @@ if (code === EXIT_FAIL) {
   process.exit(1);
 }
 
-if (code === EXIT_CANNOT_TELL) cannotTell('check:panels', blind.join('\n\n'));
+if (code === EXIT_CANNOT_TELL) {
+  // Both notes print here too. The comment over `seamNote` promises them on
+  // EVERY run, and this refusal is now a path the seam assertion itself
+  // reaches — leaving them out would make that comment describe the opposite
+  // of its code, which this file has already paid for once.
+  console.error(`\n${uncomparableNote()}`);
+  console.error(seamNote());
+  cannotTell('check:panels', blind.join('\n\n'));
+}
 
 console.log(
   `[check:panels] OK — W0 and W9 hold across ${panelsSeen} panel(s) `

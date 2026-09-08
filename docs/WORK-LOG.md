@@ -35,6 +35,22 @@ objected that the panel was fine. It was right and I was wrong — I had measure
 a full-width box, which by design starts further left than the others. That is
 the check doing its job before the work had even shipped, which is the best
 evidence it works that I could offer.
+
+Review sent this back once, and the catch was a good one: the new rule could
+still go completely blind and report a green pass. If the checker lost track of
+where the top block lives — which an ordinary bit of tidying-up elsewhere in the
+code would do without anyone noticing — it measured nothing at all, printed a
+note politely explaining that this was not a pass, and then reported a pass
+anyway. The same thing happened to a panel that quietly stopped appearing on the
+test page: its entry sat in the list, unchecked forever, under a green tick.
+That is the exact fault this whole job was written to fix, reproduced one level
+down inside the fix. Both now stop the run with "could not take a reading",
+which is a distinct third answer from pass and fail and is the one everything
+else here already uses when an instrument cannot see. It matters most over the
+next few weeks: the straightening job empties that list as it goes, and a
+checker that had gone blind would make an emptied list look exactly like
+success.
+
 ## 2026-09-07 — The cleanup found the half-finished work, and the next job branched over it anyway (#644)
 
 Yesterday's fix (#637) taught the overnight cleanup to look on the Macs before
