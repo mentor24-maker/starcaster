@@ -69,6 +69,24 @@ carries the name of the module that wrote it. And the comment in that file said
 the memory "lives in the open panel and is gone when it closes", which was never
 true; it is corrected, because a note claiming a safety that does not exist is
 the thing somebody trusts later.
+
+A third look found the same defect once more, arriving a way nobody had tried.
+Naming the module on that note settled which module was allowed to *read* it —
+but there was still only ever **one note**, so the moment a second module had a
+direction picked on it, the first module's note was thrown away and its box
+went straight back to the number the pixels work out to. Pick 15 on the photo,
+then pick 45 on the slideshow, and the photo's box reads 16 again — while the
+shadow itself has not moved a pixel. That is the very first bug on this ticket,
+returning through a door neither earlier check opened, because both of them
+only ever drove one module at a time.
+
+There is now one note per module instead of one note in total, so a direction
+picked on one panel survives any number of picks made on the others. Measured
+in a real browser with three modules open at once: each keeps its own, and the
+photo still says 15 after the other two have been set to 45 and 120. The test
+that catches it drives two modules, which nothing in the suite had done before
+— it fails on the old code with exactly the wrong number the panel was showing.
+
 ## 2026-09-07 — The cleanup found the half-finished work, and the next job branched over it anyway (#644)
 
 Yesterday's fix (#637) taught the overnight cleanup to look on the Macs before
