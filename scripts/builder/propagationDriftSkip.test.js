@@ -129,6 +129,11 @@ test('a page whose copy was hand-edited (drifted from the previous master) is sk
     assert.equal(result.total, 2, 'both pages carry a matching canonical instance');
     assert.equal(result.updated, 1, 'only Home was actually written');
     assert.deepEqual(result.skipped, [{ pageId: '2', name: 'Rates' }]);
+    assert.deepEqual(
+      result.writtenWithPreservedEdits,
+      [],
+      'Rates was not written at all, so it belongs in `skipped` and nowhere else'
+    );
 
     assert.equal(patchCalls.length, 1, 'the drifted page must never be PATCHed');
     assert.equal(patchCalls[0].query.includes('id=eq.1'), true);
@@ -237,4 +242,172 @@ test('id/savedSectionId/canonical differing between the instance and the previou
   const { hasSectionDrifted } = require('../../lib/builder/document.js');
   const instance = { ...PREVIOUS_MASTER, id: 'inst-77' };
   assert.equal(hasSectionDrifted(instance, PREVIOUS_MASTER), false);
+});
+
+/* ---------------------------------------------- one page, more than one copy
+ *
+ * Everything above gives each page exactly ONE copy of the master, which is
+ * why the bug below survived: `drifted` and `changed` are per PAGE, and with
+ * one copy per page they can never disagree. A page may hold several sections
+ * following the same master, and then the two flags answer different
+ * questions — landmine 17 / DOCTRINE §5.30, the same slip that made a dialog
+ * name a page as left alone and then publish it.
+ */
+
+/** A page carrying several sections, so per-copy and per-page can disagree. */
+function mixedPageRow(id, name, sections) {
+  return {
+    id,
+    name,
+    slug: name.toLowerCase(),
+    layout_sections: writeLayoutSectionsToRow({ pageBackground: {}, theme: {}, sections }),
+    updated_at: new Date(0).toISOString(),
+    created_at: new Date(0).toISOString(),
+  };
+}
+
+test('one page holding a clean copy AND a drifted one is UPDATED, names the preserved copy, and is never called skipped or overwritten', async () => {
+  // The fixture from the report: page "Block States" carries two sections
+  // following one master, one Following and one Changed.
+  const pages = [
+    mixedPageRow(1, 'Block States', [
+      section('old copy'),                            // clean — this push rewrites it
+      section('HAND-EDITED HERE', { id: 'sec-2' }),   // drifted — must be left alone
+    ]),
+  ];
+  const { mod, patchCalls, restore } = withMockedPagesStore(pages);
+  try {
+    const result = await mod.propagateCanonicalSection(SAVED_SECTION_ID, NEW_MASTER, null, {
+      previousSection: PREVIOUS_MASTER,
+    });
+
+    assert.equal(result.updated, 1, 'the page IS written, for the clean copy');
+    assert.deepEqual(
+      result.overwritten,
+      [],
+      'nothing was overwritten — overwriteDrifted was false and the drifted copy was left as it was'
+    );
+    // This assertion is the meaning of the word, and it is the one that sent
+    // the first attempt back: `skipped` is PAGES THIS PUSH DID NOT WRITE. Put
+    // this page in it and the toast counts it twice ("updated 1 page. 1 page
+    // was skipped"), and the "Overwrite anyway?" banner offers to overwrite a
+    // page a Save & Publish has already published.
+    assert.deepEqual(result.skipped, [], 'a page that WAS written is never in `skipped`');
+    assert.deepEqual(
+      result.updatedPages,
+      [{ pageId: '1', name: 'Block States' }],
+      'and it is in updatedPages, so a Save & Publish publishes it'
+    );
+    assert.deepEqual(
+      result.writtenWithPreservedEdits,
+      [{ pageId: '1', name: 'Block States', copies: 1 }],
+      'the copy that was left alone has to be named, or the operator is never told his edit survived'
+    );
+
+    // The evidence that "skipped" is the truthful word: the drifted copy's own
+    // text is still in the body that was written.
+    assert.equal(patchCalls.length, 1);
+    const written = patchCalls[0].body.layout_sections;
+    const texts = written.sections.map((s) => s.modules[0].text);
+    assert.deepEqual(texts, ['new copy', 'HAND-EDITED HERE'], 'the hand edit survives the push untouched');
+  } finally {
+    restore();
+  }
+});
+
+test('a FORCED push on that same mixed page reports it as OVERWRITTEN and not as skipped', async () => {
+  const pages = [
+    mixedPageRow(1, 'Block States', [
+      section('old copy'),
+      section('HAND-EDITED HERE', { id: 'sec-2' }),
+    ]),
+  ];
+  const { mod, patchCalls, restore } = withMockedPagesStore(pages);
+  try {
+    const result = await mod.propagateCanonicalSection(SAVED_SECTION_ID, NEW_MASTER, null, {
+      previousSection: PREVIOUS_MASTER,
+      overwriteDrifted: true,
+    });
+
+    assert.equal(result.updated, 1);
+    assert.deepEqual(result.overwritten, [{ pageId: '1', name: 'Block States' }], 'the forced overwrite is named');
+    assert.deepEqual(result.skipped, [], 'nothing was left alone on a forced push');
+    assert.deepEqual(result.writtenWithPreservedEdits, [], 'and nothing was preserved either — the force flattened it');
+
+    const written = patchCalls[0].body.layout_sections;
+    const texts = written.sections.map((s) => s.modules[0].text);
+    assert.deepEqual(texts, ['new copy', 'new copy'], 'the force really did flatten both copies');
+  } finally {
+    restore();
+  }
+});
+
+test('two hand-edited copies on one written page are counted as TWO copies, on one page', async () => {
+  // The count is in copies because the sentence the operator reads is in
+  // copies. A page-shaped count here would say "1" about two preserved edits.
+  const pages = [
+    mixedPageRow(1, 'Block States', [
+      section('old copy'),                              // clean — rewritten
+      section('HAND-EDITED HERE', { id: 'sec-2' }),     // drifted — left alone
+      section('AND EDITED HERE TOO', { id: 'sec-3' }),  // drifted — left alone
+    ]),
+  ];
+  const { mod, patchCalls, restore } = withMockedPagesStore(pages);
+  try {
+    const result = await mod.propagateCanonicalSection(SAVED_SECTION_ID, NEW_MASTER, null, {
+      previousSection: PREVIOUS_MASTER,
+    });
+
+    assert.equal(result.updated, 1, 'one page written');
+    assert.deepEqual(result.skipped, []);
+    assert.deepEqual(result.writtenWithPreservedEdits, [{ pageId: '1', name: 'Block States', copies: 2 }]);
+
+    const texts = patchCalls[0].body.layout_sections.sections.map((s) => s.modules[0].text);
+    assert.deepEqual(texts, ['new copy', 'HAND-EDITED HERE', 'AND EDITED HERE TOO'], 'both hand edits survive');
+  } finally {
+    restore();
+  }
+});
+
+test('a page written with a preserved edit sits in updatedPages and in the new bucket, and in neither of the other two', async () => {
+  // The bucket arithmetic itself, asserted directly: `skipped` is disjoint
+  // from `updatedPages` (the toast adds them), the new bucket is a subset of
+  // it (the toast must NOT add that), and `overwritten` is empty unless a
+  // force run really flattened something.
+  const pages = [
+    mixedPageRow(1, 'Block States', [
+      section('old copy'),
+      section('HAND-EDITED HERE', { id: 'sec-2' }),
+    ]),
+    pageRow(2, 'Rates', section('HAND-EDITED HERE')), // wholly drifted — not written
+    pageRow(3, 'Home', section('old copy')),          // wholly clean — written
+  ];
+  const { mod, restore } = withMockedPagesStore(pages);
+  try {
+    const result = await mod.propagateCanonicalSection(SAVED_SECTION_ID, NEW_MASTER, null, {
+      previousSection: PREVIOUS_MASTER,
+    });
+
+    const updatedIds = result.updatedPages.map((p) => p.pageId).sort();
+    const skippedIds = result.skipped.map((p) => String(p.pageId)).sort();
+    const preservedIds = result.writtenWithPreservedEdits.map((p) => p.pageId).sort();
+
+    assert.deepEqual(updatedIds, ['1', '3']);
+    assert.deepEqual(skippedIds, ['2']);
+    assert.deepEqual(preservedIds, ['1']);
+    assert.deepEqual(result.overwritten, []);
+
+    assert.equal(
+      skippedIds.some((id) => updatedIds.includes(id)),
+      false,
+      '`skipped` and `updatedPages` must stay disjoint — the toast adds them together'
+    );
+    assert.equal(
+      preservedIds.every((id) => updatedIds.includes(id)),
+      true,
+      'the preserved bucket is a subset of the pages written, so its clause must not add to the count'
+    );
+  } finally {
+    restore();
+  }
 });

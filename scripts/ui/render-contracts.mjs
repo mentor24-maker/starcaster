@@ -97,6 +97,25 @@ const VIDEO_SECTION = {
 };
 
 /**
+ * THE PAGE-LEVEL video background — the same clip, set on the PAGE rather than
+ * on a row, with two spacer sections so the page is tall enough to scroll past
+ * it. The subject row carries no background of its own, which is what lets the
+ * clip show through it; the contracts below check both halves of that.
+ */
+const VIDEO_PAGE = {
+  layout: 'single',
+  spacers: 2,
+  pageBackground: {
+    mode: 'video',
+    videoUrl: '/images/render-fixture-background.mp4',
+    posterUrl: '/images/render-fixture-background-poster.jpg',
+    videoSpeed: 1,
+    videoLoop: true,
+  },
+  modules: [{ type: 'heading', text: 'Text over a page video', settings: {} }],
+};
+
+/**
  * ─────────────────────────────────────────────────────────────────────────
  * THE SETTINGS SWEEP — coverage nobody has to remember to write.
  *
@@ -862,6 +881,81 @@ export const RENDER_CONTRACTS = [
       }
       return null;
     },
+  },
+
+  {
+    id: 'page-video-background-is-fixed-to-the-window',
+    why:
+      'A PAGE video is the same element as a row video and differs by exactly one CSS declaration: ' +
+      '`position: fixed`, which is what makes the clip fill the window while the sections scroll ' +
+      'over it. Lose that declaration and it becomes an absolutely-positioned layer inside a shell ' +
+      'as tall as the whole page — the clip stretches to the full document height and scrolls away ' +
+      'with the content, which reads as a badly-cropped picture rather than as a broken setting. ' +
+      'Nothing else can see it: the element is present, playing, and in the right place at the top ' +
+      'of the page, so every static check and every screenshot of the first fold agrees it is fine.',
+    section: { ...VIDEO_PAGE },
+    selector: 'video[data-builder-video-background="page"]',
+    read: ['objectFit', 'position', 'zIndex'],
+    expect(sample) {
+      if (sample.styles.position !== 'fixed') {
+        return `the page video background is \`position: ${sample.styles.position}\`, not fixed — it would ` +
+          'scroll away with the page instead of staying in the window behind it.';
+      }
+      if (sample.styles.objectFit !== 'cover') {
+        return `the page video background is \`object-fit: ${sample.styles.objectFit || 'none'}\`, not cover — ` +
+          'it would letterbox or stretch instead of filling the window.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'page-video-background-sits-behind-the-page',
+    why:
+      'The whole page has to paint IN FRONT of a full-window element, and the only thing making that ' +
+      'true is `.builder-viewport-shell-content` carrying its own stacking context. Without it the ' +
+      'clip covers every section on the site — text, navigation, forms — and the page reads as having ' +
+      'gone blank rather than as a background being in the wrong layer. It is also the exact failure ' +
+      'a fixed layer invites, which is why it is asserted rather than assumed.',
+    section: { ...VIDEO_PAGE },
+    selector: '.builder-viewport-shell-content',
+    read: ['position', 'zIndex'],
+    expect(sample) {
+      if (sample.styles.position === 'static') {
+        return 'the page content is `position: static`, so its z-index does nothing and the video paints over it.';
+      }
+      const zIndex = Number(sample.styles.zIndex);
+      if (!Number.isFinite(zIndex) || zIndex < 1) {
+        return `the page content sits at z-index ${sample.styles.zIndex || 'auto'}, which is not above the ` +
+          'page video layer (0) — every section on the site would be hidden behind the clip.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'page-video-background-honours-reduce-motion',
+    why:
+      'A full-WINDOW looping clip is louder than a full-bleed row, and it is on every screen of the ' +
+      'site rather than one band of one page. The fallback is the poster the shell already paints, ' +
+      'so honouring this costs nothing — and it is invisible to everyone not affected by it, which ' +
+      'is precisely why it needs a check rather than a reviewer.',
+    section: { ...VIDEO_PAGE },
+    selector: 'video[data-builder-video-background="page"]',
+    emulate: { reducedMotion: 'reduce' },
+    absent: true,
+  },
+
+  {
+    id: 'page-video-background-falls-back-to-the-poster-on-phones',
+    why:
+      'Megabytes of a visitor\'s cell data, spent on decoration, on every page of the site rather ' +
+      'than on one row of one page. Same default as a row background and the same silent failure ' +
+      'mode: nobody testing on a desktop can see that phones are being charged for the clip.',
+    section: { ...VIDEO_PAGE },
+    selector: 'video[data-builder-video-background="page"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    absent: true,
   },
 
   {
