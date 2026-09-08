@@ -3,7 +3,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { defaultWatches, handbackTarget, mergeEnabled, sweepVerdict } = require('./busRelayPlan.js');
+const {
+  defaultWatches, handbackTarget, handbackDestination, mergeEnabled, sweepVerdict,
+} = require('./busRelayPlan.js');
 
 const watches = defaultWatches({ agentResponseList: 'AR', loopQueueList: 'LQ' });
 const agentResponse = watches.find((w) => w.list === 'AR');
@@ -887,7 +889,7 @@ test('the relay reads the durable marker as delivery, which is the whole of the 
     'an already-relayed comment must be recorded as DELIVERED, not merely skipped');
 
   const authorizedAt = RELAY_SRC.indexOf('const authorized = answered.state ===');
-  const targetAt = RELAY_SRC.indexOf("const target = handbackTarget(watch, t.status?.status, authorized)");
+  const targetAt = RELAY_SRC.indexOf("const plan = handbackDestination(watch, t.status?.status, authorized, handbackPr)");
   assert.ok(authorizedAt > -1 && targetAt > authorizedAt,
     'the hand-back must be decided from the durable verdict, never from this pass\'s `fresh` count');
 
@@ -1014,4 +1016,99 @@ test('a completed hand-back marks the answer, and only after the move verified',
     'marking an answer spent before the move is verified would suppress the retry this ticket exists to add');
   assert.match(RELAY_SRC, /handled: \(c\) => handbackDoneIds\.has\(String\(c\.id\)\)/,
     'and the relay must READ that marker, or writing it changes nothing');
+});
+
+
+/* ------------------------------------------------------------------ *
+ * WHERE AN ANSWERED TICKET GOES (2026-09-08, task 86bbw596q).
+ *
+ * The handback used to be a flat map: every answered "needs your input"
+ * ticket went to `Queued`, which is a status `loop-build` claims from — even
+ * when the ticket's own work was already merged and its branch deleted. That
+ * is 86bbw4dch on 2026-09-07 (PR #650): merged, answered, handed back as
+ * claimable work, caught by hand within minutes.
+ * ------------------------------------------------------------------ */
+
+test('an answered ticket whose work is ALREADY MERGED does not go back in the build queue', () => {
+  const plan = handbackDestination(loopQueue, 'needs your input', 1, { number: 650, state: 'MERGED' });
+  assert.equal(plan.act, 'move');
+  assert.equal(plan.target, 'Live', 'merged work belongs in Live, where the relay\'s own merge path puts it');
+  // The claim guard reads status alone, so the destination is the ONLY thing
+  // standing between a merged ticket and a build pass claiming it.
+  const claimable = ['Queued', 'Rework'];
+  assert.equal(claimable.includes(plan.target), false,
+    'a merged ticket landed in a status loop-build claims from — this is the bug');
+  assert.match(plan.why, /#650/, 'the reason must name the pull request it read');
+});
+
+test('ClickUp and gh spell state differently, and neither casing may claim-queue merged work', () => {
+  // gh answers "MERGED"; nothing guarantees a future caller keeps the case.
+  assert.equal(handbackDestination(loopQueue, 'needs your input', 1, { number: 650, state: 'merged' }).target, 'Live');
+  assert.equal(handbackDestination(loopQueue, 'NEEDS YOUR INPUT', 1, { number: 650, state: ' Merged ' }).target, 'Live');
+});
+
+test('the ordinary case is unchanged: an answered ticket with no PR trail still goes to Queued', () => {
+  // This is the case the hand-back exists for (task 86bbh9g7k) and the one it
+  // must not regress — a ticket nobody has built belongs back in the queue.
+  const plan = handbackDestination(loopQueue, 'needs your input', 1, null);
+  assert.equal(plan.act, 'move');
+  assert.equal(plan.target, 'Queued');
+  assert.match(plan.why, /nothing has been built/);
+  // And undefined must read the same as null: the caller passes whatever its
+  // trail lookup returned.
+  assert.equal(handbackDestination(loopQueue, 'needs your input', 1).target, 'Queued');
+});
+
+test('an answered ticket with an OPEN pull request goes to Rework, where migrate-rework says it belongs', () => {
+  const plan = handbackDestination(loopQueue, 'needs your input', 1, { number: 651, state: 'OPEN' });
+  assert.equal(plan.act, 'move');
+  assert.equal(plan.target, 'Rework',
+    'a queued ticket with a branch behind it is one a build pass misreads — that is what migrate-rework asserts');
+});
+
+test('a pull request closed WITHOUT merging goes back to Queued — GitHub deleted the branch, so there is nothing to continue', () => {
+  const plan = handbackDestination(loopQueue, 'needs your input', 1, { number: 652, state: 'CLOSED' });
+  assert.equal(plan.act, 'move');
+  assert.equal(plan.target, 'Queued');
+});
+
+test('a pull request whose state could not be read moves NOTHING and says so', () => {
+  // DOCTRINE 3.11: "could not check" must never read as "clear". Guessing
+  // Queued here is exactly the bug; guessing Live would close live work.
+  const plan = handbackDestination(loopQueue, 'needs your input', 1,
+    { number: 653, state: '', why: 'the `gh` command is not installed on this machine' });
+  assert.equal(plan.act, 'cannot-tell');
+  assert.equal(plan.target, null, 'a ticket whose PR could not be read must stay exactly where it is');
+  assert.match(plan.why, /gh` command is not installed/, 'and the reason it could not tell must survive to the report');
+});
+
+test('the doctrine checkpoint still comes first: no authorization, no move, whatever the PR says', () => {
+  for (const pr of [null, { number: 650, state: 'MERGED' }, { number: 651, state: 'OPEN' }]) {
+    const plan = handbackDestination(loopQueue, 'needs your input', 0, pr);
+    assert.equal(plan.act, 'skip');
+    assert.equal(plan.target, null);
+  }
+});
+
+test('"ready to launch" and the Agent Response list are still released by nothing', () => {
+  assert.equal(handbackDestination(loopQueue, 'ready to launch', 1, { number: 650, state: 'MERGED' }).act, 'skip');
+  assert.equal(handbackDestination(agentResponse, 'pending response', 1, null).act, 'skip');
+  assert.equal(handbackDestination(loopQueue, 'building', 1, null).act, 'skip');
+});
+
+test('the relay decides the hand-back from the ticket, and reports a reading it could not take', () => {
+  // The pure function above is only half of it. Nothing but the source can pin
+  // that the relay actually resolves the trail and passes it in — without
+  // these, every unit test here passes while the flat map is still live.
+  assert.match(RELAY_SRC, /const trailPr = releasesThisStatus \? findPullRequest\(/,
+    'the relay must read this ticket\'s own "PR opened:" trail');
+  assert.match(RELAY_SRC, /const handbackPr = trailPr \? readPullRequestState\(trailPr\) : null;/,
+    'and resolve that pull request\'s state before deciding');
+  assert.match(RELAY_SRC, /if \(plan\.act === 'cannot-tell'\) \{/,
+    'a state it could not read must stop the move, not fall through to one');
+  assert.match(RELAY_SRC, /unchecked\.push\(`\$\{t\.id\}: his answer was delivered, but \$\{plan\.why\}`\)/,
+    'and it must be reported, or "could not check" reads as a clean pass');
+  // The receipt names the status the move will ask for, not a hard-coded one.
+  assert.match(RELAY_SRC, /const simTarget = handbackDestination\(watch, t\.status\?\.status, 1, handbackPr\)\.target;/,
+    'the fallback receipt must name the destination this ticket is actually going to');
 });
