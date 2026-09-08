@@ -96,6 +96,32 @@ const VIDEO_SECTION = {
   modules: [{ type: 'heading', text: 'Text over video', settings: {} }],
 };
 
+/*
+ * A video in the LEFT cell of a two-column row, and nothing in the right one.
+ *
+ * The asymmetry is the whole scene. A per-cell background that leaked would
+ * leak sideways, so a row with footage in both cells could not tell a working
+ * layer from one bleeding across the gap — both would look like video
+ * everywhere. The right cell is the control, and it carries a module of its
+ * own so there is something visible for stray footage to land on.
+ */
+const CELL_VIDEO_SECTION = {
+  layout: 'two-column',
+  cellBackgrounds: {
+    left: {
+      mode: 'video',
+      videoUrl: '/images/render-fixture-background.mp4',
+      posterUrl: '/images/render-fixture-background-poster.jpg',
+      videoSpeed: 1,
+      videoLoop: true,
+    },
+  },
+  modules: [
+    { type: 'heading', text: 'Text over cell video', settings: {}, column: 'left' },
+    { type: 'heading', text: 'Plain neighbour', settings: {}, column: 'right' },
+  ],
+};
+
 /**
  * ─────────────────────────────────────────────────────────────────────────
  * THE SETTINGS SWEEP — coverage nobody has to remember to write.
@@ -862,6 +888,144 @@ export const RENDER_CONTRACTS = [
       }
       return null;
     },
+  },
+
+  /*
+   * ── THE CELL'S OWN VIDEO ──────────────────────────────────────────────
+   *
+   * The same shared layer as the row's, mounted on a smaller surface, so
+   * these deliberately mirror the row contracts above rather than inventing
+   * new questions. What is genuinely new is the CLIPPING one: a row's layer
+   * has nothing beside it to spill onto, and a cell's has the next column.
+   */
+  {
+    id: 'cell-video-background-renders-a-real-video',
+    why:
+      'Video is the one background mode that is not an element-free CSS property, and the cell ' +
+      'paints the POSTER as its own background either way. So a cell whose layer never mounts looks ' +
+      'exactly like one working correctly with a slow clip — a still picture, no error, nothing to ' +
+      'see. This is the contract that tells those two apart.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: 'video[data-builder-video-background="cell"]',
+    read: ['objectFit', 'position'],
+    expect(sample) {
+      if (sample.styles.objectFit !== 'cover') {
+        return `the cell video is \`object-fit: ${sample.styles.objectFit || 'none'}\`, not cover — ` +
+          'it would letterbox or stretch instead of filling the cell.';
+      }
+      if (sample.styles.position !== 'absolute') {
+        return `the cell video is \`position: ${sample.styles.position}\` — it is in the cell's flow ` +
+          'rather than behind it, so it would push the column\'s content down.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-is-clipped-to-its-own-cell',
+    why:
+      'THE reason this is a per-cell feature and not a per-row one. The layer is scaled to cover, so ' +
+      'without `overflow: hidden` on the column the footage spills sideways over the column beside ' +
+      'it — one cell\'s background silently painting over its neighbour\'s words. It is invisible to ' +
+      'every other check here: the video renders, the poster is right, the z-index is right, and the ' +
+      'row still looks like a row.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '.builder-preview-column-layered',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow !== 'hidden') {
+        return `the cell carrying the video is \`overflow: ${sample.styles.overflow || 'visible'}\` — its ` +
+          'footage is free to bleed across the gap into the next column.';
+      }
+      if (sample.styles.position === 'static') {
+        return 'the cell is `position: static`, so the absolutely positioned video escapes it entirely ' +
+          'and sizes itself against the row (or the page) instead.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-stays-behind-the-words',
+    why:
+      'The video is absolutely positioned inside the cell and the modules are ordinary in-flow ' +
+      'siblings, so without the content rung the footage paints OVER the operator\'s text. That is ' +
+      'the one outcome a background must never produce, and it is the same failure the cell tint ' +
+      'screen already guards — this one arrives through a different element.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '.builder-preview-column-layered > .builder-preview-module',
+    read: ['position', 'zIndex'],
+    expect(sample) {
+      if (sample.styles.position === 'static') {
+        return 'the module is `position: static`, so its z-index does nothing and the video paints over it.';
+      }
+      const zIndex = Number(sample.styles.zIndex);
+      if (!Number.isFinite(zIndex) || zIndex < 1) {
+        return `the module sits at z-index ${sample.styles.zIndex || 'auto'}, which is not above the cell ` +
+          'video layer (0) — the words in that column would be behind the footage.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-leaves-the-next-column-without-a-video',
+    why:
+      'The control for every contract above, and they need one badly: a cell background that mounted ' +
+      'its layer for EVERY column would satisfy all of them and still be flatly wrong — the operator ' +
+      'asked ONE column for footage, not the row. The neighbour was given no background at all, so a ' +
+      'video inside it can only have come from the mount condition being blind to which cell it is on.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector:
+      '.builder-preview-column + .builder-preview-column video[data-builder-video-background="cell"]',
+    absent: true,
+  },
+
+  {
+    id: 'cell-video-background-does-not-clip-a-cell-that-has-no-video',
+    why:
+      'The containment that keeps footage inside its own cell is deliberately conditional, and this ' +
+      'is what holds it that way. Clipping every column unconditionally would pass every other ' +
+      'contract here and silently start cutting off the floating images and overhanging decor that ' +
+      'are SUPPOSED to reach out of their cell — a regression with no error, in a feature nobody was ' +
+      'touching.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '.builder-preview-column + .builder-preview-column',
+    read: ['overflow'],
+    expect(sample) {
+      if (sample.styles.overflow === 'hidden') {
+        return 'the cell with NO video of its own is `overflow: hidden` — containment is being applied ' +
+          'to every column rather than only the ones carrying a layer, so overhanging decor elsewhere ' +
+          'on the page is now being clipped.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-honours-reduce-motion',
+    why:
+      'Reduce Motion is turned on for migraines and motion sickness, and it has to hold per CELL as ' +
+      'well as per row — a setting honoured on one surface and quietly dropped on the next is worse ' +
+      'than one that was never offered. The poster underneath is already painted, so this costs the ' +
+      'look nothing.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: 'video[data-builder-video-background="cell"]',
+    emulate: { reducedMotion: 'reduce' },
+    absent: true,
+  },
+
+  {
+    id: 'cell-video-background-falls-back-to-the-poster-on-phones',
+    why:
+      'A background video is megabytes of someone else\'s cell data spent on decoration, and a row of ' +
+      'video cells multiplies that by the column count. The phone fallback has to hold per cell for ' +
+      'the same reason it holds per row, and it fails silently: nobody testing on a desktop can see ' +
+      'that phones are being charged for the clips.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: 'video[data-builder-video-background="cell"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    absent: true,
   },
 
   {

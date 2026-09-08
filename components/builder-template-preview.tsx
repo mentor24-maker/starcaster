@@ -1930,6 +1930,41 @@ function BuilderSectionPreview({
             ? undefined
             : getBuilderRowOverlayScreenStyle(section.cellOverlayScreens?.[columnKey]);
         /*
+         * The cell's own video layer — the per-cell twin of the row's, and the
+         * SAME component (`BuilderBackgroundLayer`), which is what keeps "pause
+         * off screen", "honour reduce motion" and "fall back to the poster on a
+         * phone" from existing twice. Its `surface` prop already had "cell" in
+         * the union before anything mounted one.
+         *
+         * `columnStyle` above has already painted the POSTER as an ordinary CSS
+         * background, exactly as the row does, so the cell reads correctly
+         * before this layer mounts, while it buffers, and in every state where
+         * the layer decides not to play at all. The <video> only ever covers a
+         * still that is already right.
+         *
+         * The two collapsed-slot guards mirror the overlay screen's directly
+         * above, and they mirror the ROW's `isOverlayLayoutCollapsed` guard for
+         * the same reason: an overlay-flow column and a section-scoped overlay
+         * slot are decor mounts with their box thrown away, and the containment
+         * this layer needs (`overflow: hidden`) would clip the very thing they
+         * exist to let overflow.
+         *
+         * There is no parallax twin here. An image background parallaxes by
+         * mounting this same layer, but the driver measures `parentElement` as
+         * the surface and translates against the SCROLL — a row-height effect.
+         * Cells are not offered it (no `allowParallax` on the cell panel), so
+         * mounting a layer for a plain cell image would give every one of them
+         * the containment above and start clipping overhanging decor for no
+         * gain. Video only, which is exactly what the panel can produce.
+         */
+        const columnVideoBackground =
+          !isPageOverlayFlowColumn &&
+          !isSectionOverlayColumn &&
+          columnBackground?.mode === "video" &&
+          Boolean(columnBackground?.videoUrl)
+            ? columnBackground
+            : null;
+        /*
          * The cell's own numbers, as one answer each, used BOTH by the inline
          * properties below and by the variables the narrow-screen rules read.
          *
@@ -1995,7 +2030,21 @@ function BuilderSectionPreview({
                 section.cellHAlign?.[columnKey] ?? "left",
                 section.cellVAlign?.[columnKey] ?? "top"
               )),
-          position: "relative"
+          position: "relative",
+          /*
+           * Containment for the video layer, and the reason this ticket is
+           * about cells rather than rows: the layer is scaled to cover, so
+           * without `overflow: hidden` a cell's footage spills sideways over
+           * the column beside it — the one thing a per-cell background must
+           * never do. The row clips its own layer for the same reason.
+           *
+           * Applied ONLY when a video layer is actually mounted. Clipping
+           * every cell unconditionally would silently start cutting off the
+           * floating images and overhanging decor that deliberately reach out
+           * of their column, which is why the collapsed-slot guards sit on
+           * `columnVideoBackground` itself.
+           */
+          ...(columnVideoBackground ? { overflow: "hidden" } : {})
         };
 
         return (
@@ -2006,10 +2055,24 @@ function BuilderSectionPreview({
             } ${isNavigationColumn ? "builder-preview-column-navigation" : ""}${
               isPageOverlayFlowColumn ? " builder-preview-column-overlay-flow" : ""
             } ${isSectionOverlayColumn ? " builder-preview-column-overlay-slot" : ""}${
-              cellOverlayScreenStyle ? " builder-preview-column-layered" : ""
+              cellOverlayScreenStyle || columnVideoBackground ? " builder-preview-column-layered" : ""
             }`}
             style={columnStyle}
           >
+            {/*
+              The video sits UNDER the tint screen and under the modules. Order
+              here is the fill, then this, then the screen, then the words —
+              the same stack the row paints, so a cell that carries both a
+              video and an overlay dims the footage rather than the text.
+
+              `builder-preview-column-layered` is on the column above whenever
+              EITHER is mounted, which is what lifts the modules to the content
+              rung; this element stays at 0 with the screen, from the shared
+              `.builder-preview-video-background` rule.
+            */}
+            {columnVideoBackground ? (
+              <BuilderBackgroundLayer background={columnVideoBackground} surface="cell" />
+            ) : null}
             {/*
               Above the cell's own fill, below its modules. The stacking is not
               done here — the class above is what the stylesheet hangs two

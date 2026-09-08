@@ -183,7 +183,19 @@ export function BuilderCellStyleSettings({
           {/* D9, blast radius descending: the fill moves the most, then how
               much of it shows, then the border — style first because it gates
               width and colour — and the shadow last. */}
+          {/* `allowVideo` is ON here and OFF on the Overlay group below, and the
+              difference is the same one the ROW panel draws: this is the cell's
+              own fill, so its video is the ONE <video> that cell paints, while
+              an overlay video would be a second element screening the first.
+
+              It gets no gallery callback for the same reason the fill's image
+              mode gets none — handing it the row's would repaint the row — so
+              "Choose Video" and "Choose Poster" open the shared picker's own
+              gallery. There is deliberately no `allowParallax`: parallax is a
+              row-scale effect, and offering it per cell would be a new control
+              rather than the same one on a smaller surface. */}
           <BuilderBackgroundControls
+            allowVideo
             label="Background"
             background={section.cellBackgrounds[column] ?? createDefaultBackgroundSettings()}
             horizontal
