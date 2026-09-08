@@ -15,7 +15,12 @@
 #   - any refusal is logged and the report runs on the code that is here
 # A background job may keep a checkout current; it may not rewrite anyone's work.
 #
-# AND IT HAS TO CLEAN UP AFTER ITSELF FIRST, or it disables itself on run two.
+# AND IT HAS TO CLEAN UP AFTER ITSELF, AT BOTH ENDS, or it disables itself.
+# The cleanup runs twice: once at the top of the run (the backstop, for a run
+# that died halfway and left its output behind) and once after a SUCCESSFUL
+# publish, which is the call that keeps the checkout clean the other six days
+# of the week. The long note beside that second call says what only cleaning
+# at the top cost on 2026-09-07.
 # The report writes docs/reports/<date>.html, <date>.data.json and index.html
 # into this checkout and leaves them there — publishing copies them into a
 # throwaway worktree, so the originals stay behind. "Clean tree" then reads
@@ -71,12 +76,14 @@ echo "=== weekly-report $(date '+%Y-%m-%d %H:%M:%S') — $REPO"
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
 
-if [ -d docs/reports ]; then
+clean_report_residue() {
+  [ -d docs/reports ] || return 0
+
   residue="$(git ls-files --others --exclude-standard -- docs/reports 2>/dev/null)"
   if [ -n "$residue" ]; then
     echo "cleanup: removing the last run's own untracked output under docs/reports/"
     echo "$residue" | sed 's/^/  /'
-    git clean -fdq -- docs/reports 2>/dev/null || echo "cleanup: could not remove it; the update below will say so"
+    git clean -fdq -- docs/reports 2>/dev/null || echo "cleanup: could not remove it — the checkout stays dirty and the next run will report it"
   fi
 
   # The tracked half — index.html, and any edition re-rendered for a date that
@@ -86,12 +93,14 @@ if [ -d docs/reports ]; then
     if [ -n "$modified" ]; then
       echo "cleanup: restoring the last run's own changes to TRACKED files under docs/reports/"
       echo "$modified" | sed 's/^/  /'
-      git checkout -- docs/reports 2>/dev/null || echo "cleanup: could not restore them; the update below will say so"
+      git checkout -- docs/reports 2>/dev/null || echo "cleanup: could not restore them — the checkout stays dirty and the next run will report it"
     fi
   elif [ -n "$(git diff --name-only -- docs/reports 2>/dev/null)" ]; then
     echo "cleanup: tracked files under docs/reports/ are modified, but this checkout is on '$branch', not main — leaving them alone."
   fi
-fi
+}
+
+clean_report_residue
 
 if [ "$branch" != "main" ]; then
   echo "update: skipped — checkout is on '$branch', not main. Running the code that is here."
@@ -145,7 +154,37 @@ echo "window: the 7 days ending $as_of (the week that has finished)"
 # commits the report to a branch, opens the pull request and files the ticket
 # for the narrative pass. It refuses on any machine that does not own the role,
 # which is why the schedule is harmless if it is ever installed in two places.
-node scripts/weekly_report.mjs --as-of "$as_of" --window 7 --publish
+# WEEKLY_REPORT_NODE is the second test seam, and it exists for the same reason
+# as the first: the report itself wants doppler, npm and the network, so the
+# only honest way to test the cleanup BELOW is to stand in a fake report that
+# leaves the same files behind. launchd sets no environment, so the real Monday
+# run always uses plain `node`.
+"${WEEKLY_REPORT_NODE:-node}" scripts/weekly_report.mjs --as-of "$as_of" --window 7 --publish
 status=$?
+
+# AND IT CLEANS UP AGAIN HERE, WHICH IS THE CALL THAT ACTUALLY MATTERS.
+#
+# Cleaning only at the top of the run does work — but the repair does not land
+# until the NEXT run, and this job runs once a week. So the checkout sits dirty
+# for six days out of seven, the self-update skips every one of those days, and
+# EVERY OTHER scheduled job on that machine quietly runs whatever commit was
+# current last Monday.
+#
+# On 2026-09-07 the Mini sat 11 commits behind origin/main from 07:01 until it
+# was cleared by hand at 17:50, and it was hiding two more stale checkouts on
+# the same machine — pulse 3 commits behind and the VAULT 50, which meant the
+# machine was reading canon a fortnight out of date. The stale-checkout alarm
+# fired correctly and said "this one needs a person"; it posted to the bus,
+# which was refusing writes that day (86bbw860m), so nobody heard it.
+#
+# Only on success. A publish that failed halfway leaves its output where a
+# person can look at it, and the cleanup at the top of the next run is the
+# backstop for that case — which is why that call stays exactly where it is.
+if [ "$status" -eq 0 ]; then
+  clean_report_residue
+else
+  echo "cleanup: skipped — the publish exited $status, so its output stays put for a person to look at."
+fi
+
 echo "=== exit $status"
 exit $status
