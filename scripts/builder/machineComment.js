@@ -89,6 +89,9 @@ const MACHINE_MARKER_LINE = `${MACHINE_MARKER} posted by a loop under Dane's tok
 const LEGACY_MACHINE_PREFIXES = [
   '[CC-starcaster bus-relay]',
   '[CC-starcaster]',
+  '[AG-starcaster bus-relay]',
+  '[AG-starcaster]',
+  '[Antigravity]',
   '[CC-pulse]',
   '[auto-merge]',
   '[bus-relay]',
@@ -115,7 +118,7 @@ const LEGACY_MACHINE_PREFIXES = [
 // NOT `machine` — the [machine] marker is deliberately honoured only on the
 // LAST non-empty line (a body that OPENS with it is a person quoting one), and
 // putting it in this head-anchored family quietly repealed that rule.
-const MACHINE_TAG = /^\[\s*(cc-[a-z0-9-]+|bus-relay|auto-merge|reconciler)\b[^\]]*\]/i;
+const MACHINE_TAG = /^\[\s*(cc-[a-z0-9-]+|ag-[a-z0-9-]+|antigravity|cx-[a-z0-9-]+|cr-[a-z0-9-]+|bus-relay|auto-merge|reconciler)\b[^\]]*\]/i;
 
 /**
  * Undo the editor's markdown escaping before matching a prefix.
