@@ -1,3 +1,27 @@
+## 2026-09-08 — The Builder now says when a background video is too heavy (#664)
+
+A background video starts playing the second somebody lands on the page, before
+anything else can finish. The gallery only ever showed you a file's name and a
+little picture of it — never how big it was — so a 34MB clip could go onto a
+client's front page with nothing anywhere warning that a visitor on their phone
+would sit staring at a blank band for several seconds.
+
+The Video panel now tells you. Under the Choose Video button it names the file's
+size, and if it is over 10MB it says so in a plain sentence: *"This video is
+34 MB. Visitors on phone data will wait several seconds for it. Under 10MB is a
+comfortable size for a background."*
+
+**It is advice, not a rule.** Nothing is blocked, nothing is greyed out, the
+upload still works and the video still saves and plays exactly as before. You
+can ignore it whenever you have a reason to — it is there so the decision is
+yours instead of accidental.
+
+The size is remembered on the page itself, so it is still there when you come
+back to that page next week, not just in the minute after you picked the file.
+And it is thrown away the moment you type a different video into the box, which
+matters more than it sounds: a leftover number would confidently describe the
+wrong file, and a wrong number nobody can spot is worse than no number at all.
+
 ## 2026-09-07 — A drop shadow can now be pointed, not just nudged (#645)
 
 A shadow under a picture was set by two numbers: how far right it sat, and how
