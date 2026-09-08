@@ -1,3 +1,28 @@
+## 2026-09-08 — The job roll call stops calling slow jobs dead (#661)
+
+There is a shared record of when each scheduled job last finished successfully —
+the roll call — and something reads it and shouts if a job has gone quiet. It
+judged every job by the same yardstick: silent for more than 25 hours, presumed
+dead. That is a sensible yardstick for a job that runs every ten minutes. It is
+nonsense for one that runs once a day or once a week, because such a job can go
+quiet for longer than that while working perfectly — so the alarm would go off
+about a healthy job, over and over. An alarm that keeps being wrong is one
+everybody learns to ignore, which would take the real alarms down with it. This
+was already known: it is the stated reason the weekly report has never been
+allowed to check in at all.
+
+Each job is now measured against its own schedule instead of one shared number:
+a day (which is as often as the shared record gets updated) plus one more of
+that job's own runs. Every job we currently run goes hourly or oftener, so all
+four come out at exactly the 25 hours they already had — nothing about today's
+behaviour changes, which is what made it safe to switch over everywhere at once.
+A daily job would now get two days before anyone worries about it, and a weekly
+job eight. The alarm still names a job that has genuinely stopped, and it now
+also says what it measured that job against, because "quiet for 30 hours" means
+disaster for one job and a normal Tuesday for another.
+
+The weekly report is still switched off deliberately. Letting a job start
+checking in is a change in its own right and gets its own test.
 ## 2026-09-08 — When a push spares your hand edit, it now says so (#662)
 
 A shared section is one block you build once and reuse on many pages. When you
