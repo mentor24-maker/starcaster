@@ -4318,6 +4318,43 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ---------------------------------------------------------------------------
+ * THE CHROME JOINS THE FIRST SETTINGS COLUMN (ticket 86bbq065f, 2026-09-08).
+ *
+ * The operator, 2026-08-13, looking at a two-column module editor: *"notice in
+ * the left column how the column width varies arbitrarily between the Settings
+ * fields and the Layout fields"*. The block below closed that seam for the two
+ * editors that could reach it with `subgrid`. This closes it for the other 32,
+ * which could not — a wrapping flex container sits between the editor and the
+ * first column, and a flex item cannot subgrid to a grid two levels up. The
+ * full reasoning, and why the answer is a slot rather than a rule, is in
+ * `components/builder/builder-module-chrome-slot.tsx`.
+ *
+ * The card portals the chrome into `.builder-module-chrome-slot`, which the
+ * panel renders at the end of its first column. All three boxes between the
+ * column's grid and the chrome's label/control pairs have to disappear for
+ * those pairs to become the column's own grid items — the slot, the chrome,
+ * and the strip inside it. That is the same flattening the column already does
+ * to its own strips a few hundred lines above; the chrome simply arrives with
+ * three wrappers instead of one.
+ *
+ * `.builder-module-chrome` is a wrapping FLEX row in its own right (it is what
+ * lays the heading and floating-image bars out), so leaving it a box would put
+ * the whole chrome in a single cell of the column and lay its rows out inside
+ * it — the "Background on a line of its own under its label" failure the axis
+ * columns already paid for.
+ * ------------------------------------------------------------------------ */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-chrome-slot,
+/* `crm-form` reaches the same place without a slot: it owns its chrome outright
+   rather than receiving the shared one (E6 — it is excluded from
+   `needsRestoredChrome` so there is never a second copy), so it simply renders
+   it inside its Content column. Matching the chrome by descent rather than only
+   through the slot is what makes both routes one rule instead of two. */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-chrome,
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-chrome > .builder-module-field-strip {
+  display: contents;
+}
+
+/* ---------------------------------------------------------------------------
  * THE CHROME AND THE SETTINGS COLUMN SHARE ONE LATTICE
  * (ticket 86bbmafd6, 2026-08-26 — the second half of the operator's
  * 2026-08-13 note, *"the column width varies arbitrarily between the
