@@ -5,7 +5,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { buildLandingPagePatch } = require('../../routes/builder');
+const {
+  buildLandingPagePatch,
+  buildLandingPageCreateInput,
+  buildBulkCreatePageInput,
+} = require('../../routes/builder');
 const { inputToRow, rowToPage } = require('../../lib/builderPagesStore');
 
 /**
@@ -75,6 +79,226 @@ test('a caller that says nothing about templates still gets the derived legacy i
   const built = buildLandingPagePatch({ name: 'Brand New Page' });
   const patch = built.patch ?? built;
   assert.ok(patch.templateId, 'derivation still applies when nothing is specified');
+});
+
+/**
+ * The CREATE path -- a separate whitelist from the patch above, and it was
+ * missing this field entirely (task 86bbujvq8).
+ *
+ * The symptom was specific and misleading: choosing a Template on a brand new
+ * page and saving reported success, the Theme stuck (themeId WAS in the list),
+ * and the Template came back empty. Setting it again on the now-existing page
+ * worked, because that is a PATCH and the patch whitelist names the field. So
+ * it read as "the first save doesn't take" rather than as a dropped field.
+ */
+
+test('a create carrying pageTemplateId reaches createPage with it', () => {
+  const input = buildLandingPageCreateInput({ name: 'Pricing', slug: 'pricing', pageTemplateId: '47' }, 'Pricing');
+  assert.equal(input.pageTemplateId, '47', 'the create whitelist must carry the chosen template');
+});
+
+test('the create input survives the store, all the way to a row', () => {
+  // Same end-to-end shape the patch path is held to above: the field has to
+  // clear the route AND the store, because either one drops it silently.
+  const input = buildLandingPageCreateInput({ name: 'Pricing', pageTemplateId: '47' }, 'Pricing');
+  const row = inputToRow(input);
+  assert.equal(row.page_template_id, '47');
+  assert.equal(rowToPage({ id: 1, ...row }).pageTemplateId, '47');
+});
+
+test('snake_case on a create is accepted too', () => {
+  const input = buildLandingPageCreateInput({ name: 'Pricing', page_template_id: '12' }, 'Pricing');
+  assert.equal(input.pageTemplateId, '12');
+});
+
+test('a create that names no template still leaves the column NULL', () => {
+  // "No template" is a legal state -- 93 production pages were in it when the
+  // column was added -- so the fix must not start inventing one.
+  const input = buildLandingPageCreateInput({ name: 'Pricing' }, 'Pricing');
+  assert.equal(input.pageTemplateId, '');
+  assert.equal(inputToRow(input).page_template_id, null);
+});
+
+test('a create still derives the legacy templateId, and still honours an explicit one', () => {
+  // Unlike the patch path, deriving here is correct: a new row needs some
+  // template_id and there is nothing to overwrite. But a caller that states
+  // one must keep it.
+  const derived = buildLandingPageCreateInput({ name: 'Brand New Page', slug: 'brand-new' }, 'Brand New Page');
+  assert.match(derived.templateId, /^brand-new-/, 'derived from the slug, with a uniqueness suffix');
+
+  const explicit = buildLandingPageCreateInput(
+    { name: 'Brand New Page', templateId: 'standard-right-form', pageTemplateId: '47' },
+    'Brand New Page'
+  );
+  assert.equal(explicit.templateId, 'standard-right-form', 'an explicit legacy id is never overwritten');
+  assert.equal(explicit.pageTemplateId, '47');
+});
+
+test('the create ROUTE uses the builder, instead of assembling its own list again', () => {
+  // The whole bug was a second, hand-written field list inside the handler
+  // that nothing could test. If a future edit inlines one again, this fails --
+  // otherwise the tests above would keep passing while the route ignored them.
+  const routes = fs.readFileSync(path.join(__dirname, '..', '..', 'routes', 'builder.js'), 'utf8');
+  assert.match(
+    routes,
+    /createPage\(buildLandingPageCreateInput\(body, name\), scope\)/,
+    'POST /api/builder/landing-pages must build its input with buildLandingPageCreateInput'
+  );
+});
+
+/**
+ * BULK create -- the other caller of createPage, and the one #614 did not reach
+ * (task 86bbve4kp).
+ *
+ * Measured on 2026-09-05: a bulk run with `templateId: "47"` wrote 47 into the
+ * legacy `template_id` and left `page_template_id` NULL, and answered 200. So
+ * every page a batch made read "No template" in Page Details even though the
+ * operator had picked one.
+ */
+
+test('a bulk-created page carries the chosen page template', () => {
+  const input = buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: '47',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  });
+  assert.equal(input.pageTemplateId, '47', 'bulk create must carry the template it built the page from');
+});
+
+test('a bulk-created page still writes the legacy templateId it always has', () => {
+  // The bulk route has always put the chosen id in template_id too. Anything
+  // reading that column must see exactly what it saw before this fix.
+  const input = buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: '47',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  });
+  assert.equal(input.templateId, '47', 'the legacy column must be unchanged by this fix');
+});
+
+test('the bulk create input survives the store, all the way to a row', () => {
+  // Same end-to-end shape the single create is held to: route whitelist AND
+  // store, because either one drops the field silently.
+  const row = inputToRow(buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: '47',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  }));
+  assert.equal(row.page_template_id, '47');
+  assert.equal(row.template_id, '47');
+  assert.equal(rowToPage({ id: 1, ...row }).pageTemplateId, '47');
+});
+
+test('a built-in template id reaches the column too, not just a numeric row id', () => {
+  // BUILT_IN_PAGE_TEMPLATES ids are legal page_template_id values -- the
+  // migration claims them by name -- so bulk create must not assume digits.
+  const input = buildBulkCreatePageInput({
+    name: 'Court Fees',
+    slug: 'court-fees',
+    templateId: 'standard-right-form',
+    themeId: '',
+    isPublished: true,
+    pageBackground: {},
+    theme: {},
+    layoutSections: [],
+  });
+  assert.equal(input.pageTemplateId, 'standard-right-form');
+});
+
+test('the BULK route uses the builder, instead of assembling its own list again', () => {
+  // The bug was a third hand-written field list inside the bulk handler. If a
+  // future edit inlines one again this fails -- otherwise the tests above keep
+  // passing while the route ignores them, which is exactly what happened
+  // between #614 and this fix.
+  const routes = fs.readFileSync(path.join(__dirname, '..', '..', 'routes', 'builder.js'), 'utf8');
+  assert.match(
+    routes,
+    /createPage\(buildBulkCreatePageInput\(\{/,
+    'bulk-create-with-model must build its input with buildBulkCreatePageInput'
+  );
+});
+
+/**
+ * The path Bulk Create ACTUALLY takes, which is not the bulk route at all.
+ *
+ * Picking a content model posts the batch to bulk-create-with-model (tested
+ * above). Picking none -- the default, and what the ticket's own test steps do
+ * -- posts each page separately to the SINGLE create route from the browser.
+ * That body named `templateId` and not `pageTemplateId`, so the fix above
+ * could not reach it and Bulk Create still read "No template" (task 86bbve4kp,
+ * caught in review of PR #635 by running the real bulk handler).
+ *
+ * These are source guards, the same shape as the two route guards above: the
+ * behaviour is tested in lib/builder-client/bulk-create-page-body.test.ts, and
+ * this is what fails if a caller stops using the builder. Three callers have
+ * now dropped this one field, each in its own hand-written list.
+ */
+
+const CLIENT_FILES = [
+  {
+    label: "the Builder's Bulk Create",
+    file: path.join(__dirname, '..', '..', 'components', 'admin-builder-editor.tsx'),
+    uses: /body: JSON\.stringify\(buildBulkCreatePageBody\(\{/,
+    hint: 'bulkCreatePages must build its body with buildBulkCreatePageBody',
+  },
+  {
+    label: "Acquire's Create Page modal",
+    file: path.join(__dirname, '..', '..', 'public', 'js', 'acquire.js'),
+    uses: /templateId, pageTemplateId: templateId,/,
+    hint: "acquire.js's no-content-model branch must send pageTemplateId alongside templateId",
+  },
+];
+
+for (const target of CLIENT_FILES) {
+  test(`${target.label} sends the page template it was given`, () => {
+    const source = fs.readFileSync(target.file, 'utf8');
+    assert.match(source, target.uses, target.hint);
+  });
+}
+
+test('the client body builder names pageTemplateId', () => {
+  // The guard above proves the caller uses the builder; this proves the
+  // builder still sends the field. Neither is enough on its own.
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'lib', 'builder-client', 'bulk-create-page-body.ts'),
+    'utf8'
+  );
+  assert.match(source, /pageTemplateId: input\.templateId/, 'the browser body must carry the chosen template');
+});
+
+test('the create and patch whitelists do not drift apart on the fields the editor sends', () => {
+  // Every field the editor puts in a create body has to be named by BOTH
+  // lists, or the same class of bug reappears on a different setting.
+  const body = {
+    name: 'Pricing',
+    slug: 'pricing',
+    pageTemplateId: '47',
+    themeId: '9',
+    searchPriority: 'pinned',
+    isPublished: true,
+    isPrivate: false,
+  };
+  const created = buildLandingPageCreateInput(body, 'Pricing');
+  const patched = buildLandingPagePatch(body).patch ?? buildLandingPagePatch(body);
+  for (const key of ['pageTemplateId', 'themeId', 'searchPriority', 'isPublished', 'isPrivate', 'slug']) {
+    assert.ok(key in created, `create whitelist is missing ${key}`);
+    assert.ok(key in patched, `patch whitelist is missing ${key}`);
+  }
 });
 
 test('a page with no page template reads as empty, not as its legacy layout', () => {

@@ -91,10 +91,15 @@ const CLAIMABLE_BY_BUILD = Object.freeze([REWORK, QUEUED]);
 
 /**
  * Work that genuinely occupies the pipeline: a pull request whose ticket
- * wears one of these is real in-flight work — the merge side's question,
- * which is wipCap's question. pipelinePause asks a NARROWER one (is a PASS
- * actually running?) and derives its pair of machine statuses from these
- * minus OPERATOR_HELD, with its reasoning kept on that view.
+ * wears one of these is real in-flight work — the merge side's question.
+ * pipelinePause asks a NARROWER one (is a PASS actually running?) and derives
+ * its pair of machine statuses from these minus OPERATOR_HELD, with its
+ * reasoning kept on that view.
+ *
+ * THIS IS STILL THE HONEST TOTAL, and pulse and the throughput report both
+ * want exactly it. What changed on 2026-09-04 (task 86bbuzzbk) is that
+ * `wipCap` no longer measures its cap against this whole set — see
+ * IN_PROGRESS_STATUSES below for the split and the reason.
  */
 const IN_FLIGHT_STATUSES = Object.freeze([
   BUILDING, IN_REVIEW, READY_TO_LAUNCH, NEEDS_YOUR_INPUT,
@@ -102,6 +107,44 @@ const IN_FLIGHT_STATUSES = Object.freeze([
 
 /** Parked on Dane, on purpose — only he moves a ticket out of these. */
 const OPERATOR_HELD_STATUSES = Object.freeze([READY_TO_LAUNCH, NEEDS_YOUR_INPUT]);
+
+/**
+ * In-flight work that a MACHINE is still moving — in-flight minus the two
+ * statuses parked on Dane. Derived, never re-listed, so the relationship is
+ * what breaks if someone edits either side.
+ *
+ * WHY THE SPLIT EXISTS (2026-09-04, task 86bbuzzbk). `wipCap` used to measure
+ * its cap of five against the whole IN_FLIGHT set, so a ticket that was
+ * finished, reviewed, green and waiting only for Dane to press merge held one
+ * of the five build slots for as long as he was asleep. Fill all five and the
+ * build loop stops completely, however deep the queue is.
+ *
+ * The effect ran backwards: THE LONGER DANE WAS AWAY, THE LESS THE MACHINES
+ * WERE ALLOWED TO DO. On the night of 2026-09-03 the cap sat full for three
+ * separate hours with 66-71 tickets claimable, and loop-build ran roughly 222
+ * of 640 minutes. It also put a hard ceiling of five on how much finished work
+ * could ever be waiting for him at once — which is the thing he actually
+ * asked for more of.
+ *
+ * WHAT THE OLD READING GOT RIGHT, AND WHY IT IS NOT LOST. The argument on
+ * IN_FLIGHT_STATUSES ran: a ticket parked on Dane with an open PR is real work
+ * occupying the merge pipeline, its branch still needs catching up every time
+ * something lands, and "if his inbox is full the pipeline genuinely is full" —
+ * so a cap that hid that would lie in the more dangerous direction. Every word
+ * of that is still true, and none of it is being discarded.
+ *
+ * The mistake was answering it with ONE number. "Is the merge pipeline full?"
+ * and "should loop-build stop producing?" are different questions, and
+ * collapsing them made an honest signal into a throttle on the wrong thing.
+ * So there are now two limits, not none: this set carries the build cap, and
+ * OPERATOR_HELD carries its own separate ceiling in wipCap. Operator-held work
+ * still bounds the loop — at its own, larger number — and `wip-check` names
+ * all three counts every time. The reporting gets MORE precise, not quieter,
+ * which is the direction the original argument was protecting.
+ */
+const IN_PROGRESS_STATUSES = Object.freeze(
+  IN_FLIGHT_STATUSES.filter((s) => !OPERATOR_HELD_STATUSES.includes(s)),
+);
 
 /**
  * DECISION D1 (Dane, 2026-09-02, recorded on task 86bbtujed): `live` is the
@@ -225,6 +268,7 @@ function claimOrder(tasks) {
 module.exports = {
   IN_FLIGHT_STATUSES,
   OPERATOR_HELD_STATUSES,
+  IN_PROGRESS_STATUSES,
   TERMINAL_STATUSES,
   TERMINAL_ALIASES,
   REWORK,

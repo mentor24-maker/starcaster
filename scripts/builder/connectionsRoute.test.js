@@ -234,15 +234,38 @@ test('the four card states are decided from what is actually stored', async (t) 
   assert.equal(cards.get('bluesky').account, null);
   assert.equal(cards.get('bluesky').reason, '', 'a healthy card carries no reason');
 
-  // A platform with no adapter is greyed, whatever else is true of it.
-  // Read the catalogue for what is STILL unfinished rather than naming a
-  // platform: Instagram became connectable in slice 5 (86bbpz1gk), and a test
-  // that hard-codes the example silently loses its subject each time one ships.
-  const registryNow = require('../../lib/connections/registry.js');
-  const stillComingSoon = registryNow.CATALOGUE.filter((entry) => entry.readiness === 'coming_soon');
-  assert.ok(stillComingSoon.length, 'no coming_soon entry left to prove the greyed state');
-  for (const entry of stillComingSoon) {
-    assert.equal(cards.get(entry.provider).cardState, 'coming_soon');
+  /**
+   * A platform with no adapter is greyed, whatever else is true of it.
+   *
+   * There is no such platform any more — X was the last one and it connects as
+   * of Connections 7 of 7 (86bbpz1hu), which is the epic finishing. This used
+   * to read the catalogue for whatever was still unfinished and assert it found
+   * one, precisely so that this moment would fail loudly rather than the
+   * assertion quietly ceasing to test anything.
+   *
+   * So the state is pinned at its decision point instead. `cardStateFor` is
+   * exported for exactly this, and the greyed card is the ONE state that is
+   * decided before any row is read — which is why it must keep a test even with
+   * nothing in the catalogue to point at: the next platform added as
+   * `coming_soon` would otherwise be the first thing ever to exercise it.
+   */
+  assert.equal(
+    h.route.cardStateFor({ provider: 'someday', readiness: 'coming_soon' }, []).cardState,
+    'coming_soon'
+  );
+  // Greyed beats everything: a stored row must not un-grey a platform whose
+  // adapter does not exist, or the card offers a button that cannot work.
+  assert.equal(
+    h.route.cardStateFor(
+      { provider: 'someday', readiness: 'coming_soon' },
+      [{ status: 'connected', hasAccessToken: true, accountId: '1', accountLabel: 'x' }]
+    ).cardState,
+    'coming_soon'
+  );
+  // And every catalogue entry today is connectable, which is the fact that
+  // retired the loop above.
+  for (const card of cards.values()) {
+    assert.notEqual(card.cardState, 'coming_soon');
   }
 
   // A live grant.
@@ -262,6 +285,171 @@ test('the four card states are decided from what is actually stored', async (t) 
   assert.equal(cards.get('bluesky').cardState, 'needs_attention');
   assert.match(cards.get('bluesky').reason, /expired/i);
   assert.ok(cards.get('bluesky').reason.length > 20, 'the reason is a sentence, not a status word');
+});
+
+/**
+ * The amber card says what the SWEEP found, not one of four generic lines.
+ * Connections 6b of 7 (86bbu50mb).
+ *
+ * The verify sweep exists to learn why a connection stopped working and write
+ * it down — a drifted Bluesky handle names the account it now signs in as, an
+ * unrenewed grant names the deadline it passed. `verifySweep.js` says as much
+ * where it marks a row expiring: "the card goes amber with the sentence below
+ * under it". It did not. The route read `status` alone and printed a line from
+ * a four-entry map, so every cause the sweep recorded arrived at the client as
+ * the same sentence and `last_error` was written by one slice and read by
+ * nobody.
+ *
+ * These pin `attentionSentence` directly rather than through a stored row,
+ * because the sentence is the deliverable and a round trip would only prove the
+ * store still round-trips.
+ */
+test('an amber card carries the recorded cause, not a generic line', async () => {
+  const h = withRoute();
+  const { attentionSentence } = h.route;
+
+  // The sweep's own sentence for a drifted Bluesky handle, verbatim from
+  // outcomeFor() in lib/connections/verifySweep.js.
+  const drift = 'the handle now signs in as a different account (it was saved as delray.bsky.social.)';
+  const shown = attentionSentence({ status: 'error', lastError: drift, hasAccessToken: true });
+  assert.ok(
+    shown.includes('handle now signs in as a different account'),
+    `the recorded cause has to survive to the card, got: ${shown}`
+  );
+  assert.ok(
+    shown.includes('delray.bsky.social'),
+    'the account the sweep named is the one fact a client can act on'
+  );
+  // And it still says what to DO. A cause with no next step is a fault report.
+  assert.ok(shown.includes('Reconnect'), `the card still says how to fix it, got: ${shown}`);
+
+  // A fragment is opened and closed as a sentence — presentation only. No other
+  // character may change, or the panel is substituting our wording for the
+  // platform's (acceptance criterion 5).
+  assert.ok(shown.startsWith('The handle now signs in'), `capitalised, got: ${shown}`);
+  assert.ok(
+    shown.includes('(it was saved as delray.bsky.social.) Reconnect'),
+    'the stored text is passed through unedited apart from its first letter'
+  );
+
+  // Each status keeps its own instruction, so "about to stop" and "has expired"
+  // do not both read as the same emergency.
+  assert.ok(
+    attentionSentence({ status: 'expiring', lastError: 'it expires tomorrow', hasAccessToken: true })
+      .includes('keep posting'),
+    'an expiring connection is asked to be renewed, not restored'
+  );
+  assert.ok(
+    attentionSentence({ status: 'revoked', lastError: 'permission was withdrawn', hasAccessToken: true })
+      .includes('restore'),
+    'a revoked one is asked to be restored'
+  );
+
+  // Nothing recorded — a status changed by hand, or a row from before the sweep
+  // existed — still gets a full sentence rather than an empty card.
+  const generic = attentionSentence({ status: 'expired', lastError: '', hasAccessToken: true });
+  assert.match(generic, /expired/i);
+  assert.ok(generic.length > 20, 'the fallback is still a sentence');
+
+  // Our own storage being incomplete outranks whatever a platform last said:
+  // the resolver skips a token-less row, so no amount of provider detail
+  // changes what the client has to do about it.
+  assert.match(
+    attentionSentence({ status: 'error', lastError: 'the platform refused it', hasAccessToken: false }),
+    /stored permission is incomplete/i
+  );
+
+  // An unknown status is not a blank card. `CONNECTION_STATUSES` can grow, and
+  // a card that says nothing is indistinguishable from a broken screen.
+  const unknown = attentionSentence({ status: 'something-new', lastError: '', hasAccessToken: true });
+  assert.ok(unknown.length > 20, `an unknown status still gets a sentence, got: ${unknown}`);
+});
+
+/**
+ * A recorded cause is shown only when it is something a client can read.
+ *
+ * The send-back that produced this test, 2026-09-05: `last_error` is whatever
+ * `verifyResult.error` held, and `lib/connections/adapters/facebookPage.js:95`
+ * falls back to the ENTIRE raw response body when it is not JSON. A gateway 502
+ * is an HTML page, so a client's card read
+ * "<!DOCTYPE html><html><head><title>502 Bad Gateway</title>… Reconnect to fix
+ * it." — internal text on the surface a client reads to decide whether their
+ * account works, which is landmine 16 and what the ticket's own Risk line calls
+ * the whole failure.
+ *
+ * The fix is a fitness test on the STORED text, not a rewrite of it: a cause
+ * either comes through untouched or is dropped for the generic line. Acceptance
+ * criterion 5 is not weakened — real prose still arrives verbatim, which the
+ * test above pins.
+ */
+test('a cause that is not client prose falls back to the generic sentence', async () => {
+  const h = withRoute();
+  const { attentionSentence, ATTENTION_REASONS, readsAsClientProse, CAUSE_LIMITS } = h.route;
+  // Every direct call below is on the STORED path — that is what attentionSentence
+  // reads. Naming it is required since round 3; see lib/connections/clientProse.js.
+  const STORED = CAUSE_LIMITS.stored;
+
+  // What facebookPage.js really stores when a gateway answers instead of Meta.
+  const gateway502 = '<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head>'
+    + '<body bgcolor="white"><center><h1>502 Bad Gateway</h1></center><hr>'
+    + '<center>nginx/1.18.0</center></body></html>';
+  const shown = attentionSentence({ status: 'error', lastError: gateway502, hasAccessToken: true });
+  assert.doesNotMatch(shown, /</, `no markup may reach a client's card, got: ${shown}`);
+  assert.doesNotMatch(shown, /DOCTYPE|nginx|502/i, `nor its contents, got: ${shown}`);
+  assert.equal(
+    shown,
+    ATTENTION_REASONS.error,
+    'it falls back to the generic line that already existed — wrong-but-readable beats markup'
+  );
+
+  // A short tag is markup too. Length alone would let this one straight through.
+  assert.equal(
+    readsAsClientProse('<p>refused</p>', 'stored'),
+    false,
+    'a tag is markup at any length'
+  );
+
+  // Too long to be a sentence on a card: a body that happens to carry no tags
+  // (a stack trace, a JSON dump, a plain-text error page) is still not prose.
+  const wall = `the platform refused this connection. ${'diagnostic detail '.repeat(40)}`;
+  assert.ok(wall.length > STORED, 'the fixture has to actually exceed the limit');
+  assert.equal(
+    attentionSentence({ status: 'revoked', lastError: wall, hasAccessToken: true }),
+    ATTENTION_REASONS.revoked,
+    'a wall of text is dropped for the generic line'
+  );
+
+  // ── The other side of the gate, which is the half that can silently over-reach.
+  // Every one of these is prose the sweep or an adapter really writes, and each
+  // must survive untouched. A gate that quietly widened until it swallowed real
+  // causes would put us back where slice 6b started, with every card generic.
+  const realProse = [
+    // verifySweep.js, the identity-drift sentence at its longest — two full
+    // Bluesky handles — which is the longest legitimate cause measured (189).
+    'This connection was saved as delray-beach-tennis-center.bsky.social and now authenticates as '
+      + 'some-other-handle.bsky.social. Until it is connected again, posts would go to the wrong account.',
+    // The 409 composition, adapter sentence plus the stored account.
+    'this app password now signs in as Delray Tennis, not the account it was saved for. '
+      + '(it was saved as delray.bsky.social.)',
+    // facebookPage.js, when Meta DOES answer in JSON.
+    'No Facebook Pages found for this account. Confirm you manage at least one Page and '
+      + 'granted Page permissions.',
+    // A cause carrying arithmetic. "<" alone is not markup, and a gate that
+    // treated it as such would drop a real sentence.
+    'the grant has < 24 hours left before it stops working',
+  ];
+  for (const cause of realProse) {
+    assert.equal(readsAsClientProse(cause, 'stored'), true, `real prose must pass the gate: ${cause}`);
+    const card = attentionSentence({ status: 'error', lastError: cause, hasAccessToken: true });
+    assert.notEqual(card, ATTENTION_REASONS.error, `it must not fall back: ${cause}`);
+    // Passed through unedited apart from the first letter and a closing stop.
+    assert.ok(card.includes(cause.slice(1, 60)), `verbatim, got: ${card}`);
+  }
+
+  // Exactly at the limit is prose; one character over is not. Pinned so the
+  // boundary is a decision rather than whatever the comparison happened to be.
+  assert.equal(readsAsClientProse('a'.repeat(STORED), 'stored'), true, 'the limit itself passes');
+  assert.equal(readsAsClientProse('a'.repeat(STORED + 1), 'stored'), false, 'one over does not');
 });
 
 test('a card never carries a token, and never describes one', async (t) => {
@@ -330,15 +518,39 @@ test('starting a connection asks the adapter, and never invents a credential fie
     assert.ok(field.help, 'and a line saying where to get it');
   }
 
-  // A platform with no adapter refuses with the registry's own sentence, and
-  // the two refusals are different facts: not finished, versus no such thing.
-  const comingSoon = await call(h.route, { method: 'POST', path: '/api/connections/x/start' });
+  /**
+   * The two refusals are different facts: not finished, versus no such thing.
+   *
+   * `x` used to be the "not finished" example and is now connectable
+   * (86bbpz1hu), and no catalogue entry is `coming_soon` any more — so that
+   * half is pinned against the registry's own branch, which is where the
+   * sentence is actually chosen. `adapterAnswer` is what `getAdapter` calls,
+   * and `getAdapter` is what this route hands its refusal to verbatim.
+   */
+  const registryNow = require('../../lib/connections/registry.js');
+  const comingSoon = registryNow.adapterAnswer(
+    { provider: 'someday', displayName: 'Someday', readiness: 'coming_soon', adapter: null },
+    'someday'
+  );
   assert.equal(comingSoon.status, 400);
-  assert.match(comingSoon.payload.error.message, /not connectable yet/i);
+  assert.equal(comingSoon.code, 'COMING_SOON');
+  assert.match(comingSoon.error, /not connectable yet/i);
 
   const unknown = await call(h.route, { method: 'POST', path: '/api/connections/friendster/start' });
   assert.equal(unknown.status, 404);
   assert.match(unknown.payload.error.message, /unknown/i);
+
+  /**
+   * X now starts a real sign-in, and its refusal when the app is not set up
+   * must be a THIRD thing again — not "unknown platform" and not "not
+   * connectable yet", both of which would send whoever hit it looking in the
+   * wrong place. This asserts the route passes the adapter's own sentence
+   * through rather than substituting one of its own.
+   */
+  const xStart = await call(h.route, { method: 'POST', path: '/api/connections/x/start' });
+  assert.equal(xStart.status, 400);
+  assert.match(xStart.payload.error.message, /OAuth 2\.0 Client ID/);
+  assert.doesNotMatch(xStart.payload.error.message, /not connectable yet/i);
 });
 
 test('picking an account makes it the one that will actually post', async (t) => {
@@ -520,6 +732,76 @@ test('every endpoint refuses before it acts when no workspace is chosen', async 
     assert.equal(res.status, 400, `${method} ${urlPath}`);
     assert.equal(res.payload.error.code, 'PROJECT_REQUIRED', `${method} ${urlPath}`);
   }
+});
+
+/**
+ * Review round 2 of 86bbpz1hu — a route that looked like it worked and could not.
+ *
+ * `EXCHANGE_FIELDS` is an allow-list: only the fields named there reach an
+ * adapter's `exchange`. `state` and `nonce` were not on it, and the X adapter
+ * derives its PKCE code verifier from the nonce — so every X sign-in driven
+ * through THIS route refused with "the PKCE verifier it was begun with cannot
+ * be reproduced", no matter what was posted to it.
+ *
+ * Nothing visible was broken: the live screen goes through the
+ * `routes/engage.js` callback, which passes both. But the next reader would
+ * have believed this route, so the gap is pinned rather than documented.
+ *
+ * The assertion is that the refusal has MOVED PAST the verifier — it is now the
+ * app-not-configured one, which the adapter reaches only after reproducing the
+ * verifier successfully. Deliberately with no X client credentials in the
+ * environment, so the adapter refuses before it would call X: a unit test must
+ * not make a live HTTP request.
+ */
+test('a PKCE sign-in through the finish route gets its state and nonce', async (t) => {
+  const h = withRoute();
+  t.after(h.restore);
+
+  const previous = {};
+  for (const key of ['META_OAUTH_STATE_SECRET', 'X_CLIENT_ID', 'X_CLIENT_SECRET',
+    'X_OAUTH_CLIENT_ID', 'X_OAUTH_CLIENT_SECRET']) {
+    previous[key] = process.env[key];
+    delete process.env[key];
+  }
+  process.env.META_OAUTH_STATE_SECRET = 'state-secret-for-tests';
+  // Set only long enough to MINT the state — `authorizeUrl` needs them — then
+  // removed again before the route call, so the adapter stops at the
+  // credentials check rather than making a live request to X.
+  process.env.X_CLIENT_ID = 'x-client-id';
+  process.env.X_CLIENT_SECRET = 'x-client-secret';
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  // A REAL state, minted by the adapter that will read it back — so this fails
+  // if the route drops the field, and not because the fixture is malformed.
+  const x = require('../../lib/connections/adapters/x.js');
+  const started = x.authorizeUrl({ projectId: SCOPE.projectId, userId: SCOPE.userId });
+  assert.equal(started.ok, true, started.error);
+  const state = new URL(started.data.url).searchParams.get('state');
+  assert.ok(state, 'the adapter minted no state, so this test proves nothing');
+  delete process.env.X_CLIENT_ID;
+  delete process.env.X_CLIENT_SECRET;
+
+  const res = await call(h.route, {
+    method: 'POST',
+    path: '/api/connections/x/finish',
+    body: { code: 'an-authorization-code', state },
+  });
+
+  const message = String(res.payload?.error?.message || '');
+  assert.doesNotMatch(
+    message,
+    /PKCE verifier/,
+    'the route dropped `state` on the way to the adapter, so an X sign-in through it can never complete: '
+    + `${message}`
+  );
+  // Where it gets to instead: past the verifier, and stopped by the missing
+  // app credentials this test deliberately did not set.
+  assert.match(message, /X_CLIENT_ID|not configured|developer\.x\.com/i, message);
 });
 
 test('the route ignores paths that are not its own', async (t) => {

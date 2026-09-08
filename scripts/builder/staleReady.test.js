@@ -361,3 +361,157 @@ test('the check locates a ticket\'s PR the way the merge step does — no second
   assert.match(src, /findPullRequest/, 'reuse the merge step\'s locator');
   assert.doesNotMatch(src, /PR opened:\s*\\?s\*\(https/, 'and do not write a second regex for it');
 });
+
+// ── the second clock (2026-09-02, task 86bbtqytq) ───────────────────────────
+//
+// 86bbqw49y sat in Ready to launch for TWELVE hours with its PR already merged,
+// while this check reported "0 past 24h / Nothing is stuck" — honestly, and
+// uselessly. Dane's ruling: a ticket carrying his own `merge` comment gets a
+// short fuse, measured FROM THAT COMMENT.
+
+const {
+  APPROVED_STALE_AFTER_HOURS,
+  liveApprovalAt,
+  stalenessClock,
+  overdueRatio,
+} = staleReady;
+
+const OPERATOR_ID = 48012725;
+const comment = (over = {}) => ({
+  id: String(over.id || '1'),
+  date: String(over.at || Date.now()),
+  user: { id: over.userId === undefined ? OPERATOR_ID : over.userId },
+  comment_text: over.text || 'merge',
+});
+
+test('the short fuse is 2h AND is the pulse\'s own building threshold — no new magic number', () => {
+  // His ruling asked for exactly this: "no new constant enters the codebase
+  // without a sibling". The coupling is deliberate, so it is pinned in BOTH
+  // directions — retuning the build threshold fails here and makes somebody
+  // decide, rather than silently moving a clock a person is waiting on.
+  const { STAGE_THRESHOLDS } = require('./pulse.js');
+  assert.equal(APPROVED_STALE_AFTER_HOURS, 2);
+  assert.equal(APPROVED_STALE_AFTER_HOURS, STAGE_THRESHOLDS.building.hours);
+  assert.notEqual(APPROVED_STALE_AFTER_HOURS, STALE_AFTER_HOURS, 'two clocks, not one');
+});
+
+test('THE INCIDENT: 12h with his merge word is stuck; 12h without it is not', () => {
+  const approved = ticket({ hours: 12, approvedHours: 12, prState: 'MERGED', mergeWordGiven: true });
+  const untouched = ticket({ hours: 12, prState: 'MERGED' });
+  const out = readyFindings([approved, untouched]);
+  assert.equal(out.findings.length, 1, 'exactly one of these two is past its clock');
+  assert.equal(out.findings[0].basis, 'approval');
+  assert.deepEqual(out.fresh, [untouched.taskId], 'the unapproved one keeps its 24h');
+});
+
+test('BREAK-TEST: the fuse burns from the merge COMMENT, not from date_updated', () => {
+  // The ruling's own break test. 86bbqw49y took 25 automated refusal comments
+  // while it sat there, and every one of them bumped date_updated. A clock
+  // reading ticket age is reset by the very refusals it exists to catch — so
+  // this ticket looks four minutes old and is still a finding.
+  const refreshedByRefusals = ticket({ hours: 0.07, approvedHours: 9, prState: 'MERGED', mergeWordGiven: true });
+  const clock = stalenessClock(refreshedByRefusals);
+  assert.equal(clock.basis, 'approval');
+  assert.equal(clock.hours, 9, 'if this reads 0.07 the clock is pointed at date_updated and measures nothing');
+  assert.equal(readyFindings([refreshedByRefusals]).findings.length, 1);
+});
+
+test('a ticket he approved 1h ago is still fresh — the fuse is short, not instant', () => {
+  const out = readyFindings([ticket({ hours: 1, approvedHours: 1 })]);
+  assert.equal(out.findings.length, 0);
+  assert.equal(out.fresh.length, 1);
+});
+
+test('the finding says which clock it is on, so a "3.1h" is never read against 24', () => {
+  const f = classifyReady(ticket({ hours: 0.5, approvedHours: 3.1, prState: 'MERGED' }));
+  assert.match(f.message, /since you said "merge"/);
+  assert.doesNotMatch(f.message, /0\.5h/, 'the stage age is not the clock here and must not be quoted');
+});
+
+test('findings rank by how far past their OWN clock they are, not by raw hours', () => {
+  const approved = ticket({ taskId: 'A', hours: 3, approvedHours: 3, prState: 'MERGED' });  // 1.5x its 2h
+  const untouched = ticket({ taskId: 'B', hours: 26, prState: 'MERGED' });                  // 1.08x its 24h
+  const { findings } = readyFindings([untouched, approved]);
+  assert.deepEqual(findings.map((f) => f.taskId), ['A', 'B'],
+    'raw-hours sorting would bury the ticket he is actually waiting on');
+  assert.ok(overdueRatio(findings[0]) > overdueRatio(findings[1]));
+});
+
+test('liveApprovalAt takes the OLDEST live merge comment — repeating himself does not restart it', () => {
+  const t0 = 1_756_000_000_000;
+  const at = liveApprovalAt([
+    comment({ id: '1', at: t0, text: 'REVIEW: PASSED (all gates green)', userId: 999 }),
+    comment({ id: '2', at: t0 + 3_600_000, text: 'merge' }),
+    comment({ id: '3', at: t0 + 7_200_000, text: 'merge' }),
+  ], { operatorId: OPERATOR_ID });
+  assert.equal(at, t0 + 3_600_000, 'the wait began the first time he said it');
+});
+
+test('BREAK-TEST: a merge word from an EARLIER round never lights the fuse', () => {
+  // A ticket sent back, rebuilt and re-reviewed carries a stale "merge". The
+  // merge step refuses it for exactly this reason; if the fuse ignored the
+  // rule, every rebuilt ticket would arrive back in the stage already on fire.
+  const t0 = 1_756_000_000_000;
+  const at = liveApprovalAt([
+    comment({ id: '1', at: t0, text: 'merge' }),
+    comment({ id: '2', at: t0 + 86_400_000, text: 'REVIEW: PASSED (round 2)', userId: 999 }),
+  ], { operatorId: OPERATOR_ID });
+  assert.equal(at, 0, 'no live approval — this one is back to waiting on him, and row 1 says so');
+});
+
+test('BREAK-TEST: a MACHINE saying "merge" is not an authorization and starts no clock', () => {
+  const at = liveApprovalAt([comment({ id: '1', text: 'merge', userId: 777 })], { operatorId: OPERATOR_ID });
+  assert.equal(at, 0);
+});
+
+test('no comments at all means no approval, and the 24h clock stands', () => {
+  assert.equal(liveApprovalAt([], { operatorId: OPERATOR_ID }), 0);
+  assert.equal(liveApprovalAt(null, { operatorId: OPERATOR_ID }), 0);
+  assert.equal(stalenessClock({ hours: 5 }).thresholdHours, STALE_AFTER_HOURS);
+});
+
+test('a ticket whose comments would not read is not counted as measured', () => {
+  // Its short fuse could not be applied at all. Not an alarm at 3h — a
+  // transient read failure is not a stuck ticket — but never folded into
+  // "nothing is stuck" either (DOCTRINE 3.11).
+  const out = readyFindings([ticket({ hours: 3, commentsReadable: false })]);
+  assert.equal(out.findings.length, 0);
+  assert.deepEqual(out.unmeasured, ['86bbkw1mn']);
+  const report = renderReport({ ...out, readyCount: 1 });
+  assert.match(report, /could not have the short fuse applied/);
+  assert.match(report, /86bbkw1mn/);
+});
+
+test('both reports name both clocks, so a threshold is never guessed at', () => {
+  const post = renderStalePost({ findings: [classifyReady(ticket({ approvedHours: 3 }))] });
+  assert.match(post, new RegExp(`${APPROVED_STALE_AFTER_HOURS}h once you have said`));
+  assert.match(post, new RegExp(`${STALE_AFTER_HOURS}h otherwise`));
+  assert.match(post, /measured from your "merge" comment itself, which nothing resets/);
+  const report = renderReport({ findings: [], fresh: [], readyCount: 0 });
+  assert.match(report, /Two clocks/);
+});
+
+test('the check reads the trail for EVERY ready ticket, not only the ones past 24h', () => {
+  // The regression that would silently undo all of the above: skipping the
+  // comment read for a "fresh" ticket makes the merge word invisible, and the
+  // 12-hour ticket this was written for is fresh by the 24h clock.
+  const src = read('scripts/stale_ready.mjs');
+  const readAt = src.indexOf('await readComments(id)');
+  const clockAt = src.indexOf('staleReady.stalenessClock(base)');
+  assert.ok(readAt > 0 && clockAt > readAt,
+    'the comments must be read BEFORE the threshold decision, not after it');
+  assert.match(src, /liveApprovalAt/, 'and the approval time must come from the module that owns the rule');
+});
+
+test('a row that has NOT established approval does not tell him he approved it', () => {
+  // With two clocks in play, "has been approved and waiting 26h" on a row
+  // reached without ever reading an approval is the DOCTRINE §2.5 slip in
+  // miniature: it states his action as fact. Every such row now says only what
+  // the reading actually established.
+  for (const t of [ticket({ pr: null }), ticket({ prState: 'CLOSED' }),
+    ticket({ prReadable: false, prState: null, checks: null }),
+    ticket({ checks: null }), ticket({ commentsReadable: false })]) {
+    const f = classifyReady(t);
+    assert.doesNotMatch(f.message, /has been approved/, `${f.reasonKey} presumes an approval it never read`);
+  }
+});

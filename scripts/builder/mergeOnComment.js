@@ -24,6 +24,12 @@
 // The one reading of a local merge verdict, shared with the merge step so the
 // two cannot disagree about it (task 86bbq80j5).
 const { isRealOverlap, isSelfHealing, isPermanent, conflictActor, verdictCopy, conflictVerdictKind } = require('./conflictWork');
+const { stripMachineMarker } = require('./machineComment');
+
+// Every refusal reason, classified terminal/transient/unknown where it is
+// RAISED (task 86bbtqpxd). There is no default: a code absent from that table
+// throws rather than inheriting a promise nobody chose for it.
+const { REFUSAL_CODES: R, classifyRefusal, speaksAsTerminal, refusalNeeds } = require('./refusalClass');
 
 /**
  * The exact phrases that mean "merge it". Deliberately a closed set matched
@@ -46,19 +52,57 @@ const MERGE_PHRASES = ['merge', 'merge it', 'ship it', 'approve'];
  * what keeps whole-message strictness honest: without this, "strict" quietly
  * means "strict about things the operator cannot control".
  *
- * Only the code-block SYNTAX goes. Nothing inside is touched, so prose that
- * merely mentions a command is still prose, and the caller still requires the
- * whole remaining string to equal a phrase.
+ * Only the WRAPPER goes. Nothing inside is touched, so prose that merely
+ * mentions a command is still prose, and the caller still requires the whole
+ * remaining string to equal a phrase.
+ *
+ * IT CAME BACK IN A DIFFERENT SHAPE (2026-09-06, task 86bbvraw4). The first
+ * version of this stripped backticks and fences, because that was the wrapper
+ * ClickUp had produced. On 2026-09-06 Dane posted the resume three times over
+ * half an hour and the lane stayed latched off; the near-miss detector quoted
+ * what had actually been stored:
+ *
+ *     **resume auto-merging**
+ *
+ * Markdown bold, which he did not type — it rode along on a formatted copy. It
+ * only took on the fourth try, using Paste and Match Style. His words:
+ * "we definitely need to do string match or some other method that will strip
+ * the invisible style characters so I don't always have to remember to paste
+ * just so."
+ *
+ * So this now removes the CLASS rather than the instance: emphasis, invisible
+ * characters, and the dash variants an editor substitutes. Whole-message
+ * strictness is untouched — that is the point. Strict has to mean strict about
+ * what he SAID, never about what his editor did to it on the way out.
  */
-function stripCodeFormatting(text) {
+function stripEditorFormatting(text) {
   return String(text || '')
     // A fenced block: ```lang\n ... \n``` — the opening fence may carry a
     // language tag ClickUp inferred, which is never part of the instruction.
     .replace(/^[ \t]*```[^\n`]*\n?/gm, '')
     .replace(/^[ \t]*```[ \t]*$/gm, '')
     // Inline backticks: `merge` is the same instruction as merge.
-    .replace(/`/g, '');
+    .replace(/`/g, '')
+    // Invisible characters a paste carries: zero-width space/non-joiner/joiner,
+    // BOM, and the bidirectional marks. They are never part of an instruction
+    // and they are, by definition, the ones he cannot see to remove.
+    .replace(/[\u200B-\u200F\u2028\u2029\uFEFF]/g, '')
+    // A non-breaking space is a space. Collapsing it here rather than in the
+    // whitespace pass below keeps that pass's \s+ honest across engines.
+    .replace(/\u00A0/g, ' ')
+    // Dash variants: en/em dash, non-breaking and figure hyphen, minus sign.
+    // "auto-merging" carries a hyphen, and autocorrect rewrites it.
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    // Markdown emphasis: **bold**, __bold__, *italic*, _italic_, ~~strike~~.
+    // Removed as MARKERS, not as pairs — a copy can bring one end and not the
+    // other, and half a wrapper is still the editor talking.
+    .replace(/\*\*|__|~~/g, '')
+    .replace(/[*_]/g, '');
 }
+
+/** The old name, kept because the whole point is that the wrapper varies.
+ *  One implementation, so a caller cannot get the narrow behaviour by accident. */
+const stripCodeFormatting = stripEditorFormatting;
 
 /**
  * Normalize a comment for phrase matching: strip code formatting the editor
@@ -69,7 +113,7 @@ function stripCodeFormatting(text) {
  * string must equal a phrase.
  */
 function normalizeCommand(text) {
-  return stripCodeFormatting(text)
+  return stripEditorFormatting(text)
     .trim()
     .toLowerCase()
     .replace(/\s+/g, ' ')
@@ -141,18 +185,35 @@ function isReviewPassed(text) {
  * comment mentioned would be a catastrophe that looks like success. No
  * "PR opened:" line means no candidate — refuse rather than guess.
  * Newest wins, so a rebuilt ticket merges its latest PR.
+ *
+ * `findPullRequests` is the same rule, returning EVERY trail PR newest-first
+ * rather than only the winner. It exists because the reconciler needs both
+ * questions answered from ONE definition of "this ticket's PR": which PR is
+ * authoritative (the newest), and which PRs are this ticket's at all (all of
+ * them, to spot a leftover open one under a closed ticket). Before 2026-09-04
+ * the reconciler answered the second question with its own loose regex over
+ * prose and closed a live urgent ticket on a PR belonging to another ticket —
+ * exactly the catastrophe the paragraph above says this parser exists to
+ * prevent, arriving through the one caller that did not use it (86bbuv66c).
  */
 const PR_OPENED_RE = /^\s*PR opened:\s*(https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+))\b/im;
 
-function findPullRequest(comments) {
-  const sorted = byDateNewestFirst(comments);
-  for (const c of sorted) {
+function findPullRequests(comments) {
+  const found = [];
+  const seen = new Set();
+  for (const c of byDateNewestFirst(comments)) {
     const m = PR_OPENED_RE.exec(String(c.comment_text || ''));
-    if (m) {
-      return { url: m[1], owner: m[2], repo: m[3], number: Number(m[4]), commentId: String(c.id) };
-    }
+    if (!m) continue;
+    const url = m[1];
+    if (seen.has(url)) continue;
+    seen.add(url);
+    found.push({ url, owner: m[2], repo: m[3], number: Number(m[4]), commentId: String(c.id) });
   }
-  return null;
+  return found;
+}
+
+function findPullRequest(comments) {
+  return findPullRequests(comments)[0] || null;
 }
 
 function commentDate(c) {
@@ -202,7 +263,14 @@ const LEGACY_HAND_OFF_RE = /^conflict hand-off on PR #\d+$/i;
  * ("no \"PR opened:\" comment on this ticket — nothing to merge").
  */
 function parseMergeMarker(text) {
-  const raw = String(text || '');
+  // THE STAMP COMES OFF FIRST (2026-09-06, task 86bbvr0j5). `call()` appends
+  // the `[machine]` line to every comment it posts, this marker included, and
+  // that line ends in "Dane's token — not his word". The ` — <timestamp>` split
+  // below takes the LAST em-dash, so the stamp captured it: the timestamp was
+  // never recovered and the reason came back with the stamp glued on. Neither
+  // ever matched what the next pass compared against, which killed the dedup
+  // and made the stall alarm behind it unreachable.
+  const raw = stripMachineMarker(text);
   if (!raw.startsWith(MERGE_MARKER)) return null;
   let rest = raw.slice(MERGE_MARKER.length).trim();
   let at = '';
@@ -253,6 +321,38 @@ function latestMergeMarker(replies) {
 }
 
 /**
+ * How many times a pass has already refused this authorization FOR THIS REASON.
+ *
+ * WHY IT IS COUNTED (2026-09-06, task 86bbvr0j5, Dane's call). A conflicting
+ * PR retries every relay pass, and the only alarm on that path measured AGE —
+ * 24 hours, chosen when the failure being imagined was a hand-off nobody had
+ * picked up. It is the wrong instrument for a merge that is actively retrying
+ * and failing: PR #628 failed five times in ninety minutes and the clock had
+ * barely moved. Dane noticed by eye and asked why the system had not.
+ *
+ * The attempts need no new storage, because each pass already writes its own
+ * marker reply. Counting the markers that gave THIS reason is the number of
+ * times this exact refusal has been reached — which is the question, and it
+ * survives a restart because the record is on the ticket rather than in
+ * memory.
+ *
+ * Matching on the reason, not merely on the marker, is what keeps it honest: a
+ * PR refused twice for red checks and once for a conflict has not tried the
+ * conflict three times, and an alarm that said so would send somebody looking
+ * for a problem that is not there.
+ */
+function countMergeRefusals(replies, reason) {
+  const want = String(reason == null ? '' : reason).trim();
+  if (!want) return 0;
+  let n = 0;
+  for (const r of replies || []) {
+    const parsed = parseMergeMarker(r && r.comment_text);
+    if (parsed && parsed.kind === 'refused' && String(parsed.reason).trim() === want) n += 1;
+  }
+  return n;
+}
+
+/**
  * Decide what a bus-relay pass should do with one Ready-to-launch ticket.
  *
  * Returns `{ act, reason, ... }` where act is one of:
@@ -273,7 +373,7 @@ function latestMergeMarker(replies) {
  * re-planning costs no extra noise on the ticket. A different reason, or a
  * clean run through to 'merge', is new information and is acted on.
  */
-function mergeDecision({ status, comments, operatorId, handled, refused, refusedAt }) {
+function mergeDecision({ status, comments, operatorId, handled, refused, refusedAt, refusedCount }) {
   const seen = handled instanceof Set ? handled : new Set(handled || []);
   const priorRefusals = refused instanceof Map ? refused : new Map(Object.entries(refused || {}));
   // WHEN the previous refusal was written, carried alongside WHY. A conflict
@@ -281,6 +381,7 @@ function mergeDecision({ status, comments, operatorId, handled, refused, refused
   // has not changed (task 86bbq0fh8) — and the age can only come from the
   // marker, which is the one record of when the pass actually said it.
   const priorRefusalTimes = refusedAt instanceof Map ? refusedAt : new Map(Object.entries(refusedAt || {}));
+  const priorRefusalCounts = refusedCount instanceof Map ? refusedCount : new Map(Object.entries(refusedCount || {}));
   const all = byDateNewestFirst(comments);
 
   // Only Ready to launch. The same word on any other status does nothing —
@@ -310,6 +411,9 @@ function mergeDecision({ status, comments, operatorId, handled, refused, refused
     commentDate: commentDate(authorization),
     priorRefusal: priorRefusals.get(String(authorization.id)),
     priorRefusalAt: priorRefusalTimes.get(String(authorization.id)) || '',
+    // HOW MANY TIMES, alongside why and when. Age alone cannot see a merge
+    // that is retrying and failing every few minutes (task 86bbvr0j5).
+    priorRefusalCount: Number(priorRefusalCounts.get(String(authorization.id))) || 0,
   };
 
   // A refusal we have already given, whose reason is still true, is not news.
@@ -318,11 +422,16 @@ function mergeDecision({ status, comments, operatorId, handled, refused, refused
   // answer, not by being permanently struck off. The moment the reason
   // changes (or disappears), the next pass acts.
   const wasRefusedFor = base.priorRefusal;
-  const refuse = (reason) => (
-    reason === wasRefusedFor
-      ? { ...base, act: 'ignore', reason: `already refused for the same reason: ${reason}` }
-      : { ...base, act: 'refuse', reason }
-  );
+  // The CODE travels with the reason from here on (task 86bbtqpxd).
+  // `classifyRefusal` throws on an unknown one, so a new refusal added
+  // without a classification fails at the raise site rather than quietly
+  // inheriting the standing-approval promise.
+  const refuse = (refusalCode, reason) => {
+    classifyRefusal(refusalCode);
+    return reason === wasRefusedFor
+      ? { ...base, act: 'ignore', reason: `already refused for the same reason: ${reason}`, refusalCode }
+      : { ...base, act: 'refuse', reason, refusalCode };
+  };
 
   // The newest REVIEW verdict must be a PASS, and the authorization must be
   // NEWER than it. Both halves matter: the first is "a human-independent
@@ -332,18 +441,18 @@ function mergeDecision({ status, comments, operatorId, handled, refused, refused
   // and must not release the new PR.
   const verdict = all.find((c) => isReviewVerdict(c.comment_text));
   if (!verdict) {
-    return refuse('no review verdict on this ticket — loop-review has not passed it');
+    return refuse(R.noReviewVerdict, 'no review verdict on this ticket — loop-review has not passed it');
   }
   if (!isReviewPassed(verdict.comment_text)) {
-    return refuse('the most recent review verdict is not a PASS');
+    return refuse(R.reviewNotPassed, 'the most recent review verdict is not a PASS');
   }
   if (commentDate(authorization) < commentDate(verdict)) {
-    return refuse('the merge command predates the current review verdict — it authorized an earlier round');
+    return refuse(R.authorizationPredatesVerdict, 'the merge command predates the current review verdict — it authorized an earlier round');
   }
 
   const pr = findPullRequest(all);
   if (!pr) {
-    return refuse('no "PR opened:" comment on this ticket — nothing to merge');
+    return refuse(R.noPrRecorded, 'no "PR opened:" comment on this ticket — nothing to merge');
   }
 
   return { ...base, act: 'merge', pr, reason: `authorized by comment ${authorization.id}` };
@@ -415,9 +524,12 @@ function unmetProtectionRule(pr) {
  * What to do with the PR itself, given `gh pr view --json
  * state,mergeStateStatus,mergeable,reviewDecision,statusCheckRollup`.
  *
- *   'merge'         — go
- *   'update-branch' — behind main; catch it up, then re-run the gate
- *   'conflict'      — hand it to an agent session; a script never resolves conflicts
+ *   'merge'            — go
+ *   'update-branch'    — behind main; catch it up via GitHub, then re-run the gate
+ *   'catch-up-locally' — GitHub says it conflicts and git says it does not;
+ *                        merge main in HERE and push (GitHub's own
+ *                        `update-branch` refuses on a PR it has flagged)
+ *   'conflict'         — hand it to an agent session; a script never resolves conflicts
  *   'wait'          — checks still running; say nothing, try next pass
  *   'refuse'        — terminal; comment on the ticket and stop
  *
@@ -435,13 +547,25 @@ function unmetProtectionRule(pr) {
  * GitHub's answer does not determine the cause, the reason says CANNOT TELL
  * and names what it saw (DOCTRINE 3.11) — never a pass, and never a plausible
  * reason, for a question that could not be answered.
+ *
+ * EVERY RETURN DECLARES `cannotTell`, TRUE OR FALSE (review round 2 of task
+ * 86bbuvd50). It answers one question — did this pass take a reading of the
+ * pull request at all, or is the verdict the absence of one? — and it is what
+ * the repeat bound counts, because the SENTENCE cannot be trusted to carry
+ * that meaning. PR #597 reworded the dominant cannot-tell and deleted the
+ * `CANNOT TELL` marker from it, which silently unhooked 84 of the 108
+ * measured lines from a bound that read the prose. Omitting the field on a
+ * new branch is not a syntax error and no behavioural test would catch it
+ * (`Boolean(undefined)` is `false`, so it would simply never be counted), so
+ * a source assertion in mergeOnComment.test.js fails on any return here that
+ * leaves the question unanswered.
  */
-function githubGate(pr) {
+function githubGate(pr, { gitCrossCheck = null } = {}) {
   const state = String((pr && pr.state) || '').toUpperCase();
-  if (state === 'MERGED') return { action: 'refuse', reason: 'the PR is already merged' };
-  if (state !== 'OPEN') return { action: 'refuse', reason: `the PR is ${state || 'in an unknown state'}, not open` };
+  if (state === 'MERGED') return { action: 'refuse', cannotTell: false, refusalCode: R.prAlreadyMerged, reason: 'the PR is already merged' };
+  if (state !== 'OPEN') return { action: 'refuse', cannotTell: false, refusalCode: R.prNotOpen, reason: `the PR is ${state || 'in an unknown state'}, not open` };
 
-  if (pr.isDraft) return { action: 'refuse', reason: 'the PR is still a draft' };
+  if (pr.isDraft) return { action: 'refuse', cannotTell: false, refusalCode: R.prIsDraft, reason: 'the PR is still a draft' };
 
   const mergeable = String(pr.mergeable || '').toUpperCase();
   const mergeStateStatus = String(pr.mergeStateStatus || '').toUpperCase();
@@ -449,8 +573,85 @@ function githubGate(pr) {
   // Conflicts first: a CONFLICTING PR cannot be helped by updating the
   // branch, and update-branch on one is exactly the "resolve it blind" this
   // must never do.
+  //
+  // ONE ASYNCHRONOUS READING IS NOT A SETTLED FACT (2026-09-03, task
+  // 86bbupfgn). On 2026-09-03 PR #567 read CONFLICTING/DIRTY from two
+  // different GitHub endpoints five minutes apart, while `git merge-tree`
+  // said clean and the real merge brought 16 commits across with zero
+  // conflicts. The gate handed the ticket to an agent session — of which
+  // none was watching — so a green, approved PR simply stopped, and the
+  // sentence it stopped with ("the branch conflicts with newer work on
+  // main") was false.
+  //
+  // Note the shape: the UNKNOWN branch below already knows this reading is
+  // computed in the background and can be not-yet-true. DIRTY comes from the
+  // same computation and got no such treatment.
+  //
+  // WHY GitHub said dirty is still unknown, and this code does not guess.
+  // The ticket's leading suspect was a stale computation against an older
+  // base — GitHub reported base_sha 0c6f096b while main was at 9b0056e2 —
+  // and that was MEASURED and does not hold: `git merge-tree --write-tree`
+  // is clean against BOTH commits (verified 2026-09-03 on the real objects).
+  // So the fix deliberately assumes nothing about the cause. It only refuses
+  // to assert a conflict that a second source contradicts.
   if (mergeable === 'CONFLICTING' || mergeStateStatus === 'DIRTY') {
-    return { action: 'conflict', reason: 'the branch conflicts with newer work on main' };
+    const cc = gitCrossCheck;
+    if (cc && cc.known && cc.conflicts === false) {
+      // THE DISAGREEMENT HAS A KNOWN REMEDY, SO REPORTING IT IS NOT ENOUGH
+      // (2026-09-04, task 86bbuvcwc). This used to answer `wait` — no
+      // conflict claimed, ask again next pass — which is right about the
+      // conflict and wrong about what happens next. Nothing was going to
+      // change on its own: measured on PR #585, this exact line was printed
+      // five times over fifty minutes, saying auto-merge would land a pull
+      // request GitHub had flagged and therefore would not land.
+      //
+      // One confirmed cause is `docs/WORK-LOG.md merge=union`. Git honours
+      // that driver and so does a merge GitHub PERFORMS, but the mergeability
+      // GitHub PRECOMPUTES does not — so a union-only difference reads as
+      // CONFLICTING for as long as the branch stays behind. That is not
+      // asserted as THE cause here, because this function does not know it:
+      // it is one measured instance of the general shape.
+      //
+      // What IS general is the remedy, and it was measured on the same PR —
+      // merging main in and pushing flipped GitHub to MERGEABLE within
+      // seconds. So the answer is the local catch-up, not GitHub's
+      // `update-branch` (which refuses on a PR it has called CONFLICTING).
+      return {
+        action: 'catch-up-locally',
+        disagreement: true,
+        // NO READING WAS TAKEN. Two sources contradict each other about the
+        // same branch, so this verdict is not an answer — it is the absence
+        // of one, and asking again next pass can legitimately say something
+        // different. It is 84 of the 108 lines the bound's threshold was
+        // measured on, and until review round 2 of task 86bbuvd50 it was
+        // classified by looking for `CANNOT TELL` in the sentence below —
+        // which PR #597 had already deleted from it.
+        cannotTell: true,
+        reason: `GitHub reports this branch as ${mergeable === 'CONFLICTING' ? 'CONFLICTING' : 'DIRTY'}, but git merges ${cc.base || 'main'} into ${cc.head || 'the branch'} cleanly (merge-tree exit 0). The two sources disagree, so no conflict is claimed — this machine merges ${cc.base || 'main'} into the branch and pushes, which is what cleared the identical reading on PR #585`,
+      };
+    }
+    if (cc && cc.known && cc.conflicts === true) {
+      return {
+        action: 'conflict',
+        // Both sources agree: this IS a reading, and a definite one.
+        cannotTell: false,
+        reason: 'the branch conflicts with newer work on main — GitHub and git agree',
+      };
+    }
+    // No cross-check available. The hand-off still happens, because an
+    // unverified conflict is not a reason to merge — but the sentence says
+    // what was actually read and what could not be, rather than asserting a
+    // conflict nothing confirmed (DOCTRINE 3.11).
+    return {
+      action: 'conflict',
+      needsGitCrossCheck: true,
+      // Honestly a cannot-tell — GitHub said CONFLICTING and nothing
+      // confirmed it. It never reaches the repeat bound, because a conflict
+      // hand-off is terminal rather than a wait that repeats, but the field
+      // states what was read rather than what happens next.
+      cannotTell: true,
+      reason: `GitHub reports this branch as ${mergeable === 'CONFLICTING' ? 'CONFLICTING' : 'DIRTY'}${cc && cc.why ? `, and git could not be consulted (${cc.why})` : ', and this pass did not cross-check it against git'} — treated as a conflict because an unconfirmed conflict is still not something to merge`,
+    };
   }
 
   // GitHub answers UNKNOWN while it is still computing mergeability. That is
@@ -459,28 +660,36 @@ function githubGate(pr) {
   if (mergeable === 'UNKNOWN' || mergeStateStatus === 'UNKNOWN') {
     return {
       action: 'wait',
+      // The other 22 of the 108 measured lines.
+      cannotTell: true,
       reason: 'CANNOT TELL yet — GitHub is still computing whether the branch merges cleanly; the next pass asks again',
     };
   }
 
   const checks = checkState(pr.statusCheckRollup);
   if (checks.failed.length) {
-    return { action: 'refuse', reason: `checks are red: ${checks.failed.join(', ')}` };
+    return { action: 'refuse', cannotTell: false, refusalCode: R.checksRed, reason: `checks are red: ${checks.failed.join(', ')}` };
   }
   if (checks.pending.length) {
-    return { action: 'wait', reason: `checks still running: ${checks.pending.join(', ')}` };
+    // A READING WAS TAKEN and it is "not yet". CI here takes about six
+    // minutes; counting it toward a ninety-minute bound measured on a
+    // narrower population would turn every ordinary wait into an alarm, which
+    // is the calibration error task 86bbuvd50 warned about in the loud
+    // direction.
+    return { action: 'wait', cannotTell: false, reason: `checks still running: ${checks.pending.join(', ')}` };
   }
   // A PR with no checks at all is not a green PR — it is a PR nothing
   // verified. main is protected on the "verify" check precisely so this
   // cannot ship unchecked.
   if (!checks.total) {
-    return { action: 'refuse', reason: 'the PR reports no checks at all — nothing verified this branch' };
+    return { action: 'refuse', cannotTell: false, refusalCode: R.noChecksAtAll, reason: 'the PR reports no checks at all — nothing verified this branch' };
   }
 
   // Behind main: the machine's own job, and it does it this pass.
   if (mergeStateStatus === 'BEHIND') {
     return {
       action: 'update-branch',
+      cannotTell: false,
       reason: 'the branch is behind main — this machine catches it up and the checks re-run',
     };
   }
@@ -492,6 +701,8 @@ function githubGate(pr) {
   if (mergeStateStatus === 'UNSTABLE') {
     return {
       action: 'refuse',
+      cannotTell: true,
+      refusalCode: R.unstableCannotTell,
       reason: 'CANNOT TELL — GitHub reports a check on this branch is not passing, but every check this gate can read is green, so it cannot name which one; read the PR\'s checks on GitHub',
     };
   }
@@ -499,7 +710,7 @@ function githubGate(pr) {
   if (mergeStateStatus === 'BLOCKED') {
     const rule = unmetProtectionRule(pr);
     if (rule) {
-      return { action: 'refuse', reason: `GitHub is holding the merge because ${rule}` };
+      return { action: 'refuse', cannotTell: false, refusalCode: R.blockedByNamedRule, reason: `GitHub is holding the merge because ${rule}` };
     }
     // The #487 sentence used to live here, and it was a guess wearing a
     // fact's clothes. GitHub reports BLOCKED for any unsatisfied protection
@@ -507,16 +718,18 @@ function githubGate(pr) {
     // neither, so neither may be named back.
     return {
       action: 'refuse',
+      cannotTell: true,
+      refusalCode: R.blockedCannotTell,
       reason: 'CANNOT TELL which rule — GitHub reports the merge is blocked while every check this gate can read is green, and it did not name the rule. It is not necessarily a missing review: a conflict GitHub has not finished recomputing reads exactly like this, so re-read the PR before acting on it',
     };
   }
 
   if (mergeStateStatus === 'DRAFT') {
-    return { action: 'refuse', reason: 'GitHub still reports the PR as a draft' };
+    return { action: 'refuse', cannotTell: false, refusalCode: R.githubReportsDraft, reason: 'GitHub still reports the PR as a draft' };
   }
 
   if (mergeStateStatus === 'CLEAN' || mergeStateStatus === 'HAS_HOOKS') {
-    return { action: 'merge', reason: `open, ${checks.total} check(s) green, no conflicts` };
+    return { action: 'merge', cannotTell: false, reason: `open, ${checks.total} check(s) green, no conflicts` };
   }
 
   // Not one of the eight values this gate knows how to read. The old code
@@ -525,6 +738,8 @@ function githubGate(pr) {
   // evidence.
   return {
     action: 'refuse',
+    cannotTell: true,
+    refusalCode: R.unreadableMergeState,
     reason: `CANNOT TELL — GitHub reported a merge state this gate does not know how to read (${mergeStateStatus ? `mergeStateStatus "${mergeStateStatus}"` : 'no mergeStateStatus at all'}, mergeable "${mergeable || 'absent'}")`,
   };
 }
@@ -561,7 +776,30 @@ function githubGate(pr) {
  *     the existing wording.
  */
 
-/** ~2x the observed 85s median for `verify`. Named, not a literal. */
+/**
+ * How long a pass will hold itself open waiting on CI.
+ *
+ * MEASURED AGAINST `verify`, AND THE MEASUREMENT MOVED (2026-09-03, task
+ * 86bbup3u1). This was set at 180s as "~2x the observed 85s median". That
+ * median is no longer true: four consecutive runs on PR #571 that afternoon
+ * took 127s, 317s, 346s and 342s. 180s is now SHORTER than the thing it is
+ * waiting for, which is not a slow wait — it is a wait that can never
+ * succeed.
+ *
+ * It is deliberately NOT raised to cover the new figure, and that is the
+ * point of this ticket. The bound is not free: MAX_IN_PASS_WAITS x this must
+ * stay under the relay's own 600s interval (see below), so covering a 350s CI
+ * run would mean a cap of one, and one stuck PR would spend the whole pass.
+ * A budget cannot be both big enough for CI and small enough for the
+ * schedule.
+ *
+ * So the merge path no longer tries to win that race. It hands the PR to
+ * GitHub's own auto-merge (see autoMergeDecision) and returns immediately;
+ * GitHub merges it whenever the checks go green, however long they take, and
+ * keeps the branch current itself. This budget survives only for the one
+ * caller that genuinely must wait in-pass — the stale review-gate re-run,
+ * which has to see a NEW answer appear before it can act on anything.
+ */
 const IN_PASS_WAIT_MS = 180_000;
 
 /** How often to re-ask GitHub inside that budget. */
@@ -588,20 +826,102 @@ function mayWaitInPass(waitsUsed, cap = MAX_IN_PASS_WAITS) {
 }
 
 /**
+ * How long may THIS pass hold itself open watching a merge land?
+ *
+ * WHY THIS EXISTS (round 2 of task 86bbv35cq). The merge-observation wait was
+ * added taking a 15-minute default, blocking (`Atomics.wait` freezes the event
+ * loop), uncapped per ticket, and charged to nothing — so `inPassBudget` never
+ * saw it and the tested "a pass cannot outlast its own interval" invariant did
+ * not cover it. The relay's schedule is 600s. One enqueued pull request would
+ * have been 900s, several 30-45 minutes, swallowing the relay's own next
+ * firings and everything else that rides its ten-minute wake.
+ *
+ * That is exactly what the comment on the worst-case test already warned
+ * about: "the 15-minute bound this replaces... was picked when the relay ran
+ * hourly, and it survived the change to 10 minutes still permitting a pass
+ * 1.5x longer than the whole interval." It came straight back on a new path.
+ *
+ * So the merge observation is not a second budget. It IS an in-pass wait — the
+ * same slots, the same per-wait ceiling, the same accounting — because two
+ * budgets that must jointly fit under one interval is a sum nobody maintains.
+ * The worst case stays MAX_IN_PASS_WAITS x IN_PASS_WAIT_MS, which
+ * mergeOnComment.test.js already pins against the relay's real interval read
+ * out of install_bus_relay.sh.
+ *
+ * A SPENT BUDGET IS NOT A REFUSAL TO LOOK. It returns `timeoutMs: 0`, which
+ * still takes one read and no sleep — and one read is the whole of the
+ * queue-less path, where `gh pr merge` has already merged synchronously by the
+ * time it returns. So a pass that has spent its waits still observes every
+ * ordinary merge correctly; it just does not linger on one GitHub is holding.
+ *
+ * @param used  waits already spent this pass (inPassBudget.used)
+ * @param cap   how many the pass gets (inPassBudget.cap)
+ * @param waitMs per-wait ceiling
+ * @returns {{ timeoutMs: number, charged: boolean }}
+ */
+function mergeObserveBudget({ used = 0, cap = MAX_IN_PASS_WAITS, waitMs = IN_PASS_WAIT_MS } = {}) {
+  if (!mayWaitInPass(used, cap)) return { timeoutMs: 0, charged: false };
+  return { timeoutMs: waitMs, charged: true };
+}
+
+/**
+ * Did that merge observation actually SPEND one of the pass's waits?
+ *
+ * WHY THIS IS NOT `observeBudget.charged` (round 3 of task 86bbv35cq). The
+ * slot was drawn BEFORE the observation, so a queue-less merge — which returns
+ * on the first read having slept 0ms, and is every merge on this repo today —
+ * still cost one of three. Measured: three ordinary merges in a pass left
+ * `used = 3/3`, and `mayWaitInPass` then refused the fourth ticket its real
+ * review-gate or CI wait and deferred it a whole ten-minute interval. For
+ * waits that never happened.
+ *
+ * That is criterion 5 — "it must work identically with NO queue enabled" —
+ * broken on the live path, by the accounting rather than by the wait.
+ *
+ * So the budget is charged on the way OUT, on evidence: `sleptMs` is what the
+ * observation really blocked for. `charged` still gates it, because a pass
+ * with no slots left is handed `timeoutMs: 0` and must not somehow spend a
+ * fourth.
+ *
+ * @param charged  whether a slot was available (mergeObserveBudget().charged)
+ * @param sleptMs  what the observation actually blocked for (waitForMerge)
+ */
+function mergeObservationSpendsSlot({ charged = false, sleptMs = 0 } = {}) {
+  return Boolean(charged) && Number(sleptMs) > 0;
+}
+
+/**
  * Given a freshly re-read gate and how long we have been waiting, what next?
  *
  * Deliberately does NOT re-implement the gate. `merge`, `refuse` and
  * `conflict` are handed straight back to the paths that already handle them,
  * so there is exactly one place that decides whether something may merge.
  *
- * @returns {{ action: 'merge'|'refuse'|'conflict'|'update-branch'|'wait'|'poll-again', reason?: string }}
+ * `refusalCode` RIDES THROUGH, AND THAT IS LOAD-BEARING (review round 1 of
+ * task 86bbtqpxd). This function is the funnel BOTH in-pass waits go through
+ * — `waitForChecksInPass` spreads its answer straight to the caller — so
+ * dropping the code here left every refusal discovered while waiting
+ * unclassified. Two things followed, and both were worse than the bug this
+ * ticket set out to kill: the relay pass THREW (`classifyRefusal` has no
+ * default, by design) and died mid-pass, and the one path that supplied a
+ * fallback code relabelled genuinely terminal reasons — "the PR is CLOSED" —
+ * as transient, rebuilding the exact standing-approval lie on a fresh path.
+ *
+ * The rule this encodes: a gate object whose action is a refusal carries the
+ * code that classifies it, through every hand-off, unconditionally. Anything
+ * that rebuilds a gate object copies the code with it. (Written without the
+ * literal raise-site spelling on purpose: refusalClass.test.js COUNTS that
+ * string to prove every raise site is classified, and a comment quoting it
+ * would be an eleventh refusal that carries no code.)
+ *
+ * @returns {{ action: 'merge'|'refuse'|'conflict'|'update-branch'|'catch-up-locally'|'wait'|'poll-again', reason?: string, refusalCode?: string }}
  */
 function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS } = {}) {
   const action = String(gate?.action || '');
 
-  // Terminal answers go back to the existing paths untouched.
+  // Terminal answers go back to the existing paths untouched — code included.
   if (action === 'merge' || action === 'refuse' || action === 'conflict') {
-    return { action, reason: gate.reason };
+    return { action, cannotTell: Boolean(gate.cannotTell), reason: gate.reason, ...(gate.refusalCode ? { refusalCode: gate.refusalCode } : {}) };
   }
 
   // Behind main is also terminal: no amount of polling makes a branch catch
@@ -610,7 +930,20 @@ function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS 
   // in review, 2026-08-30, task 86bbmk7pv). Ending the wait here hands it to
   // the next pass, where the catch-up path already lives.
   if (action === 'update-branch') {
-    return { action, reason: gate.reason || 'the branch fell behind main while waiting' };
+    return { action, cannotTell: Boolean(gate.cannotTell), reason: gate.reason || 'the branch fell behind main while waiting' };
+  }
+
+  // Same reasoning, different remedy (task 86bbuvcwc). A branch GitHub has
+  // flagged as CONFLICTING while git calls it clean does not un-flag itself
+  // either, so polling it out can only end in a wrong-reason answer. It goes
+  // back terminal, to the caller that owns the local catch-up.
+  if (action === 'catch-up-locally') {
+    return {
+      action,
+      disagreement: true,
+      cannotTell: Boolean(gate.cannotTell),
+      reason: gate.reason || 'GitHub and git disagree about whether this branch conflicts',
+    };
   }
 
   // Anything else means "not resolved yet". Out of budget is a WAIT — the
@@ -618,11 +951,16 @@ function afterCatchUpDecision({ gate, elapsedMs = 0, budgetMs = IN_PASS_WAIT_MS 
   if (Number(elapsedMs) >= Number(budgetMs)) {
     return {
       action: 'wait',
+      // THE VERDICT'S CLASSIFICATION SURVIVES THE TIMEOUT. Running out of
+      // budget does not turn a pull request GitHub cannot read into one it
+      // can — if the last gate reading was a cannot-tell, this is still one,
+      // whatever the sentence below says about CI.
+      cannotTell: Boolean(gate && gate.cannotTell),
       reason: `CI was still running after ${Math.round(Number(budgetMs) / 1000)}s; the next pass will pick it up`,
     };
   }
 
-  return { action: 'poll-again', reason: gate?.reason || 'checks still running' };
+  return { action: 'poll-again', cannotTell: Boolean(gate && gate.cannotTell), reason: gate?.reason || 'checks still running' };
 }
 
 /**
@@ -676,7 +1014,18 @@ const APPROVAL_CARRIES_OVER = '**Your approval is still standing — you do not 
  * hand-off that cannot name a specific waiting actor does not get to imply
  * one. `actor` is that name, made structural so a test can check it.
  */
-const ACTOR_PROMISES = { 'later-pass': true, 'loop-queue': true, nobody: false, none: false };
+const ACTOR_PROMISES = {
+  'later-pass': true,
+  'loop-queue': true,
+  // A TERMINAL refusal: the reason will never clear on its own, so no pass is
+  // coming and the body must say who has to act instead (task 86bbtqpxd). The
+  // hyphenated name is the two actors the `needs` sentences name out loud, so
+  // the structural field and the prose cannot drift apart into a message that
+  // implies an actor it never names (`docs/DOCTRINE.md` §2.5).
+  'agent-or-operator': false,
+  nobody: false,
+  none: false,
+};
 
 /** May this notice tell him the approval carries over? Only if the marker is
  *  re-decidable AND a named actor is going to act on the reason. */
@@ -692,16 +1041,87 @@ function markerKind(what) {
 }
 
 /**
- * A precondition failed, or GitHub says the PR cannot be merged safely. The
- * marker is re-decidable, so the promise is the truthful one: the reason may
- * be fixed later and this goes through on its own.
+ * A precondition failed, or GitHub says the PR cannot be merged safely.
+ *
+ * WHICH PROMISE THIS MAKES DEPENDS ON THE REASON'S CLASS, NOT ON ITS WORDING
+ * (2026-09-03, task 86bbtqpxd). Until now every refusal said the same thing —
+ * "your approval is still standing ... it goes through on its own" — and that
+ * sentence is true of "checks are red" and flatly false of "the PR is already
+ * merged". Ticket 86bbqw49y carried twenty-five of them, sixteen for a reason
+ * no pass could ever clear, and sat twelve hours with its work already live.
+ *
+ * So the class comes from `refusalClass.js`, keyed on the code the raise site
+ * chose:
+ *
+ *   transient — unchanged. The marker is re-decidable, a later pass merges on
+ *               the same word, and the body says so truthfully.
+ *   terminal / unknown — the promise is dropped entirely and replaced by the
+ *               reason's own `needs` sentence, which names WHO must act.
+ *
+ * THE MARKER STAYS RE-DECIDABLE EVEN WHEN THE MESSAGE IS TERMINAL, and that
+ * is deliberate. Terminal describes the REASON, not the operator's word: if an
+ * agent session records the missing PR, his "merge" should still be good. A
+ * terminal marker would spend it and make him say it twice for someone else's
+ * omission. What changes is what he is TOLD, which is the whole defect.
+ *
+ * `refusalCode` is required. An absent or unknown one throws (there is no
+ * default), because a refusal that could not be classified is exactly the one
+ * that would otherwise inherit the reassuring wording by accident.
  */
-function refusalNotice({ commentId, why, plainEnglish }) {
+function refusalNotice({ commentId, why, plainEnglish, refusalCode }) {
+  const kind = classifyRefusal(refusalCode).kind;
+  const terminal = speaksAsTerminal(refusalCode);
+  const closing = terminal ? refusalNeeds(refusalCode) : APPROVAL_CARRIES_OVER;
   return {
     marker: `refused: ${why}`,
-    actor: 'later-pass',
-    body: `Merge not performed. ${plainEnglish}\n\nWhy: ${why}.\n\n${APPROVAL_CARRIES_OVER}\n\n(Automatic: your comment ${commentId} on this ticket was read as a merge authorization. Nothing on GitHub or this ticket was changed. — bus-relay merge step)`,
+    actor: terminal ? 'agent-or-operator' : 'later-pass',
+    refusalCode,
+    terminal,
+    // `terminal` answers "may this promise the approval carries over?" and is
+    // deliberately true for BOTH 'terminal' and 'unknown'. `kind` is the
+    // three-way answer, and the bus post needs it: announcing a CANNOT-TELL
+    // as "no later pass will clear it" is a certainty the gate did not have,
+    // and it contradicted the ticket comment posted beside it (review round 1
+    // of task 86bbtqpxd). A caller that flattens the two says something the
+    // classification does not.
+    kind,
+    body: `Merge not performed. ${plainEnglish}\n\nWhy: ${why}.\n\n${closing}\n\n(Automatic: your comment ${commentId} on this ticket was read as a merge authorization. Nothing on GitHub or this ticket was changed. — bus-relay merge step)`,
   };
+}
+
+/**
+ * The ONE LINE the bus hears about a refusal, keyed on the reason's class.
+ *
+ * THREE CLASSES, THREE SENTENCES (review round 1 of task 86bbtqpxd). The
+ * relay used to branch on `notice.terminal`, which is true of 'unknown' as
+ * well as 'terminal' — so a CANNOT-TELL refusal was announced here as "no
+ * later pass will clear it" while the ticket comment posted beside it
+ * correctly said it could not say. Two surfaces, one occurrence, contradicting
+ * each other, and the CERTAIN one was the wrong one: `blockedCannotTell`
+ * routinely does clear on the next pass. A gate that could not tell must never
+ * be quoted as though it had.
+ *
+ * It lives here, next to the body it accompanies, for the same reason the
+ * marker does: two places writing about one occurrence is two chances to drift,
+ * and the drift is always in the reassuring direction.
+ */
+function refusalBusLine({ label, url, why, kind }) {
+  const head = `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${url}): ${why}.`;
+  if (kind === 'terminal') {
+    return `${head} This reason is TERMINAL — no later pass will clear it and this step will not post about it again. It needs an agent session or Dane; the ticket comment says what. It is still Ready to launch.`;
+  }
+  if (kind === 'unknown') {
+    return `${head} This step CANNOT TELL whether a later pass would clear it, and it will not post about it again — so an agent session or Dane has to look. The ticket comment says what. It is still Ready to launch.`;
+  }
+  if (kind === 'transient') {
+    return `${head} Explanation posted on the ticket; it is still Ready to launch.`;
+  }
+  // No default sentence, for the same reason refusalClass has no default
+  // class: a line written for a class nobody declared would say whichever
+  // thing was cheapest to write.
+  throw new Error(
+    `refusalBusLine: unknown refusal class ${JSON.stringify(kind)} — every class in REFUSAL_CLASSES needs its own sentence`,
+  );
 }
 
 /**
@@ -839,21 +1259,470 @@ function mergedNotice({ commentId, pr, mergedAt, lane, files }) {
   };
 }
 
+/**
+ * GITHUB'S AUTO-MERGE, AND WHY THE RELAY STOPPED WAITING (2026-09-03, task
+ * 86bbup3u1).
+ *
+ * `main` is protected with `strict: true`, so a branch must contain every
+ * commit on main to merge, and every merge invalidates every other open
+ * branch. The relay's answer was to catch the branch up itself and then wait
+ * out CI in-pass. That works when the queue is quiet and CANNOT work when it
+ * is busy, which is exactly when the merge lane matters: catch up, restart
+ * CI, run out of budget, defer — and by the next pass main has moved again.
+ * On 2026-09-03 the operator said "merge" at 15:43 and the PR was still open
+ * an hour later, having gone round that loop four times. Nothing refused and
+ * nothing errored; every pass was a healthy pass.
+ *
+ * The fix is to stop racing. GitHub will hold a merge itself: armed on a PR,
+ * auto-merge lands it the moment the required checks pass, and with
+ * `allow_update_branch` on it does the catch-up too. The relay arms it and
+ * goes home.
+ *
+ * WHAT ARMING IS NOT. It is not a second merge gate. Arming happens ONLY on
+ * the two non-terminal answers — `wait` (checks still running) and
+ * `update-branch` (behind main) — which the existing gate reaches only after
+ * every other precondition already holds: the PR is open, not a draft, not
+ * conflicting, no check is red, and the operator's word is on the ticket.
+ * `refuse` and `conflict` are untouched and never arm. GitHub then applies
+ * the branch protection rules on its own account, so an armed PR whose checks
+ * later go red does not merge.
+ */
+function autoMergeDecision({ gate, autoMergeRequest, reviewGateState, alreadyMerged = false } = {}) {
+  if (alreadyMerged) return { action: 'none', reason: 'the PR is already merged' };
+
+  const armed = Boolean(autoMergeRequest);
+  const review = String(reviewGateState || '');
+
+  // THE ONE THING GITHUB DOES NOT CHECK FOR US, AND IT IS THIS REPO'S OWN
+  // REVIEW GATE. Branch protection on `main` requires exactly one check,
+  // `verify`. `review-gate` runs on every PR but is NOT required, so GitHub's
+  // auto-merge — which enforces the protection rules and nothing else —
+  // would happily land a PR whose review gate is stale or red. The relay's
+  // own merge path refuses that case outright, so arming without this guard
+  // would delegate the merge to a WEAKER gate than the one being replaced,
+  // which is the kind of trade that gets made once and discovered later.
+  //
+  // So the review gate is checked HERE, before arming, and is re-checked on
+  // every later pass: a PR that goes stale after it was armed is DISARMED
+  // rather than left to GitHub. 'absent' passes for the same reason the merge
+  // path lets it through — a PR carrying no review-gate check at all is a
+  // different situation from one carrying a bad answer, and it is not this
+  // function's to redefine.
+  const reviewOk = review === 'fresh' || review === 'absent' || review === '';
+  if (!reviewOk) {
+    return armed
+      ? {
+          action: 'disarm',
+          reason: `the review gate is "${review}", which GitHub's auto-merge does not check — disarming so this merge goes back through the relay's own gate`,
+        }
+      : { action: 'none', reason: `the review gate is "${review}", so this PR is not in a state to hand to GitHub` };
+  }
+
+  const action = String((gate && gate.action) || '');
+  if (action !== 'wait' && action !== 'update-branch') {
+    return { action: 'none', reason: `the gate says "${action || 'nothing'}", which is not a state that arms auto-merge` };
+  }
+
+  if (armed) {
+    return { action: 'already-armed', reason: 'auto-merge is already armed on this PR; GitHub lands it when the checks pass' };
+  }
+
+  return {
+    action: 'arm',
+    reason: action === 'update-branch'
+      ? 'the branch is behind main — GitHub catches it up and merges when the checks pass'
+      : 'the checks are still running — GitHub merges when they pass',
+  };
+}
+
+/**
+ * How long an armed PR may sit before its silence is worth a word.
+ *
+ * AN ARMED MERGE THAT NEVER FIRES IS A NEW KIND OF QUIET, and it is the thing
+ * this ticket's own incident should teach. Before auto-merge, a pass that
+ * could not merge said so every ten minutes in its log. After it, the pass
+ * ends cleanly having handed the PR to GitHub — and if GitHub then never
+ * merges it (a check goes red later, someone pushes, the arming is dropped,
+ * a protection rule changes) there is nothing on our side still watching.
+ * "Handed off" would read exactly like "done".
+ *
+ * Two hours is chosen against the thing it must not cry wolf about: a CI run
+ * here is ~6 minutes and the relay wakes every 10, so anything still armed
+ * after two hours has missed roughly twelve chances to merge and is not
+ * merely slow.
+ */
+const AUTO_MERGE_STALE_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Has an armed PR been armed too long? Returns a REASON, not just a boolean,
+ * because the caller puts it in front of a person.
+ *
+ * A missing or unreadable `enabledAt` is NOT treated as "fine": it comes back
+ * as `cannot-tell`, which the caller reports rather than swallows. Reading an
+ * unknown as healthy is how the silence this guards against gets rebuilt one
+ * level up.
+ */
+function autoMergeArmedTooLong({ autoMergeRequest, now = Date.now(), thresholdMs = AUTO_MERGE_STALE_MS } = {}) {
+  if (!autoMergeRequest) return { state: 'not-armed' };
+
+  const raw = autoMergeRequest.enabledAt || autoMergeRequest.enabled_at || '';
+  const at = Date.parse(raw);
+  if (!raw || Number.isNaN(at)) {
+    return {
+      state: 'cannot-tell',
+      reason: 'auto-merge is armed but GitHub did not say when it was armed, so how long it has been waiting cannot be read',
+    };
+  }
+
+  const heldMs = Number(now) - at;
+  if (heldMs < Number(thresholdMs)) return { state: 'ok', heldMs };
+
+  const hours = Math.floor(heldMs / 3_600_000);
+  const mins = Math.round((heldMs % 3_600_000) / 60_000);
+  return {
+    state: 'stale',
+    heldMs,
+    reason: `auto-merge has been armed on this PR for ${hours}h ${mins}m without landing — GitHub is holding it for something (a check that went red after arming, a push that dropped the arming, or a protection rule that is not satisfied)`,
+  };
+}
+
+/**
+ * The PR is MERGED and an unhandled merge authorization is still sitting on
+ * the ticket. Before auto-merge this could only mean somebody merged by hand,
+ * and the gate's answer — refuse, "the PR is already merged" — was a fair
+ * description of what the relay itself had done. Once the relay arms GitHub
+ * to merge on its behalf it becomes the ORDINARY ending, and a refusal notice
+ * telling the operator his merge was not performed, on a ticket whose PR is
+ * merged, is simply false.
+ *
+ * So a merged PR with a live authorization completes the bookkeeping the
+ * merge path would have done: record it and move the ticket to Live. This
+ * cannot double-merge — the merge already happened; the only thing left is
+ * saying so.
+ */
+function mergedElsewhereNotice({ commentId, pr, mergedAt, armed }) {
+  const how = armed
+    ? "GitHub's auto-merge landed it, which this relay armed on your word"
+    : 'it was merged outside this relay (by hand, or by another session)';
+  return {
+    marker: `merged PR #${pr.number} at ${mergedAt}`,
+    actor: 'none',
+    body: `Merged: PR #${pr.number} (${pr.url}) is merged into main — ${how}. Recorded here on your merge command ${commentId}, and this ticket is moving to Live. main auto-deploys, so this is on its way live now.\n\n(Automatic — bus-relay merge step.)`,
+  };
+}
+
+
+/**
+ * How long one unchanging CANNOT TELL may repeat before somebody is told.
+ *
+ * MEASURED, NOT CHOSEN (2026-09-04, task 86bbuvd50 — and the ticket asked for
+ * this explicitly, because the 2026-09-02 recency-alarm proposal died of a
+ * number picked from a single incident).
+ *
+ * Every `MERGE WAITING ... CANNOT TELL` line in the relay's own launchd log,
+ * grouped by ticket, first sighting to last:
+ *
+ *   86bbugcpa   16 lines   09:23 -> 12:02   2h39m   an agent session unstuck it
+ *   86bbuvcwc   16 lines   09:55 -> 12:33   2h38m   an agent session unstuck it
+ *   86bbpz1hu   13 lines   10:37 -> 12:44   2h07m   an agent session unstuck it
+ *   86bbtqpxd    6 lines   23:56 -> 00:50     54m   cleared on its own
+ *   86bbpz1gd    4 lines   14:20 -> 15:04     44m   cleared on its own
+ *   86bbugzep    2 lines   16:04 -> 16:44     40m   cleared on its own
+ *   86bbugeda    2 lines   08:40 -> 08:50     10m   cleared on its own
+ *   86bbqz7rg    1 line                        —    cleared on its own
+ *   86bbjt1b0    1 line                        —    cleared on its own
+ *
+ * **Nothing sits between 54 minutes and 2h07m.** That empty gap chose the
+ * threshold, the same way DOCTRINE 6.22's did. Ninety minutes is above every
+ * run that has ever resolved itself and below every run that has ever needed
+ * hands, with roughly half an hour of margin on each side.
+ *
+ * MEASURED IN TIME, NOT IN PASSES, and that is deliberate. A ticket only
+ * produces a line on passes where the relay actually looks at it — 86bbugzep's
+ * two lines span forty minutes, not twenty — so a pass count is not a clock.
+ * The count is still reported, because it is what a reader wants to see; it is
+ * simply not what the decision turns on.
+ *
+ * DO NOT UNIFY THIS WITH `pipelinePause.STRANDED_AFTER_MS`, which is also 90
+ * minutes. The equality is a coincidence of two independent measurements: that
+ * one bounds how long a BUILD PASS may legitimately take, this one bounds how
+ * long GitHub may legitimately be undecided. They will move for different
+ * reasons, and a future reader tidying them into one constant would couple two
+ * unrelated clocks — the drift failure this repo already carries three
+ * comments about.
+ */
+const CANNOT_TELL_STALE_MS = 90 * 60 * 1000;
+
+/**
+ * Is this pass looking at the SAME BLOCK the stored run is counting?
+ *
+ * A block is one pull request stuck on one commit — NOT one form of words.
+ * Review round 1 of task 86bbuvd50 killed the first answer, which compared the
+ * reason TEXT: replayed over the relay's own log it escalated on one of the
+ * three blocks that actually needed hands, because GitHub alternates between
+ * two CANNOT TELL wordings inside a single block
+ *
+ *   CANNOT TELL — GitHub reports this branch as CONFLICTING, but git merges
+ *   origin/main into a6f52c23 cleanly (merge-tree exit 0)...
+ *   CANNOT TELL yet — GitHub is still computing whether the branch merges
+ *   cleanly; the next pass asks again
+ *
+ * (Those are the wordings AS LOGGED. PR #597 has since dropped the
+ * `CANNOT TELL — ` prefix from the first one — which is what review round 2
+ * caught, and why `verdictCannotTell` no longer reads any of this prose.)
+ *
+ * and 86bbpz1hu alternated eight times in thirteen passes — its longest
+ * unbroken streak of one wording was about thirty minutes, so the clock reset
+ * long before ninety was ever reached. Both wordings are the same fact:
+ * GitHub cannot give a stable answer about this branch. The prose is GitHub's
+ * polling state; the head commit is the thing that actually changed or did not.
+ *
+ * UNKNOWN IS A WILDCARD, NEVER A DIFFERENCE. A pass that could not read the PR
+ * has no SHA to compare — that is the ticket's own "a rate-limited read" — and
+ * treating an unreadable pass as a new block would restart the clock every time
+ * GitHub rate-limited us, which is this bug wearing a different hat. Only a
+ * KNOWN difference on both sides ends a run. An old record written before this
+ * field existed has no `headSha` either, and continues for the same reason.
+ */
+function sameCannotTellBlock(previous, identity = {}) {
+  if (!previous) return false;
+  const differs = (a, b) => a != null && b != null && String(a) !== String(b);
+  if (differs(previous.pr, identity.pr)) return false;
+  if (differs(previous.headSha, identity.headSha)) return false;
+  return true;
+}
+
+/**
+ * Should this repeated CANNOT TELL be escalated, and has it already been?
+ *
+ * PURE. The caller owns reading and writing `prev` (the per-PR ledger entry);
+ * this only decides. That split is why the quiet-after-escalating rule can be
+ * tested without a ledger, a relay pass or a clock.
+ *
+ * WHAT THIS DOES NOT DO (the ticket's non-goals, restated where they can be
+ * violated): it never claims a conflict, never refuses a merge and never
+ * cancels auto-merge. CANNOT TELL is a CORRECT verdict — only its silence was
+ * wrong. Every branch below returns the same `verdict` it was handed.
+ *
+ * @param {object|null} prev   the stored run: { pr, headSha, reason, rewordings, firstSeenAt, passes, escalatedAt }
+ * @param {string} verdict     this pass's reason text, verbatim ('' if not a cannot-tell)
+ * @param {boolean} isCannotTell  whether this pass's verdict is a cannot-tell at all
+ * @param {object} identity    what this pass is stuck ON: { pr, headSha }; either may be
+ *                             null when it could not be read, and an unknown never
+ *                             ends a run — see sameCannotTellBlock
+ * @returns {{ state:'clear'|'new'|'holding'|'escalate'|'quiet', next:object|null, escalate:boolean, reason?:string }}
+ */
+function cannotTellRun({ prev, verdict, isCannotTell, identity = {}, now = Date.now(), thresholdMs = CANNOT_TELL_STALE_MS } = {}) {
+  // Not a cannot-tell this pass — the block is over, whatever it was. Returning
+  // `next: null` is what leaves NO RESIDUE: a resolved wobble must not make the
+  // next unrelated block start half-way to an alarm.
+  if (!isCannotTell) return { state: 'clear', next: null, escalate: false };
+
+  const reason = String(verdict || '').trim();
+  const previous = prev && typeof prev === 'object' ? prev : null;
+
+  // What this pass is stuck ON. An unknown field is carried forward from the
+  // stored run rather than overwritten with null, so one unreadable pass does
+  // not erase the identity the next pass would have compared against.
+  const pr = identity.pr != null ? identity.pr : (previous ? previous.pr : null);
+  const headSha = identity.headSha != null ? identity.headSha : (previous ? previous.headSha : null);
+  const at = { pr: pr == null ? null : pr, headSha: headSha == null ? null : headSha };
+
+  // A DIFFERENT BLOCK is a different fact, so the clock restarts and the new
+  // run may escalate later on its own merits. "Different" is a different pull
+  // request or a different head commit — never a different form of words; see
+  // sameCannotTellBlock for the log that settled it.
+  if (!sameCannotTellBlock(previous, identity)) {
+    return {
+      state: 'new',
+      next: { ...at, reason, rewordings: 0, firstSeenAt: now, passes: 1, escalatedAt: null },
+      escalate: false,
+    };
+  }
+
+  // A POSITIVE FINITE NUMBER, nothing looser. `Number(null)` is 0 and 0 is
+  // finite, so a plain `Number.isFinite` check would read a null timestamp as
+  // the epoch — making heldMs about 56 years and escalating instantly on a
+  // corrupt record. The test for this caught it; the noisy direction is as
+  // wrong as the silent one.
+  const rawFirst = previous.firstSeenAt;
+  const firstSeenAt = typeof rawFirst === 'number' && Number.isFinite(rawFirst) && rawFirst > 0
+    ? rawFirst
+    : NaN;
+  const passes = Number(previous.passes || 0) + 1;
+
+  // An unreadable stored timestamp is NOT read as "just started" — that would
+  // make the alarm unreachable forever, which is this ticket's own bug wearing
+  // a different hat (and exactly what task 86bbu60ax found in the claim reader
+  // on 2026-09-04). It restarts the clock and says so by leaving escalatedAt
+  // null, so the next pass can still get there.
+  if (!Number.isFinite(firstSeenAt)) {
+    return {
+      state: 'new',
+      next: { ...at, reason, rewordings: 0, firstSeenAt: now, passes: 1, escalatedAt: null },
+      escalate: false,
+    };
+  }
+
+  const heldMs = Number(now) - firstSeenAt;
+  // The NEWEST wording is what gets stored and quoted — the run is identified
+  // by the commit, but the message must say what GitHub is saying now, not
+  // what it said ninety minutes ago. `rewordings` counts how many times that
+  // answer has been reworded, because "GitHub has given three different
+  // answers about the same commit" IS the diagnosis in the alternating case.
+  const reworded = String(previous.reason || '') !== reason;
+  const rewordings = Math.max(0, Number(previous.rewordings || 0) + (reworded ? 1 : 0));
+  const carried = { ...at, reason, rewordings, firstSeenAt, passes, escalatedAt: previous.escalatedAt || null };
+
+  // ESCALATED ALREADY — the whole point of the bound. It stays silent until the
+  // verdict changes or clears, both of which are handled above. Without this
+  // branch the fix would post every ten minutes forever, which is the failure
+  // REPORTING-NEEDS-A-READER clause 2 names: one noisy escalation beats 820
+  // silent ones, and N escalations beat neither.
+  if (previous.escalatedAt) return { state: 'quiet', next: carried, escalate: false };
+
+  if (heldMs < Number(thresholdMs)) return { state: 'holding', next: carried, escalate: false };
+
+  const hours = Math.floor(heldMs / 3_600_000);
+  const mins = Math.round((heldMs % 3_600_000) / 60_000);
+  const held = hours ? `${hours}h ${mins}m` : `${mins}m`;
+  // TWO WORDINGS OF THE SAME SENTENCE, because "answered the same way" is
+  // FALSE of the alternating case and that case is the common one — 84 of the
+  // 108 measured lines are one wording and the rest are GitHub's "still
+  // computing", interleaved. Claiming a verbatim repeat where there was none
+  // would make the message argue with the log a reader is about to open.
+  const what = rewordings > 0
+    ? `This pull request has been unable to settle on an answer for ${held} across ${passes} pass(es) — `
+      + `it has reworded itself ${rewordings} time(s) while the commit has not moved. The newest is: `
+    : `This pull request has answered the same way for ${held} across ${passes} pass(es) and has not moved: `;
+  return {
+    state: 'escalate',
+    next: { ...carried, escalatedAt: now },
+    escalate: true,
+    heldMs,
+    reason:
+      what
+      + `"${reason}" — a verdict that will not settle is not a momentary wobble, and nothing on `
+      + 'this side will say so again until it changes or clears. It needs an agent session or Dane to look. '
+      + 'Nothing was merged, refused or cancelled by this message.',
+  };
+}
+
+/**
+ * Did this verdict take a reading of the pull request at all?
+ *
+ * ASKED OF THE VERDICT, NEVER OF ITS PROSE (review round 2 of task
+ * 86bbuvd50). This used to test `/CANNOT TELL/` against the reason SENTENCE,
+ * and it was already broken on the day it shipped: PR #597 — merged to main
+ * before the branch that carried it — deleted the `CANNOT TELL — ` prefix
+ * from the dominant verdict and changed its action to `catch-up-locally`.
+ *
+ * 84 of the 106 classifiable lines in the measured log stopped classifying,
+ * and the failure was worse than under-counting. An unclassified pass reads
+ * as `clear`, which DELETES the stored run — so every CONFLICTING pass wiped
+ * the clock the "still computing" passes had built up, and the longest
+ * unbroken run of the one surviving wording is about thirty minutes. Ninety
+ * was unreachable. The bound merged green, passed every gate, and said
+ * nothing on the exact incident it was written for.
+ *
+ * So the classification is declared where the verdict is MADE — every
+ * `githubGate` return carries `cannotTell` explicitly, and a source assertion
+ * fails on any that omits it. That assertion would have failed on the day
+ * #597 landed. A future rewording cannot unhook the bound again, because no
+ * wording is read.
+ *
+ * THE POPULATION IS UNCHANGED, deliberately. The verdicts marked true are the
+ * same two the ninety-minute threshold was measured on — GitHub-says-
+ * CONFLICTING-while-git-says-clean (84 lines) and GitHub-is-still-computing
+ * (22) — plus the paths that could not reach GitHub at all, which is the
+ * ticket's own "a rate-limited read". A routine six-minute CI wait is a
+ * reading, and counting it would be a threshold measured on one population
+ * applied to a wider one: the calibration error the ticket warned about,
+ * wearing a louder coat.
+ *
+ * Callers that KNOW no reading was taken — a failed `gh pr view`, unparseable
+ * JSON — pass `cannotTell: true` directly rather than through here. What no
+ * caller may do is leave the question unanswered, which is why every
+ * `outcome: 'waiting'` return is checked by a source assertion too.
+ */
+function verdictCannotTell(verdict) {
+  return Boolean(verdict && verdict.cannotTell);
+}
+
+/**
+ * The one message a bounded CANNOT TELL run gets to send.
+ *
+ * It says, in this order, the four things the ticket asked for and the one
+ * thing that makes them actionable: how long, how many passes, the verdict
+ * VERBATIM (never a summary — the wording is the diagnosis), who wrote this
+ * and from which machine, and what a person can actually do about it.
+ *
+ * It also says what it did NOT do. Every non-goal on the ticket is a thing a
+ * reader will otherwise assume happened: nothing was merged, nothing was
+ * refused, auto-merge was not cancelled, and the operator's approval is
+ * untouched. A message that leaves that ambiguous is the 86bbqw49y defect —
+ * an automated note that let the reader infer a merge decision it never made.
+ */
+function cannotTellEscalation({ label, taskUrl, pr, prUrl, decision, node, at } = {}) {
+  const machine = node ? `on ${node}` : 'on an unnamed machine';
+  const prBit = pr ? `PR #${pr}` : 'this pull request';
+  const when = at ? ` at ${at}` : '';
+  const body = [
+    `**Stuck on the same answer — ${prBit} has not moved.**`,
+    '',
+    decision.reason,
+    '',
+    'What a person can do: read the pull request on GitHub and find out which of '
+    + 'the two disagreeing sources is right — the checks, the mergeability, the '
+    + 'branch protection. If it needs a push, it needs an agent session; if it '
+    + 'needs nothing, it will clear on its own and this goes quiet by itself.',
+    '',
+    `Auto-merge is exactly as it was and the merge command still stands. ${prUrl || ''}`.trim(),
+    '',
+    `(Automatic — bus-relay merge step, ${machine}${when}.)`,
+  ].join('\n');
+
+  const bus = `[CC-starcaster bus-relay] MERGE STUCK — ${label}${taskUrl ? ` (${taskUrl})` : ''}: `
+    + `${decision.reason} Written by the bus-relay merge step ${machine}.`
+    + `${prUrl ? `\n\n${prUrl}` : ''}`;
+
+  return { body, bus };
+}
+
 module.exports = {
+  REFUSAL_CODES: R,
+  classifyRefusal,
+  speaksAsTerminal,
+  refusalNeeds,
   IN_PASS_WAIT_MS,
+  AUTO_MERGE_STALE_MS,
+  CANNOT_TELL_STALE_MS,
+  cannotTellRun,
+  sameCannotTellBlock,
+  verdictCannotTell,
+  cannotTellEscalation,
+  autoMergeDecision,
+  autoMergeArmedTooLong,
+  mergedElsewhereNotice,
   IN_PASS_POLL_MS,
   MAX_IN_PASS_WAITS,
+  mergeObserveBudget,
+  mergeObservationSpendsSlot,
   mayWaitInPass,
   afterCatchUpDecision,
   MERGE_PHRASES,
   MERGE_MARKER,
   parseMergeMarker,
+  countMergeRefusals,
   latestMergeMarker,
   normalizeCommand,
+  stripEditorFormatting,
+  commentDate,
   isMergeCommand,
   isReviewVerdict,
   isReviewPassed,
   findPullRequest,
+  findPullRequests,
   mergeDecision,
   checkState,
   githubGate,
@@ -862,6 +1731,7 @@ module.exports = {
   markerKind,
   mayPromiseApproval,
   refusalNotice,
+  refusalBusLine,
   conflictHandOffNotice,
   mergedNotice,
   APPROVAL_CARRIES_OVER,

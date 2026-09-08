@@ -11,6 +11,17 @@
  *   npm run heartbeat                       read the roll call, print it, post nothing
  *   npm run heartbeat -- --check            the same, and post to the bus if a job is quiet
  *   npm run heartbeat -- --beat --role X    record a successful run of X (jobs call this)
+ *   npm run heartbeat -- --stale-check      the LOCAL recency alarm, read-only, no ClickUp read
+ *   npm run heartbeat -- --stale-check --check   the same, and post to the bus
+ *
+ * WHY --stale-check IS A SEPARATE MODE AND NOT PART OF --check
+ * The roll call is a network read, and it is the surface that answers "is the
+ * other machine dead?". The recency alarm reads THIS machine's own stamps and
+ * answers "is this machine awake and not working?" — the 16-hour failure of
+ * 2026-09-03. Folding it into --check would make the second question depend on
+ * the first one's network call succeeding, so a ClickUp outage would silence
+ * an alarm that needs no ClickUp at all. Two questions, two failure domains,
+ * two commands. See lib/nodeHeartbeat.js -> recencyReport.
  *
  * Exit codes, because scripts branch on this:
  *   0  read cleanly, nothing overdue
@@ -247,6 +258,26 @@ async function doBeat(role) {
   clearStamp(`quiet-${role}`);
   clearStamp(`failed-${role}`);
 
+  // The recency alarm closes itself, and SAYS SO — but only if it actually
+  // spoke. The stamp exists exactly when a quiet report was posted to the bus,
+  // so this can never become the "all is well" x365 the non-goals forbid: a
+  // healthy job that was never reported quiet posts nothing here, ever.
+  const wasQuiet = readStamp(`stale-${role}`);
+  clearStamp(`stale-${role}`);
+  if (wasQuiet) {
+    try {
+      clickup.postBusMessage(BUS_CHANNEL, heartbeat.renderRecoveredPost({
+        role, node: NODE.name || 'an unnamed machine', quietSince: wasQuiet, now: NOW,
+      }));
+      console.error(`heartbeat: ${role} was reported quiet at ${wasQuiet} — posted that it is beating again.`);
+    } catch (err) {
+      // Loud, and never fatal. The stamp is already cleared, so the worst case
+      // is that the close of the alarm went unsaid; failing the job that just
+      // succeeded would be far worse.
+      console.error(`heartbeat: ${role} recovered, but the bus post failed (${String(err && err.message).slice(0, 200)}).`);
+    }
+  }
+
   // 2. The shared row, at most once a day. This is the throttle that keeps the
   //    feature from being channel noise x365 — and it is also the resolution
   //    the requirement asks for: a day-long absence, not a ten-minute one.
@@ -298,6 +329,101 @@ async function doBeat(role) {
   return 0;
 }
 
+// --- the recency alarm (local, no ClickUp read) ------------------------------
+
+/**
+ * "Is a job this machine owns not beating any more?"
+ *
+ * Only roles this machine OWNS are considered, and that is load-bearing rather
+ * than tidy: the local stamps only exist where the job runs, so asking about
+ * another machine's role here would read a missing file and either invent a
+ * silence or teach the check to ignore missing files — and ignoring missing
+ * files is how a real silence gets swallowed.
+ *
+ * The machine-is-switched-off case is NOT this check's job and cannot be: a
+ * dead machine runs nothing, including this. That case belongs to the roll
+ * call, which is read by whichever machine is awake, at day resolution.
+ */
+async function doStaleCheck({ post }) {
+  const out = [];
+  out.push('', bold('LOCAL RECENCY — is a job this machine owns still beating?'), '');
+
+  if (!nodeRoles.isKnownNode(NODE.name)) {
+    out.push(`  ${yellow('????')}  Cannot tell.`);
+    out.push(`        ${dim(`This machine calls itself "${NODE.name || '(nothing)'}", which is not a machine this system knows.`)}`);
+    out.push(`        ${dim('Without an identity there is no way to know which jobs it should be running.')}`);
+    out.push(`        ${dim(`Fix it once:  echo ${nodeRoles.KNOWN_NODES[0]} > ${NODE.file}`)}`);
+    out.push('');
+    console.log(out.join('\n'));
+    return 2;
+  }
+
+  const owned = nodeRoles.rolesOwnedBy(NODE.name).filter((role) => heartbeat.BEAT_EMITTERS[role]);
+  const entries = owned.map((role) => ({
+    role,
+    owner: nodeRoles.ROLES[role] && nodeRoles.ROLES[role].owner,
+    beat: heartbeat.readBeat({ role }),
+  }));
+  const report = heartbeat.recencyReport({ entries, now: NOW });
+
+  for (const f of report.fresh) {
+    out.push(`  ${green('BEAT')}  ${f.role} — ${f.beatMeans === 'liveness' ? 'last ran' : 'last succeeded'} `
+      + `${heartbeat.ageText(f.ageMs)} (quiet after ${heartbeat.ageText(f.thresholdMs).replace(' ago', '')}).`);
+  }
+  for (const q of report.quiet) {
+    out.push(`  ${red('QUIET')} ${q.role} on ${NODE.name} — ${q.reason}.`);
+    out.push(`        ${dim(`threshold ${heartbeat.ageText(q.thresholdMs).replace(' ago', '')}; last beat ${q.at}`)}`);
+  }
+  for (const u of report.unknown) {
+    out.push(`  ${yellow('????')}  ${u.role} — cannot judge.`);
+    out.push(`        ${dim(`cannot tell: ${u.why}`)}`);
+  }
+  if (entries.length === 0) {
+    out.push(`  ${yellow('????')}  This machine owns no job that records a beat, so there is nothing to measure here.`);
+  }
+
+  out.push('');
+  if (report.quiet.length > 0) {
+    out.push(bold(red(`${report.quiet.length} job${report.quiet.length === 1 ? ' has' : 's have'} stopped beating on this machine.`)));
+  } else if (report.fresh.length > 0) {
+    out.push(bold(green('Every job this machine owns is beating inside its own threshold.')));
+  } else {
+    out.push(bold(yellow('Nothing could be measured. This is not an all-clear — read the ???? lines.')));
+  }
+  out.push('');
+  console.log(out.join('\n'));
+
+  if (post && report.quiet.length > 0) {
+    // Per role, so a second job going quiet is announced straight away instead
+    // of being swallowed by the first one's window — the same reasoning the
+    // roll call's own suppression uses.
+    const toAnnounce = report.quiet.filter((q) => heartbeat.dueAgain({
+      lastAt: readStamp(`stale-${q.role}`), now: NOW, everyMs: heartbeat.STALE_REPOST_EVERY_MS,
+    }));
+    if (toAnnounce.length === 0) {
+      console.error('heartbeat: already reported these as quiet within the window — not posting again.');
+    } else {
+      const text = heartbeat.renderStalePost({ quiet: toAnnounce, node: NODE.name, now: NOW });
+      try {
+        clickup.postBusMessage(BUS_CHANNEL, text);
+        const at = new Date(NOW).toISOString();
+        for (const q of toAnnounce) writeStamp(`stale-${q.role}`, at);
+        console.error(`heartbeat: posted to the bus about ${toAnnounce.map((q) => q.role).join(', ')} having stopped.`);
+      } catch (err) {
+        // Not stamped, so the next pass tries again. A failed announcement that
+        // recorded itself as sent would silence the alarm for 12 hours on the
+        // strength of a message nobody received.
+        console.error(`heartbeat: could NOT post to the bus (${String(err && err.message).slice(0, 200)}).`);
+        console.error('heartbeat: not stamping it as announced, so the next pass tries again.');
+      }
+    }
+  }
+
+  if (report.quiet.length > 0) return 1;
+  if (report.fresh.length === 0) return 2;
+  return 0;
+}
+
 // --- the watchdog -----------------------------------------------------------
 
 async function doCheck(state) {
@@ -338,6 +464,10 @@ async function doCheck(state) {
 
 if (flag('beat')) {
   process.exit(await doBeat(arg('role')));
+}
+
+if (flag('stale-check')) {
+  process.exit(await doStaleCheck({ post: flag('check') }));
 }
 
 const state = await loadReport();

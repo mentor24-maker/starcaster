@@ -4,7 +4,8 @@ A **saved section** is one section — a row of modules — stored once and reus
 on many pages. Headers, footer menus and shared banners are all saved sections.
 The stored copy is the **original**; what sits on a page is an **instance**.
 
-This doc is the model, the two saves, and the ways the two have bitten.
+This doc is the model, the two saves, the publish decision that follows them,
+and the ways all three have bitten.
 
 ---
 
@@ -153,8 +154,59 @@ A section with no original behind it skips the dialog: one meaning, no question.
 So does one whose original has been deleted — the provenance outlives the
 delete, and a PATCH against a deleted id is a 404.
 
-**Neither save writes the page.** The original and the other pages are updated
-immediately; the page you are looking at still needs its own Save.
+**Neither save writes the page you are looking at.** The original and the
+other pages are updated immediately; this page still needs its own Save.
+
+---
+
+## 2a. The third question: and shall those pages go live?
+
+Since 2026-09-03 (#575) a save that fans out asks one more thing, in the same
+dialog, before the write — `BuilderSharedBlockSaveModal`:
+
+| | |
+|---|---|
+| **Save** | Exactly the behaviour above. The original and the following pages change **as drafts**. |
+| **Save & Publish** | The same save, then **those pages** are published. |
+| **Cancel** | Nothing is written. |
+
+**Why it exists.** §3 writes drafts and nothing else — `lib/canonicalPropagation.js`
+never touches `builder_published_pages`. So every fan-out left a pile of pages
+*pending publish*, and the operator's next step was to leave this screen, find
+the Publish panel, and put the site live. He described it exactly that way, and
+a step you have to remember on another screen is a step that gets skipped —
+which is how a section edit "does not take" on a live site while the manager
+says "Saved."
+
+**The publish is NARROW, and that is the load-bearing part.**
+`POST /api/builder/publish` with no `pageIds` publishes **everything pending**,
+newest draft first. Wiring this straight to it would put every unrelated
+half-finished draft in the project in front of visitors as a side effect of a
+routine section edit. So:
+
+- the tally reports **which** pages it wrote (`updatedPages`), not only how many;
+- `publishPages(projectId, { pageIds })` **intersects** that list with the
+  pending list — naming a page that is not pending does not publish it, so a
+  stale id costs nothing;
+- an **empty** list publishes **nothing**. `if (pageIds.length)` reads an empty
+  array as "no filter" and puts the whole site live; the rule lives in one
+  tested function (`selectPagesToPublish`) for exactly that reason.
+
+**Publishing is still per PAGE.** These pages go live *entire* — any other
+unpublished edit sitting on one of them goes live with it. The dialog says so,
+because it is the one surprise this button can deliver.
+
+The dialog is skipped when nothing follows the original: a first save is never
+interrupted. It is shown on all four surfaces that write a shared block — the
+React saved-sections manager, the standalone `SavedSectionEditorModal`, the
+saved-**modules** manager, and (as a checkbox rather than a fourth button, since
+that dialog is already asking which of two saves you meant) `BuilderSectionSaveModal`.
+
+**The browser must reach the publish route through `builderAdminFetch`.** An
+unmapped path falls through to a plain `fetch` carrying neither the
+`/api/builder` prefix nor the project-scope headers, and the 404 that produces
+reads as a missing feature. `/api/admin/publish` is in that adapter's rewrite
+table; `propagation-runs` had this exact bug before it.
 
 ---
 
@@ -183,8 +235,15 @@ already reached for it there.
   own id>, savedSectionId, canonical: true }`. The instance keeps nothing but
   its id.
 - Runs in batches of 8, stamps one `runId` on every revision it writes, and
-  returns `{ ok, total, updated, failed, skipped, runId }` — `skipped` names
-  the pages left untouched for drift, `{ pageId, name }` each.
+  returns `{ ok, total, updated, failed, skipped, overwritten, updatedPages,
+  runId }`. `skipped` names the pages left untouched for drift and
+  `updatedPages` the pages actually written, `{ pageId, name }` each —
+  `updatedPages` is what "Save & Publish" hands to the publish route (§2a), and
+  it is a **list**, not a count, precisely so the publish can name its pages.
+  `overwritten` means what it says: a **drifted copy written over**, which only
+  `overwriteDrifted` does. It used to be filled in whenever any copy on a
+  written page had drifted, which reported "1 page with local changes was
+  overwritten" about an edit still sitting untouched on that page.
 - That `runId` is what `POST /api/builder/propagation-runs/:runId/undo` rolls
   back. A page skipped for drift was never written, so it holds no revision
   for this run and undo never touches it either — consistent either way.
@@ -199,6 +258,28 @@ already reached for it there.
   operator's decision (2026-08-23, "ship it without undo"); a mistaken
   normalization is fixed by hand, and the tally says `templates.undoable: false`
   rather than letting a caller assume the page undo covers these too.
+
+### Drift is measured per COPY. Writing and publishing happen per PAGE.
+
+**A page can hold more than one copy of the same original**, and the two units
+come apart there. A page carrying one hand-edited copy *and* one untouched copy
+**is written** — the untouched copy takes the update — while the edited one is
+left exactly as it was. It is therefore not "skipped", it is not left alone, and
+it *is* published by a Save & Publish.
+
+Two separate pieces of code said otherwise, and both were found on 2026-09-03
+only because the UI fixture's own **Block States** page happens to have that
+shape:
+
+- `driftedFollowingPages` asked `.some(drifted)`, so such a page was named to
+  the operator as left alone — in a dialog that then went on to publish it. It
+  asks `.every(drifted)` now: a page is left alone only when **nothing** on it
+  changes.
+- `runPropagation` filled in `overwritten` from `outcome.drifted`, which says a
+  copy on this page drifted, not that one was written over.
+
+Neither was caught by a test, and neither could have been: every fixture in the
+suite gave each page one copy. The general rule is `docs/DOCTRINE.md` §5.30.
 
 **Local edits on a following page are replaced, without a merge — unless the
 copy has drifted, in which case it is left alone by default.** There is still
@@ -271,6 +352,14 @@ you are editing holds a second following copy of the same section.
 4. **Deleting an original leaves every instance carrying its id.** They keep
    rendering and stay editable; they simply have nothing to relink to. Relink
    detects this and clears the field.
+5. **A page is not a copy.** Drift is per copy; writing, publishing and every
+   sentence shown to the operator are per page, and a page may hold several
+   copies of one original (§3). Any new answer phrased as "these pages …" has
+   to say which quantifier it means — `some` and `every` are different
+   questions here, and picking the wrong one produces a confident, testable,
+   wrong sentence. Both 2026-09-03 bugs were this.
+6. **`POST /api/builder/publish` publishes EVERYTHING pending unless you name
+   the pages** (§2a). An empty `pageIds` means nothing, not everything.
 
 ---
 
@@ -282,7 +371,10 @@ you are editing holds a second following copy of the same section.
 | Provenance rescue on save/load | `lib/builder/document.js` |
 | Drift detection (Changed state) | `lib/builder-client/section-drift.ts` — hand-ported CJS twin: `lib/builder/document.js` (`hasSectionDrifted`, `getSectionContent`) |
 | Which save, and the wiring | `components/admin-builder-editor.tsx` — `saveSection`, `saveSectionAsNew`, `overwriteCanonicalFromSection`, `saveSavedSection`, `forceOverwriteDrifted` |
-| The dialog | `components/builder/builder-section-save-modal.tsx` |
+| The dialog (which save?) | `components/builder/builder-section-save-modal.tsx` |
+| The dialog (and shall it go live?) | `components/builder/builder-shared-block-save-modal.tsx` |
+| Publishing a named set of pages | `lib/builder-client/publish-pages.ts` — `publishNamedPages`, the batch loop |
+| The narrowing rule | `lib/builderPublishStore.js` — `selectPagesToPublish`; route `routes/publish.js` |
 | Impact + outcome wording, drift counts | `lib/builder-client/shared-block-usage.ts` — `driftedFollowingPages` |
 | Per-page diff before the click | `lib/builder-client/saved-section-diff.ts` |
 | One name: stamp, notice, display | `lib/builder-client/saved-section-name.ts` |

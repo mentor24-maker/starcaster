@@ -16,18 +16,60 @@
  * read it -- attention is not a control.
  *
  * ONCE PER FILE PER SESSION
- * State lives in .git/sql-handoff-<session>.json. A file that has been handed
- * off stays handed off for the rest of the session, so follow-up turns are not
- * held hostage to repeating a block the operator already has.
+ * State lives in sql-handoff-<session>.json inside the git dir -- see
+ * lib/hook_state_dir.cjs for why that is NOT `<toplevel>/.git/`, and
+ * stateFiles() for the worktree-keyed fallback used when that write is
+ * refused. A file that has been handed off stays handed off for the rest of
+ * the session, so follow-up turns are not held hostage to repeating a block
+ * the operator already has.
  *
- * LOOP SAFETY
- * Three refusals per session, then it steps aside and lets the turn end. A
+ * LOOP SAFETY -- TWO INDEPENDENT BRAKES
+ * Three refusals per session, then it steps aside and lets the turn end; and
+ * `stop_hook_active`, the harness's own infinite-loop flag, which it honours
+ * outright. Two limits, so neither one failing alone can wedge the session. A
  * hook that can wedge a conversation shut is worse than the miss it prevents.
+ *
+ * The flag stands the REFUSAL down; it does not stand the READING down, and
+ * the order is load-bearing. A continuation turn is where the hand-off block
+ * arrives, so a hook that exits before reading the reply throws away the very
+ * turn that solved it -- see the comment at the check itself for the six turns
+ * that measured it. The sibling hook has no such ordering to get wrong,
+ * because it keeps no state between turns.
+ *
+ * The refusal counter depends on the state file actually being written, and
+ * that has failed twice for two different reasons:
+ *
+ *   - WHERE: from 2026-08-19 until 2026-09-03 the path was built from
+ *     `--show-toplevel`, and `.git` is a FILE in a linked worktree, so every
+ *     write died of ENOTDIR. Fixed by lib/hook_state_dir.cjs.
+ *   - WHETHER: the directory can resolve perfectly and still refuse the write
+ *     -- a read-only mount, permissions, a full disk. Measured 2026-09-04 with
+ *     the git dir chmod 500: the hook refused six turns out of six, and would
+ *     have refused six hundred. Same wedge, different cause.
+ *
+ *   - WHICH ONE: the fallback was reached by the write and not by the read, so
+ *     a state file that stayed readable while losing write permission shadowed
+ *     it forever. Measured 2026-09-05: twelve turns, twelve refusals. Same
+ *     wedge again, this time through the repair. See openState().
+ *   - WHOSE: the fallback was keyed by session id alone, so every worktree of
+ *     one session shared a single machine-wide file. Fixing the read to merge
+ *     its candidates then made the guard read another worktree's spent brake
+ *     as its own -- measured 2026-09-06, the healthy worktree spent 0 of its
+ *     3 refusals, which is not a wedge but its opposite: the guard silently
+ *     OFF. Keyed by worktree now. See stateFiles().
+ *
+ * So the counter now has somewhere to fall back to, one place that decides
+ * where that is for both halves, and -- the part that actually closes it -- A
+ * REFUSAL IS ONLY ISSUED IF THE COUNT LANDED. A hook that cannot count its own
+ * refusals has no brake, and the honest response to that is to let the turn
+ * end, not to refuse forever.
  *
  * Escape hatch: SKIP_SQL_HANDOFF=1 (say so and why, per CLAUDE.md).
  */
 
 const fs = require('fs');
+const os = require('os');
+const crypto = require('crypto');
 const path = require('path');
 const {
   newSqlFiles,
@@ -37,28 +79,143 @@ const {
   renderBlock,
   messageHandsOff,
 } = require('../lib/sql_handoff.cjs');
+const { gitStateDir } = require('../lib/hook_state_dir.cjs');
 
 const MAX_REFUSALS = 3;
 
-function stateFile(root, sessionId) {
+/**
+ * Every place this session's state may live, best first.
+ *
+ * The git dir is the right home: per-worktree, which is the grain sessions
+ * actually have, and it is thrown away with the worktree. `os.tmpdir()` is a
+ * worse place -- machine-wide, survives the worktree, swept on the OS's
+ * schedule rather than ours -- and it is infinitely better than nowhere, which
+ * is what "no brake at all" means. It is only ever reached when the git dir
+ * refuses the write.
+ *
+ * THE FALLBACK IS KEYED BY WORKTREE AS WELL AS BY SESSION, AND THAT IS LOAD-
+ * BEARING. The session id alone is not enough, because one session routinely
+ * drives several worktrees here (CLAUDE.md, "One topic, one worktree -- a
+ * session may hold more than one"). With a session-only name, every worktree
+ * of one session shares a single machine-wide file, so a brake spent in
+ * worktree A is read back as spent in worktree B -- which is not a leak at the
+ * margins but the guard switched OFF in B for the rest of the session.
+ * Measured 2026-09-06, one session, two worktrees, A's state file frozen:
+ *
+ *   worktree A (frozen)     2,2,2,0,0     tmpdir file A wrote: {"refusals":3}
+ *   worktree B (healthy)    0,0,0,0,0     0 of its own 3 refusals
+ *
+ * Hashing the git dir rather than spelling it out keeps the name a single
+ * short path segment: a git dir is an absolute path, and any escaping of it
+ * that stayed readable would either collide after truncation or blow past the
+ * filename limit.
+ *
+ * The `handedOff` list leaked across worktrees the same way, and is fixed by
+ * the same key -- the paths it stores are repo-relative, so worktree B would
+ * see "docs/SQL/x.sql already handed off" for a hand-off that only ever
+ * happened in A.
+ *
+ * No git dir means no candidates at all, so the hook stands aside. That case
+ * is already unreachable from main(): `repoRoot()` shells out to the same git
+ * binary and has exited 0 before this is called. Returning nothing is the safe
+ * direction anyway -- a miss, never a wedge.
+ */
+function stateFiles(root, sessionId) {
   const safe = String(sessionId || 'nosession').replace(/[^a-z0-9-]/gi, '').slice(0, 60);
-  return path.join(root, '.git', `sql-handoff-${safe}.json`);
+  const gitDir = gitStateDir(root);
+  if (!gitDir) return [];
+
+  const worktreeKey = crypto.createHash('sha256').update(gitDir).digest('hex').slice(0, 12);
+  const files = [
+    path.join(gitDir, `sql-handoff-${safe}.json`),
+    path.join(os.tmpdir(), `sql-handoff-${safe}-${worktreeKey}.json`),
+  ];
+  return files.filter((file, i) => files.indexOf(file) === i);
 }
 
-function readState(file) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return { handedOff: [], refusals: 0 };
-  }
-}
+/**
+ * This session's state, and the one way to write it back.
+ *
+ * READ AND WRITE LIVE IN ONE FUNCTION BECAUSE THEY USED TO DISAGREE, AND THE
+ * DISAGREEMENT FROZE THE COUNTER. Both halves scanned the same candidate list
+ * and stopped on different conditions: the read returned the first file that
+ * PARSED, the write returned the first that ACCEPTED A WRITE. So a state file
+ * in the git dir that stayed readable while losing write permission shadowed
+ * the fallback forever -- every write landed in tmpdir, every read came back
+ * from the stale git-dir copy, and `refusals` never moved. The stand-down
+ * could never fire, which is the exact wedge the counter exists to prevent,
+ * arriving through the counter. Measured 2026-09-05 on 9351ae64: twelve turns,
+ * twelve refusals, and a file already handed off re-demanded on every turn
+ * after the freeze because `handedOff` was lost the same way.
+ *
+ * THE READ MERGES EVERY CANDIDATE; THE WRITE TAKES THE FIRST THAT ACCEPTS.
+ * That is what makes them agree. There is deliberately no single
+ * "authoritative" file: whichever candidate the write reaches, the read is
+ * already looking at it. Refusals take the HIGHEST count seen and `handedOff`
+ * takes the union, both of which only ever move one way -- so the brake can be
+ * spent but never refunded, and a file the operator already has is never
+ * demanded again.
+ *
+ * MERGING IS ONLY SAFE BECAUSE EVERY CANDIDATE IS A COPY OF THIS WORKTREE'S
+ * OWN STATE, and that is a property `stateFiles()` has to keep -- it is not
+ * one this function can check. An earlier draft of this comment claimed a copy
+ * left behind somewhere else "can never shadow a newer one", and that was
+ * false in the case that matters: the fallback was keyed by session id alone,
+ * so two worktrees of one session shared a machine-wide file and the merge
+ * read another worktree's spent brake as this one's, on every turn. Measured
+ * 2026-09-06: worktree B spent 0 of its own 3 refusals. See stateFiles(), and
+ * do not add a candidate that is not per-worktree.
+ *
+ * The sibling `check_operator_handoff.cjs` pairs its read and write per
+ * candidate inside one loop, and that is sound there because it carries a
+ * counter and nothing else. Doing the same here would restart the count at the
+ * moment the git dir stops accepting writes -- git-dir copy says 2, unwritable,
+ * so it falls to an empty tmpdir and refuses three MORE times. Five refusals
+ * from a three-refusal brake is quieter than a freeze and still wrong.
+ *
+ * Shapes are coerced rather than trusted -- a truncated or half-written file
+ * parses to something with no `refusals`, and `undefined >= 3` is false, which
+ * is the counter silently reading zero all over again.
+ */
+function openState(files) {
+  const state = { handedOff: [], refusals: 0 };
 
-function writeState(file, state) {
-  try {
-    fs.writeFileSync(file, JSON.stringify(state));
-  } catch {
-    // Best-effort: losing the state means at worst one extra prompt.
+  for (const file of files) {
+    let parsed;
+    try {
+      parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      continue; // Not here, or unreadable -- a later candidate may still have it.
+    }
+    const handedOff = Array.isArray(parsed?.handedOff) ? parsed.handedOff : [];
+    for (const sql of handedOff) {
+      if (typeof sql === 'string' && !state.handedOff.includes(sql)) state.handedOff.push(sql);
+    }
+    const refusals = Number.isFinite(parsed?.refusals) ? parsed.refusals : 0;
+    if (refusals > state.refusals) state.refusals = refusals;
   }
+
+  /**
+   * Returns whether the state landed ANYWHERE. The caller must check it before
+   * refusing: this used to swallow the failure and return nothing, and that one
+   * missing boolean is the whole of the wedge described in the header. A write
+   * that never lands means `refusals` reads 0 next turn, so the stand-down can
+   * never fire, and `handedOff` never persists, so a file already handed off is
+   * re-demanded for the rest of the session.
+   */
+  const save = () => {
+    for (const file of files) {
+      try {
+        fs.writeFileSync(file, JSON.stringify(state));
+        return true;
+      } catch {
+        // Unwritable -- try the next place rather than losing the count.
+      }
+    }
+    return false;
+  };
+
+  return { state, save };
 }
 
 function main(input) {
@@ -80,35 +237,83 @@ function main(input) {
   // is the branch. Nothing to enforce here.
   if (!branch || branch === 'main' || branch === 'HEAD') process.exit(0);
 
-  const files = newSqlFiles(root);
+  const sqlFiles = newSqlFiles(root);
+  if (!sqlFiles.length) process.exit(0);
+
+  // Nowhere at all to keep state means no refusal counter, and a hook that
+  // refuses with no limit is the wedged conversation this file's header calls
+  // worse than the miss it prevents. So stand aside instead.
+  //
+  // Reaching this needs BOTH the git dir and the temp dir to come back empty,
+  // which is close to unreachable -- `repoRoot()` above shells out to the same
+  // git binary and has already exited 0 if it was not there. The case that
+  // actually bites is a directory that resolves and then refuses the write,
+  // and that is handled at the refusal below, not here.
+  const files = stateFiles(root, payload?.session_id);
   if (!files.length) process.exit(0);
 
-  const file = stateFile(root, payload?.session_id);
-  const state = readState(file);
+  const { state, save } = openState(files);
 
   const message = String(payload?.last_assistant_message || '');
 
   // Anything handed off in this reply is now handed off for good.
-  for (const sql of files) {
+  for (const sql of sqlFiles) {
     if (messageHandsOff(message, branch, sql) && !state.handedOff.includes(sql)) {
       state.handedOff.push(sql);
     }
   }
 
-  const outstanding = files.filter((sql) => !state.handedOff.includes(sql));
+  const outstanding = sqlFiles.filter((sql) => !state.handedOff.includes(sql));
   if (!outstanding.length) {
-    writeState(file, state);
+    save();
+    process.exit(0);
+  }
+
+  // The harness's OWN infinite-loop guard: it sets this when the turn is
+  // continuing because a Stop hook already blocked it once. Honouring it is
+  // what makes the refusal counter the SECOND brake rather than the only one,
+  // so neither failing alone can wedge the session.
+  //
+  // IT SUPPRESSES THE REFUSAL, NOT THE LEARNING, AND THAT IS WHY IT IS HERE
+  // RATHER THAN AT THE TOP OF main(). A continuation turn is exactly where the
+  // hand-off arrives -- this hook refuses, the agent adds the block, and THAT
+  // turn carries the flag. Exiting before the loop above reads the reply threw
+  // the solving turn away: `handedOff` never persisted, the same file was
+  // re-demanded on every ordinary turn after it, and the whole three-refusal
+  // brake was spent on SQL the operator already had. Measured over the six-turn
+  // dance, 2026-09-05: 2,0,2,0,2,0 with the exit at the top, against 2,0,0,0,0,0
+  // with it here. A new SQL file committed afterwards was then missed in
+  // silence, which is this hook failing at its actual job.
+  //
+  // check_operator_handoff.cjs can exit at the top and does, because it keeps
+  // no per-file state -- it judges message text and nothing else, so a
+  // continuation costs it nothing. This one carries `handedOff` and has
+  // something to lose.
+  //
+  // This ordering also settles the asymmetry recorded at
+  // check_operator_handoff.cjs:124. That hook has honoured the flag all along
+  // and this one did not, so whenever this one blocked first, the next Stop
+  // carried the flag, the sibling exited immediately, and a reply with BOTH
+  // problems only ever got the SQL complaint. Both hooks now stand down
+  // together on a continuation, which is the safe direction for the same reason
+  // it was there: a miss, not a wedge.
+  if (payload?.stop_hook_active) {
+    save();
     process.exit(0);
   }
 
   if (state.refusals >= MAX_REFUSALS) {
     // Stepped aside deliberately: a wedged conversation is worse than a miss.
-    writeState(file, state);
+    save();
     process.exit(0);
   }
 
+  // Claim a refusal slot, and only refuse if the claim actually persisted. If
+  // it did not land anywhere, this refusal cannot be counted, so the next turn
+  // would refuse again, and the one after that, with no limit -- which is the
+  // exact wedge the counter exists to prevent, arriving through the counter.
   state.refusals += 1;
-  writeState(file, state);
+  if (!save()) process.exit(0);
 
   const pushed = isPushed(root);
   const lines = [

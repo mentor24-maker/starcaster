@@ -12,8 +12,11 @@ type Props = {
  * D8 logical axes (docs/UI_RULES.md): Content and Structure.
  *
  * PAIRING RULE - a toggle that gates ONE specific sibling field stays adjacent
- * to it in the same strip, toggle first. One such pair is left here:
- * `showTitle` gates `panelTitle`.
+ * to it in the same strip, toggle first. Two such pairs are left here:
+ * `showTitle` gates `panelTitle`, and `showAutoTag` gates `autoTagButtonLabel`.
+ * Neither is split across strips or axes. The third pair, `showRelate` gating
+ * `relateButtonLabel`, went to `admin-related-articles` with the rest of the
+ * relate half (86bbuhph0).
  *
  * WHICH AXIS: `showTags` (the tag manager table) changes what the page is made
  * of, so it is Structure. The two page-address fields are Structure too: they
@@ -60,6 +63,27 @@ const SCHEMA: BuilderSettingsSchema = {
             rendersVia: RENDERS_VIA
           }
         ],
+        [
+          /* The Auto-tag extension's button (ticket 86bbw4dcp): toggle first, then the label it gates. */
+          {
+            key: "showAutoTag",
+            label: "Auto-tag button",
+            width: "check",
+            control: "checkbox",
+            fallback: "true",
+            rendersVia: RENDERS_VIA
+          },
+          {
+            key: "autoTagButtonLabel",
+            label: "Button text",
+            width: "text-md",
+            control: "text",
+            placeholder: "Auto-tag",
+            fallback: "Auto-tag",
+            visibleWhen: (s) => (s.showAutoTag ?? "true") === "true",
+            rendersVia: RENDERS_VIA
+          }
+        ]
       ]
     },
     {

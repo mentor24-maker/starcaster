@@ -64,7 +64,8 @@ objects:
       home: /Users/mentor
       container_runtime: Docker Desktop
       role: interactive work; not trusted for scheduled jobs because it sleeps and travels
-    probe: hostname
+      reachable: ssh macbook-pro (key-based, from the Mini; alias in the Mini's ~/.ssh/config)
+    probe: ssh
 
   - id: mac-mini
     name: Mac Mini

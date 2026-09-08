@@ -119,6 +119,24 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
       // stays as narrow as its siblings (D4 equal-width columns).
       // C3: Show/Hide selects → checkboxes — same "true"/"false" stored values.
       [
+        {
+          key: "filterMode",
+          label: "Filter Mode",
+          width: "select-md",
+          control: "select",
+          fallback: "all",
+          options: [
+            { value: "all", label: "All filters" },
+            { value: "tag", label: "Tags only" },
+            { value: "category", label: "Categories only" },
+            { value: "author", label: "Authors only" }
+          ],
+          rendersVia: "BlogPostListPreview filter bar + results line"
+        }
+      ],
+      // A single mode overrides the three checkboxes below it, and adds the
+      // "Blog posts matching the tag ...: n" line above the results.
+      [
         { key: "showSearch", label: "Search Bar", width: "check", control: "checkbox", fallback: "true" },
         { key: "showCategoryFilter", label: "Category Filter", width: "check", control: "checkbox", fallback: "true" },
         { key: "showDateFilter", label: "Date Filter", width: "check", control: "checkbox", fallback: "false" }

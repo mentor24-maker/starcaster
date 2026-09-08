@@ -25,6 +25,15 @@ const require = createRequire(import.meta.url);
 const repair = require('./builder/repair.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 
+/** No step may hang the wake. This runner had no deadline at all, so a step
+ *  that never returned — a ClickUp read with no answer, a `gh` call waiting on
+ *  auth — pinned the relay's ten-minute wake with nothing to break it, and the
+ *  next wake found it still there. A killed step surfaces as `out.error` and
+ *  reads FAILED, which is loud and honest: the pass did not complete.
+ *  Five minutes covers the slowest real reading (a reconcile pass measures
+ *  ~19s) with room to spare. */
+const STEP_TIMEOUT_MS = 5 * 60 * 1000;
+
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
 const CHECK = flag('check');
@@ -51,13 +60,10 @@ if (CHECK) writeStamp(readStamp);
 function firstLineOf(out, step) {
   const all = [out.stdout, out.stderr].map((x) => String(x || '')).join('\n')
     .split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('>'));
-  // The sweep opens with the pipeline banner; its FINDING line is the one a
-  // reader needs on the step line.
-  if (step && step.id === 'stranded') {
-    const finding = all.find((l) => /stranded ticket/i.test(l));
-    if (finding) return finding;
-  }
-  return all[0] || '(the step printed nothing)';
+  // Which of those lines is the FINDING — the decision lives in `repair.js`
+  // with the rest of them, so it can be tested against real sweep output
+  // rather than by reading this file.
+  return repair.findingLine(all, step?.id);
 }
 
 const meanings = [];
@@ -73,7 +79,8 @@ for (const step of repair.STEPS) {
     meanings.push('clean');
     continue;
   }
-  const out = spawnSync('npm', ['run', '--silent', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  const out = spawnSync('npm', ['run', '--silent', ...args],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: STEP_TIMEOUT_MS });
   const meaning = out.error ? 'failed' : repair.readStep(step, out.status);
   meanings.push(meaning);
   lines.push(repair.renderStepLine(step, meaning, out.error ? String(out.error.message || out.error) : firstLineOf(out, step)));

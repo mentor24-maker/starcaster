@@ -197,12 +197,23 @@ words do not map onto three things — categories are a real table, **tags are a
 `text[]` on each post** (so the list is derived and a rename rewrites posts),
 and **topics do not exist in the blog at all**.
 
-It also carries the two traps that only a browser found: this module renders
-inside ARBITRARY tenant themes, where a semantic `<header>` inherits the site's
-header styling and a theme's `input { width: 100% }` blew a checkbox out to
-1056px and starved the title beside it to zero width. And the pre-existing
-join-table probe bug it fixed, which had silently stopped blog post/category
-links persisting in production.
+It also carries the traps that only a browser found, each now in
+`docs/DOCTRINE.md`:
+
+- **§5.26** a probe must ask a question the thing can ANSWER — `select=id` on a
+  join table with no `id` column read as the TABLE being absent, and silently
+  stopped blog post/category links persisting in production;
+- **§5.27** module defaults merge UNDER saved settings, so defaulting a
+  migration key defeats the migration;
+- **§5.28** a module renders inside ARBITRARY tenant themes — a semantic
+  `<header>` inherits the site's header styling, and a theme's
+  `input { width: 100% }` blew a checkbox out to 1056px and starved the title
+  beside it to zero width;
+- **§5.29** a Builder-time affordance must not render at visit time — a live
+  client blog was advertising `react / typescript / design / tutorial`.
+
+And in `docs/UI_RULES.md`: **T-1** a name is never truncated, **T-2** a new
+manager takes the shape of the one that already exists.
 
 ## Saved sections — read `docs/SAVED_SECTIONS.md` first
 

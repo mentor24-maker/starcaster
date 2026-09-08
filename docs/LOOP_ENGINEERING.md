@@ -693,9 +693,84 @@ on mouse-over (`+ New status` there creates inline, skipping the broken
 dialog), and statuses live on the **list**, not the space — the space
 settings' generic `TO DO / IN PROGRESS / COMPLETE` are not this board.
 
+### Parking a finding instead of filing it (2026-09-06, task 86bbvtnfn)
+
+`wont-do` above is for work that was **decided against**. There is a second,
+much commoner case: a finding that is perfectly real and simply is not worth a
+queue slot. That one is **parked**, not killed, and the difference is the tag.
+
+**The stopping rule.** A pipeline or self-machinery ticket is filed only when a
+pipeline failure **actually cost something observable** — lost work, a dead
+lane, a silent outage, a wrong merge — and the description names that incident.
+A theoretical gap noticed while specifying, building or reviewing is not a
+ticket, however correct it is.
+
+Why it is a rule: measured 2026-09-06, tickets the pipeline filed about itself
+accelerated from about **6 a day in mid-August to about 16 a day in early
+September** — faster than the queue drains — and Delray and product work queued
+behind them. Dane parked **31** of them that day. The **six** that stayed all
+name a failure that actually happened (86bbuzyra, 86bbvr5zv, 86bbvr5ym,
+86bbvr4w3, 86bbvqkr1, 86bbvj44f). Not one of the 31 could. *"Is this a real
+finding?"* is therefore the wrong gate — all 31 passed it.
+
+**Where a parked finding goes:** one plain line in the ClickUp doc *The 31
+parked tickets*, `https://app.clickup.com/90141423066/docs/2kydhxeu-814`, under
+**Parked tickets** — what breaks and who feels it, and stop. A headless loop
+pass has no write route to a ClickUp doc; it says the line in its run report
+and as a plain comment on the ticket it was already working, marked as a parked
+finding. **What no pass does is file it.**
+
+**Parking an existing ticket:** close it as `Live` with the tag **`deferred`**
+— *not* `wont-do` — keeping its description and comments. Reviving one is
+setting its status back to `Queued`; the loops pick it up again. That is the
+whole procedure.
+
+**Client-facing defects are not in scope here.** A bug on a tenant site or in
+the admin app is filed on sight, as always. This rule governs the pipeline's
+tickets about itself.
+
+**Titles, wherever a ticket is created.** The name says in plain words **what
+breaks and who feels it**, readable by the operator scanning a list of seventy;
+the diagnostic sentence goes in the description. Dane, verbatim: *"your
+descriptions of tickets is so cryptic and full of fanciful turns of phrases
+that it is difficult for me to understand which ones are really important and
+which ones aren't."*
+
+Canon: `docs/DOCTRINE.md` §6.24, cross-referenced from `CLAUDE.md`.
+
 ## How to run it
 
-Two commands, each in **its own session**:
+**They are already running.** Since 2026-09-02 (task 86bbtuje2, PR #537) both
+lanes run unattended on the Mac Mini as launchd agents —
+`com.starcaster.loop-build` and `com.starcaster.loop-review` — keeping the
+committed `scripts/loop_runner.sh` alive across crashes and reboots. Nobody
+starts them by hand, and nobody should: `lib/nodeRoles.js` names the Mini as
+the owner of both roles, and a second claimant makes a check-then-act claim
+unsound.
+
+So the question is never "shall I start one", it is "what is it doing":
+
+```
+./scripts/install_loop_runner.sh --status    # on the Mini: installed? alive? lock held? last pass?
+npm run node:owns -- loop-build              # may THIS machine run it? 0 yes, 3 another machine's
+npm run pipeline -- check                    # is the line paused? 3 = paused, claim nothing
+```
+
+A loop that is alive and claims nothing every pass is the state that reads as
+healthy and is not — usually the work-in-progress cap being full. The decline
+message **names which stage is holding the slots** ("the slots are held by 1
+building, 4 in review") rather than blaming a lane it has not measured. Until
+2026-09-05 it said "the merge side is the bottleneck", and on the morning that
+was rewritten it was false: merges were landing unattended in about nine
+minutes and the stall was in review (task 86bbvh285). Where ticket statuses
+cannot be read at all it says the split **could not be determined**, which is
+different news from either answer.
+
+### Starting one by hand — the fallback
+
+Only on a machine that owns the role and has no schedule installed (a new
+machine mid-cutover, or the Mini with its agents unloaded). Two commands, each
+in **its own session**:
 
 ```
 # In session A:
@@ -1459,11 +1534,70 @@ fell through on that moment — other checks green, the PR merged, the re-run's
 answer never observed. "No gate on this PR" is benign before a re-run exists;
 during the wait it means *cannot see*, and cannot-see is not a pass.
 
-## Lane A — when the machine supplies the word (2026-08-25, task 86bbkw2au)
+## Lanes A and B — when the machine supplies the word (2026-08-25, task 86bbkw2au; Lane B 2026-09-04, task 86bbuzyra)
 
 **Canon: vault `doctrine/AUTO-MERGE-LANES.md`, ratified 2026-08-24.** That
 document is binding; this section is how it is wired up here. If the two ever
 disagree, the vault is right and this file is the thing to fix.
+
+> ### THEY DISAGREE RIGHT NOW — read this before you widen anything
+>
+> As of **2026-09-04** this file and the vault say two different things about
+> Lane B, and by the precedence rule you have just read, the vault wins — which
+> would instruct you to undo a decision Dane made on purpose. So the divergence
+> is written down here, at the rule, rather than left for someone to discover:
+>
+> | | The ratified vault, 2026-08-24 | Dane's ruling, 2026-09-04 (task 86bbuzyra) |
+> |---|---|---|
+> | Lane B's status | **"not shipped"** | ship it |
+> | Lane B's file set | `lib/`, `scripts/`, tooling | `scripts/`, `docs/`, tests — **`lib/` excluded** |
+>
+> **Do not "fix this file to match the vault."** The vault text predates the
+> measurement that forced the question (nine merges in a night, none of them
+> Lane A's, seven hours of a ten-hour night with no merge at all) and predates
+> his answer. `lib/` is excluded for a reason he gave himself and which is still
+> true: `server.js` requires it directly, so a bad merge there reaches a
+> client's site with nobody in the path. Widening Lane B back to `lib/` is a
+> regression, and two independent mechanisms will stop you —
+> `npm run check:automerge-reach` and six named tests in
+> `scripts/builder/autoMergeLane.test.js`.
+>
+> **The vault's other precondition is real history, and it is kept here.** It
+> withheld Lane B until Lane A's run had shown the objection window and the
+> digest actually work — and that proof never arrived. By 2026-09-04, 573 relay
+> passes had considered 640 tickets with `announced=0 in window=0 auto-merged=0
+> cancelled=0`; Lane A armed for the first time that day (PR #592), did not
+> land, and latched the lane off. Dane held #599 unmerged on that precondition
+> twice — 2026-09-04 (*"1"* — HOLD) and 2026-09-05 (*"1"* — clear the latch,
+> keep the hold). Then the full measurement arrived: over the whole relay log,
+> 2026-08-23 12:36 → 2026-09-06 12:07, **841 passes considered 1,260 tickets
+> and announced zero** — the announce → wait → merge cycle never once began,
+> the lane was not even running in 512 of those passes, and the only candidate
+> in the queue was correctly refused. The proof he was waiting for was blocked
+> by exactly the narrowness this PR fixes.
+>
+> **He dropped the hold on 2026-09-06** (12:37pm MT, on task 86bbuzyra),
+> answering *"1"* to a card whose option 1 read: *"Merge #599 now, drop the
+> hold. The proof happens afterwards, with the wider lane, which is far more
+> likely to ever produce a candidate."* That was a weighed choice made with the
+> numbers in front of him — take the proof afterwards, with a lane wide enough
+> to produce a candidate, rather than before it with one that could not. So
+> **Lane B operates.** Do not treat the retired hold as an instruction and do
+> not switch the lane off on its account; the controls that govern it are the
+> ordinary ones — the shared switch, the caps, `--no-merge`, and "stop
+> auto-merging".
+>
+> **Status of the repair:** a proposal to amend the vault document — mark Lane B
+> ruled, record the `lib/` exclusion and its reason, and state the
+> Lane-A-must-arm-once precondition as an operating gate rather than a shipping
+> gate — is filed at vault `doctrine/_proposals/AUTO-MERGE-LANE-B.md`
+> (2026-09-05). **Only Dane ratifies it, and its fourth amendment is now
+> overtaken:** his 2026-09-06 answer retires the Lane-A-must-arm-once
+> precondition outright, so ratifying that amendment as filed would reimpose a
+> hold he has dropped. The proposal is not rewritten from here; whoever carries
+> it to ratification updates that amendment against his 9/6 answer on this
+> ticket. Until he ratifies, this box is the record, and the vault's Lane B
+> rows are superseded by his rulings above.
 
 ### What it is, in one paragraph
 
@@ -1476,21 +1610,101 @@ touches **nothing but tests and documentation**. It announces itself on the
 ticket, waits **one hour**, and merges unless you say anything at all.
 
 Your ruling, 2026-08-24: *"Ship Lane A now. Give it a 1-hour window to start.
-Never for C."* Lane B was not ruled on and is not built. Lane C — anything
-visual, routes, migrations, auth, CI — is never automated.
+Never for C."* Lane C — anything visual, routes, migrations, auth, CI — is never
+automated.
+
+**Lane B was ruled on 2026-09-04** and is now built. What forced it: overnight
+2026-09-03 nine pull requests merged and Lane A merged **none** of them, because
+the pipeline had spent the night building on itself — `scripts/`, which is
+neither a test nor a document. Seven hours of a ten-hour night had no merge at
+all, and the gaps lined up exactly with when you were asleep. The merge rate was
+not a property of the pipeline; it was a property of your sleep schedule.
+
+Your ruling, 2026-09-04, choosing between four options: **"A — `scripts/`,
+`docs/` and test files only."** You removed `lib/` from the proposal yourself,
+with the reason: `server.js` requires it directly (`lib/config`,
+`lib/environmentBanner`, `lib/publicSiteHosts`, `lib/devTeamStore`), and it
+holds the stores and `projectScope.js` that serve tenant sites. `lib/builder-client/**`
+also bundles into `public/builder-bundle.js` and into `lib/builder/template.js`,
+which renders a client's published pages. A bad merge there reaches a client's
+site with no human in the path.
 
 ### What qualifies
 
-Every changed file must match one of:
+**Lane A** — every changed file matches one of:
 
 ```
 *.test.js   *.test.ts   *.test.tsx   *.test.mjs
 docs/**     *.md
 ```
 
-**One file outside that set disqualifies the whole pull request.** There is no
+**Lane B** — every changed file matches Lane A's set, or:
+
+```
+scripts/**/*.js   scripts/**/*.mjs   scripts/**/*.cjs
+scripts/**/*.ts   scripts/**/*.json
+```
+
+The extension list is not decoration. A bare `scripts/**` also carried
+`scripts/git-hooks/pre-commit` (extensionless — and doctrine criterion 4 names
+git hooks outright), every `.sh` runner and installer, and would carry a `.sql`
+migration the day somebody adds one, which criterion 1 calls out as *not*
+reversible by a single revert.
+
+The lane a PR runs in is **the widest lane any one of its files needs**. A test
+file inside `scripts/` still reads as Lane A, so the narrower lane does not
+quietly stop existing.
+
+**One file outside the set disqualifies the whole pull request.** There is no
 partial credit and no "mostly tests": a mixed PR carries the risk of its
 riskiest file, not the average of them.
+
+### The merge machinery is never auto-merged, in either lane
+
+Doctrine criterion 4: *"A machine may never auto-merge a change to the machinery
+that governs machines … CI workflows, git hooks, `check_conventions`,
+`nodeRoles`, `.gitattributes`, **the merge step itself**, or this document."*
+
+Until Lane B this needed almost no code. `scripts/builder/mergeOnComment.js` is
+neither a test nor a document, so Lane A refused it without being asked to —
+only the *tests* of the merge machinery needed an explicit rule. **Lane B
+removes that accident**, so the rule now covers the sources too:
+`mergeOnComment`, `autoMergeLane`, `autoMergeLedgerFile`, `passClaim`, `wipCap`,
+`preflight`, `reviewGate`, `pipelinePause`, `clickup_direct`, `pipeline`,
+`repair` and their siblings, plus every `scripts/check_*` gate, every
+`scripts/**/*.sh` runner, and `scripts/git-hooks/`.
+
+Measured on 2026-09-04: of 413 tracked files under `scripts/`, **63 are blocked
+as governance and 350 are auto-mergeable.**
+
+Worth knowing when you read the first digest: on the fourteen pull requests
+merged over 2026-09-03/04, this lane would have merged **none of them** — not
+because the boundary is wrong, but because that night's work was almost entirely
+the merge machinery itself. Over the last sixty merged PRs it would have carried
+five (three Lane A, two Lane B).
+
+### The boundary cannot silently expire
+
+You attached a condition to choosing it:
+
+```
+"A folder boundary is not permanent. scripts/ is unreachable from a served
+ route today, but nothing enforces that ... If you pick A or D, the build
+ should include a check that fails if an auto-mergeable folder becomes
+ reachable from the server. Otherwise this decision silently expires."
+```
+
+That is `npm run check:automerge-reach`, and it runs in CI on every pull
+request. It walks the require/import graph out from `server.js`,
+`api/[...slug].js` and `routes/index.js` and fails if it reaches a file Lane B
+would carry, naming the import that did it. A missing entry point exits **2**
+(cannot tell), never 0 — a clean sweep over the wrong graph is worse than none.
+
+Measured when it shipped: 279 files are reachable from the server and none of
+them is auto-mergeable. The crossing you named — `lib/loopThroughput.js`
+importing `scripts/builder/wipCap.js` — is real, but `lib/loopThroughput.js` is
+not reachable from any entry point, and both files it pulls are governance-blocked
+anyway.
 
 Disqualified even though they match, because a machine never auto-merges the
 machinery that governs machines: any `CLAUDE.md`, `docs/DOCTRINE.md`, this file,
@@ -1619,7 +1833,9 @@ npm run pipeline -- status                    is it running? if not, since when,
 npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
 npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
 npm run pipeline -- pause --now               ... or don't wait, and name exactly what was left running
-npm run pipeline -- resume --operator-asked   hand the deck back — yours, never an agent's
+npm run pipeline -- resume --operator-asked --why "<his words>"   hand the deck back — yours,
+                                              never an agent's. --why is required: quote him,
+                                              on ONE line — a record keeps one line per field.
 ```
 
 The `--` is required in every one of those. npm eats any `--flag` typed without
@@ -1684,16 +1900,69 @@ it skips is the queue position.
    ticket is still claimable by a loop pass; only the status is, and only
    `--if-status` makes the write refuse if a pass got there first (the same
    check-then-act guard the loops use). Leave the priority where it is.
-4. **Find the branch.** `npm run clickup -- build-start --task <id>`: exit 3
-   means a PR is already open, so the work continues on THAT branch, not a
-   fresh one. `npm run thread` only creates new branches, so for an existing
-   one it is by hand:
+4. **Find the branch.** `npm run clickup -- build-start --task <id>`. It asks
+   whether this ticket was already started, and since task 86bbvur5a it looks
+   at **disks as well as at pull requests** — because a pull request is the
+   last thing a build produces, so a pass that wrote code and died before
+   pushing leaves nothing for a PR lookup to find. **Exit 3 therefore comes in
+   two flavours, and the line it prints says which.**
+
+   **`CONTINUE`** — work exists on this machine, and that branch is the one to
+   work on. `npm run thread` only creates new branches, so it is by hand. If
+   the command printed a `pr:` line, the branch is pushed:
 
    ```
    git worktree add .claude/worktrees/<topic> -b <branch> origin/<branch>
    cd .claude/worktrees/<topic> && npm ci && npm run build && npm run env:local
    git config branch.<branch>.clickup-task <id>     # what tidy reads back
    ```
+
+   If it printed a **`work:`** line naming a worktree instead, that folder is
+   already on this machine and **was never pushed** — `cd` into it and carry
+   on. `origin/<branch>` does not exist, so the command above would fail.
+
+   And there is a **third shape**, which is the one this whole reading is
+   named after: a **`work:`** line saying **`(no worktree — the branch exists
+   but is not checked out)`**. The branch is on this disk, stamped with the
+   ticket, carrying commits nobody pushed — and there is no folder to `cd`
+   into, because `tidy` removed it or the pass died before creating one. Both
+   documented moves fail here, and until the round-3 review of task 86bbvur5a
+   these three docs offered nothing else: `-b <branch> origin/<branch>` gives
+   `fatal: invalid reference: origin/<branch>` (never pushed) with a second
+   error behind it (`-b` on a branch that already exists), and "cd into the
+   folder it prints" has no folder to name. **Attach the existing local
+   branch:**
+
+   ```
+   git worktree add .claude/worktrees/<topic> <branch>
+   cd .claude/worktrees/<topic> && npm ci && npm run build && npm run env:local
+   ```
+
+   **No `-b`** — the branch already exists, and `-b` on an existing branch is
+   an error in its own right. **No `origin/`** — it was never pushed.
+
+   Either way the stamp is what `tidy` and `ship` read back, so set it if it
+   is missing.
+
+   **`WORK ON ANOTHER MACHINE`** — also exit 3. The half-built worktree is on
+   a disk this one cannot reach, so there is nothing to check out here. Do not
+   branch, and do not hand the ticket back to the claim line: rework is
+   claimed first and oldest-first, so it would come back and be refused again
+   on every pass. The command prints the escalation to run.
+
+   **Exit 1 is a stop — unless it prints a `next:` line.** Something could not
+   be read *here*, most often the local disk itself, and a disk that went
+   quiet clears itself on its own: stopping is the whole instruction and no
+   `next:` line is printed. A ticket whose **`repo:` tag does not resolve** is
+   the other half of exit 1 and it never clears — the tag is the same on every
+   pass, so a pass that merely stops leaves the ticket to be returned to
+   `Rework`, claimed first-and-oldest-first on a key that never changes, and
+   refused again on every pass for good. **One mis-tagged ticket kills the
+   lane, silently** — the 2026-09-03 shape. That case prints the escalation to
+   run (`ask` it to `Needs your input`), and the `next:` line is the
+   instruction. A `work:` line marked *NOT on this machine* is naming somebody
+   else's branch, not yours. Only **exit 0** means
+   `npm run thread <topic> <id>`.
 
    Then build in that folder, by absolute path (CLAUDE.md, "One topic, one
    worktree — a session may hold more than one", rule 2). The hand-off to a
@@ -2044,9 +2313,12 @@ The floor is applied to *everything*: the curve's own rungs, the runner's
 argument, and the on-disk state file. A hand-edited `120` cannot get through.
 Nor can a hand-edited `null` get *under* the hysteresis: `Number(null)` is 0,
 which a floor-only clamp would raise to 900 and treat as the cadence already
-in force, so one deep reading would shorten it at once. Anything that is not
-actually a number resolves to the long fallback instead, and the test asserts
-that value rather than merely `>= floor`.
+in force. Anything that is not actually a number resolves to the long fallback
+instead, and the test asserts that value rather than merely `>= floor`. Since
+the 2026-09-05 inversion this protects the *lengthening* guard rather than the
+shortening one — a junk state reading as 900 would make every quiet reading a
+lengthening, which is the direction that waits — but the defect and the fix
+are the same either way.
 
 ### "Claimable", not "queued"
 
@@ -2111,16 +2383,67 @@ be visible in the log, not inferred from an interval an hour later.
 
 ### Hysteresis, and which direction it protects
 
-**Shortening needs two consecutive readings. Lengthening is immediate.**
+**Shortening is immediate. Lengthening needs two consecutive readings that
+both want it.**
 
-One burst of tickets must not set a fast cadence for the rest of the night —
-the queue may be drained again before the loop next wakes. Going *slower*
-never waits, because that is the cheap mistake.
+**That is the opposite of what it said until 2026-09-05** (task 86bbvh285),
+and the inversion is worth reading rather than skimming, because the original
+reasoning was not silly — it was measured against the wrong cost.
 
-With no state on disk at all, the cadence in force is taken to be the runner's
-configured argument, so a first pass against a deep queue holds one cycle and
-shortens on the next. That is the same rule every later pass follows, rather
-than a special case that skips the guard exactly when nothing is known.
+The original rule: shortening waits for two consecutive readings, because one
+burst of tickets must not set a fast cadence for the rest of the night;
+lengthening never waits, because the expensive mistake is staying fast and
+burning quota invisibly.
+
+**What that missed.** The two errors are not the same size. Waking sooner than
+a wrong reading deserved costs **one extra pass** against a shallow queue. But
+the hold is paid *at the cadence that is already too long* — the loop sleeps
+the old interval to earn the right to shorten it — so refusing to shorten from
+an hour costs an hour, of the whole pipeline, because the WIP cap counts
+`In review` and a slow review lane fills it until `loop-build` stops claiming.
+
+**And on a drifting queue the guard was effectively unreachable.** This part is
+not what it looks like, and the ticket that filed it described it wrongly. The
+old comparison *was* directional — `lastProposed < current` — so two different
+short proposals ought to second each other. They cannot: a **held pass does not
+move `current`**, and an intervening reading that is not shorter than `current`
+is adopted and overwrites `lastProposed` with itself, throwing the short
+reading away. The second reading therefore has to beat the interval in force,
+and on a queue drifting across the curve's rows it usually does not.
+
+Measured, from `~/loop-logs/loop-review.log` on the Mini:
+
+```
+00:26  4 claimable -> 900s proposed, HELD at 1800s      (lastProposed = 900)
+01:05  3 claimable -> 1800s, not < 1800s, so adopted as-is
+                      and lastProposed reset to 1800 — the 900 is discarded
+01:44  2 claimable -> 1800s
+02:24  1 claimable -> 1800s
+```
+
+The queue reached the curve's deepest row and the cadence never went there.
+That is a **ratchet**, not hysteresis: alternating readings settle on the
+slower rung and stay.
+
+**What the ticket got wrong**, recorded so the next reader is not misled: it
+described the guard as comparing exact seconds ("two readings of the same
+value") and reported `loop-review` as pinned at 3600 s for over three hours.
+The comparison is directional, as above; and of the three hours at 3600 s that
+day, two passes genuinely read **zero claimable** — correct behaviour — and
+only the 14:05 pass was a hold. One hour was lost to hysteresis, not three.
+The conclusion survives the arithmetic, and the real defect is worse than the
+one reported, because a ratchet can strand the cadence a rung short forever.
+
+The anti-thrash property is not lost — it moved to the direction where being
+wrong is cheap. A queue that empties for one pass and refills no longer costs
+an hour of sleep, and the ratchet cannot form the other way either, because a
+reading that wants *shorter* is adopted outright rather than resetting a
+counter.
+
+With no state on disk at all, the cadence in force is still taken to be the
+runner's configured argument. A first pass against a deep queue therefore
+shortens at once, and a first pass against an empty one holds for a cycle —
+the same rule every later pass follows, not a special case.
 
 State is one small file per loop, beside the log the runner already writes:
 `~/loop-logs/<loop>.interval-state.json`. Deleting it is harmless — it costs
@@ -2136,7 +2459,8 @@ one cycle of hysteresis, in the safe direction.
 | The command itself fails | the runner's `$INTERVAL` argument | The runner never sleeps on a guess. |
 
 A failed read is **not a reading**: it leaves the hysteresis state untouched,
-so two outages in a row cannot masquerade as two consecutive short readings.
+so two outages in a row cannot masquerade as two consecutive readings in
+either direction.
 
 And nothing is silent. Every cycle logs the number *and* its reason —
 
@@ -2220,11 +2544,177 @@ Two things follow, and both used to be got wrong:
   `nudge` hook). It does that at most once, and if a run still does not appear
   it says plainly that this is no longer a delay.
 
-**Recovering a checkless PR by hand** — any new commit will do:
+**Recovering a checkless PR by hand** — any new commit will do, *for this cause*:
 
 ```
 git commit --allow-empty -m "Nudge GitHub into creating a check run" && git push
 ```
+
+### The OTHER cause, whose remedy is the opposite one (2026-09-06, PR #630)
+
+For a long time the paragraphs above were the whole story, and they are only
+half of it. A checkless pull request has **two** causes, they look completely
+identical from outside, and **the remedy for each does nothing for the other.**
+
+On PR #630 two commits were pushed eleven minutes apart — `8ef87761` at 16:26
+and `47f0b6c0` at 16:37 — and GitHub created no workflow runs for either:
+
+```
+$ gh api repos/mentor24-maker/starcaster/commits/8ef87761/check-runs
+Vercel Preview Comments   completed   success        <- and nothing else
+```
+
+Actions was healthy the whole time: other pull requests in the same repository
+got full `CI` + `review-gate` runs at 16:34 and 16:37, in between those two
+pushes. And the documented remedy was tried and did nothing — the nudge commit
+was pushed and produced no run either.
+
+**The cause is the pull request's merge state.**
+
+```
+$ gh pr view 630 --json mergeable,mergeStateStatus
+{"mergeable":"CONFLICTING","mergeStateStatus":"DIRTY"}
+```
+
+Both workflows here trigger on `pull_request` (`.github/workflows/ci.yml`,
+`review-gate.yml`), and a `pull_request` workflow runs against the **merge ref**
+— the branch merged into its base. GitHub cannot build that ref for a pull
+request it believes conflicts, so it runs **nothing at all**. No error, no
+skipped run, no annotation; the checks are simply absent. That is why the nudge
+cannot help: the empty commit does move the head SHA, but the new SHA does not
+merge either.
+
+`git merge-tree --write-tree origin/main HEAD` exited **0** with a clean tree,
+so this was the phantom kind of conflict rather than a real disagreement. What
+was not known before #630 is that a phantom conflict is not merely untidy —
+**it switches the pull request's checks off entirely.** The thing that fixed it
+was merging `origin/main` in: the moment the branch was current, `mergeable`
+flipped to `MERGEABLE` and both workflows started within seconds.
+
+### Which remedy applies — ask, do not guess
+
+One command tells the two apart, and it costs a second:
+
+```
+gh pr view <pr> --json mergeable,mergeStateStatus
+```
+
+| Reading | Cause | Remedy |
+|---|---|---|
+| `CONFLICTING` / `DIRTY` | GitHub will not build a merge ref, so it runs nothing | **Ask git too, then see the three cases below** — usually a catch-up merge (`npm run ship`) |
+| `MERGEABLE` / anything else | The `opened` run and a too-quick second push were both dropped (#387/#389) | **Push any new commit** — `git commit --allow-empty -m "Nudge GitHub into creating a check run" && git push` |
+| `UNKNOWN` | GitHub has not worked it out yet — normal for a few seconds after a push | **Ask again.** Never read this as either of the above |
+
+Applying the wrong one is not a no-op: it burns a grace window, adds a commit
+that changes nothing, and then reports the wrong diagnosis. On #630 that ended
+in "check that Actions is enabled for the repository", about a repository whose
+Actions were running other people's pull requests at that exact minute.
+
+### `CONFLICTING` is one reading with three different remedies
+
+"Merge the base in" is the right answer *when the branch is actually behind*,
+and on a branch that is already current it is a **no-op loop** — `ship` merges
+`origin/main` in at step 1, so a pull request whose only problem is GitHub's
+stale computation gets told to do the thing `ship` just did, does it, changes
+nothing, and comes back round. That is not hypothetical: GitHub's mergeability
+is a cached background computation and it is wrong here often enough to have
+its own note in doctrine (PRs #567 and #585, and #639 — the pull request that
+carried this very fix, which read `CONFLICTING` while git merged it cleanly).
+
+So a conflicting reading is met with a **second source**, the same cross-check
+`mergeOnComment`'s gate already makes:
+
+```
+git rev-parse --verify origin/main^{commit}     # both refs FIRST — see below
+git rev-parse --verify HEAD^{commit}
+git merge-tree --write-tree origin/main HEAD    # 0 = merges clean, 1 = conflicts
+git rev-list --count HEAD..origin/main          # 0 = the branch already has main
+```
+
+| GitHub | git | What it is | Remedy |
+|---|---|---|---|
+| `CONFLICTING` | conflicts | A real conflict; both sources agree | **Resolve it** — `git merge origin/main`, fix the files, commit, `npm run ship` |
+| `CONFLICTING` | clean, branch behind main | The #630 case: stale branch, phantom reading | **Catch up** — `npm run ship` merges `origin/main` in first |
+| `CONFLICTING` | clean, branch already current | GitHub is holding a stale computation and there is nothing to catch up | **Make it recompute** — `git commit --allow-empty -m "Recompute mergeability" && git push` |
+| `CONFLICTING` | no reading could be taken | Unconfirmed | **Catch up** — the measured remedy, and safe against an unconfirmed conflict |
+
+**Resolve both refs before the exit code means anything.** `git merge-tree
+--write-tree` exits **1** for a ref it cannot resolve as well as for a conflict
+(measured on git 2.50.1: `merge-tree: nosuchref - not something we can merge`).
+Reading that bare `1` as a conflict sends you to resolve one that does not
+exist, over a typo. Every unreadable case here is a **CANNOT TELL** that falls
+back to the catch-up merge — never "clean".
+
+**`npm run ship` asks this itself now.** `scripts/builder/waitForChecks.js`
+polls mergeability while no check has ever appeared, and returns its own
+`blocked_conflicting` outcome the moment GitHub says `CONFLICTING` — before the
+grace window, and before the nudge, because reaching either of those first
+hands out the wrong remedy. `UNKNOWN` is deliberately not treated as a
+conflict: it is the ordinary answer for the first seconds after every push, so
+it is polled rather than read once.
+
+**And the message it prints names exactly ONE remedy.** Both checkless outcomes
+— the conflicting head and "nothing ever appeared" — go through one builder,
+`scripts/builder/checklessMessage.js`, which fills a single remedy slot from
+the table above. It is written that way because the first version assembled the
+message by CONCATENATION, appending a note about mergeability to a paragraph
+chosen from the nudge's outcome, and two of those pairings contradicted
+themselves outright — "the branch needs a new commit before GitHub will make a
+run", immediately followed by "the remedy is a catch-up merge, not another
+commit". The operator can do one of those, and nothing in the message said
+which: this section's own failure mode, reproduced inside the fix for it. One
+slot, filled by a table, is what makes a second remedy something a future edit
+cannot add by accident.
+
+**A conflicting head blocks runs from being CREATED; it does not remove runs
+that already exist.** Measured on 2026-09-06: PR #637 read `CONFLICTING` /
+`DIRTY` with all four of its checks passing, because they were created before
+the branch went stale. That is the whole reason the guard above only fires when
+**no check has ever appeared** — a pull request that goes conflicting mid-run
+still has real checks with a real verdict, and the merge gate refuses a `DIRTY`
+head on its own anyway. Firing on any conflicting reading would report a fully
+green board as blocked.
+
+### "No checks" never looks like no checks — Vercel is always there
+
+This is what made the guard above ship **unreachable**, and it is the trap a
+pass reading `gh pr checks` by hand falls into as well. A checkless pull
+request in this repository is not an empty list. Vercel posts its own rows on
+every pull request whatever GitHub Actions does, and `gh` reports them as
+passing, so the #630 board looked like this:
+
+```
+Vercel Preview Comments   completed   success        <- and nothing else
+```
+
+Two green rows. Nothing had run. **The count of rows tells you nothing; only
+which rows tells you anything.** Ask for the `workflow` field and the
+distinction is immediate — a GitHub Actions check *run* belongs to a workflow
+and carries its name, a status posted by an outside service does not:
+
+```
+$ gh pr checks <pr> --json name,bucket,state,workflow
+{"name":"verify",                 "workflow":"CI"}            <- ours
+{"name":"review-gate",            "workflow":"review-gate"}   <- ours
+{"name":"Vercel",                 "workflow":""}              <- not a check run
+{"name":"Vercel Preview Comments","workflow":""}              <- not a check run
+```
+
+The two rows that decide anything are **`verify`** and **`review-gate`**. If
+neither is present, no CI has run, however green the board looks.
+
+`waitForChecks` classifies on exactly that (`isWorkflowCheck`), which is what
+makes the conflicting-head guard reachable at all. It also closes a second,
+older hole the same finding uncovered: before this, a pull request carrying
+nothing but Vercel rows classified as fully **passed**, so `ship` would walk
+past its CI gate and try to merge a pull request with no CI green whatsoever.
+
+**A pass waiting on checks by hand owes the same question.** If `verify` and
+`review-gate` are absent — *not* "if the list is empty", which it never is —
+run the `gh pr view` line above *before* waiting. A conflicting head is a
+**CANNOT TELL**, not a slow CI run: the checks are not late, they are never
+coming, and waiting out the pass's budget on one is how a finished green
+branch ends up sitting in `Building` overnight.
 
 **Avoiding it in the first place:** do not push again in the seconds right after
 `gh pr create`. Open the PR, wait until `gh pr checks <pr>` lists a run, and
@@ -2496,9 +2986,17 @@ listed as **not measured**, never silently skipped.
 
 **Shape 4 is the dangerous one, and the reason this check reads both
 directions.** `build-start` decides whether a branch already exists by reading
-*the ticket*. A link that exists only on the PR side is invisible to it, so the
-next pass opens a second branch for work that already has one — exactly how
-duplicate PRs #407 and #408 were born. Real case: PR #373 ↔ 86bbjj6qb, found
+*the ticket* — so a link that exists only on the PR side is invisible to it,
+and the next pass opens a second branch for work that already has one, exactly
+how duplicate PRs #407 and #408 were born.
+
+Since task 86bbvur5a it takes a second reading, of the **disks**, which narrows
+this shape without closing it: a stamped branch still sitting on a machine the
+probe can reach is found whether or not the ticket knows about its PR. What
+that reading cannot see is a branch that exists only on GitHub — tidied away
+locally, or built on a machine now unreachable — and it says which seats it
+could not look at rather than answering for them. This check is still the one
+that reads the PR side. Real case: PR #373 ↔ 86bbjj6qb, found
 while writing the design and since repaired by hand.
 
 Two distinctions cost false positives on the first production run, and both are

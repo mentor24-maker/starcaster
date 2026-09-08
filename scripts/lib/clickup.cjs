@@ -23,6 +23,8 @@
 
 const path = require('path');
 const { retryDecision } = require('../builder/clickupRetry.js');
+const ledger = require('./clickupLedger.cjs');
+const { callerKind } = require('./clickupCaller.cjs');
 const { execFileSync } = require('child_process');
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
@@ -68,6 +70,146 @@ const SHELL_TIMEOUT_MS = Number(process.env.CLICKUP_SHELL_TIMEOUT_MS) || 2 * 60 
  */
 const API_BASE = process.env.CLICKUP_API_BASE || 'https://api.clickup.com';
 
+// ── THE ONE DOOR TO CLICKUP ───────────────────────────────────────────────────
+/**
+ * The single place in this repo that calls `fetch` against api.clickup.com
+ * (2026-09-03, task 86bbugcdb).
+ *
+ * WHY. The limit is per TOKEN, and there is one token for the whole company.
+ * Six files each opened their own connection, four of them counted nothing,
+ * and only one read `x-ratelimit-*` at all — and printed the numbers to stderr
+ * rather than keeping them. So nothing in the system could answer "how much
+ * budget is left?", and on 2026-09-03 a bus-relay pass spending 114 requests
+ * against a ~100/minute allowance was rate-limited on every pass for hours,
+ * which disabled the auto-merge lane for 271 consecutive passes.
+ *
+ * THIS FUNCTION NEVER THROWS. That is a safety property, not a style choice.
+ * `fetch` REJECTS on a transport failure rather than resolving with a non-ok
+ * response; when that rejection escaped, it killed the process with exit 1 —
+ * and `loop-build` reads exit 1 as "could not tell, so proceed, unbounded by
+ * the cap". A routine network blip therefore UNCAPPED the loop (task
+ * 86bbm4zwd). Callers get `transportError` set and decide for themselves
+ * whether to throw; the two existing callers do NOT agree on the answer, so
+ * this one does not pick for them.
+ *
+ * It counts at the ATTEMPT, not the success: a request that failed to connect
+ * still spent whatever the attempt costs, and for a budget you would rather
+ * over-count than under-count.
+ */
+const budget = {
+  requests: 0,
+  limit: null,
+  remaining: null,
+  resetSeconds: null,
+  at: 0,
+};
+
+/**
+ * `fetchImpl` is injectable (2026-09-04, task 86bbugcpa) so that a caller with
+ * its own test fakes can come through the door instead of routing around it.
+ * `lib/clickupForward.js` runs on the bug reporter's request path and its
+ * tests drive every ClickUp failure shape through a substitute transport; the
+ * alternative was leaving it outside the door, which is exactly the second
+ * door this whole ticket exists to close. The request is counted whichever
+ * transport is used — the counter measures the ATTEMPT, and a caller cannot
+ * opt out of being counted by supplying its own `fetch`.
+ */
+async function clickupFetch(url, init = {}, { fetchImpl = fetch, env = process.env, now = Date.now } = {}) {
+  // THE RESERVE, ENFORCED AT THE DOOR (2026-09-04, task 86bbugd8j).
+  //
+  // Scheduled jobs are expected to stop at their own loop boundaries, where a
+  // stop is legible and the pass can still print what it did not reach. This
+  // is the BACKSTOP behind that: a job that never checks, or checks and then
+  // keeps going, still cannot spend the budget an interactive session needs.
+  //
+  // It refuses rather than throws, because this function's contract is that it
+  // never throws — a rejection escaping here once uncapped the build loop
+  // (task 86bbm4zwd). `yielded` is a THIRD outcome alongside a response and a
+  // transport error, and both call sites handle it by name. An interactive
+  // caller can never reach this branch.
+  //
+  // ONLY REAL CLICKUP TRAFFIC touches the machine's ledger. `api.clickup.com`
+  // is the only host that spends the token, and a request to anything else —
+  // a stand-in server, a deliberately-invalid host in a test — has not spent
+  // it. Without this, running `npm run test:builder` on the Mini would write
+  // requests into the same ledger the live relay reads a second later, and a
+  // test run could make a real scheduled job yield. The door's OWN counter
+  // still counts every attempt: it answers "what did this pass cost", which is
+  // a different question from "what has been taken from the token".
+  const who = callerKind({ env });
+  const verdict = spendsClickUpBudget(url)
+    ? ledger.shouldYield({ kind: who.kind, now: now(), env })
+    : { yield: false, why: 'not a request to api.clickup.com — nothing of the token is spent' };
+  if (verdict.yield) {
+    return { res: null, json: null, text: null, transportError: null, yielded: { ...verdict, caller: who } };
+  }
+  budget.requests += 1;
+  let res;
+  try {
+    res = await fetchImpl(url, init);
+  } catch (err) {
+    // Counted on this machine's ledger even though it never arrived: the
+    // attempt is what the budget is spent by, and under-counting is the
+    // unsafe direction.
+    if (spendsClickUpBudget(url)) ledger.record({ now: now(), env, kind: who.kind });
+    return { res: null, json: null, text: null, transportError: err, yielded: null };
+  }
+  recordLimits(res);
+  if (spendsClickUpBudget(url)) {
+    ledger.record({
+      now: now(),
+      env,
+      kind: who.kind,
+      rem: budget.remaining,
+      reset: budget.resetSeconds,
+      limit: budget.limit,
+    });
+  }
+  let text;
+  try {
+    text = await res.text();
+  } catch (err) {
+    // The body can fail mid-stream after a perfectly good set of headers — a
+    // dropped connection reads as a rejection here, not at the line above.
+    return { res, json: null, text: null, transportError: err, yielded: null };
+  }
+  let json = null;
+  try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
+  return { res, json, text, transportError: null, yielded: null };
+}
+
+/** Is this URL the thing that actually spends the company's one ClickUp token? */
+function spendsClickUpBudget(url) {
+  try { return new URL(String(url)).host === 'api.clickup.com'; } catch { return false; }
+}
+
+/** Keep the live rate-limit state instead of printing it and throwing it away.
+ *  A header ClickUp did not send leaves the previous reading alone rather than
+ *  overwriting it with null — a missing header is "no news", not "no budget". */
+function recordLimits(res) {
+  // A response without headers is not a crash. Real ClickUp always sends them,
+  // but an injected transport need not, and the door must not be the thing
+  // that breaks when a caller hands it a simpler shape than a real Response.
+  if (!res || !res.headers || typeof res.headers.get !== 'function') return;
+  const limit = res.headers.get('x-ratelimit-limit');
+  const remaining = res.headers.get('x-ratelimit-remaining');
+  const reset = res.headers.get('x-ratelimit-reset');
+  if (limit == null && remaining == null) return;
+  if (limit != null) budget.limit = Number(limit);
+  if (remaining != null) budget.remaining = Number(remaining);
+  if (reset != null) budget.resetSeconds = Number(reset);
+  budget.at = Date.now();
+}
+
+/** What is left, for a caller that wants to decide something with it. A copy,
+ *  so a caller cannot edit the counter it is reading. */
+function getBudget() {
+  const secs = Number.isFinite(budget.resetSeconds)
+    ? Math.max(0, budget.resetSeconds - Math.floor(Date.now() / 1000))
+    : null;
+  return { ...budget, resetsInSeconds: secs };
+}
+
 function requireToken() {
   if (!TOKEN) {
     throw new Error(
@@ -102,30 +244,89 @@ async function call(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {})
   }
 }
 
+/**
+ * WHAT A PASS COSTS, in the units ClickUp throttles on (task 86bbtqytq).
+ *
+ * `clickup_direct.mjs` has counted its own requests since the relay's interval
+ * was set, and closes every pass with "requests this pass: N". The scripts on
+ * THIS client — reconcile, stale-ready — had no such number, so the one
+ * question the ticket asked about scheduling reconcile more often ("measure
+ * before you schedule it; a watchdog that exhausts the rate limit takes the
+ * relay down with it") could only be answered by arithmetic on the source.
+ *
+ * A counter, not an estimate: comment paging makes the real figure depend on
+ * how chatty each ticket is, which no reading of the code produces.
+ *
+ * ONE COUNTER, AND IT IS THE ONE DOOR'S (resolved 2026-09-04, round 3).
+ *
+ * This branch and `main` grew a counter each, within hours, and they were
+ * written to disagree on purpose about what a request IS:
+ *
+ *   - the one door counts at the ATTEMPT — "a request that failed to connect
+ *     still spent whatever the attempt costs, and for a budget you would
+ *     rather over-count than under-count";
+ *   - this file's counted after `requireToken()` — "a missing token is a
+ *     request that never left the machine, and counting attempts there would
+ *     inflate exactly the number the ticket asked to be measured".
+ *
+ * Keeping both is the "keep both sides" shape DOCTRINE 6.7 was written about,
+ * so there is now one, and it is `budget.requests`. The losing argument turns
+ * out to cost nothing here, which is why the merge is safe rather than a coin
+ * flip: `clickupFetch` is reached from exactly one place in this file
+ * (`callOnce`, below), and `requireToken()` guards that line — so a missing
+ * token throws before the door is opened and is not counted either way. The
+ * two counters were numerically identical for every caller of this module.
+ *
+ * KNOWN UNDER-COUNT, unchanged by any of this and worth knowing before you
+ * schedule anything on the figure: WRITES from this module shell out to
+ * `scripts/clickup_direct.mjs`, a separate process with its own budget. They
+ * really are spent against the same per-token limit, and this number does not
+ * see them. It is a floor for a pass's cost, not the whole of it.
+ */
+const requestsMade = () => budget.requests;
+
+/**
+ * A scheduled job stopping at the reserve, as an error a caller can recognise.
+ *
+ * A distinct type rather than a string match: `report_job_failure.mjs` and the
+ * loop lanes need to tell "the budget ran out and I stopped on purpose" from
+ * "ClickUp broke". They are different events with different fixes, and a
+ * yield that reads as a failure sends the next reader hunting for an outage.
+ */
+class ClickUpReserveYield extends Error {
+  constructor(message, details) {
+    super(message);
+    this.name = 'ClickUpReserveYield';
+    this.yielded = details || null;
+  }
+}
+
 async function callOnce(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {}) {
   requireToken();
-  let res;
-  try {
-    res = await fetch(`${API_BASE}${apiPath}`, {
-      method,
-      headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-      // The deadline covers the response HEADERS. `res.text()` below is bounded
-      // by the same signal, because aborting the signal also errors a body that
-      // is still streaming.
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (err) {
-    throw new Error(timeoutAwareMessage(err, `${method} ${apiPath}`, timeoutMs));
+  // Through the one door. This file's contract is to THROW on a transport
+  // failure — every caller here is written around that — so the no-throw
+  // result is converted back at exactly this line, and nowhere else.
+  const out = await clickupFetch(`${API_BASE}${apiPath}`, {
+    method,
+    headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+    // The deadline covers the response HEADERS. Reading the body is bounded by
+    // the same signal, because aborting the signal also errors a body that is
+    // still streaming.
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (out.yielded) {
+    throw new ClickUpReserveYield(
+      `ClickUp ${method} ${apiPath} was not sent: ${out.yielded.why}`,
+      out.yielded,
+    );
   }
-  let text;
-  try {
-    text = await res.text();
-  } catch (err) {
-    throw new Error(timeoutAwareMessage(err, `${method} ${apiPath} (reading the response body)`, timeoutMs));
+  if (out.transportError) {
+    const where = out.res ? `${method} ${apiPath} (reading the response body)` : `${method} ${apiPath}`;
+    throw new Error(timeoutAwareMessage(out.transportError, where, timeoutMs));
   }
-  let json = null;
-  try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
+  const { res, json } = out;
+  const text = out.text;
   // resetSeconds is surfaced so the retry loop above can wait exactly as long
   // as ClickUp asks, rather than guessing.
   return { ok: res.ok, status: res.status, json, text, resetSeconds: res.headers.get('x-ratelimit-reset') };
@@ -235,7 +436,36 @@ async function pageComments({ get, taskId, maxPages = 40 }) {
  * caller here wants the trail, and half a trail that looks whole is how a
  * reader concludes something never happened.
  */
-async function getTaskComments(taskId) {
+/**
+ * A task's comments as RECORDS — `{ id, date, user, comment_text }`,
+ * oldest-first.
+ *
+ * `getTaskComments` below flattens these to bare strings, which is all most
+ * callers want. A caller that has to decide something about a comment needs
+ * more than its text: `mergeOnComment.findPullRequest` sorts by `date` to pick
+ * the newest `PR opened:` line and returns the `id` so the decision can be
+ * marked as spent. Handed strings instead, it silently sees every comment as
+ * equally old and returns whichever it met first — which is the OLDEST, the
+ * opposite of the rule it documents.
+ *
+ * That is not hypothetical: the reconciler passed strings, so it could not use
+ * that parser at all, wrote its own loose regex over prose, and closed a live
+ * ticket on another ticket's pull request (86bbuv66c, 2026-09-04).
+ *
+ * `user` CARRIES AUTHORSHIP, and it is here because dropping it made a whole
+ * class of question unaskable (2026-09-05, task 86bbv05ay). Every other reader
+ * of a merge command in this repo — `mergeDecision`, `liveApprovalAt`,
+ * `autoMergeLane` — decides authorship by numeric user id, and a reader handed
+ * these records could not: it would have had to fall back to the text alone,
+ * which reads "merge" typed by anybody as Dane's authorization. Passing the
+ * field through costs nothing and keeps the reconciler asking the SAME question
+ * the merge path asks, rather than a weaker second version of it.
+ *
+ * It is passed through verbatim rather than reduced to an id, because
+ * `machineComment.isMachineComment` needs the text and the callers need the
+ * name for the evidence line they write.
+ */
+async function getTaskCommentRecords(taskId) {
   const out = await pageComments({ get: (p) => call('GET', p), taskId });
   if (!out.complete) {
     if (out.capped) {
@@ -245,7 +475,16 @@ async function getTaskComments(taskId) {
     throw new Error(`getTaskComments(${taskId}): HTTP ${f.status} ${(f.json && f.json.err) || String(f.text || '').slice(0, 200)}`);
   }
   // API order is newest-first within a page; reverse the whole set to oldest-first.
-  return out.comments.reverse().map((c) => c.comment_text || '');
+  return out.comments.reverse().map((c) => ({
+    id: String(c.id ?? ''),
+    date: c.date,
+    user: c.user || null,
+    comment_text: c.comment_text || '',
+  }));
+}
+
+async function getTaskComments(taskId) {
+  return (await getTaskCommentRecords(taskId)).map((c) => c.comment_text);
 }
 
 /**
@@ -293,9 +532,39 @@ function shellFailureDetail(err, timeoutMs) {
  * "that status does not exist" 200 that a bare PUT would report as success.
  * Returns the command's own report line.
  */
-function moveTaskStatus(taskId, status, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
-  return runDirect(['status', '--task', String(taskId), '--status', status], {
-    what: `move task ${taskId} -> "${status}"`,
+/**
+ * Move a task, through the one verified door.
+ *
+ * `ifStatus` makes the move a GUARDED one: `clickup status --if-status` re-reads
+ * the task and exits 3 without writing if it is no longer wearing that status,
+ * which `runDirect` surfaces as a throw. A caller that read a status, thought
+ * about it, and then wrote wants this — the thinking is the window. Added for
+ * the reconciler's authorized close (86bbv05ay), where the gap between reading
+ * the ticket and closing it spans a `gh` call and a comment post, and a ticket
+ * Dane moved himself in that gap must be left exactly where he put it.
+ */
+function moveTaskStatus(taskId, status, { timeoutMs = SHELL_TIMEOUT_MS, ifStatus = null } = {}) {
+  const guard = ifStatus ? ['--if-status', String(ifStatus)] : [];
+  return runDirect(['status', '--task', String(taskId), '--status', status, ...guard], {
+    what: `move task ${taskId} -> "${status}"${ifStatus ? ` (only while it is "${ifStatus}")` : ''}`,
+    timeoutMs,
+  });
+}
+
+/**
+ * Comment on a task through the direct door.
+ *
+ * A DURABLE surface, which is why it exists (2026-09-03, task 86bbtqpxd). The
+ * reconciler used to report a contradiction to the bus and nowhere else, so a
+ * finding about one specific ticket competed with every other message in the
+ * room and was read as traffic. A comment lands on the ticket the finding is
+ * ABOUT, where the next reader of that ticket cannot miss it — and it survives
+ * the channel scrolling.
+ */
+function commentOnTask(taskId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
+  return runDirect(['comment', '--task', String(taskId), '--body-file', '-'], {
+    input: text,
+    what: `comment on task ${taskId}`,
     timeoutMs,
   });
 }
@@ -311,6 +580,14 @@ function postBusMessage(channelId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) 
 
 module.exports = {
   WORKSPACE,
+  // The one door, and the budget it keeps (task 86bbugcdb).
+  clickupFetch,
+  getBudget,
+  // The reserve (task 86bbugd8j): the ledger, who is asking, and the error a
+  // scheduled job gets when it stops.
+  ledger,
+  callerKind,
+  ClickUpReserveYield,
   COMMENT_PAGE_SIZE,
   HTTP_TIMEOUT_MS,
   SHELL_TIMEOUT_MS,
@@ -321,9 +598,12 @@ module.exports = {
   // Exported rather than re-implemented: a second fetch wrapper is a second
   // place for the token contract and the JSON/non-JSON handling to drift.
   call,
+  requestsMade,
   listTasks,
   pageComments,
   getTaskComments,
+  getTaskCommentRecords,
   moveTaskStatus,
+  commentOnTask,
   postBusMessage,
 };

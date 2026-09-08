@@ -239,6 +239,54 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     was frozen in production from 2026-06-30 until 2026-09-02 that way, with
     every save reporting success. A fallback path is for the store being
     ABSENT, never for it refusing. `docs/DOCTRINE.md` §5.21.
+16. **`POST /api/builder/publish` publishes EVERYTHING pending unless you name
+    the pages**, newest draft first. Any caller that means "put *these* pages
+    live" must send `pageIds`, or a routine edit puts every unrelated
+    half-finished draft in the project in front of visitors. An **empty**
+    `pageIds` means nothing, not everything — `if (pageIds.length)` reads it as
+    "no filter" and publishes the site; the rule is one tested function
+    (`selectPagesToPublish`). And reach the route through `builderAdminFetch`
+    (`/api/admin/publish`): an unmapped path falls through to a plain `fetch`
+    with neither the prefix nor the project-scope headers, and that 404 reads
+    as a missing feature. `docs/SAVED_SECTIONS.md` §2a.
+17. **A verdict evaluated per COPY must not be reported per PAGE.** A page can
+    hold several copies of one saved section, so `.some(drifted)` and
+    `.every(drifted)` are different questions and neither is what "drifted
+    pages" means on its own. Two 2026-09-03 bugs were that one slip: a dialog
+    named a page as left alone and then published it, and a save reported an
+    edit as overwritten while it sat untouched. No test could catch either —
+    every fixture gave each page one copy. `docs/DOCTRINE.md` §5.30.
+
+16. **A module's empty-state text renders on the CLIENT'S LIVE SITE.** "Set a
+    Form ID in module settings", "Add tags in the Messaging section", "Add posts
+    in module settings" — all written for whoever is building the page, all
+    shipping to visitors who have no module settings and nothing to act on. Six
+    were live on a client's blog on 2026-09-03, and two of those had been fixed
+    hours earlier the same day and came straight back.
+    Any builder-facing note goes inside `<BuilderOnlyNote liveSite={liveSite}>`,
+    which renders null on a published page; **`npm run check:builder-notes`**
+    blocks the commit and the build otherwise. And where the note is ALL the
+    module would render, return `null` on a live site — a lone heading over
+    empty space is the same defect, and is what "it flashes and disappears"
+    looks like. `docs/DOCTRINE.md` §5.29.
+
+17. **An empty screen that does not say WHY reads as a broken one.** Three
+    "bugs" reported in one day were correct code with an unexplained empty
+    state: a tag page whose 13 posts were all drafts, a related-posts module
+    matching on categories no post has, a filter naming a tag nothing carries.
+    The operator cannot read the database, so *empty* and *broken* are the same
+    picture. Name the value and the cause — "No posts tagged 'junior tennis'",
+    "this post is not in any category" — and where two screens count the same
+    thing differently, each says what it counts. `docs/DOCTRINE.md` §5.31.
+
+18. **No blog post anywhere has a category** (true as of 2026-09-03).
+    `blog_post_categories` holds 0 rows across every project, because the post
+    editor's Categories field never saved — it holds slugs, the API takes ids,
+    and the payload sent a string where `Array.isArray` was required. Fixed
+    going forward in #568; no historic post has one. So anything matching posts
+    BY CATEGORY finds nothing on every site — which is what made the
+    "You Might Also Like" module, whose default `matchBy` is `categories`,
+    render nothing everywhere. Match by **tags** works.
 
 ## Working locally
 
@@ -287,6 +335,7 @@ setting somebody flips on one machine at 2am.
 npm run node:whoami          # which machine is this, and what may it run
 npm run node:owns -- <job>   # 0 = yes, 3 = another machine's job, 1 = cannot tell
 npm run doctor:node          # is this MACHINE a valid node? (read-only, safe anywhere)
+npm run node:verify          # did this machine's jobs come back after it restarted?
 npm run provision:node       # what would it take to make it one? (dry run)
 ```
 
@@ -302,6 +351,29 @@ work would grade it by the assumptions it acted on — but they read ONE invento
 quietly. **Installing the pulse schedules reports CANNOT DO YET on every run**
 until Slice B (`86bbh9kh2`) exists: a green check on a machine that runs no jobs
 is the exact failure the NODES plan was written against.
+
+**A schedule can be installed, loaded, and never have started at all.** macOS
+scheduled jobs are USER jobs: they do not run until somebody logs in. With
+FileVault on and no automatic login, a 3am power blip leaves the Mini at a login
+screen with everything stopped and nothing reporting it — `launchctl list` shows
+nothing wrong because nothing is loaded to be wrong. So `doctor:node` has a
+sixth section that asks a different question from the schedules one: **have this
+machine's roles been confirmed since it last restarted?** `npm run node:verify`
+probes every owned schedule and records what it SAW, role by role — plus the
+roles it skipped and why; `doctor:node` reads that back. **The verdict is graded
+against what the machine OWNS, never against the record**, or a record covering
+three roles on a Mini owning six reads as "all owned roles came back": an owned
+role with no schedule to check is named on the verdict line rather than dropped
+from the count, an owned role missing from the record is CANNOT TELL, and a
+machine this system cannot identify gets no pass at all.
+The thing compared is the machine's boot identity
+(`sysctl -n kern.boottime`), not a date somebody maintains, so a restart puts
+the answer back to CANNOT TELL on its own. The record carries observations and
+never a verdict — a pass a script could write by reaching its own last line is
+the failure the section exists against. Two commands because `doctor:node`
+writes nothing, which is what makes it safe on a machine that is on fire.
+The cross-machine half ("confirm from another machine") is the heartbeat below,
+deliberately not rebuilt here.
 
 ### A job that stops firing has to say so
 
@@ -337,6 +409,29 @@ Two clocks, on purpose: the local stamp is written on **every** success (free,
 offline — it is what `doctor:node` reads to say when each owned job last
 actually worked here), and the shared row is pushed **at most once a day**,
 which is the resolution the requirement needs and what keeps the ticket quiet.
+
+**That day-resolution row cannot see a job dying on a machine that is awake**,
+and on 2026-09-03 the merge lane was dead for sixteen hours while every surface
+stayed quiet or said something reassuring — the roll call among them, because a
+perfectly healthy job legitimately reads as ~21h stale between pushes. So there
+is a second, local alarm reading the precise stamps:
+
+```
+npm run heartbeat -- --stale-check           has a job THIS machine owns stopped beating?
+npm run heartbeat -- --stale-check --check   the same, and post to the bus once if so
+```
+
+It runs on the relay's ten-minute wake, considers only roles this machine owns
+(the stamps exist nowhere else), and needs no ClickUp — deliberately, so a
+ClickUp outage cannot silence an alarm that never needed it. **The threshold is
+per role and derived, six missed runs with a three-hour floor**: 3h for the
+relay, 6h for the loops and the pulse. One hour was the original proposal and
+the measurements killed it — over 14 days of the Mini's real logs the p90
+beat-to-beat gap is already 1.0h for two roles, and the loops legitimately sleep
+for hours waiting out a stated usage limit. The arithmetic, the measured table
+and each incident are in `lib/nodeHeartbeat.js`. It clears itself on the next
+beat and says so — and that is the only "good news" it ever posts, because the
+message is only sent when an alarm actually went out.
 
 **Two jobs beat today: `bus-relay` and `pipeline-pulse`.** The two loop lanes
 run inside long-lived agent sessions with no committed runner to hang an emitter
@@ -434,13 +529,38 @@ so there is now a switch:
 npm run pipeline -- status                    is it running? if not, since when, who, and why
 npm run pipeline -- check                     the same question for a script: 0 = running, 3 = paused
 npm run pipeline -- pause --why "..."         stop new claims, then WAIT for work in flight to finish
-npm run pipeline -- resume --operator-asked   hand the deck back (Dane's call, never an agent's)
+npm run pipeline -- resume --operator-asked --why "<his words>"   hand the deck back (Dane's call,
+                                              never an agent's). --why is required: quote him,
+                                              on ONE line — a record keeps one line per field.
 ```
 
 **Type the `--`.** It is not decoration: without it npm swallows every `--flag`
 before the command sees it. Leave it out and `resume --operator-asked` is
 refused for missing the very flag you just typed, and `pause --now` waits the
 full half hour instead of returning at once.
+
+**`resume` also refuses without `--why`, and it wants his words, not a summary**
+(2026-09-01, task 86bbrqa5j). A resume used to record who and when and nothing
+else, so the only question worth asking afterwards — on whose word? — could not
+be answered from the switch ticket at all. That day the line was paused for a
+fast-track; Dane wrote *"I am finished (for now) with the other fast-track
+task"*, and nineteen seconds later a different session resumed. That sentence
+retires the pause's stated reason; it is not "hand the deck back", and he had
+not authorized it. The requirement is the mechanism, not the audit trail: an
+agent that must paste his words has to go find them, and that session would
+have discovered at that moment that no such sentence existed. If you cannot
+find one to paste, that IS the answer — nobody handed the deck back.
+`npm run pipeline -- status` now prints the reason on a RUNNING line too, so an
+unauthorised resume is visible where everyone already looks.
+
+**Quote him on ONE line.** A switch record keeps one line per field, so a
+`--why` that spans lines used to be written whole and read back as its first
+line only — a half-sentence shown on the ticket as his words, with nothing to
+say a half was dropped — and a second line beginning `by:` overwrote the name
+of whoever resumed. `resume` refuses a multi-line `--why` now and says so;
+keep every word and join the lines with spaces. It refuses rather than
+reflowing for you, because his words are the evidence and a script that
+quietly rewrites the evidence is not evidence.
 
 **Every actor asks, not just the loops.** A pause only the loops respected
 would not have prevented the collision it was written for — the session that
@@ -471,6 +591,34 @@ person standing on it knows whether he is finished. A pause that outlives two
 hours announces itself on the bus and keeps saying so hourly, because a pause
 nobody remembers looks exactly like a pipeline that has broken.
 
+## Filing a ticket about the pipeline itself — only for a real cost
+
+A tool that inspects itself finds more than it can fix. Measured 2026-09-06,
+tickets the pipeline filed **about the pipeline** went from about 6 a day in
+mid-August to about 16 a day in early September, and the paying work queued
+behind them. Dane parked 31 of them that day; the six that stayed all trace to
+a failure that actually happened.
+
+So the gate is not *"is this a real finding?"* — all 31 were. It is **did it
+cost anything.**
+
+- **File a pipeline/self-machinery ticket only when a pipeline failure cost
+  something observable** — lost work, a dead lane, a silent outage, a wrong
+  merge — and name that incident in the description.
+- **A theoretical gap noticed while building or reviewing is not a ticket.**
+  It goes as one plain line in the parked-backlog doc, *The 31 parked tickets*
+  (`https://app.clickup.com/90141423066/docs/2kydhxeu-814`). A pass with no
+  route to that doc says the line in its run report and as a plain comment on
+  the ticket it was already working — it does not file it.
+- **Every ticket title says in plain words what breaks and who feels it**, so
+  the operator can scan a list of seventy. The diagnostic sentence belongs in
+  the description. Dane, verbatim: *"your descriptions of tickets is so cryptic
+  and full of fanciful turns of phrases that it is difficult for me to
+  understand which ones are really important and which ones aren't."*
+
+**Client-facing bugs are unaffected** — file those on sight. The full rule,
+the numbers and the six that stayed: `docs/DOCTRINE.md` §6.24.
+
 ## The fast-track lane — "Let's fast track <ticket-id>"
 
 Said at the start of a session, that sentence is a **complete instruction**
@@ -489,11 +637,28 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
    Leave the priority alone. Two statuses are claimable now, `Rework` and
    `Queued`; a send-back lands in `Rework`, and `queue --claimable` lists them
    in the order they must be drained (all rework first, oldest first).
-4. `npm run clickup -- build-start --task <id>` — exit 3 means a branch
-   already exists; work on THAT branch (`git worktree add
-   .claude/worktrees/<topic> -b <branch> origin/<branch>`, then `npm ci`,
-   `npm run build`, `npm run env:local`, and stamp
-   `git config branch.<branch>.clickup-task <id>`). Otherwise
+4. `npm run clickup -- build-start --task <id>` — it asks whether this ticket
+   was already started, and it looks at DISKS as well as at pull requests, so
+   exit 3 now comes in two flavours and the printed line says which.
+   **`CONTINUE`** — work exists here, in one of **three** shapes, and only the
+   first is `origin/<branch>`. A **`pr:`** line means the branch is pushed:
+   `git worktree add .claude/worktrees/<topic> -b <branch> origin/<branch>`.
+   A **`work:`** line ending **`in <folder>`** means that folder is already on
+   this disk — `cd` into it; the branch was never pushed, so `origin/<branch>`
+   does not exist and that command would fail. A **`work:`** line saying
+   **`(no worktree — the branch exists but is not checked out)`** means the
+   branch is here with no folder to `cd` into: attach it with
+   `git worktree add .claude/worktrees/<topic> <branch>` — **no `-b`** (the
+   branch already exists) and **no `origin/`** (it was never pushed). Either
+   way, `npm ci`, `npm run build`, `npm run env:local`, and stamp
+   `git config branch.<branch>.clickup-task <id>`.
+   **`WORK ON ANOTHER MACHINE`** — the half-built worktree is on a disk this
+   one cannot reach. Do not branch and do not hand it back to the claim line;
+   the command prints the escalation to run. Exit 1 means it could not tell
+   from here: stop, do not guess — **but read the `next:` line first.** A disk
+   that went quiet clears itself and prints none; a ticket whose `repo:` tag
+   does not resolve never clears, and would be claimed and refused on every
+   pass forever, so it prints the escalation to run instead. Only exit 0 means
    `npm run thread <topic> <id>`.
 5. **On a send-back, merge `origin/main` in BEFORE touching a line.** The fix
    review asked for may already have landed on `main` under another name —
@@ -701,7 +866,13 @@ above can't see on their own: a Loop Queue task left in-flight after its PR
 already merged (moves it to Live), and a branch stamped with a task
 (`npm run thread`) that has since closed but is still on the Mac (flags it to
 the bus — `npm run tidy`'s own closed-task cleanup should have caught it).
-Dry-run by default (`npm run reconcile`); `-- --live` performs the repairs.
+Dry-run by default (`npm run reconcile`); `-- --live` performs the repairs by
+hand, and `-- --check` is the SCHEDULED shape — the same writes, plus the two
+disciplines a background pass owes (2026-09-02, task 86bbtqytq): it asks the
+pipeline switch before it reads anything and stands down if Dane has the deck,
+and its bus flags carry a 6h window that CLEARS when the contradiction
+resolves. That window used to be permanent, which made a drift posted once
+never speakable again — an alarm that fires only the first time.
 **Scheduled since 2026-09-02** (task 86bbtnk3k): `npm run repair` runs it —
 with the loop's dropped-claim backstop before it and a DRY stranded-ticket
 sweep after it — on the relay's ten-minute idle wake, throttled to one fresh
@@ -745,11 +916,15 @@ Before reporting a task complete, run and state the results of:
 3. The rebuild command for every generated artifact your change affects
 4. `node scripts/check_conventions.cjs` (also runs at pre-commit;
    `SKIP_CONVENTIONS=1` bypasses — if you bypass, say so and why)
-5. `npm run check:syntax` if you touched `public/js/`, `public/shared/`,
+5. `npm run check:builder-notes` if you touched a module's empty state or any
+   text a module renders — it blocks in CI and pre-commit, but run it directly
+   when you are working on one, because the failure it catches ships to a
+   client's public site (landmine 16).
+6. `npm run check:syntax` if you touched `public/js/`, `public/shared/`,
    `scripts/` or `lib/` — a parse gate over every hand-written
    `.js`/`.mjs`/`.cjs` in those trees (also runs at pre-commit and gates CI).
    Run it after resolving ANY merge conflict by keeping both sides.
-6. **`npm run check:panels` if you touched ANY settings panel or its CSS**,
+7. **`npm run check:panels` if you touched ANY settings panel or its CSS**,
    and it is not optional because CI cannot run it — CI has no browser, so
    this check only ever runs if a person runs it. A staggered panel reached
    the operator on 2026-08-12 and again on 2026-08-13; both times the code
@@ -763,7 +938,7 @@ Before reporting a task complete, run and state the results of:
    outright rather than passing silently, which is the specific hole that
    let both of those panels through.
 
-7. **`npm run check:render` if you changed what a module RENDERS** — its
+8. **`npm run check:render` if you changed what a module RENDERS** — its
    markup, its animation, or the CSS behind either. It drives a real browser
    over `builder-preview.html` and needs **no database, no login and no
    fixture**, so it costs about 30 seconds:
@@ -779,7 +954,7 @@ Before reporting a task complete, run and state the results of:
    two assertions that could not fail, including one where the check was
    comparing a setting to itself.
 
-8. **`npm run check:shots` on every task, not only the visual-looking ones.**
+9. **`npm run check:shots` on every task, not only the visual-looking ones.**
    It builds `main`'s code and this branch's code, photographs six pages
    through both, and attaches every pair that differs to the ClickUp ticket —
    so a change to what a page renders reaches the operator as pictures rather
@@ -797,13 +972,29 @@ Before reporting a task complete, run and state the results of:
    If that control ever fails, fix the scene, never the comparison.
    `docs/VISUAL_REVIEW.md`.
 
+**Read the exit code, not the log.** Every browser gate above answers with one
+of three verdicts (`scripts/ui/harness-exit.mjs`, `docs/DOCTRINE.md` §5.33):
+**0** ran and passed, **1** ran and found a defect in your change, **2** could
+not take a reading at all. A **2** is not a failure of your work and not a
+pass — it means the instrument was blind (no fixture project, a stale build,
+another worktree owning the port, a throttled server, a missing variant), so
+fix that and run it again. Until 2026-09-03 eight of these paths printed a
+perfect explanation and exited 0 or 1; `check:screens` with no fixture project
+printed "9 screen-width combination(s) checked, 0 skipped, 0 failing" — which
+is exactly what a clean sweep prints — and exited 0.
+
+**A 1 always outranks a 2**, so a gate that reports 2 really did find nothing
+wrong; it just could not see. The one exception is `check:shots`, which never
+judges your change at all — it only photographs it — so it answers **0 or 2 and
+never 1**. When it stops, the camera broke, not your code.
+
 `npm run check:css` is deliberately absent from this list: CI runs it on
 every pull request, so it is the one visual gate nobody has to remember.
 What it and `check:render` do **and do not** cover is `docs/DOCTRINE.md`
 §5.14 — read that before treating a green run as proof a page looks right.
 Neither of them can tell a bounce from a wobble.
 
-9. **Say where you looked at it.** Not a command — a sentence naming the
+10. **Say where you looked at it.** Not a command — a sentence naming the
    screen you opened and what you saw. Every gate above can pass on a change
    that is visibly broken: nothing here tests CSS, and the panel bugs of
    2026-08-12, 08-13 and 08-16 all reached the operator green. The local app

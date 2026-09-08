@@ -169,6 +169,173 @@ export function disconnectConfirmMessage(card: {
     + `You can connect it again at any time.`;
 }
 
+/**
+ * A sentence carried back from a connect attempt, and which card it belongs to.
+ *
+ * A refusal stores NOTHING — there is no row for an amber card to read — so the
+ * provider hands its reason to the browser on the return URL and this is the
+ * only place it can be rendered from. Connections 6b of 7 (86bbu50mb).
+ */
+type ConnectNotice = {
+  provider: string;
+  tone: 'error' | 'notice';
+  sentence: string;
+};
+
+/**
+ * The connect outcome, read off the return URL.
+ *
+ * `routes/engage.js` appends these to the hash, not the query string
+ * (`connectionsReturnUrl` builds `#page=settingsConnectionsPage&connect_...`),
+ * which is why this reads through App.readHashParam rather than
+ * URLSearchParams — the vanilla shell already owns hash parsing and reusing it
+ * means one definition of "a parameter on this screen" instead of two.
+ *
+ * Pure and passed its reader, so a test can hand it a URL without a browser.
+ *
+ * ── On `connect_notice` ────────────────────────────────────────────────────
+ *
+ * Measured on main at 03340bba: NOTHING sets `connect_notice` anywhere in the
+ * repo. It is named in this slice's scope, and reading it costs the three lines
+ * below, so it is here and tested — but it is inert until a producer exists,
+ * and that is recorded on the ticket rather than left for the next reader to
+ * discover. `connect_error` is the live half.
+ *
+ * The two tones are not decoration. A refusal is not a failure of the client's
+ * account and must not be dressed as an alarm: nothing was stored, the card is
+ * still in its not-connected state, and trying again after fixing the account
+ * is exactly the right next move.
+ */
+export function connectReturnMessage(read: (name: string) => string): ConnectNotice | null {
+  const provider = String(read('connect_provider') || '').trim().toLowerCase();
+  const error = String(read('connect_error') || '').trim();
+  if (error) return { provider, tone: 'error', sentence: error };
+  const notice = String(read('connect_notice') || '').trim();
+  if (notice) return { provider, tone: 'notice', sentence: notice };
+  return null;
+}
+
+/**
+ * Every parameter this screen consumes, cleared together once it has been read.
+ *
+ * The list must match what `routes/engage.js` actually appends
+ * (`connectionsReturnUrl`, engage.js:1636-1644) — a parameter left off is one
+ * left on the URL. Harmless today, because the vanilla shell rewrites the hash
+ * to bare `#page=<id>` while it boots and drops every key regardless; the point
+ * is that this list stops being the thing that is true, and the next reader
+ * cannot tell which absences were decisions.
+ */
+export const CONNECT_PARAMS = [
+  'connect_oauth',
+  'connect_provider',
+  'connect_error',
+  'connect_notice',
+  'connect_code',
+  'connect_account',
+  'connect_choose',
+];
+
+/**
+ * Which card, if any, a return sentence belongs to.
+ *
+ * Matched case-insensitively because the parameter has been round-tripped
+ * through a provider's redirect, and a catalogue key is lower case.
+ */
+export function noticeForCard(
+  notice: ConnectNotice | null,
+  provider: string,
+): ConnectNotice | null {
+  if (!notice) return null;
+  return notice.provider === String(provider || '').toLowerCase() ? notice : null;
+}
+
+/**
+ * When the sentence has to be shown by the PANEL rather than by a card.
+ *
+ * The rule is that a return sentence is shown somewhere, always. By the time
+ * this is asked, the parameter has already been cleared off the URL — so a
+ * surface that declines to show it is the last word on the subject, and the
+ * client is returned to a screen that says nothing at all about the attempt
+ * they just made. An unexplained return reads as the button being broken
+ * (landmine 17).
+ *
+ * Three ways a card cannot carry it, and the third is the one that sent this
+ * ticket back on 2026-09-05:
+ *   - the refusal named no provider at all
+ *   - it named one that is not in the catalogue any more
+ *   - `GET /api/connections` FAILED, so there are no cards on screen to
+ *     attach it to. The panel used to hide the orphan notice behind the same
+ *     `!loadError` guard as the card list, which meant a load failing in the
+ *     seconds after a refusal swallowed the sentence permanently.
+ *
+ * Pure and given its inputs so a test can pin all three without a browser.
+ */
+export function orphanNoticeFor(
+  notice: ConnectNotice | null,
+  cards: Pick<ConnectionCard, 'provider'>[],
+  view: { loading: boolean; loadError: string },
+): ConnectNotice | null {
+  if (!notice) return null;
+  if (view.loading) return null;
+  // The cards are on screen only when the list actually loaded.
+  const cardsVisible = !view.loadError;
+  const carried = cardsVisible && cards.some((card) => noticeForCard(notice, card.provider));
+  return carried ? null : notice;
+}
+
+/**
+ * The hash, as key/value pairs. Self-contained on purpose — see below.
+ */
+export function parseConnectHash(hash: string): Record<string, string> {
+  const raw = String(hash || '').trim();
+  const bare = raw.startsWith('#') ? raw.slice(1) : raw;
+  const out: Record<string, string> = {};
+  if (!bare) return out;
+  for (const pair of bare.split('&')) {
+    if (!pair) continue;
+    const eq = pair.indexOf('=');
+    const key = eq === -1 ? pair : pair.slice(0, eq);
+    const value = eq === -1 ? '' : pair.slice(eq + 1);
+    if (!key || key in out) continue;
+    try { out[key] = decodeURIComponent(value.replace(/\+/g, ' ')); } catch (_) { out[key] = value; }
+  }
+  return out;
+}
+
+/**
+ * THE RETURN PARAMETERS, READ AT MODULE LOAD — and it has to be here rather
+ * than in an effect.
+ *
+ * Measured in a real browser on 2026-09-04, which is the only place this shows
+ * up: the panel read the hash inside a mount effect, the effect ran, the hash
+ * was already `#page=settingsConnectionsPage` and nothing rendered. Every unit
+ * test passed, because a test hands the reader a URL and no shell is running.
+ *
+ * The vanilla shell owns the hash and rewrites it to EXACTLY one parameter:
+ *
+ *     const nextHash = `#page=${encodeURIComponent(id)}`;   // public/js/core.js
+ *     window.history.pushState({ pageId: id }, '', nextHash);
+ *
+ * That runs while the shell boots — before React mounts — and it drops every
+ * other key. (`public/js/builder.js` reads `builderPage` early for the same
+ * reason; this is the same trap one screen over.)
+ *
+ * `/bundle.js` is a plain `<script src>` with no `defer`, so this module's body
+ * evaluates during parsing, before DOMContentLoaded and therefore before both
+ * the shell's boot and the island's mount. Reading here is the one point that
+ * is reliably earlier than the rewrite. It is also why this parser does not go
+ * through `App.readHashParam`: at module-evaluation time `window.App` may not
+ * be built yet, and depending on it would reintroduce the ordering problem in a
+ * quieter form.
+ *
+ * A connect return is always a fresh page load, so reading once is right.
+ */
+const RETURN_NOTICE: ConnectNotice | null = (() => {
+  if (typeof window === 'undefined') return null;
+  const params = parseConnectHash(window.location?.hash || '');
+  return connectReturnMessage((name) => params[name] || '');
+})();
+
 const STATE_LABEL: Record<CardState, string> = {
   connected: 'Connected',
   not_connected: 'Not connected',
@@ -192,6 +359,7 @@ const STATE_LABEL: Record<CardState, string> = {
 export function ConnectionCardRow({
   card,
   busy,
+  notice,
   onConnect,
   onDisconnect,
   onPickAccount,
@@ -199,6 +367,7 @@ export function ConnectionCardRow({
 }: {
   card: ConnectionCard;
   busy: boolean;
+  notice?: ConnectNotice | null;
   onConnect: (card: ConnectionCard) => void;
   onDisconnect: (card: ConnectionCard) => void;
   onPickAccount: (card: ConnectionCard, accountId: string) => void;
@@ -282,6 +451,22 @@ export function ConnectionCardRow({
           )}
         </div>
       </div>
+
+      {/* What came back from the last connect attempt, in the provider's own
+          words. It sits under the card's own line rather than replacing it: the
+          card is describing the connection's stored state, which a refusal did
+          not change, and this is describing what just happened. Not an alert
+          box — a client who has to dismiss a dialog before they can read the
+          card is being asked to remember the sentence. */}
+      {notice && (
+        <p
+          className={`connections-card-notice connections-card-notice-${notice.tone}`}
+          data-notice-tone={notice.tone}
+          role="status"
+        >
+          {notice.sentence}
+        </p>
+      )}
 
       {/* A grant can cover several accounts — several Facebook Pages behind one
           sign-in. The chooser only appears when there is a real choice. */}
@@ -376,6 +561,7 @@ export default function ConnectionsPanel(): JSX.Element {
   const [loadError, setLoadError] = useState('');
   const [pending, setPending] = useState<PendingForm | null>(null);
   const [busyProvider, setBusyProvider] = useState('');
+  const [connectNotice, setConnectNotice] = useState<ConnectNotice | null>(null);
 
   const hostRef = useRef<HTMLDivElement | null>(null);
 
@@ -411,6 +597,32 @@ export default function ConnectionsPanel(): JSX.Element {
     }
     load();
   }, [load]);
+
+  /**
+   * What the last connect attempt said, taken off the URL and then removed
+   * from it.
+   *
+   * Held in state BEFORE the hash is cleared, which is the whole of acceptance
+   * criterion 3: reading it out of the URL at render time would mean a reload
+   * shows it again, and clearing it without capturing it first would mean it
+   * flashes and vanishes. It survives here until the client navigates away.
+   *
+   * The reading itself happened at module load (see RETURN_NOTICE) because the
+   * shell wipes the hash before this effect could run. What is left here is
+   * moving it into state, which has to happen inside the component.
+   */
+  useEffect(() => {
+    if (!RETURN_NOTICE) return;
+    setConnectNotice(RETURN_NOTICE);
+    // Usually a no-op by now — the shell has already rewritten the hash — but
+    // correct when it has not, which is the case where this screen was already
+    // the active page. Cheap, and the alternative is a URL a client can reload
+    // or share that still reports a refusal.
+    const app = getApp();
+    if (typeof app?.clearHashParam === 'function') {
+      CONNECT_PARAMS.forEach((name) => app.clearHashParam(name));
+    }
+  }, []);
 
   // The vanilla shell shows and hides pages by toggling a class rather than
   // mounting them, so this component exists long before anyone looks at it.
@@ -538,6 +750,13 @@ export default function ConnectionsPanel(): JSX.Element {
     }
   };
 
+  // Both decisions are pure functions above, so a test pins them directly
+  // rather than through a rendered panel with a mocked fetch.
+  const noticeFor = (card: ConnectionCard): ConnectNotice | null => (
+    noticeForCard(connectNotice, card.provider)
+  );
+  const orphanNotice = orphanNoticeFor(connectNotice, cards, { loading, loadError });
+
   return (
     <div ref={hostRef} className="connections-panel">
       <div className="card">
@@ -550,6 +769,22 @@ export default function ConnectionsPanel(): JSX.Element {
         {loading && <p className="meta">Loading your connections…</p>}
         {!loading && loadError && <p className="connections-panel-error">{loadError}</p>}
 
+        {/* A sentence that names a provider with no card — a platform dropped
+            from the catalogue between the redirect leaving and coming back, or
+            a refusal that named none. Showing it unattached is worse than
+            showing it on a card and far better than swallowing it: an
+            unexplained return to this screen reads as the button being broken
+            (landmine 17). */}
+        {!loading && orphanNotice && (
+          <p
+            className={`connections-panel-notice connections-card-notice-${orphanNotice.tone}`}
+            data-notice-tone={orphanNotice.tone}
+            role="status"
+          >
+            {orphanNotice.sentence}
+          </p>
+        )}
+
         {!loading && !loadError && (
           <ul className="connections-card-list">
             {cards.map((card) => (
@@ -557,6 +792,7 @@ export default function ConnectionsPanel(): JSX.Element {
                 key={card.provider}
                 card={card}
                 busy={busyProvider === card.provider}
+                notice={noticeFor(card)}
                 onConnect={onConnect}
                 onDisconnect={onDisconnect}
                 onPickAccount={onPickAccount}

@@ -15,8 +15,30 @@
 # This needs no registration in .git/config and no install step, because git
 # ships it. (Unlike the retired `asset-pins` driver that used to live in this
 # file — removed 2026-08-24, task 86bbkh288, when committed HTML stopped
-# carrying ?v= pins and there was nothing left for it to merge.) GitHub
-# honours it server-side, so "Update branch" on a pull request stops conflicting.
+# carrying ?v= pins and there was nothing left for it to merge.)
+#
+# BUT GITHUB'S PRECOMPUTED MERGEABILITY DOES NOT APPLY IT (measured 2026-09-04
+# on PR #585, task 86bbuvcwc). Two different questions get two different
+# answers:
+#
+#   * a merge GitHub PERFORMS — "Update branch", the merge button, auto-merge
+#     once it actually fires — runs git, so union is honoured and the merge
+#     comes out clean;
+#   * the `mergeable` / `mergeStateStatus` fields GitHub PRECOMPUTES for a
+#     pull request do NOT honour it.
+#
+# So a branch whose only difference from main is this file reads as
+# CONFLICTING / DIRTY on the pull request while `git merge-tree --write-tree`
+# exits 0 on the same two commits. That flag is not cosmetic: GitHub's own
+# auto-merge refuses to land a pull request it has flagged, so the PR sits
+# green, armed and unmergeable indefinitely. PR #585 did exactly that until
+# the branch was caught up by hand — merging origin/main in and pushing
+# flipped GitHub to MERGEABLE within seconds and the armed auto-merge landed
+# it.
+#
+# The remedy is the catch-up, not a driver change. The merge relay performs it
+# whenever GitHub says CONFLICTING and git says clean
+# (`scripts/builder/mergeOnComment.js`, the disagreement path).
 #
 # A genuine edit to the SAME entry by two branches would still be merged by
 # keeping both lines rather than flagging it — acceptable here, because entries

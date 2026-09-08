@@ -19,7 +19,7 @@
  * what this save is about to write.
  */
 import { hasSectionDrifted, type DriftableSection } from "./section-drift";
-import { sectionFollowsMaster } from "./canonical-follow";
+import { moduleFollowsMaster, sectionFollowsMaster } from "./canonical-follow";
 
 /** Only the fields usage counting depends on — structural, so tests stay light. */
 export type UsageSection = {
@@ -102,6 +102,71 @@ export function buildSavedSectionUsageIndex(
   return index;
 }
 
+/** Only the fields MODULE usage counting depends on. */
+export type UsageModule = {
+  savedModuleId?: string;
+  canonical?: boolean;
+  canonicalLocked?: boolean;
+};
+
+/** A page as the module index reads it — sections, each holding modules. */
+export type UsagePageWithModules = {
+  id?: string;
+  name?: string;
+  slug?: string;
+  layoutSections?: readonly { modules?: readonly UsageModule[] }[];
+};
+
+/**
+ * The same count for saved MODULES — which pages hold a copy that follows.
+ *
+ * A separate pass rather than a parameter on the section index, because the
+ * two levels disagree about what an unmarked copy means: an unmarked section
+ * copy has never followed, an unmarked module copy always has
+ * (./canonical-follow). Sharing one traversal would mean one `follows` call
+ * site deciding by level, which is exactly the shape that got the defaults
+ * confused before.
+ */
+export function buildSavedModuleUsageIndex(
+  pages: readonly UsagePageWithModules[] | null | undefined
+): Map<string, BlockUsage> {
+  const index = new Map<string, BlockUsage>();
+  if (!Array.isArray(pages)) return index;
+
+  for (const page of pages) {
+    const sections = Array.isArray(page?.layoutSections) ? page.layoutSections : [];
+    const countedOnThisPage = new Set<string>();
+
+    for (const section of sections) {
+      const modules = Array.isArray(section?.modules) ? section.modules : [];
+      for (const module of modules) {
+        const id = String(module?.savedModuleId ?? '').trim();
+        if (!id) continue;
+
+        let usage = index.get(id);
+        if (!usage) {
+          usage = { following: 0, independent: 0, pages: 0, pageLabels: [] };
+          index.set(id, usage);
+        }
+
+        if (!moduleFollowsMaster(module)) {
+          usage.independent += 1;
+          continue;
+        }
+
+        usage.following += 1;
+        if (!countedOnThisPage.has(id)) {
+          countedOnThisPage.add(id);
+          usage.pages += 1;
+          usage.pageLabels.push(labelFor(page));
+        }
+      }
+    }
+  }
+
+  return index;
+}
+
 export function savedSectionUsage(
   pages: readonly UsagePage[] | null | undefined,
   savedSectionId: string
@@ -155,10 +220,22 @@ export type UsagePageWithContent = {
 };
 
 /**
- * Of the pages following `savedSectionId`, how many have a copy whose content
- * no longer matches `masterSection` — the master as it stood BEFORE this
- * save, never the content about to be written. Those are exactly the pages
- * `propagateCanonicalSection` will skip by default.
+ * Of the pages following `savedSectionId`, which ones does a push LEAVE
+ * ENTIRELY ALONE — every following copy on them having local changes, so the
+ * page is not written and its draft does not move.
+ *
+ * DRIFT IS PER COPY; THIS ANSWER IS PER PAGE, and a page can hold more than
+ * one copy of the same master. Asking `.some(drifted)` conflates the two: a
+ * page carrying one hand-edited copy and one untouched copy IS rewritten —
+ * the untouched copy takes the update — and it was being reported as skipped.
+ * That was harmless while this only fed a warning sentence, and stopped being
+ * harmless when "Save & Publish" started naming pages it would not publish
+ * (2026-09-03, caught on the UI fixture's own Block States page, which has
+ * exactly that shape). A page is left alone only when NOTHING on it changes.
+ *
+ * `masterSection` is the master as it stood BEFORE this save, never the
+ * content about to be written — every following copy differs from that by
+ * definition.
  */
 export function driftedFollowingPages(
   pages: readonly UsagePageWithContent[] | null | undefined,
@@ -171,11 +248,11 @@ export function driftedFollowingPages(
   const pageLabels: string[] = [];
   for (const page of pages) {
     const sections: readonly UsageSectionWithContent[] = Array.isArray(page?.layoutSections) ? page.layoutSections : [];
-    const drifted = sections.some(
-      (s: UsageSectionWithContent) =>
-        sectionFollowsMaster(s) && String(s?.savedSectionId ?? '') === id && hasSectionDrifted(s, masterSection)
+    const copies = sections.filter(
+      (s: UsageSectionWithContent) => sectionFollowsMaster(s) && String(s?.savedSectionId ?? '') === id
     );
-    if (drifted) pageLabels.push(labelFor(page));
+    if (!copies.length) continue;
+    if (copies.every((s) => hasSectionDrifted(s, masterSection))) pageLabels.push(labelFor(page));
   }
   return { count: pageLabels.length, pageLabels };
 }
@@ -278,8 +355,8 @@ export function describeCanonicalOverwrite(
   return {
     summary: drifted > 0
       ? `Replaces “${label}” itself, and rewrites it on ${
-          willUpdate === 1 ? 'the 1 page' : `${willUpdate} pages`
-        } that follow it. ${drifted === 1 ? '1 page has' : `${drifted} pages have`} local changes and ` +
+          willUpdate === 1 ? 'the 1 page that follows it' : `${willUpdate} pages that follow it`
+        }. ${drifted === 1 ? '1 page has' : `${drifted} pages have`} local changes and ` +
         `will be skipped — any local edits on the rest are replaced.`
       : `Replaces “${label}” itself, and rewrites it on ${
           pages === 1 ? 'the 1 page' : `the ${pages} pages`
@@ -300,7 +377,22 @@ export type PropagationTally = {
   skipped?: ReadonlyArray<{ pageId?: string; name?: string }>;
   /** Drifted copies written anyway because the caller opted in — never described as skipped. */
   overwritten?: ReadonlyArray<{ pageId?: string; name?: string }>;
+  /**
+   * WHICH pages this push actually rewrote — one entry per page written.
+   *
+   * `updated` is the count of the same thing; this is the list, and it is what
+   * a "Save & Publish" needs. Publishing without it means asking the publish
+   * route for everything pending, which sweeps up unrelated half-finished
+   * drafts elsewhere in the project.
+   */
+  updatedPages?: ReadonlyArray<{ pageId?: string; name?: string }>;
 };
+
+/** The page ids a push rewrote, ready to hand to the publish route. */
+export function updatedPageIds(propagation: PropagationTally | null | undefined): string[] {
+  const rows = Array.isArray(propagation?.updatedPages) ? propagation!.updatedPages! : [];
+  return rows.map((row) => String(row?.pageId ?? '').trim()).filter(Boolean);
+}
 
 /**
  * The tally out of a route response, wherever the route put it.

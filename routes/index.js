@@ -28,6 +28,7 @@ const { getProviderValues } = require('../lib/apiSettings');
 const { getUserFromSessionToken, getAuthSession } = require('../lib/authStore');
 const { getAdminSession } = require('../lib/projectAdminStore');
 const { resolveCurrentProject } = require('../lib/projectsStore');
+const connectionsRegistry = require('../lib/connections/registry');
 const { requireProjectContext } = require('../lib/requireProjectContext');
 const {
   acceptsProjectAdminSession,
@@ -267,8 +268,26 @@ async function handleRequest(req, res) {
   // facts the invitation email already told them. It never lists invitations
   // and never redeems one; redemption is in POST /api/auth/register.
   const isInviteVerifyRoute = pathname === '/api/invitations/verify' && method === 'GET';
-  const isFacebookOAuthCallback =
-    pathname === '/api/promote/social/facebook/oauth/callback' && method === 'GET';
+  /**
+   * The OAuth callbacks a provider redirects a browser back to.
+   *
+   * SECURITY EXEMPTION, and a narrow one: a browser arriving from Meta or X
+   * carries no session cookie for us and no `x-project-id` header, so requiring
+   * either would refuse every completed sign-in. What authorises the request is
+   * the SIGNED STATE it carries — the route reads the project and user from
+   * there and nowhere else (lib/metaOAuthState.js), and refuses a state whose
+   * signature, expiry or provider does not check out.
+   *
+   * X's path is read from its adapter rather than typed again, so the
+   * registered URL, the route that answers it and this exemption cannot drift
+   * apart — a mismatch here would show up as X sign-ins failing with
+   * "Not authenticated", which names nothing about the real cause
+   * (Connections 7 of 7, 86bbpz1hu).
+   */
+  const isOAuthCallback = method === 'GET' && (
+    pathname === '/api/promote/social/facebook/oauth/callback'
+    || pathname === connectionsRegistry.getEntry('x')?.adapter?.callbackPath
+  );
   const isImportDriveFolderHealth =
     pathname === assets.IMPORT_DRIVE_FOLDER_PATH && method === 'GET';
   const isCronAuthorized = isAuthorizedCronRequest(req, pathname);
@@ -327,7 +346,7 @@ async function handleRequest(req, res) {
     && !isAdminAuthRoute
     && !isWebhookRoute
     && !isCronAuthorized
-    && !isFacebookOAuthCallback
+    && !isOAuthCallback
     && !isPublicContactSubmit
     && !isPublicCrmRoute
     && !isPublicSiteRoute
@@ -360,7 +379,7 @@ async function handleRequest(req, res) {
     && !isDebugRoute
     && !isWebhookRoute
     && !isCronAuthorized
-    && !isFacebookOAuthCallback
+    && !isOAuthCallback
   ) {
     const projectRequired = requireProjectContext(req, pathname, method);
     if (!projectRequired.ok) {

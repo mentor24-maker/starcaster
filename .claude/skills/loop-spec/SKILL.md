@@ -104,6 +104,17 @@ write any code here. You produce well-formed tasks.
    low | medium | high — and one line on the blast radius.
    ````
 
+   **The task NAME says in plain words what breaks and who feels it.** It is
+   read by the operator scanning a list of seventy, so it has to be legible at
+   a glance; the clever diagnostic sentence goes in the description, where it
+   is useful. Dane, verbatim (2026-09-06): *"your descriptions of tickets is so
+   cryptic and full of fanciful turns of phrases that it is difficult for me to
+   understand which ones are really important and which ones aren't."*
+
+   Good: *"The /tags search box ignores what a visitor types"*.
+   Not: *"Tag search: the query parameter is read but never applied to the
+   predicate"* — true, and it tells him nothing about whether it matters.
+
    Tag each task with the feature/epic name so the queue stays legible.
 
    To rewrite an existing task's description, use the direct script — it
@@ -187,9 +198,50 @@ The escape hatch is `--no-card`, which is a written claim that no card is owed,
 not a way around the format.
 
 4. **Report back.** List the tasks you filed (name + risk + one-line goal) and
-   the total. Remind the operator they can now start the build loop:
-   `/loop 30m loop-build` — from wherever this session already is; the build
-   loop makes its own worktree per task.
+   the total.
+
+   **Then say what the build loop is actually doing — never tell him to start
+   one without checking.** Both lanes have run unattended on the Mac Mini as
+   launchd agents since 2026-09-02 (`com.starcaster.loop-build`,
+   `com.starcaster.loop-review`, driving the committed
+   `scripts/loop_runner.sh`). The line that used to close this step —
+   *"you can now start the build loop: `/loop 30m loop-build`"* — was written
+   when loops were started by hand, and it is now wrong in both directions:
+
+   - If a loop IS running and he starts another, the second one is a second
+     claimant. Claiming a ticket is check-then-act (a GET, a comparison, a
+     PUT), which is only sound with exactly one claimant — the whole reason
+     `lib/nodeRoles.js` exists.
+   - If it is running on a machine this session is not on, the pass he starts
+     declines and exits 0, and a queue that never moves looks exactly like a
+     queue with nothing to do.
+
+   It happened on 2026-09-03: a session filed three tickets, recited this line,
+   and the loop was already alive on the Mini with a pass 40 minutes old. Dane
+   caught it (ticket 86bbuv0kp).
+
+   One command answers it, run on the machine that owns the role — from here,
+   over SSH to the Mini:
+
+   ```
+   ./scripts/install_loop_runner.sh --status
+   ```
+
+   It reports, per lane: installed, loaded (a PID means the runner is alive),
+   whether the lock is held by a live pid, and when the log was last written.
+   Report that in plain language, plus the two states that matter most, because
+   **a loop that is alive and claiming nothing is the failure that reads as
+   healthy**:
+
+   - the work-in-progress cap is full (`5 in flight, cap 5`) — the merge side
+     is the bottleneck, not the queue. Say which tickets are waiting to merge.
+   - the pipeline is paused (`npm run pipeline -- check`, exit 3) — say since
+     when and why.
+
+   Offer to start a loop by hand ONLY when the check shows none running AND
+   this machine owns the role (`npm run node:owns -- loop-build`, exit 0).
+   Then, and only then, the command is `/loop 30m loop-build` — the loop makes
+   its own worktree per task, so it may be started from any folder.
 
 ## Evidence, or it is a question
 
@@ -222,6 +274,35 @@ Two requirements, checked by the review loop on the other end:
     criterion. The 2026-09-02 recency-alarm ticket died precisely there: 189
     real closures showed its proposed threshold firing on eleven nights in
     fourteen.
+
+## A pipeline ticket needs a COST, not a gap
+
+Before filing anything about the pipeline or the loop machinery itself — the
+skills, the scripts, the gates, the schedules, the ClickUp plumbing — ask one
+question: **did a pipeline failure actually cost something observable?** Lost
+work, a dead lane, a silent outage, a wrong merge. If yes, file it and name
+that incident in the description. If no, it is not a ticket, however real the
+finding is.
+
+Measured 2026-09-06: tickets the pipeline filed about itself went from about
+6 a day in mid-August to about 16 a day in early September — faster than the
+queue drains — and the paying work queued behind them. Dane parked 31 of them
+that day; the six that stayed all name a failure that actually happened. So
+*"is this a real finding?"* is the wrong gate. All 31 passed it.
+
+**A gap with no incident goes as one plain line** in the ClickUp doc *The 31
+parked tickets* — `https://app.clickup.com/90141423066/docs/2kydhxeu-814`,
+under **Parked tickets** — saying what breaks and who feels it. If you have no
+route to write that doc, say the line in your report to the operator instead.
+Do not file it.
+
+**This is about the pipeline's tickets on ITSELF.** A defect on a tenant site,
+in the Builder or in the admin app is filed on sight, exactly as before, and
+nothing in this section relaxes the evidence rule above for the ones you do
+file.
+
+Canon: `docs/DOCTRINE.md` §6.24; the same rule in the loop's own terms is
+`docs/LOOP_ENGINEERING.md` → "Parking a finding instead of filing it".
 
 ## Guardrails
 

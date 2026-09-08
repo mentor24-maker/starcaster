@@ -42,8 +42,10 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch, signIn, activateProject, BASE_URL } from './app-driver.mjs';
+import { assertManagerRoom, bucketFields, findUncomparableManagers } from './lattice-room.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const { cannotTell, verdict, EXIT_FAIL, EXIT_CANNOT_TELL } = await import('./harness-exit.mjs');
 const { createRequire } = await import('node:module');
 // lib/builder/template.js is a GENERATED artifact and a fresh worktree has
 // none. Without this the run dies on a raw MODULE_NOT_FOUND stack that says
@@ -55,12 +57,9 @@ try {
     path.join(ROOT, 'lib/builder/template.js')
   ));
 } catch {
-  console.error(
-    '\n[check:panels] lib/builder/template.js is missing — it is a generated file\n' +
-    'and a fresh worktree does not have one.\n\n' +
-    'Run `npm run build:builder-template`.\n'
-  );
-  process.exit(2);
+  cannotTell('check:panels',
+    'lib/builder/template.js is missing — it is a generated file and a fresh worktree\n' +
+    'does not have one.\n\nRun `npm run build:builder-template`.');
 }
 const EXPECTED_MODULES = BUILDER_MODULE_TYPES.length;
 const PROJECT_ID = process.env.UI_HARNESS_PROJECT_ID || '';
@@ -87,12 +86,10 @@ const WIDTHS = (process.env.UI_HARNESS_WIDTHS || '1440,1600,1920').split(',').ma
 const NON_STRETCH = ['check', 'align', 'color'];
 
 if (!PROJECT_ID) {
-  console.error(
+  cannotTell('check:panels',
     'Set UI_HARNESS_PROJECT_ID first — `npm run seed:ui-fixture` prints it.\n' +
     'Without a project the builder renders an empty page and every assertion\n' +
-    'passes on zero panels, which is worse than failing.'
-  );
-  process.exit(2);
+    'passes on zero panels, which is worse than failing.');
 }
 
 /** Walk from the pages list into an expanded module panel. */
@@ -495,6 +492,20 @@ function assertLattice(panels, width) {
 
     if (!allFields.length) continue;
 
+    /*
+     * THE OTHER HALF OF THE ROOM RULE — the track can also be too WIDE.
+     *
+     * Everything below this line compares fields to EACH OTHER, so a block
+     * whose every row shares the same wrong geometry agrees with itself
+     * perfectly, and a block rendering a single row has nothing to compare at
+     * all. Both were true of the Trigger panel on 2026-09-03, which is how two
+     * deliberate breaks of the defect PR #449 had just fixed came back green.
+     * This one is a property of the field set rather than a comparison, so it
+     * still bites at n=1. `scripts/ui/lattice-room.mjs` carries the mechanism
+     * and the measurements the ceiling was derived from.
+     */
+    failures.push(...assertManagerRoom(panel, width));
+
     // W0 is per COLUMN. A group that puts two label/field pairs on a row
     // (L6a — the Feature Cards manager) therefore has two columns inside it,
     // and each is held to the rule on its own. Bucketing is by the label's
@@ -502,11 +513,7 @@ function assertLattice(panels, width) {
     // stays one bucket, so a genuine stagger still fails rather than being
     // explained away as a second column.
     const declared = panel.pairs || 1;
-    const buckets = declared > 1
-      ? [...new Map(allFields.map((f) => [f.labelBoxX, null])).keys()]
-        .sort((a, b) => a - b)
-        .map((x) => allFields.filter((f) => f.labelBoxX === x))
-      : [allFields];
+    const buckets = bucketFields(panel);
 
     if (declared > 1 && buckets.length > declared) {
       failures.push(
@@ -793,6 +800,28 @@ const allFailures = [];
 let panelsSeen = 0;
 let cardsSeen = 0;
 let columnGridsSeen = 0;
+/*
+ * Declared managers that rendered a SINGLE label/field pair.
+ *
+ * Counted and reported, never failed. A one-row manager can be entirely
+ * correct — the Trigger block on any module that is not Confetti has exactly
+ * one row and there is nothing to seed that would give it a second — but the
+ * four comparative assertions (label widths, label-text offsets, field
+ * offsets, field widths) are all `new Set(...).length > 1` tests, so on such a
+ * block they cannot fail. Saying so is the difference between a count and a
+ * verdict, and on 2026-09-03 that difference cost a reviewer a round: a green
+ * run over the Trigger panel was reported as proof the layout was right when
+ * most of what the reader assumes was checked had never been able to fail
+ * (task 86bbufmdt).
+ *
+ * PER PAIR-COLUMN and KEYED, both learned in review round 1 of that same
+ * ticket. Per column because the comparative assertions run inside the bucket
+ * loop, so a two-column manager holding one item has every one of them vacuous
+ * while its group-wide field count looks like a comparable 2. Keyed because
+ * the first version added the per-width count three times and printed 9 for
+ * 3 real blocks.
+ */
+const uncomparableManagers = new Map();   // stable key -> the widths it was seen at
 
 for (const width of WIDTHS) {
   const { browser, page } = await launch({ width, height: 1400, headless: true });
@@ -810,6 +839,14 @@ for (const width of WIDTHS) {
     const panels = measure(page, NON_STRETCH);
     const measured = await panels;
     panelsSeen += measured.length;
+    for (const u of findUncomparableManagers(measured)) {
+      // Keyed, not summed. Adding the per-width count over three widths
+      // printed "9 declared manager(s)" for 3 real blocks — three times the
+      // truth, on the one ticket whose acceptance criterion is that a count
+      // must not read as a verdict (review round 1, 2026-09-05).
+      if (!uncomparableManagers.has(u.key)) uncomparableManagers.set(u.key, { label: u.label, widths: [] });
+      uncomparableManagers.get(u.key).widths.push(width);
+    }
     allFailures.push(...assertLattice(measured, width));
     // W9 runs at every width on purpose: a ceiling is only interesting on the
     // wide end, and 1440 alone would let a 1600px-only overflow through.
@@ -827,31 +864,82 @@ for (const width of WIDTHS) {
 // the SAME database. On 2026-08-13 that silently cut this page from 53
 // modules to 3, and the check reported a confident pass over what was left.
 // Counting the cards is what makes that loud instead of invisible.
+const blind = [];
+
 if (cardsSeen > 0 && cardsSeen < EXPECTED_MODULES) {
-  console.error(
-    `\n[check:panels] The fixture is INCOMPLETE — ${cardsSeen} module cards on the page, ` +
+  // A 2, not a 1: the fixture is the INSTRUMENT. Nothing here says the panels
+  // are wrong, and reporting it as a failure sends the reader hunting a defect
+  // in code that could be perfect (task 86bbt6hgx).
+  blind.push(
+    `The fixture is INCOMPLETE — ${cardsSeen} module cards on the page, ` +
     `${EXPECTED_MODULES} module types exist.\n` +
     'Another session has probably re-seeded over it. Re-run `npm run seed:ui-fixture`\n' +
-    'and check again; a pass over a partial fixture is not a pass.\n'
-  );
-  process.exit(1);
+    'and check again; a pass over a partial fixture is not a pass.');
 }
 
 if (panelsSeen === 0) {
-  console.error(
+  blind.push(
     'No panels carrying `.is-lattice` were found.\n' +
-    'That is a FAILURE, not a pass. The class is stamped on EVERY module\n' +
+    'Zero assertions is never a green result. The class is stamped on EVERY module\n' +
     'editor by ModuleEditorWrapper (components/builder/builder-module-card.tsx)\n' +
     'and on the section, cell and table-cell editors, so finding none means\n' +
     'either the fixture page has no modules (`npm run seed:ui-fixture`) or the\n' +
-    'navigation above stopped working. Zero assertions is never a green result.'
-  );
-  process.exit(1);
+    'navigation above stopped working — an instrument problem either way, which\n' +
+    'is why this is a 2 rather than a 1.');
 }
 
-if (allFailures.length) {
+/*
+ * FAILURES FIRST, THEN THE REFUSAL. Both guards above used to exit 2 on the
+ * spot, ahead of this block — so a partial fixture plus a genuine W0/W9
+ * violation on the panels that DID render reported as a broken instrument and
+ * threw the violation list away (review round 1, task 86bbt6hgx). The
+ * incomplete-fixture case is the common one: another session re-seeding over
+ * the shared page did exactly this on 2026-08-13. A width that is wrong is
+ * wrong whatever else about the run was hollow, which is the ranking
+ * `verdict()` encodes.
+ */
+/*
+ * WHAT A PASS OVER A DECLARED MANAGER IS WORTH — printed on EVERY run, green
+ * or red, including when the number is zero.
+ *
+ * Round 1 of this ticket wrote "printed on every green run, not only when it
+ * is non-zero, so the reader is never left inferring it from silence" directly
+ * above an `if (uncomparableManagers)`, which printed nothing at zero — the
+ * exact silence the comment claimed to have removed. A comment that describes
+ * the opposite of its code is worse than no comment, because it is read as
+ * evidence. Zero now says so out loud.
+ */
+function uncomparableNote() {
+  if (!uncomparableManagers.size) {
+    return '[check:panels] NOTE — every declared item manager rendered at least two label/field\n'
+      + '  pairs in every pair-column, so the four comparative assertions (label widths,\n'
+      + '  label-text offsets, field offsets, field widths) were live on all of them.';
+  }
+  const rows = [...uncomparableManagers.values()]
+    .map((u) => `      · ${u.label} (at ${u.widths.join('/')}px)`)
+    .join('\n');
+  return `[check:panels] NOTE — ${uncomparableManagers.size} declared pair-column(s) rendered a single\n`
+    + '  label/field pair, so the four comparative assertions (label widths, label-text\n'
+    + '  offsets, field offsets, field widths) had nothing to compare and could not fail on\n'
+    + '  them. The per-field assertions — the label-room floor and ceiling, the cropped-word\n'
+    + '  check, and control-right-of-label — did run. Seed a second row in\n'
+    + '  scripts/ui/seed_fixture.mjs if these should be compared too:\n'
+    + rows;
+}
+
+const code = verdict({ failures: allFailures.length, blind: blind.length });
+
+if (code === EXIT_FAIL) {
   console.error(`\n[check:panels] FAILED — ${allFailures.length} problem(s):\n`);
   for (const f of allFailures) console.error(`  ✗ ${f}`);
+  if (blind.length) {
+    console.error(
+      '\nAND the run was partly blind, which does NOT excuse the failures above —\n' +
+      'it means there may be more of them that went unmeasured:\n\n' +
+      blind.map((b) => `  • ${b.split('\n')[0]}`).join('\n') + '\n'
+    );
+  }
+  console.error(`\n${uncomparableNote()}\n`);
   console.error(
     '\nW0: one label width and one field width per panel. The two numbers live in\n' +
     'src/css/_variables.css (--builder-field-label-w / --builder-field-control-w).\n' +
@@ -861,7 +949,11 @@ if (allFailures.length) {
   process.exit(1);
 }
 
+if (code === EXIT_CANNOT_TELL) cannotTell('check:panels', blind.join('\n\n'));
+
 console.log(
   `[check:panels] OK — W0 and W9 hold across ${panelsSeen} panel(s) `
   + `and ${columnGridsSeen} titled-column manager(s) at ${WIDTHS.join('/')}px.`
 );
+
+console.log(uncomparableNote());

@@ -1,6 +1,15 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { AppPasswordForm, ConnectionCardRow, disconnectConfirmMessage } from './connections-panel';
+import {
+  AppPasswordForm,
+  CONNECT_PARAMS,
+  noticeForCard,
+  orphanNoticeFor,
+  ConnectionCardRow,
+  connectReturnMessage,
+  disconnectConfirmMessage,
+  parseConnectHash,
+} from './connections-panel';
 
 /**
  * The Connections screen's four card states. Connections 4 of 7 (86bbpz1gd).
@@ -309,5 +318,260 @@ describe('Disconnect confirmation — it names everything it removes', () => {
       accounts: [],
     }));
     expect(message).toContain('Disconnect Bluesky?');
+  });
+});
+
+/**
+ * The refused connect. Connections 6b of 7 (86bbu50mb).
+ *
+ * A refusal stores NOTHING — no row, so no card state to read — which is why
+ * this is a separate surface from the amber card rather than a fifth state of
+ * it. The whole of it travels on the return URL, so these tests hand the reader
+ * a URL's worth of parameters and assert what a client ends up seeing.
+ */
+function reader(params: Record<string, string>) {
+  return (name: string) => params[name] || '';
+}
+
+describe('A refused connect says why', () => {
+  it('carries the adapter\'s own sentence, unedited', () => {
+    const sentence = 'This Instagram account is a personal account. '
+      + 'Switch it to a Professional account in the Instagram app, then try again.';
+    const found = connectReturnMessage(reader({
+      connect_oauth: 'error',
+      connect_provider: 'instagram',
+      connect_error: sentence,
+    }));
+    expect(found).toEqual({ provider: 'instagram', tone: 'error', sentence });
+  });
+
+  /**
+   * THE criterion this whole surface turns on. The adapters were written to
+   * produce plain English naming what to change — an Instagram refusal says
+   * "switch it to a Professional account" — and every generic sentence
+   * substituted for one of those throws that away and puts the client back at
+   * "it did not work". Asserted by identity, not by a substring: a panel that
+   * appended so much as a helpful "Please try again." would still pass a
+   * `toContain`.
+   */
+  it('does not substitute wording of its own', () => {
+    const sentence = 'Instagram refused the connection.';
+    const found = connectReturnMessage(reader({ connect_provider: 'instagram', connect_error: sentence }));
+    expect(found?.sentence).toBe(sentence);
+  });
+
+  it('a notice is a notice, not an error — the tones are not the same face', () => {
+    const found = connectReturnMessage(reader({
+      connect_provider: 'facebook',
+      connect_notice: 'This grant covers three Pages. Choose which one posts.',
+    }));
+    expect(found?.tone).toBe('notice');
+  });
+
+  /** An error and a notice together: the error is the one that matters. */
+  it('prefers the error when both arrive', () => {
+    const found = connectReturnMessage(reader({
+      connect_provider: 'x',
+      connect_error: 'X refused the connection.',
+      connect_notice: 'Something milder.',
+    }));
+    expect(found?.tone).toBe('error');
+    expect(found?.sentence).toBe('X refused the connection.');
+  });
+
+  /** A plain success carries neither, and must not render an empty box. */
+  it('says nothing at all about a connect that worked', () => {
+    expect(connectReturnMessage(reader({
+      connect_oauth: 'connected',
+      connect_provider: 'instagram',
+      connect_account: '17841400000000000',
+    }))).toBe(null);
+    expect(connectReturnMessage(reader({}))).toBe(null);
+  });
+
+  /** Whitespace is not a sentence. A trailing "&connect_error=" renders nothing. */
+  it('treats a blank parameter as absent', () => {
+    expect(connectReturnMessage(reader({ connect_provider: 'x', connect_error: '   ' }))).toBe(null);
+  });
+
+  /**
+   * Acceptance criterion 3 — reloading does not show it again — is only true if
+   * every parameter is cleared, not just the one that was rendered. A leftover
+   * `connect_oauth=error` in the hash is a URL a client can bookmark or share
+   * that still says something went wrong.
+   */
+  it('clears every parameter it consumes, so a reload is clean', () => {
+    expect(CONNECT_PARAMS).toContain('connect_error');
+    expect(CONNECT_PARAMS).toContain('connect_notice');
+    expect(CONNECT_PARAMS).toContain('connect_provider');
+    expect(CONNECT_PARAMS).toContain('connect_oauth');
+    expect(CONNECT_PARAMS).toContain('connect_code');
+    // `routes/engage.js:1642-1643` sets these two as well. The shell wipes the
+    // hash regardless, so leaving them off was tidiness rather than a bug — but
+    // this list is meant to BE what engage.js appends, and a list that has
+    // drifted cannot be read as a decision by whoever comes next.
+    expect(CONNECT_PARAMS).toContain('connect_account');
+    expect(CONNECT_PARAMS).toContain('connect_choose');
+  });
+});
+
+/**
+ * A return sentence is shown SOMEWHERE, always.
+ *
+ * From the 2026-09-05 send-back. The panel hid the orphan notice behind the
+ * same `!loadError` guard as the card list, so if `GET /api/connections` failed
+ * in the seconds after a refusal there was no card to carry the sentence and
+ * the panel-level fallback was suppressed too. It is gone for good at that
+ * point — the parameter was cleared off the URL before this decision is ever
+ * made — and the client is left on a screen that says nothing about the attempt
+ * they just made, which reads as the Connect button being broken.
+ */
+describe('Where the refusal sentence goes', () => {
+  const NOTICE = {
+    provider: 'instagram',
+    tone: 'error' as const,
+    sentence: 'Instagram could not be connected because this account is not linked to a Facebook Page.',
+  };
+  const CARDS = [{ provider: 'instagram' }, { provider: 'bluesky' }];
+  const LOADED = { loading: false, loadError: '' };
+
+  it('leaves it to the card when that card is on screen', () => {
+    expect(orphanNoticeFor(NOTICE, CARDS, LOADED)).toBe(null);
+    expect(noticeForCard(NOTICE, 'instagram')).toBe(NOTICE);
+    expect(noticeForCard(NOTICE, 'bluesky')).toBe(null);
+  });
+
+  it('shows it at panel level when the connections list failed to load', () => {
+    // The card list is hidden by `loadError`, so no card can carry it.
+    const shown = orphanNoticeFor(NOTICE, CARDS, {
+      loading: false,
+      loadError: 'Could not load your connections',
+    });
+    expect(shown).toBe(NOTICE);
+  });
+
+  it('shows it at panel level when no card matches the provider', () => {
+    expect(orphanNoticeFor(NOTICE, [{ provider: 'bluesky' }], LOADED)).toBe(NOTICE);
+    // A refusal that named no provider at all.
+    const nameless = { ...NOTICE, provider: '' };
+    expect(orphanNoticeFor(nameless, CARDS, LOADED)).toBe(nameless);
+  });
+
+  it('holds it back while the list is still loading, so it lands on its card', () => {
+    // Cards are empty mid-load; rendering it unattached here would make it jump
+    // to the card a moment later.
+    expect(orphanNoticeFor(NOTICE, [], { loading: true, loadError: '' })).toBe(null);
+  });
+
+  it('says nothing when there was no refusal', () => {
+    expect(orphanNoticeFor(null, CARDS, LOADED)).toBe(null);
+    expect(orphanNoticeFor(null, [], { loading: false, loadError: 'boom' })).toBe(null);
+  });
+
+  it('matches the card case-insensitively, as the redirect may change it', () => {
+    expect(orphanNoticeFor({ ...NOTICE, provider: 'instagram' }, [{ provider: 'Instagram' }], LOADED))
+      .toBe(null);
+  });
+});
+
+describe('The refusal on the card', () => {
+  const REFUSAL = 'Instagram could not be connected because this account is not linked to a Facebook Page.';
+
+  function withNotice(tone: 'error' | 'notice') {
+    return renderToStaticMarkup(
+      <ConnectionCardRow
+        card={card({ provider: 'instagram', displayName: 'Instagram', blurb: 'Post to Instagram.' })}
+        busy={false}
+        notice={{ provider: 'instagram', tone, sentence: REFUSAL }}
+        onConnect={() => {}}
+        onDisconnect={() => {}}
+        onPickAccount={() => {}}
+      />
+    );
+  }
+
+  it('renders the sentence against the card, in the provider\'s own words', () => {
+    const html = withNotice('error');
+    expect(html).toContain('data-provider="instagram"');
+    expect(html).toContain(REFUSAL);
+  });
+
+  /**
+   * A refusal is NOT a failure of the connection, and the card must not act
+   * like one. Nothing was stored, so the card is still not-connected and
+   * Connect — not Reconnect — is still the right thing to press. Getting this
+   * wrong would tell a client their account had broken when they had simply
+   * been asked to change a setting and come back.
+   */
+  it('leaves the card not-connected, with Connect still offered', () => {
+    const html = withNotice('error');
+    expect(html).toContain('data-card-state="not_connected"');
+    expect(html).toContain('>Connect<');
+    expect(html).not.toContain('>Reconnect<');
+    expect(html).not.toContain('connections-card-needs_attention');
+  });
+
+  it('a card with nothing to report renders no notice element at all', () => {
+    const html = rowHtml({ provider: 'instagram' });
+    expect(html).not.toContain('connections-card-notice');
+    expect(html).not.toContain('data-notice-tone');
+  });
+
+  it('keeps the two tones apart in the markup, so CSS can tell them apart', () => {
+    expect(withNotice('error')).toContain('data-notice-tone="error"');
+    expect(withNotice('notice')).toContain('data-notice-tone="notice"');
+  });
+});
+
+/**
+ * Reading the hash, and why this parser exists at all.
+ *
+ * `routes/engage.js` puts the outcome in the FRAGMENT, not the query string —
+ * `connectionsReturnUrl` builds `#page=settingsConnectionsPage&connect_...` —
+ * so `URLSearchParams(location.search)` would find nothing. These use the exact
+ * strings that function produces.
+ *
+ * The parser is the panel's own rather than `App.readHashParam` because it runs
+ * at module-evaluation time, before `window.App` is built. That is not a
+ * preference: measured in a real browser on 2026-09-04, reading the hash inside
+ * a mount effect found nothing at all, because the vanilla shell rewrites the
+ * hash to exactly `#page=<id>` while it boots and drops every other key. Every
+ * test in this file passed while the screen showed nothing.
+ */
+describe('The return URL', () => {
+  it('reads the parameters out of the fragment, the way slice 5 writes them', () => {
+    const sentence = 'Instagram refused: this account is not linked to a Facebook Page.';
+    const hash = '#page=settingsConnectionsPage&connect_oauth=error&connect_provider=instagram'
+      + `&connect_error=${encodeURIComponent(sentence)}`;
+    const params = parseConnectHash(hash);
+    expect(params.page).toBe('settingsConnectionsPage');
+    expect(params.connect_provider).toBe('instagram');
+    expect(params.connect_error).toBe(sentence);
+    expect(connectReturnMessage((n) => params[n] || '')?.sentence).toBe(sentence);
+  });
+
+  /**
+   * The shell's rewrite, as it actually appears. If this ever starts yielding a
+   * sentence, something has changed about when the panel reads — and the mount
+   * effect that used to do the reading produced exactly this and rendered
+   * nothing.
+   */
+  it('finds nothing once the shell has rewritten the hash', () => {
+    const params = parseConnectHash('#page=settingsConnectionsPage');
+    expect(connectReturnMessage((n) => params[n] || '')).toBe(null);
+  });
+
+  it('survives an empty hash, a bare key and a broken escape', () => {
+    expect(parseConnectHash('')).toEqual({});
+    expect(parseConnectHash('#')).toEqual({});
+    expect(parseConnectHash('#page=x&connect_error')).toEqual({ page: 'x', connect_error: '' });
+    // A lone % is not valid percent-encoding; the raw text is better than a throw.
+    expect(parseConnectHash('#connect_error=100%').connect_error).toBe('100%');
+  });
+
+  /** A sentence has spaces in it, and a redirect may encode them either way. */
+  it('decodes both spellings of a space', () => {
+    expect(parseConnectHash('#connect_error=try%20again').connect_error).toBe('try again');
+    expect(parseConnectHash('#connect_error=try+again').connect_error).toBe('try again');
   });
 });

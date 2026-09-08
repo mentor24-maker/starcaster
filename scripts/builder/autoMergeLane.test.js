@@ -16,6 +16,11 @@ const {
   latestAutoMergeMarker,
   markerLine,
   switchCommand,
+  nearMissResume,
+  nearMissNotice,
+  NEAR_MISS_MEMORY,
+  newNearMisses,
+  ledgerAfterNearMiss,
   killSwitchState,
   SWITCH_STOP,
   SWITCH_RESUME,
@@ -27,6 +32,8 @@ const {
   laneADecision,
   announcementNotice,
   cancellationNotice,
+  isLaneNotice,
+  quotesMachineText,
   digestDue,
   digestBody,
   digestSince,
@@ -39,7 +46,11 @@ const {
   ledgerAfterDigest,
   switchSignalsFromLedger,
   mergesSince,
+  laneEligibility,
+  laneForFile,
 } = require('./autoMergeLane');
+
+const { MACHINE_MARKER_LINE, stampMachineComment, stampCommentBody, isCommentPostPath } = require('./machineComment');
 
 /**
  * Task 86bbkw2au — Lane A. Canon: vault doctrine/AUTO-MERGE-LANES.md.
@@ -60,6 +71,8 @@ const DAY = 24 * HOUR;
 const OPERATOR = 48012725;
 const T0 = 1_756_000_000_000; // a fixed epoch; nothing here reads a real clock
 
+const DOCS_ONLY = ['docs/LOCAL_DEVELOPMENT.md', 'README.md', 'scripts/builder/themeWizardApply.test.js'];
+
 let nextId = 1000;
 const comment = (text, { at = T0, user = 7, id } = {}) => ({
   id: String(id ?? nextId++),
@@ -69,18 +82,38 @@ const comment = (text, { at = T0, user = 7, id } = {}) => ({
 });
 
 const fromDane = (text, at) => comment(text, { at, user: OPERATOR });
+/**
+ * A machine comment AS THE API HANDS IT BACK: stamped, and carrying Dane's own
+ * user id, because the loops post under his token. `comment(..., { user: 7 })`
+ * is not this shape and never was — which is exactly why every test passed
+ * while the lane cancelled real merges (task 86bbv8nvy).
+ */
+const fromMachine = (text, at) => comment(stampMachineComment(text), { at, user: OPERATOR });
 const prComment = (n, at) => comment(`PR opened: https://github.com/mentor24-maker/starcaster/pull/${n}`, { at });
 const reviewPass = (at) => comment('REVIEW: PASSED (checked out, gates green)', { at });
 const reviewFail = (at) => comment('REVIEW: sent back to Queued — the test does not fail when broken', { at });
-const armed = (n, at) => comment(`some words\n${markerLine('armed', n, 'iso')}`, { at });
-const cancelled = (n, at) => comment(`${markerLine('cancelled', n, 'iso')}`, { at });
+/**
+ * The lane's own notices, AS THE API HANDS THEM BACK — stamped, because
+ * `call()` stamps every comment a machine posts at the door.
+ *
+ * They must be stamped for the same reason `fromMachine` must be: the marker
+ * reader now honours a marker only on a comment a machine actually wrote
+ * (task 86bbv8nvy round 1), so an unstamped fixture models a notice that
+ * cannot exist and would test the wrong lane. Dane quoting `[auto-merge]
+ * armed PR #618` is what an UNstamped marker really is, and it must not arm.
+ */
+const armed = (n, at) => comment(stampMachineComment(
+  announcementNotice({ pr: { number: n, url: `https://github.com/x/y/pull/${n}` }, files: DOCS_ONLY, deadlineLabel: '6:00pm EDT', at: 'iso' }).body,
+), { at, user: OPERATOR });
+const cancelled = (n, at) => comment(stampMachineComment(
+  cancellationNotice({ pr: { number: n, url: `https://github.com/x/y/pull/${n}` }, why: 'you commented', at: 'iso' }).body,
+), { at, user: OPERATOR });
 
 /** A ticket that is ready in every way except whatever the test is probing. */
 function readyTicket({ pr = 42, verdictAt = T0, prAt = T0 - 1000, extra = [] } = {}) {
   return [prComment(pr, prAt), reviewPass(verdictAt), ...extra];
 }
 
-const DOCS_ONLY = ['docs/LOCAL_DEVELOPMENT.md', 'README.md', 'scripts/builder/themeWizardApply.test.js'];
 
 // ── Criterion 1: which files may ride ────────────────────────────────────────
 
@@ -112,7 +145,7 @@ test('ONE file outside the set disqualifies the whole PR — no partial credit',
     const r = laneAEligibility([...DOCS_ONLY, intruder]);
     assert.equal(r.eligible, false, `${intruder} should have disqualified the PR`);
     assert.equal(r.blockedBy, intruder);
-    assert.match(r.reason, /not a test or a document/);
+    assert.match(r.reason, /not a test, a document or pipeline tooling/);
   }
 });
 
@@ -231,8 +264,12 @@ test('a failed announcement starts no clock and merges nothing', () => {
 // ── The record on the ticket ─────────────────────────────────────────────────
 
 test('markers round-trip, and the newest one decides', () => {
-  assert.deepEqual(parseAutoMergeMarker(markerLine('armed', 7, 'x')), { kind: 'armed', pr: 7 });
-  assert.deepEqual(parseAutoMergeMarker(markerLine('cancelled', 7, 'x')), { kind: 'cancelled', pr: 7 });
+  assert.deepEqual(parseAutoMergeMarker(markerLine('armed', 7, 'x')), { kind: 'armed', pr: 7, lane: 'A' });
+  assert.deepEqual(parseAutoMergeMarker(markerLine('cancelled', 7, 'x')), { kind: 'cancelled', pr: 7, lane: 'A' });
+  // Lane B round-trips too, and a marker written before Lane B existed — with
+  // no lane letter at all — still parses as the lane it was: A.
+  assert.deepEqual(parseAutoMergeMarker(markerLine('armed', 7, 'x', 'B')), { kind: 'armed', pr: 7, lane: 'B' });
+  assert.deepEqual(parseAutoMergeMarker('[auto-merge] armed PR #7'), { kind: 'armed', pr: 7, lane: 'A' });
   assert.equal(parseAutoMergeMarker('no marker here'), null);
   // Prose ABOUT a marker is not a marker: it must start the line.
   assert.equal(parseAutoMergeMarker('as I said, [auto-merge] armed PR #7'), null);
@@ -257,6 +294,106 @@ test('stop is matched loosely, resume strictly — the asymmetry is deliberate',
     'a resume must be the whole message — a false resume costs an unwanted merge');
   assert.equal(switchCommand('merge'), null);
   assert.equal(switchCommand(''), null);
+});
+
+// ── A near miss says so, instead of matching nothing in silence (86bbuv99r) ──
+
+test('his real 11:11pm message now RESUMES — the wrapper is stripped (86bbvraw4)', () => {
+  // The exact string ClickUp stored on 2026-09-03, and again on 2026-09-05.
+  // It used to be reported as a near miss and left the lane off; Dane's call
+  // on 2026-09-06, after the same class cost him a fourth attempt, was to
+  // strip the formatting instead: "we definitely need to do string match or
+  // some other method that will strip the invisible style characters so I
+  // don't always have to remember to paste just so."
+  assert.equal(switchCommand('**`resume auto-merging`**'), 'resume');
+});
+
+test('a message with extra WORDS is still a near miss — it does not resume, and it is not silent', () => {
+  // The near-miss lane keeps its job. What changed is which failures reach it:
+  // formatting he cannot control is now stripped, while a phrase buried in a
+  // sentence is a genuine ambiguity and must not merge anything.
+  const his = 'resume auto-merging when CI is green';
+  assert.equal(switchCommand(his), null, 'a resume must still be the whole message');
+  const miss = nearMissResume(his);
+  assert.ok(miss, 'and it must no longer be indistinguishable from silence');
+  assert.equal(miss.phrase, SWITCH_RESUME);
+
+  const notice = nearMissNotice({ where: 'on the party line', saw: miss.saw });
+  assert.match(notice, /did not take/i, 'it has to say plainly that nothing happened');
+  // The phrase is handed back PLAIN. The wrapper he copied came from an
+  // agent's own card; a notice that repeats it hands him another dud line.
+  assert.match(notice, /\n\nresume auto-merging\n/,
+    'the phrase must appear on its own line with no bold and no backticks');
+  // The echo above quotes HIM, wrapper and all — that is the evidence, and it
+  // is indented as a block so it reads as a quotation. What must be clean is
+  // the half he is being told to copy from.
+  const instruction = notice.slice(notice.indexOf('Type or paste exactly this line'));
+  assert.ok(!/[*`_]/.test(instruction.split('(Only "resume"')[0]),
+    'the line he is told to copy must carry no markdown at all');
+  assert.match(notice, /What came through, exactly as ClickUp stored it/,
+    'and he is shown what actually arrived, so the wrapper is visible as the cause');
+});
+
+test('a message that DID take gets no notice — resume and stop alike', () => {
+  assert.equal(nearMissResume('resume auto-merging'), null);
+  assert.equal(nearMissResume('`resume auto-merging`'), null, 'backticks already matched');
+  assert.equal(nearMissResume('Resume Auto Merging.'), null, 'so did case, spacing and a full stop');
+  assert.equal(nearMissResume('hey, stop auto-merging until I look at this'), null,
+    'the stop matcher is untouched, and a stop that took is not a near miss');
+});
+
+test('an unrelated message produces NO notice — the noise failure, pinned', () => {
+  // If this test ever fails, the fix has become worse than the silence it
+  // replaced: the party line is where every alarm lands.
+  for (const quiet of [
+    'merge',
+    'merge 599',
+    'looks good, ship it',
+    'why has nothing merged since 6:27pm?',
+    'resume the pipeline',
+    'auto-merging',
+    '',
+    null,
+  ]) {
+    assert.equal(nearMissResume(quiet), null, `must stay quiet about ${JSON.stringify(quiet)}`);
+  }
+});
+
+test('a near miss is answered ONCE, not once per pass', () => {
+  const candidates = [{ id: 'msg-1', where: 'on the party line', saw: 'x' }];
+  let ledger = asLedger(null);
+
+  const first = newNearMisses({ candidates, ledger });
+  assert.equal(first.length, 1, 'the first pass answers it');
+
+  ledger = ledgerAfterNearMiss(ledger, ['msg-1']);
+  assert.deepEqual(newNearMisses({ candidates, ledger }), [],
+    'every pass after that stays quiet — the message is still in view, and it is not news twice');
+
+  // A SECOND near miss from him is news again, even with identical text.
+  const again = newNearMisses({ candidates: [...candidates, { id: 'msg-2', saw: 'x' }], ledger });
+  assert.equal(again.length, 1);
+  assert.equal(again[0].id, 'msg-2', 'dedup is by message id, never by text');
+});
+
+test('a near miss with no id is not answered — it could not be remembered', () => {
+  assert.deepEqual(newNearMisses({ candidates: [{ where: 'on the party line' }], ledger: null }), [],
+    'answering something we cannot record would repeat forever');
+  assert.deepEqual(newNearMisses({ candidates: [{ id: 'a' }, { id: 'a' }], ledger: null }).length, 1,
+    'and the same id twice in one pass is one answer');
+});
+
+test('the answered-near-miss memory survives a round trip and stays bounded', () => {
+  const ids = Array.from({ length: NEAR_MISS_MEMORY + 20 }, (_, i) => `m${i}`);
+  let ledger = asLedger(null);
+  for (const id of ids) ledger = ledgerAfterNearMiss(ledger, [id]);
+  assert.equal(ledger.nearMisses.length, NEAR_MISS_MEMORY, 'the file stays a file');
+  assert.equal(ledger.nearMisses[ledger.nearMisses.length - 1], `m${ids.length - 1}`, 'newest kept');
+
+  const reread = asLedger(JSON.parse(JSON.stringify(ledger)));
+  assert.deepEqual(reread.nearMisses, ledger.nearMisses, 'and it comes back off disk intact');
+  // The whitelist in asLedger is why this key has to be named there at all.
+  assert.deepEqual(asLedger({ nearMisses: 'not an array' }).nearMisses, []);
 });
 
 test('an UNREADABLE switch means OFF — the fail-safe direction', () => {
@@ -355,7 +492,14 @@ test('a disable persists until a human clears it', () => {
   const d = selfDisableState({ persisted: { at: T0, why: 'main went red' } });
   assert.equal(d.disabled, true);
   assert.equal(d.fresh, false, 'a remembered disable must not re-announce itself every pass');
-  assert.equal(d.why, 'main went red');
+  // The reason KEEPS its substance but is no longer replayed verbatim (task
+  // 86bbt0mz6). This assertion used to be `equal(d.why, 'main went red')`,
+  // which pinned the defect: a stored sentence written by the pass that
+  // latched, replayed unchanged by every pass after it, reads as a live
+  // finding. On 2026-09-03 that put "this pass could not fully verify 4
+  // thing(s)" one line above "0 could not be checked" for 10.8 hours.
+  assert.match(d.why, /main went red/, 'the recorded substance must survive');
+  assert.match(d.why, /latched off since/, 'and it must say it is a REMEMBERED state, with a date');
 });
 
 test('the gate reports WHY, cheapest and most serious reason first', () => {
@@ -505,12 +649,394 @@ test('only HIS comments object, and only ones inside the window', () => {
     status: 'Ready to launch', comments: machine, operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
   }).act, 'merge');
 
+  // AND THE SAME COMMENT AS IT REALLY ARRIVES — stamped, under Dane's own user
+  // id, because the loops post with his token (task 86bbv8nvy). The line above
+  // passes on a user id no machine comment actually carries, so it could never
+  // have caught this; this one is the assertion that fails without the filter.
+  const stamped = readyTicket({
+    extra: [armed(42, T0 + 10), fromMachine('[CC-starcaster] Review PASSED — gates green', T0 + 20)],
+  });
+  assert.equal(laneADecision({
+    status: 'Ready to launch', comments: stamped, operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
+  }).act, 'merge', 'a stamped machine comment under his token is the pipeline, not him');
+
   // His comment from BEFORE the announcement is not an objection to it — the
   // announcement came after and gave him a fresh hour.
   const before = readyTicket({ extra: [fromDane('looks good', T0 + 5), armed(42, T0 + 10)] });
   assert.equal(laneADecision({
     status: 'Ready to launch', comments: before, operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
   }).act, 'merge');
+});
+
+test('the machine filter narrows the objection test and nothing else', () => {
+  // Break-test 1 — drop `!isMachineComment(...)` from laneADecision and the
+  // stamped-comment assertion above turns into a cancel.
+  //
+  // Break-test 2 — make the filter swallow everything (`() => true`) and BOTH
+  // halves of this test fail: his plain word stops cancelling, and so does the
+  // comment nobody can classify. That is the direction that would merge
+  // something he objected to, so it gets its own named assertions.
+  const base = {
+    status: 'Ready to launch', operatorId: OPERATOR, now: T0 + 10 + HOUR, files: DOCS_ONLY,
+  };
+
+  // His own word, in the window, unstamped: cancels, exactly as before.
+  const his = readyTicket({ extra: [armed(42, T0 + 10), fromDane('hold off on this one', T0 + 20)] });
+  const d = laneADecision({ ...base, comments: his });
+  assert.equal(d.act, 'cancel', 'his real comment must still cancel');
+  assert.match(d.reason, /you commented/);
+
+  // HE QUOTES A MACHINE CARD AND OBJECTS UNDERNEATH IT. This is how he
+  // actually objects, and both quoting styles must survive it (round 1 of
+  // task 86bbv8nvy — the first cut only covered the tail marker, which was
+  // the half that already worked).
+  //
+  // Break-test 3 — swap `isStampedMachineComment` back to the wide
+  // `isMachineComment` and the three head-tag cases below turn into merges:
+  // the lane ships over the top of him saying stop.
+  const quotedHeads = [
+    '[CC-starcaster loop-review] REVIEW: PASSED (checked out, gates green)',
+    '[auto-merge] window opened on this PR',
+    '[bus-relay] relayed to the bus',
+    '[reconciler] moved 86bbv8nvy to Live',
+  ];
+  for (const card of quotedHeads) {
+    const quotingHead = readyTicket({
+      extra: [armed(42, T0 + 10), fromDane(`${card}\n\nno, hold this one — I want to look`, T0 + 20)],
+    });
+    assert.equal(laneADecision({ ...base, comments: quotingHead }).act, 'cancel',
+      `his words under a quoted "${card.split(']')[0]}]" card are still his words`);
+  }
+
+  // The same act with the TAIL marker pasted first. The stamp lands mid-text
+  // rather than last, which is the direction machineComment.js chose on
+  // purpose, and it is the safe one here too.
+  const quoting = readyTicket({
+    extra: [armed(42, T0 + 10), fromDane(`${MACHINE_MARKER_LINE}\n\nwait, why is this merging?`, T0 + 20)],
+  });
+  assert.equal(laneADecision({ ...base, comments: quoting }).act, 'cancel',
+    'his words after a pasted marker are still his words');
+
+  // AND THE HEAD TAG STILL DOES NOT MAKE A REAL MACHINE CARD OBJECT — every
+  // card a loop posts carries the tail stamp too (call() writes it at the
+  // door), so narrowing to the stamp costs the lane nothing. Sampled over 110
+  // real Loop Queue comments: 100 machine-written, 100 via the tail stamp.
+  const realCard = readyTicket({
+    extra: [armed(42, T0 + 10), fromMachine('[CC-starcaster loop-review] REVIEW: PASSED', T0 + 20)],
+  });
+  assert.equal(laneADecision({ ...base, comments: realCard }).act, 'merge',
+    'a real machine card carries the stamp and is still discounted');
+
+  // An UNCLASSIFIABLE comment under his id still objects. No stamp, no legacy
+  // prefix, nothing to recognise — so the lane must assume him and stop.
+  const unknown = readyTicket({ extra: [armed(42, T0 + 10), fromDane('?', T0 + 20)] });
+  assert.equal(laneADecision({ ...base, comments: unknown }).act, 'cancel',
+    'an unrecognised comment is still an objection — the asymmetry is preserved');
+
+  // An unreadable body is the same case: `isMachineComment(undefined)` is
+  // false by design, so it counts as his rather than being discounted.
+  const unreadable = readyTicket({
+    extra: [armed(42, T0 + 10), { id: '9001', date: String(T0 + 20), user: { id: OPERATOR } }],
+  });
+  assert.equal(laneADecision({ ...base, comments: unreadable }).act, 'cancel',
+    'a comment whose text could not be read is not proof a machine wrote it');
+});
+
+test('HE QUOTES THE ANNOUNCEMENT ITSELF — his quote must not re-arm the window', () => {
+  // The card he is most likely to quote is the one he is replying to. Before
+  // this, his quote of `[auto-merge] armed PR #42 ...` registered as a SECOND
+  // announcement dated to his own comment: the window silently restarted from
+  // his words, his objection was no longer "after the marker", and an hour
+  // later the lane merged the PR he had said hold on.
+  //
+  // Break-test — drop the `isStampedMachineComment` guard from
+  // `latestAutoMergeMarker` and both assertions below turn into merges.
+  const base = { status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY };
+  const quotesTheNotice = readyTicket({
+    extra: [
+      armed(42, T0 + 10),
+      fromDane(`${markerLine('armed', 42, 'iso')}\n\nno, hold this one — I want to look`, T0 + 20),
+    ],
+  });
+
+  // Inside the real window: it is an objection, exactly like any other comment.
+  const during = laneADecision({ ...base, comments: quotesTheNotice, now: T0 + 10 + HOUR });
+  assert.equal(during.act, 'cancel', 'his words under a quoted announcement are an objection');
+  assert.match(during.reason, /you commented/);
+
+  // And an hour past HIS comment — the window his quote would have re-armed —
+  // it is still cancelled, not merged. This is the assertion that failed.
+  assert.equal(
+    laneADecision({ ...base, comments: quotesTheNotice, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'his quote of the announcement is not an announcement, so it cannot re-arm',
+  );
+});
+
+test('HE PASTES THE CARD UNDER HIS WORDS — the other way up, and the one that merged', () => {
+  // ROUND 2 OF THIS TICKET, and the reason round 1 was sent back. Round 1
+  // closed the ordering where he pastes a card ABOVE his reply: the `[machine]`
+  // stamp lands mid-text and the comment reads as his. Pasted UNDERNEATH his
+  // words the stamp is the LAST line of HIS comment, so the whole thing read as
+  // machine-written — and quoting below your reply is at least as natural as
+  // quoting above it. Dane pastes machine text into his comments (2026-09-05,
+  // on 86bbuzyra: "I copied that and pasted special as Paste and Match Style").
+  //
+  // Measured on the real lane before the fix, driving laneADecision with no
+  // mocks: "no, hold this one" followed by the announcement card gave
+  //     >> inside the window:  ignore | the objection window has 55 minute(s) left
+  //     >> an hour past his comment: MERGE | "announced 60 minute(s) ago with no objection"
+  // — the lane merged the PR he said hold on, and named nobody objecting as
+  // its reason, because his comment had also re-armed the window from his own
+  // words.
+  //
+  // Break-test 1 — delete the `quotesMachineText` call from the objection
+  // filter and every assertion below turns into a merge.
+  const base = { status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY };
+  const card = armed(42, T0 + 10);
+  const pastedUnder = readyTicket({
+    extra: [card, fromDane(`no, hold this one — I want to look\n\n${card.comment_text}`, T0 + 20)],
+  });
+
+  const during = laneADecision({ ...base, comments: pastedUnder, now: T0 + 10 + HOUR });
+  assert.equal(during.act, 'cancel', 'his words ABOVE a pasted card are still his words');
+
+  // The assertion that failed: an hour past HIS comment, past the window his
+  // quote would have re-armed.
+  assert.equal(
+    laneADecision({ ...base, comments: pastedUnder, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'a card pasted under his objection must not merge over the top of him',
+  );
+
+  // And the marker still comes from the LANE's announcement, not from his
+  // comment — the window never restarted.
+  const marker = latestAutoMergeMarker(pastedUnder);
+  assert.equal(marker.commentId, String(card.id), 'the window is the lane\'s, dated to the lane\'s own notice');
+
+  // THE MESSAGE SAYS WHICH IT WAS. Naming him for something a script did is
+  // the dishonesty this whole ticket was filed about, so a comment that is
+  // only his because it carries a pasted card says so.
+  assert.match(during.reason, /quotes a machine card/);
+  const plain = readyTicket({ extra: [card, fromDane('hold off', T0 + 20)] });
+  assert.doesNotMatch(
+    laneADecision({ ...base, comments: plain, now: T0 + 10 + HOUR }).reason,
+    /quotes a machine card/,
+    'a comment he simply typed is not described as a quote',
+  );
+});
+
+test('he quotes a NON-lane machine card from this ticket, underneath his words', () => {
+  // The announcement is not the only card he might paste. Any comment already
+  // on the ticket, reproduced whole with words of his around it, was assembled
+  // by a person — a loop writes fresh prose, it does not reprint a card that
+  // is already there. Measured 2026-09-06 over 1,278 ordered pairs drawn from
+  // 189 real machine cards on 60 Loop Queue tickets: ZERO machine card
+  // contains another comment whole, so this costs the lane nothing.
+  //
+  // Break-test 2 — drop the containment half of `quotesMachineText` (keep only
+  // the marker half) and this one turns into a merge.
+  const verdict = fromMachine(
+    '[CC-starcaster loop-review] REVIEW: PASSED — every gate re-run on the branch, break-tested, checked out and driven by hand',
+    T0 + 5,
+  );
+  const comments = readyTicket({
+    extra: [
+      armed(42, T0 + 10),
+      verdict,
+      fromDane(`no — hold this one, I want to read it first\n\n${verdict.comment_text}`, T0 + 20),
+    ],
+  });
+  assert.equal(
+    laneADecision({ status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY, comments, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'his words around a card copied off this ticket are still his words',
+  );
+});
+
+test('HE PASTES WITHOUT THE FORMATTING — the third door, and the one that merged', () => {
+  // ROUND 3 OF THIS TICKET. Sign 2 above compares his comment against the
+  // cards on the ticket, and it used to compare the RAW TEXT with only its
+  // whitespace collapsed — on the premise that "whitespace is what a paste is
+  // least likely to preserve exactly". Markdown is. Dane said how he pastes,
+  // in his own words, on 86bbuzyra two days before this was found:
+  //
+  //     "I copied that and pasted special as Paste and Match Style."
+  //
+  // That drops the formatting. The stored card carries `**` and backticks; his
+  // copy does not; containment failed on the marks alone. His comment was
+  // still stamped — the `[machine]` line is plain text and survives any paste
+  // — so it stayed discounted, and the lane merged the PR he said hold on,
+  // reason "announced 90 minute(s) ago with no objection".
+  //
+  // Measured on the real board: 456 of 679 stamped machine cards (67%) carry
+  // emphasis or code marks that a rendered paste drops, so this was the common
+  // case, not an edge one.
+  //
+  // Break-test — put `normalizeForQuoting` back to `replace(/\s+/g, ' ')` and
+  // both assertions below turn into merges.
+  const base = { status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY };
+
+  // A card with the markdown these cards really carry.
+  const verdict = fromMachine(
+    '**REVIEW: PASSED** — every gate re-run on the branch, `npm run typecheck` clean, '
+    + '*break-tested* four ways, checked out and driven by hand.\n\n```js\nconst ok = true;\n```',
+    T0 + 5,
+  );
+  // What paste-and-match-style puts in his comment: the words, no marks.
+  const asPasted = verdict.comment_text
+    .replace(/```[a-z]*\n?/g, '')
+    .replace(/\*\*/g, '')
+    .replace(/\*/g, '')
+    .replace(/`/g, '');
+  assert.notEqual(asPasted, verdict.comment_text, 'the fixture must actually differ from the stored card');
+
+  const comments = readyTicket({
+    extra: [armed(42, T0 + 10), verdict, fromDane(`no — hold this one, I want to read it first\n\n${asPasted}`, T0 + 20)],
+  });
+
+  const during = laneADecision({ ...base, comments, now: T0 + 10 + HOUR });
+  assert.equal(during.act, 'cancel', 'a card he pasted WITHOUT its formatting is still a card he pasted');
+
+  // An hour past HIS comment — the assertion that merged.
+  assert.equal(
+    laneADecision({ ...base, comments, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'a formatting-stripped paste must not merge over the top of him',
+  );
+
+  // And the verbatim paste, which already worked, still does — widening the
+  // normaliser must not have traded one ordering for the other.
+  const verbatim = readyTicket({
+    extra: [armed(42, T0 + 10), verdict, fromDane(`no — hold this one\n\n${verdict.comment_text}`, T0 + 20)],
+  });
+  assert.equal(
+    laneADecision({ ...base, comments: verbatim, now: T0 + 20 + HOUR + 1 }).act,
+    'cancel',
+    'the verbatim paste is unaffected',
+  );
+});
+
+test('WHAT THIS DOES NOT COVER, pinned so it is found on purpose and not by accident', () => {
+  // Said plainly rather than left to be discovered a fourth time — and this
+  // comment has BEEN wrong once already, which is the reason to distrust it.
+  // Round 2 wrote it claiming the foreign card was the only case left, while
+  // the far likelier one — a card off THIS ticket, pasted with its formatting
+  // dropped — was sailing through sign 2 on the asterisks alone. Round 3 found
+  // that one live. What is pinned here is the remainder AFTER that fix.
+  //
+  // Neither sign `quotesMachineText` reads can see a card pasted from a
+  // DIFFERENT ticket that is not one of this lane's notices: the text is
+  // stamped, the lane has never seen it, so containment has nothing to compare
+  // against, and nothing in the body says a person put it there.
+  //
+  // Closing it needs the stamp bound to the body it was written for — a digest
+  // in the stamp line — which changes what every card a loop posts looks like
+  // and is this ticket's stated non-goal. If a later change DOES close it,
+  // this test fails, and that is the point: the note above it has to be
+  // rewritten rather than quietly outliving the limit it describes.
+  const foreign = stampMachineComment('BUILD: a card posted on some other ticket entirely, pasted in from elsewhere');
+  const comments = readyTicket({
+    extra: [armed(42, T0 + 10), fromDane(`no, hold this one\n\n${foreign}`, T0 + 20)],
+  });
+  assert.equal(
+    laneADecision({ status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY, comments, now: T0 + 20 + HOUR + 1 }).act,
+    'merge',
+    'the known gap: a stamped card from another ticket is still read as a machine\'s',
+  );
+});
+
+test('isLaneNotice recognises the lane\'s own voice by BOTH ends, not by a marker', () => {
+  // A requote carries the marker line and the stamp. What it cannot carry is
+  // both ENDS of the notice with nothing of his outside them.
+  //
+  // Break-test 3 — let `isLaneNotice` return on the closing marker alone
+  // (drop the opening check) and the two "pasted" assertions below fail.
+  const notice = announcementNotice({
+    pr: { number: 42, url: 'https://github.com/x/y/pull/42' }, files: DOCS_ONLY, deadlineLabel: '6:00pm EDT', at: 'iso',
+  }).body;
+  const cancelNotice = cancellationNotice({
+    pr: { number: 42, url: 'https://github.com/x/y/pull/42' }, why: 'you commented', at: 'iso',
+  }).body;
+
+  assert.equal(isLaneNotice(stampMachineComment(notice)), 'armed');
+  assert.equal(isLaneNotice(stampMachineComment(cancelNotice)), 'cancelled');
+  assert.equal(isLaneNotice(notice), 'armed', 'the stamp is optional — the notice is recognised by what the LANE wrote');
+
+  assert.equal(isLaneNotice(`${notice}\n\nno, hold this one`), null, 'his words below it break the close');
+  assert.equal(isLaneNotice(`no, hold this one\n\n${notice}`), null, 'his words above it break the opening');
+  assert.equal(isLaneNotice(markerLine('armed', 42, 'iso')), null, 'a bare marker line is not a notice');
+  assert.equal(isLaneNotice(''), null);
+  assert.equal(isLaneNotice(null), null);
+
+  // Two cards spliced together must not pass by borrowing an end from each.
+  const other = announcementNotice({
+    pr: { number: 99, url: 'https://github.com/x/y/pull/99' }, files: DOCS_ONLY, deadlineLabel: '6:00pm EDT', at: 'iso',
+  }).body;
+  const spliced = `${other.split('\n')[0]}\n${notice.split('\n').slice(1).join('\n')}`;
+  assert.equal(isLaneNotice(spliced), null, 'the opening and the marker must name the same PR');
+});
+
+test('an unrecognised CANCELLED marker is still terminal — the skip fails safe both ways', () => {
+  // The two kinds fail safe in OPPOSITE directions, and reading them the same
+  // way is a regression round 2 caught before it shipped. Skipping an `armed`
+  // marker arms nothing, which is safe. Skipping a `cancelled` one makes the
+  // ticket read as never announced, so the lane announces AGAIN with no fresh
+  // review PASS — the guard that exists so he does not have to say no twice.
+  //
+  // Break-test 4 — apply the `isLaneNotice` guard to `cancelled` as well as
+  // `armed`, and this turns into `announce`.
+  const bare = [
+    prComment(42, T0 - 1000),
+    reviewPass(T0),
+    armed(42, T0 + 10),
+    comment(markerLine('cancelled', 42, 'iso'), { at: T0 + 30, user: OPERATOR }),
+  ];
+  const d = laneADecision({
+    status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY, comments: bare, now: T0 + 30 + HOUR + 1,
+  });
+  assert.equal(d.act, 'ignore', 'a cancellation the lane cannot vouch for still stops it');
+  assert.match(d.reason, /you stopped the last auto-merge/);
+});
+
+test('THE COUPLING: a real announcement, posted the real way, still arms', () => {
+  // The guard above makes the lane's OWN notice depend on the stamp, so if the
+  // posting path ever stopped stamping, Lane A would go silently dead — it
+  // would announce every pass and never find its own announcement. That is
+  // two modules agreeing, which is the kind of thing that drifts.
+  //
+  // So this asserts the whole chain with no live post: the body the lane
+  // builds, sent to the path `postLaneNotice` uses, through the same
+  // `stampCommentBody` that `call()` applies at the door.
+  const PATH = '/api/v2/task/86bbv8nvy/comment';
+  assert.equal(isCommentPostPath(PATH), true, 'the notice path is a comment post, so it gets stamped');
+
+  const notice = announcementNotice({
+    pr: { number: 42 }, files: DOCS_ONLY, deadlineLabel: '6:00pm EDT', at: 'iso',
+  });
+  const sent = stampCommentBody({ comment_text: notice.body });
+  const asStored = comment(sent.comment_text, { at: T0 + 10 });
+
+  const read = latestAutoMergeMarker([asStored]);
+  assert.ok(read, 'the lane can read back its own posted announcement');
+  assert.equal(read.kind, 'armed');
+  assert.equal(read.pr, 42);
+});
+
+test('an unstamped marker arms nothing at all — it is not the lane talking', () => {
+  // The safe direction, stated on purpose: a marker nobody can confirm a
+  // machine wrote leaves the ticket un-announced, so nothing merges on it.
+  // Re-announcing costs a fresh review PASS, like every other cancel.
+  const forged = [
+    prComment(42, T0 - 1000),
+    reviewPass(T0),
+    comment(markerLine('armed', 42, 'iso'), { at: T0 + 10, user: OPERATOR }),
+  ];
+  const d = laneADecision({
+    status: 'Ready to launch', operatorId: OPERATOR, files: DOCS_ONLY, comments: forged, now: T0 + 10 + HOUR + 1,
+  });
+  assert.notEqual(d.act, 'merge', 'an unstamped marker must never carry a merge');
+  assert.equal(d.act, 'announce', 'the ticket reads as never announced, so the lane announces properly');
 });
 
 test('cancelling is terminal — no re-announcement without a FRESH review pass', () => {
@@ -557,7 +1083,7 @@ test('a PR that gains a runtime file DURING the window does not merge', () => {
     files: [...DOCS_ONLY, 'lib/projectScope.js'],
   });
   assert.equal(d.act, 'cancel');
-  assert.match(d.reason, /no longer a Lane A change/);
+  assert.match(d.reason, /no longer eligible for any auto-merge lane/);
   assert.match(d.reason, /lib\/projectScope\.js/);
 });
 
@@ -586,8 +1112,8 @@ test('the announcement names the deadline, the files, and how to stop it', () =>
   for (const f of DOCS_ONLY) assert.ok(n.body.includes(f), `${f} must be listed`);
   // The body carries its own marker, so what a later pass reads and what he
   // was told are the same comment by construction.
-  assert.deepEqual(parseAutoMergeMarker(n.body), { kind: 'armed', pr: 42 });
-  assert.deepEqual(parseAutoMergeMarker(n.marker), { kind: 'armed', pr: 42 });
+  assert.deepEqual(parseAutoMergeMarker(n.body), { kind: 'armed', pr: 42, lane: 'A' });
+  assert.deepEqual(parseAutoMergeMarker(n.marker), { kind: 'armed', pr: 42, lane: 'A' });
 });
 
 test('a cancellation says nothing merged, and promises no second announcement', () => {
@@ -599,7 +1125,7 @@ test('a cancellation says nothing merged, and promises no second announcement', 
   assert.match(n.body, /Nothing was merged/i);
   assert.match(n.body, /still Ready to launch/);
   assert.match(n.body, /fresh review/);
-  assert.deepEqual(parseAutoMergeMarker(n.body), { kind: 'cancelled', pr: 42 });
+  assert.deepEqual(parseAutoMergeMarker(n.body), { kind: 'cancelled', pr: 42, lane: 'A' });
 });
 
 test('every notice pairs its promise with the marker it writes', () => {
@@ -703,10 +1229,21 @@ test('the relay merges through the SAME gate, not a second one', () => {
   // does — same gate, same marker, same Live transition". A second merge
   // implementation would be a second set of preconditions to keep in step,
   // and the one that drifted would be the one nobody was watching.
-  assert.match(RELAY, /lane: \{ name: 'A', decision, files: decision\.eligibility\.files \}/,
+  assert.match(RELAY, /lane: \{ name: decision\.lane \|\| 'A', decision, files: decision\.eligibility\.files \}/,
     'the lane must reach the merge through runMergeStep');
-  const mergeCommands = (RELAY.match(/'pr', 'merge'/g) || []).length;
-  assert.equal(mergeCommands, 1, `there must be exactly ONE place that merges a PR, found ${mergeCommands}`);
+  // COUNT WHAT PERFORMS A MERGE, NOT WHAT SHARES ITS VERB. `gh pr merge
+  // --auto` and `gh pr merge --disable-auto` arm and disarm GitHub's own
+  // auto-merge and merge nothing themselves (task 86bbup3u1); counting them
+  // as merge implementations would either fail this guard forever or, if the
+  // number were simply bumped to 3, stop it noticing a genuine second merge.
+  const mergeInvocations = RELAY.match(/'pr', 'merge'.*/g) || [];
+  const performing = mergeInvocations.filter((line) => !/'--auto'|'--disable-auto'/.test(line));
+  assert.equal(performing.length, 1,
+    `there must be exactly ONE place that merges a PR, found ${performing.length}`);
+  // And the arming calls really are arming: an `--auto` that lost its flag
+  // would merge immediately, past every wait this path exists to respect.
+  assert.equal(mergeInvocations.length - performing.length, 2,
+    'expected exactly two auto-merge control calls (arm and disarm)');
   const gateCalls = (RELAY.match(/githubGate\(/g) || []).length;
   assert.ok(gateCalls >= 1, 'the lane must not re-implement mergeability');
 });
@@ -766,7 +1303,17 @@ test('a lane merge threads its marker under the ANNOUNCEMENT, not an undefined c
   // filed a false "could not write the dedup marker" under the very section
   // the self-disable watches. Every auto-merge would have disabled the lane.
   assert.match(RELAY, /const authorizingComment = lane \? decision\.announcementId : decision\.commentId;/);
-  assert.match(RELAY, /markMergeHandled\(authorizingComment, task, unchecked, mergedRecord\.marker\)/);
+  // The bookkeeping moved into `recordMergedTicket` (task 86bbup3u1), because
+  // there are now two ways a merge ends — this pass merging, and GitHub's
+  // auto-merge landing it between passes — and both owe the identical trail.
+  // What this guard is about is unchanged: the marker threads under
+  // `authorizingComment`, which is the announcement for a lane.
+  assert.match(RELAY, /markMergeHandled\(authorizingComment, task, unchecked, record\.marker\)/,
+    'the shared record path must thread the marker under the authorizing comment');
+  assert.match(RELAY, /await recordMergedTicket\(mergedRecord, pr\)/,
+    'the operator-authorised merge must go through the shared record path');
+  assert.match(RELAY, /await recordMergedTicket\(record, pr\)/,
+    'the already-merged path must go through the same shared record path');
   assert.match(RELAY, /mergedNotice\(\{\n\s*commentId: authorizingComment,/);
   const laneSection = RELAY.slice(RELAY.indexOf('async function runMergeStep'), RELAY.indexOf('function ledgerPath'));
   assert.equal(/mergedRecord\.marker[\s\S]*decision\.commentId/.test(laneSection.slice(laneSection.indexOf('MERGED PR'))), false,
@@ -799,13 +1346,324 @@ test('a truncated file list is refused rather than judged', () => {
 test('a dry run announces nothing, cancels nothing and merges nothing', () => {
   const laneSection = RELAY.slice(RELAY.indexOf('Lane A: announce, wait one hour, merge'));
   for (const phrase of [
-    'DRY RUN — would announce Lane A',
-    'DRY RUN — would cancel Lane A',
+    'DRY RUN — would announce Lane ${laneName}',
+    'DRY RUN — would cancel Lane ${cancelLane}',
     'DRY RUN — would auto-merge PR',
     'DRY RUN — would post to the bus',
   ]) {
     assert.ok(laneSection.includes(phrase), `dry run must cover: ${phrase}`);
   }
+});
+
+// ── Lane B: the pipeline's own tooling (task 86bbuzyra) ─────────────────────
+//
+// Overnight 2026-09-03 nine pull requests merged and Lane A merged none,
+// because the pipeline had spent the night building on ITSELF. Dane ruled the
+// boundary on 2026-09-04: "A — scripts/, docs/ and test files only", with lib/
+// explicitly excluded because server.js requires it directly.
+
+test('a PR that is all pipeline tooling is eligible, and it is Lane B', () => {
+  const r = laneEligibility([
+    'scripts/builder/loopNote.js',
+    'scripts/builder/loopNote.test.js',
+    'scripts/weekly_report.mjs',
+  ]);
+  assert.equal(r.eligible, true, 'scripts/ is what Lane B exists to carry');
+  assert.equal(r.lane, 'B');
+  assert.match(r.reason, /pipeline's own tooling/);
+});
+
+test('tests and docs are still Lane A, not dragged into B', () => {
+  // A test file inside scripts/ is one of hundreds. If it read as Lane B the
+  // narrower lane would effectively stop existing, and the digest would stop
+  // being able to say which risk was actually taken.
+  const r = laneEligibility(['scripts/builder/loopNote.test.js', 'docs/WORK-LOG.md']);
+  assert.equal(r.eligible, true);
+  assert.equal(r.lane, 'A');
+});
+
+test('the widest lane any single file needs is the lane the whole PR runs in', () => {
+  const r = laneEligibility(['docs/WORK-LOG.md', 'scripts/weekly_report.mjs']);
+  assert.equal(r.lane, 'B', 'one tooling file makes the whole PR a Lane B merge');
+});
+
+test('every tenant-facing tree is refused, and the refusal names the file', () => {
+  // Acceptance criterion 2: a test per excluded directory. These are the trees
+  // a client's browser can reach, or that the live server loads.
+  const excluded = [
+    'lib/projectScope.js',
+    'lib/builder-client/builder-template.ts',
+    'lib/builder/template.js',
+    'lib/authStore.js',
+    'components/builder/SettingsPanel.tsx',
+    'public/js/core.js',
+    'src/css/main.css',
+    'routes/index.js',
+    'api/[...slug].js',
+    'package.json',
+    'vercel.json',
+  ];
+  for (const f of excluded) {
+    const r = laneEligibility(['scripts/builder/loopNote.js', f]);
+    assert.equal(r.eligible, false, `${f} must not be auto-mergeable`);
+    assert.equal(r.blockedBy, f, `the refusal must name ${f}`);
+    assert.equal(r.lane, null);
+  }
+});
+
+test('lib/ is refused even though the doctrine table lists it under Lane B', () => {
+  // The doctrine's Lane B row reads "lib/, scripts/, tooling". Dane REMOVED
+  // lib/ when he chose the boundary, because server.js requires it directly
+  // (lib/config, lib/environmentBanner, lib/publicSiteHosts, lib/devTeamStore)
+  // and lib/builder-client bundles into a client's page. This test is here so
+  // a future reader who finds the doctrine table and "fixes" the code to match
+  // it fails instead.
+  for (const f of ['lib/config.js', 'lib/environmentBanner.js', 'lib/publicSiteHosts.js', 'lib/devTeamStore.js']) {
+    assert.equal(laneEligibility([f]).eligible, false, `${f} is loaded by server.js`);
+  }
+});
+
+test('governance still blocks FIRST, and one governance file refuses the whole PR', () => {
+  // Acceptance criterion 3. The order matters: a governance file that is also
+  // allowed by the lane must be refused for being governance, with that reason.
+  const r = laneEligibility(['scripts/builder/loopNote.js', 'scripts/builder/mergeOnComment.js']);
+  assert.equal(r.eligible, false);
+  assert.equal(r.blockedBy, 'scripts/builder/mergeOnComment.js');
+  assert.match(r.reason, /machinery that governs merging/);
+});
+
+test('the merge machinery is governance as SOURCE, not only as tests', () => {
+  // THE HOLE LANE B WOULD HAVE OPENED. Before this, only `<stem>.test.js` was
+  // listed — the sources needed no rule because Lane A refused anything that
+  // was not a test or a doc. Lane B makes scripts/ eligible, so the accident
+  // that protected them is gone. Doctrine criterion 4: "a machine may never
+  // auto-merge a change to the machinery that governs machines ... THE MERGE
+  // STEP ITSELF".
+  for (const f of [
+    'scripts/builder/mergeOnComment.js',
+    'scripts/builder/autoMergeLane.js',
+    'scripts/builder/autoMergeLedgerFile.js',
+    'scripts/builder/passClaim.js',
+    'scripts/builder/wipCap.js',
+    'scripts/builder/reviewGate.js',
+    'scripts/builder/preflight.js',
+    'scripts/builder/pipelinePause.js',
+    'scripts/clickup_direct.mjs',
+    'scripts/review_gate.mjs',
+    'scripts/pipeline.mjs',
+    'scripts/lib/clickup.cjs',
+    'scripts/builder/clickupRetry.js',
+  ]) {
+    assert.ok(governanceReason(f), `${f} is machinery that governs machines`);
+    assert.equal(laneEligibility([f]).eligible, false, `${f} must never auto-merge`);
+  }
+});
+
+test('the retry policy inside the one ClickUp door is governance too', () => {
+  // scripts/lib/clickup.cjs is governance because a change there changes every
+  // automated write at once. It delegates when-to-wait-and-retry wholesale to
+  // clickupRetry.js, so that file decides the same thing and must be blocked
+  // with it — otherwise the door is guarded and its lock is not.
+  //
+  // This is not hypothetical. check:automerge-reach failed on 2026-09-05, on
+  // the first catch-up merge after the shared client landed (#592): the client
+  // is reachable from the server (routes/publicSite.js ->
+  // lib/bugReportForward.js -> lib/clickupForward.js -> scripts/lib/clickup.cjs
+  // -> scripts/builder/clickupRetry.js), which put an auto-mergeable file on a
+  // live path. Blocking it as governance is the remedy that check names.
+  for (const f of ['scripts/builder/clickupRetry.js', 'scripts/builder/clickupRetry.test.js']) {
+    assert.ok(governanceReason(f), `${f} governs every automated ClickUp write`);
+    assert.equal(laneEligibility([f]).eligible, false, `${f} must never auto-merge`);
+  }
+  // And it must refuse the whole PR, not just itself.
+  const r = laneEligibility(['scripts/builder/loopNote.js', 'scripts/builder/clickupRetry.js']);
+  assert.equal(r.eligible, false);
+  assert.equal(r.blockedBy, 'scripts/builder/clickupRetry.js');
+});
+
+test('the spend policy inside the one ClickUp door is governance too', () => {
+  // The SECOND crossing the reach check caught, one catch-up merge after the
+  // first (2026-09-05). scripts/lib/clickup.cjs delegates *whether a call may
+  // be made at all* to two files that landed with #592: clickupLedger.cjs
+  // holds the machine-local spend budget and the reserve scheduled jobs leave
+  // alone, and clickupCaller.cjs decides which kind of caller this process is.
+  // Between them they can silence every automated ClickUp write on the machine
+  // — the stop switch, the review gate and this lane's own announcements
+  // included — so a change there changes every automated write at once, which
+  // is the sentence that made the door itself governance.
+  //
+  // Reached from the server by the same path the retry policy is:
+  // routes/publicSite.js -> lib/bugReportForward.js -> lib/clickupForward.js
+  // -> scripts/lib/clickup.cjs -> {clickupLedger,clickupCaller}.cjs.
+  for (const f of [
+    'scripts/lib/clickupLedger.cjs',
+    'scripts/lib/clickupCaller.cjs',
+    'scripts/builder/clickupLedger.test.js',
+    'scripts/builder/clickupCaller.test.js',
+  ]) {
+    assert.ok(governanceReason(f), `${f} governs every automated ClickUp write`);
+    assert.equal(laneEligibility([f]).eligible, false, `${f} must never auto-merge`);
+  }
+  // And each refuses the whole PR, not just itself.
+  for (const f of ['scripts/lib/clickupLedger.cjs', 'scripts/lib/clickupCaller.cjs']) {
+    const mixed = laneEligibility(['scripts/builder/loopNote.js', f]);
+    assert.equal(mixed.eligible, false);
+    assert.equal(mixed.blockedBy, f);
+  }
+});
+
+test('git hooks and shell runners are governance, though neither is a .js file', () => {
+  // Doctrine criterion 4 names GIT HOOKS outright, and they live under
+  // scripts/git-hooks/ with no extension at all — so no stem rule would ever
+  // have matched them. Every .sh under scripts/ is a runner, an installer or a
+  // schedule: what decides WHEN the automation fires, and on which machine.
+  for (const f of [
+    'scripts/git-hooks/pre-commit',
+    'scripts/git-hooks/pre-push',
+    'scripts/loop_runner.sh',
+    'scripts/run_bus_relay.sh',
+    'scripts/install_pipeline_pulse.sh',
+    'scripts/provision_node.sh',
+  ]) {
+    assert.ok(governanceReason(f), `${f} governs when or whether the machines run`);
+    assert.equal(laneEligibility([f]).eligible, false);
+  }
+});
+
+test("the referee's and the gates' own helpers are governance too", () => {
+  // REVIEW ROUND 2 ON TASK 86bbuzyra (2026-09-06). GOVERNANCE_STEMS protects
+  // three kinds of machinery — the merge step, the referee that decides what a
+  // review PASS is, and the gates — but only the merge step had a guard asking
+  // what it IMPORTS. So the rot that guard exists to stop was still open for
+  // the other two, and this branch is what exposed it: before Lane B,
+  // `scripts/` was refused by accident. All five were carriable by Lane B when
+  // the send-back was written; the reproduction was:
+  //
+  //   laneEligibility(['scripts/builder/reviewGateClickup.js'])  -> lane B
+  //
+  // Each decides something the machinery above then acts on, so a machine that
+  // could merge one could change what the referee accepts or what a gate
+  // checks, and grade itself afterwards.
+  for (const f of [
+    'scripts/builder/reviewGateClickup.js', // what the referee reads back from ClickUp
+    'scripts/builder/clickupTicketLink.js', // what counts as "this PR names its ticket"
+    'scripts/builder/loopTrail.js', // the trail the referee reads
+    'scripts/lib/generated_files.cjs', // the gates' definition of a generated file
+    'scripts/pin_asset_versions.cjs', // check_asset_versions' targets AND its hash
+  ]) {
+    assert.ok(governanceReason(f), `${f} governs what the referee or a gate decides`);
+    assert.equal(laneEligibility([f]).eligible, false, `${f} must never auto-merge`);
+  }
+});
+
+test('...and blocking them did NOT narrow Lane B into uselessness', () => {
+  // The half that is easy to fake: an allowlist that is subtly too strict
+  // refuses everything and looks exactly like the situation this ticket was
+  // filed to fix. Ordinary pipeline tooling next door to all five must still
+  // be carried.
+  for (const f of [
+    'scripts/builder/loopNote.js',
+    'scripts/builder/operatorCard.js',
+    'scripts/builder/buildStart.js',
+    'scripts/builder/pullRequestTitle.js',
+    'docs/WORK-LOG.md',
+  ]) {
+    assert.equal(governanceReason(f), null, `${f} is ordinary tooling, not governance`);
+  }
+  assert.equal(laneEligibility([
+    'scripts/builder/loopNote.js',
+    'scripts/builder/loopNote.test.js',
+    'docs/WORK-LOG.md',
+  ]).lane, 'B', 'a pipeline-internal PR must still be Lane B eligible');
+});
+
+test('the gates themselves are governance — every scripts/check_* file', () => {
+  const names = fs.readdirSync(path.join(__dirname, '..')).filter((n) => n.startsWith('check_'));
+  assert.ok(names.length >= 10, 'expected the check_* family to exist');
+  for (const n of names) {
+    assert.ok(governanceReason(`scripts/${n}`), `scripts/${n} is a gate and must not auto-merge`);
+  }
+});
+
+test('Lane B carries only known script extensions, never anything else', () => {
+  // `^scripts/` on its own carried scripts/git-hooks/pre-commit, every .sh
+  // runner, and would carry a .sql migration the day somebody adds one —
+  // which doctrine criterion 1 calls out as NOT reversible by a single revert.
+  for (const f of ['scripts/x.test.js.bak', 'scripts/migrate.sql', 'scripts/notes.txt', 'scripts/a.yml']) {
+    assert.equal(laneForFile(f), null, `${f} must not be carried by any lane`);
+    assert.equal(laneEligibility([f]).eligible, false);
+  }
+  for (const f of ['scripts/a.js', 'scripts/a.mjs', 'scripts/a.cjs', 'scripts/fixtures/a.json']) {
+    assert.equal(laneForFile(f), 'B', `${f} is ordinary pipeline tooling`);
+  }
+});
+
+test('the empty file list is still refused, and still names no lane', () => {
+  // Acceptance criterion 4: the vacuous-truth guard survives the widening.
+  assert.equal(laneEligibility([]).eligible, false);
+  assert.equal(laneEligibility([]).lane, null);
+  assert.match(laneEligibility([]).reason, /no changed files/);
+});
+
+test('BREAK TEST — the lane can actually PASS, on a real PR shape', () => {
+  // The ticket's own warning: "a widened lane whose allowlist is subtly wrong
+  // refuses everything and looks exactly like the current situation, which is
+  // the failure being fixed." A lane that only ever refuses is the bug.
+  //
+  // These are the files of PR #562 (Backfill the missing tags onto the three
+  // imported Delray blog posts), which merged on a human's word and which this
+  // lane would have carried.
+  const r = laneEligibility([
+    'scripts/blog_backfill_import_tags.cjs',
+    'scripts/builder/blogBackfillImportTags.js',
+    'scripts/builder/blogBackfillImportTags.test.js',
+  ]);
+  assert.equal(r.eligible, true, 'a lane that refuses everything is the bug being fixed');
+  assert.equal(r.lane, 'B');
+});
+
+test('the announcement says WHICH lane, and what that lane means', () => {
+  const b = announcementNotice({
+    pr: { number: 9, url: 'https://github.com/o/r/pull/9' },
+    files: ['scripts/weekly_report.mjs'],
+    deadlineLabel: '9:15pm EDT',
+    at: '2026-09-04T20:15:00.000Z',
+    lane: 'B',
+  });
+  assert.match(b.body, /Lane B/);
+  assert.match(b.body, /pipeline's own tooling/);
+  assert.match(b.body, /no file\nthe live server loads/);
+  assert.deepEqual(parseAutoMergeMarker(b.body), { kind: 'armed', pr: 9, lane: 'B' });
+  // And Lane A's wording is untouched — he has read it before and it should
+  // not change meaning under him.
+  const a = announcementNotice({
+    pr: { number: 9, url: 'https://github.com/o/r/pull/9' },
+    files: ['docs/a.md'],
+    deadlineLabel: '9:15pm EDT',
+    at: '2026-09-04T20:15:00.000Z',
+  });
+  assert.match(a.body, /nothing but tests and documentation/);
+  assert.match(a.body, /Lane A/);
+});
+
+test('auto-merge-status reports Lane B as plainly as Lane A', () => {
+  // Acceptance criterion 6.
+  const status = RELAY.slice(RELAY.indexOf("console.log(`LANE A:"));
+  assert.match(status, /LANE B:/, 'the new lane must appear in auto-merge-status');
+  assert.match(status, /carries:/, 'each lane must say what it carries');
+  assert.match(status, /check:automerge-reach/, 'the boundary guard must be named');
+});
+
+test("Dane's condition 1 shipped: the boundary cannot silently expire", () => {
+  // He attached this to choosing the boundary, in these words: "the build
+  // should include a check that fails if an auto-mergeable folder becomes
+  // reachable from the server. Otherwise this decision silently expires."
+  const check = path.join(__dirname, '../check_automerge_reach.cjs');
+  assert.ok(fs.existsSync(check), 'scripts/check_automerge_reach.cjs must exist');
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
+  assert.equal(pkg.scripts['check:automerge-reach'], 'node scripts/check_automerge_reach.cjs');
+  const ci = fs.readFileSync(path.join(__dirname, '../../.github/workflows/ci.yml'), 'utf8');
+  assert.match(ci, /npm run check:automerge-reach/, 'the guard must run in CI, not only by hand');
 });
 
 test('this very change could not have auto-merged itself', () => {
@@ -867,4 +1725,260 @@ test('stripping the fence does NOT loosen resume into a substring match', () => 
 
 test('a fenced stop still stops', () => {
   assert.equal(switchCommand('```\nstop auto-merging\n```'), 'stop');
+});
+
+/*
+ * THE LATCH (2026-09-03, task 86bbt0mz6).
+ *
+ * The lane latched itself off on 2026-08-30 and stayed off for two days; it
+ * did it again on 2026-09-03 and stayed off 10.8 hours, found only because
+ * Dane asked why nothing had merged since 6:27pm. The latch was RIGHT both
+ * times. What made it undiagnosable:
+ *
+ *   - the stored reason kept only a COUNT, and `unchecked` holds a full
+ *     English sentence for every item — all discarded at the moment of
+ *     latching;
+ *   - the stored sentence says "this pass", so replaying it made a
+ *     ten-hour-old finding read as a live verdict, one line above the same
+ *     pass reporting "0 could not be checked";
+ *   - and after the first announcement, nothing ever said it was still off.
+ */
+const {
+  ledgerAfterLatchNag, persistedLatchWhy, latchNagDue,
+  LATCH_ITEM_CAP, LATCH_NAG_EVERY_MS,
+} = require('./autoMergeLane.js');
+
+const THREE = ['could not read PR #1', 'could not post to the bus', 'could not stamp the note'];
+
+test('a latch stores the sentences themselves, not just how many there were', () => {
+  const l = ledgerAfterDisable(null, 'why', 1000, { items: THREE, trigger: 'unchecked' });
+  assert.deepEqual(l.disabled.items, THREE);
+  assert.equal(l.disabled.droppedItems, 0);
+  assert.equal(l.disabled.trigger, 'unchecked');
+});
+
+test('auto-merge-status can read those sentences back off a persisted latch', () => {
+  const l = ledgerAfterDisable(null, 'why', 1000, { items: THREE, trigger: 'unchecked' });
+  const d = selfDisableState({ persisted: l.disabled });
+  assert.deepEqual(d.items, THREE);
+  assert.equal(d.disabled, true);
+  assert.equal(d.fresh, false);
+});
+
+test('the stored list is capped, and says how many it dropped', () => {
+  const many = Array.from({ length: LATCH_ITEM_CAP + 7 }, (_, i) => `item ${i}`);
+  const l = ledgerAfterDisable(null, 'why', 1000, { items: many, trigger: 'unchecked' });
+  assert.equal(l.disabled.items.length, LATCH_ITEM_CAP);
+  assert.equal(l.disabled.droppedItems, 7);
+});
+
+/*
+ * BREAK-TEST: drop the `.replace(/^this pass/...)` and this fails — the
+ * replayed sentence claims the CURRENT pass could not verify something, which
+ * is what put "could not fully verify 4 thing(s)" and "0 could not be checked"
+ * one line apart in the same log for ten hours.
+ */
+test('a replayed latch is re-tensed and dated, so it cannot read as this pass\'s finding', () => {
+  const at = Date.UTC(2026, 8, 3, 16, 41, 10);
+  const why = persistedLatchWhy({ at, why: 'this pass could not fully verify 4 thing(s), so it is not in a position to merge on its own word' });
+  assert.ok(!why.startsWith('this pass'), 'a stored reason must not be replayed in the present tense');
+  assert.match(why, /latched off since/);
+  assert.match(why, /2026-09-03/, 'it must say WHEN, or "still broken" and "broke this morning" look alike');
+});
+
+/*
+ * BREAK-TEST: return `{ due: true }` unconditionally and this fails — the nag
+ * would fire on every pass, which is the "all is well x365" failure the bus
+ * throttles exist to prevent, in its noisy mirror image.
+ */
+test('a latch under a day old does not nag', () => {
+  const at = 1_000_000_000;
+  const d = selfDisableState({ persisted: { at, why: 'w' } });
+  assert.equal(latchNagDue({ disabled: d, now: at + 3600_000 }).due, false);
+});
+
+test('a latch still in force after a day says so again', () => {
+  const at = 1_000_000_000;
+  const d = selfDisableState({ persisted: { at, why: 'w' } });
+  const out = latchNagDue({ disabled: d, now: at + LATCH_NAG_EVERY_MS + 1 });
+  assert.equal(out.due, true);
+  assert.match(out.why, /still latched/);
+});
+
+test('a FRESH latch never nags — it has just announced itself', () => {
+  const d = selfDisableState({ unchecked: ['one'] });
+  assert.equal(d.fresh, true);
+  assert.equal(latchNagDue({ disabled: d, now: Date.now() }).due, false);
+});
+
+test('the nag clock resets only when a nag is recorded, so it is once a day and not once a pass', () => {
+  const at = 1_000_000_000;
+  const l0 = ledgerAfterDisable(null, 'w', at, { items: ['one'], trigger: 'unchecked' });
+  const nagged = ledgerAfterLatchNag(l0, at + LATCH_NAG_EVERY_MS + 1);
+  const d = selfDisableState({ persisted: nagged.disabled });
+  const soonAfter = latchNagDue({ disabled: d, now: at + LATCH_NAG_EVERY_MS + 2, lastNagAt: nagged.disabled.lastNagAt });
+  assert.equal(soonAfter.due, false, 'a nag just posted must not repeat on the next pass');
+});
+
+/*
+ * Acceptance criterion 3. A red main is a different fact from a verification
+ * failure, and reporting it as "0 things could not be verified" would send
+ * whoever reads it hunting for an unchecked item that never existed.
+ */
+test('a latch for a RED MAIN reports that reason and is not dressed as an unchecked item', () => {
+  const d = selfDisableState({ mainBuildRed: true });
+  assert.equal(d.disabled, true);
+  assert.equal(d.trigger, 'main-red');
+  assert.deepEqual(d.items, []);
+  assert.match(d.why, /red/);
+  assert.ok(!/could not fully verify/.test(d.why));
+});
+
+test('a latch recorded before this change still reads, and says the sentences are gone', () => {
+  const d = selfDisableState({ persisted: { at: 1000, why: 'this pass could not fully verify 4 thing(s)' } });
+  assert.deepEqual(d.items, [], 'an old ledger has no items — it must not invent any');
+  assert.equal(d.disabled, true);
+});
+
+const lane = require('./autoMergeLane.js');
+
+// --- has Lane A ever merged anything? (task 86bbugeda) -----------------------
+//
+// `auto-merge-status` printed `LANE A: RUNNING` beside `ledger: not created
+// yet` on 2026-09-03. Both lines were true and the pair reads as a working
+// lane; the lane had never merged a single pull request in its life. "The gate
+// is open" and "anything has ever come out of it" are different questions.
+
+test('a lane with no ledger file has NEVER merged, and says so', () => {
+  const h = lane.laneAMergeHistory({ ledger: null, fresh: true, readable: true });
+  assert.equal(h.verdict, 'never');
+  assert.equal(h.count, 0);
+  assert.match(h.why, /NEVER merged anything/);
+});
+
+test('a lane that has merged reports how many, all-time', () => {
+  let ledger = null;
+  ledger = lane.ledgerAfterMerge(ledger, { pr: 101, task: 'aaa', at: 1000 }, 1000);
+  ledger = lane.ledgerAfterMerge(ledger, { pr: 102, task: 'bbb', at: 2000 }, 2000);
+  const h = lane.laneAMergeHistory({ ledger, fresh: false, readable: true });
+  assert.equal(h.verdict, 'yes');
+  assert.equal(h.count, 2);
+  assert.match(h.why, /PR #102/);
+});
+
+test('pruning the rate-cap window must NOT walk the all-time count back to zero', () => {
+  // THE BUG THIS PINS. `merges` is pruned to two days because it is the rate
+  // cap's working set. Deriving "has it ever merged" from it would make a lane
+  // that merged plenty last week read as one that has never run — the exact
+  // wrong answer, arriving three days after the right one.
+  const DAY = 24 * 60 * 60 * 1000;
+  const t0 = Date.parse('2026-09-01T00:00:00Z');
+  let ledger = lane.ledgerAfterMerge(null, { pr: 7, task: 'aaa', at: t0 }, t0);
+  assert.equal(ledger.merges.length, 1);
+  assert.equal(ledger.everMerged.count, 1);
+
+  // Five days later a second merge lands. `ledgerAfterMerge` prunes the first
+  // one out of the rate-cap window on the way past, so the window holds ONE
+  // entry while the lane has merged TWO. Counting the window here would report
+  // the wrong number forever, and would report zero on the next quiet week.
+  const later = t0 + 5 * DAY;
+  ledger = lane.ledgerAfterMerge(ledger, { pr: 8, task: 'bbb', at: later }, later);
+  assert.equal(ledger.merges.length, 1, 'the rate-cap window has legitimately pruned the older merge');
+  assert.equal(ledger.everMerged.count, 2, 'the all-time count must not be derived from the pruned window');
+
+  // And once the window empties entirely, the lane must still read as one that
+  // HAS merged — an empty two-day window does not unsay a merge that happened.
+  const muchLater = later + 5 * DAY;
+  const emptied = { ...ledger, merges: ledger.merges.filter((m) => muchLater - m.at < 2 * DAY) };
+  assert.equal(emptied.merges.length, 0);
+  const h = lane.laneAMergeHistory({ ledger: emptied, fresh: false, readable: true });
+  assert.equal(h.verdict, 'yes');
+  assert.equal(h.count, 2);
+});
+
+test('a ledger written before the counter existed answers CANNOT TELL, never "never"', () => {
+  // Confidently wrong is the failure mode here: an old ledger with an empty
+  // window is not evidence of a lane that has never run, and reporting it as
+  // one would send somebody to fix a lane that works.
+  const old = { version: 1, merges: [], switch: null, disabled: null, lastDigestAt: 0 };
+  const h = lane.laneAMergeHistory({ ledger: old, fresh: false, readable: true });
+  assert.equal(h.verdict, 'unknown');
+  assert.match(h.why, /not "never"/);
+});
+
+test('an old ledger with merges still in its window reports what it can, and says the rest is unrecorded', () => {
+  const old = { version: 1, merges: [{ pr: 3, at: 5 }], switch: null, disabled: null, lastDigestAt: 0 };
+  const h = lane.laneAMergeHistory({ ledger: old, fresh: false, readable: true });
+  assert.equal(h.verdict, 'yes');
+  assert.equal(h.count, null, 'the all-time count is genuinely unknown, so it is not invented');
+  assert.match(h.why, /predates the all-time counter/);
+});
+
+test('an unreadable ledger is CANNOT TELL, not a lane that has never merged', () => {
+  const h = lane.laneAMergeHistory({ ledger: null, fresh: false, readable: false });
+  assert.equal(h.verdict, 'unknown');
+  assert.match(h.why, /could not be read/);
+});
+
+test('the all-time counter survives a round trip through asLedger', () => {
+  // The normaliser drops anything it does not recognise, so a field it forgets
+  // to carry is silently lost on the next write — which is how the count would
+  // reset to zero on the first pass after this shipped.
+  let ledger = lane.ledgerAfterMerge(null, { pr: 55, task: 'zzz', at: 1000 }, 1000);
+  const reloaded = JSON.parse(JSON.stringify(ledger));
+  const h = lane.laneAMergeHistory({ ledger: reloaded, fresh: false, readable: true });
+  assert.equal(h.count, 1);
+  assert.match(h.why, /PR #55/);
+});
+
+/*
+ * THE WRAPPER IS THE EDITOR TALKING, NOT HIM (2026-09-06, task 86bbvraw4).
+ *
+ * Dane posted the resume three times over half an hour on 2026-09-06 and the
+ * lane stayed latched off. The near-miss detector quoted what ClickUp had
+ * actually stored: `**resume auto-merging**` — markdown bold he never typed,
+ * carried in on a formatted copy. It took on the fourth try, with Paste and
+ * Match Style.
+ *
+ * This is the SECOND time in six days: stripCodeFormatting was added on
+ * 2026-09-01 (86bbt038u) after ClickUp wrapped the same phrase in a code
+ * fence and cost two days. Fixing one wrapper at a time is how the same
+ * failure keeps coming back, so these cover the class.
+ *
+ * The literal below is the real stored string. A hand-written approximation is
+ * exactly what would have missed it.
+ */
+test('a resume wrapped in the editor formatting he did not type still resumes', () => {
+  const wrapped = [
+    ['**resume auto-merging**', 'markdown bold — the real 2026-09-06 string'],
+    ['__resume auto-merging__', 'underscore bold'],
+    ['*resume auto-merging*', 'italic'],
+    ['~~resume auto-merging~~', 'strikethrough'],
+    ['`resume auto-merging`', 'inline backticks'],
+    ['```cpp\nresume auto-merging\n```', 'fenced block — the 2026-09-01 case'],
+    ['​resume auto-merging​', 'zero-width spaces'],
+    ['﻿resume auto-merging', 'byte order mark'],
+    ['resume auto-merging', 'non-breaking space'],
+    ['resume auto‑merging', 'non-breaking hyphen'],
+    ['resume auto–merging', 'en dash'],
+    ['**Resume Auto-Merging**', 'bold and capitalised'],
+  ];
+  for (const [text, why] of wrapped) {
+    assert.equal(switchCommand(text), 'resume', why);
+  }
+});
+
+test('stripping the wrapper does NOT loosen the whole-message rule', () => {
+  // The strictness is the safety property: a resume that fires when he was
+  // only TALKING about resuming costs an unwanted merge.
+  assert.equal(switchCommand('I will resume auto-merging later'), null);
+  assert.equal(switchCommand('resume auto-merging when CI is green'), null);
+  assert.equal(switchCommand('**resume auto-merging** once #618 lands'), null);
+});
+
+test('a formatted STOP is still a stop — a stop must never be lost', () => {
+  assert.equal(switchCommand('**stop auto-merging**'), 'stop');
+  assert.equal(switchCommand('`stop auto-merging`'), 'stop');
+  // Stop stays a SUBSTRING match, so it survives being said mid-sentence.
+  assert.equal(switchCommand('please **stop auto-merging** for now'), 'stop');
 });

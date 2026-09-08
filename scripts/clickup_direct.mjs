@@ -57,6 +57,8 @@ import os from 'node:os';
 import loopNoteLib from './builder/loopNote.js';
 const { loopNote, heartbeatNote } = loopNoteLib;
 import { spawnSync } from 'node:child_process';
+import clickupLib from './lib/clickup.cjs';
+const { clickupFetch, ledger: clickupLedger, callerKind } = clickupLib;
 import busRelayPlan from './builder/busRelayPlan.js';
 import clickupRetry from './builder/clickupRetry.js';
 import mergeOnComment from './builder/mergeOnComment.js';
@@ -75,20 +77,28 @@ import passClaim from './builder/passClaim.js';
 import loopStatuses from './builder/loopStatuses.js';
 import autoMergeLane from './builder/autoMergeLane.js';
 import autoMergeLedgerFile from './builder/autoMergeLedgerFile.js';
+import mergeWindowLease from './builder/mergeWindowLease.js';
+import mergeWindowLeaseFile from './builder/mergeWindowLeaseFile.js';
+import mergeCompletion from './builder/mergeCompletion.js';
 import workLogPlaceholder from './builder/workLogPlaceholder.js';
 import sendBackRounds from './builder/sendBackRounds.js';
 import pipelinePause from './builder/pipelinePause.js';
+import localWorkReading from './builder/localWorkReading.js';
+import strandedLocalWork from './builder/strandedLocalWork.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
   defaultWatches, handbackTarget, mergeEnabled, operatorComments,
+  answerAwaitingHandback, handbackFailureText, handbackDoneText,
+  repliesShowRelayed, repliesShowHandbackDone, repliesShowHandbackFailure,
+  ticketsToRead, markAfterPass, DEFAULT_OVERLAP_MS,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
-  SIMULATED_BUS_WHY, simulationGuard, simulationLine,
+  SIMULATED_BUS_WHY, simulationGuard, simulationLine, sweepVerdict,
 } = busRelayPlan;
 const { retryDecision } = clickupRetry;
 const {
-  mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker,
-  refusalNotice, conflictHandOffNotice, mergedNotice,
+  mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker, countMergeRefusals,
+  refusalNotice, refusalBusLine, conflictHandOffNotice, mergedNotice,
 } = mergeOnComment;
 const {
   conflictTicketFiledComment, findConflictTicket, conflictTicketName,
@@ -104,10 +114,13 @@ const {
 // what lives out here is the network and the file, nothing else.
 const {
   laneADecision, laneAEligibility, laneGate, killSwitchState, switchCommand,
+  nearMissResume, nearMissNotice, newNearMisses, ledgerAfterNearMiss,
   rateCapState, selfDisableState, announcementNotice, cancellationNotice,
   digestDue, digestBody, digestSince, WINDOW_MS,
-  ledgerAfterMerge, ledgerAfterSwitch, ledgerAfterDisable,
-  ledgerAfterDigest, switchSignalsFromLedger, mergesSince,
+  ledgerAfterMerge, ledgerAfterSwitch, ledgerAfterDisable, ledgerAfterLatchNag,
+  latchNagDue,
+  ledgerAfterDigest, switchSignalsFromLedger, mergesSince, laneAMergeHistory,
+  ledgerAfterCannotTell,
 } = autoMergeLane;
 const { readLedgerFile, saveLedgerIfReadable } = autoMergeLedgerFile;
 const { buildCard, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } = operatorCard;
@@ -202,13 +215,16 @@ function readBody(spec) {
  * trustworthy about this (it says "NaN minutes" on the chat endpoints).
  */
 function reportLimits(res) {
-  const limit = res.headers.get('x-ratelimit-limit');
-  const remaining = res.headers.get('x-ratelimit-remaining');
-  const reset = res.headers.get('x-ratelimit-reset');
-  if (!limit && !remaining) return;
-  const secs = reset ? Number(reset) - Math.floor(Date.now() / 1000) : NaN;
-  const resetTxt = Number.isFinite(secs) ? ` (resets in ${Math.max(0, secs)}s)` : '';
-  console.error(`  ClickUp's own limit: ${remaining ?? '?'} of ${limit ?? '?'} left this minute${resetTxt}`);
+  // The numbers come from the shared client, which records them off every
+  // response (task 86bbugcdb). They used to be parsed here, printed, and then
+  // thrown away — which is why nothing in the system could answer "how much
+  // budget is left?" while the relay was spending 114 of ~100 a minute.
+  // `res` is still accepted so every call site stays untouched; it is the
+  // signal that a response just arrived, not the source of the numbers.
+  const b = clickupLib.getBudget();
+  if (b.limit == null && b.remaining == null) return;
+  const resetTxt = b.resetsInSeconds === null ? '' : ` (resets in ${b.resetsInSeconds}s)`;
+  console.error(`  ClickUp's own limit: ${b.remaining ?? '?'} of ${b.limit ?? '?'} left this minute${resetTxt}`);
 }
 
 /**
@@ -229,11 +245,27 @@ function reportLimits(res) {
  * fails to connect still spent whatever the attempt costs, and for a budget
  * you would rather over-count than under-count.
  */
-let requestCount = 0;
+// The counter lives in the shared client now, so the multipart upload and the
+// JSON path cannot drift apart, and a future caller inherits the counting
+// instead of having to remember it.
+function requestCount() { return clickupLib.getBudget().requests; }
 
 /** Plain sleep. Only the retry loop uses it. */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * A BLOCKING sleep, for the merge-completion wait (task 86bbv35cq).
+ *
+ * The merge step is synchronous throughout — every `gh` call here is
+ * `spawnSync` — and `mergeCompletion.waitForMerge` is shared with
+ * `scripts/ship_thread.cjs`, which is CommonJS and cannot await at all. One
+ * synchronous wait for both callers is what keeps the two from answering "did
+ * it merge?" differently. Nothing else in this file may use it.
+ */
+function sleepBlocking(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 /**
@@ -293,7 +325,6 @@ async function call(method, path, body) {
 
 /** One HTTP attempt. Everything that was `call` before the retry loop. */
 async function callOnce(method, path, body) {
-  requestCount += 1;
   // THE ONE PLACE A MACHINE COMMENT IS MARKED (task 86bbqx2xe). The loops post
   // under Dane's own token, so nothing downstream can tell their writing from
   // his; the relay read an `ask` card as his answer and released the
@@ -304,26 +335,79 @@ async function callOnce(method, path, body) {
   const sendBody = (method === 'POST' && isCommentPostPath(path))
     ? stampCommentBody(body)
     : body;
-  let res;
-  try {
-    res = await fetch(`https://api.clickup.com${path}`, {
-      method,
-      headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
-      body: sendBody ? JSON.stringify(sendBody) : undefined,
-    });
-  } catch (err) {
-    return unreachable(err);
-  }
-  let text;
-  // The body can fail mid-stream after a perfectly good set of headers — a
-  // dropped connection reads as a rejection here, not at the line above.
-  try { text = await res.text(); } catch (err) { return unreachable(err); }
-  let json = null;
-  try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
-  return { res, json, text };
+  // Through the one door (task 86bbugcdb). It counts the attempt and records
+  // the rate-limit headers; it never throws, which is the contract this file
+  // has always had and must keep — see `unreachable` above for what a thrown
+  // transport failure once cost.
+  const out = await clickupFetch(`https://api.clickup.com${path}`, {
+    method,
+    headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
+    body: sendBody ? JSON.stringify(sendBody) : undefined,
+  });
+  // THE RESERVE (task 86bbugd8j). A scheduled job that has reached the reserve
+  // is not having a network problem and must not be dressed up as one — HTTP 0
+  // prints network advice, which would send the next reader to the wrong
+  // place entirely. `yielded()` says what actually happened and stops the
+  // command with its own exit code.
+  if (out.yielded) return yieldedResult(out.yielded);
+  if (out.transportError) return unreachable(out.transportError);
+  return { res: out.res, json: out.json, text: out.text };
 }
 
-function die(label, { res, json, text }) {
+/**
+ * The shape a yielded request travels in.
+ *
+ * The same trick `unreachable()` plays, and for the same reason: every call
+ * site in this 4,500-line file is written around `{ res, json, text }`, so a
+ * new outcome has to arrive in that shape or a hundred call sites need
+ * editing. Status 0 is already taken by "never left the machine"; 429 is
+ * ClickUp refusing. YIELDED is us refusing, and `die()` gives it its own
+ * explanation and its own exit code.
+ */
+/**
+ * A STRING, not a number, and that is the whole point.
+ *
+ * Eighteen places in this file format a failure as `HTTP ${res.status}`. With
+ * a numeric sentinel every one of them printed `HTTP -1`, which is not an HTTP
+ * status, means nothing to a reader, and sends them looking for a network
+ * fault — the exact thing DOCTRINE 2.2 is about. As a string, those same
+ * eighteen messages say what actually happened without any of them being
+ * edited. Every numeric comparison in this file (`!== 429`, `=== 401`,
+ * `=== 404`, `=== 0`) keeps behaving correctly, because a string equals none
+ * of them: a yield is not retried and not mistaken for an auth problem.
+ */
+const YIELDED_STATUS = 'YIELDED (the ClickUp reserve)';
+function yieldedResult(yielded) {
+  return {
+    res: { ok: false, status: YIELDED_STATUS, headers: { get: () => null } },
+    json: null,
+    text: yielded.why,
+    yielded,
+  };
+}
+
+/**
+ * Exit 7 means "I stopped on purpose at the ClickUp reserve", and it is not
+ * 1. A scheduled job that yields has NOT done its work — so it must not exit 0
+ * (the ticket's Non-goal) — but it also has not failed, and reporting it as a
+ * failure would put a ClickUp outage on the bus every time the budget got
+ * tight. A code of its own lets `run_bus_relay.sh` tell the two apart.
+ */
+const EXIT_YIELDED = 7;
+
+function die(label, { res, json, text, yielded }) {
+  if (yielded || res.status === YIELDED_STATUS) {
+    const why = (yielded && yielded.why) || text;
+    console.error(`\n${label} STOPPED — the ClickUp reserve, not a failure.`);
+    console.error(why);
+    console.error('\nWhat this means: this is a scheduled job, and the ClickUp budget for this minute');
+    console.error('is down to the reserve kept for the sessions Dane is actually talking to. The job');
+    console.error('stopped instead of spending it. Nothing is half-done that was not already half-done;');
+    console.error('the next scheduled pass picks up where this one stopped.');
+    console.error('To run this by hand anyway, from a session Dane is in, run it WITHOUT');
+    console.error('STARCASTER_CALLER=scheduled — interactive callers never yield.');
+    process.exit(EXIT_YIELDED);
+  }
   console.error(`\n${label} FAILED — HTTP ${res.status}`);
   console.error(json?.err || json?.error || text.slice(0, 500));
   // Say what to do in terms of the thing the operator touches (DOCTRINE 2.2).
@@ -363,6 +447,10 @@ function usage(code = 2) {
   console.error('  task --list <id> --name "<name>" --body-file <file|-> [--status S] [--priority urgent|high|normal|low] [--tags a,b] [--id-out <file>]');
   console.error('                                             --priority urgent needs --operator-asked too — Urgent is the');
   console.error('                                             operator\'s lane, agents file at High or below by default');
+  console.error('                                             --name says in PLAIN WORDS what breaks and who feels it — he scans a');
+  console.error('                                             list of 70; the diagnostic sentence goes in the body (DOCTRINE 6.24)');
+  console.error('                                             and a ticket about the PIPELINE needs an incident that actually cost');
+  console.error('                                             something — a theoretical gap is one line in the parked-backlog doc');
   console.error('  priority --task <id> --priority urgent|high|normal|low [--operator-asked]');
   console.error('                                             change an existing task\'s priority, verified by read-back;');
   console.error('                                             same --operator-asked rule as `task` for urgent');
@@ -399,11 +487,18 @@ function usage(code = 2) {
   console.error('                                             of that skill hands the ticket back if this one dies. Opt-in on purpose:');
   console.error('                                             a hand-driven session claims with this same command, and a marker from');
   console.error('                                             one would let a loop reclaim a ticket a person is building.');
-  console.error('  pass-reconcile                             the FIRST thing a loop-build pass runs: if the previous pass left a');
-  console.error('                                             claim marker and its ticket is still "Building", hand it back (Rework');
-  console.error('                                             if a PR is open, else Queued) and clear the marker.');
+  console.error('  pass-reconcile [--scheduled]               the FIRST thing a loop-build pass runs: if the previous pass left a');
+  console.error('                                             claim marker and its ticket is still "Building", hand it back and clear');
+  console.error('                                             the marker. It goes to Rework if a pull request is open for it, if');
+  console.error('                                             half-finished work is found on a machine\'s disk, or if either of those');
+  console.error('                                             could not be checked — the note names where the work is. It goes to');
+  console.error('                                             Queued ONLY when the disks WERE looked at and were empty; a machine');
+  console.error('                                             there is no route to is named in the note, never assumed empty.');
   console.error('                                             exit 0 = nothing to do, 1 = a hand-back failed, 2 = could not tell');
   console.error('                                             (never 0), 3 = a hand-back was performed.');
+  console.error('                                             --scheduled: the caller is a TIMER, not a new pass, so a firing clock');
+  console.error('                                             proves nothing about whether a pass is alive. Judges on the claim\'s');
+  console.error('                                             age instead and leaves a young claim in "Building", saying why.');
   console.error('  migrate-rework [--apply] [--list <id>]     one-off: move tickets that are Queued WITH AN OPEN PR into Rework.');
   console.error('                                             Dry run unless --apply. Run it AFTER the claim rule is live on main —');
   console.error('                                             a Rework ticket is claimed by nothing until then.');
@@ -416,9 +511,12 @@ function usage(code = 2) {
   console.error('                                             upload image(s) onto a task — the before/after pair');
   console.error("                                             the approval queue runs on; verified by reading the");
   console.error("                                             task's attachment list back");
-  console.error('  build-start --task <id>                    BEFORE branching: is a PR for this ticket already open?');
-  console.error('                                             exit 0 = start fresh, 3 = continue the existing branch,');
-  console.error('                                             1 = could not tell (do NOT guess)');
+  console.error('  build-start --task <id>                    BEFORE branching: has this ticket been started already —');
+  console.error('                                             an open PR, or a half-finished worktree on any disk?');
+  console.error('                                             exit 0 = start fresh, 3 = do NOT branch (the line says');
+  console.error('                                             which: continue the named branch, or the work is on');
+  console.error('                                             another machine — escalate, do not hand it back),');
+  console.error('                                             1 = could not tell here (do NOT guess)');
   console.error('  wip-check [--repo owner/name]              is the merge side already full? 0 = room to claim,');
   console.error('                                             3 = capped (a normal decline), 1 = could not tell.');
   console.error('                                             Reads only; a capped pass writes nothing.');
@@ -488,13 +586,14 @@ function usage(code = 2) {
   console.error('                                             --only-task <id> confines the whole pass to one ticket.');
   console.error('                                             ONE machine relays (lib/nodeRoles.js); on any other it');
   console.error('                                             says so and exits 0. npm run node:whoami names this one');
-  console.error('                                             LANE A: a Ready-to-launch ticket whose PR touches nothing but');
-  console.error(`                                             tests and documentation is announced, left ${autoMergeLane.WINDOW_MS / 3600000} hour, then`);
+  console.error('                                             LANES A and B: a Ready-to-launch ticket whose PR touches nothing');
+  console.error('                                             but tests and documentation (A) or the pipeline\'s own tooling');
+  console.error(`                                             under scripts/ (B) is announced, left ${autoMergeLane.WINDOW_MS / 3600000} hour, then`);
   console.error('                                             merged unless he comments. --no-merge turns it off with the');
   console.error(`                                             rest; so does "${autoMergeLane.SWITCH_STOP}" on the bus or any`);
   console.error(`                                             ticket ("${autoMergeLane.SWITCH_RESUME}" to undo). Cap`);
   console.error(`                                             ${autoMergeLane.CAP_PER_HOUR}/hour and ${autoMergeLane.CAP_PER_DAY}/day; one digest a day, "none" included.`);
-  console.error('  auto-merge-status                          what Lane A would do right now, reading only — the switch,');
+  console.error('  auto-merge-status                          what Lanes A and B would do right now, reading only — the switch,');
   console.error('                                             the cap, the self-disable flag and the recent auto-merges');
   console.error('  task-open --task <id>                      exit 0 if the task is still open (status.type), 1 if closed/done');
   console.error('                                             or gone — used by `npm run thread`/`tidy` (Task-closes-thread)');
@@ -650,6 +749,7 @@ function listOpenPullRequests(repo) {
 function capProbe({ repo } = {}) {
   return wipCap.probeCap({
     cap: wipCap.resolveCap(process.env),
+    operatorCap: wipCap.resolveOperatorCap(process.env),
     listOpenPrs: async () => listOpenPullRequests(repo),
     readTicketStatuses: async () => {
       // fatal:false is REQUIRED — see fetchAllTasks. With the default, a
@@ -790,6 +890,52 @@ async function deliverToBus(channel, content, { taskId, target, receipted, simul
  * ticket, so the bus post carried nothing that was lost — a chat outage must
  * not fail a pass that told the operator everything anyway (task 86bbjxew2).
  */
+/** The stored "could not verify" sentences, rendered for a bus post or the
+ *  status command. One definition, so the two can never disagree about what
+ *  the latch was about — the whole complaint in task 86bbt0mz6 was that the
+ *  count was the only thing anybody could see. */
+function latchItemLines(d) {
+  const items = (d && Array.isArray(d.items)) ? d.items : [];
+  if (!items.length) return '';
+  const dropped = Number(d.droppedItems) || 0;
+  const more = dropped ? `\n  ...and ${dropped} more (the stored list is capped)` : '';
+  return `\n\nWhat it could not verify:\n${items.map((x) => `  - ${x}`).join('\n')}${more}`;
+}
+/**
+ * A SECOND OPINION ON "DOES THIS BRANCH CONFLICT?" (2026-09-03, task 86bbupfgn).
+ *
+ * GitHub's mergeability is computed in the background and, on 2026-09-03, was
+ * wrong: PR #567 read CONFLICTING/DIRTY from two endpoints five minutes apart
+ * while git merged the same two commits with zero conflicts. `git merge-tree
+ * --write-tree` answers the same question locally and synchronously — exit 0
+ * clean, exit 1 conflicts — without writing anything to the index, the working
+ * tree or a branch.
+ *
+ * Every failure here is CANNOT TELL, never "clean". A cross-check that cannot
+ * be taken must not turn an unverified conflict into a merge, so `known:false`
+ * leaves the hand-off exactly as it was.
+ */
+function gitConflictCrossCheck({ repo, base = 'origin/main', head }) {
+  if (!head) return { known: false, why: 'no head ref to check' };
+  // The head commit has to be present locally. A relay pass runs in the main
+  // checkout, which tracks origin but need not have this branch yet.
+  const fetched = spawnSync('git', ['fetch', '--quiet', 'origin', String(head)], { encoding: 'utf8' });
+  if (fetched.status !== 0) {
+    return { known: false, why: `could not fetch ${head} (${String(fetched.stderr || '').trim().slice(0, 120)})` };
+  }
+  const baseRef = spawnSync('git', ['rev-parse', '--verify', `${base}^{commit}`], { encoding: 'utf8' });
+  if (baseRef.status !== 0) return { known: false, why: `could not resolve ${base}` };
+  const headSha = String(spawnSync('git', ['rev-parse', 'FETCH_HEAD'], { encoding: 'utf8' }).stdout || '').trim();
+  if (!headSha) return { known: false, why: `could not resolve ${head} after fetching it` };
+  const out = spawnSync('git', ['merge-tree', '--write-tree', String(baseRef.stdout).trim(), headSha], { encoding: 'utf8' });
+  // 0 = merges cleanly, 1 = conflicts. Anything else is git failing to answer
+  // (a bad object, an unsupported git), which is CANNOT TELL and not a clean
+  // merge — the distinction this whole ticket is about.
+  if (out.status === 0) return { known: true, conflicts: false, base, head: headSha.slice(0, 8) };
+  if (out.status === 1) return { known: true, conflicts: true, base, head: headSha.slice(0, 8) };
+  return { known: false, why: `git merge-tree exited ${out.status} (${String(out.stderr || '').trim().slice(0, 120)})` };
+}
+
 function reportBusFailure({ delivered, cosmetic, unchecked, busSkipped, line }) {
   if (busFailureBucket({ delivered, cosmetic }) === 'skipped') busSkipped.push(line);
   else unchecked.push(line);
@@ -910,9 +1056,33 @@ async function fileConflictTicket({ task, pr, branch, localVerdict, commentId, u
  * the "keep waiting" condition; it can never widen "may merge", because the
  * gate it composes with is still this one.
  */
+/**
+ * The head commit that identifies a stuck block, preferring the FRESHEST read.
+ *
+ * `waitForChecksInPass` re-reads the PR and returns that read as `prJson`; the
+ * caller's own `prJson` was taken before the catch-up push, so its commit is
+ * one behind the branch that now exists. Handing the stale one to the CANNOT
+ * TELL bound makes the next pass see a different commit, call it a different
+ * block and restart the ninety-minute clock — once per catch-up (review round
+ * 2 of task 86bbuvd50). With PR #597 performing catch-ups routinely that is
+ * not a rare race.
+ *
+ * `null` rather than a guess when neither read has it: an unknown commit is a
+ * WILDCARD to `sameCannotTellBlock`, never a difference, so an unreadable pass
+ * continues the run instead of resetting it.
+ */
+function headShaOf(fresh, fallback) {
+  const f = fresh && fresh.prJson && fresh.prJson.headRefOid;
+  if (f) return f;
+  return (fallback && fallback.headRefOid) || null;
+}
+
 async function waitForChecksInPass({ pr, repo, label, fields, budget, gateOf = githubGate }) {
   if (!budget || !mergeOnComment.mayWaitInPass(budget.used, budget.cap)) {
-    return { action: 'wait', reason: 'the in-pass wait cap for this run is already spent' };
+    // NOT a cannot-tell. The cap is this pass's own scheduling limit, not a
+    // fact about the pull request — the same reasoning the review-gate budget
+    // wait below is written on.
+    return { action: 'wait', cannotTell: false, reason: 'the in-pass wait cap for this run is already spent' };
   }
   budget.used += 1;
 
@@ -924,10 +1094,12 @@ async function waitForChecksInPass({ pr, repo, label, fields, budget, gateOf = g
     await new Promise((resolve) => setTimeout(resolve, mergeOnComment.IN_PASS_POLL_MS));
 
     const again = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
-    if (!again.ok) return { action: 'wait', reason: 'could not re-read the PR while waiting' };
+    // Both of these KNOW no reading was taken — the ticket's own "a
+    // rate-limited read" — so they declare it rather than being classified.
+    if (!again.ok) return { action: 'wait', cannotTell: true, reason: 'could not re-read the PR while waiting' };
     let json;
     try { json = JSON.parse(again.stdout); } catch {
-      return { action: 'wait', reason: 'gh returned unparseable JSON while waiting' };
+      return { action: 'wait', cannotTell: true, reason: 'gh returned unparseable JSON while waiting' };
     }
 
     const next = mergeOnComment.afterCatchUpDecision({
@@ -939,7 +1111,7 @@ async function waitForChecksInPass({ pr, repo, label, fields, budget, gateOf = g
   }
 }
 
-async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeRefusedAt, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget, lane }) {
+async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeRefusedAt, mergeRefusedCount, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget, lane }) {
   // ONE GATE, ONE MERGE COMMAND, ONE Live TRANSITION (task 86bbkw2au). Lane A
   // replaces the operator's WORD and nothing else, so it arrives here as a
   // decision of the same shape and takes the identical path afterwards:
@@ -960,6 +1132,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     handled: mergeHandled,
     refused: mergeRefused,
     refusedAt: mergeRefusedAt,
+    refusedCount: mergeRefusedCount,
   });
   if (decision.act === 'ignore') return { outcome: 'none' };
 
@@ -983,7 +1156,20 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // answer costs nothing and says nothing.
   const alreadySaid = (why) => decision.priorRefusal === why;
 
-  const refuse = async (why, plainEnglish) => {
+  // `refusalCode` is REQUIRED at every call (task 86bbtqpxd). It decides
+  // whether the operator is told his approval carries over — a promise that
+  // is true of a red check and false of an already-merged PR — and
+  // `refusalNotice` throws on a code it cannot classify, so a new refusal
+  // reason cannot reach him wearing the reassuring wording by default.
+  // Assigned for real once the pull request is known (below). A refusal ends
+  // this pull request's flight, so it has to give the MERGE WINDOW back — a red
+  // check holding the queue until the 45-minute bound expires would be the
+  // livelock wearing its own fix's clothes (task 86bbuv9jt). Declared here
+  // because `refuse` is defined before the PR is read and called only after.
+  let releaseMergeWindow = () => {};
+
+  const refuse = async (why, plainEnglish, refusalCode) => {
+    releaseMergeWindow('the merge was refused');
     if (lane) return { outcome: 'lane-cancel', reason: why };
     if (alreadySaid(why)) {
       console.error(`  MERGE REFUSED (unchanged, nothing posted) on ${label}: ${why}`);
@@ -991,50 +1177,421 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     }
     console.error(`  MERGE REFUSED on ${label}: ${why}`);
     if (dryRun) return { outcome: 'would-refuse', reason: why };
-    const notice = refusalNotice({ commentId: decision.commentId, why, plainEnglish });
+
+    // AN UNCLASSIFIED CODE IS A BUG, AND A BUG MUST NOT TAKE THE PASS WITH IT
+    // (review round 1 of task 86bbtqpxd). `refusalNotice` throws on a code it
+    // cannot classify, which is right — there is no default, and a refusal
+    // must never inherit the reassuring wording by accident. But this function
+    // runs inside a loop over every watched ticket, `runMergeStep` had nothing
+    // catching it, and the throw therefore ended the whole relay pass: no
+    // comment here, no bus post, and every later ticket in that pass silently
+    // unrelayed. That is the same defect wearing different clothes.
+    //
+    // So the throw is CAUGHT and REPORTED — never softened. No ticket comment
+    // is invented, because inventing wording for a reason nothing could
+    // classify is how the lie gets back in; the operator's authorization is
+    // left unspent and unmarked, so the next pass tries again; and the finding
+    // goes to `unchecked` and the bus naming the code, because a code defect
+    // in the merge step is nobody's routine.
+    let notice;
+    try {
+      notice = refusalNotice({ commentId: decision.commentId, why, plainEnglish, refusalCode });
+    } catch (err) {
+      unchecked.push(`${task.id}: merge refused (${why}) but the reason could not be classified (${err.message}) — nothing was posted to the ticket, and this is a defect in the merge step, not in the PR`);
+      const bus = await postToBus(channel, `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. This step could not CLASSIFY that reason (code ${JSON.stringify(refusalCode)}), so it said nothing on the ticket rather than guess whether the approval still stands. That is a defect in the merge step itself — it needs an agent session. The ticket is still Ready to launch and the approval is unspent.`);
+      if (!bus.ok) reportBusFailure({ cosmetic: false, unchecked, busSkipped, line: `${task.id}: merge refusal could not be classified AND the bus post failed (${bus.why})` });
+      return { outcome: 'refused-unclassified', reason: why };
+    }
+
     const cOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: notice.body });
     if (!cOut.res.ok) {
       unchecked.push(`${task.id}: merge refused (${why}) but the explanation comment FAILED to post — the operator has not been told`);
       return { outcome: 'refused', reason: why };
     }
-    const bus = await postToBus(channel, `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. Explanation posted on the ticket; it is still Ready to launch.`);
+    // ONE bus post per occurrence, and a TERMINAL one says out loud that
+    // nothing further is coming (task 86bbtqpxd). The dedup above already
+    // stops the repeat; what was missing is that the single post read like a
+    // progress note. A refusal that can never clear is the end of the line,
+    // and the line that reports it has to be the line somebody acts on.
+    //
+    // The sentence is chosen by the reason's CLASS, in `refusalBusLine` beside
+    // the body it accompanies — not by `notice.terminal`, which is true of the
+    // could-not-tell class as well and made this line announce a CANNOT-TELL
+    // as a certainty while the ticket comment beside it said the opposite
+    // (review round 1 of task 86bbtqpxd).
+    //
+    // (The class is named without its quoted spelling on purpose:
+    // conflictWork.test.js bans that literal anywhere in this function, to keep
+    // the retired two-bucket CONFLICT verdict from coming back. Different
+    // concept, same word.)
+    const busLine = refusalBusLine({ label, url: task.url, why, kind: notice.kind });
+    const bus = await postToBus(channel, busLine);
     if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${task.id}: merge refusal explained on the ticket but the bus post failed (${bus.why})` });
     await markMergeHandled(decision.commentId, task, unchecked, notice.marker);
     return { outcome: 'refused', reason: why };
   };
 
+  /**
+   * The bookkeeping that follows a merge: mark the authorization spent, post
+   * the record, move the ticket to Live and clear the assignees.
+   *
+   * Extracted (task 86bbup3u1) because there are now TWO ways a merge ends —
+   * this pass running `gh pr merge`, and GitHub's auto-merge landing it
+   * between passes — and both owe the operator the identical trail. Two
+   * copies of this would be two chances for the auto-merge path to quietly
+   * skip the Live move, which is the one part he actually looks at.
+   */
+  const recordMergedTicket = async (record, prRef) => {
+    await markMergeHandled(authorizingComment, task, unchecked, record.marker);
+
+    const recOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: record.body });
+    if (!recOut.res.ok) unchecked.push(`${task.id}: PR #${prRef.number} MERGED, but the record comment failed to post`);
+
+    // Live is a closed status: the ticket leaves the open view here. Assignees
+    // clear in the same write — the handoff rule, same as every other machine
+    // status (loop-build SKILL.md, "Assignment is the handoff signal").
+    const rem = (task.assignees || []).map((a) => a.id);
+    const moveOut = await call('PUT', `/api/v2/task/${task.id}`, { status: 'Live', assignees: { add: [], rem } });
+    if (!moveOut.res.ok) {
+      unchecked.push(`${task.id}: PR #${prRef.number} MERGED but the ticket did NOT move to Live — move it by hand`);
+    } else {
+      const now = moveOut.json.status?.status ?? '?';
+      if (now.toLowerCase() !== 'live') {
+        unchecked.push(`${task.id}: PR #${prRef.number} MERGED but the move to Live did not stick (came back "${now}")`);
+      } else {
+        const leftover = (moveOut.json.assignees || []).map((a) => a.id);
+        if (leftover.length) unchecked.push(`${task.id}: moved to Live but assignees did not clear ([${leftover.join(', ')}])`);
+      }
+    }
+  };
+
   if (decision.act === 'refuse') {
-    return refuse(decision.reason, 'This ticket is not in a state a script may merge from.');
+    return refuse(decision.reason, 'This ticket is not in a state a script may merge from.', decision.refusalCode);
   }
 
   const pr = decision.pr;
   const repo = `${pr.owner}/${pr.repo}`;
+
+  // ── The merge window, plumbing half (2026-09-05, task 86bbuv9jt) ──────────
+  //
+  // Branch protection on this repo is `strict: true`, so every merge puts every
+  // other open branch BEHIND and restarts its checks. When merges arrive faster
+  // than a branch can be caught up and re-verified, nothing converges — the
+  // queue livelocks while every actor reports success at every step. The remedy
+  // is serialisation: ONE pull request may be in the window at a time, and
+  // everything that moves main takes it first.
+  //
+  // Every decision is in scripts/builder/mergeWindowLease.js, where it is
+  // break-tested without a GitHub, a disk or a clock. Only the IO is here.
+  let holdsMergeWindow = false;
+
+  // Give the window back. Deliberately NOT guarded on `holdsMergeWindow`: the
+  // already-merged path below runs in a LATER pass than the one that took the
+  // window, and that is the ordinary way an armed merge ends. `releaseWindow`
+  // refuses to clear a hold belonging to another pull request, so calling this
+  // when we hold nothing is a no-op rather than a way to hand the window out
+  // twice.
+  releaseMergeWindow = (why) => {
+    // Nor may a dry run RELEASE one — the worse half of the same bug, because
+    // the window it would free belongs to a real pass that is mid-flight.
+    if (dryRun) { holdsMergeWindow = false; return; }
+    const read = mergeWindowLeaseFile.readLeaseFile(mergeWindowLeaseFile.leasePath());
+    const rel = mergeWindowLease.releaseWindow({ read, repo, pr: pr.number });
+    holdsMergeWindow = false;
+    if (!rel.changed) return;
+    const saved = mergeWindowLeaseFile.saveLeaseIfReadable(read, rel.lease);
+    if (!saved.ok) {
+      unchecked.push(`${task.id}: PR #${pr.number} left the merge window (${why}) but releasing it FAILED (${saved.why}) — every other merge is held until the bound clears it, which needs an agent session`);
+      return;
+    }
+    console.error(`  MERGE WINDOW released by PR #${pr.number} — ${why}`);
+  };
   // `reviewDecision` is here so a BLOCKED merge can name the rule that is
   // unmet instead of guessing at one (task 86bbrg9v0). Without it the gate
   // still answers, but it answers CANNOT TELL.
-  const fields = 'number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,title,url,statusCheckRollup';
+  // `autoMergeRequest` is how this pass knows whether GitHub is already
+  // holding the merge for it (task 86bbup3u1). It is read from GITHUB rather
+  // than remembered in a marker of our own on purpose: GitHub is the thing
+  // that will or will not perform the merge, so its answer is the only one
+  // that cannot drift from what actually happens.
+  // `headRefOid` IDENTIFIES A STUCK BLOCK for the CANNOT TELL bound (review
+  // round 1 of task 86bbuvd50). The bound used to compare the reason PROSE,
+  // and GitHub rewords a cannot-tell mid-block — so the commit is what says
+  // whether this is still the same wall or a new one.
+  const fields = 'number,state,mergedAt,isDraft,mergeable,mergeStateStatus,reviewDecision,headRefName,headRefOid,title,url,statusCheckRollup,autoMergeRequest';
   const view = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
   if (!view.ok) {
     // A read that failed is not a red PR — it is a PR nobody checked. Say so
     // and try again next pass rather than guessing in either direction.
     unchecked.push(`${task.id}: could not read PR #${pr.number} from GitHub (${view.stderr.slice(0, 200)}) — merge authorization still pending`);
     console.error(`  MERGE WAITING on ${label}: could not read PR #${pr.number}`);
-    return { outcome: 'waiting', reason: 'could not read the PR' };
+    // `cannotTell: true` DECLARED, not classified: this path KNOWS no
+    // reading was taken — it is the ticket's own "a rate-limited read" — while
+    // its reason text predates the marker that predicate looks for.
+    return { outcome: 'waiting', reason: 'could not read the PR', pr: pr.number, prUrl: pr.url, headSha: null, cannotTell: true };
   }
   let prJson;
   try {
     prJson = JSON.parse(view.stdout);
   } catch {
     unchecked.push(`${task.id}: gh returned unparseable JSON for PR #${pr.number} — merge authorization still pending`);
-    return { outcome: 'waiting', reason: 'unparseable gh output' };
+    // Same as above: gh answered with something unreadable, so no reading was
+    // taken. The code knows; the prose does not say so.
+    return { outcome: 'waiting', reason: 'unparseable gh output', pr: pr.number, prUrl: pr.url, headSha: null, cannotTell: true };
+  }
+
+  // THE PR IS ALREADY MERGED AND HIS WORD IS STILL UNSPENT (task 86bbup3u1).
+  // Before auto-merge this only happened when somebody merged by hand, and
+  // githubGate's answer — refuse, "the PR is already merged" — described what
+  // this relay had done accurately enough. Once the relay arms GitHub to
+  // merge on its behalf it becomes the ORDINARY ending, and posting "merge
+  // NOT performed" on a ticket whose PR is merged is simply false. So the
+  // bookkeeping the merge path owes him gets done: record it, move it to
+  // Live. Nothing here can double-merge — the merge has already happened and
+  // the only thing left is saying so.
+  if (String(prJson.state || '').toUpperCase() === 'MERGED') {
+    const wasArmed = Boolean(prJson.autoMergeRequest);
+    if (dryRun) {
+      console.error(`  DRY RUN — PR #${pr.number} is already merged; would record it and set ${label} to Live`);
+      return { outcome: 'would-record-merged', pr: pr.number };
+    }
+    // GITHUB'S MERGE TIME, NEVER OURS (task 86bbv35cq, criterion 4). This
+    // used to stamp `new Date()` at the moment the read returned, which for an
+    // armed merge is however long after the merge as the relay's next pass —
+    // up to ten minutes — and it is written on the ticket as fact.
+    const mergedAt = mergeCompletion.mergeTimeLabel(mergeCompletion.mergedAtOf(prJson));
+    const record = mergeOnComment.mergedElsewhereNotice({ commentId: authorizingComment, pr, mergedAt, armed: wasArmed });
+    // THE ORDINARY ENDING OF AN ARMED MERGE, and therefore the ordinary way
+    // the merge window is given back: the pass that armed this pull request
+    // ended long before GitHub landed it, so nothing else has released the
+    // hold. `releaseWindow` only clears a hold naming THIS pull request, so a
+    // merge performed outside the window costs nothing here.
+    releaseMergeWindow('it is already merged');
+    console.error(`  ALREADY MERGED PR #${pr.number} for ${label} — recording it and moving the ticket to Live`);
+    await recordMergedTicket(record, pr);
+    const bus = await postToBus(channel, `[CC-starcaster bus-relay] MERGED: ${label} — PR #${pr.number} is merged into main (${wasArmed ? "GitHub's auto-merge, armed by this relay on Dane's word" : 'merged outside this relay'}), ticket set to Live. main auto-deploys.\n\n${pr.url}`);
+    if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${task.id}: PR #${pr.number} recorded as merged and moved to Live, but the bus post failed (${bus.why})` });
+    return { outcome: 'merged', pr: pr.number, url: pr.url, viaAutoMerge: wasArmed };
+  }
+
+  // Is GitHub already holding this one, and has it been holding it too long?
+  // An armed merge that never fires is silent in a way the old treadmill was
+  // not: the pass ends cleanly having handed the PR over, so "handed off"
+  // reads exactly like "done". This is the only thing still watching it.
+  const armedFor = mergeOnComment.autoMergeArmedTooLong({ autoMergeRequest: prJson.autoMergeRequest });
+  if (armedFor.state === 'stale' || armedFor.state === 'cannot-tell') {
+    unchecked.push(`${task.id}: PR #${pr.number} — ${armedFor.reason}`);
+    console.error(`  AUTO-MERGE STALLED on ${label}: ${armedFor.reason}`);
   }
 
   let gate = githubGate(prJson);
+
+  /**
+   * Ask for the merge window before doing anything that moves main.
+   *
+   * The lease is READ FRESH on every claim rather than once per pass, because
+   * an earlier ticket in this same pass may have taken the window a moment ago
+   * and a cached read would hand it out twice.
+   */
+  const claimMergeWindow = (action) => {
+    if (holdsMergeWindow || !mergeWindowLease.needsMergeWindow(action)) return { ok: true };
+    const read = mergeWindowLeaseFile.readLeaseFile(mergeWindowLeaseFile.leasePath());
+    const now = new Date().toISOString();
+    const d = mergeWindowLease.windowDecision({ read, repo, pr: pr.number, now });
+    if (d.action === 'blocked') return { ok: false, reason: d.reason, cannotTell: Boolean(d.cannotTell) };
+    if (d.action === 'proceed') { holdsMergeWindow = true; return { ok: true }; }
+
+    // A DRY RUN MAY NOT TAKE THE WINDOW. Caught by running one: the pass
+    // printed "MERGE WINDOW taken by PR #613" and wrote the file, on a run
+    // whose whole promise is that it changes nothing — and a stolen window is
+    // not a cosmetic write, it stops every real merge on this machine until the
+    // bound expires. The DECISION above still runs, so a dry run still reports
+    // a window it would have been blocked by, which is the half worth seeing.
+    if (dryRun) {
+      console.error(`  DRY RUN — would take the merge window for PR #${pr.number} (${d.reason})`);
+      holdsMergeWindow = true;
+      return { ok: true };
+    }
+    const next = mergeWindowLease.takeWindow({
+      read, repo, pr: pr.number, task: task.id, branch: prJson.headRefName, headSha: prJson.headRefOid, now,
+    });
+    // RECORDED BEFORE THE ACTION, NEVER AFTER. A pass that dies between taking
+    // the window and pushing must leave it HELD: a crash quietly letting the
+    // next branch in is exactly the livelock, arriving through its own fix. The
+    // 45-minute bound is what clears a hold nobody ever released.
+    const saved = mergeWindowLeaseFile.saveLeaseIfReadable(read, next);
+    if (!saved.ok) {
+      return {
+        ok: false,
+        cannotTell: true,
+        reason: `the merge window is free, but taking it could not be RECORDED (${saved.why}) — acting without a record is how two branches end up in it at once, so nothing was done to main; the next pass asks again`,
+      };
+    }
+    if (d.expired) {
+      unchecked.push(`${task.id}: PR #${d.expired.pr} held the merge window past its bound without landing, so PR #${pr.number} has taken it over — that pull request is stuck and needs an agent session`);
+    }
+    holdsMergeWindow = true;
+    console.error(`  MERGE WINDOW taken by PR #${pr.number} for ${label}`);
+    return { ok: true };
+  };
+
+  /**
+   * One place that turns a blocked window into this pass's answer. It is a
+   * WAIT, never a refusal: nothing is wrong with this pull request, another one
+   * is simply ahead of it, so there is no comment to post and no authorization
+   * to spend. The next pass takes it from the top.
+   */
+  const mergeWindowWait = (blocked) => {
+    console.error(`  MERGE WAITING on ${label}: ${blocked.reason}`);
+    return { outcome: 'waiting', reason: blocked.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.verdictCannotTell(blocked) };
+  };
+
+  // GitHub said the branch conflicts. Ask git before believing it — one
+  // asynchronous reading is not a settled fact (task 86bbupfgn), and the
+  // hand-off it triggers goes to an agent session that may well not be
+  // watching. The check only runs on this branch of the gate, so an ordinary
+  // green PR pays nothing for it.
+  if (gate.action === 'conflict' && gate.needsGitCrossCheck) {
+    const cross = gitConflictCrossCheck({ repo, head: prJson.headRefName || (pr && pr.branch) });
+    gate = githubGate(prJson, { gitCrossCheck: cross });
+    // Hoisted rather than inlined, and this is not style. branchCatchUp.test.js
+    // locates the conflict hand-off by searching this file for that statement
+    // verbatim, then asserts the local check appears before it. Any earlier
+    // copy of the same text — in code OR in a comment quoting it — makes the
+    // assertion measure the wrong statement and fail. Do not spell it out here.
+    const stillAConflict = gate.action === 'conflict';
+    if (gate.disagreement) {
+      console.error(`  ${label}: GITHUB AND GIT DISAGREE — ${gate.reason}`);
+    } else if (stillAConflict) {
+      // Feed the answer into the SAME vocabulary the catch-up path produces,
+      // so a hand-off that follows says what was actually checked. Without
+      // this the DIRTY path reached `conflictTicketBody` with no verdict at
+      // all and printed "no local check was attempted" — which was true
+      // before this change and would now be false. One table decides what a
+      // code means (conflictWork.CATCH_UP_VERDICTS); this only picks the code.
+      gate = {
+        ...gate,
+        localVerdict: cross.known
+          ? { code: branchCatchUp.CODES.REAL_CONFLICT, reason: `git merge-tree reports a conflict merging ${cross.base} into ${cross.head}` }
+          : { code: branchCatchUp.CODES.FETCH_FAILED, reason: cross.why || 'the git cross-check could not be taken' },
+      };
+    }
+  }
+
+  // GITHUB SAYS IT CONFLICTS, GIT SAYS IT DOES NOT — DO THE CATCH-UP, DO NOT
+  // ONLY REPORT IT (2026-09-04, task 86bbuvcwc). Declining to claim a
+  // conflict on a disagreement is right and stays. What was missing is that
+  // the disagreement has a KNOWN remedy, so answering `wait` promised a
+  // change that was never coming: on PR #585 this printed five times over
+  // fifty minutes — "auto-merge is armed, GitHub lands it" — while GitHub's
+  // own auto-merge refused to land a pull request GitHub had flagged. Dane
+  // had said "merge" and nothing at all was going to happen.
+  //
+  // NOT `gh pr update-branch`, which is the arm below: GitHub refuses it on a
+  // PR it has called CONFLICTING. The local catch-up is the remedy that was
+  // actually measured — merging origin/main in and pushing flipped GitHub to
+  // MERGEABLE within seconds, and the armed merge then landed it.
+  //
+  // The variable below is deliberately NOT named `local`. conflictWork.test.js
+  // locates the conflict hand-off's own catch-up by searching this file for
+  // its exact declaration and slicing forward from the FIRST hit; an earlier
+  // copy of that spelling — in code or in a comment quoting it — would make
+  // the assertion silently measure this block instead of the one it guards.
+  // The same warning already sits on that statement. Do not spell it out.
+  if (gate.action === 'catch-up-locally') {
+    const win = claimMergeWindow('catch-up-locally');
+    if (!win.ok) return mergeWindowWait(win);
+    if (dryRun) {
+      console.error(`  DRY RUN — would merge main into ${prJson.headRefName} here and push it, then re-read PR #${pr.number}: ${gate.reason}`);
+      return { outcome: 'would-catch-up-disagreement', pr: pr.number, reason: gate.reason };
+    }
+    const caughtUp = branchCatchUp.catchUpBranchLocally({ repo, branch: prJson.headRefName });
+    if (caughtUp.ok) {
+      console.error(`  ${label}: CAUGHT UP after a GitHub/git disagreement — ${caughtUp.reason}`);
+      // A BRANCH CAUGHT UP AUTOMATICALLY IS NOT A SILENT WRITE (the identical
+      // reason as 86bbuv66c). This machine just pushed a merge commit to a
+      // branch on its own initiative; if the only record is a log line on one
+      // machine, nobody reading the ticket can tell where the commit came
+      // from. It is said in the same breath as the wait.
+      const said = await call('POST', `/api/v2/task/${task.id}/comment`, {
+        comment_text: `**Branch caught up automatically.** GitHub reported PR #${pr.number} as conflicting while git merged it cleanly — GitHub's precomputed mergeability does not apply the \`union\` merge driver that resolves \`docs/WORK-LOG.md\`, so a branch can read as conflicting while it is not. This machine merged \`main\` into \`${prJson.headRefName}\` and pushed it: an ordinary merge commit, never a force-push, so the branch only gained history. The checks are re-running now. Your approval still stands — you do not have to say "merge" again.`,
+      });
+      if (!said.res.ok) unchecked.push(`${task.id}: PR #${pr.number} was caught up automatically, but the comment saying so FAILED to post — the push has no record on the ticket`);
+      const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
+      if (after.action === 'wait' || after.action === 'update-branch' || after.action === 'catch-up-locally') {
+        console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
+        // THE FRESH COMMIT, NOT THE STALE ONE (review round 2 of task
+        // 86bbuvd50). `prJson` was read BEFORE the catch-up push above, so its
+        // head commit is one behind the branch that now exists — and the next
+        // pass would read a "different" block and restart the ninety-minute
+        // clock, once per catch-up. With #597 performing catch-ups routinely
+        // that is not a rare case.
+        return { outcome: 'waiting', reason: after.reason, pr: pr.number, prUrl: pr.url, headSha: headShaOf(after, prJson), cannotTell: mergeOnComment.verdictCannotTell(after) };
+      }
+      // The verdict and the refusal code travel, for the same reason they do
+      // on the conflict path: this machine performed the merge, so it holds
+      // the strongest evidence there is about whether anything overlaps, and
+      // a gate object never loses its code on a reassignment.
+      gate = { action: after.action, cannotTell: Boolean(after.cannotTell), reason: after.reason, refusalCode: after.refusalCode, localVerdict: caughtUp };
+      if (after.prJson) prJson = after.prJson;
+    } else if (caughtUp.code === branchCatchUp.CODES.REAL_CONFLICT) {
+      // THE OTHER DIRECTION, AND IT IS THE ONE THAT MUST NOT BE SKIPPED. A
+      // real merge is a stronger reading than `merge-tree`, and it says the
+      // branches genuinely overlap — so this goes to the hand-off, exactly as
+      // it did before. A fix that only ever caught up would push merge
+      // commits onto branches that really do conflict.
+      console.error(`  ${label}: the catch-up found a REAL conflict — ${caughtUp.reason}`);
+      // No `localVerdict` is attached on purpose: the hand-off block below owns
+      // that vocabulary, and letting it take its own reading keeps ONE place
+      // deciding what a conflict verdict says. It costs a second local merge
+      // that reaches the same answer and pushes nothing — a real conflict
+      // aborts — which is cheap next to two ways of describing one finding.
+      gate = {
+        action: 'conflict',
+        // Two sources agree, so this is a reading, not the absence of one.
+        cannotTell: false,
+        reason: `the branch conflicts with newer work on main — GitHub said so, and the catch-up merge agrees (${caughtUp.reason})`,
+      };
+    } else {
+      // The remedy could not be applied at all — a failed fetch, a lost push
+      // race, the wrong checkout. That is neither a conflict nor a pass, so
+      // it stays a wait and names what could not be settled (DOCTRINE 3.11).
+      // The next pass tries again.
+      console.error(`  ${label}: the catch-up could not be performed — ${caughtUp.reason}`);
+      gate = {
+        action: 'wait',
+        // STILL A CANNOT TELL, and this is the path that repeats. GitHub's
+        // flag stands, git contradicts it, and the remedy did not run — so
+        // nothing was settled and the next pass asks the same question. This
+        // is the verdict the ninety-minute bound exists to notice.
+        cannotTell: true,
+        reason: `${gate.reason}. That catch-up could NOT be performed this pass (${caughtUp.reason}), so the branch is still flagged and the next pass tries again`,
+      };
+    }
+  }
 
   // Behind main: catch the branch up, then stop for this pass. The push
   // restarts CI, so merging on the checks just read would be merging on a
   // result that no longer describes the branch.
   if (gate.action === 'update-branch') {
+    // ARMING DOES NOT CATCH A BRANCH UP, AND THIS WAS MEASURED, NOT ASSUMED
+    // (2026-09-03, task 86bbup3u1). The first version of this change skipped
+    // the catch-up whenever auto-merge was armed, on the belief that
+    // `allow_update_branch` let GitHub do it. It does not — that setting adds
+    // the "Update branch" button; it does not make GitHub push to an armed
+    // PR. PR #583 was armed while BEHIND and sat for twenty minutes with its
+    // head SHA never moving, which is a WORSE livelock than the one this
+    // ticket is about: permanent, and wearing the word "armed" the whole
+    // time.
+    //
+    // So the catch-up stays this machine's job, exactly as before. What
+    // arming changes is the OTHER half: once the branch is current and CI is
+    // running, nobody has to be awake at the right moment to merge it.
+    // GitHub lands it the instant the checks go green, instead of the merge
+    // depending on a ten-minute pass happening to find the PR green before
+    // main moved again. Arming is confirmed to survive the catch-up push.
+    const win = claimMergeWindow('update-branch');
+    if (!win.ok) return mergeWindowWait(win);
     if (dryRun) {
       console.error(`  DRY RUN — would update PR #${pr.number} from main, then wait for CI`);
       return { outcome: 'would-update-branch', pr: pr.number };
@@ -1043,19 +1600,25 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     if (!upd.ok) {
       // update-branch fails on a genuine conflict too — treat that as the
       // conflict hand-off rather than retrying it forever.
-      gate = { action: 'conflict', reason: `the branch could not be caught up with main (${upd.stderr.slice(0, 200)})` };
+      // A reading WAS taken — GitHub said BEHIND — and it is the remedy that
+      // failed, so this is a definite hand-off rather than an unanswered
+      // question.
+      gate = { action: 'conflict', cannotTell: false, reason: `the branch could not be caught up with main (${upd.stderr.slice(0, 200)})` };
     } else {
-      // Do not go away for an hour: CI takes ~85s and the whole merge is
-      // three minutes of work. 'update-branch' out of the wait means main
-      // moved AGAIN while we waited — the next pass catches up from the top
-      // rather than this one chasing a moving target.
-      const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
-      if (after.action === 'wait' || after.action === 'update-branch') {
-        console.error(`  MERGE WAITING on ${label}: branch updated from main — ${after.reason}`);
-        return { outcome: 'waiting', reason: after.reason };
+      // The push restarted CI, so the checks just read no longer describe the
+      // branch. This used to hold the pass open for 180s hoping to see the
+      // new run finish — the treadmill. Now it falls through to the arming
+      // path below with a 'wait', which hands the PR to GitHub and returns:
+      // GitHub merges it whenever the re-run goes green, however long that
+      // takes, with nothing here having to be awake for it.
+      //
+      // The staleness question below still gets asked first, and that is the
+      // point of falling through rather than arming here.
+      gate = { action: 'wait', cannotTell: false, reason: 'the branch was caught up with main and its checks are re-running' };
+      const reread = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', fields]);
+      if (reread.ok) {
+        try { prJson = JSON.parse(reread.stdout); } catch { /* keep the pre-push read; the gate above is already 'wait' */ }
       }
-      gate = { action: after.action, reason: after.reason };
-      if (after.prJson) prJson = after.prJson;
     }
   }
 
@@ -1070,13 +1633,21 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // branch is pushed so CI re-runs; anything else — including "could not
   // tell" — falls straight through to the hand-off below, unchanged.
   if (gate.action === 'conflict' && !dryRun) {
+    // This pushes too, so it is a main move in waiting and takes the window
+    // like the others. A blocked window here is a WAIT, not a hand-off: filing
+    // a conflict ticket for a branch nobody has tried to catch up yet would be
+    // asserting an overlap this pass never checked.
+    const winC = claimMergeWindow('catch-up-locally');
+    if (!winC.ok) return mergeWindowWait(winC);
     const local = branchCatchUp.catchUpBranchLocally({ repo, branch: prJson.headRefName });
     if (local.ok) {
       console.error(`  ${label}: GitHub reported a conflict, but ${local.reason}`);
       const after = await waitForChecksInPass({ pr, repo, label, fields, budget: inPassBudget });
       if (after.action === 'wait' || after.action === 'update-branch') {
         console.error(`  MERGE WAITING on ${label}: ${after.reason}`);
-        return { outcome: 'waiting', reason: after.reason };
+        // Same as the catch-up path above: this branch was pushed a moment
+        // ago, so the fresh read's commit is the one that identifies the block.
+        return { outcome: 'waiting', reason: after.reason, pr: pr.number, prUrl: pr.url, headSha: headShaOf(after, prJson), cannotTell: mergeOnComment.verdictCannotTell(after) };
       }
       // CARRY THE CLEAN VERDICT (review round 2). If GitHub STILL says
       // conflict after a catch-up that merged and pushed, that is the textbook
@@ -1084,7 +1655,15 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       // there is no overlap, because it just did the merge. Dropping the
       // verdict here left `localVerdict` null, which the hand-off then had to
       // guess about. It is a finding; it travels.
-      gate = { action: after.action, reason: after.reason, localVerdict: local };
+      // CARRY THE REFUSAL CODE TOO (review round 1 of task 86bbtqpxd). If the
+      // fresh read refuses — checks going red after the catch-up push is the
+      // ORDINARY case — this object is what reaches `refuse()` at the bottom
+      // of the function. Rebuilding it without the code handed `refusalNotice`
+      // an unclassified reason, which throws by design, and `runMergeStep` was
+      // called with nothing catching it: no refusal comment, no bus post, and
+      // every remaining ticket in the pass never relayed. A gate object never
+      // loses its code as it is reassigned.
+      gate = { action: after.action, cannotTell: Boolean(after.cannotTell), reason: after.reason, refusalCode: after.refusalCode, localVerdict: local };
       if (after.prJson) prJson = after.prJson;
     } else {
       // Carry WHY into the hand-off, so the reader learns whether it was a
@@ -1100,6 +1679,11 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // pass that runs after someone fixes the branch merges it on his original
   // word — which is what the comment promised all along.
   if (gate.action === 'conflict') {
+    // The flight is over: resolving a conflict is an agent session's job on a
+    // human clock, and holding the merge window through that would stop every
+    // other merge until the bound expired. The window goes back now; this pull
+    // request asks for it again once somebody has fixed the branch.
+    releaseMergeWindow('it was handed off as a conflict');
     // What the local attempt found, in the operator's terms. "It really does
     // overlap" and "I could not check" are different problems with different
     // fixes, and reading one as the other is how a machine problem gets
@@ -1174,6 +1758,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     if (alreadySaid(handOffReason) && !freshlyFiled) {
       const stalled = handOffStalled({
         at: decision.priorRefusalAt, now: Date.now(), filed, localVerdict,
+        attempts: decision.priorRefusalCount,
       });
       if (!stalled.stalled) {
         console.error(`  MERGE HANDED OFF (unchanged, nothing posted) on ${label}: ${gate.reason}`);
@@ -1293,7 +1878,10 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   if (prOpenForWork) {
     if (staleness.state === 'pending') {
       console.error(`  MERGE WAITING on ${label}: ${staleness.reason}`);
-      return { outcome: 'waiting', reason: staleness.reason };
+      // A READING WAS TAKEN: the review gate is running and will answer. Not
+      // a cannot-tell, and counting it would put an ordinary check run inside
+      // a bound measured on GitHub refusing to answer at all.
+      return { outcome: 'waiting', reason: staleness.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: false };
     }
     if (staleness.state === 'stale') {
       if (dryRun) {
@@ -1309,12 +1897,14 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       if (!inPassBudget || !mergeOnComment.mayWaitInPass(inPassBudget.used, inPassBudget.cap)) {
         const why = `the review gate is stale (${staleness.reason}) but this pass has no wait budget left — the next pass re-runs it`;
         console.error(`  MERGE WAITING on ${label}: ${why}`);
-        return { outcome: 'waiting', reason: why };
+        // This pass's own scheduling limit, not a fact about the PR.
+        return { outcome: 'waiting', reason: why, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: false };
       }
 
       const cannotRerun = (why) => refuse(
         `the review gate on PR #${pr.number} is out of date (${staleness.reason}) and ${why}`,
         `PR #${pr.number} carries a review check that was worked out BEFORE the review landed, so it is answering an older question. It could not be re-run, and merging on the old answer is not something this step will do.`,
+        mergeOnComment.REFUSAL_CODES.reviewGateCannotRerun,
       );
       if (!staleness.runId) return cannotRerun('its workflow run could not be identified, so it cannot be re-run');
 
@@ -1338,7 +1928,25 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       });
       const next = reviewGate.afterRerunDecision(after);
       if (next.action === 'refuse') {
-        return refuse(next.reason, `PR #${pr.number} was not merged: its review check had to be re-run first, and the re-run did not clear it.`);
+        // The re-run path passes through githubGate's own answer, which
+        // carries its own code; `afterRerunDecision` supplies
+        // `reviewGateRerunUnresolved` for its OWN unresolved answer. Either
+        // way a code arrives, so there is nothing to default to.
+        //
+        // THERE USED TO BE A `|| reviewGateRerunUnresolved` HERE, AND IT WAS
+        // NOT A BELT — it was the whole answer (review round 1 of task
+        // 86bbtqpxd). `afterCatchUpDecision` stripped the code two frames
+        // earlier, so the fallback fired EVERY time, and it is classified
+        // transient: a PR read back as CLOSED during the wait rendered as
+        // "your approval is still standing ... it goes through on its own".
+        // That is the sentence and the situation from 86bbqw49y, rebuilt on a
+        // different path by the fix meant to remove it. A quiet default is
+        // also exactly what refusalClass.js forbids: there is NO DEFAULT.
+        return refuse(
+          next.reason,
+          `PR #${pr.number} was not merged: its review check had to be re-run first, and the re-run did not clear it.`,
+          next.refusalCode,
+        );
       }
       if (next.action === 'conflict' || next.action === 'wait') {
         // Rare: the branch went stale or fell behind during the three minutes
@@ -1347,27 +1955,104 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         // paths know how to explain themselves to the operator and this one
         // does not.
         console.error(`  MERGE WAITING on ${label}: ${next.reason} (found while re-running the review gate)`);
-        return { outcome: 'waiting', reason: next.reason };
+        return { outcome: 'waiting', reason: next.reason, pr: pr.number, prUrl: pr.url, headSha: headShaOf(after, prJson), cannotTell: mergeOnComment.verdictCannotTell(next) };
       }
       console.error(`  ${label}: the re-run of the review gate came back clean — ${next.reason}`);
       // The re-run rewrote the answer the rest of this function acts on: the
       // gate that said 'refuse' was refusing the stale red check that no
       // longer exists. Carry the fresh read forward so the refusal branch
       // below judges the PR as it is now, not as it was.
-      gate = { action: next.action, reason: next.reason };
+      // The code rides along for the same reason as the conflict path above:
+      // a gate object never loses it on a reassignment, whatever this
+      // particular branch's action happens to be today.
+      gate = { action: next.action, cannotTell: Boolean(next.cannotTell), reason: next.reason, refusalCode: next.refusalCode };
       if (after.prJson) prJson = after.prJson;
     }
   }
 
   // Not terminal: no marker, no comment, no noise. The next pass looks again.
+  //
+  // EXCEPT that "the next pass looks again" was the whole bug (task
+  // 86bbup3u1). CI here takes ~6 minutes, main absorbs a merge every ~20, and
+  // a pass that defers is starting from behind every time. So instead of
+  // coming back to look, hand the PR to GitHub: armed, it lands the moment
+  // the required checks pass, and catches the branch up on its own.
+  //
+  // This sits BELOW the staleness block on purpose, and the order is the
+  // safety property. GitHub enforces branch protection and nothing else, and
+  // `review-gate` is not a required check on this repo — so arming above the
+  // staleness question would hand a stale review gate to something that
+  // cannot see it. autoMergeDecision refuses to arm on anything but a fresh
+  // (or absent) gate, and DISARMS a PR whose gate has gone stale since.
   if (gate.action === 'wait') {
-    console.error(`  MERGE WAITING on ${label}: ${gate.reason}`);
-    return { outcome: 'waiting', reason: gate.reason };
+    const freshStaleness = reviewGate.reviewGateStaleness({ rollup: prJson.statusCheckRollup, comments });
+    const auto = mergeOnComment.autoMergeDecision({
+      gate,
+      autoMergeRequest: prJson.autoMergeRequest,
+      reviewGateState: freshStaleness.state,
+    });
+
+    if (auto.action === 'arm' || auto.action === 'disarm') {
+      // ARMING IS A MAIN MOVE, just a deferred one — GitHub lands the pull
+      // request the instant its checks go green, with nobody here awake for
+      // it. Two armed pull requests therefore reset each other exactly as two
+      // merged ones would, so arming takes the window and holds it until the
+      // merge lands. DISARMING is the opposite and needs no window.
+      if (auto.action === 'arm') {
+        const win = claimMergeWindow('arm');
+        if (!win.ok) return mergeWindowWait(win);
+      }
+      if (dryRun) {
+        console.error(`  DRY RUN — would ${auto.action} auto-merge on PR #${pr.number}: ${auto.reason}`);
+        return { outcome: auto.action === 'arm' ? 'would-arm-auto-merge' : 'would-disarm-auto-merge', pr: pr.number, reason: auto.reason };
+      }
+      const args = auto.action === 'arm'
+        ? ['pr', 'merge', String(pr.number), '--repo', repo, '--auto', '--squash', '--delete-branch']
+        : ['pr', 'merge', String(pr.number), '--repo', repo, '--disable-auto'];
+      const ran = gh(args);
+      if (!ran.ok) {
+        // Not a refusal: arming is an optimisation over waiting, and failing
+        // to arm just leaves the PR where it already was. Say so out loud
+        // rather than reporting a clean pass — a silent failure here puts the
+        // treadmill back with nothing to show it.
+        unchecked.push(`${task.id}: could not ${auto.action} auto-merge on PR #${pr.number} (${ran.stderr.slice(0, 200)}) — the merge falls back to the next pass`);
+        console.error(`  MERGE WAITING on ${label}: could not ${auto.action} auto-merge — ${gate.reason}`);
+        return { outcome: 'waiting', reason: gate.reason, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.verdictCannotTell(gate) };
+      }
+
+      // READ IT BACK. `gh` exiting 0 is not evidence that GitHub is holding
+      // the merge — and "armed" is precisely the state this pass then stops
+      // watching, so an unverified arming is an unwatched PR.
+      const confirm = gh(['pr', 'view', String(pr.number), '--repo', repo, '--json', 'autoMergeRequest']);
+      let confirmed = null;
+      if (confirm.ok) {
+        try { confirmed = Boolean(JSON.parse(confirm.stdout).autoMergeRequest); } catch { confirmed = null; }
+      }
+      const wanted = auto.action === 'arm';
+      if (confirmed === null) {
+        unchecked.push(`${task.id}: PR #${pr.number} — auto-merge ${auto.action} reported success but could not be read back, so whether GitHub is holding it is unknown`);
+      } else if (confirmed !== wanted) {
+        unchecked.push(`${task.id}: PR #${pr.number} — auto-merge ${auto.action} reported success but reading it back says otherwise (armed=${confirmed})`);
+      }
+      if (auto.action === 'disarm') releaseMergeWindow('auto-merge was disarmed, so GitHub is no longer holding this one');
+      console.error(`  AUTO-MERGE ${auto.action.toUpperCase()}ED on ${label}: ${auto.reason}`);
+      return { outcome: auto.action === 'arm' ? 'auto-merge-armed' : 'auto-merge-disarmed', pr: pr.number, reason: auto.reason };
+    }
+
+    const why = auto.action === 'already-armed' ? `${gate.reason} — auto-merge is armed, GitHub lands it` : gate.reason;
+    console.error(`  MERGE WAITING on ${label}: ${why}`);
+    return { outcome: 'waiting', reason: why, pr: pr.number, prUrl: pr.url, headSha: prJson.headRefOid || null, cannotTell: mergeOnComment.verdictCannotTell(gate) };
   }
 
   if (gate.action === 'refuse') {
-    return refuse(gate.reason, `PR #${pr.number} is not in a state that can be merged safely.`);
+    return refuse(gate.reason, `PR #${pr.number} is not in a state that can be merged safely.`, gate.refusalCode);
   }
+
+  // The last main move, and the only one that is instantaneous. It still takes
+  // the window: merging while another branch is mid-flight is precisely what
+  // puts that branch BEHIND and restarts its checks.
+  const winM = claimMergeWindow('merge');
+  if (!winM.ok) return mergeWindowWait(winM);
 
   if (dryRun) {
     console.error(`  DRY RUN — would merge PR #${pr.number} (${gate.reason}) and set ${label} to Live`);
@@ -1379,9 +2064,130 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // get to route around a standing decision).
   const merged = gh(['pr', 'merge', String(pr.number), '--repo', repo, '--squash', '--delete-branch']);
   if (!merged.ok) {
-    return refuse(`the merge command itself failed (${merged.stderr.slice(0, 300)})`, `PR #${pr.number} could not be merged.`);
+    return refuse(`the merge command itself failed (${merged.stderr.slice(0, 300)})`, `PR #${pr.number} could not be merged.`, mergeOnComment.REFUSAL_CODES.mergeCommandFailed);
   }
-  const mergedAt = new Date().toISOString();
+
+  // `gh` EXITING 0 IS NOT A MERGE (task 86bbv35cq). Under a merge queue that
+  // command ENQUEUES and returns success at once; the pull request stays OPEN
+  // for as long as the queue takes and may never merge at all if the group's
+  // CI fails. Everything below this line — stamping a merge time, writing the
+  // merged marker, moving the ticket to Live, announcing it on the bus — is
+  // the bookkeeping a COMPLETED merge owes, and none of it may run on a merge
+  // nobody has observed. So the merge is observed first.
+  //
+  // With no queue, which is the state this ships into, `gh pr merge` merges
+  // synchronously and this returns on its very first read without sleeping.
+  //
+  // THE WAIT IS CHARGED AND BOUNDED (round 2). It draws an in-pass wait slot
+  // like every other wait in this pass — same cap, same per-wait ceiling — so
+  // the tested "a pass cannot outlast its own interval" invariant covers it
+  // instead of standing beside it. A 15-minute literal here would have been
+  // 1.5x the relay's whole 600s wake, which is the precise mistake the
+  // MAX_IN_PASS_WAITS comment records having already been made once. A spent
+  // budget still takes ONE read and no sleep, which is the entire queue-less
+  // path, so nothing ordinary is missed by a pass that has done its waiting.
+  const observeBudget = mergeOnComment.mergeObserveBudget({
+    used: inPassBudget ? inPassBudget.used : Infinity,
+    cap: inPassBudget ? inPassBudget.cap : 0,
+  });
+  const observed = mergeCompletion.waitForMerge({
+    now: () => Date.now(),
+    sleep: sleepBlocking,
+    timeoutMs: observeBudget.timeoutMs,
+    pollIntervalMs: mergeOnComment.IN_PASS_POLL_MS,
+    readPr: () => {
+      const seen = gh(mergeCompletion.prObservationArgv(repo, pr.number));
+      if (!seen.ok) return null;
+      return mergeCompletion.parsePrObservation(seen.stdout);
+    },
+  });
+
+  // CHARGED ON THE WAY OUT, ON EVIDENCE (round 3). The slot used to be drawn
+  // above, before the observation — so a queue-less merge, which answers on the
+  // first read having slept 0ms and is every merge on this repo today, still
+  // cost one of three. Three ordinary merges in a pass left the budget spent
+  // and the fourth ticket's REAL review-gate wait refused, deferring it a whole
+  // interval, for waits that never happened. `sleptMs` is what it actually
+  // blocked for; the rule lives in mergeOnComment beside the budget it spends.
+  if (inPassBudget && mergeOnComment.mergeObservationSpendsSlot({
+    charged: observeBudget.charged, sleptMs: observed.sleptMs,
+  })) inPassBudget.used += 1;
+
+  if (observed.outcome !== 'merged') {
+    // THE THIRD ANSWER (DOCTRINE 3.2). Not a success — nothing is recorded,
+    // the ticket does not move to Live, no merge time is invented and the bus
+    // is not told a merge happened. Not a refusal either — the merge command
+    // succeeded and GitHub may well land it minutes from now, so his
+    // authorization stays UNSPENT and the next pass picks the ticket up and
+    // finds it merged.
+    //
+    // THE WINDOW IS NOT ALWAYS GIVEN BACK (round 3). It used to be released on
+    // every non-merged outcome, `queued` included — and `queued` is precisely
+    // the state where GitHub is holding this pull request and will land it.
+    // Handing the window over there lets the next merge move main, which puts
+    // the held pull request behind (protection is strict:true), resets the
+    // checks it is waiting on, and it never lands: the livelock the window
+    // exists to prevent, arriving through its own fix. An armed merge already
+    // holds the window for exactly this reason; a queued one is the same
+    // deferred main move. The decision is in mergeCompletion, break-tested.
+    const disposition = mergeCompletion.windowDispositionAfterMerge(observed);
+    if (disposition.release) {
+      releaseMergeWindow(disposition.why);
+    } else {
+      console.error(`  MERGE WINDOW HELD by PR #${pr.number} — ${disposition.why}`);
+    }
+    const why = observed.outcome === 'queued'
+      ? `PR #${pr.number} was ENQUEUED, not merged — ${mergeCompletion.holdLabel(observed.hold)}, and it was still open after ${observed.polls} read(s). The ticket has NOT been moved to Live and no merge has been recorded; the next pass will find it merged and do the bookkeeping then.`
+      : observed.outcome === 'not-merged'
+        // NOT a queue wait, and this is the round-2 correction: with nothing
+        // holding the pull request there is no queue to wait for and the merge
+        // simply did not happen. Said plainly, once, rather than dressed as
+        // "GitHub is still working through the merge queue".
+        //
+        // AND NOT ALWAYS A REFUSAL EITHER (round 4). `not-merged` covers hold
+        // 'none' — observed, nothing is holding it, GitHub really did refuse —
+        // and hold 'unknown', where the field never came back and why it did
+        // not merge is simply not known. This line asserted a refusal for
+        // both, and it is written to the ticket and to the bus, so it reaches
+        // Dane. Six lines below, this same return already sets
+        // `cannotTell: true` on exactly that reading: the code knew, and the
+        // sentence did not. The wording is shared with ship, in
+        // mergeCompletion.
+        ? `PR #${pr.number} did NOT merge — it is still open and ${mergeCompletion.holdLabel(observed.hold)}. ${mergeCompletion.notMergedExplanation(observed.hold).cause} The ticket has NOT been moved to Live and no merge has been recorded.`
+        : observed.outcome === 'closed'
+          ? `PR #${pr.number} is CLOSED without having merged. The ticket has NOT been moved to Live and no merge has been recorded.`
+          : `whether PR #${pr.number} merged is UNKNOWN — ${observed.failedReads} read(s) came back blind, so nobody looked. The ticket has NOT been moved to Live and no merge has been recorded.`;
+    // The window's fate rides along on the SAME line, because a held window
+    // stops every other merge on this machine and that is not something to
+    // learn from a log nobody reads. A released one says so too, so the two
+    // are never told apart by silence.
+    const windowNote = disposition.release
+      ? 'The merge window was given back.'
+      : 'The merge window is being HELD by this pull request until it lands or the lease bound clears it — no other merge runs meanwhile.';
+    unchecked.push(`${task.id}: ${why} ${windowNote}`);
+    console.error(`  MERGE NOT OBSERVED on ${label}: ${observed.outcome} — ${why}`);
+    return {
+      outcome: 'merge-not-observed',
+      pr: pr.number,
+      prUrl: pr.url,
+      reason: why,
+      headSha: prJson.headRefOid || null,
+      // 'queued' and 'closed' ARE readings; 'unknown' is the absence of one.
+      // So is a `not-merged` whose HOLD could not be read: the merge is known
+      // not to have happened, but whether GitHub will still land it is not,
+      // and a confident refusal there would be the same overreach in miniature.
+      cannotTell: observed.outcome === 'unknown'
+        || (observed.outcome === 'not-merged' && observed.hold === 'unknown'),
+      mergeState: observed.outcome,
+    };
+  }
+
+  const mergedAt = mergeCompletion.mergeTimeLabel(observed.mergedAt);
+  // Released BEFORE the bookkeeping below, which is several ClickUp writes and
+  // a bus post. main has already moved; holding the window through that would
+  // idle the next merge for no reason, and a failure in the bookkeeping must
+  // not leave the queue stopped.
+  releaseMergeWindow('it merged');
   console.error(`  MERGED PR #${pr.number} for ${label}`);
 
   // Marker first, now that the irreversible thing has happened: if the next
@@ -1394,27 +2200,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     lane: lane ? lane.name : undefined,
     files: lane ? lane.files : undefined,
   });
-  await markMergeHandled(authorizingComment, task, unchecked, mergedRecord.marker);
-
-  const recOut = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: mergedRecord.body });
-  if (!recOut.res.ok) unchecked.push(`${task.id}: PR #${pr.number} MERGED, but the record comment failed to post`);
-
-  // Live is a closed status: the ticket leaves the open view here. Assignees
-  // clear in the same write — the handoff rule, same as every other machine
-  // status (loop-build SKILL.md, "Assignment is the handoff signal").
-  const rem = (task.assignees || []).map((a) => a.id);
-  const moveOut = await call('PUT', `/api/v2/task/${task.id}`, { status: 'Live', assignees: { add: [], rem } });
-  if (!moveOut.res.ok) {
-    unchecked.push(`${task.id}: PR #${pr.number} MERGED but the ticket did NOT move to Live — move it by hand`);
-  } else {
-    const now = moveOut.json.status?.status ?? '?';
-    if (now.toLowerCase() !== 'live') {
-      unchecked.push(`${task.id}: PR #${pr.number} MERGED but the move to Live did not stick (came back "${now}")`);
-    } else {
-      const leftover = (moveOut.json.assignees || []).map((a) => a.id);
-      if (leftover.length) unchecked.push(`${task.id}: moved to Live but assignees did not clear ([${leftover.join(', ')}])`);
-    }
-  }
+  await recordMergedTicket(mergedRecord, pr);
 
   const how = lane
     ? `AUTO-MERGED (Lane ${lane.name}, one-hour window elapsed with no objection)`
@@ -1452,6 +2238,65 @@ function ledgerPath() {
 function readLedger() { return readLedgerFile(ledgerPath()); }
 
 /**
+ * THE PRIMARY RELEASE OF THE MERGE WINDOW (2026-09-05, task 86bbuv9jt), run
+ * once at the top of every pass.
+ *
+ * The pass that arms a pull request ends long before GitHub lands it, so the
+ * hold outlives the session that took it — by design, because that is exactly
+ * the interval during which nobody else may move main. What frees it is this:
+ * ask GitHub what became of each holder, and let go the moment it is MERGED or
+ * CLOSED. Without it the 45-minute bound would be the ONLY release, and a
+ * queue that merges one pull request every 45 minutes is the stall this whole
+ * change exists to remove.
+ *
+ * Everything it decides is `mergeWindowLease.releaseSettled`'s, including the
+ * bound and the fail-safe. This only reads GitHub and writes the file.
+ */
+function releaseSettledMergeWindows({ unchecked = [], dryRun = false } = {}) {
+  const read = mergeWindowLeaseFile.readLeaseFile(mergeWindowLeaseFile.leasePath());
+  if (!read.ok) {
+    // Not a quiet skip. An unreadable window stops every merge on this machine
+    // (windowDecision treats it as held), so it has to be said out loud rather
+    // than discovered as a mysteriously idle queue.
+    // `read.why` already names the file and the parse error, so wrapping it in
+    // another "could not be read" reads as two separate failures.
+    unchecked.push(`${read.why} — no merge will proceed on this machine until it is fixed by hand: ${read.file || '(path unknown)'}`);
+    return;
+  }
+  for (const { repo, holder } of mergeWindowLease.heldRepos(read)) {
+    const view = gh(['pr', 'view', String(holder.pr), '--repo', repo, '--json', 'state']);
+    let state = '';
+    if (view.ok) {
+      try { state = String(JSON.parse(view.stdout).state || ''); } catch { state = ''; }
+    }
+    // A read that failed leaves `state` empty, and releaseSettled keeps the
+    // hold for it — "I could not check" is not "it is gone" (DOCTRINE 3.11).
+    const settled = mergeWindowLease.releaseSettled({ read, repo, state, now: new Date().toISOString() });
+    if (!settled.changed) {
+      if (!state) unchecked.push(`${repo}: could not read PR #${holder.pr}'s state, so the merge window stays held and no other merge on that repo will proceed this pass`);
+      continue;
+    }
+    if (dryRun) {
+      console.error(`  DRY RUN — would free the merge window: ${settled.reason}`);
+      continue;
+    }
+    const saved = mergeWindowLeaseFile.saveLeaseIfReadable(read, settled.lease);
+    if (!saved.ok) {
+      unchecked.push(`${repo}: PR #${holder.pr} is out of the merge window (${settled.reason}) but the window could not be written (${saved.why}) — merges on that repo stay stopped`);
+      continue;
+    }
+    console.error(`  MERGE WINDOW: ${settled.reason}`);
+    // Taken over rather than finished is a finding, not a routine — the holder
+    // never landed and nothing else is watching it.
+    if (!/is (MERGED|CLOSED)\b/.test(settled.reason)) unchecked.push(`${repo}: ${settled.reason}`);
+    // The file changed under our earlier read, so later claims in this pass
+    // must not act on the stale one. They re-read; this only keeps the local
+    // copy honest for the rest of this loop.
+    read.lease = settled.lease;
+  }
+}
+
+/**
  * The kill switch's other half: the party line. A read failure here is NOT a
  * quiet zero — it means we cannot know whether he said stop, and the entire
  * point of standing condition 1 is that those two are not the same thing.
@@ -1470,6 +2315,11 @@ async function readBusSwitchSignals(channel) {
     return { readable: false, signals: [], why: 'the party line answered, but not in a shape this relay recognises as a message list' };
   }
   const signals = [];
+  // A message that ALMOST said resume. Collected here rather than in a second
+  // pass over the same list because the filters below — his id, and not a
+  // machine's words — are the same two, and a near-miss notice answering an
+  // agent's own post quoting the phrase would be the lane talking to itself.
+  const nearMisses = [];
   for (const m of messages) {
     // Only HIS words. An agent post quoting the phrase is a machine talking to
     // itself, and a bus full of agents discussing the kill switch would hold
@@ -1487,8 +2337,17 @@ async function readBusSwitchSignals(channel) {
     if (isMachineComment(body)) continue;
     const kind = switchCommand(body);
     if (kind) signals.push({ kind, at: Number(new Date(m.date ?? m.created_at ?? 0)) || 0, where: 'on the party line' });
+    const miss = nearMissResume(body);
+    if (miss) {
+      nearMisses.push({
+        id: String(m.id ?? m.message_id ?? ''),
+        at: Number(new Date(m.date ?? m.created_at ?? 0)) || 0,
+        where: 'on the party line',
+        saw: miss.saw,
+      });
+    }
   }
-  return { readable: true, signals };
+  return { readable: true, signals, nearMisses };
 }
 
 /** Is main's most recent build red? The second self-disable trigger (condition 4). */
@@ -1715,7 +2574,12 @@ function passMarkerPath() {
 function writePassMarker(task, skill) {
   const file = passMarkerPath();
   try {
-    writeFileSync(file, `${JSON.stringify(passClaim.claimRecord({ task, skill, pid: process.pid }), null, 2)}\n`);
+    // `newClaimRecord`, not `claimRecord`: the clock belongs to the WRITE.
+    // The read path deliberately preserves a missing `at` so it reaches the
+    // `undated` branch and says COULD NOT TELL out loud — if this line ever
+    // stops stamping one, every scheduled run returns exit 2 rather than
+    // silently reading the marker as "claimed just now" forever.
+    writeFileSync(file, `${JSON.stringify(passClaim.newClaimRecord({ task, skill, pid: process.pid }), null, 2)}\n`);
     console.error(`  (pass marker written for ${task} — the next ${skill} pass will hand it back if this one does not finish)`);
   } catch (err) {
     // NOT fatal, and said out loud. The claim itself is what matters; losing
@@ -1879,19 +2743,47 @@ if (cmd === 'whoami') {
   // Nothing in a killed session runs again. The next pass is the cheapest
   // thing guaranteed to run afterwards, and a fresh session is exactly what
   // survives the previous one being killed.
+  //
+  // `--scheduled` says WHICH SEAT IS ASKING (2026-09-04, task 86bbu60ax).
+  // Without it, the caller is a new pass and the inference above holds. With
+  // it, the caller is `npm run repair` on the relay's idle wake, where a
+  // firing timer proves nothing about whether a pass is running — so it judges
+  // on the claim's age instead and leaves a young claim alone. Before that
+  // flag existed, a build that outlived the half-hour throttle had its LIVE
+  // claim revoked on a timer, putting a ticket somebody was actively building
+  // back into the claim line.
   const file = passMarkerPath();
   const marker = passClaim.readMarker(file);
+  const trigger = flag('scheduled') ? passClaim.TRIGGER_SCHEDULED : passClaim.TRIGGER_PASS;
 
   let status = '';
+  // The clock the SWEEP measures by, taken from the same response as the
+  // status (task 86bbu60ax, found in review). `classifyTicket` calls a ticket
+  // stranded after 90 minutes of no activity ON THE TICKET; the marker's `at`
+  // is stamped once and never refreshed. Feeding this in makes the borrowed
+  // constant mean the same thing in both steps of one `npm run repair` run,
+  // instead of only being the same number.
+  let lastActivityMs = null;
+  // The TICKET ITSELF, kept rather than just its status: its `repo:` tag is
+  // what says which checkout to look in for a half-finished build below, and
+  // this is the one read that has it. An unreadable read leaves it null, and
+  // `reconcileDecision` never reaches `handback` from that — see the comment
+  // on `status` just below.
+  let ticket = null;
   if (marker.found && marker.record) {
     const seen = await call('GET', `/api/v2/task/${marker.record.task}`);
     // An unreadable status is NOT a hand-back. Moving a ticket on a reading we
     // did not take is how a live build gets yanked out from under a pass that
     // is genuinely running.
-    if (seen.res.ok) status = seen.json.status?.status ?? '';
+    if (seen.res.ok) {
+      ticket = seen.json;
+      status = seen.json.status?.status ?? '';
+      const updated = Number(seen.json.date_updated);
+      if (Number.isFinite(updated)) lastActivityMs = updated;
+    }
   }
 
-  const decision = passClaim.reconcileDecision({ marker, status });
+  const decision = passClaim.reconcileDecision({ marker, status, trigger, lastActivityMs });
   let ok = true;
   let destination = '';
 
@@ -1913,16 +2805,50 @@ if (cmd === 'whoami') {
     const dest = cmts.res.ok
       ? buildStart.resolveBuildStart(cmts.json.comments || [], { lookupPr })
       : { action: 'unknown' };
-    const plan = pipelinePause.strandedBuildDestination(dest.action);
+
+    // BEFORE SAYING "NOTHING WAS BUILT", LOOK (2026-09-06, task 86bbvj44f).
+    //
+    // A pull-request lookup cannot see a worktree with seven uncommitted files
+    // in it, so on the `fresh` answer — the only one that asserts an ABSENCE —
+    // this asks every machine it can reach whether a branch stamped with this
+    // ticket is sitting on a disk somewhere. Exactly the reading the stranded
+    // sweep takes, through the same module, so the two steps of one
+    // `npm run repair` run cannot reach opposite conclusions about one ticket.
+    //
+    // It matters MOST here rather than in the sweep: `repair` runs this first
+    // and the sweep third, so on the Mini — where the loops actually run — a
+    // dead loop-build pass had its ticket moved to `Queued` before the sweep's
+    // guard ever looked at it, and the sweep then found nothing stranded
+    // because the ticket had already gone.
+    //
+    // Only on the Queued path: `continue` and `unknown` already name a PR, so
+    // they assert nothing absent and go to Rework regardless.
+    const provisional = pipelinePause.strandedBuildDestination(dest.action);
+    const local = provisional.status !== 'Queued'
+      ? { verdict: 'none', work: [], unseen: [], unlooked: [] }
+      : localWorkReading.workInProgressFor(ticket || { id: decision.task }, localWorkReading.workProbe());
+    // WHERE it goes given that reading. Unlike the sweep, this may never leave
+    // a ticket in "Building" — that is the invisibility it exists to end — so
+    // `work` and `cannot-tell` both go to Rework, which is claimable and
+    // asserts nothing. `none` is `strandedBuildDestination` unchanged.
+    const plan = pipelinePause.reconciledBuildDestination(dest.action, {
+      verdict: local.verdict,
+      work: local.work,
+      unlookedSeats: strandedLocalWork.describeUnlooked(local.unlooked),
+      blindSpots: strandedLocalWork.describeUnlooked([...(local.unseen || []), ...(local.unlooked || [])]),
+    }, { describeWork: strandedLocalWork.describeWork });
     destination = plan.status;
     const note = await call('POST', `/api/v2/task/${decision.task}/comment`, {
       comment_text: pipelinePause.sweptTicketNote({
         at: new Date().toISOString(),
-        by: `the next ${marker.record.skill || 'loop'} pass`,
+        // WHO RAN, from the seat — never a fixed string. Under `--scheduled`
+        // no pass ran at all; `npm run repair` on the relay's idle wake did,
+        // and the command to reproduce it carries the flag, because without
+        // the flag it is the other seat and a different program.
+        ...passClaim.handbackActor(trigger, { skill: marker.record.skill }),
         kind: 'a build',
         destination: plan.status,
         why: plan.why,
-        command: 'npm run clickup -- pass-reconcile',
       }),
       notify_all: false,
     });
@@ -2611,17 +3537,19 @@ if (cmd === 'whoami') {
     const bytes = readFileSync(file);
     const form = new FormData();
     form.append('attachment', new Blob([bytes]), basename(file));
-    // Not routed through `call` (multipart), so count it here or the pass
-    // total under-reports — see the note beside `requestCount`.
-    requestCount += 1;
-    const res = await fetch(`https://api.clickup.com/api/v2/task/${task}/attachment`, {
+    // Multipart, so it cannot share the JSON `call` path — but it goes through
+    // the same door, which is what keeps it counted. It used to increment the
+    // counter by hand beside its own `fetch`, and the note there warned that a
+    // third caller would have to remember to do the same. Now nobody has to.
+    const up = await clickupFetch(`https://api.clickup.com/api/v2/task/${task}/attachment`, {
       method: 'POST',
       headers: { Authorization: TOKEN },
       body: form,
     });
-    const text = await res.text();
-    let json = null;
-    try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
+    if (up.transportError) die(`attach ${basename(file)}`, unreachable(up.transportError));
+    const res = up.res;
+    const text = up.text;
+    const json = up.json;
     if (!res.ok) die(`attach ${basename(file)}`, { res, json, text });
     uploaded.push({ name: basename(file), id: json?.id ?? '(no id)', bytes: bytes.length });
     reportLimits(res);
@@ -2673,19 +3601,85 @@ if (cmd === 'whoami') {
     }
   };
 
-  const decision = buildStart.resolveBuildStart(got.json.comments || [], { lookupPr });
+  // AND THEN LOOK AT THE DISK (2026-09-07, task 86bbvur5a). A pull request is
+  // the LAST thing a build produces, so a pass that wrote code and died before
+  // pushing leaves nothing for the lookup above to find — and this command
+  // then said "fresh", exit 0, and the next pass cut a second branch over it.
+  // `pass-reconcile` and the stranded sweep already take this reading before
+  // they assert that nothing was built; the step whose whole job is "has this
+  // been started already?" was the one still answering from comments alone.
+  //
+  // The same module both of those use, so the three cannot disagree about one
+  // ticket.
+  //
+  // THE PULL REQUEST ANSWER FIRST, AND THE TICKET IS READ ONLY IF IT MATTERS.
+  // `needsLocalWorkReading` is the module's own predicate rather than a second
+  // copy of it here. Round 1 read the ticket unconditionally, so `continue` and
+  // `unknown` — the paths where `findLocalWork` is never called — each paid an
+  // extra ClickUp read on every claim, and the comment above claiming nothing
+  // is probed on those paths was contradicted by the line under it.
+  const fromPr = buildStart.resolveFromPullRequest(got.json.comments || [], lookupPr);
+  let decision = fromPr;
+  if (buildStart.needsLocalWorkReading(fromPr)) {
+    // The ticket read here is for its TAGS: `workInProgressFor` resolves the
+    // repo from the ticket's own `repo:` tag, so it looks in the checkout the
+    // builder would actually have used.
+    //
+    // AN UNREADABLE TICKET IS NOT HANDED ON AS `{ id }` (round-1 review,
+    // finding 2). That fabrication has no `tags`, `resolveTaskRepo` answers
+    // `starcaster` for a task with none — because no tag legitimately means
+    // starcaster — and a `repo:pulse` ticket was therefore probed against the
+    // STARCASTER checkout on any transient ClickUp failure, found nothing, and
+    // exited 0 "fresh". The false all-clear this whole reading exists to close,
+    // arriving through the reading itself, and the same scar the `lookupPr`
+    // comment above already carries from task 86bbqyyfn. It throws instead:
+    // `withLocalWork` turns that into CANNOT TELL, exit 1.
+    const ticketRes = await call('GET', `/api/v2/task/${task}`);
+    const findLocalWork = () => {
+      if (!ticketRes.res.ok) {
+        throw new Error(`the ticket itself could not be read (HTTP ${ticketRes.res.status}), `
+          + 'so which repo to look in is unknown and nothing was probed');
+      }
+      return localWorkReading.workInProgressFor(ticketRes.json, localWorkReading.workProbe());
+    };
+    decision = buildStart.withLocalWork(fromPr, {
+      findLocalWork,
+      hereId: localWorkReading.thisNodeName(),
+    });
+  }
+
   console.log(buildStart.describeBuildStart(decision));
   if (decision.pr) {
     console.log(`pr:     #${decision.pr.number}${decision.pr.branch ? ` (branch ${decision.pr.branch})` : ''}`);
     console.log(`url:    ${decision.pr.url}`);
   }
+  // The branch, the worktree and the machine, one per line — this is the
+  // sentence somebody has to be able to walk to the work with.
+  //
+  // EACH ONE SAYS WHETHER THIS PASS CAN ACT ON IT (round-2 review, "also worth
+  // a look"). This printed every branch the reading found, on every machine, in
+  // identical lines under a heading a reader takes to mean "the work to
+  // continue" — so a `continue` here also listed the other machine's branch in
+  // the same voice, and CLAUDE.md step 4 tells a session to check a named
+  // branch out. The list is unchanged; only the attribution is added, and it
+  // is built in `buildStart` so a test can pin the wording.
+  for (const line of buildStart.describeFoundWork(decision)) {
+    console.log(`work:   ${line}`);
+  }
+  // AND WHAT TO DO ABOUT IT, where refusing is not the whole instruction.
+  // `elsewhere` used to be a bare refusal with no way out: the ticket is
+  // already in "Building", the reconcile returns it to "Rework", rework is
+  // claimed first and oldest-first, and the lane then spends every pass on the
+  // one ticket it can never build.
+  const next = buildStart.describeNextMove(decision, { task });
+  if (next) console.log(`next:   ${next}`);
   reportLimits(got.res);
 
   // Exit codes so a shell can branch on this without parsing prose, matching
   // `node:owns`: 0 = go ahead, 3 = somebody else's work, 1 = cannot tell.
-  if (decision.action === 'continue') process.exit(3);
-  if (decision.action === 'unknown') process.exit(1);
-  process.exit(0);
+  // The mapping lives in `buildStart` so this command and its tests cannot
+  // drift; "work on another machine" is a 3 because it is still a refusal.
+  process.exit(buildStart.buildStartExitCode(decision));
 } else if (cmd === 'pr-opened') {
   // The build loop's audit trail, made into a command (task 86bbjt18r).
   // Until now step 7 of loop-build said "add the PR URL as a ClickUp
@@ -3378,7 +4372,7 @@ if (cmd === 'whoami') {
   // cap x budget, which is what keeps a pass from becoming unbounded
   // and stops one stuck PR starving the rest (task 86bbk2fb5).
   const inPassBudget = { used: 0, cap: mergeOnComment.MAX_IN_PASS_WAITS };
-  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0, stalled: 0 };
+  const merges = { merged: 0, refused: 0, handedOff: 0, waiting: 0, unchanged: 0, stalled: 0, armed: 0, notObserved: 0, threw: 0 };
   // Report what could not be checked rather than silently passing over it
   // (DOCTRINE 3.11) — a task this script could not read is a task whose
   // comments might be sitting unrelayed, not a clean zero.
@@ -3395,6 +4389,13 @@ if (cmd === 'whoami') {
   // write returned 400 for sixteen hours and the whole pipeline stopped
   // behind it, though every answer was sitting on its ticket the entire time.
   const busSkipped = [];
+
+  // Free the merge window of anything that has already landed, BEFORE any
+  // ticket is looked at — otherwise the first ticket of the pass is measured
+  // against a holder that merged twenty minutes ago and is told to wait for it.
+  // Below `unchecked` on purpose: it reports through it, and reading a window
+  // this pass cannot then report on is worse than not reading it.
+  if (mergingAllowed) releaseSettledMergeWindows({ unchecked, dryRun });
   // Tickets already receipted THIS pass, mapped to whether that receipt was
   // read back successfully. One acknowledgement per ticket, not one per
   // comment — three answers during an outage otherwise leave three identical
@@ -3412,18 +4413,115 @@ if (cmd === 'whoami') {
   // is not final until every ticket has been through — so a lane that ran
   // inline would be judging a half-finished account of its own reliability.
   const laneSwitchSignals = [];
+  // Near misses seen this pass, from either surface. Answered once each, at
+  // the same place the switch is decided — see the block that posts them.
+  const laneNearMisses = [];
   const laneCandidates = [];
+  // Every merge-step reading taken this pass, so the CANNOT TELL bound can be
+  // counted after the loop, where the auto-merge ledger is read and written
+  // (task 86bbuvd50). Collected rather than acted on inline for the same
+  // reason `laneCandidates` is: one reader and one writer of that file per
+  // pass, in one place, or the last write silently wins.
+  const mergeReadings = [];
+  // Lane A's readings are collected separately because they are taken AFTER
+  // the bound has already run over the watch loop's — see boundCannotTell.
+  const laneReadings = [];
   let lastRes = null;
+  // One entry per watch — see busRelayPlan.sweepVerdict for why the unit is
+  // the LIST and not the ticket.
+  const sweeps = [];
+
+  // ── The high-water mark, per list (task 86bbugbay) ────────────────────────
+  // Why this exists: the per-ticket comment read is the relay's entire cost,
+  // and a ticket untouched since the last completed pass cannot carry a new
+  // comment. See busRelayPlan.ticketsToRead for what is filtered and — just
+  // as important — what deliberately is NOT.
+  //
+  // The stamp is taken NOW, before a single list is read, so a comment landing
+  // mid-pass is never behind the mark that pass writes.
+  const passStartedAt = Date.now();
+  const marksFile = arg('marks-file')
+    || process.env.BUS_RELAY_MARKS
+    || path.join(os.homedir(), 'loop-logs', 'bus-relay.marks.json');
+  let marks = {};
+  try {
+    if (existsSync(marksFile)) marks = JSON.parse(readFileSync(marksFile, 'utf8')) || {};
+  } catch {
+    // Unreadable marks cost requests, never correctness: every watch falls
+    // back to the cold-start branch and reads everything. Say so.
+    console.error(`  (the relay's high-water marks at ${marksFile} are unreadable — this pass reads every ticket)`);
+    marks = {};
+  }
+
+  // THE RESERVE, CHECKED WHERE A STOP IS LEGIBLE (task 86bbugd8j).
+  //
+  // The one door will refuse a request outright once this pass is past the
+  // reserve, and that refusal exits mid-flight — no summary, no verdict, no
+  // list of what went unread. That is the backstop, not the plan. The plan is
+  // to stop BETWEEN units of work, so the pass still prints what it did not
+  // reach, which is the whole difference between "the relay stopped" and "the
+  // relay went quiet" (2026-09-03, sixteen hours).
+  let yieldedAt = null;
+  const reserveGate = () => {
+    if (yieldedAt) return yieldedAt;
+    const gate = clickupLedger.shouldYield({ kind: callerKind().kind });
+    if (gate.yield) yieldedAt = gate;
+    return gate.yield ? gate : null;
+  };
 
   for (const watch of watches) {
-    const { tasks, res: listRes } = await fetchAllTasks(watch.list);
+    const stopped = reserveGate();
+    if (stopped) {
+      const why = `stopped at the ClickUp reserve — ${stopped.why}`;
+      unchecked.push(`${watch.label}: not read at all (${why})`);
+      sweeps.push({ label: watch.label, merge: mergeEnabled(watch), complete: false, why });
+      console.error(`${watch.label}: NOT READ — ${why}`);
+      continue;
+    }
+    // fatal:false so a list this pass could not READ becomes an INCOMPLETE
+    // verdict rather than process.exit(1) three lines in. Dying here is how a
+    // 429 on the first list left the second one — the merge-capable one —
+    // never even attempted, with no record that it had been skipped.
+    const uncheckedBefore = unchecked.length;
+    const { tasks, res: listRes, failed } = await fetchAllTasks(watch.list, { fatal: false });
     if (listRes) lastRes = listRes;
-    const open = tasks
+    if (!tasks) {
+      const why = failed || 'the list could not be read';
+      unchecked.push(`${watch.label}: could not read the list (${why}) — no ticket on it was examined`);
+      sweeps.push({ label: watch.label, merge: mergeEnabled(watch), complete: false, why });
+      console.error(`${watch.label}: COULD NOT READ THE LIST (${why}) — skipping it, and this pass is INCOMPLETE`);
+      continue;
+    }
+    const inStatus = tasks
       .filter((t) => watch.statuses.includes((t.status?.status ?? '').toLowerCase()))
       .filter((t) => !onlyTask || String(t.id) === String(onlyTask));
+    // The FULL in-status set is what Lane A and the kill switch are gathered
+    // from below; only the expensive comment read is narrowed.
+    const picked = ticketsToRead({
+      watch,
+      tasks: inStatus,
+      mark: Number(marks[watch.list]),
+      overlapMs: DEFAULT_OVERLAP_MS,
+    });
+    const open = picked.read;
     console.error(`${watch.label}: ${open.length} open task(s) of ${tasks.length} total in list ${watch.list} (statuses: ${watch.statuses.join(', ')})`);
+    console.error(`  reading comments on ${open.length} of ${inStatus.length} in-status ticket(s) — ${picked.reason}${picked.skipped ? `; ${picked.skipped} unchanged since the last completed pass` : ''}`);
 
-    for (const t of open) {
+    for (let i = 0; i < open.length; i += 1) {
+      const t = open[i];
+      const stoppedHere = reserveGate();
+      if (stoppedHere) {
+        // Mid-list. Name the WHOLE remainder, not just the ticket we happened
+        // to stop on — "1 ticket unread" and "37 tickets unread" call for very
+        // different reactions, and only one of them is true. The list is then
+        // INCOMPLETE, so the high-water mark below is not advanced and the
+        // next pass re-reads everything this one did not get to rather than
+        // skipping it as "unchanged".
+        const left = open.length - i;
+        unchecked.push(`${watch.label}: ${left} of ${open.length} ticket(s) not read — stopped at the ClickUp reserve (${stoppedHere.why})`);
+        console.error(`  STOPPED at the reserve with ${left} ticket(s) unread on this list`);
+        break;
+      }
       const commentsOut = await call('GET', `/api/v2/task/${t.id}/comment`);
       if (!commentsOut.res.ok) { unchecked.push(`${t.id} (${t.name}): could not read comments`); continue; }
       // Authorship is id AND marker (task 86bbqx2xe) — the rule lives in
@@ -3439,6 +4537,15 @@ if (cmd === 'whoami') {
       for (const c of fromOperator) {
         const kind = switchCommand(c.comment_text);
         if (kind) laneSwitchSignals.push({ kind, at: Number(c.date) || 0, where: `on task ${t.id}` });
+        const miss = nearMissResume(c.comment_text);
+        if (miss) {
+          laneNearMisses.push({
+            id: `comment-${c.id}`,
+            at: Number(c.date) || 0,
+            where: `on task ${t.id}`,
+            saw: miss.saw,
+          });
+        }
       }
 
       // Comments relayed on THIS run, for THIS task. This is the handback
@@ -3448,6 +4555,18 @@ if (cmd === 'whoami') {
       // on the ticket — the gate is re-pointed at a durable surface, never
       // weakened.
       let fresh = 0;
+      // WHICH OF HIS COMMENTS HAVE ACTUALLY REACHED SOMEBODY — by the durable
+      // marker as well as by this pass's own success (task 86bbvr4w3). `fresh`
+      // above is still the count relayed THIS RUN, and it is still what the
+      // pass summary reports; it is no longer the hand-back trigger, because a
+      // trigger that can only fire once is a trigger a crash destroys for good.
+      const deliveredIds = new Set();
+      // ...and which of his answers a hand-back has ALREADY completed on, and
+      // which already carry a failure note. Both are read off the very same
+      // reply fetch `deliveredIds` uses, so they cost nothing: the request was
+      // already being spent (2026-09-07, round 1 review).
+      const handbackDoneIds = new Set();
+      const handbackNotedIds = new Set();
       // Merge commands this pass must NOT act on: either terminally acted on
       // (merged, or handed to an agent session for a conflict), or unknowable because
       // the reply read failed. The second case is deliberate — a comment
@@ -3466,6 +4585,10 @@ if (cmd === 'whoami') {
       // that has been sitting for three days, and only the second is news
       // (task 86bbq0fh8).
       const mergeRefusedAt = new Map();
+      // ...and HOW MANY TIMES this exact refusal has been given. A merge that
+      // is retrying and failing every pass moves no clock, so age alone cannot
+      // see it (task 86bbvr0j5).
+      const mergeRefusedCount = new Map();
 
       for (const c of fromOperator) {
         const repliesOut = await call('GET', `/api/v2/comment/${c.id}/reply`);
@@ -3482,10 +4605,24 @@ if (cmd === 'whoami') {
         if (marker && marker.kind === 'refused') {
           mergeRefused.set(String(c.id), marker.reason);
           mergeRefusedAt.set(String(c.id), marker.at || '');
+          // Counted over the whole reply thread, not just the newest marker:
+          // the attempts ARE the earlier markers, and only the ones that gave
+          // this same reason count toward this alarm.
+          mergeRefusedCount.set(String(c.id), countMergeRefusals(replies, marker.reason));
         }
         else if (marker) mergeHandled.add(String(c.id));
-        const already = replies.some((r) => (r.comment_text || '').startsWith(BUS_RELAY_MARKER));
-        if (already) { skipped++; continue; }
+        // Read BEFORE the `already` branch below returns: the answer that a
+        // hand-back acts on is by definition one that was relayed on an
+        // earlier pass, so anything read after that `continue` is never read
+        // on the comment that matters.
+        if (repliesShowHandbackDone(replies)) handbackDoneIds.add(String(c.id));
+        if (repliesShowHandbackFailure(replies)) handbackNotedIds.add(String(c.id));
+        const already = repliesShowRelayed(replies);
+        // Already relayed on an EARLIER pass. Nothing more to send — and this
+        // is exactly the state that used to end the story, because `fresh`
+        // stayed 0 and the hand-back could never fire again. The marker is the
+        // durable proof his answer was delivered, so it is read as such.
+        if (already) { deliveredIds.add(String(c.id)); skipped++; continue; }
 
         const when = new Date(Number(c.date)).toISOString().slice(0, 16).replace('T', ' ');
         console.error(`\nRelaying: task "${t.name}" (${t.id}), comment ${c.id} [${when}]`);
@@ -3493,7 +4630,7 @@ if (cmd === 'whoami') {
         // posted and asserts nothing about delivery. Under --simulate-bus-failure
         // it deliberately does NOT stop, because the whole point is to run the
         // fallback path rather than describe it.
-        if (dryRun && !simulateBusFailure) { console.error(`  DRY RUN — would post:\n  ${c.comment_text}`); relayed++; fresh++; continue; }
+        if (dryRun && !simulateBusFailure) { console.error(`  DRY RUN — would post:\n  ${c.comment_text}`); relayed++; fresh++; deliveredIds.add(String(c.id)); continue; }
 
         const busBody = `[CC-starcaster bus-relay] Dane replied on "${t.name}" (${t.url}):\n\n${c.comment_text}`;
         // Chat, then a receipt comment on this very ticket. Only if BOTH fail
@@ -3513,7 +4650,7 @@ if (cmd === 'whoami') {
         // #414 guarantee holds on THIS watch.
         if (simulateBusFailure) {
           console.error(simulationLine({ verdict: delivery, target: simTarget }));
-          if (delivery.ok) { relayed++; fresh++; }
+          if (delivery.ok) { relayed++; fresh++; deliveredIds.add(String(c.id)); }
           else unchecked.push(`${t.id} comment ${c.id}: SIMULATION — not delivered (${delivery.reason || delivery.why}); nothing was marked relayed`);
           continue;
         }
@@ -3540,7 +4677,7 @@ if (cmd === 'whoami') {
         // "already relayed" check reads.
         const markerText = relayMarkerText({ via: delivery.via, channel, at: new Date().toISOString() });
         const markOut = await call('POST', `/api/v2/comment/${c.id}/reply`, { comment_text: markerText });
-        if (!markOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: delivered (via ${delivery.via}) but could not write the dedup marker — will re-relay next run`); relayed++; fresh++; continue; }
+        if (!markOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: delivered (via ${delivery.via}) but could not write the dedup marker — will re-relay next run`); relayed++; fresh++; deliveredIds.add(String(c.id)); continue; }
 
         // Verify the marker actually landed, same discipline as `comment`'s
         // read-back (DOCTRINE 3.10) — a 200 here is not proof it stuck.
@@ -3551,6 +4688,7 @@ if (cmd === 'whoami') {
         console.error(`  delivered via ${delivery.via === 'chat' ? 'the party line' : 'a receipt on the ticket'}, marker ${stuck ? 'verified' : 'UNVERIFIED'}`);
         relayed++;
         fresh++;
+        deliveredIds.add(String(c.id));
       }
 
       // Comment-driven MERGE (task 86bbjd5nn): the other thing an operator
@@ -3560,9 +4698,30 @@ if (cmd === 'whoami') {
       // pass (or one whose bus post failed) is still an authorization. Its
       // own marker, checked above, is what stops it firing twice.
       if (mergingAllowed && mergeEnabled(watch)) {
-        const m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, mergeRefusedAt, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget });
-        if (m.outcome === 'merged' || m.outcome === 'would-merge') merges.merged++;
+        // ONE TICKET'S CRASH MUST NOT END THE PASS (review round 1 of task
+        // 86bbtqpxd). This call was bare, and `runMergeStep` can throw —
+        // `refusalNotice` does so deliberately on a reason nothing classified.
+        // A throw here ended the whole relay: no refusal comment, no bus post,
+        // and every remaining ticket in the pass never looked at, which is a
+        // silence indistinguishable from a quiet week. The specific trigger is
+        // fixed above; this makes the CLASS survivable, and loudly — the
+        // finding goes to `unchecked`, which is reported and posted, and the
+        // pass carries on to the next ticket.
+        let m;
+        try {
+          m = await runMergeStep({ task: t, comments: commentsOut.json.comments || [], mergeHandled, mergeRefused, mergeRefusedAt, mergeRefusedCount, dryRun, channel, unchecked, busSkipped, stalledHandOffs, inPassBudget });
+        } catch (err) {
+          unchecked.push(`${t.id}: the merge step THREW (${err && err.message ? err.message : err}) — this ticket got no merge decision, nothing was posted on it, and its authorization is unspent. That is a defect in the merge step; it needs an agent session.`);
+          console.error(`  MERGE STEP THREW on "${t.name}" (${t.id}): ${err && err.stack ? err.stack : err}`);
+          m = { outcome: 'threw' };
+        }
+        if (m.outcome === 'threw') merges.threw++;
+        else if (m.outcome === 'merged' || m.outcome === 'would-merge') merges.merged++;
         else if (m.outcome === 'refused' || m.outcome === 'would-refuse') merges.refused++;
+        // A refusal whose reason could not be classified. Counted with the
+        // refusals so the pass summary cannot read as clean, and reported as
+        // its own line in `unchecked` by the refuse() path that raised it.
+        else if (m.outcome === 'refused-unclassified') merges.refused++;
         else if (m.outcome === 'handed-off' || m.outcome === 'would-hand-off') merges.handedOff++;
         // Re-derived the same answer as last pass and posted nothing. Counted
         // separately so a silent pass is legibly "still stuck", not "clean".
@@ -3571,7 +4730,46 @@ if (cmd === 'whoami') {
         // means "nothing to say", and this is the one thing that most needs
         // saying (task 86bbq0fh8).
         else if (m.outcome === 'handed-off-stalled' || m.outcome === 'would-report-stalled') merges.stalled++;
-        else if (m.outcome === 'waiting' || m.outcome === 'would-update-branch' || m.outcome === 'would-rerun-review-gate') merges.waiting++;
+        // Armed is NOT waiting. Waiting means this pass will look again;
+        // armed means it has handed the merge to GitHub and stopped looking,
+        // which is a different promise and has to read differently in the
+        // summary (task 86bbup3u1).
+        else if (m.outcome === 'auto-merge-armed' || m.outcome === 'would-arm-auto-merge') merges.armed++;
+        else if (m.outcome === 'auto-merge-disarmed' || m.outcome === 'would-disarm-auto-merge') merges.waiting++;
+        else if (m.outcome === 'waiting' || m.outcome === 'would-update-branch' || m.outcome === 'would-rerun-review-gate' || m.outcome === 'would-record-merged') merges.waiting++;
+        // THE MERGE COMMAND RAN AND THE MERGE WAS NOT OBSERVED (task
+        // 86bbv35cq). Its own bucket, never `merged`: counting it with the
+        // merges is precisely the false success this ticket exists to remove,
+        // and counting it with `waiting` would hide the one case a queue makes
+        // possible — a pull request handed to GitHub that never lands.
+        else if (m.outcome === 'merge-not-observed') merges.notObserved++;
+        // THE READING THIS PASS TOOK, whatever it was. Recorded for EVERY
+        // outcome, not only the stuck ones, because a verdict that CLEARS is
+        // what deletes the stored run — criterion 5, "a resolved wobble leaves
+        // no residue". A pass that only recorded its cannot-tells would count
+        // up and never down.
+        //
+        // TWO OUTCOMES ARE DELIBERATELY NOT RECORDED, and for the same
+        // reason: no reading was taken, so neither may be read as "cleared".
+        // 'threw' — the step crashed mid-decision; already reported loudly in
+        // `unchecked` by the catch above. 'none' — this ticket carried no
+        // merge authorization for the step to act on, which says nothing
+        // whatever about whether a block is still there. Counting 'none' as a
+        // clear is what made Lane A's tickets uncountable: they reach this
+        // loop with no merge word (that is WHY they are lane candidates), so
+        // every pass wiped the run the lane's own merge step had just stored,
+        // and the bound could never reach ninety minutes on them.
+        if (m.outcome !== 'threw' && m.outcome !== 'none') {
+          mergeReadings.push({
+            task: t,
+            pr: m.pr == null ? null : m.pr,
+            prUrl: m.prUrl || null,
+            reason: m.reason || '',
+            headSha: m.headSha || null,
+            isCannotTell: Boolean(m.cannotTell),
+          });
+        }
+
         // A merged ticket is now Live, which is not a status this watch
         // handles — skip the handback check rather than acting on a status
         // this pass itself just changed.
@@ -3585,12 +4783,51 @@ if (cmd === 'whoami') {
         }
       }
 
-      // Comment-driven handback (task 86bbh9g7k): a fresh answer from the
-      // operator on a "needs your input" ticket releases it back to the
-      // machine. His comment is the authorization; no fresh comment, no
-      // move — that is the doctrine checkpoint, enforced in handbackTarget.
-      const target = handbackTarget(watch, t.status?.status, fresh);
+      // Comment-driven handback (task 86bbh9g7k): an answer from the operator
+      // on a "needs your input" ticket releases it back to the machine. His
+      // comment is the authorization; no delivered answer, no move — that is
+      // the doctrine checkpoint, enforced in handbackTarget.
+      //
+      // THE AUTHORIZATION IS NOW DURABLE (2026-09-06, task 86bbvr4w3). It used
+      // to be `fresh` — comments relayed in THIS pass — which made the move a
+      // one-shot event. Relaying writes a permanent marker, so a pass that died
+      // between the relay and the move left a ticket that no later pass could
+      // ever release: `fresh` was 0 for ever after. That is not a hypothetical;
+      // 86bbv8nvy was stranded that way for 3.5 hours on 2026-09-06, and only
+      // Dane noticing broke the loop.
+      //
+      // So the question asked is a property of the TICKET, re-derivable every
+      // pass: is there a delivered answer of his newer than the newest
+      // escalation card? `answerAwaitingHandback` owns that rule and its
+      // reasoning.
+      const answered = answerAwaitingHandback({
+        comments: commentsOut.json.comments || [],
+        operatorId: OPERATOR_ID,
+        isMachine: isMachineComment,
+        delivered: (c) => deliveredIds.has(String(c.id)),
+        // An answer a hand-back has already completed on is SPENT, so a ticket
+        // he parks here again by hand is left where he put it rather than
+        // dragged back out ten minutes later on words he wrote for an earlier
+        // round. `Needs your input` is his; the only thing that may take a
+        // ticket out of it is a comment he wrote FOR the card it is parked on.
+        handled: (c) => handbackDoneIds.has(String(c.id)),
+      });
+      // No escalation card on the trail means there is no way to tell an answer
+      // from something he said last week, so the OLD fresh-only rule stands
+      // there and nothing regresses. `npm run stale-answer` reports those as
+      // CANNOT TELL rather than letting them read as quiet.
+      const authorized = answered.state === 'no-question'
+        ? fresh
+        : (answered.state === 'answered' && answered.delivered);
+      const target = handbackTarget(watch, t.status?.status, authorized);
       if (!target) continue;
+      // A retry is worth a line of its own: it is the whole of this fix, and a
+      // pass that silently repaired yesterday's crash would leave nobody able
+      // to tell the repair had ever run.
+      if (!fresh) {
+        console.error(`  RETRYING a hand-back that an earlier pass did not complete: "${t.name}" -> ${target}`
+          + ` (his answer was delivered at ${new Date(answered.answerAt).toISOString()})`);
+      }
       if (dryRun) {
         console.error(`  DRY RUN — would hand back: "${t.name}" -> ${target}`);
         handedBack++;
@@ -3600,7 +4837,33 @@ if (cmd === 'whoami') {
       // them in the same write, and verify BOTH halves from its response.
       const rem = (t.assignees || []).map((a) => a.id);
       const moveOut = await call('PUT', `/api/v2/task/${t.id}`, { status: target, assignees: { add: [], rem } });
-      if (!moveOut.res.ok) { unchecked.push(`${t.id}: the answer was delivered but the hand-back to "${target}" FAILED — the ticket is still parked in "${t.status?.status}"`); continue; }
+      if (!moveOut.res.ok) {
+        const why = `HTTP ${moveOut.res.status}`;
+        unchecked.push(`${t.id}: the answer was delivered but the hand-back to "${target}" FAILED (${why}) — the ticket is still parked in "${t.status?.status}". The next pass re-derives this and tries again.`);
+        // Criterion 2: the failure goes on the TICKET, not only into a bus post
+        // that a rate limit can swallow. Best effort by design — the retry is
+        // derived from the trail and does NOT depend on this landing, which
+        // matters because the usual reason the move failed is the same budget
+        // this write needs.
+        //
+        // ONCE PER ANSWER, NOT ONCE PER PASS (2026-09-07, round 1 review). A
+        // persistent non-429 failure — a renamed status, a permission error —
+        // keeps the status write failing while comment writes keep succeeding,
+        // so an unconditional note is ~144 identical comments a day on the very
+        // ticket he is reading. Everything else in this family throttles; this
+        // is the same discipline, off a read this pass already paid for.
+        if (answered.answer && handbackNotedIds.has(String(answered.answer.id))) {
+          console.error(`  (the failed hand-back on ${t.id} is already noted on his answer — not repeating it)`);
+        } else if (answered.answer) {
+          const noteOut = await call('POST', `/api/v2/comment/${answered.answer.id}/reply`, {
+            comment_text: handbackFailureText({
+              target, status: t.status?.status, why, at: new Date().toISOString(),
+            }),
+          });
+          if (!noteOut.res.ok) console.error(`  (could not record the failed hand-back on ${t.id} either — HTTP ${noteOut.res.status}; the next pass still re-derives it)`);
+        }
+        continue;
+      }
       const now = moveOut.json.status?.status ?? '?';
       if (now.toLowerCase() !== target.toLowerCase()) {
         unchecked.push(`${t.id}: hand-back did not stick (asked "${target}", the write came back "${now}")`);
@@ -3608,8 +4871,50 @@ if (cmd === 'whoami') {
       }
       const leftover = (moveOut.json.assignees || []).map((a) => a.id);
       if (leftover.length) unchecked.push(`${t.id}: handed back to "${now}" but assignees did not clear ([${leftover.join(', ')}])`);
+      // The move stuck, so the answer that authorized it is spent. Written AFTER
+      // the verification and never before it: a marker on a move that did not
+      // happen would suppress the retry this whole ticket exists to add.
+      // Best-effort — if it fails, the behaviour degrades to what it was before
+      // the marker existed (a hand-park could be re-released), never to a
+      // stranding.
+      if (answered.answer) {
+        const doneOut = await call('POST', `/api/v2/comment/${answered.answer.id}/reply`, {
+          comment_text: handbackDoneText({ target: now, at: new Date().toISOString() }),
+        });
+        if (!doneOut.res.ok) console.error(`  (handed back, but could not mark his answer as acted on — HTTP ${doneOut.res.status}; re-parking this ticket by hand could release it again)`);
+      }
       console.error(`  handed back: "${t.name}" -> "${now}" (verified from the write response)`);
       handedBack++;
+    }
+
+    // The list is finished. It counts as COMPLETE only if nothing on it went
+    // unchecked — a list swept with three unreadable tickets has not been
+    // swept, and saying so at the list level is the whole point of this
+    // verdict (see busRelayPlan.sweepVerdict).
+    const missed = unchecked.length - uncheckedBefore;
+    const complete = missed === 0;
+    sweeps.push({
+      label: watch.label,
+      merge: mergeEnabled(watch),
+      complete,
+      why: missed ? `${missed} ticket(s) on it could not be read` : '',
+    });
+    // A partial list must not advance its mark, or the tickets it never
+    // reached fall behind the cutoff and are skipped forever.
+    const nextMark = markAfterPass({ complete, startedAt: passStartedAt, previous: Number(marks[watch.list]) || null });
+    if (nextMark.advanced) marks[watch.list] = nextMark.mark;
+    else console.error(`  ${watch.label}: high-water mark NOT advanced — ${nextMark.why}`);
+  }
+
+  // Written once, after every watch, and never in a dry run: a dry run that
+  // moved the mark would make the next real pass skip the very comments it
+  // was rehearsing on.
+  if (!dryRun) {
+    try {
+      mkdirSync(path.dirname(marksFile), { recursive: true });
+      writeFileSync(marksFile, `${JSON.stringify(marks, null, 2)}\n`);
+    } catch (err) {
+      console.error(`  (could not save the relay's high-water marks to ${marksFile}: ${err.message} — the next pass will read every ticket)`);
     }
   }
 
@@ -3625,6 +4930,110 @@ if (cmd === 'whoami') {
     const led = readLedger();
     let ledger = led.ledger;
 
+    // ── The bound on CANNOT TELL (2026-09-04, task 86bbuvd50) ───────────────
+    //
+    // A verdict the merge step cannot resolve used to be repeated once per
+    // pass, in the same words, forever: five identical lines over fifty
+    // minutes while Dane, who had said "merge" nearly an hour earlier, had to
+    // ask what was happening. A permanent block and a momentary one were the
+    // same picture. The rule the repo already applies to job failures and to
+    // the throughput UNKNOWN — say it once, then go quiet until it changes —
+    // is applied here.
+    //
+    // IT SITS ABOVE THE LANE GATE ON PURPOSE. Everything below can be halted:
+    // the kill switch, the self-disable latch, the rate cap. None of them has
+    // anything to do with whether a stuck merge should be spoken about, and a
+    // bound that goes silent exactly when auto-merge is latched off would be
+    // deaf during the periods most likely to need it.
+    //
+    // AN UNREADABLE LEDGER (led.ok false) MAKES THIS SILENT, NOT NOISY.
+    // `asLedger(null)` yields no stored runs, so every reading looks new and
+    // nothing escalates; the write is refused by saveLedgerIfReadable further
+    // down. That is the right direction to fail — the alternative is an alarm
+    // fired off a record nobody could read — and `led.why` is already pushed
+    // to `unchecked` above, so the blindness itself is reported.
+    //
+    // IT IS A FUNCTION BECAUSE IT RUNS TWICE. The watch loop's readings are
+    // bounded here, above the lane gate; Lane A's own merge step takes its
+    // readings further down and is bounded straight after it, because a pull
+    // request stuck on the auto-merge lane is exactly as invisible as one
+    // stuck on his word (review round 1 of task 86bbuvd50). Splitting it any
+    // other way loses one of the two: bounding only after the lane would go
+    // deaf whenever the lane is halted, and bounding only before it never
+    // sees the lane's readings at all, since they do not exist yet.
+    const boundedTickets = new Set();
+    const boundCannotTell = async (readings) => {
+      for (const reading of readings) {
+        const t = reading.task;
+        // ONE READING PER TICKET PER PASS, first wins. A Ready-to-launch
+        // ticket carrying his merge word is read by the watch loop AND is a
+        // lane candidate, and two readings of one block would let the second
+        // overwrite the first's clock.
+        if (boundedTickets.has(t.id)) continue;
+        boundedTickets.add(t.id);
+
+        const stored = ledger.cannotTell[t.id] || null;
+        // WHAT THE RUN IS STUCK ON, not what it SAYS. A different pull request
+        // or a different head commit is a different block and restarts the
+        // clock; a reworded verdict on the same commit does not. The prose
+        // grain shipped first and escalated on one of the three real blocks in
+        // the relay's own log — see sameCannotTellBlock for the wordings.
+        const run = mergeOnComment.cannotTellRun({
+          prev: stored,
+          verdict: reading.reason,
+          isCannotTell: reading.isCannotTell,
+          identity: { pr: reading.pr, headSha: reading.headSha },
+          now: Date.now(),
+        });
+        const next = run.next;
+
+        if (!run.escalate) {
+          // 'clear' carries next === null, which DELETES the record — that is
+          // criterion 5, and it is why this loop runs over every reading rather
+          // than only the stuck ones.
+          ledger = ledgerAfterCannotTell(ledger, t.id, next);
+          continue;
+        }
+
+        const label = `"${t.name}" (${t.id})`;
+        const notice = mergeOnComment.cannotTellEscalation({
+          label,
+          taskUrl: t.url,
+          pr: reading.pr,
+          prUrl: reading.prUrl,
+          decision: run,
+          node: nodeRoles.thisNode().name,
+          at: clockAt(Date.now()),
+        });
+
+        if (dryRun) {
+          // Nothing written and nothing stamped: a rehearsal that marked the run
+          // as escalated would buy real silence on a message nobody got. Same
+          // rule as `throughput --dry-run`, which had this exact defect.
+          console.error(`  DRY RUN — would escalate a stuck merge on ${label}: ${run.reason}`);
+          continue;
+        }
+
+        const out = await call('POST', `/api/v2/task/${t.id}/comment`, { comment_text: notice.body });
+        if (!out.res.ok) {
+          // The clock is NOT stamped on a failed post — the run keeps counting
+          // and the next pass tries again. Stamping here would spend the one
+          // escalation this run is allowed on a message that never landed,
+          // which is the silence this whole ticket is about, reached through
+          // the fix for it.
+          unchecked.push(`${t.id}: PR #${reading.pr} has been stuck on an unresolvable CANNOT TELL for over ${Math.round(run.heldMs / 60000)} minutes and the escalation comment FAILED to post (HTTP ${out.res.status}) — nobody has been told`);
+          ledger = ledgerAfterCannotTell(ledger, t.id, { ...next, escalatedAt: null });
+          continue;
+        }
+        ledger = ledgerAfterCannotTell(ledger, t.id, next);
+
+        const bus = await postToBus(channel, notice.bus);
+        if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${t.id}: the stuck-merge escalation landed on the ticket but the bus post failed (${bus.why})` });
+        console.error(`  MERGE STUCK escalated on ${label}: ${run.reason}`);
+      }
+    };
+    await boundCannotTell(mergeReadings);
+
     // Every source the switch can be set from. `readable` is the fail-safe:
     // if the party line or the ledger could not be read, we cannot know
     // whether he said stop, and standing condition 1 says an unreadable
@@ -3633,6 +5042,41 @@ if (cmd === 'whoami') {
     const readable = busSw.readable && led.ok;
     if (!busSw.readable) busSkipped.push(`the kill switch could not be read from the party line (${busSw.why}) — auto-merge is OFF this pass`);
     if (!led.ok) unchecked.push(led.why);
+
+    // A message that ALMOST said resume gets an answer. It changes nothing
+    // about the switch — it cannot, and must not — it only breaks the silence
+    // that made a near miss and an unread message the same event (task
+    // 86bbuv99r). Answered once each, remembered in the ledger, because this
+    // list is re-read every ten minutes for as long as the message is in view.
+    const nearMissCandidates = [...(busSw.nearMisses || []), ...laneNearMisses];
+    // An unreadable ledger cannot remember that a notice was sent, and
+    // `saveLedgerIfReadable` will refuse the write, so posting here would
+    // repeat the same notice every ten minutes for as long as the message
+    // stayed in view. Staying quiet is the lesser of those two — and the read
+    // failure itself is already in `unchecked` from the line above.
+    const freshNearMisses = led.ok
+      ? newNearMisses({ candidates: nearMissCandidates, ledger })
+      : [];
+    if (!led.ok && nearMissCandidates.length) {
+      unchecked.push(`${nearMissCandidates.length} message(s) nearly said "resume auto-merging" and could not be answered — the auto-merge ledger is unreadable, so there is no way to answer each one once`);
+    }
+    for (const miss of freshNearMisses) {
+      const line = nearMissNotice({ where: miss.where, saw: miss.saw });
+      if (dryRun) {
+        console.error(`  DRY RUN — would post to the bus: a near-miss notice for the message ${miss.where}`);
+        continue;
+      }
+      const posted = await postToBus(channel, line);
+      if (!posted.ok) {
+        // NOT recorded when the post failed, so the next pass tries again. The
+        // ledger stamp means "he was told", and stamping an undelivered notice
+        // would spend the one answer this message gets on nothing.
+        reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `a near-miss switch notice for the message ${miss.where} could not be posted (${posted.why}) — it will be tried again next pass` });
+        continue;
+      }
+      ledger = ledgerAfterNearMiss(ledger, [miss.id]);
+      console.error(`  NEAR MISS answered: a message ${miss.where} nearly said "resume auto-merging" and did not match`);
+    }
 
     const liveSignals = [...busSw.signals, ...laneSwitchSignals];
     // Remember a stop the moment it is seen. A pass only reads OPEN tickets,
@@ -3660,13 +5104,39 @@ if (cmd === 'whoami') {
 
     const selfDisable = selfDisableState({ unchecked, mainBuildRed: mainRed, persisted: ledger.disabled });
     if (selfDisable.disabled && selfDisable.fresh) {
-      ledger = ledgerAfterDisable(ledger, selfDisable.why, now);
-      const line = `[CC-starcaster bus-relay] AUTO-MERGE DISABLED ITSELF: ${selfDisable.why}. No pull request will be auto-merged until a human says "resume auto-merging". Merges on your own word are unaffected.`;
+      // The sentences go INTO the ledger, not just their count (task
+      // 86bbt0mz6). `unchecked` holds a full English line for every thing
+      // this pass could not check; discarding them at the moment of latching
+      // is what left an August outage undiagnosable two days later.
+      ledger = ledgerAfterDisable(ledger, selfDisable.why, now, {
+        items: selfDisable.items,
+        trigger: selfDisable.trigger,
+      });
+      const line = `[CC-starcaster bus-relay] AUTO-MERGE DISABLED ITSELF: ${selfDisable.why}. No pull request will be auto-merged until a human says "resume auto-merging". Merges on your own word are unaffected.${latchItemLines(selfDisable)}`;
       // A dry run says what it would post. Until 2026-08-30 this was the one
       // Lane A write with no guard — and because the ledger write IS guarded,
       // the flag never persisted and it re-posted on every dry run.
       if (dryRun) console.error(`  DRY RUN — would post to the bus: ${line}`);
       else await postToBus(channel, line);
+    }
+
+    // A latch that has been in force for a day says so again. The FIRST
+    // engagement announces itself above; the silence AFTERWARDS is the defect
+    // — the halt went only to a launchd log nobody reads, so a lane that had
+    // switched itself off looked exactly like a quiet night. Two days in
+    // August 2026; 10.8 hours on 2026-09-03, found only because Dane asked
+    // why nothing had merged since 6:27pm.
+    const nag = latchNagDue({ disabled: selfDisable, now, lastNagAt: ledger.disabled?.lastNagAt });
+    if (nag.due) {
+      const line = `[CC-starcaster bus-relay] AUTO-MERGE IS STILL LATCHED OFF — ${nag.why}. ${selfDisable.why}${latchItemLines(selfDisable)}\n\nNothing will auto-merge until a human says "resume auto-merging". Your own merge commands still work.`;
+      if (dryRun) console.error(`  DRY RUN — would post to the bus: ${line}`);
+      else {
+        const posted = await postToBus(channel, line);
+        // Only a delivered nag resets the clock. Stamping it on a failed post
+        // would buy silence for a day on the strength of a message nobody got.
+        if (posted && posted.ok) ledger = ledgerAfterLatchNag(ledger, now);
+        else busSkipped.push('the auto-merge latch reminder could not be posted to the party line — it will be tried again next pass');
+      }
     }
 
     const gate = laneGate({
@@ -3677,7 +5147,7 @@ if (cmd === 'whoami') {
 
     if (!gate.allowed) {
       lane.halted = gate.why;
-      console.error(`  Lane A is not running this pass: ${gate.why}`);
+      console.error(`  The auto-merge lanes are not running this pass: ${gate.why}`);
     } else {
       for (const cand of laneCandidates) {
         const t = cand.task;
@@ -3687,7 +5157,7 @@ if (cmd === 'whoami') {
         // the hourly cap is spent, and a cap read before the first one would
         // let the fourth through.
         const cap = rateCapState(ledger.merges, Date.now());
-        if (!cap.allowed) { lane.halted = cap.why; console.error(`  Lane A stopping: ${cap.why}`); break; }
+        if (!cap.allowed) { lane.halted = cap.why; console.error(`  Auto-merge stopping: ${cap.why}`); break; }
 
         let decision = laneADecision({
           status: t.status?.status,
@@ -3703,7 +5173,7 @@ if (cmd === 'whoami') {
           const repo = `${decision.pr.owner}/${decision.pr.repo}`;
           const got = prChangedFiles(decision.pr.number, repo);
           if (!got.ok) {
-            unchecked.push(`${t.id}: could not read PR #${decision.pr.number}'s changed files (${got.why}) — Lane A did not judge it`);
+            unchecked.push(`${t.id}: could not read PR #${decision.pr.number}'s changed files (${got.why}) — the auto-merge lanes did not judge it`);
             continue;
           }
           decision = laneADecision({
@@ -3727,9 +5197,10 @@ if (cmd === 'whoami') {
         if (decision.act === 'announce') {
           const at = new Date().toISOString();
           const deadlineLabel = clockAt(Date.now() + WINDOW_MS);
-          const notice = announcementNotice({ pr, files: decision.eligibility.files, deadlineLabel, at });
+          const laneName = decision.lane || 'A';
+          const notice = announcementNotice({ pr, files: decision.eligibility.files, deadlineLabel, at, lane: laneName });
           if (dryRun) {
-            console.error(`  DRY RUN — would announce Lane A on ${label}: PR #${pr.number} merging at ${deadlineLabel}`);
+            console.error(`  DRY RUN — would announce Lane ${laneName} on ${label}: PR #${pr.number} merging at ${deadlineLabel}`);
             lane.announced++;
             continue;
           }
@@ -3737,53 +5208,86 @@ if (cmd === 'whoami') {
           if (!posted.ok) {
             // An announcement that failed to post is not a window. Nothing is
             // armed, no clock runs, and the next pass starts over.
-            unchecked.push(`${t.id}: the Lane A announcement failed (${posted.why}) — nothing is armed and nothing will merge`);
+            unchecked.push(`${t.id}: the Lane ${laneName} announcement failed (${posted.why}) — nothing is armed and nothing will merge`);
             continue;
           }
           // The BINDING deadline is ClickUp's confirmed post time plus an
           // hour, which is never earlier than the time announced above. He
           // can be merged on late; he cannot be merged on early.
           await stampLoopNoteSoftly(t.id, loopNote('auto-merge-armed', { deadline: clockAt(posted.at + WINDOW_MS) }), unchecked);
-          const bus = await postToBus(channel, `[CC-starcaster bus-relay] Lane A armed on ${label} (${t.url}): PR #${pr.number} is tests and documentation only and has a review PASS, so it merges at ${clockAt(posted.at + WINDOW_MS)} unless Dane comments on the ticket.\n\n${pr.url}`);
-          if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${t.id}: Lane A announced on the ticket but the bus post failed (${bus.why})` });
-          console.error(`  LANE A ARMED on ${label}: PR #${pr.number}, merging at ${clockAt(posted.at + WINDOW_MS)}`);
+          const whatItIs = laneName === 'B'
+            ? "is the pipeline's own tooling under scripts/ only"
+            : 'is tests and documentation only';
+          const bus = await postToBus(channel, `[CC-starcaster bus-relay] Lane ${laneName} armed on ${label} (${t.url}): PR #${pr.number} ${whatItIs} and has a review PASS, so it merges at ${clockAt(posted.at + WINDOW_MS)} unless Dane comments on the ticket.\n\n${pr.url}`);
+          if (!bus.ok) reportBusFailure({ cosmetic: true, unchecked, busSkipped, line: `${t.id}: Lane ${laneName} announced on the ticket but the bus post failed (${bus.why})` });
+          console.error(`  LANE ${laneName} ARMED on ${label}: PR #${pr.number}, merging at ${clockAt(posted.at + WINDOW_MS)}`);
           lane.announced++;
           continue;
         }
 
         if (decision.act === 'cancel') {
-          const notice = cancellationNotice({ pr, why: decision.reason, at: new Date().toISOString() });
-          if (dryRun) { console.error(`  DRY RUN — would cancel Lane A on ${label}: ${decision.reason}`); lane.cancelled++; continue; }
+          const cancelLane = decision.lane || 'A';
+          const notice = cancellationNotice({ pr, why: decision.reason, at: new Date().toISOString(), lane: cancelLane });
+          if (dryRun) { console.error(`  DRY RUN — would cancel Lane ${cancelLane} on ${label}: ${decision.reason}`); lane.cancelled++; continue; }
           const out = await call('POST', `/api/v2/task/${t.id}/comment`, { comment_text: notice.body });
           if (!out.res.ok) {
-            unchecked.push(`${t.id}: Lane A was cancelled (${decision.reason}) but the notice FAILED to post — he has not been told, and the announcement is still armed`);
+            unchecked.push(`${t.id}: Lane ${cancelLane} was cancelled (${decision.reason}) but the notice FAILED to post — he has not been told, and the announcement is still armed`);
             continue;
           }
           await stampLoopNoteSoftly(t.id, loopNote('auto-merge-cancelled', { at: clockAt(Date.now()) }), unchecked);
-          console.error(`  LANE A CANCELLED on ${label}: ${decision.reason}`);
+          console.error(`  LANE ${cancelLane} CANCELLED on ${label}: ${decision.reason}`);
           lane.cancelled++;
           continue;
         }
 
         if (decision.act === 'merge') {
           if (dryRun) { console.error(`  DRY RUN — would auto-merge PR #${pr.number} for ${label} (${decision.reason})`); lane.merged++; continue; }
-          const m = await runMergeStep({
-            task: t,
-            comments: cand.comments,
-            mergeHandled: new Set(),
-            mergeRefused: new Map(),
-            dryRun,
-            channel,
-            unchecked,
-            busSkipped,
-            stalledHandOffs,
-            inPassBudget,
-            lane: { name: 'A', decision, files: decision.eligibility.files },
-          });
+          // Same containment as the comment-driven call above: a throw here
+          // used to end the pass mid-lane, which is worse than any refusal it
+          // could have posted (review round 1 of task 86bbtqpxd).
+          let m;
+          try {
+            m = await runMergeStep({
+              task: t,
+              comments: cand.comments,
+              mergeHandled: new Set(),
+              mergeRefused: new Map(),
+              dryRun,
+              channel,
+              unchecked,
+              busSkipped,
+              stalledHandOffs,
+              inPassBudget,
+              lane: { name: decision.lane || 'A', decision, files: decision.eligibility.files },
+            });
+          } catch (err) {
+            unchecked.push(`${t.id}: Lane ${decision.lane || 'A'} reached the merge and the merge step THREW (${err && err.message ? err.message : err}) — PR #${pr.number} was NOT merged, nothing was posted on the ticket, and the announcement is still armed. That is a defect in the merge step; it needs an agent session.`);
+            console.error(`  MERGE STEP THREW in Lane ${decision.lane || 'A'} on ${label}: ${err && err.stack ? err.stack : err}`);
+            merges.threw++;
+            continue;
+          }
+          // THE LANE'S OWN READING (review round 1 of task 86bbuvd50). It is
+          // the identical merge step, so it produces the identical verdicts —
+          // and a PR that GitHub cannot make its mind up about does not care
+          // which lane authorized it. Only the `act === 'merge'` path is here
+          // because it is the only lane path that calls the merge step at all:
+          // arming and cancelling never ask GitHub whether the branch merges,
+          // so they have no verdict to bound. Same two exclusions as the watch
+          // loop — a throw and a 'none' are both "no reading was taken".
+          if (m.outcome !== 'threw' && m.outcome !== 'none') {
+            laneReadings.push({
+              task: t,
+              pr: m.pr == null ? null : m.pr,
+              prUrl: m.prUrl || null,
+              reason: m.reason || '',
+              headSha: m.headSha || null,
+              isCannotTell: Boolean(m.cannotTell),
+            });
+          }
           if (m.outcome === 'merged') {
             lane.merged++;
             ledger = ledgerAfterMerge(ledger, {
-              at: Date.now(), lane: 'A', pr: pr.number, url: pr.url, task: t.id, repo, files: decision.eligibility.files,
+              at: Date.now(), lane: decision.lane || 'A', pr: pr.number, url: pr.url, task: t.id, repo, files: decision.eligibility.files,
             }, Date.now());
             const saved = saveLedgerIfReadable(led, ledger);
             // The ledger IS the rate cap. If it cannot be written, the next
@@ -3794,12 +5298,25 @@ if (cmd === 'whoami') {
             // The gate said no after the window had already run: checks went
             // red, the branch conflicts, something changed. He is told, and it
             // needs a fresh review PASS before it can announce itself again.
-            const notice = cancellationNotice({ pr, why: m.reason, at: new Date().toISOString() });
+            const atMergeLane = decision.lane || 'A';
+            const notice = cancellationNotice({ pr, why: m.reason, at: new Date().toISOString(), lane: atMergeLane });
             const out = await call('POST', `/api/v2/task/${t.id}/comment`, { comment_text: notice.body });
-            if (!out.res.ok) unchecked.push(`${t.id}: Lane A was cancelled at merge time (${m.reason}) but the notice FAILED to post`);
+            if (!out.res.ok) unchecked.push(`${t.id}: Lane ${atMergeLane} was cancelled at merge time (${m.reason}) but the notice FAILED to post`);
             else await stampLoopNoteSoftly(t.id, loopNote('auto-merge-cancelled', { at: clockAt(Date.now()) }), unchecked);
-            console.error(`  LANE A CANCELLED at merge time on ${label}: ${m.reason}`);
+            console.error(`  LANE ${atMergeLane} CANCELLED at merge time on ${label}: ${m.reason}`);
             lane.cancelled++;
+          } else if (m.outcome === 'merge-not-observed') {
+            // The merge command ran and the merge was NOT observed (task
+            // 86bbv35cq) — enqueued, closed, or unreadable. Emphatically not
+            // counted as a lane merge: the ledger is the rate cap, and
+            // crediting it with a merge that has not happened would spend a
+            // slot on nothing. The announcement stays armed, the ticket stays
+            // where it is, and the next pass finds it merged (or still not)
+            // and does the bookkeeping then. Already reported in `unchecked`
+            // by the merge step; this line is so the lane's own log says it
+            // too, rather than filing it under "CI is still running".
+            console.error(`  LANE A MERGE NOT OBSERVED on ${label}: ${m.reason}`);
+            lane.waiting++;
           } else {
             // 'waiting' — CI is still running. The announcement stays armed
             // and the next pass tries again. Nothing is said, because nothing
@@ -3809,6 +5326,12 @@ if (cmd === 'whoami') {
         }
       }
     }
+
+    // The lane's own stuck merges, bounded on the same clock and the same
+    // ledger as the watch loop's. This runs BELOW the lane gate because the
+    // readings do not exist until the lane has run; the half above the gate is
+    // what keeps the bound audible while the lane is halted.
+    await boundCannotTell(laneReadings);
 
     // Standing condition 3: announced, never silent. One post a day, and it
     // posts "none" on a quiet day — a silent day and a broken job must not
@@ -3882,7 +5405,7 @@ if (cmd === 'whoami') {
     : '';
 
   const mergeLine = mergingAllowed
-    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass`
+    ? `, ${merges.merged} merged, ${merges.refused} merge refused, ${merges.handedOff} handed to an agent session, ${merges.armed} handed to GitHub auto-merge, ${merges.waiting} waiting on checks, ${merges.unchanged} unchanged since last pass${merges.notObserved ? `, ${merges.notObserved} MERGE NOT OBSERVED (enqueued or unreadable — see could-not-be-checked below)` : ''}${merges.threw ? `, ${merges.threw} THREW (see could-not-be-checked below)` : ''}`
     : pauseState.paused
       ? `, merging disabled — the pipeline is PAUSED${pauseState.certain ? '' : ' (the switch could not be read, which counts as paused)'}`
       : ', merging disabled (--no-merge)';
@@ -3921,9 +5444,33 @@ if (cmd === 'whoami') {
   // the headroom to watch is per-pass, not per-hour. If this creeps toward
   // 100 the answer is a cheaper pass, not a longer interval — the relay is
   // the pipeline's consumer and slowing it down is what the ticket undid.
-  console.error(`  requests this pass: ${requestCount} (ClickUp allows ~100/minute)`);
+  console.error(`  requests this pass: ${requestCount()} (ClickUp allows ~100/minute)`);
   if (lastRes) reportLimits(lastRes);
-  if (unchecked.length) process.exit(1);
+
+  // THE VERDICT, at LIST granularity (task 86bbugdv9). Everything above says
+  // what happened to individual tickets; this says whether the pass actually
+  // DID its job, and names the list it did not finish. A pass that never
+  // reached the merge-capable list used to be indistinguishable from a quiet
+  // one, and was, for sixteen hours on 2026-09-03.
+  const verdict = sweepVerdict(sweeps);
+  console.log(verdict.line);
+  // The sweep verdict covers the watch loop. Steps that run AFTER it — Lane A,
+  // the merge step's own follow-ups — can still add to `unchecked`, and those
+  // used to be what forced exit 1. Keep that: a pass is non-zero if EITHER the
+  // sweep was incomplete or anything at all went unverified. Dropping the
+  // second half would have been a silent regression in the quiet direction,
+  // which is the one that costs.
+  // A pass that STOPPED AT THE RESERVE gets its own code, ahead of the generic
+  // failure code. It has not done its work — so never 0 (the ticket's Non-goal)
+  // — but it has not failed either, and `run_bus_relay.sh` has to tell those
+  // apart or a tight budget posts a ClickUp outage to the bus every ten
+  // minutes.
+  if (yieldedAt) {
+    console.error(`\nThis pass STOPPED AT THE CLICKUP RESERVE. ${yieldedAt.why}`);
+    console.error('It did not finish; the lists and tickets it did not reach are named above.');
+    process.exit(EXIT_YIELDED);
+  }
+  process.exit(verdict.exitCode || (unchecked.length ? 1 : 0));
 
 } else if (cmd === 'loop-note') {
   // Stamp the "Loop note" custom field with a plain-language transition line
@@ -3990,10 +5537,44 @@ if (cmd === 'whoami') {
 
   console.log(`switch:  ${ks.state} — ${ks.why}`);
   console.log(`disabled:${disabled.disabled ? ` yes — ${disabled.why}` : ' no'}`);
+  // "Why is the lane off?" answerable in one read-only command.
+  if (disabled.disabled) {
+    if (disabled.trigger === 'main-red') {
+      console.log('         (the trigger was a RED BUILD ON MAIN, not an unchecked item)');
+    } else if (disabled.items.length) {
+      console.log('         what it could not verify:');
+      for (const item of disabled.items) console.log(`           - ${item}`);
+      if (disabled.droppedItems) console.log(`           ...and ${disabled.droppedItems} more (the stored list is capped)`);
+    } else {
+      console.log('         (this latch was recorded before the reasons were stored — the sentences are gone)');
+    }
+  }
   console.log(`cap:     ${cap.why}`);
   console.log(`window:  ${WINDOW_MS / 60000} minutes`);
   console.log(`digest:  ${digestDue(led.ledger.lastDigestAt, now) ? 'due' : `last posted ${clockAt(led.ledger.lastDigestAt)}`}`);
-  console.log(`LANE A:  ${gate.allowed ? 'RUNNING' : `NOT RUNNING — ${gate.why}`}`);
+  // "Running" is about the gate being OPEN. Whether anything has ever come out
+  // of it is a different question, and printing only the first one is how
+  // `LANE A: RUNNING` sat beside `ledger: not created yet` on 2026-09-03 and
+  // read as a healthy lane that had never merged a single pull request
+  // (task 86bbugeda).
+  const history = laneAMergeHistory({ ledger: led.ledger, fresh: led.fresh, readable: led.ok });
+  // Both lanes share ONE gate — the switch, the cap and the latch apply to
+  // every automated lane (doctrine, "Conditions that apply to every automated
+  // lane"), so printing them per lane would invite the reading that they are
+  // separately switchable. What differs is which files each lane carries, so
+  // that is what each line says.
+  const state = gate.allowed ? 'RUNNING' : `NOT RUNNING — ${gate.why}`;
+  console.log(`LANE A:  ${state}`);
+  console.log('         carries: test files, docs/, *.md');
+  console.log(`LANE B:  ${state}`);
+  console.log("         carries: scripts/ — the pipeline's own tooling. NOT lib/ (the live");
+  console.log('         server loads it), and not the merge machinery itself.');
+  console.log(`         guard:   npm run check:automerge-reach`);
+  console.log(`history: ${history.verdict === 'never' ? 'NEVER MERGED — ' : (history.verdict === 'unknown' ? 'CANNOT TELL — ' : '')}${history.why}`);
+  if (gate.allowed && history.verdict === 'never') {
+    console.log('         RUNNING here means the gate is open, NOT that these lanes work —');
+    console.log('         nothing has ever come out of them.');
+  }
   const recent = mergesSince(led.ledger, digestSince(led.ledger, now));
   console.log(`recent:  ${recent.length} auto-merge(s) since the last digest (or the last 24 hours if none has posted)`);
   for (const m of recent) console.log(`  PR #${m.pr}  task ${m.task}  ${clockAt(m.at)}  ${(m.files || []).join(' ')}`);

@@ -147,6 +147,17 @@ export const CONTROLS = [
   { key: "navBorderColor", value: "#8a2be2", label: "Border Color", base: { navBorderWidth: "6" } },
   { key: "navBarRadius", value: "72", label: "Radius" },
   { key: "navBorderRadius", value: "44", label: "Link Radius" },
+  /*
+   * "Square bottom when open". The sweep reaches this through the PANEL, not
+   * the item: it forces every dropdown open with `display: flex` but cannot
+   * force `:hover`, and the fixture's first link (Home) has no dropdown to
+   * hover anyway. What it does see is `.site-nav-dropdown-menu` squaring its
+   * own top corners, which is half the control and enough to prove it is not
+   * dead. The item's bottom corners are covered by the colocated vitest and
+   * by a break test — see the PR for 86bbum0x9.
+   */
+  { key: "navLinkRadiusTopOnly", value: "true", label: "Square Bottom When Open",
+    open: true, note: "measured on the panel's top corners; the item half is hover-only" },
   { key: "navShadow", value: "false", label: "Drop Shadow" },
   { key: "navShadowColor", value: "#8a2be2", label: "Shadow Color" },
   { key: "navShadowX", value: "48", label: "Shadow X" },

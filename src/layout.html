@@ -404,6 +404,12 @@
   <!-- Module order matters: core first, then features, then app (orchestrator) last -->
 
   <script src="/shared/composeXPost.js"></script>
+  <!-- What the bulk template change reports once it has run. In shared/ so a
+       node test can reach the sentence: the report used to be built inline in
+       builder.js, where nothing but a browser parses it, and four defects in
+       it survived review and a full gate run because no assertion could see
+       them. builder.js needs this before it runs, so it loads first. -->
+  <script src="/shared/bulkTemplateOutcome.js"></script>
   <!-- Proximity halo + ignition for the login screen's "Explore" link.
        Self-contained and optional: the anchor keeps a real href and the CSS
        carries a resting halo, so the link still glows, still lights on hover,

@@ -21,7 +21,7 @@
  */
 
 const fs = require('fs');
-const { execFileSync } = require('child_process');
+const { gitStateDir } = require('./hook_state_dir.cjs');
 
 /**
  * The four exceptions named in CLAUDE.md. A hand-off is legitimate ONLY when
@@ -317,32 +317,17 @@ function isInteractive(entrypoint) {
 }
 
 /**
- * Where the per-session refusal counter lives.
+ * Where the per-session refusal counter lives. Kept as a named export because
+ * this hook and its tests have always called it `stateDir`; the resolver itself
+ * moved to lib/hook_state_dir.cjs, which explains why it is NOT
+ * `<toplevel>/.git/` and carries the incident.
  *
- * NOT `<toplevel>/.git/` -- that is only a directory in the MAIN checkout. In
- * a worktree `.git` is a one-line FILE pointing at the real git dir, so
- * writing a state file under it fails with ENOTDIR. The write is wrapped in a
- * try/catch, so the failure is silent, and the effect is that the
- * three-refusal stand-down never engages. Every thread here runs in a
- * worktree, so that is the case that matters: the safety valve would have been
- * inoperative exactly where the work happens, and a hook that can wedge a
- * conversation shut is worse than the miss it prevents.
- *
- * `--absolute-git-dir` answers correctly from both -- the main checkout's
- * `.git`, or `<main>/.git/worktrees/<name>` from inside a linked worktree.
- * Per-worktree is the right grain anyway: sessions are per-folder.
+ * It moved because the SQL hook needed the identical answer and copying it a
+ * second time is how the first copy drifted -- this bug was fixed here in
+ * PR #499 and stayed live in require_sql_handoff.cjs for another week. One
+ * function, two callers, no drift.
  */
-function stateDir(cwd) {
-  try {
-    return execFileSync('git', ['rev-parse', '--absolute-git-dir'], {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return '';
-  }
-}
+const stateDir = gitStateDir;
 
 /** The refusal the agent reads. Named so the test can assert on its shape. */
 function refusalMessage(offenders) {

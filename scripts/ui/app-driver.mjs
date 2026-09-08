@@ -27,6 +27,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cannotTell } from './harness-exit.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
@@ -229,8 +230,7 @@ export async function ensureBuildIsCurrent(baseUrl = BASE_URL) {
   try {
     await assertServingThisCheckout(baseUrl);
   } catch (e) {
-    console.error(`\n[ui-harness] ${e.message}\n`);
-    process.exit(2);
+    cannotTell('ui-harness', e.message);
   }
 }
 
@@ -242,8 +242,7 @@ export async function launch({ width = 1440, height = 1000, headless = true } = 
     // Printed and exited here rather than thrown on: every caller is a
     // top-level await, so a thrown error surfaces as a stack trace with the
     // explanation buried in it. This message IS the fix instructions.
-    console.error(`\n[ui-harness] ${e.message}\n`);
-    process.exit(2);
+    cannotTell('ui-harness', e.message);
   }
   const browser = await chromium.launch({ headless });
   const page = await browser.newPage({ viewport: { width, height } });

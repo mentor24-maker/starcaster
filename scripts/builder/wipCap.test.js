@@ -45,7 +45,12 @@ test('at or above the cap it declines, and says the count, the cap and why', () 
   assert.equal(out.openCount, 21);
   assert.match(out.message, /21 PR\(s\) open/);
   assert.match(out.message, /cap 5/);
-  assert.match(out.message, /merge side is the bottleneck/);
+  // WITHOUT TICKET STATUSES IT CANNOT TELL which stage holds the slots, and
+  // must say so rather than assert one (2026-09-05, task 86bbvh285). The
+  // sentence it replaced — "the merge side is the bottleneck" — named a cause
+  // this path has no reading for at all.
+  assert.match(out.message, /could NOT be determined/);
+  assert.doesNotMatch(out.message, /bottleneck/, 'a path with no statuses named a cause anyway');
   assert.match(out.message, /not a failure/, 'it must not read as an error');
 });
 
@@ -327,11 +332,17 @@ test('the message names the split, never a bare total', () => {
   const prs = [pr(1, 'a'), pr(2, 'b'), pr(3, 'c'), pr(4, 'd')];
   const byId = { a: 'Building', b: 'Queued', c: 'Live', d: 'Rework' };
   const { message } = wipDecision({ prs, cap: 5, ticketStatusById: byId });
-  assert.match(message, /1 in flight, cap 5/);
+  // Since task 86bbuzzbk the headline carries BOTH limits, because there are
+  // two and either can be the one that declined. Naming only the enforced one
+  // would put a true number where the deciding one belongs.
+  assert.match(message, /1 building or in review \(cap 5\)/);
+  assert.match(message, /0 waiting on Dane \(ceiling 10\)/);
   assert.match(message, /1 in rework, waiting to be re-claimed \(#4\)/);
   assert.match(message, /1 queued with a PR already open \(#2\)/);
   assert.match(message, /already live \(#3\)/);
   assert.doesNotMatch(message, /4 PR\(s\) open/, 'the old bare-total phrasing must be gone');
+  assert.doesNotMatch(message, /\d+ in flight, cap/,
+    'the merged "in flight" total must not stand where the build cap is enforced — it counted work parked on Dane');
 });
 
 test('the rework count is in the headline of BOTH messages, and zero is stated', () => {
@@ -387,7 +398,47 @@ test('a genuinely full pipeline still caps', () => {
   const d = wipDecision({ prs, cap: 5, ticketStatusById: byId });
   assert.equal(d.claim, false);
   assert.equal(d.code, 3);
-  assert.match(d.message, /5 in flight, cap 5/);
+  assert.equal(d.limitHit, 'wip', 'five machine-held PRs is the BUILD cap, not the operator ceiling');
+  assert.match(d.message, /5 building or in review \(cap 5\)/);
+  // IT NAMES WHAT IT MEASURED, not a cause (task 86bbvh285). All five are in
+  // review here, so a message blaming the merge side would send the reader to
+  // the one lane that is not involved — which is exactly what happened on
+  // 2026-09-05, when merges were landing in nine minutes and review was the
+  // stage that had stalled.
+  assert.match(d.message, /the slots are held by 0 building, 5 in review/);
+  assert.doesNotMatch(d.message, /bottleneck/);
+});
+
+test('the decline names the SPLIT of the slots, not just the total', () => {
+  // Two builds and three reviews. A reader has to be able to tell which stage
+  // to go and look at; "5 building or in review" alone cannot say.
+  const prs = [1, 2, 3, 4, 5].map((n) => pr(n, `t${n}`));
+  const byId = {
+    t1: 'Building', t2: 'Building', t3: 'In review', t4: 'In review', t5: 'In review',
+  };
+  const d = wipDecision({
+    prs, cap: 5, ticketStatusById: byId,
+    // Keep the two builds FRESH, or the stranded discount takes them out of
+    // the count and this measures something else entirely.
+    nowMs: Date.now(), strandedAfterMs: 60 * 60 * 1000,
+  });
+  assert.equal(d.limitHit, 'wip');
+  assert.equal(d.building, 2);
+  assert.equal(d.reviewing, 3);
+  assert.match(d.message, /the slots are held by 2 building, 3 in review/);
+});
+
+test('BREAK-TEST: the split is a PARTITION of the in-progress count', () => {
+  // building + reviewing must equal inProgress. If a third in-progress status
+  // is ever added to the taxonomy and not handled here, the phrase says so
+  // rather than under-reporting — a total that stops adding up to the cap is
+  // how a partition quietly stops being one.
+  const prs = [1, 2, 3].map((n) => pr(n, `t${n}`));
+  const byId = { t1: 'Building', t2: 'In review', t3: 'In review' };
+  const d = wipDecision({
+    prs, cap: 5, ticketStatusById: byId, nowMs: Date.now(), strandedAfterMs: 60 * 60 * 1000,
+  });
+  assert.equal(d.building + d.reviewing, d.inProgress, 'the split lost a pull request');
 });
 
 test('no ticket statuses at all falls back to the OLD, stricter counting', () => {
@@ -824,4 +875,149 @@ test('the cap probe reads freshness from the tasks it already fetched', () => {
   const probe = code.slice(code.indexOf('function capProbe('), code.indexOf('function capProbe(') + 2000);
   assert.match(probe, /dateUpdated: Number\(t\.date_updated\)/, 'the probe must supply freshness');
   assert.match(probe, /loopNote: loopNoteOf\(t\)/, 'and the loop note the shared classifier reads');
+});
+
+// ── The operator ceiling (2026-09-04, task 86bbuzzbk) ────────────────────────
+//
+// THE BUG THESE COVER. Until today `Ready to launch` and `Needs your input`
+// counted against the build cap of five, so a ticket that was finished,
+// reviewed, green and waiting only on Dane held a build slot for as long as he
+// was asleep. Five of them stopped the pipeline outright, however deep the
+// queue. On the night of 2026-09-03 that idled loop-build for three separate
+// hours with 66-71 tickets claimable, and it put a hard ceiling of five on how
+// much finished work could ever be waiting for him at once.
+
+test('work parked on Dane no longer holds a BUILD slot', () => {
+  // The headline case, stated as the night of 2026-09-03 actually looked:
+  // four finished tickets waiting on Dane and one genuinely building. The old
+  // reading called that 5-of-5 and stopped claiming; there is plenty of room.
+  const prs = [1, 2, 3, 4, 5].map((n) => pr(n, `t${n}`));
+  const byId = {
+    t1: 'Ready to launch', t2: 'Ready to launch', t3: 'Ready to launch',
+    t4: 'Needs your input', t5: 'Building',
+  };
+  const d = wipDecision({ prs, cap: 5, ticketStatusById: byId });
+  assert.equal(d.claim, true, 'four tickets parked on Dane must not stop the build loop');
+  assert.equal(d.code, 0);
+  assert.equal(d.inProgress, 1, 'only the one genuinely building counts against the build cap');
+  assert.equal(d.operatorHeld, 4);
+  assert.equal(d.inFlight, 5, 'the honest total is unchanged — pulse and throughput still want it');
+});
+
+test('the operator ceiling still bounds the pile, and says so DIFFERENTLY', () => {
+  // Not counting them at all would leave open PRs unbounded, which is the
+  // quadratic catch-up cost the cap exists to control. They are bounded at
+  // their own larger number instead.
+  const prs = Array.from({ length: 10 }, (_, i) => pr(i + 1, `t${i + 1}`));
+  const byId = Object.fromEntries(prs.map((_, i) => [`t${i + 1}`, 'Ready to launch']));
+  const d = wipDecision({ prs, cap: 5, operatorCap: 10, ticketStatusById: byId });
+  assert.equal(d.claim, false, 'ten waiting on Dane is a full inbox and the loop must stop');
+  assert.equal(d.code, 3);
+  assert.equal(d.limitHit, 'operator', 'the two limits are told apart, not merged');
+  assert.match(d.message, /OPERATOR CEILING reached/);
+  assert.match(d.message, /his inbox is full/);
+  // Naming the build stages would be a LIE here: the machines are idle and the
+  // queue is deep. A reader who cannot tell the two declines apart cannot act.
+  assert.doesNotMatch(d.message, /the slots are held by/,
+    'pointing at the build stages when Dane is the one who must act sends the reader to the wrong place');
+  assert.doesNotMatch(d.message, /bottleneck/);
+});
+
+test('the two limits are independent — a full inbox does not borrow build slots', () => {
+  // Nine parked on Dane (under the ceiling) plus five genuinely building
+  // (at the build cap). The build cap is what declines, and it says so.
+  const prs = Array.from({ length: 14 }, (_, i) => pr(i + 1, `t${i + 1}`));
+  const byId = {};
+  for (let i = 1; i <= 9; i += 1) byId[`t${i}`] = 'Ready to launch';
+  for (let i = 10; i <= 14; i += 1) byId[`t${i}`] = 'In review';
+  const d = wipDecision({ prs, cap: 5, operatorCap: 10, ticketStatusById: byId });
+  assert.equal(d.claim, false);
+  assert.equal(d.limitHit, 'wip', 'five in review fills the BUILD cap; the inbox is under its own ceiling');
+  assert.equal(d.inProgress, 5);
+  assert.equal(d.operatorHeld, 9);
+});
+
+test('every message names BOTH counts, whichever way it goes', () => {
+  // Splitting one cap into two makes it possible to print a number that is no
+  // longer the one being enforced. Both are always stated, including zero —
+  // a clause that vanishes at zero tells the reader nothing about whether it
+  // was checked (the same rule the stranded phrase already follows).
+  const cases = [
+    [{ t1: 'Building' }, [pr(1, 't1')]],
+    [Object.fromEntries([1, 2, 3, 4, 5].map((n) => [`t${n}`, 'Building'])), [1, 2, 3, 4, 5].map((n) => pr(n, `t${n}`))],
+    [Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`t${i + 1}`, 'Ready to launch'])),
+      Array.from({ length: 10 }, (_, i) => pr(i + 1, `t${i + 1}`))],
+  ];
+  for (const [byId, prs] of cases) {
+    const { message } = wipDecision({ prs, cap: 5, operatorCap: 10, ticketStatusById: byId });
+    assert.match(message, /\d+ building or in review \(cap 5\)/, `missing the build count: ${message}`);
+    assert.match(message, /\d+ waiting on Dane \(ceiling 10\)/, `missing the operator count: ${message}`);
+  }
+});
+
+test('the split is a PARTITION of in-flight, so the three counts cannot disagree', () => {
+  // inProgress and operatorHeld are derived by splitting inFlight rather than
+  // by an independent test, so one pull request can never be in both or
+  // neither. Two functions disagreeing about one string is the failure this
+  // file already carries two comments about.
+  const prs = [1, 2, 3, 4, 5, 6].map((n) => pr(n, `t${n}`));
+  const byId = {
+    t1: 'Building', t2: 'In review', t3: 'Ready to launch',
+    t4: 'Needs your input', t5: 'Queued', t6: 'Live',
+  };
+  const g = classifyPrs({ prs, ticketStatusById: byId });
+  assert.deepEqual(g.inProgress, [1, 2]);
+  assert.deepEqual(g.operatorHeld, [3, 4]);
+  assert.deepEqual(g.inFlight, [1, 2, 3, 4]);
+  assert.deepEqual(
+    [...g.inProgress, ...g.operatorHeld].sort((a, b) => a - b), g.inFlight,
+    'the two halves must add up to the whole, exactly',
+  );
+});
+
+test('with no ticket statuses the split is null, never zero', () => {
+  // DOCTRINE 3.2. Reporting "0 waiting on Dane" from a pass that could not
+  // read a single status is an all-clear nobody established — and it is the
+  // conservative path, where operator-held work IS counted against the build
+  // cap, so the numbers would also be wrong.
+  // Five open against a cap of five, so this really is the CAPPED branch —
+  // asserting the capped wording on an uncapped call passes for the wrong
+  // reason and proves nothing.
+  const prs = [1, 2, 3, 4, 5].map((n) => pr(n, `t${n}`));
+  const d = wipDecision({ prs, cap: 5 });
+  assert.equal(d.claim, false, 'the unreadable-queue path must still fail TOWARD the cap');
+  assert.equal(d.inProgress, null);
+  assert.equal(d.operatorHeld, null);
+  assert.match(d.message, /work parked on Dane was counted against the build[\s\S]*cap too/,
+    'the fallback must say that it counted them, because normally it does not');
+
+  // And the uncapped half of the same path still reports null rather than 0.
+  const room = wipDecision({ prs: [pr(1, 't1')], cap: 5 });
+  assert.equal(room.claim, true);
+  assert.equal(room.inProgress, null);
+  assert.equal(room.operatorHeld, null);
+});
+
+test('a malformed operator ceiling is ignored, never obeyed', () => {
+  // Same discipline as resolveCap. A typo here would either uncap Dane's
+  // queue entirely or stop the loop dead, and neither belongs to a mistyped
+  // environment variable.
+  const { resolveOperatorCap, DEFAULT_OPERATOR_CAP, OPERATOR_CAP_ENV } = require('./wipCap');
+  assert.equal(resolveOperatorCap({}), DEFAULT_OPERATOR_CAP);
+  assert.equal(resolveOperatorCap({ [OPERATOR_CAP_ENV]: 'lots' }), DEFAULT_OPERATOR_CAP);
+  assert.equal(resolveOperatorCap({ [OPERATOR_CAP_ENV]: '-3' }), DEFAULT_OPERATOR_CAP);
+  assert.equal(resolveOperatorCap({ [OPERATOR_CAP_ENV]: '2.5' }), DEFAULT_OPERATOR_CAP);
+  assert.equal(resolveOperatorCap({ [OPERATOR_CAP_ENV]: '12' }), 12, 'a valid override IS obeyed');
+});
+
+test('the probe passes the operator ceiling through — or the ticket ships dead', () => {
+  // The whole change is inert if the one live caller never sends the second
+  // limit: wipDecision would fall back to its default and the env override
+  // would silently do nothing.
+  const code = fs.readFileSync(path.join(__dirname, '..', 'clickup_direct.mjs'), 'utf8');
+  const at = code.indexOf('function capProbe(');
+  assert.ok(at > -1, 'capProbe must still exist');
+  const probe = code.slice(at, at + 2000);
+  assert.match(probe, /operatorCap:\s*wipCap\.resolveOperatorCap\(process\.env\)/,
+    'capProbe must pass the operator ceiling, or the second limit is never enforced');
 });

@@ -33,6 +33,9 @@
  */
 
 const { isReviewVerdict, isReviewPassed } = require('./mergeOnComment.js');
+// The refusal-reason table (task 86bbtqpxd). This module raises exactly one
+// refusal of its own, and it names its class like every other raise site.
+const { REFUSAL_CODES } = require('./refusalClass.js');
 const { prTrailLanded } = require('./loopTrail.js');
 
 /**
@@ -585,6 +588,10 @@ function duringRerunWait({ staleness, gate } = {}) {
   if (state !== 'fresh') {
     return {
       action: 'wait',
+      // The rollup is mid-swap, which is a state this pass CAN read — the
+      // re-run simply has not answered yet. See `verdictCannotTell` in
+      // mergeOnComment.js for what the field decides.
+      cannotTell: false,
       reason: `the re-run has not produced a fresh review-gate answer yet (${(staleness && staleness.reason) || 'no staleness answer'})`,
     };
   }
@@ -614,19 +621,47 @@ function duringRerunWait({ staleness, gate } = {}) {
  * result nobody saw is not a pass. The refusal is re-decidable, so the next
  * pass merges it on the operator's original word once the re-run has landed.
  */
-function afterRerunDecision({ action, reason } = {}) {
+function afterRerunDecision({ action, reason, refusalCode, cannotTell } = {}) {
   const act = String(action || '');
   if (act === 'merge' || act === 'refuse' || act === 'conflict') {
-    return { action: act, reason: reason || '' };
+    // `refusalCode` rides through unchanged: a refusal that came from
+    // githubGate is already classified, and re-labelling it here would be a
+    // second opinion about a reason this function did not raise (86bbtqpxd).
+    // `cannotTell` rides through for the identical reason, and because a
+    // field DROPPED on a reassignment is exactly how the 86bbtqpxd defect
+    // above worked — silently, with every test still passing.
+    return { action: act, cannotTell: Boolean(cannotTell), reason: reason || '', ...(refusalCode ? { refusalCode } : {}) };
   }
   if (act === 'update-branch') {
     return {
       action: 'wait',
+      cannotTell: Boolean(cannotTell),
       reason: `main moved while waiting on the review-gate re-run (${reason || 'the branch is behind main'}) — the next pass catches the branch up, which re-runs the gate itself`,
+    };
+  }
+  // The same shape, arriving by the other route (task 86bbuvcwc): GitHub has
+  // flagged the branch CONFLICTING while git merges it cleanly. Also neither a
+  // pass nor a failure — the next pass's catch-up path is what settles it, and
+  // that push re-runs the gate. Without this arm it fell to the refusal below
+  // and blamed the re-run for a branch that merely needs catching up, which is
+  // the wrong-reason defect the arm above was written for.
+  if (act === 'catch-up-locally') {
+    return {
+      action: 'wait',
+      // Carries the disagreement's own classification: two sources contradict
+      // each other, so no reading was taken, and this arm is one of the ways
+      // that verdict reaches the repeat bound.
+      cannotTell: Boolean(cannotTell),
+      reason: `GitHub and git disagree about whether this branch conflicts (${reason || 'no reason given'}) — the next pass catches the branch up, which re-runs the gate itself`,
     };
   }
   return {
     action: 'refuse',
+    // The wait ran out or the answer was unreadable — no reading was taken.
+    // It is a refusal, so it never reaches the repeat bound; the field says
+    // what was read rather than what happens next.
+    cannotTell: true,
+    refusalCode: REFUSAL_CODES.reviewGateRerunUnresolved,
     reason: `the review gate was re-run because it was stale, and this pass could not confirm the result (${reason || 'no answer'}) — refusing rather than merging on a stale gate`,
   };
 }

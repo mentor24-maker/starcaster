@@ -46,7 +46,12 @@ const { printAndExit } = require('./lib/flushExit.cjs');
 
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const LOOP_LOG_DIR = process.env.LOOP_LOG_DIR || path.join(os.homedir(), 'loop-logs');
+const { clickupFetch } = require('./lib/clickup.cjs');
+
 const TOKEN = process.env.CLICKUP_API_TOKEN;
+/** Constant in every real run; overridable only so tests can point at a
+ *  server that is not ClickUp. Same knob the shared client uses. */
+const API_BASE = process.env.CLICKUP_API_BASE || 'https://api.clickup.com';
 const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
 
 const asJson = process.argv.includes('--json');
@@ -97,19 +102,29 @@ function readNoOp(job, queuedCount, now) {
 
 // ── ClickUp: GETs only ───────────────────────────────────────────────────────
 
+/*
+ * Through the SHARED door (2026-09-04, task 86bbugcpa), so this hourly job's
+ * requests are counted against the one company token instead of being spent
+ * invisibly beside the relay's.
+ *
+ * The door never throws — it hands a transport failure back as
+ * `transportError` — but every caller in this file is written around a throw,
+ * and this ticket's non-goal is that nothing observable changes. So the
+ * rejection is re-raised at exactly this line and nowhere else, with the
+ * original error object, which is what the old bare `fetch` propagated.
+ */
 async function clickupGet(apiPath) {
   if (!TOKEN) {
     throw new Error(
       'CLICKUP_API_TOKEN is not set. Run this via `npm run pulse` so Doppler supplies it.'
     );
   }
-  const res = await fetch(`https://api.clickup.com${apiPath}`, {
+  const out = await clickupFetch(`${API_BASE}${apiPath}`, {
     method: 'GET',
     headers: { Authorization: TOKEN },
   });
-  const text = await res.text();
-  let json = null;
-  try { json = JSON.parse(text); } catch { /* a non-JSON error page */ }
+  if (out.transportError) throw out.transportError;
+  const { res, json, text } = out;
   if (!res.ok) throw new Error(`HTTP ${res.status} ${json?.err || text.slice(0, 160)}`);
   return json;
 }

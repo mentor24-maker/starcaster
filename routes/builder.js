@@ -16,6 +16,123 @@ function deriveTemplateId(body, name, { unique = false } = {}) {
 }
 
 /**
+ * Build the createPage input for POST /api/builder/landing-pages.
+ *
+ * This is a WHITELIST, exactly like buildLandingPagePatch, and it fails the
+ * same silent way: a field the editor sends and this does not name is dropped
+ * here, the route still answers 201, and the setting reads back empty on the
+ * page that was just created. `pageTemplateId` was missing from this list from
+ * the day the field shipped -- the editor posted it on every create, the
+ * server never wrote it, and setting the template a SECOND time (a PATCH,
+ * which does name it) worked, so the bug looked like "the first save doesn't
+ * take".
+ *
+ * Split out of the handler so a test can hold it. A create input assembled
+ * inline inside a route is a list nothing can check.
+ */
+function buildLandingPageCreateInput(body, name) {
+  // Unconditional derivation is correct HERE, unlike the patch above. A new
+  // row needs some legacy template_id, and deriveTemplateId already returns
+  // body.templateId untouched when the caller states one -- so nothing the
+  // caller said is overwritten. The patch path has to refuse because it would
+  // rewrite an EXISTING template_id from the page's title on every save.
+  const templateId = deriveTemplateId(body, name, { unique: true });
+
+  return {
+    name,
+    templateKind: body.templateKind || body.template_kind,
+    templateId,
+    slug: body.slug,
+    isPublished: body.isPublished ?? body.is_published,
+    isPrivate: body.isPrivate ?? body.is_private,
+    searchPriority: body.searchPriority ?? body.search_priority,
+    primaryColor: String(body.primaryColor || '').trim(),
+    backgroundColor: String(body.backgroundColor || '').trim(),
+    accentColor: String(body.accentColor || '').trim(),
+    formId: String(body.formId || '').trim(),
+    leadMagnetId: String(body.leadMagnetId || '').trim(),
+    headlineId: String(body.headlineId || '').trim(),
+    pitchId: String(body.pitchId || '').trim(),
+    ctaId: String(body.ctaId || '').trim(),
+    websiteBannerImageId: String(body.websiteBannerImageId || '').trim(),
+    backgroundImageId: String(body.backgroundImageId || '').trim(),
+    featureImageId: String(body.featureImageId || '').trim(),
+    highlightImageId: String(body.highlightImageId || '').trim(),
+    featureHeadlineId: String(body.featureHeadlineId || '').trim(),
+    featureSubheadingId: String(body.featureSubheadingId || '').trim(),
+    featureTitle: String(body.featureTitle || '').trim(),
+    featureCopy: String(body.featureCopy || '').trim(),
+    highlightHeadlineId: String(body.highlightHeadlineId || '').trim(),
+    highlightPitchId: String(body.highlightPitchId || '').trim(),
+    highlightTitle: String(body.highlightTitle || '').trim(),
+    highlightCopy: String(body.highlightCopy || '').trim(),
+    bodyHeadlineId: String(body.bodyHeadlineId || '').trim(),
+    bodySubheadingId: String(body.bodySubheadingId || '').trim(),
+    bodyPitchId: String(body.bodyPitchId || '').trim(),
+    logoWideId: String(body.logoWideId || '').trim(),
+    logoSquareId: String(body.logoSquareId || '').trim(),
+    themeId: String(body.themeId || '').trim(),
+    // Which page template this page was created FROM -- distinct from
+    // templateId above, which is a legacy layout name. Empty is a real value
+    // ("no template"), and the store writes it as NULL, which is the state 93
+    // production pages were already in when the column was added.
+    pageTemplateId: String(body.pageTemplateId ?? body.page_template_id ?? '').trim(),
+    pageBackground: body.pageBackground || body.page_background,
+    theme: body.theme,
+    layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
+      ? (body.layoutSections || body.layout_sections)
+      : [],
+    contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
+  };
+}
+
+/**
+ * Build the createPage input for POST /api/builder/landing-pages/bulk-create-with-model.
+ *
+ * Bulk Create is the OTHER caller of createPage, and it had the identical
+ * defect the single-page route had: a third hand-written field list that did
+ * not name `pageTemplateId`, so every page a batch produced read "No template"
+ * in Page Details. The fix for the single create (#614, task 86bbujvq8) was
+ * correct and did not reach here (task 86bbve4kp).
+ *
+ * Two ids, one value. The bulk route resolves its template BY ROW ID
+ * (`listPageTemplates(...).find((t) => t.id === templateId)`), so the id it is
+ * handed IS the page-template id -- it belongs in `pageTemplateId`. It is also
+ * passed through as the legacy `templateId`, which is what the column has held
+ * for every page bulk create has ever made; changing that would alter what
+ * existing readers of `template_id` see, which is out of scope here.
+ *
+ * A named function rather than an object literal inside the handler, because a
+ * field list assembled inside a route is a list nothing can check -- which is
+ * how this same field went missing twice.
+ */
+function buildBulkCreatePageInput({
+  name,
+  slug,
+  templateId,
+  themeId,
+  isPublished,
+  pageBackground,
+  theme,
+  layoutSections,
+}) {
+  return buildLandingPageCreateInput(
+    {
+      slug,
+      templateId,
+      pageTemplateId: templateId,
+      themeId,
+      templateKind: 'modular',
+      isPublished,
+      pageBackground,
+      theme,
+      layoutSections,
+    },
+    name
+  );
+}
+
+/**
  * Who is making this request, for the page-revision audit trail.
  *
  * The dispatcher puts a platform session on req.authUser, and a tenant
@@ -125,6 +242,9 @@ const {
   deletePage,
   propagateCanonicalSection,
   bulkSetPublished,
+  bulkSetPageTemplate,
+  checkBulkSetPageTemplate,
+  NOTHING_WRITTEN,
 } = require('../lib/builderPagesStore');
 // Sections and modules share ONE propagation engine since Sync 7/7. The
 // section entry point is re-exported by the pages store above for the callers
@@ -134,6 +254,7 @@ const { populateTitlesInSections } = require('../lib/populateModuleTitles');
 const {
   listPageSnapshots,
   getPageSnapshot,
+  pageSnapshotExists,
   createPageSnapshot,
   deletePageSnapshot,
 } = require('../lib/builderPageSnapshotsStore');
@@ -302,6 +423,102 @@ function findAcquiredPageMatch(builderName, acquiredPages) {
   return { exact: null, partials };
 }
 
+/**
+ * Read and check a bulk template-change request.
+ *
+ * Pulled out of the route so the archive-first rule is testable without
+ * standing up a request: it is the only undo this operation has. The action
+ * re-pours every selected page — the operator chose that on 2026-09-01 having
+ * been shown the 2026-08-14 incident where the same operation emptied 35
+ * sections off the live Delray home page — so a missing archive must refuse
+ * the whole call rather than change pages and hope.
+ *
+ * `snapshotId` is required HERE, on the server, and not only in the browser
+ * that is supposed to take the archive first. A guard that lives only in the
+ * client is not a guard: a stale bundle, a retried request or a direct API
+ * call all arrive with no archive behind them.
+ */
+function readBulkSetTemplateRequest(body) {
+  const source = body && typeof body === 'object' ? body : {};
+  const pageIds = Array.isArray(source.pageIds) ? source.pageIds : [];
+  const pageTemplateId = String(source.pageTemplateId ?? source.page_template_id ?? '').trim();
+  const snapshotId = String(source.snapshotId ?? source.snapshot_id ?? '').trim();
+
+  // Every refusal here is raised before the route touches a page, and the CODE
+  // is how the browser gets to know that. Without it the report is guessing
+  // from an HTTP status, which cannot tell a decision from a crash.
+  if (!pageIds.length) return { ok: false, status: 400, error: 'pageIds is required', code: NOTHING_WRITTEN };
+  if (!pageTemplateId) {
+    return { ok: false, status: 400, error: 'pageTemplateId is required', code: NOTHING_WRITTEN };
+  }
+  if (!snapshotId) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'snapshotId is required — take an archive before changing templates in bulk',
+      code: NOTHING_WRITTEN,
+    };
+  }
+  return { ok: true, pageIds, pageTemplateId, snapshotId };
+}
+
+/**
+ * The archive lookup failed. WHICH failure was it?
+ *
+ * "There is no such archive" and "I could not find out whether there is such
+ * an archive" are different answers, and only the first one means the operator
+ * did something wrong. The first version of this route rendered both — plus a
+ * 500 from the snapshots table, a timeout and an RLS refusal — as the single
+ * string `No archive with id "X" — take an archive first`, which sends the
+ * operator off to create an archive that already exists and hides the real
+ * cause. That is a "could not tell" rendered as a definite answer, which is
+ * the one thing this repo's diagnostics are not allowed to do.
+ *
+ * Nothing was written in any of these cases; only the sentence differs.
+ */
+function describeArchiveCheckFailure(snapshotId, lookup) {
+  const id = String(snapshotId ?? '').trim();
+  const result = lookup && typeof lookup === 'object' ? lookup : {};
+  const status = Number(result.status) || 0;
+  const detail = String(result.error || '').trim();
+
+  // Every branch below is raised before a page is touched, so all three carry
+  // the code that says so. The three differ in what they claim about the
+  // ARCHIVE; they agree completely about the pages.
+  //
+  // Definite: the archive is not there.
+  if (status === 404) {
+    return {
+      status: 400,
+      error: `No archive with id "${id}" — nothing was changed. Take an archive first.`,
+      code: NOTHING_WRITTEN,
+    };
+  }
+
+  // Definite: what was sent is not an archive id at all — and the CODE is what
+  // says so, not the status. getPageSnapshot tags its own refusal
+  // `INVALID_SNAPSHOT_ID`; every other 400 reaching here came back raw from
+  // PostgREST, which answers 400 for a malformed scope filter or a column that
+  // moved. Reading the bare status turned all of those into this definite,
+  // actionable, wrong sentence — the exact defect this function documents
+  // itself as fixing, one layer down.
+  if (status === 400 && String(result.code || '') === 'INVALID_SNAPSHOT_ID') {
+    return {
+      status: 400,
+      error: `"${id}" is not an archive id — nothing was changed. Take an archive first.`,
+      code: NOTHING_WRITTEN,
+    };
+  }
+
+  // Everything else is a failure to LOOK, not a finding. Name what came back,
+  // and say plainly that this is not the same as having no archive.
+  return {
+    status: status || 500,
+    error: `Could not check whether archive "${id}" exists, so nothing was changed. The archive lookup answered ${status || 'no status'}${detail ? `: ${detail}` : ''}. This is not the same as having no archive — try again.`,
+    code: NOTHING_WRITTEN,
+  };
+}
+
 async function handle(req, res, pathname, method) {
   const requestMethod = String(method || '').toUpperCase();
   const scope = requestProjectScope(req);
@@ -428,54 +645,73 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { results: result.data }), true;
   }
 
+  // Move a whole selection of pages onto one page template, replacing each
+  // page's sections with that template's.
+  //
+  // `snapshotId` is REQUIRED and is checked before a single page is touched.
+  // The archive is the only undo this operation has — the operator chose the
+  // destructive re-pour on 2026-09-01 having been shown the 2026-08-14 incident
+  // where it emptied 35 sections off a live page — and a guard that lives only
+  // in the browser is not a guard: a stale bundle, a retried request or a
+  // direct API call all reach this route with no archive behind them.
+  // WOULD this change be refused? Asked before the browser takes an archive.
+  //
+  // A separate path rather than a flag on the route below, deliberately: a
+  // `validateOnly` flag on the write endpoint is one misread boolean away from
+  // skipping the archive-first guard, which is the only undo this operation
+  // has. This path cannot write no matter what it is sent, and the path below
+  // still demands a snapshotId from everybody.
+  if (pathname === '/api/builder/landing-pages/bulk-set-template/check' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const pageIds = Array.isArray(body?.pageIds) ? body.pageIds : [];
+    const pageTemplateId = String(body?.pageTemplateId ?? body?.page_template_id ?? '').trim();
+    const check = await checkBulkSetPageTemplate(pageIds, pageTemplateId, scope);
+    if (!check.ok) {
+      return sendErr(res, check.status || 500, check.error || 'Could not check the template change', { code: check.code }), true;
+    }
+    return sendOk(res, 200, check.data, check.data), true;
+  }
+
+  if (pathname === '/api/builder/landing-pages/bulk-set-template' && requestMethod === 'POST') {
+    const body = await parseJsonBody(req).catch(() => ({}));
+    const request = readBulkSetTemplateRequest(body);
+    if (!request.ok) return sendErr(res, request.status, request.error, { code: request.code }), true;
+    const { pageIds, pageTemplateId, snapshotId } = request;
+    // EXISTS, not "fetch it": the snapshot's `pages` blob holds every page
+    // layout in the project, and this guard only needs to know the row is
+    // there. Loading it cost a full read and deserialize immediately before
+    // the write loop, in the invocation least able to afford one.
+    const snapshot = await pageSnapshotExists(snapshotId, scope);
+    if (!snapshot.ok) {
+      const refusal = describeArchiveCheckFailure(snapshotId, snapshot);
+      return sendErr(res, refusal.status, refusal.error, { code: refusal.code }), true;
+    }
+    // WHO asked for it. Without the actor every revision this banks records no
+    // author, so Page History cannot tell a 43-page bulk re-pour from him
+    // hand-editing each page.
+    const result = await bulkSetPageTemplate(pageIds, pageTemplateId, scope, { actor: actorFrom(req) });
+    // result.code is NOTHING_WRITTEN only when the store refused before writing.
+    // The "every page failed" answer deliberately carries no code, because that
+    // is not the same as knowing the database is untouched — so the browser
+    // reports it as a could-not-tell rather than as a definite no-op.
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, result.error || 'Could not change the template', { code: result.code }), true;
+    }
+    return sendOk(
+      res,
+      200,
+      result.data,
+      { results: result.data, templateName: result.templateName, verifiedCount: result.verifiedCount },
+    ), true;
+  }
+
   if (pathname === '/api/builder/landing-pages' && requestMethod === 'POST') {
     const body = await parseJsonBody(req);
     const name = String(body.name || '').trim();
 
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    const templateId = deriveTemplateId(body, name, { unique: true });
 
-    const result = await createPage({
-      name,
-      templateKind: body.templateKind || body.template_kind,
-      templateId,
-      slug: body.slug,
-      isPublished: body.isPublished ?? body.is_published,
-      isPrivate: body.isPrivate ?? body.is_private,
-      searchPriority: body.searchPriority ?? body.search_priority,
-      primaryColor: String(body.primaryColor || '').trim(),
-      backgroundColor: String(body.backgroundColor || '').trim(),
-      accentColor: String(body.accentColor || '').trim(),
-      formId: String(body.formId || '').trim(),
-      leadMagnetId: String(body.leadMagnetId || '').trim(),
-      headlineId: String(body.headlineId || '').trim(),
-      pitchId: String(body.pitchId || '').trim(),
-      ctaId: String(body.ctaId || '').trim(),
-      websiteBannerImageId: String(body.websiteBannerImageId || '').trim(),
-      backgroundImageId: String(body.backgroundImageId || '').trim(),
-      featureImageId: String(body.featureImageId || '').trim(),
-      highlightImageId: String(body.highlightImageId || '').trim(),
-      featureHeadlineId: String(body.featureHeadlineId || '').trim(),
-      featureSubheadingId: String(body.featureSubheadingId || '').trim(),
-      featureTitle: String(body.featureTitle || '').trim(),
-      featureCopy: String(body.featureCopy || '').trim(),
-      highlightHeadlineId: String(body.highlightHeadlineId || '').trim(),
-      highlightPitchId: String(body.highlightPitchId || '').trim(),
-      highlightTitle: String(body.highlightTitle || '').trim(),
-      highlightCopy: String(body.highlightCopy || '').trim(),
-      bodyHeadlineId: String(body.bodyHeadlineId || '').trim(),
-      bodySubheadingId: String(body.bodySubheadingId || '').trim(),
-      bodyPitchId: String(body.bodyPitchId || '').trim(),
-      logoWideId: String(body.logoWideId || '').trim(),
-      logoSquareId: String(body.logoSquareId || '').trim(),
-      themeId: String(body.themeId || '').trim(),
-      pageBackground: body.pageBackground || body.page_background,
-      theme: body.theme,
-      layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
-        ? (body.layoutSections || body.layout_sections)
-        : [],
-      contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
-    }, scope);
+    const result = await createPage(buildLandingPageCreateInput(body, name), scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error || 'Could not create page'), true;
     return sendOk(res, 201, result.data, { page: result.data }), true;
   }
@@ -1552,19 +1788,27 @@ async function handle(req, res, pathname, method) {
           }
         }
 
-        // Derive a templateId from the slug/name (stable, no time suffix for create)
-        const derivedTemplateId = templateId;
-        const pageResult = await createPage({
+        // Stamped unconditionally, on purpose (decided 2026-09-06, task
+        // 86bbve4kp). `tplResult` above being null does NOT mean the template
+        // is missing: the built-in stubs (`standard-right-form`) have no
+        // database row and are injected only by GET /api/builder/page-templates,
+        // so `listPageTemplates(...).find(...)` returns null for a perfectly
+        // valid id. Gating the stamp on `tplResult` would therefore stop
+        // recording built-in templates, which is the same bug in a new place.
+        // The narrow case it would have caught -- a template deleted between
+        // opening the dialog and pressing Generate -- already produces a page
+        // with no sections at all, which is the louder half of that problem
+        // and is not this ticket's.
+        const pageResult = await createPage(buildBulkCreatePageInput({
           name,
           slug,
-          templateId: derivedTemplateId,
+          templateId,
           themeId,
-          templateKind: 'modular',
           isPublished: body.isPublished ?? body.is_published ?? true,
           pageBackground: templateBackground,
           theme: effectiveTheme,
           layoutSections,
-        }, scope);
+        }), scope);
 
         if (!pageResult.ok) {
           return { name, slug, error: pageResult.error || 'Could not create page', contentExtracted, contentNote };
@@ -2233,6 +2477,19 @@ const manifest = {
   prefixes: ['/api/builder', '/api/develop'],
 };
 
-// buildLandingPagePatch is exported for the same reason it is dangerous: it
-// is a whitelist, and a field missing from it is dropped with a 200 OK.
-module.exports = { handle, manifest, buildLandingPagePatch };
+// Both whitelists are exported for the same reason they are dangerous: a field
+// missing from either one is dropped and the route still answers OK. The patch
+// list loses it on an update; the create list loses it on the page's very
+// first save, which reads as "the setting didn't take the first time".
+module.exports = {
+  handle,
+  manifest,
+  buildLandingPagePatch,
+  buildLandingPageCreateInput,
+  buildBulkCreatePageInput,
+  // Exported for scripts/builder/bulkSetPageTemplate.test.js: the archive-first
+  // rule is the only undo a bulk re-pour has, so it is tested directly rather
+  // than inferred from a request that has to be stood up first.
+  readBulkSetTemplateRequest,
+  describeArchiveCheckFailure,
+};

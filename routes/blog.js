@@ -5,8 +5,12 @@ const { listCategories, getCategory, getCategoryBySlug, createCategory, updateCa
 const { listPosts, getPost, getPostBySlug, createPost, updatePost, deletePost } = require('../lib/blogPostsStore');
 const { getCardTemplate, saveCardTemplate } = require('../lib/blogCardTemplateStore');
 const { listTags, listPostsWithTag, renameTag, removeTag } = require('../lib/blogTagsStore');
+const { listCandidates: listAutoTagCandidates, runBatch: runAutoTagBatch, describeRun: describeAutoTagRun, undoRun: undoAutoTagRun } = require('../lib/blogAutoTagRun');
 const { listRelations, listRelatedPostIds, relatePosts, setRelatedPosts, unrelatePosts } = require('../lib/blogPostRelationsStore');
 const { listImportCandidates, importPosts, IMPORT_BATCH_SIZE } = require('../lib/blogImportStore');
+const { getAdminSession } = require('../lib/projectAdminStore');
+const { readAdminSessionToken } = require('./projectAdmin');
+const { canPreviewDraft, isPublishedPost } = require('../lib/blogDraftPreview');
 const { getPublicProjectById } = require('../lib/projectsStore');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { logActivity } = require('../lib/activityLog');
@@ -134,8 +138,17 @@ async function handle(req, res, pathname, method) {
       : await getPost(id, requestScope(req));
     if (!post) return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
     const isPublicSlugRead = bySlug && !req.authUser;
-    if (isPublicSlugRead && String(post.status || '').trim() !== 'published') {
-      return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
+    if (isPublicSlugRead && !isPublishedPost(post)) {
+      // A by-slug read is a public route, so the tenant admin's session is
+      // deliberately not folded into req.authUser (lib/projectAdminApiAuth.js).
+      // "Preview draft" in the Blog Manager opens exactly this address as the
+      // tenant admin, so ask for that session here — and serve the draft only
+      // to an admin of THIS post's project. Everyone else is a visitor: 404,
+      // in the same words, so a draft's existence is not announced (86bbvtzt1).
+      const adminSession = await getAdminSession(readAdminSessionToken(req));
+      if (!canPreviewDraft(post, adminSession)) {
+        return sendErr(res, 404, 'Post not found', { code: 'NOT_FOUND' }), true;
+      }
     }
     return sendOk(res, 200, post, { post }), true;
   }
@@ -219,6 +232,54 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const saved = await saveCardTemplate(body, requestScope(req));
     return sendOk(res, 200, saved, { template: saved }), true;
+  }
+
+  // ── Auto-tag extension (ticket 86bbw4dch) ────────────────────────────────
+  // One click in the Blog Links manager adds the clearly matching EXISTING
+  // tags to every post, in batches of ten driven by the client, and one call
+  // undoes the whole run. Scoring: lib/blogAutoTag.js; run: lib/blogAutoTagRun.js.
+  // Tenant admins reach these (nothing under /api/blog is denied to them) and
+  // they cost no model tokens -- the scorer is deterministic.
+
+  if (pathname === '/api/blog/tags/auto-tag/candidates' && method === 'GET') {
+    const result = await listAutoTagCandidates(requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error, { code: result.code }), true;
+    return sendOk(res, 200, result.data, { candidates: result.data }, { total: result.data.total }), true;
+  }
+
+  if (pathname === '/api/blog/tags/auto-tag' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'blog.tags')) return true;
+    const body = await parseJsonBody(req);
+    const result = await runAutoTagBatch({ runId: body.runId, postIds: body.postIds }, requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error, { code: result.code }), true;
+    if (result.data.tagged) {
+      logActivity({
+        action: 'blog_post.auto_tagged', entityType: 'blog_tag_run', entityId: result.data.runId,
+        summary: `Auto-tag added ${result.data.tagsAdded} tag(s) across ${result.data.tagged} post(s)${result.data.failed.length ? `; ${result.data.failed.length} post(s) failed` : ''}`,
+      });
+    }
+    return sendOk(res, 200, result.data, { run: result.data }), true;
+  }
+
+  const autoTagUndoMatch = pathname.match(/^\/api\/blog\/tags\/auto-tag\/([^/]+)\/undo\/?$/);
+  if (autoTagUndoMatch && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'blog.tags')) return true;
+    const runId = decodeURIComponent(autoTagUndoMatch[1] || '').trim();
+    const result = await undoAutoTagRun(runId, requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error, { code: result.code }), true;
+    logActivity({
+      action: 'blog_post.auto_tag_undone', entityType: 'blog_tag_run', entityId: runId,
+      summary: `Auto-tag run undone across ${result.data.restored.length} post(s)${result.data.failed.length ? `; ${result.data.failed.length} post(s) failed` : ''}`,
+    });
+    return sendOk(res, 200, result.data, { undo: result.data }), true;
+  }
+
+  const autoTagRunMatch = pathname.match(/^\/api\/blog\/tags\/auto-tag\/([^/]+)\/?$/);
+  if (autoTagRunMatch && method === 'GET' && autoTagRunMatch[1] !== 'candidates') {
+    const runId = decodeURIComponent(autoTagRunMatch[1] || '').trim();
+    const result = await describeAutoTagRun(runId, requestScope(req));
+    if (!result.ok) return sendErr(res, result.status || 500, result.error, { code: result.code }), true;
+    return sendOk(res, 200, result.data, { run: result.data }), true;
   }
 
   // ── Blog Tags ───────────────────────────────────────────────────────────────

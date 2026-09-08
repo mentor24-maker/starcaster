@@ -23,6 +23,15 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO" || exit 1
 
+# ── THIS IS A BACKGROUND JOB, AND IT SAYS SO ─────────────────────────────────
+# The ClickUp budget is one allowance per token for the whole company, and the
+# operator's decision (2026-09-03) is that scheduled jobs yield: "You are never
+# blocked by a background job." Every child process inherits this, so anything
+# this script runs will stop at the reserve instead of spending the budget an
+# interactive session is about to need. See scripts/lib/clickupCaller.cjs —
+# there is no tty guess anywhere; a scheduled job is one that declares itself.
+export STARCASTER_CALLER=scheduled
+
 echo "=== bus-relay $(date '+%Y-%m-%d %H:%M:%S') — $REPO"
 
 # THE UPDATE, AND THE ALARM WHEN IT CANNOT HAPPEN (task 86bbrf2vf).
@@ -65,6 +74,29 @@ REPO="$REPO" "$REPO/scripts/bus_relay_interval.sh" "interval: " || true
 # Reads the shared roll call and posts to the bus only when a job has gone
 # quiet; it is silent otherwise. Never allowed to fail the relay.
 npm run --silent heartbeat -- --check || true
+
+# THE SAME WATCHDOG'S OTHER HALF, AND IT RUNS FROM THE OPPOSITE VANTAGE POINT
+# (task 86bbugeda).
+#
+# Everything above is written around the machine that does NOT own the job.
+# That vantage point is the only one that survives the owning machine being
+# dead — and it is blind to the failure that cost sixteen hours on 2026-09-03,
+# where the Mini was awake, launchd was firing on time, and the work simply was
+# not happening. The shared roll call cannot see that: its rows are pushed at
+# most once a day, so a perfectly healthy job legitimately reads as 21 hours
+# stale, and a reader cannot tell that from a dead one.
+#
+# The LOCAL stamps can, because they are written on every run. So this line
+# asks the local question, and it only ever considers roles THIS machine owns
+# (lib/nodeHeartbeat.js -> recencyReport) — on a machine that owns none it
+# measures nothing and says so. Its thresholds are derived per role from each
+# job's own cadence, measured against 14 days of this machine's real logs; the
+# arithmetic and the numbers are in lib/nodeHeartbeat.js.
+#
+# Separate from the --check above rather than folded into it, because that one
+# needs ClickUp to answer and this one does not: a ClickUp outage must not take
+# an alarm offline that never needed ClickUp in the first place.
+npm run --silent heartbeat -- --stale-check --check || true
 
 # THE OTHER WATCHDOG, IN THE SAME PLACE AND FOR THE SAME REASON (task 86bbqrw3p).
 #
@@ -118,6 +150,35 @@ npm run --silent throughput -- --check || true
 # fail the relay: it exits 1 on a finding and 2 on a cannot-tell, both of which
 # are readings, not this script's failure.
 npm run --silent stale-ready -- --check || true
+
+# THE FIFTH WATCHDOG — he replied, and nothing moved (task 86bbvr4w3).
+#
+# The four above watch the machines and one operator-held stage. This watches
+# the OTHER operator-held stage, `Needs your input`, and specifically the one
+# shape there that means a machine dropped something: an answer of Dane's that
+# is newer than the question and has still not released the ticket.
+#
+# On 2026-09-06 he answered `C` on 86bbv8nvy at 09:40. The 09:46 relay pass
+# delivered the answer, ran out of ClickUp request budget before it could move
+# the ticket, reported that honestly — into a bus post the SAME rate limit
+# skipped — and every later pass read the answer as already relayed and did
+# nothing at all. It sat 3.5 hours until he found it himself. The retry that
+# stops that being permanent is in busRelayPlan.js; this is the alarm for every
+# other reason the move might still not happen.
+#
+# Here the neighbours' own reasoning applies directly, unlike stale-ready's:
+# the failure being watched for is the RELAY not finishing its move, so a check
+# that ran only where the relay runs could not see the relay being dead. This
+# wake happens on the machine that does not own it, which is the vantage point
+# that survives the owning machine being off.
+#
+# Its threshold is 30 minutes (three relay passes), so it takes a fresh reading
+# every 20 rather than hourly — an hourly read against a half-hour window is a
+# check that looks like it works. Posts once per ticket per REASON per 6h,
+# cleared when the ticket stops being stuck, and it asks the pipeline switch
+# first. Never allowed to fail the relay: it exits 1 on a finding and 2 on a
+# cannot-tell, both of which are readings, not this script's failure.
+npm run --silent stale-answer -- --check || true
 # THE ONE REPAIR, on the idle wake (task 86bbtnk3k — audit Phase 4). The sweep
 # became reachable on 2026-09-02 and was then called by nothing, which is the
 # defect that opened that morning's stall report wearing a new coat. It rides
@@ -135,7 +196,25 @@ npm run --silent clickup -- bus-relay
 status=$?
 echo "=== exit $status"
 
-if [ "$status" -eq 0 ]; then
+# EXIT 7 IS "I STOPPED AT THE CLICKUP RESERVE", NOT "I BROKE" (task 86bbugd8j).
+#
+# A scheduled job that yields has not done its work, so it must not exit 0 and
+# must not beat — a beat means "this job succeeded", and a roll call that
+# counted a yield as a success would report a relay that has read nothing for
+# hours as perfectly healthy. But it has not FAILED either, and routing it to
+# report:failure would post a ClickUp outage to the bus every ten minutes for
+# as long as the budget stayed tight, which is the alarm-fatigue shape every
+# other watchdog in this file is written to avoid.
+#
+# So: no beat, no failure alert, and a line in the log that says plainly what
+# happened. The relay's own output above already names the lists and tickets it
+# did not reach. If this becomes common rather than occasional, the answer is a
+# cheaper pass or a smaller reserve, and both are decisions with measurements
+# behind them (scripts/measure_clickup_headroom.mjs).
+if [ "$status" -eq 7 ]; then
+  echo "=== stopped at the ClickUp reserve — not a failure, and not a success either."
+  echo "=== no beat recorded (this pass did not finish) and no failure alert sent."
+elif [ "$status" -eq 0 ]; then
   # A beat, and only on a real success. Recorded locally every time (free,
   # offline); pushed to the shared roll call at most once a day, which is what
   # keeps this from being channel noise x365 and is the resolution the

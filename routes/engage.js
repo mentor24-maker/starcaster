@@ -24,6 +24,7 @@ const { stageCampaignVideoForBuffer } = require('../lib/bufferVideoStaging');
 const metaClients = require('../lib/metaClients');
 const metaOAuth = require('../lib/metaOAuth');
 const connectionsRegistry = require('../lib/connections/registry');
+const { readsAsClientProse } = require('../lib/connections/clientProse');
 const { storeAccounts } = require('../lib/connections/completeConnection');
 const { verifyOAuthState } = require('../lib/metaOAuthState');
 const projectSocialCredentialsStore = require('../lib/projectSocialCredentialsStore');
@@ -1547,6 +1548,66 @@ function settingsOAuthReturnUrl(origin, params = {}) {
 }
 
 /**
+ * THE ONE GATE ON WHAT A REFUSAL IS ALLOWED TO SAY TO A CLIENT.
+ *
+ * Connections 6b of 7 (86bbu50mb), review round 2. Round 1 stopped a raw 502
+ * HTML page reaching an amber card through the STORED cause. The identical page
+ * was still reaching a client through the CARRIED one, and by the same route:
+ *
+ *     exchange() -> completeOAuthCodeExchange() -> exchangeCodeForToken()
+ *                -> fetchJson()   (lib/connections/adapters/facebookPage.js)
+ *
+ * `fetchJson` falls back to the entire raw response body when it will not parse
+ * as JSON, `contract.normalize` passes `result.error` straight through, and
+ * `completeConnectionsOAuth` puts that into `connect_error`. Measured with a
+ * 502 stubbed at the adapter, the Facebook Page card read
+ * "<!DOCTYPE html>\n<html>\n<head><title>502 Bad Gateway</title>…" in amber.
+ * Note it was 165 characters — inside the length limit on either path, so
+ * length would not have caught it; the markup test is what does. That is why
+ * round 3's fix could raise the connect limit to 1000 without weakening this:
+ * the two halves catch different things, and this is the markup half's case.
+ *
+ * ── Why the gate is HERE and not in the panel ──────────────────────────────
+ *
+ * Eight sites in this file set `connect_error`, in two different functions, and
+ * one of them (the X callback) forwards `error_description` written by the
+ * platform — text from outside our code entirely. Gating each site is eight
+ * chances to forget, and forgetting one is exactly how this defect survived
+ * round 1. Every one of them goes through `connectionsReturnUrl`, so this is
+ * the single point where the server hands text to a browser, which makes it the
+ * mirror of round 1's fix: that one sits in the route that SERVES the stored
+ * cause, this one in the code that SERVES the carried cause. It also means the
+ * markup never enters the URL at all — not the address bar, not history, not an
+ * access log of the redirect — which a gate in the client could not achieve.
+ *
+ * It does not weaken acceptance criterion 5. A real adapter sentence still
+ * arrives untouched; a cause either comes through verbatim or is dropped for
+ * the generic line, and nothing is ever reworded.
+ */
+function clientSafeConnectParams(params) {
+  const out = { ...(params || {}) };
+  const provider = safeText(out.connect_provider);
+  const displayName = connectionsRegistry.getEntry(provider)?.displayName
+    || provider
+    || 'This platform';
+
+  const error = safeText(out.connect_error);
+  if (error && !readsAsClientProse(error, 'connect')) {
+    out.connect_error = `${displayName} refused the connection`;
+  }
+
+  // A milder notice has no generic line to fall back to — it exists to add
+  // detail a client did not have. Machinery in that slot is worth less than
+  // nothing, so it is dropped rather than replaced.
+  const notice = safeText(out.connect_notice);
+  if (notice && !readsAsClientProse(notice, 'connect')) {
+    out.connect_notice = '';
+  }
+
+  return out;
+}
+
+/**
  * Where the browser lands after a CONNECTIONS-screen sign-in, as opposed to the
  * operator's own APIs page above. Connections 5 of 7 (86bbpz1gk).
  *
@@ -1566,7 +1627,7 @@ function settingsOAuthReturnUrl(origin, params = {}) {
 function connectionsReturnUrl(origin, params = {}) {
   const base = `${String(origin || '').replace(/\/+$/, '')}/#page=settingsConnectionsPage`;
   const query = new URLSearchParams();
-  Object.entries(params || {}).forEach(([key, value]) => {
+  Object.entries(clientSafeConnectParams(params)).forEach(([key, value]) => {
     const text = safeText(value);
     if (text) query.set(key, text);
   });
@@ -1591,7 +1652,7 @@ function connectionsReturnUrl(origin, params = {}) {
  * The storing itself is lib/connections/completeConnection.js — the same code
  * path POST /api/connections/:provider/finish uses, not a second copy of it.
  */
-async function completeConnectionsOAuth({ provider, code, redirectUri, scope, origin, res }) {
+async function completeConnectionsOAuth({ provider, code, redirectUri, state, nonce, scope, origin, res }) {
   const entry = connectionsRegistry.getEntry(provider);
   const adapterRes = connectionsRegistry.getAdapter(provider);
   const displayName = entry?.displayName || provider;
@@ -1603,7 +1664,11 @@ async function completeConnectionsOAuth({ provider, code, redirectUri, scope, or
     }));
   }
 
-  const exchanged = await adapterRes.data.exchange({ code, redirectUri });
+  // `state` and `nonce` are carried through for PKCE. Only X reads them today
+  // (lib/connections/adapters/x.js derives its code_verifier from the nonce);
+  // the Meta adapters ignore both, so passing them costs nothing and means the
+  // next PKCE provider is a new adapter rather than a change here.
+  const exchanged = await adapterRes.data.exchange({ code, redirectUri, state, nonce });
   if (!exchanged.ok) {
     // The adapter's own sentence, verbatim. For Instagram this is the whole
     // point of the slice: a personal account or an unlinked one produces plain
@@ -2046,6 +2111,87 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, start.data, start.data), true;
   }
 
+  /**
+   * X's OWN callback. Connections 7 of 7 (86bbpz1hu).
+   *
+   * A separate URL from Meta's, and it has to be: a provider only accepts a
+   * redirect_uri registered with it, and this one is registered at
+   * developer.x.com rather than in the Meta app. The path is the adapter's
+   * `callbackPath` — read from the adapter rather than written out again here,
+   * because two copies of a registered URL is one typo away from a sign-in that
+   * fails for every client with an error naming none of this.
+   *
+   * Everything about WHOSE connection this is comes from the signed state, not
+   * from the session: the browser arriving here has been at x.com and carries
+   * no project header, which is exactly why this route is exempt from the
+   * project-context requirement in routes/index.js.
+   */
+  if (pathname === connectionsRegistry.getEntry('x')?.adapter?.callbackPath && requestMethod === 'GET') {
+    const urlObj = getUrlObj(req);
+    const origin = getAppPublicOrigin(req);
+    const xAdapterRes = connectionsRegistry.getAdapter('x');
+    if (!xAdapterRes.ok) {
+      return sendRedirect(res, connectionsReturnUrl(origin, {
+        connect_oauth: 'error',
+        connect_provider: 'x',
+        connect_error: xAdapterRes.error,
+      })), true;
+    }
+
+    // X reports a refusal on the redirect rather than at the token endpoint —
+    // a client pressing Cancel arrives here with `error=access_denied` and no
+    // code. Passing its own words through means "you cancelled" reads as
+    // cancelling rather than as a failure.
+    const oauthError = safeText(urlObj.searchParams.get('error'));
+    if (oauthError) {
+      return sendRedirect(res, connectionsReturnUrl(origin, {
+        connect_oauth: 'error',
+        connect_provider: 'x',
+        connect_error: safeText(urlObj.searchParams.get('error_description')) || oauthError,
+      })), true;
+    }
+
+    const stateRaw = safeText(urlObj.searchParams.get('state'));
+    const stateRes = verifyOAuthState(stateRaw);
+    if (!stateRes.ok) {
+      return sendRedirect(res, connectionsReturnUrl(origin, {
+        connect_oauth: 'error',
+        connect_provider: 'x',
+        connect_error: stateRes.error || 'Invalid OAuth state',
+      })), true;
+    }
+    // The state is signed, so a request that reaches here has not been tampered
+    // with — but it could still be a state built for ANOTHER provider and
+    // replayed at this URL, which would run X's exchange against a Meta code.
+    if (safeText(stateRes.data.provider) !== 'x') {
+      return sendRedirect(res, connectionsReturnUrl(origin, {
+        connect_oauth: 'error',
+        connect_provider: 'x',
+        connect_error: 'This sign-in did not begin as an X connection.',
+      })), true;
+    }
+
+    const code = safeText(urlObj.searchParams.get('code'));
+    if (!code) {
+      return sendRedirect(res, connectionsReturnUrl(origin, {
+        connect_oauth: 'error',
+        connect_provider: 'x',
+        connect_error: 'Missing OAuth code',
+      })), true;
+    }
+
+    return await completeConnectionsOAuth({
+      provider: 'x',
+      code,
+      redirectUri: xAdapterRes.data.callbackUrl(),
+      state: stateRaw,
+      nonce: stateRes.data.nonce,
+      scope: { projectId: stateRes.data.projectId, userId: stateRes.data.userId },
+      origin,
+      res,
+    }), true;
+  }
+
   if (pathname === '/api/promote/social/facebook/oauth/callback' && requestMethod === 'GET') {
     const urlObj = getUrlObj(req);
     // The origin the BROWSER is sent back to when this is over — the admin app
@@ -2108,6 +2254,8 @@ async function handle(req, res, pathname, method) {
         provider: statedProvider,
         code,
         redirectUri,
+        state: stateRaw,
+        nonce: stateRes.data.nonce,
         scope: { projectId: stateRes.data.projectId, userId: stateRes.data.userId },
         origin,
         res,

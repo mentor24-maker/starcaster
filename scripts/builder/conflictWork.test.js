@@ -8,6 +8,7 @@ const path = require('node:path');
 const {
   CONFLICT_TICKET_TRAIL,
   STALE_HAND_OFF_MS,
+  MERGE_ATTEMPT_ALARM,
   conflictTicketFiledComment,
   findConflictTicket,
   conflictTicketName,
@@ -794,8 +795,16 @@ test('A CLEAN CATCH-UP CARRIES ITS VERDICT — GitHub disagreeing does not erase
   // hand-off then had to guess about — and guessing is the defect.
   const from = SCRIPT.indexOf('const local = branchCatchUp.catchUpBranchLocally(');
   const block = SCRIPT.slice(from, SCRIPT.indexOf('} else {', from));
-  assert.match(block, /gate = \{ action: after\.action, reason: after\.reason, localVerdict: local \};/,
-    'the CLEAN verdict must travel with the gate');
+  // `refusalCode` joined it there in round 1 of task 86bbtqpxd, for the same
+  // reason and after the same kind of incident: the rebuilt gate is what
+  // reaches `refuse()`, and a field dropped on the way is a finding this
+  // machine made and then threw away. BOTH must travel.
+  // `cannotTell` joined them in review round 2 of task 86bbuvd50, for the
+  // third time and the same reason: the rebuilt gate is what the CANNOT TELL
+  // bound classifies, and a field dropped here takes the bound back to never
+  // firing. THREE must travel.
+  assert.match(block, /gate = \{ action: after\.action, cannotTell: Boolean\(after\.cannotTell\), reason: after\.reason, refusalCode: after\.refusalCode, localVerdict: local \};/,
+    'the CLEAN verdict, the refusal code and the cannot-tell classification must all travel with the gate');
   assert.ok(!/gate = \{ action: after\.action, reason: after\.reason \};\n\s*if \(after\.prJson\) prJson = after\.prJson;\n\s*\} else \{/.test(SCRIPT),
     'the verdict-dropping form must not come back');
 });
@@ -865,4 +874,48 @@ test('the hand-off messages read the VERDICT, never `filed` and never a two-valu
     'the stall check must know WHAT WAS FOUND, not just who is waiting');
   assert.match(block, /const busBody = selfHealing/, 'the bus post must not call a self-healing branch blocked');
   assert.match(block, /if \(!filed && !selfHealing\) unchecked\.push\(/, 'a self-healing hand-off is not an unchecked pass');
+});
+
+/*
+ * ATTEMPTS, NOT ONLY AGE (2026-09-06, task 86bbvr0j5).
+ *
+ * PR #628 failed to merge five times in ninety minutes and nothing said so,
+ * because the only alarm on this path measured the clock and the clock had
+ * barely moved. These pin the rule Dane asked for: notice the repetition.
+ */
+test('a merge that has failed the alarm number of times is stalled however young it is', () => {
+  const now = Date.now();
+  const at = new Date(now - 60 * 1000).toISOString(); // one minute ago
+  const s = handOffStalled({ at, now, filed: FILED, localVerdict: { kind: 'real-conflict' }, attempts: MERGE_ATTEMPT_ALARM });
+  assert.equal(s.stalled, true);
+  assert.match(s.why, /failed 3 times/);
+  // The age rule alone would have called this fine.
+  assert.ok(s.ageMs < STALE_HAND_OFF_MS);
+});
+
+test('below the alarm it stays quiet, so a retry that clears itself costs no noise', () => {
+  const now = Date.now();
+  const at = new Date(now - 60 * 1000).toISOString();
+  const s = handOffStalled({ at, now, filed: FILED, localVerdict: { kind: 'real-conflict' }, attempts: MERGE_ATTEMPT_ALARM - 1 });
+  assert.equal(s.stalled, false);
+});
+
+test('the attempts rule is reached even when the marker carries no readable timestamp', () => {
+  // The exact state the broken dedup left behind: no parsable `at`. Checked
+  // BEFORE the timestamp guard on purpose — placed after it, the alarm would
+  // be unreachable in the case it was written for.
+  const s = handOffStalled({ at: '', now: Date.now(), filed: FILED, localVerdict: { kind: 'real-conflict' }, attempts: 4 });
+  assert.equal(s.stalled, true);
+  assert.match(s.why, /failed 4 times/);
+});
+
+test('every verdict kind can say why a repeatedly failing merge is news', () => {
+  // Same discipline as the rest of the vocabulary: a kind with no entry here
+  // would throw rather than borrow another verdict's words.
+  for (const v of [{ kind: 'real-conflict' }, { kind: 'no-overlap' }, { kind: 'could-not-check' }]) {
+    const s = handOffStalled({ at: '', now: Date.now(), filed: FILED, localVerdict: v, attempts: 3 });
+    assert.equal(s.stalled, true);
+    assert.equal(typeof s.why, 'string');
+    assert.ok(s.why.length > 0);
+  }
 });
