@@ -10,6 +10,7 @@ import {
   createDefaultBackgroundSettings,
   normalizeBuilderAssetUrl
 } from "@/lib/builder-template";
+import { backgroundVideoSizeNotice, recallAssetByteSize } from "@/lib/background-video-size";
 import {
   BACKGROUND_PARALLAX_SPEED_MAX,
   BACKGROUND_PARALLAX_SPEED_MIN,
@@ -142,6 +143,19 @@ export function BuilderBackgroundControls({
   const videoUrl = background.videoUrl ?? "";
   const posterUrl = background.posterUrl ?? "";
   const needsPoster = background.mode === "video" && !posterUrl;
+  /*
+   * Advice, not a gate. `null` when the size is unknown — a url typed in by
+   * hand, or a page built before the size was recorded and whose gallery has
+   * not been opened this session — and the panel then says nothing at all,
+   * which is the honest answer rather than a permanent shrug.
+   *
+   * The STORED size wins: it was written in the same breath as this exact url
+   * and is cleared whenever the url changes without one. The registry is the
+   * fallback for the pages that predate the field entirely.
+   */
+  const videoSizeNotice = backgroundVideoSizeNotice(
+    background.videoBytes || recallAssetByteSize(videoUrl)
+  );
 
   const videoGallery = openVideoPicker ? (
     <BuilderGalleryModal
@@ -157,11 +171,15 @@ export function BuilderBackgroundControls({
        * Clear brings the whole library back.
        */
       initialKind={openVideoPicker === "clip" ? "video" : "image"}
-      onSelectImage={(path) => {
+      onSelectImage={(path, item) => {
         const url = normalizeBuilderAssetUrl(path);
         onChange((current) =>
           openVideoPicker === "clip"
-            ? { ...current, videoUrl: url }
+            ? // The size travels WITH the url, in the same write. Two separate
+              // updates could interleave and leave one clip's bytes on
+              // another clip's url, which is the stale-number failure this
+              // whole field is written to avoid.
+              { ...current, videoUrl: url, videoBytes: Number(item?.size || 0) || 0 }
             : { ...current, posterUrl: url }
         );
         setOpenVideoPicker(null);
@@ -191,7 +209,14 @@ export function BuilderBackgroundControls({
             onChange={(event) =>
               onChange((current) => ({
                 ...current,
-                videoUrl: normalizeBuilderAssetUrl(event.target.value)
+                videoUrl: normalizeBuilderAssetUrl(event.target.value),
+                /*
+                 * Typing a url supplies no size, so the old clip's size must
+                 * go with the old clip. Leaving it would put a confident,
+                 * specific, wrong number under a different video — worse than
+                 * the silence this feature was written to replace.
+                 */
+                videoBytes: 0
               }))
             }
             placeholder="/api/admin/media-file/..."
@@ -223,6 +248,25 @@ export function BuilderBackgroundControls({
             ) : null}
           </div>
         </BuilderSettingRow>
+
+        {videoSizeNotice ? (
+          <BuilderSettingRow label="" fullWidth>
+            {/*
+              * The size ONCE. An oversized video's warning already names it
+              * ("This video is 34 MB. ..."), so printing the number above the
+              * sentence that repeats it reads like a stutter — and a panel that
+              * looks careless is a panel whose advice gets ignored.
+              */}
+            <p
+              className={`builder-video-background-size${
+                videoSizeNotice.isOversized ? " builder-video-background-size-warn" : ""
+              }`}
+              data-oversized={videoSizeNotice.isOversized ? "true" : "false"}
+            >
+              {videoSizeNotice.warning || videoSizeNotice.sizeText}
+            </p>
+          </BuilderSettingRow>
+        ) : null}
 
         <BuilderSettingRow label="Poster Image" fullWidth>
           <input
