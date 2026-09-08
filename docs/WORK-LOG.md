@@ -1,3 +1,34 @@
+## 2026-09-07 — A ship message no longer says it measured something it did not (#657)
+
+When `npm run ship` finishes and finds a pull request that GitHub has run no
+checks on, it stops and prints an explanation. Part of that explanation is a
+short block headed **WHAT WAS READ** — the facts it gathered, laid out so the
+next move is obvious. One of the lines it could print said *"origin/main merges
+in cleanly, and this branch is behind it."*
+
+It printed that sentence in three different situations, and only one of them had
+actually measured anything. The other two were: the command that goes and asks
+GitHub for the latest main **failed**, and the count of how far behind the
+branch is **could not be read**. In both of those, nothing whatsoever had
+established that the branch was behind — but the message said so anyway, under a
+heading promising these were things it had read.
+
+The advice underneath was never wrong. "Bring main in" is the safe thing to do
+when you are not sure, and that has not changed here. What it cost was the
+*second* try. If bringing main in turns out to change nothing at all — which is
+the exact loop this whole area of the code was written to kill — the old message
+gave no hint that the reading had never been taken, so there was no way to work
+out that the other fix (push a small commit so GitHub recalculates) was the one
+needed. Now the message says plainly that the distance was not established, and
+the reference table in the engineering notes was updated to call the two
+"unconfirmed" cases the same thing the message calls them, so the document and
+the program cannot drift apart.
+
+Both halves of the fix were deliberately broken and watched to fail before the
+green run was believed: first by folding the new honest answer back into the old
+one, then by leaving it in place but printing the old wording for it. Three
+named tests failed each time.
+
 ## 2026-09-07 — A drop shadow can now be pointed, not just nudged (#645)
 
 A shadow under a picture was set by two numbers: how far right it sat, and how
