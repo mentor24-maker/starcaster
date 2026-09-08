@@ -1,3 +1,91 @@
+## 2026-09-07 — A drop shadow can now be pointed, not just nudged (#645)
+
+A shadow under a picture was set by two numbers: how far right it sat, and how
+far down. That is fine for nudging one a few pixels, and awkward for the thing
+people actually want, which is to swing the shadow round to the other side of
+the picture while keeping it the same distance away. Doing that meant working
+out two new numbers in your head.
+
+There are now two more controls beside the old ones — **Shadow Angle**, which
+way it falls, and **Shadow Distance**, how far out. All four are live at the
+same time and they move together: pick an angle and the old two change to
+match, type into the old two and the angle and distance follow. Both places
+that frame a picture get them, the image module and the Carousel, from one
+shared control so the two can never grow apart.
+
+Nothing new is saved. The angle and the distance are worked out from the two
+numbers already stored, each time the panel is opened, so there is still one
+answer to where a shadow sits rather than two that could disagree. That is also
+what makes this safe on sites already running: every shadow anyone has ever
+saved keeps its exact look, and the check that photographs pages before and
+after confirmed it — a picture with a shadow at each of the four quarters comes
+out pixel for pixel identical to the version live today.
+
+The one thing that took care was the distance dial reaching further than the
+two numbers do. A shadow parked in the far corner is 57 pixels away even though
+neither number goes past 40. Had the dial stopped at 40, opening that panel
+would have shown the wrong figure and quietly pulled the shadow in — a live page
+changing because somebody looked at it. It goes to 57.
+
+Reviewing it in the real panel turned up three things that reading the code
+would never have shown, all from one cause: the direction lives only in those
+two whole-number offsets, and whole numbers cannot hold twenty-four separate
+directions when the shadow is only a few pixels out. So picking **15** left the
+box reading **16** — on sixteen of the twenty-four positions. Taking the
+distance down to nothing and back turned the shadow a quarter of the way round
+on its own, because at zero there is no direction left in the numbers to come
+back to. And at zero, picking a direction did nothing whatsoever and said
+nothing about it.
+
+The panel now simply remembers what was picked, for as long as the numbers
+underneath are still the ones that pick produced. Pick 15 and it says 15; go
+out to nothing and back and the shadow returns the way it was pointing; pick a
+direction before there is any distance and it holds the choice until you give
+it one. Touch Shadow X or Shadow Y by hand and the panel drops what it
+remembered instantly and goes back to describing the picture as it actually is
+— which is the part that matters, because a panel quietly describing a shadow
+that is not on the page is a worse bug than the three it fixes. Nothing extra
+is saved.
+
+A second look at the real panel found two more, and they are the reason this
+went round twice. The first: **dragging the distance slider out past about 41
+turned the shadow all by itself.** Pick a direction, touch nothing but the
+distance, and by the far end the shadow had swung twelve degrees. The cause is
+worth stating plainly, because it looked like a safety feature. Neither of the
+two stored numbers may go past 40, and each was being trimmed to 40 on its own
+— so once one of them hit the limit the shadow stopped travelling along the
+line the angle described and started sliding around the edge of the box towards
+its corner. Trimming both by the same amount instead keeps the shadow pointing
+exactly where it was told to; it simply stops getting further away, and the
+distance box says so honestly rather than drifting. Checked at every one of the
+twenty-four directions, at every distance: it no longer moves at all, where
+before it moved on 189 of them.
+
+The second was quieter and had no visible symptom on a page. The panel's memory
+of what was picked was a single note with no name on it, and in the Builder
+several modules are open at once — so a direction picked on one module was being
+shown by another module that happened to sit at the same offsets. The note now
+carries the name of the module that wrote it. And the comment in that file said
+the memory "lives in the open panel and is gone when it closes", which was never
+true; it is corrected, because a note claiming a safety that does not exist is
+the thing somebody trusts later.
+
+A third look found the same defect once more, arriving a way nobody had tried.
+Naming the module on that note settled which module was allowed to *read* it —
+but there was still only ever **one note**, so the moment a second module had a
+direction picked on it, the first module's note was thrown away and its box
+went straight back to the number the pixels work out to. Pick 15 on the photo,
+then pick 45 on the slideshow, and the photo's box reads 16 again — while the
+shadow itself has not moved a pixel. That is the very first bug on this ticket,
+returning through a door neither earlier check opened, because both of them
+only ever drove one module at a time.
+
+There is now one note per module instead of one note in total, so a direction
+picked on one panel survives any number of picks made on the others. Measured
+in a real browser with three modules open at once: each keeps its own, and the
+photo still says 15 after the other two have been set to 45 and 120. The test
+that catches it drives two modules, which nothing in the suite had done before
+— it fails on the old code with exactly the wrong number the panel was showing.
 ## 2026-09-07 — Every dropdown that lists your pages now lists them A to Z (#656)
 
 Pick a page anywhere in the admin app — the Post Page on a Blog Post List
