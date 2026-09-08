@@ -483,11 +483,26 @@ if (!knownNode) {
           + 'succeeded and a job that is working perfectly look identical from the schedule alone.',
       );
     } else {
+      // The role's OWN window, not one number for every job (lib/nodeHeartbeat.js
+      // -> OVERDUE_AFTER_MS). Asking the same function the roll call asks is the
+      // point: two places deciding "overdue" for themselves is two answers that
+      // drift quietly. Every role declaring a cadence today runs hourly or
+      // oftener, so this returns the same 25 hours it always did and nothing
+      // here moves — it is correct in advance of the first slower job.
       const ageMs = Date.now() - Date.parse(beat.beat.at);
-      const stale = ageMs > heartbeat.OVERDUE_AFTER_MS;
+      const overdueAfterMs = heartbeat.overdueAfterFor(job.role);
+      const stale = ageMs > overdueAfterMs;
       const line = `${job.role}: last succeeded here ${heartbeat.ageText(ageMs)} (${beat.beat.at}).`;
-      if (stale) fail(line, 'npm run heartbeat', 'Older than this system treats as alive. Something has stopped firing.');
-      else pass(line);
+      if (stale) {
+        fail(
+          line,
+          'npm run heartbeat',
+          `Older than this system treats as alive for this job (overdue after ${heartbeat.ageText(overdueAfterMs)}). `
+            + 'Something has stopped firing.',
+        );
+      } else {
+        pass(line);
+      }
     }
   }
 
