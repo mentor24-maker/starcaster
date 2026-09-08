@@ -240,6 +240,9 @@ function inPanel(panel: "a" | "b") {
         control.value = value;
         control.dispatchEvent(new Event("change", { bubbles: true }));
       });
+    },
+    offsets(): string {
+      return scope.querySelector("output")?.textContent ?? "";
     }
   };
 }
@@ -387,6 +390,32 @@ describe("the two rows together, driven like the panel", () => {
     // A still shows the fifteen it picked — scoping the memory took nothing
     // away from the module that owns it.
     expect(a.reads("Shadow angle in degrees")).toBe("15");
+  });
+
+  it("keeps a module's pick when ANOTHER module is picked", () => {
+    // SEND-BACK ROUND 3. Round 2 scoped who may READ the memory, and that
+    // holds — but the store was still ONE slot holding ONE pick, so the
+    // moment a second module picked, the first module's memory was gone and
+    // its box fell back to the re-derived value. That is round 1's symptom
+    // word for word ("picking 15 leaves the box reading 16"), arriving
+    // through a door neither earlier round opened: both drove one module at
+    // a time. Measured in Chromium with two cards expanded.
+    mountTwo({ imageShadowX: "12", imageShadowY: "-9" }, { imageShadowX: "12", imageShadowY: "-9" });
+    const a = inPanel("a");
+    const b = inPanel("b");
+
+    a.pick("Shadow angle in degrees", "15");
+    expect(a.reads("Shadow angle in degrees")).toBe("15");
+    expect(a.offsets()).toBe("14,-4");
+
+    b.pick("Shadow angle in degrees", "45");
+    expect(b.reads("Shadow angle in degrees")).toBe("45");
+
+    // Nothing has touched A. Its offsets are the ones its own pick produced,
+    // so the fifteen it picked is still the honest thing to show.
+    expect(a.offsets()).toBe("14,-4");
+    expect(a.reads("Shadow angle in degrees")).toBe("15");
+    expect(a.reads("Shadow distance in pixels")).toBe("15");
   });
 
   it("shows the 40 the square can draw when 57 was asked for at a quarter turn", () => {

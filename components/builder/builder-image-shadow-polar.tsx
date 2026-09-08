@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 import {
   buildNumberSelectOptions,
@@ -72,34 +72,52 @@ type PolarControlProps = {
  * nothing in the settings changes and only a store of our own can bring the
  * two boxes back to say what was chosen.
  *
- * WHICH MEANS IT IS ONE VARIABLE FOR THE WHOLE APP, and the fingerprint has
- * to say so. Several module cards are expanded at once in the Builder, so a
- * memory keyed on the offsets alone was honoured by ANY module whose offsets
- * happened to match: measured on 2026-09-07 (round 2), picking Angle 15 on a
- * Slideshow left a Card Slider hand-set to the same `6, -2` reading 15 when
- * its own offsets derive to 18. So the module's id is part of the fingerprint
- * — a pick belongs to the panel that made it, and every other panel re-derives
- * from the page as though no pick had happened at all.
+ * IT IS APP-LEVEL STATE, and several module cards are expanded at once in the
+ * Builder — so it is ONE MEMORY PER MODULE, not one memory. Two rounds of the
+ * same bug came out of getting that wrong, and they are different mistakes:
+ *
+ *  - Round 2: a memory keyed on the offsets alone was honoured by ANY module
+ *    whose offsets happened to match. Picking Angle 15 on a Slideshow left a
+ *    Card Slider hand-set to the same `6, -2` reading 15 when its own offsets
+ *    derive to 18. Fixed by putting the module's id in the fingerprint, which
+ *    settled who may READ a memory.
+ *  - Round 3: the store was still one slot holding one pick, so the moment a
+ *    second module picked, the first module's memory was gone and its rows
+ *    re-derived — the Slideshow's box went from the 15 it was picked at back
+ *    to 16, with its offsets never moving. That is round 1's symptom exactly,
+ *    and it settled how long a memory SURVIVES.
+ *
+ * Hence the map below, keyed by module id: a pick belongs to the panel that
+ * made it, outlives any number of picks made on other panels, and is honoured
+ * only while the offsets it produced are still the ones the page stores. Every
+ * other panel re-derives from the page as though no pick had happened at all.
+ *
+ * The fingerprint keeps its own `moduleId` check even though the map already
+ * separates the modules. The two guards answer different questions — the map
+ * decides which memory a panel is shown, the fingerprint decides whether that
+ * memory still describes the page — and the pure functions below are tested
+ * on their own, where no map is involved.
  *
  * (An earlier version of this comment said the memory "lives in the open
  * panel and is gone when it closes". It never did — it is module-level state
  * and it outlives every panel. A comment describing a safety property the
  * code does not have is the thing that gets believed later, which is why the
- * measurement above found the bug and the comment did not.)
+ * measurements above found the bugs and the comment did not.)
  */
 export type ShadowPolarMemory =
   | { moduleId: string; angle: number; distance: number; x: number; y: number }
   | null;
 
-let pickedPolar: ShadowPolarMemory = null;
+const pickedPolar = new Map<string, ShadowPolarMemory>();
 const pickedPolarListeners = new Set<() => void>();
 
-function readPickedPolar(): ShadowPolarMemory {
-  return pickedPolar;
+function readPickedPolarFor(moduleId: string): ShadowPolarMemory {
+  return pickedPolar.get(moduleId) ?? null;
 }
 
-function writePickedPolar(next: ShadowPolarMemory): void {
-  pickedPolar = next;
+function writePickedPolarFor(moduleId: string, next: ShadowPolarMemory): void {
+  if (next) pickedPolar.set(moduleId, next);
+  else pickedPolar.delete(moduleId);
   pickedPolarListeners.forEach((listener) => listener());
 }
 
@@ -110,14 +128,29 @@ function subscribePickedPolar(listener: () => void): () => void {
   };
 }
 
-/** Forget the last pick. Tests use it; nothing in the app needs to, because
- *  the fingerprint below already refuses a memory that has gone stale. */
+/** Forget every pick. Tests use it; nothing in the app needs to, because the
+ *  fingerprint below already refuses a memory that has gone stale. */
 export function clearShadowPolarMemory(): void {
-  writePickedPolar(null);
+  pickedPolar.clear();
+  pickedPolarListeners.forEach((listener) => listener());
 }
 
-function usePickedPolar(): ShadowPolarMemory {
-  return useSyncExternalStore(subscribePickedPolar, readPickedPolar, readPickedPolar);
+/**
+ * The snapshot is ONE MODULE'S memory, never the map.
+ *
+ * That is what makes the store safe to write in place: `useSyncExternalStore`
+ * re-renders on a snapshot that is not `Object.is`-equal to the last one, so a
+ * snapshot of the map would compare equal after a `set` and the panel would
+ * never update — while a per-module snapshot is the memory object itself,
+ * which is replaced on write and left alone for every module that did not
+ * pick. Every listener is notified on every write and each one re-reads its
+ * own module; the ones that did not change get the identical object back and
+ * React does nothing. If this is ever changed to hand out the map, it has to
+ * become copy-on-write in the same edit.
+ */
+function usePickedPolar(moduleId: string): ShadowPolarMemory {
+  const getSnapshot = useCallback(() => readPickedPolarFor(moduleId), [moduleId]);
+  return useSyncExternalStore(subscribePickedPolar, getSnapshot, getSnapshot);
 }
 
 /**
@@ -254,7 +287,7 @@ export function shadowDistancePick(
 
 /** Which way the shadow falls: 0 is right, 90 up, 180 left, 270 below. */
 export function BuilderImageShadowAngleControl({ settings, moduleId, onChange }: PolarControlProps) {
-  const memory = usePickedPolar();
+  const memory = usePickedPolar(moduleId);
   const { angle } = shadowPolarShown(settings, memory, moduleId);
   const limits = CAROUSEL_IMAGE_FRAME_LIMITS.shadowAngle;
   return (
@@ -266,7 +299,7 @@ export function BuilderImageShadowAngleControl({ settings, moduleId, onChange }:
       value={angle}
       onPick={(next) => {
         const pick = shadowAnglePick(settings, memory, moduleId, next);
-        writePickedPolar(pick.memory);
+        writePickedPolarFor(moduleId, pick.memory);
         onChange(pick.values);
       }}
     />
@@ -275,7 +308,7 @@ export function BuilderImageShadowAngleControl({ settings, moduleId, onChange }:
 
 /** How far from the picture it falls — 0 to the square's diagonal, 57. */
 export function BuilderImageShadowDistanceControl({ settings, moduleId, onChange }: PolarControlProps) {
-  const memory = usePickedPolar();
+  const memory = usePickedPolar(moduleId);
   const { distance } = shadowPolarShown(settings, memory, moduleId);
   const limits = CAROUSEL_IMAGE_FRAME_LIMITS.shadowDistance;
   return (
@@ -287,7 +320,7 @@ export function BuilderImageShadowDistanceControl({ settings, moduleId, onChange
       value={distance}
       onPick={(next) => {
         const pick = shadowDistancePick(settings, memory, moduleId, next);
-        writePickedPolar(pick.memory);
+        writePickedPolarFor(moduleId, pick.memory);
         onChange(pick.values);
       }}
     />
