@@ -2964,6 +2964,39 @@ function BlogPostListPreview({
         : singleFilter === "author" ? authorFilter
           : "";
   /*
+   * Whether the typed word had anything to do with the page being empty.
+   * `postsBeforeSearch` is the dropdowns on their own: when it is already
+   * empty, the word is innocent, and naming it — "No posts tagged \u201cjunior
+   * tennis\u201d match \u201ctennis\u201d." — invites the visitor to clear
+   * something whose clearing brings nothing back.
+   *
+   * #643 wrote exactly that reason above the `missingCatSlug` carve-out and
+   * then applied it to that one case. Every dropdown can empty the list on its
+   * own: 97 tags on the Delray project carry no published post at all (22 are
+   * published in total) and the live tag cloud links to all of them, an
+   * `?author=` naming nobody does the same, and so does a date bound outside
+   * the archive. So the carve-out becomes the general rule it was always
+   * describing, and `missingCatSlug` falls out of it — that slug drops every
+   * post, so `postsBeforeSearch` is empty and the word is innocent by the same
+   * arithmetic (task 86bbw4j6e).
+   *
+   * The other direction is unchanged and is what #643 exists to protect: while
+   * the dropdowns DO leave posts standing, the search is what emptied the page
+   * and the sentence names it alongside them, never instead of them.
+   *
+   * It sits HERE, above the results line, because BOTH sentences have to
+   * answer this question the same way. Round 1 of this ticket gated only the
+   * empty state on it and left the results line naming the search
+   * unconditionally, so a tag with no published posts put two sentences on
+   * screen at once that contradicted each other — "matching the tag
+   * \u201cjunior tennis\u201d and the search \u201ctennis\u201d: 0" ten lines
+   * above "No posts tagged \u201cjunior tennis\u201d." The top one re-issued
+   * the clear-the-word invitation the bottom one had just withdrawn. One test,
+   * read by both, is what keeps them from drifting apart again; a second copy
+   * of the condition would be free to rot.
+   */
+  const searchTermIsBlamable = Boolean(searchTerm) && postsBeforeSearch.length > 0;
+  /*
    * Everything narrowing the list BEYOND the one filter this line is titled
    * after. The number printed is `filteredPosts.length` — the count of cards
    * actually on the page — so a sentence naming only the tag was claiming a
@@ -2991,7 +3024,7 @@ function BlogPostListPreview({
       : "",
     singleFilter !== "author" && authorFilter ? `the author \u201c${authorFilter}\u201d` : "",
     dateRangePhrase,
-    searchTerm ? `the search \u201c${searchTerm}\u201d` : "",
+    searchTermIsBlamable ? `the search \u201c${searchTerm}\u201d` : "",
   ].filter(Boolean);
   const resultsLine = singleFilterValue
     ? `Blog posts matching ${joinFilterPhrases([
@@ -3007,15 +3040,24 @@ function BlogPostListPreview({
    * the page (\u00a75.31) \u2014 and typing it while a tag was selected read
    * "No posts tagged \u201ctennis\u201d.", a sentence that is flatly FALSE when
    * posts carry that tag and the search is what emptied the list. A confident
-   * wrong message is the worst of the three. So the search term is named, and
-   * a filter only takes credit for an emptiness alongside it, never instead of
-   * it.
+   * wrong message is the worst of the three. So the search term is named
+   * whenever it is one of the reasons the page is empty, and a filter takes
+   * credit alongside it rather than instead of it.
+   *
+   * #643 wrote that rule without the first clause, as though the search were
+   * always one of the reasons. It is not: when the dropdowns empty the list on
+   * their own, the typed word changed nothing and naming it is the same false
+   * confidence pointing the other way. `searchTermIsBlamable` above is the
+   * test, and it decides for the results line and this message together \u2014
+   * do not reintroduce an unconditional mention of the search in either one.
    */
   /*
-   * A ?category= slug matching no category empties the list on its own —
-   * `filteredPosts` drops every post while missingCatSlug is set — so nothing
-   * else had anything to do with it. Naming the search word here would invite
-   * the visitor to clear it, and clearing it brings nothing back.
+   * `missingCatSlug` keeps a branch of its own HERE only for the wording: the
+   * slug names a category that does not exist, so it is the whole of the
+   * phrase rather than one clause joined onto others. Whether the search gets
+   * blamed alongside it is no longer decided here \u2014 that slug drops every
+   * post, so `postsBeforeSearch` is empty and `searchTermIsBlamable` reaches
+   * the same answer this special case used to reach by hand.
    */
   const activeFilterPhrase = missingCatSlug
     ? `in the category \u201c${missingCatSlug}\u201d`
@@ -3025,28 +3067,6 @@ function BlogPostListPreview({
         authorFilter ? `by \u201c${authorFilter}\u201d` : "",
         dateRangePhrase,
       ].filter(Boolean));
-  /*
-   * Whether the typed word had anything to do with the page being empty.
-   * `postsBeforeSearch` is the dropdowns on their own: when it is already
-   * empty, the word is innocent, and naming it — "No posts tagged \u201cjunior
-   * tennis\u201d match \u201ctennis\u201d." — invites the visitor to clear
-   * something whose clearing brings nothing back.
-   *
-   * #643 wrote exactly that reason above the `missingCatSlug` carve-out and
-   * then applied it to that one case. Every dropdown can empty the list on its
-   * own: 97 tags on the Delray project carry no published post at all (22 are
-   * published in total) and the live tag cloud links to all of them, an
-   * `?author=` naming nobody does the same, and so does a date bound outside
-   * the archive. So the carve-out becomes the general rule it was always
-   * describing, and `missingCatSlug` falls out of it — that slug drops every
-   * post, so `postsBeforeSearch` is empty and the word is innocent by the same
-   * arithmetic (task 86bbw4j6e).
-   *
-   * The other direction is unchanged and is what #643 exists to protect: while
-   * the dropdowns DO leave posts standing, the search is what emptied the page
-   * and the sentence names it alongside them, never instead of them.
-   */
-  const searchTermIsBlamable = Boolean(searchTerm) && postsBeforeSearch.length > 0;
   const emptyFilteredMessage = searchTermIsBlamable
     ? activeFilterPhrase
       ? `No posts ${activeFilterPhrase} match \u201c${searchTerm}\u201d.`

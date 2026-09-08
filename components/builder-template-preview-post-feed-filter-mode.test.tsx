@@ -237,3 +237,68 @@ describe("Post Feed results line — the count and the sentence describe the sam
     expect(resultsLine()).toBe("Blog posts matching the tag “beginner tennis”: 2");
   });
 });
+
+/*
+ * Round 1 of task 86bbw4j6e fixed both defects the ticket named and put a third
+ * on the same screen: the results line named the typed word unconditionally
+ * while the empty state, ten lines below, had just stopped blaming it. On a tag
+ * with no published posts both sentences rendered at once —
+ *
+ *   Blog posts matching the tag “junior tennis” and the search “tennis”: 0
+ *   No posts tagged “junior tennis”.
+ *
+ * — so the page re-issued the "clear the word and try again" invitation it had
+ * removed, and clearing the word brought nothing back. 97 tags on the Delray
+ * project carry no published post and the live tag cloud links to every one of
+ * them, so this was reachable on the client site.
+ *
+ * These read the two sentences TOGETHER, in one scene, which is the only way
+ * the contradiction is visible: each sentence on its own was defensible.
+ */
+describe("Post Feed — the results line and the empty state agree about the search", () => {
+  it("leaves the typed word out of BOTH when the tag is empty on its own", async () => {
+    // No post carries "junior tennis", so the word "tennis" changed nothing.
+    await renderFeed("?tag=junior%20tennis", { filterMode: "tag" });
+    await typeInSearchBox("tennis");
+
+    expect(resultsLine()).toBe("Blog posts matching the tag “junior tennis”: 0");
+    expect(document.body.textContent).toContain("No posts tagged “junior tennis”.");
+    // The contradiction itself: the word blamed above, cleared below.
+    expect(resultsLine()).not.toContain("the search");
+    expect(document.body.textContent).not.toContain("match “tennis”");
+  });
+
+  it("does the same for an author nobody matches", async () => {
+    await renderFeed("?author=Nobody", { filterMode: "author" });
+    await typeInSearchBox("tennis");
+
+    expect(resultsLine()).toBe("Blog posts matching the author “Nobody”: 0");
+    expect(document.body.textContent).toContain("No posts by “Nobody”.");
+    expect(resultsLine()).not.toContain("the search");
+  });
+
+  it("does the same for a ?category= slug that matches no category", async () => {
+    await renderFeed("?category=no-such-category", { filterMode: "category" });
+    await typeInSearchBox("tennis");
+
+    expect(document.body.textContent).toContain("No posts in the category “no-such-category”.");
+    expect(resultsLine()).not.toContain("the search");
+  });
+
+  it("still names the word in BOTH when the dropdowns leave posts standing", async () => {
+    /*
+     * The other direction, and what #643 exists to protect: two posts carry
+     * "beginner tennis", so a word matching neither of them IS what emptied the
+     * page, and clearing it does bring them back. Both sentences say so.
+     */
+    await renderFeed("?tag=beginner%20tennis", { filterMode: "tag" });
+    await typeInSearchBox("zzzznothing");
+
+    expect(resultsLine()).toBe(
+      "Blog posts matching the tag “beginner tennis” and the search “zzzznothing”: 0"
+    );
+    expect(document.body.textContent).toContain(
+      "No posts tagged “beginner tennis” match “zzzznothing”."
+    );
+  });
+});

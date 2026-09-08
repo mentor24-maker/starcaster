@@ -24,6 +24,15 @@ page names the tag alone and leaves the "Show all posts" button where it was.
 Where a search genuinely is what emptied the page, it is still named — that part
 was right and is untouched.
 
+The first attempt at this fixed the message at the bottom of the page and forgot
+the heading at the top, so the two ended up arguing with each other in front of
+the visitor: the heading said "matching the tag 'junior tennis' and the search
+'tennis': 0" while the message ten lines below said "No posts tagged 'junior
+tennis'." One blamed the typed word, the other cleared it. Both sentences now
+ask the same question — did the typed word actually change anything? — from one
+place in the code, so they cannot drift apart again, and the heading on that
+page reads simply "Blog posts matching the tag 'junior tennis': 0".
+
 ## 2026-09-07 — A drop shadow can now be pointed, not just nudged (#645)
 
 A shadow under a picture was set by two numbers: how far right it sat, and how
