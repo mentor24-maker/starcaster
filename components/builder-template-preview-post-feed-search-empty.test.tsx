@@ -182,9 +182,20 @@ describe("Post Feed empty state — every filter that narrowed the page names it
 
     await setDateBound("From", "2030-01-01");
 
+    /*
+     * Updated by 86bbw4j6e. This used to read "... match “Clinics”." — the
+     * date named alongside the word, per #643's "a filter only takes credit
+     * alongside the search, never instead of it". But the date bound empties
+     * this list on its OWN: clearing "Clinics" brings nothing back, so naming
+     * it is an invitation the page cannot honour. That is word for word the
+     * reason #643 gives above its own missingCatSlug carve-out, and it applies
+     * to every dropdown, not to that one alone. The rule is now general — the
+     * search is named only while the dropdowns leave posts standing.
+     */
     expect(document.body.textContent)
-      .toContain("No posts published on or after 2030-01-01 match “Clinics”.");
-    expect(document.body.textContent).not.toContain("No posts match “Clinics”.");
+      .toContain("No posts published on or after 2030-01-01.");
+    expect(document.body.textContent).not.toContain("match “Clinics”");
+    expect(document.body.textContent).not.toContain("No posts match your filters.");
   });
 
   it("names a date bound on its own when nothing was typed", async () => {
@@ -204,16 +215,23 @@ describe("Post Feed empty state — every filter that narrowed the page names it
       .toContain("No posts published between 2030-01-01 and 2030-12-31.");
   });
 
-  it("names a tag and a date together, in one sentence, alongside the search", async () => {
+  it("names a tag and a date together, in one sentence", async () => {
     await renderFeed("?tag=beginner%20tennis", { filterMode: "tag", showDateFilter: "true" });
     await typeInSearchBox("Level");
     expect(cardTitles()).toContain("What Level Player Are You?");
 
     await setDateBound("From", "2030-01-01");
 
+    /*
+     * Updated by 86bbw4j6e for the same reason as the test above, and the
+     * multi-filter sentence is why it keeps its own case: the tag and the date
+     * still join with "and", and the search still drops out, because tag +
+     * date alone already leave nothing.
+     */
     expect(document.body.textContent).toContain(
-      "No posts tagged “beginner tennis” and published on or after 2030-01-01 match “Level”."
+      "No posts tagged “beginner tennis” and published on or after 2030-01-01."
     );
+    expect(document.body.textContent).not.toContain("match “Level”");
   });
 
   it("does not invite clearing a search that an unknown category slug made irrelevant", async () => {
@@ -224,5 +242,62 @@ describe("Post Feed empty state — every filter that narrowed the page names it
 
     expect(document.body.textContent).toContain("No posts in the category “ghost-slug”.");
     expect(document.body.textContent).not.toContain("match “Tennis”.");
+  });
+});
+
+/*
+ * Task 86bbw4j6e. #643 carved the search term out of the blame for an unknown
+ * ?category= slug, giving the reason in full: "would promise that deleting the
+ * word brings posts back. Nothing will." Every dropdown can empty the list on
+ * its own, so that reason was never about the category slug — 97 tags on the
+ * Delray project carry no published post at all (22 are published in total),
+ * and the live tag cloud on /tags links to every one of them. The carve-out
+ * becomes the rule it was already describing.
+ */
+describe("Post Feed empty state — a filter that empties the list on its own takes the whole blame", () => {
+  it("does not name the search word when the tag has no posts at all", async () => {
+    // Nothing carries "junior tennis", so clearing "tennis" brings nothing back.
+    await renderFeed("?tag=junior%20tennis", { filterMode: "tag" });
+    expect(document.body.textContent).toContain("No posts tagged “junior tennis”.");
+
+    await typeInSearchBox("tennis");
+
+    expect(document.body.textContent).toContain("No posts tagged “junior tennis”.");
+    expect(document.body.textContent).not.toContain("match “tennis”");
+  });
+
+  it("does the same for an author nobody wrote as", async () => {
+    await renderFeed("?author=Nobody");
+    await typeInSearchBox("tennis");
+
+    expect(document.body.textContent).toContain("No posts by “Nobody”.");
+    expect(document.body.textContent).not.toContain("match “tennis”");
+  });
+
+  it("still names the search while the tag DOES leave posts standing", async () => {
+    /*
+     * The other direction, and the one #643 exists to protect. Posts carry
+     * "beginner tennis", so the search is what emptied the page and the
+     * sentence has to say so — this is the case the general rule must not
+     * swallow.
+     */
+    await renderFeed("?tag=beginner%20tennis", { filterMode: "tag" });
+    await typeInSearchBox("zzzznotarealquery");
+
+    expect(document.body.textContent)
+      .toContain("No posts tagged “beginner tennis” match “zzzznotarealquery”.");
+  });
+
+  it("offers a way back out of a filter-only emptiness", async () => {
+    // The message stops naming the word, but the escape hatch stays.
+    await renderFeed("?tag=junior%20tennis", { filterMode: "tag" });
+    await typeInSearchBox("tennis");
+
+    const back = Array.from(document.querySelectorAll("button"))
+      .find((b) => b.textContent === "Show all posts");
+    expect(back).toBeTruthy();
+
+    await act(async () => { back!.click(); });
+    expect(cardTitles()).toContain("Delray Beach Open");
   });
 });
