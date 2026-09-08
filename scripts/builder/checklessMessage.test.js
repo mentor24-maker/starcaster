@@ -33,6 +33,7 @@ const ATTEMPT_CASES = [
 const MERGEABILITY_CASES = [
   { label: 'conflicting, git agrees', mergeable: CONFLICTING, localMerge: 'conflicting' },
   { label: 'conflicting, git says behind', mergeable: CONFLICTING, localMerge: 'clean' },
+  { label: 'conflicting, clean but behind-ness unmeasured', mergeable: CONFLICTING, localMerge: 'clean-unconfirmed' },
   { label: 'conflicting, git says current', mergeable: CONFLICTING, localMerge: 'current' },
   { label: 'conflicting, no local reading', mergeable: CONFLICTING, localMerge: null },
   { label: 'mergeable', mergeable: MERGEABLE, localMerge: null },
@@ -136,6 +137,7 @@ test('the remedy table: every combination maps to the advice it should', () => {
     [{ mergeable: CONFLICTING, localMerge: 'conflicting' }, 'resolve-the-conflict'],
     [{ mergeable: CONFLICTING, localMerge: 'current' }, 'recompute-mergeability'],
     [{ mergeable: CONFLICTING, localMerge: 'clean' }, 'catch-up-merge'],
+    [{ mergeable: CONFLICTING, localMerge: 'clean-unconfirmed' }, 'catch-up-merge'],
     [{ mergeable: CONFLICTING, localMerge: null }, 'catch-up-merge'],
     // GitHub says mergeable — the nudge's own outcome decides.
     [{ mergeable: MERGEABLE, nudged: true }, 'check-actions'],
@@ -157,7 +159,7 @@ test('a conflicting head is decided by GitHub, never overruled by a clean git re
   // git saying "merges clean" does NOT mean the checks are coming — GitHub is
   // the one that decides whether to build the merge ref, and it is the one
   // refusing. The local reading only ever picks between conflict remedies.
-  for (const localMerge of ['conflicting', 'clean', 'current', null]) {
+  for (const localMerge of ['conflicting', 'clean', 'clean-unconfirmed', 'current', null]) {
     const { remedy } = checklessMessage({ mergeable: CONFLICTING, localMerge, nudged: true });
     assert.ok(
       ['resolve-the-conflict', 'catch-up-merge', 'recompute-mergeability'].includes(remedy),
@@ -303,8 +305,73 @@ test('classifyLocalMerge: "already current" is never claimed against a stale bas
   // request whose real remedy is the catch-up merge.
   assert.equal(classifyLocalMerge({
     baseResolved: true, headResolved: true, mergeTreeCode: 0, behindCount: 0, baseIsFresh: false,
-  }), 'clean');
+  }), 'clean-unconfirmed');
   assert.equal(classifyLocalMerge({
     baseResolved: true, headResolved: true, mergeTreeCode: 0, behindCount: null, baseIsFresh: true,
-  }), 'clean', 'an uncountable distance is not "current" either');
+  }), 'clean-unconfirmed', 'an uncountable distance is not "current" either');
+});
+
+/* --- a CANNOT TELL is never rendered as a measurement (task 86bbvyfuu) ---- */
+
+test('classifyLocalMerge: "behind main" is only claimed when it was actually measured', () => {
+  // The claim needs BOTH halves: a base ref this run refreshed, and a distance
+  // that parsed. Missing either one used to answer plain `clean`, which the
+  // message renders as "this branch is behind it" under a WHAT WAS READ
+  // heading — a reading nobody took, printed as a fact.
+  const measured = {
+    baseResolved: true, headResolved: true, mergeTreeCode: 0, behindCount: 3, baseIsFresh: true,
+  };
+  assert.equal(classifyLocalMerge(measured), 'clean', 'measured and behind stays `clean`');
+
+  assert.equal(classifyLocalMerge({ ...measured, baseIsFresh: false }), 'clean-unconfirmed',
+    'a base ref this run could not refresh establishes nothing about the distance');
+  assert.equal(classifyLocalMerge({ ...measured, behindCount: null }), 'clean-unconfirmed',
+    'nor does a distance that could not be counted');
+  assert.equal(classifyLocalMerge({ ...measured, behindCount: NaN }), 'clean-unconfirmed',
+    'nor one that would not parse');
+  assert.equal(classifyLocalMerge({ ...measured, behindCount: undefined }), 'clean-unconfirmed',
+    'nor one that was never taken at all');
+});
+
+test('THE TICKET\'S OWN CASE: a stale base never renders "branch is behind it"', () => {
+  // 86bbvyfuu, stated as the acceptance criterion states it. `git fetch origin
+  // main` failing while `gh` still works is not exotic in this repo, where git
+  // and gh authenticate by different routes.
+  const localMerge = classifyLocalMerge({
+    baseResolved: true, headResolved: true, mergeTreeCode: 0, behindCount: 0, baseIsFresh: false,
+  });
+  const { text } = checklessMessage({ mergeable: CONFLICTING, localMerge, prNumber: 639 });
+  assert.ok(!text.includes('branch is behind it'),
+    'a distance that was never measured must not be reported as one that was');
+  assert.match(text, /whether\n    this branch is BEHIND it was NOT established/);
+});
+
+test('no message anywhere claims "behind it" unless the reading said `clean`', () => {
+  // The invariant rather than the instance: whatever the outcome and whatever
+  // the nudge did, that sentence belongs to exactly one local reading.
+  for (const { label, input } of everyCombination()) {
+    const { text } = checklessMessage(input);
+    if (!text.includes('branch is behind it')) continue;
+    assert.equal(input.localMerge, 'clean',
+      `${label}: claimed the branch is behind main on a \`${input.localMerge}\` reading`);
+  }
+});
+
+test('the unconfirmed reading gets the SAME remedy — only its evidence differs', () => {
+  // Quietly changing which remedy an unconfirmed reading gets would regress
+  // 86bbvqkr1, whose whole point is that the catch-up merge is the measured,
+  // safe default under uncertainty. What changed is the evidence line above it.
+  const shared = { mergeable: CONFLICTING, prNumber: 639, prUrl: 'https://x/y/pull/639' };
+  const measured = checklessMessage({ ...shared, localMerge: 'clean' });
+  const unconfirmed = checklessMessage({ ...shared, localMerge: 'clean-unconfirmed' });
+  const noReading = checklessMessage({ ...shared, localMerge: null });
+
+  assert.equal(measured.remedy, 'catch-up-merge');
+  assert.equal(unconfirmed.remedy, 'catch-up-merge');
+  assert.equal(noReading.remedy, 'catch-up-merge');
+  assert.ok(unconfirmed.text.includes(REMEDIES['catch-up-merge']({ prNumber: 639 })));
+
+  // ...and the three are genuinely distinguishable, or the state is decorative.
+  assert.notEqual(measured.text, unconfirmed.text);
+  assert.notEqual(noReading.text, unconfirmed.text);
 });

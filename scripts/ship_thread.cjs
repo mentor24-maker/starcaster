@@ -613,9 +613,13 @@ function nudgeChecks() {
  * GitHub recomputes — and "bring main in" is a no-op loop on a branch that is
  * already current, which is precisely the branch a phantom reading lands on.
  *
- * Every failure is a cannot-tell, never "clean": `classifyLocalMerge` returns
- * null and the message falls back to the catch-up advice, which is the measured
- * remedy (#630) and safe against an unconfirmed conflict.
+ * Every failure is a cannot-tell, never a MEASURED "clean". `classifyLocalMerge`
+ * returns null when it could not read the merge at all, and `clean-unconfirmed`
+ * when the merge itself read cleanly but the distance behind main did not — a
+ * failed `git fetch`, or a count that would not parse. Both fall back to the
+ * catch-up advice, which is the measured remedy (#630) and safe against an
+ * unconfirmed conflict; only the evidence line differs, so the message never
+ * states a reading this function did not take (86bbvyfuu).
  */
 function localMergeReading() {
   const fetched = quiet('git', ['fetch', '--quiet', 'origin', 'main']);
