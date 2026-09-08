@@ -1,3 +1,44 @@
+## 2026-09-08 — Alarms stopped being thrown away when the chat room refuses them (#666)
+
+The system has one way of telling anyone that something has broken: it posts a
+message to the party line, the ClickUp chat room. Seven different background
+jobs use it and nothing else — the one that notices a job has stopped running,
+the one that notices the queue is not moving, the one that reports a failed
+job, and four more.
+
+Since about ten to ten on Sunday night, ClickUp has been refusing every message
+sent to that room. Not the account, not the room — reading it works perfectly
+and writing comments onto tickets works perfectly; it is only chat messages,
+and only writing them. So for fifteen hours every alarm the system raised was
+simply thrown away, leaving one line in a log file that nobody reads.
+
+Now, when the chat room refuses an alarm, the alarm gets written as a comment
+on a ticket called **Undelivered alarms** instead. The ticket makes itself the
+first time it is needed. The wording of the alarm is kept exactly as it was
+written, with a note on top saying which machine raised it and what the chat
+room said when it refused. The system checks the comment really landed before
+it counts the alarm as delivered — if both the chat room and the ticket refuse,
+it says nothing was delivered, so the job that raised the alarm tries again
+later instead of going quiet for six hours on a message nobody received.
+
+The second half of the same fault: every pass that picks up a ticket writes a
+short note on it saying "I am working on this", and that note is the only way
+two passes running at once can see each other. ClickUp has been refusing those
+too, with a message about the plan running out of custom fields. The trouble
+was that it read exactly like the harmless case — a note field nobody has
+created yet — which the passes are told to shrug off. Those two now say
+different things, and the serious one says plainly that the claim is invisible
+and another pass may take the ticket.
+
+One correction worth recording. The ticket asking for this work suggested
+paying ClickUp to raise the plan limit. The same pair of symptoms happened on
+23 August, the same purchase was suggested then, and it was wrong: the plan
+never changed and the problem cleared itself after about sixteen hours. The
+plan reads the same today as it did yesterday when everything worked, so
+nobody is being asked to buy anything — and the message the system now prints
+says so, and names the earlier day, so the next person to see it does not go
+down that road a third time.
+
 ## 2026-09-07 — A drop shadow can now be pointed, not just nudged (#645)
 
 A shadow under a picture was set by two numbers: how far right it sat, and how
