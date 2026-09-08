@@ -23,6 +23,19 @@ noticeably rough. A background clip is drawn twice so it can dissolve smoothly
 at the loop point, so four video columns means eight videos playing at once.
 Two or three is comfortable; four is not, and that is noted rather than fixed.
 
+Review caught one thing before any of this went out: choosing Video on a column
+made that column's own settings panel go crooked. The fourteen video settings
+arrived carrying their own alignment, so they sat on a different edge from the
+Opacity and Border boxes above and below them — a staggered form, in the middle
+of the panel you were working in. Every box in the group now lines up on one
+edge, and the panel is the same width either way; only where the boxes start
+changed.
+
+Worth recording why it got that far: the automatic layout check had been passing
+because the test page it measures never had a video on a column, so those
+fourteen settings had never once been on screen when the check looked. It has a
+video column now, so this can never again pass by not looking.
+
 ## 2026-09-07 — A drop shadow can now be pointed, not just nudged (#645)
 
 A shadow under a picture was set by two numbers: how far right it sat, and how
