@@ -4318,6 +4318,43 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ---------------------------------------------------------------------------
+ * THE CHROME JOINS THE FIRST SETTINGS COLUMN (ticket 86bbq065f, 2026-09-08).
+ *
+ * The operator, 2026-08-13, looking at a two-column module editor: *"notice in
+ * the left column how the column width varies arbitrarily between the Settings
+ * fields and the Layout fields"*. The block below closed that seam for the two
+ * editors that could reach it with `subgrid`. This closes it for the other 32,
+ * which could not — a wrapping flex container sits between the editor and the
+ * first column, and a flex item cannot subgrid to a grid two levels up. The
+ * full reasoning, and why the answer is a slot rather than a rule, is in
+ * `components/builder/builder-module-chrome-slot.tsx`.
+ *
+ * The card portals the chrome into `.builder-module-chrome-slot`, which the
+ * panel renders at the end of its first column. All three boxes between the
+ * column's grid and the chrome's label/control pairs have to disappear for
+ * those pairs to become the column's own grid items — the slot, the chrome,
+ * and the strip inside it. That is the same flattening the column already does
+ * to its own strips a few hundred lines above; the chrome simply arrives with
+ * three wrappers instead of one.
+ *
+ * `.builder-module-chrome` is a wrapping FLEX row in its own right (it is what
+ * lays the heading and floating-image bars out), so leaving it a box would put
+ * the whole chrome in a single cell of the column and lay its rows out inside
+ * it — the "Background on a line of its own under its label" failure the axis
+ * columns already paid for.
+ * ------------------------------------------------------------------------ */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-chrome-slot,
+/* `crm-form` reaches the same place without a slot: it owns its chrome outright
+   rather than receiving the shared one (E6 — it is excluded from
+   `needsRestoredChrome` so there is never a second copy), so it simply renders
+   it inside its Content column. Matching the chrome by descent rather than only
+   through the slot is what makes both routes one rule instead of two. */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-chrome,
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-chrome > .builder-module-field-strip {
+  display: contents;
+}
+
+/* ---------------------------------------------------------------------------
  * THE CHROME AND THE SETTINGS COLUMN SHARE ONE LATTICE
  * (ticket 86bbmafd6, 2026-08-26 — the second half of the operator's
  * 2026-08-13 note, *"the column width varies arbitrarily between the
@@ -7186,6 +7223,54 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /*
+ * THE PAGE-LEVEL VIDEO LAYER — the same element as above, fixed to the browser
+ * window instead of to a row, so the clip fills the viewport and the page's
+ * sections scroll over the top of it.
+ *
+ * `position: fixed` alone is the whole change: the base rule's `inset: 0`
+ * then resolves against the viewport rather than against the shell, which is
+ * both simpler and more truthful than `100vh` — a phone browser's `100vh` is
+ * famously not the visible height, and a fixed inset is.
+ *
+ * `z-index: 0` from the base rule is what keeps the page's own content in
+ * front: `.builder-viewport-shell-content` (the only sibling that carries
+ * content) is already `position: relative; z-index: 1` in `_builder-theme.css`,
+ * so every section paints above the clip and a section carrying its own
+ * background hides the clip behind exactly its own band. `pointer-events: none`
+ * from the base rule is what stops a full-window element behind everything from
+ * swallowing clicks.
+ *
+ * Scoped through `.has-shell-background-video` — the class the shell wears
+ * only when it has actually mounted this layer — so the marker is load-bearing
+ * rather than decorative. A class nobody reads is a class the next edit
+ * deletes.
+ *
+ * NOTHING ELSE HAS TO ESTABLISH A CONTAINING BLOCK, and one thing must not: an
+ * ancestor with a transform, a filter or a backdrop-filter captures a fixed
+ * descendant and it would scroll with the page. The theme's container blur is
+ * applied to `.builder-preview-column`, which is below this layer rather than
+ * above it, so it cannot reach it — but that is the failure to look for first
+ * if this ever stops staying put.
+ */
+.builder-react-root .has-shell-background-video > .builder-preview-video-background-page {
+  position: fixed;
+}
+
+/*
+ * The preview's PHONE FRAME shows the poster, not the clip — which is what a
+ * real phone shows (`BUILDER_VIDEO_MOBILE_MAX_WIDTH`, unless Play On Phones is
+ * on). The layer measures the real window, so inside a 390px frame on a
+ * desktop it would decide it is not a phone, and a viewport-fixed element
+ * would then paint across the whole browser window with the frame's
+ * `overflow: hidden` powerless to clip it — overflow does not contain a fixed
+ * element. Hiding it here makes the mobile preview agree with the device it is
+ * imitating, and the poster underneath is already the correct picture.
+ */
+.builder-react-root .builder-preview-device-mobile .builder-preview-video-background-page {
+  display: none;
+}
+
+/*
  * The IMAGE layer, which exists only to parallax — an image background is a
  * CSS background on the section itself everywhere else, and this element is
  * mounted only when it has to MOVE. It paints the same picture on top of the
@@ -7334,6 +7419,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * setting, and the operator is allowed to save without one.
  */
 .builder-video-background-warning,
+.builder-video-background-size,
 .builder-video-background-note,
 .builder-parallax-background-note {
   margin: 6px 0 0;
@@ -7343,9 +7429,30 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-secondary, #4a5568);
 }
 
-.builder-video-background-warning {
+.builder-video-background-warning,
+.builder-video-background-size-warn {
   color: var(--ink-primary, #1a202c);
   font-weight: 600;
+}
+
+/*
+ * The background video's file size. Advice, so it is deliberately NOT a red
+ * error box and nothing near it is disabled — an oversized video still saves
+ * and still plays, and the operator overrules this whenever he has a reason
+ * to. Under the threshold it is a quiet grey number (the shared rule above);
+ * over it, `-warn` gives it the same weight the missing-poster sentence has
+ * and nothing more.
+ */
+.builder-video-background-size {
+  /*
+   * These two are not decoration: this is one long sentence in a narrow
+   * settings column, and it has to wrap rather than widen the column's shared
+   * grid track (docs/UI_RULES.md — a panel is one rectangle top to bottom, so
+   * no field may push its column wider than its siblings). A long unbroken
+   * file name in the sentence is what `overflow-wrap` is guarding against.
+   */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ── Event Manager (admin module) ──────────────────────────────────────────

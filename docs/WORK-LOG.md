@@ -61,6 +61,225 @@ its blank lines, which turned a dividing rule into a heading; and two machines
 falling back in the same minute could have made two noticeboards, so they now
 agree on the older one and say out loud that a duplicate needs deleting.
 
+## 2026-09-08 — Module settings panels now line up top to bottom (#667)
+
+Open any module's settings in the Builder and you are really looking at two
+stacks of fields: the strip that every module shares — Label, Background,
+Alignment, the margins — and the module's own settings columns underneath. Those
+two stacks have never started on the same vertical line. Not by much: 25px one
+way on the image panel, 78px the other on breadcrumb. Enough to see, and enough
+to make a panel read as assembled rather than built. 32 of the 35 panels that
+have both were out. They line up now, so a panel is one rectangle from the Label
+row down to the last setting.
+
+The reason it took this long is worth writing down, because it is not what the
+ticket assumed. The two stacks were two separate layout grids, and a grid can
+only line things up with things inside it — no measurement passes between two of
+them. Two panels in the whole builder already lined up, and they did it by a
+trick that needs the two halves to be close relatives in the page structure;
+everywhere else there is a wrapper in between whose job is to let columns wrap
+onto a second row on a narrow panel, and that wrapper is exactly what blocks the
+trick. Ten of these panels already wrap, so removing it to close the seam would
+have broken something more important than the thing being fixed.
+
+So the fix stopped trying to make two grids agree and put the shared strip
+inside the first settings column instead. One grid, one measurement, no
+agreement needed. One module — the CRM form — already owned its own copy of that
+strip, so it simply moved. And one module, Social, has quietly been doing this
+by hand since long before anyone noticed; it is the only one that never had the
+problem.
+
+One thing you will see and should look at: when two stacks share a measurement,
+they both get the wider of the two. On panels with a wide first column the
+shared strip's own boxes widen to match — on the blog search panel they go from
+a fairly tight box out to the full width of the column above them. That is what
+sharing an edge costs, and it is the intended outcome rather than a side effect,
+but it is a real change in how those panels look. Before-and-after photographs
+of six panels are on the ticket.
+
+Two smaller notes. On four panels the shared strip used to sit above the
+settings and now sits below them, inside the first column — where the other
+thirty already had it. And the check that measures all this did not retire when
+the list of broken panels was emptied: it now watches the merged panels instead,
+and it was deliberately broken twice and watched to fail before the list was
+cleared, so a future panel that quietly stops joining in gets caught by name.
+
+## 2026-09-08 — The Builder now says when a background video is too heavy (#664)
+
+A background video starts playing the second somebody lands on the page, before
+anything else can finish. The gallery only ever showed you a file's name and a
+little picture of it — never how big it was — so a 34MB clip could go onto a
+client's front page with nothing anywhere warning that a visitor on their phone
+would sit staring at a blank band for several seconds.
+
+The Video panel now tells you. Under the Choose Video button it names the file's
+size, and if it is over 10MB it says so in a plain sentence: *"This video is
+34 MB. Visitors on phone data will wait several seconds for it. Under 10MB is a
+comfortable size for a background."*
+
+**It is advice, not a rule.** Nothing is blocked, nothing is greyed out, the
+upload still works and the video still saves and plays exactly as before. You
+can ignore it whenever you have a reason to — it is there so the decision is
+yours instead of accidental.
+
+The size is remembered on the page itself, so it is still there when you come
+back to that page next week, not just in the minute after you picked the file.
+And it is thrown away the moment you type a different video into the box, which
+matters more than it sounds: a leftover number would confidently describe the
+wrong file, and a wrong number nobody can spot is worse than no number at all.
+
+**One thing to know while you use it.** A video set as a *row* background does
+not survive pressing Save Page — it comes back as None — and it has never
+survived, on this change or before it. That is a separate bug, already written
+up and waiting its turn, and this work neither caused it nor could fix it. Until
+that one lands, the size warning is doing its job in the moment you pick the
+clip; it just has nothing left to describe after a save.
+## 2026-09-08 — The job roll call stops calling slow jobs dead (#661)
+
+There is a shared record of when each scheduled job last finished successfully —
+the roll call — and something reads it and shouts if a job has gone quiet. It
+judged every job by the same yardstick: silent for more than 25 hours, presumed
+dead. That is a sensible yardstick for a job that runs every ten minutes. It is
+nonsense for one that runs once a day or once a week, because such a job can go
+quiet for longer than that while working perfectly — so the alarm would go off
+about a healthy job, over and over. An alarm that keeps being wrong is one
+everybody learns to ignore, which would take the real alarms down with it. This
+was already known: it is the stated reason the weekly report has never been
+allowed to check in at all.
+
+Each job is now measured against its own schedule instead of one shared number:
+a day (which is as often as the shared record gets updated) plus one more of
+that job's own runs. Every job we currently run goes hourly or oftener, so all
+four come out at exactly the 25 hours they already had — nothing about today's
+behaviour changes, which is what made it safe to switch over everywhere at once.
+A daily job would now get two days before anyone worries about it, and a weekly
+job eight. The alarm still names a job that has genuinely stopped, and it now
+also says what it measured that job against, because "quiet for 30 hours" means
+disaster for one job and a normal Tuesday for another.
+
+The weekly report is still switched off deliberately. Letting a job start
+checking in is a change in its own right and gets its own test.
+## 2026-09-08 — When a push spares your hand edit, it now says so (#662)
+
+A shared section is one block you build once and reuse on many pages. When you
+change the master and push it out, the builder deliberately does NOT flatten a
+copy you have since hand-edited on its own page — your edit wins — and it
+reports which pages it left alone, so you know.
+
+A single page can carry more than one copy of the same shared section. When one
+of those copies was clean and another had been hand-edited, the push did exactly
+the right thing — rewrote the clean one, left your edit alone — and then said
+nothing whatsoever about the copy it had spared. It fell out of the report
+entirely. So the one message that exists to tell you your edit survived was the
+one message you never saw.
+
+The cause was that the engine asked "did anything on this page have a hand
+edit?" and "did anything on this page get rewritten?" as two yes/no questions
+about the whole page, when the real question is about each copy. It counts
+copies now.
+
+The report keeps the two facts apart on purpose, because they are different
+things and reading them as one is what produced the wrong message in the first
+place. "Skipped" still means what it has always meant — **pages this push did
+not write at all**, every copy on them hand-edited — and those are the pages
+the "Overwrite anyway?" button offers you. A page that WAS rewritten, and still
+carries an edit of yours the push stepped around, is now reported separately
+and counted in copies, so the message reads *"updated 2 pages. A hand-edited
+copy on 1 of the pages just updated was left as it is"* rather than implying a
+third page you never had.
+
+That message says "the pages just updated" rather than "those pages" for a
+reason worth a sentence. When a save updates one page, skips another, and
+spares an edit on the one it updated, all three numbers are 1 — and "1 of those
+pages" then reads as the page that was *skipped*, which is the opposite of
+where your surviving edit actually is. Naming the set outright is what makes
+the message point at the right page every time.
+
+Nothing about what gets written changed — hand edits were always safe. This was
+the builder failing to tell you so.
+## 2026-09-08 — A whole page can now sit on a video, not just one band (#663)
+
+A row on a page could already carry a video behind it. A page could not: the
+only way to get moving footage behind a whole site was to put one video row at
+the top and leave everything below it flat.
+
+Page Details → Background now offers **Video**, exactly the way a row's
+background does — same clip picker, same poster, same speed, trim, blur and
+focal point, with the same names in the same order. Choose one and the clip
+fills the browser window while the page's sections scroll over the top of it.
+A section that carries its own colour or picture still paints over the video,
+so the clip shows through only where the page is transparent, and that is what
+lets a page mix the two.
+
+There is exactly **one** video background in the whole system — the same piece
+of code a row uses (`BuilderBackgroundLayer`). That matters more than it
+sounds: it means the careful parts cannot drift apart. Phones still get the
+still picture instead of the clip, so nobody is charged for megabytes of
+someone else's decoration; a visitor who has asked their computer to reduce
+motion still gets the still picture; the layer still cannot swallow a click or
+be read out by a screen reader; and it still stops playing when it is not on
+screen. None of that had to be written a second time, so none of it can be
+fixed in one place and forgotten in the other.
+
+Four new checks drive a real browser over a page wearing a video and prove the
+two things that were new: that the clip stays put in the window while the page
+moves over it, and that the page's own content paints in front of it rather
+than behind. Each was broken on purpose first and watched to fail.
+## 2026-09-07 — The tag page stops telling visitors a number that is not the tag's (#659)
+
+On the Delray tags page, a visitor who clicked "beginner tennis" saw a heading
+counting the posts with that tag. Three of them. Then they typed "Clinics" into
+the search box, the list narrowed to one — and the heading changed to say the
+tag had one post. It does not. Three posts still carry it; the search is what
+put the other two out of sight. The heading was naming one thing and counting
+another, confidently, on a live client site.
+
+The number is the half that stays, because it is the one a visitor can count for
+themselves against the cards in front of them. So the sentence widens to cover
+it: "Blog posts matching the tag 'beginner tennis' and the search 'Clinics': 1".
+Anything else narrowing the list gets named the same way, because the search is
+not the only way in — a link can set an author or a date range alongside the
+tag, and each of those could produce the same false sentence.
+
+The second fix is the message you get when nothing comes back at all. Ninety-
+seven of Delray's tags have no published post behind them — they are all on
+drafts — and the tag cloud links to every one. Ask for one of those and then
+type a word, and the page used to say "No posts tagged 'junior tennis' match
+'tennis'", which reads as an invitation to delete the word and try again.
+Deleting it brings nothing back; the tag was empty before you typed. Now the
+page names the tag alone and leaves the "Show all posts" button where it was.
+Where a search genuinely is what emptied the page, it is still named — that part
+was right and is untouched.
+
+The first attempt at this fixed the message at the bottom of the page and forgot
+the heading at the top, so the two ended up arguing with each other in front of
+the visitor: the heading said "matching the tag 'junior tennis' and the search
+'tennis': 0" while the message ten lines below said "No posts tagged 'junior
+tennis'." One blamed the typed word, the other cleared it. Both sentences now
+ask the same question — did the typed word actually change anything? — from one
+place in the code, so they cannot drift apart again, and the heading on that
+page reads simply "Blog posts matching the tag 'junior tennis': 0".
+## 2026-09-08 — Answering a question no longer puts finished work back in the queue (#660)
+
+When Dane answers a question on a ticket, a background job hands that ticket
+back to the machines. Where it handed it was a fixed answer: always back into
+the build queue, whatever the ticket was. The build queue is the shopping list
+a build loop picks its next job from.
+
+So the day before, a ticket whose code had already been written, merged and put
+live went back on that shopping list. Somebody happened to be watching and
+closed it by hand within minutes. Nobody watching, and a build loop would have
+picked up finished work, started building it a second time, and gone looking
+for a branch GitHub had already deleted.
+
+The hand-back now looks at the ticket first. If the work is merged, the ticket
+goes to Live, where finished work belongs. If its pull request is still open,
+it goes to Rework, so the loop carries on with the branch that already exists
+rather than starting over. If there is no pull request at all — the ordinary
+case, and much the commonest — nothing changes and it goes back in the queue as
+before. And if GitHub cannot be reached to find out, the ticket does not move
+at all and the job says so out loud, because guessing is the whole of what went
+wrong here.
 ## 2026-09-07 — The panel checker was passing 35 crooked panels, and now it names them (#653)
 
 Every module in the Builder has a settings panel, and Dane pointed at a problem

@@ -89,7 +89,7 @@ import strandedLocalWork from './builder/strandedLocalWork.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
-  defaultWatches, handbackTarget, mergeEnabled, operatorComments,
+  defaultWatches, handbackTarget, handbackDestination, mergeEnabled, operatorComments,
   answerAwaitingHandback, handbackFailureText, handbackDoneText,
   repliesShowRelayed, repliesShowHandbackDone, repliesShowHandbackFailure,
   ticketsToRead, markAfterPass, DEFAULT_OVERLAP_MS,
@@ -99,7 +99,7 @@ const {
 const { retryDecision } = clickupRetry;
 const {
   mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker, countMergeRefusals,
-  refusalNotice, refusalBusLine, conflictHandOffNotice, mergedNotice,
+  refusalNotice, refusalBusLine, conflictHandOffNotice, mergedNotice, findPullRequest,
 } = mergeOnComment;
 const {
   conflictTicketFiledComment, findConflictTicket, conflictTicketName,
@@ -690,6 +690,27 @@ function gh(args) {
     stdout: String(out.stdout || ''),
     stderr: String(out.stderr || out.stdout || '').trim(),
   };
+}
+
+/**
+ * THE STATE OF THIS TICKET'S OWN PULL REQUEST, for the hand-back decision
+ * (2026-09-08, task 86bbw596q). `busRelayPlan.handbackDestination` owns what
+ * each answer MEANS; this only fetches it.
+ *
+ * A failed read comes back as `state: ''` with the reason attached, never as
+ * a guess and never as an exception: the decision function turns that into
+ * "cannot tell, move nothing", which is the fail-safe direction. `gh` carries
+ * its own credentials and is read-only here, so this is safe under --dry-run.
+ */
+function readPullRequestState(pr) {
+  const out = gh(buildStart.prLookupArgs(pr));
+  if (!out.ok) return { ...pr, state: '', why: out.stderr || 'gh could not read it' };
+  let json;
+  try { json = JSON.parse(out.stdout); }
+  catch (e) { return { ...pr, state: '', why: `gh's answer did not parse (${e.message})` }; }
+  const state = String(json?.state || '').trim();
+  if (!state) return { ...pr, state: '', why: 'gh returned no state field' };
+  return { ...pr, state };
 }
 
 /**
@@ -4709,6 +4730,17 @@ if (cmd === 'whoami') {
         isMachine: isMachineComment,
       });
 
+      // WHERE this ticket would go if his answer releases it (task 86bbw596q).
+      // Resolved ONCE per ticket, off the comments already in hand plus at most
+      // one `gh` call, and only on a status this watch actually releases — so a
+      // notify-only list and a "ready to launch" ticket cost nothing. Both the
+      // receipt below and the hand-back at the end of the loop read this same
+      // answer, so the note on the ticket can never name a different status
+      // from the one the move asks for.
+      const releasesThisStatus = Boolean(handbackTarget(watch, t.status?.status, 1));
+      const trailPr = releasesThisStatus ? findPullRequest(commentsOut.json.comments || []) : null;
+      const handbackPr = trailPr ? readPullRequestState(trailPr) : null;
+
       // The kill switch, as he may have set it on a ticket rather than on the
       // party line (standing condition 1: "on the bus or any Loop Queue
       // ticket"). Free — these comments are already in hand.
@@ -4813,7 +4845,7 @@ if (cmd === 'whoami') {
         const busBody = `[CC-starcaster bus-relay] Dane replied on "${t.name}" (${t.url}):\n\n${c.comment_text}`;
         // Chat, then a receipt comment on this very ticket. Only if BOTH fail
         // is the answer genuinely undelivered.
-        const simTarget = handbackTarget(watch, t.status?.status, 1);
+        const simTarget = handbackDestination(watch, t.status?.status, 1, handbackPr).target;
         const delivery = await deliverToBus(channel, busBody, {
           taskId: t.id,
           target: simTarget,
@@ -4997,8 +5029,19 @@ if (cmd === 'whoami') {
       const authorized = answered.state === 'no-question'
         ? fresh
         : (answered.state === 'answered' && answered.delivered);
-      const target = handbackTarget(watch, t.status?.status, authorized);
+      const plan = handbackDestination(watch, t.status?.status, authorized, handbackPr);
+      // A reading that failed is reported, never rounded down to "carry on".
+      // Moving on a guess here is the whole of the bug this fix removes.
+      if (plan.act === 'cannot-tell') {
+        unchecked.push(`${t.id}: his answer was delivered, but ${plan.why}`);
+        continue;
+      }
+      const target = plan.target;
       if (!target) continue;
+      // The reason is worth a line whenever it is NOT the ordinary case: it is
+      // the only place a reader can see why an answered ticket went somewhere
+      // other than back in the build queue.
+      if (trailPr) console.error(`  hand-back destination: ${target} — ${plan.why}`);
       // A retry is worth a line of its own: it is the whole of this fix, and a
       // pass that silently repaired yesterday's crash would leave nobody able
       // to tell the repair had ever run.
