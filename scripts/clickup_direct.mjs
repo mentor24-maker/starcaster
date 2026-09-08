@@ -511,9 +511,12 @@ function usage(code = 2) {
   console.error('                                             upload image(s) onto a task — the before/after pair');
   console.error("                                             the approval queue runs on; verified by reading the");
   console.error("                                             task's attachment list back");
-  console.error('  build-start --task <id>                    BEFORE branching: is a PR for this ticket already open?');
-  console.error('                                             exit 0 = start fresh, 3 = continue the existing branch,');
-  console.error('                                             1 = could not tell (do NOT guess)');
+  console.error('  build-start --task <id>                    BEFORE branching: has this ticket been started already —');
+  console.error('                                             an open PR, or a half-finished worktree on any disk?');
+  console.error('                                             exit 0 = start fresh, 3 = do NOT branch (the line says');
+  console.error('                                             which: continue the named branch, or the work is on');
+  console.error('                                             another machine — escalate, do not hand it back),');
+  console.error('                                             1 = could not tell here (do NOT guess)');
   console.error('  wip-check [--repo owner/name]              is the merge side already full? 0 = room to claim,');
   console.error('                                             3 = capped (a normal decline), 1 = could not tell.');
   console.error('                                             Reads only; a capped pass writes nothing.');
@@ -3598,19 +3601,85 @@ if (cmd === 'whoami') {
     }
   };
 
-  const decision = buildStart.resolveBuildStart(got.json.comments || [], { lookupPr });
+  // AND THEN LOOK AT THE DISK (2026-09-07, task 86bbvur5a). A pull request is
+  // the LAST thing a build produces, so a pass that wrote code and died before
+  // pushing leaves nothing for the lookup above to find — and this command
+  // then said "fresh", exit 0, and the next pass cut a second branch over it.
+  // `pass-reconcile` and the stranded sweep already take this reading before
+  // they assert that nothing was built; the step whose whole job is "has this
+  // been started already?" was the one still answering from comments alone.
+  //
+  // The same module both of those use, so the three cannot disagree about one
+  // ticket.
+  //
+  // THE PULL REQUEST ANSWER FIRST, AND THE TICKET IS READ ONLY IF IT MATTERS.
+  // `needsLocalWorkReading` is the module's own predicate rather than a second
+  // copy of it here. Round 1 read the ticket unconditionally, so `continue` and
+  // `unknown` — the paths where `findLocalWork` is never called — each paid an
+  // extra ClickUp read on every claim, and the comment above claiming nothing
+  // is probed on those paths was contradicted by the line under it.
+  const fromPr = buildStart.resolveFromPullRequest(got.json.comments || [], lookupPr);
+  let decision = fromPr;
+  if (buildStart.needsLocalWorkReading(fromPr)) {
+    // The ticket read here is for its TAGS: `workInProgressFor` resolves the
+    // repo from the ticket's own `repo:` tag, so it looks in the checkout the
+    // builder would actually have used.
+    //
+    // AN UNREADABLE TICKET IS NOT HANDED ON AS `{ id }` (round-1 review,
+    // finding 2). That fabrication has no `tags`, `resolveTaskRepo` answers
+    // `starcaster` for a task with none — because no tag legitimately means
+    // starcaster — and a `repo:pulse` ticket was therefore probed against the
+    // STARCASTER checkout on any transient ClickUp failure, found nothing, and
+    // exited 0 "fresh". The false all-clear this whole reading exists to close,
+    // arriving through the reading itself, and the same scar the `lookupPr`
+    // comment above already carries from task 86bbqyyfn. It throws instead:
+    // `withLocalWork` turns that into CANNOT TELL, exit 1.
+    const ticketRes = await call('GET', `/api/v2/task/${task}`);
+    const findLocalWork = () => {
+      if (!ticketRes.res.ok) {
+        throw new Error(`the ticket itself could not be read (HTTP ${ticketRes.res.status}), `
+          + 'so which repo to look in is unknown and nothing was probed');
+      }
+      return localWorkReading.workInProgressFor(ticketRes.json, localWorkReading.workProbe());
+    };
+    decision = buildStart.withLocalWork(fromPr, {
+      findLocalWork,
+      hereId: localWorkReading.thisNodeName(),
+    });
+  }
+
   console.log(buildStart.describeBuildStart(decision));
   if (decision.pr) {
     console.log(`pr:     #${decision.pr.number}${decision.pr.branch ? ` (branch ${decision.pr.branch})` : ''}`);
     console.log(`url:    ${decision.pr.url}`);
   }
+  // The branch, the worktree and the machine, one per line — this is the
+  // sentence somebody has to be able to walk to the work with.
+  //
+  // EACH ONE SAYS WHETHER THIS PASS CAN ACT ON IT (round-2 review, "also worth
+  // a look"). This printed every branch the reading found, on every machine, in
+  // identical lines under a heading a reader takes to mean "the work to
+  // continue" — so a `continue` here also listed the other machine's branch in
+  // the same voice, and CLAUDE.md step 4 tells a session to check a named
+  // branch out. The list is unchanged; only the attribution is added, and it
+  // is built in `buildStart` so a test can pin the wording.
+  for (const line of buildStart.describeFoundWork(decision)) {
+    console.log(`work:   ${line}`);
+  }
+  // AND WHAT TO DO ABOUT IT, where refusing is not the whole instruction.
+  // `elsewhere` used to be a bare refusal with no way out: the ticket is
+  // already in "Building", the reconcile returns it to "Rework", rework is
+  // claimed first and oldest-first, and the lane then spends every pass on the
+  // one ticket it can never build.
+  const next = buildStart.describeNextMove(decision, { task });
+  if (next) console.log(`next:   ${next}`);
   reportLimits(got.res);
 
   // Exit codes so a shell can branch on this without parsing prose, matching
   // `node:owns`: 0 = go ahead, 3 = somebody else's work, 1 = cannot tell.
-  if (decision.action === 'continue') process.exit(3);
-  if (decision.action === 'unknown') process.exit(1);
-  process.exit(0);
+  // The mapping lives in `buildStart` so this command and its tests cannot
+  // drift; "work on another machine" is a 3 because it is still a refusal.
+  process.exit(buildStart.buildStartExitCode(decision));
 } else if (cmd === 'pr-opened') {
   // The build loop's audit trail, made into a command (task 86bbjt18r).
   // Until now step 7 of loop-build said "add the PR URL as a ClickUp

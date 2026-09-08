@@ -69,6 +69,118 @@ carries the name of the module that wrote it. And the comment in that file said
 the memory "lives in the open panel and is gone when it closes", which was never
 true; it is corrected, because a note claiming a safety that does not exist is
 the thing somebody trusts later.
+## 2026-09-07 — The cleanup found the half-finished work, and the next job branched over it anyway (#644)
+
+Yesterday's fix (#637) taught the overnight cleanup to look on the Macs before
+declaring that nothing had been built for a ticket. It now finds the
+half-finished folder, writes on the ticket which machine and which folder it is
+in, and deliberately leaves the work alone.
+
+What it could not do was stop the next job starting over the top of it. Before a
+session begins work it runs a check whose entire job is to ask "has anybody
+started this already?" — and that check was still asking GitHub, which only sees
+work that has been sent there. A job that wrote code and stopped before sending
+it leaves nothing for GitHub to show. So the check answered "nothing here, go
+ahead", and a second session began a fresh copy of the work, right on top of the
+folder the cleanup had just carefully preserved. The note the cleanup wrote only
+helps somebody who reads it, and the step that acts on it was not reading.
+
+That check now takes exactly the same look at the Macs that the cleanup takes,
+using the same piece of code rather than a second copy of it — so the two can
+never disagree about the same ticket. If it finds unfinished work on the machine
+it is standing on, it refuses and names the folder to carry on in. If the work is
+on the *other* Mac, which it cannot reach into, it refuses differently and says
+where the work is, rather than pretending it can continue it. And if it could not
+get an answer at all, it says so and stops, which is never the same as "there is
+nothing there".
+
+The opposite mistake mattered just as much: a check that refuses everything is a
+production line that has quietly stopped — and the first version of this fix made
+exactly that mistake, which is why it went back for a second round. It treated
+any Mac that did not answer as a reason to stop. Dane's laptop is closed at the
+end of every day, so from the Mac Mini it did not answer all night, and the check
+refused every new job until the laptop was opened again. Overnight is precisely
+when the Mini is supposed to be working.
+
+What settles it is *which* Mac went quiet. The machine the job is standing on is
+the one it is about to start work on: if its own folders cannot be read, it stops,
+because it has no idea whether it is about to bury its own half-finished work. A
+different Mac going quiet is written down by name on an answer that carries on —
+work sitting over there could not have been continued from here in any case. The
+risk left over is real and is stated in plain sight every time: if the sleeping
+Mac was holding unfinished work for that exact job, a second copy gets started.
+That is rare and recoverable — the work is still on that disk, and the cleanup
+names it every run — while a line that is dead every night is neither.
+
+Four smaller things came out of the same review. A ticket that ClickUp failed to
+return was being treated as an ordinary one, which sent the check looking in the
+wrong project's folder and finding nothing there — the same false all-clear,
+arriving through the new check itself. Work found on the unreachable Mac used to
+be refused with nowhere to go, so the queue put the same ticket back at the front
+and refused it again on every pass; it now prints the exact escalation to send to
+Dane and moves on to the next ticket. The two other places that describe this
+step — the hand-run instructions in `CLAUDE.md` and the command's own help — were
+still describing the old single answer. And a job whose earlier pull request had
+already been merged printed that old branch's name directly under the words "no
+open pull request", which is the one branch nobody should check out.
+
+A third round closed the last way the rule could fail — and it was the rule
+failing against itself. Deciding "did *my own* Mac go quiet?" means knowing which
+Mac you are standing on, and the check works that out from a small identity file,
+falling back to the machine's network name if the file is missing. Rename a Mac,
+add a third one, or let the network hand out a name nobody recognises, and the
+answer is a name this system has never heard of. The check then treated *every*
+Mac as somewhere else — including the one under its own feet — asked them all
+over the network, and never looked at the disk it was about to start work on. It
+said "go ahead" having read nothing. It is not live today, because the Mini's
+identity file is correct, but the bug this whole job fixes was latent in exactly
+the same way. Now the look always includes the machine taking it: a seat that
+could not be read is written down as a seat that could not be read, and an
+unrecognised machine is a stop rather than a shrug.
+
+Three smaller ones came with it. Work found while the machine's own name was
+unknown used to be reported as "it is on the other Mac", stated confidently, when
+the truth was that nobody had checked. A refusal that pointed at the other Mac
+did not mention when this Mac's own disk had also gone unread, which is the one
+fact somebody needs to judge it. And the list of folders it prints was written in
+a single voice, so a folder on the *other* Mac looked exactly like one you could
+walk into — each line now says which. Finally, the fuller hand-run instructions
+in `docs/LOOP_ENGINEERING.md`, the third and last place this step is written
+down, still described the old single answer, and would have handed Dane a command
+that cannot work on a folder that was never sent to GitHub.
+
+A fourth round found that the new check had introduced a way to stop the
+production line dead — the exact fault it was written to prevent, arriving
+through the fix. Every ticket says which project it belongs to with a small
+label. Get that label wrong — a typo, or two of them on one ticket — and the
+check cannot work out where to go looking, so it honestly answers "I cannot
+tell" and the job stops. That part is right. What was missing is that it stopped
+without telling anybody. The ticket then went back into the queue, at the front,
+because the queue deals with returned work first and oldest first — so the very
+next job picked up the same ticket, could not tell again, and stopped again.
+Every job, all day, on one mistyped label, in silence. The rule that handles a
+mistyped label — send it to Dane and ask him which project he meant — was
+already written down, three paragraphs further down the page than the "stop"
+the job had just obeyed.
+
+The fix separates two things that had been jumbled together. A Mac that went
+quiet will answer next time, so stopping and waiting is the whole of it. A
+mistyped label will still be mistyped tomorrow, so waiting achieves nothing at
+all — and that case now prints the ready-to-run command to hand it to Dane, the
+same way work-on-the-other-Mac already did. The opposite mistake is guarded just
+as hard: a sleeping laptop must never turn into a question in Dane's inbox, and
+neither must a moment's trouble reaching ClickUp.
+
+The last one is a command that could not work. When this check finds unfinished
+work it prints where it is, and there turned out to be three shapes it can
+print, not two — the third being a branch of work that is on the Mac with no
+folder open for it, which is exactly what the tidy-up leaves behind and exactly
+what this whole job is named after. All three places that describe this step
+offered only two moves, and neither of them works on the third shape: one asks
+GitHub for something that was never sent there, the other says "go into the
+folder" when there is no folder. The move that does work is one line, and it is
+now written down in all three, held together by a test so the next edit cannot
+fix two of them and forget the third — which has now happened twice.
 
 ## 2026-09-07 — The search box on the tags page told a visitor the wrong thing when it found nothing (#643)
 
