@@ -1,3 +1,36 @@
+## 2026-09-07 — Every dropdown that lists your pages now lists them A to Z (#656)
+
+Pick a page anywhere in the admin app — the Post Page on a Blog Post List
+module, a link on a Table, the Theme Wizard's preview page, a Campaign's
+destination — and until now the list came at you in whatever order the database
+happened to hand the pages over, which is roughly the order they were created
+in. On Delray, with about forty pages, that means reading the whole list every
+time. Dane hit it on the Post Page picker, where "Tennis Drills & Clinics" sat
+between "Events Details" and "Welcome to Delray Beach Tennis Center".
+
+They are all alphabetical now, by the name shown on the row. Capital letters do
+not split the list into two blocks, "Page 2" comes before "Page 10" rather than
+after it, a page with no name is filed under its web address instead, and a page
+with neither drops to the bottom rather than sitting at the top where you look
+first. A "None" or "Default" choice stays pinned above the list, because it is
+not a page. Nothing about what gets saved changed — the ordering is purely what
+you see, and picking a page still stores exactly what it stored before.
+
+The ticket listed six places to fix. Two of them turned out not to be page
+dropdowns at all: one was a strip of screenshots from the site-import tool, and
+the other was the Facebook Page chooser you use when connecting a Facebook
+account. Both were left alone and the correction written on the ticket. The four
+real ones share a single file, so the two halves of the app — the newer Builder
+and the older admin screens, which cannot share code any other way — can never
+drift into two different alphabets.
+
+One thing turned up only by opening the actual dropdown rather than reading the
+code: the Campaigns list labelled a page that has no name by its internal id
+number, while every other dropdown labels that same page by its web address. So
+it would have been sorted under a word that appears nowhere on the row. It now
+uses the same name everywhere. A list sorted by something you cannot see is not
+really sorted.
+
 ## 2026-09-07 — The cleanup found the half-finished work, and the next job branched over it anyway (#644)
 
 Yesterday's fix (#637) taught the overnight cleanup to look on the Macs before
