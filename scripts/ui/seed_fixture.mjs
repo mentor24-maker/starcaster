@@ -987,6 +987,42 @@ const buildPanelCheckSection = (ids) => {
     opacity: 45,
   },
   /*
+   * AND A VIDEO CELL FILL, which is a THIRD panel again — and the one that
+   * reached the operator staggered.
+   *
+   * The row background above seeds the SECTION editor's Video sub-panel. The
+   * CELL editor renders the same shared picker in its own Frame group, and
+   * seeding one does nothing for the other: with this key absent the cell
+   * panel was always measured on Background = "None", so the fourteen video
+   * controls never rendered and `check_panels` reported a confident green
+   * over zero of them. That is how nine W0 violations reached review in PR #665
+   * with a 681-panel pass attached — the exact hole Definition-of-done #7
+   * names, one panel along from the cell Overlay note below.
+   *
+   * Measured, not assumed: with this seed removed, reverting the nested-column
+   * rule in `_builder-react-overrides.css` reports a clean pass at all three
+   * widths. With it, the same revert fails nine ways.
+   *
+   * `main` because this section is single-column, and the same clip and poster
+   * the row background uses — a second asset would prove nothing the first does
+   * not, and these two already exist for `check:render`.
+   */
+  cellBackgrounds: {
+    main: {
+      mode: 'video',
+      videoUrl: '/images/render-fixture-background.mp4',
+      posterUrl: '/images/render-fixture-background-poster.jpg',
+      videoSpeed: 1,
+      videoLoop: true,
+      /*
+       * A non-zero fade, because it is the shipped default (0.6) and so the
+       * state every operator opens the panel in. Zero would measure the one
+       * value the control is almost never on.
+       */
+      videoLoopFade: 0.6,
+    },
+  },
+  /*
    * AND THE SAME THING ON THE CELL, which is a different panel.
    *
    * The row overlay above seeds the SECTION editor's Overlay group. The cell

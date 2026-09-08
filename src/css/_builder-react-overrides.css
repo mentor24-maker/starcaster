@@ -4562,6 +4562,47 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   grid-column: 1 / -1;
 }
 
+/*
+ * A COLUMN INSIDE A COLUMN JOINS THE OUTER ONE'S LATTICE — it does not start
+ * a second (W0; pull request 665, review round 2, 2026-09-08).
+ *
+ * `BuilderBackgroundControls` renders its Video and Motion sub-panels as
+ * `.builder-schema-panel-column` blocks of their own. Wherever the picker is
+ * a TOP-LEVEL sibling of the axis columns — the row editor, which is the only
+ * place video had ever rendered — that is exactly right: the sub-panel becomes
+ * its own axis column with its own tracks, and it has always measured clean.
+ *
+ * The cell editor is the first surface to put the picker INSIDE a column. Its
+ * Frame group holds Background, Opacity and the four border rows, so when the
+ * mode is Video the sub-panel's fourteen controls landed in the middle of that
+ * group carrying their own grid: labels 150px against Frame's 321px, fields
+ * starting at two x-positions, stretchables at two widths. Nine W0 violations
+ * at 1440/1600/1920 — the staggered rectangle the operator would have seen the
+ * moment he chose Video on a cell.
+ *
+ * Subgrid rather than `display: contents`, for the same reason
+ * `.builder-schema-axis-section` above uses it: the sub-panel is a real box
+ * carrying its own "Video" heading, so it has to KEEP that box and share the
+ * outer column's two tracks. `column-gap: 0` for the same reason too — the
+ * 40px of room lives on the label, and a subgrid keeps its own gutters, so the
+ * `gap: 12px` shorthand from the base rule would eat 12px out of the shared
+ * tracks and put these rows 6px off the ones above them.
+ *
+ * Written against the NESTING rather than against `.builder-video-background-
+ * controls`, because the shape is the general one: any panel column that ever
+ * contains another is two lattices in one place. Motion (`allowParallax`) is
+ * the same block one flag along and is not offered on cells today, so naming
+ * only video would leave the identical hole armed for whoever adds it.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-column .builder-schema-panel-column {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  row-gap: var(--space-2, 6px);
+  column-gap: 0;
+}
+
 
 /*
  * A bare block that is PROSE, not field pairs, spans the column instead of

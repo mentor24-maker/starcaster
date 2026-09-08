@@ -2,7 +2,11 @@
 import { describe, expect, it } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { createEmptySection, type BuilderTemplateSection } from "@/lib/builder-template";
+import {
+  createDefaultBackgroundSettings,
+  createEmptySection,
+  type BuilderTemplateSection
+} from "@/lib/builder-template";
 import { BuilderSectionCard } from "./builder-section-card";
 
 // React only flushes `act` quietly when the environment says it is a test
@@ -59,7 +63,26 @@ function mount(initial?: BuilderTemplateSection): Mounted {
         onUpdateSection={(updater) => {
           latest = updater(latest);
         }}
-        onUpdateCellBackground={noop}
+        /*
+         * WIRED, not a noop, and that is a fix rather than setup.
+         *
+         * The overlay tests below assert that choosing an Overlay Type leaves
+         * `cellBackgrounds.left.mode` at "none" — the cell FILL is the mistake
+         * available there, same type and same picker, one wrong prop. With a
+         * noop here that value could never change, so the assertion guarding
+         * the whole confusion was one that could not fail. It can now.
+         */
+        onUpdateCellBackground={(column, updater) => {
+          latest = {
+            ...latest,
+            cellBackgrounds: {
+              ...latest.cellBackgrounds,
+              [column]: updater(
+                latest.cellBackgrounds?.[column] ?? createDefaultBackgroundSettings()
+              )
+            }
+          };
+        }}
         onUpdateCellBorderWidth={noop}
         onUpdateCellBorderColor={noop}
         onUpdateCellBorderRadius={noop}
@@ -243,5 +266,44 @@ describe("the cell panel's Overlay group", () => {
       mounted.labels().filter((label) => label === "Opacity").length;
 
     expect(opacities(mount(section))).toBe(opacities(mount()) + 1);
+  });
+});
+
+/*
+ * THE CELL'S OWN FILL — the Frame group's "Background" picker.
+ *
+ * Shares the harness above deliberately: these two groups are the pair the
+ * cell panel is easiest to get wrong between, and every assertion here is
+ * about the boundary between them. Splitting them into two files with two
+ * mounts would let the pair drift apart, which is the failure being guarded.
+ *
+ * Video belongs to the FILL and not to the overlay. A cell paints exactly one
+ * <video>; an overlay video would be a second element screening the first,
+ * which is why the row panel leaves it out of its overlay too.
+ */
+describe("the cell panel's Background fill", () => {
+  it("offers Video, which the row's own background has offered all along", () => {
+    const modes = [...mount().selectFor("Background").options].map((option) => option.value);
+
+    expect(modes).toContain("video");
+    // The rest of the modes still there — a gating prop that accidentally
+    // replaced the list rather than adding to it would pass on video alone.
+    for (const mode of ["none", "color", "gradient", "image"]) expect(modes).toContain(mode);
+  });
+
+  it("writes Video to the cell's FILL, and leaves that cell's overlay alone", () => {
+    const next = mount().choose("Background", "video");
+
+    expect(next.cellBackgrounds.left.mode).toBe("video");
+    // The overlay is the mirror of the mistake the overlay tests guard: same
+    // type, same picker, one wrong prop in the other direction.
+    expect(next.cellOverlayScreens?.left?.background.mode).toBe("none");
+  });
+
+  it("writes to the column whose panel was used, and leaves the other alone", () => {
+    const next = mount().choose("Background", "video");
+
+    expect(next.cellBackgrounds.left.mode).toBe("video");
+    expect(next.cellBackgrounds.right.mode).toBe("none");
   });
 });
