@@ -238,3 +238,89 @@ test('id/savedSectionId/canonical differing between the instance and the previou
   const instance = { ...PREVIOUS_MASTER, id: 'inst-77' };
   assert.equal(hasSectionDrifted(instance, PREVIOUS_MASTER), false);
 });
+
+/* ---------------------------------------------- one page, more than one copy
+ *
+ * Everything above gives each page exactly ONE copy of the master, which is
+ * why the bug below survived: `drifted` and `changed` are per PAGE, and with
+ * one copy per page they can never disagree. A page may hold several sections
+ * following the same master, and then the two flags answer different
+ * questions — landmine 17 / DOCTRINE §5.30, the same slip that made a dialog
+ * name a page as left alone and then publish it.
+ */
+
+/** A page carrying several sections, so per-copy and per-page can disagree. */
+function mixedPageRow(id, name, sections) {
+  return {
+    id,
+    name,
+    slug: name.toLowerCase(),
+    layout_sections: writeLayoutSectionsToRow({ pageBackground: {}, theme: {}, sections }),
+    updated_at: new Date(0).toISOString(),
+    created_at: new Date(0).toISOString(),
+  };
+}
+
+test('one page holding a clean copy AND a drifted one reports the drifted copy as SKIPPED, not the page as overwritten', async () => {
+  // The fixture from the report: page "Block States" carries two sections
+  // following one master, one Following and one Changed.
+  const pages = [
+    mixedPageRow(1, 'Block States', [
+      section('old copy'),                            // clean — this push rewrites it
+      section('HAND-EDITED HERE', { id: 'sec-2' }),   // drifted — must be left alone
+    ]),
+  ];
+  const { mod, patchCalls, restore } = withMockedPagesStore(pages);
+  try {
+    const result = await mod.propagateCanonicalSection(SAVED_SECTION_ID, NEW_MASTER, null, {
+      previousSection: PREVIOUS_MASTER,
+    });
+
+    assert.equal(result.updated, 1, 'the page IS written, for the clean copy');
+    assert.deepEqual(
+      result.overwritten,
+      [],
+      'nothing was overwritten — overwriteDrifted was false and the drifted copy was left as it was'
+    );
+    assert.deepEqual(
+      result.skipped,
+      [{ pageId: '1', name: 'Block States' }],
+      'the copy that WAS skipped has to be named, or the operator is never told it was left behind'
+    );
+
+    // The evidence that "skipped" is the truthful word: the drifted copy's own
+    // text is still in the body that was written.
+    assert.equal(patchCalls.length, 1);
+    const written = patchCalls[0].body.layout_sections;
+    const texts = written.sections.map((s) => s.modules[0].text);
+    assert.deepEqual(texts, ['new copy', 'HAND-EDITED HERE'], 'the hand edit survives the push untouched');
+  } finally {
+    restore();
+  }
+});
+
+test('a FORCED push on that same mixed page reports it as OVERWRITTEN and not as skipped', async () => {
+  const pages = [
+    mixedPageRow(1, 'Block States', [
+      section('old copy'),
+      section('HAND-EDITED HERE', { id: 'sec-2' }),
+    ]),
+  ];
+  const { mod, patchCalls, restore } = withMockedPagesStore(pages);
+  try {
+    const result = await mod.propagateCanonicalSection(SAVED_SECTION_ID, NEW_MASTER, null, {
+      previousSection: PREVIOUS_MASTER,
+      overwriteDrifted: true,
+    });
+
+    assert.equal(result.updated, 1);
+    assert.deepEqual(result.overwritten, [{ pageId: '1', name: 'Block States' }], 'the forced overwrite is named');
+    assert.deepEqual(result.skipped, [], 'nothing was left alone on a forced push');
+
+    const written = patchCalls[0].body.layout_sections;
+    const texts = written.sections.map((s) => s.modules[0].text);
+    assert.deepEqual(texts, ['new copy', 'new copy'], 'the force really did flatten both copies');
+  } finally {
+    restore();
+  }
+});
