@@ -415,6 +415,13 @@
        carries a resting halo, so the link still glows, still lights on hover,
        and still navigates if this never loads. -->
   <script src="/shared/exploreLink.js"></script>
+  <!-- A-Z ordering for every dropdown that lists the site's pages. One file
+       because the same rule has to hold in two runtimes that cannot import
+       each other: the React builder bundles it, and campaigns.js reaches it
+       here as App.pageSort. campaigns.js needs it before it runs, so it loads
+       ahead of /js/. A missing load leaves the Builder group unsorted rather
+       than breaking the dropdown. -->
+  <script src="/shared/pageSort.js"></script>
   <script src="/js/core.js"></script>
   <script src="/js/estimatedProgress.js"></script>
   <script src="/js/projectContext.js"></script>
