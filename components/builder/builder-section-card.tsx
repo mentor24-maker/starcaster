@@ -63,6 +63,8 @@ type BuilderSectionCardProps = {
   onSaveSection: () => void;
   onUpdateSection: (updater: (section: BuilderTemplateSection) => BuilderTemplateSection) => void;
   onUpdateCellBackground: (column: string, updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
+  /** Cell-scoped upload — see `BuilderCellStyleSettings`. Optional: no handler, no Upload button. */
+  onUploadCellBackgroundMedia?: (column: string, file: File | null) => void;
   onUpdateCellBorderWidth: (column: string, value: string) => void;
   onUpdateCellBorderColor: (column: string, value: string) => void;
   onUpdateCellBorderRadius: (column: string, value: string) => void;
@@ -136,6 +138,7 @@ export function BuilderSectionCard({
   onSaveSection,
   onUpdateSection,
   onUpdateCellBackground,
+  onUploadCellBackgroundMedia,
   onUpdateCellBorderWidth,
   onUpdateCellBorderColor,
   onUpdateCellBorderRadius,
@@ -664,6 +667,7 @@ export function BuilderSectionCard({
                         section={section}
                         editorDevice={editorDevice}
                         onUpdateCellBackground={onUpdateCellBackground}
+                        onUploadCellBackgroundMedia={onUploadCellBackgroundMedia}
                         onUpdateCellBorderWidth={onUpdateCellBorderWidth}
                         onUpdateCellBorderColor={onUpdateCellBorderColor}
                         onUpdateCellBorderRadius={onUpdateCellBorderRadius}

@@ -34,6 +34,23 @@ type BuilderBackgroundControlsProps = {
    * label it is. Defaults to `label`, so every existing caller is unchanged.
    */
   modeLabel?: string;
+  /**
+   * What this surface is CALLED in the one sentence that names it out loud —
+   * the missing-poster warning, which reads "Without a poster image this
+   * <noun> will be blank until the video loads".
+   *
+   * It has to be a prop rather than a constant because this component is worn
+   * by three surfaces that can play video and they are three different things
+   * to the operator: a row ("section"), one column inside a row ("column"),
+   * and the whole page ("page"). Until 2026-09-08 the noun was hard-coded to
+   * "section", which was true of the only surface that had video when the
+   * sentence was written and became wrong the moment the page (#663) and the
+   * cell (this ticket) gained it — a warning that names the wrong box sends
+   * the operator to fix the wrong box.
+   *
+   * Defaults to "section", so every caller that IS a section is unchanged.
+   */
+  surfaceNoun?: string;
   background: BackgroundSettings;
   onChange: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
   onChooseImage?: () => void;
@@ -75,6 +92,7 @@ type BuilderBackgroundControlsProps = {
 export function BuilderBackgroundControls({
   label,
   modeLabel,
+  surfaceNoun = "section",
   background,
   onChange,
   onChooseImage,
@@ -295,7 +313,7 @@ export function BuilderBackgroundControls({
         {needsPoster ? (
           <BuilderSettingRow label="" fullWidth>
             <p className="builder-video-background-warning">
-              Without a poster image this section will be blank until the video loads — and it is
+              Without a poster image this {surfaceNoun} will be blank until the video loads — and it is
               what phones and visitors who have asked for reduced motion see instead of the video.
             </p>
           </BuilderSettingRow>

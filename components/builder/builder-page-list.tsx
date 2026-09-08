@@ -981,6 +981,11 @@ export function BuilderPageList({
                  * default, and the same names the Row Background picker uses.
                  */
                 allowVideo
+                /* The missing-poster warning names the surface out loud, and
+                   this one is the whole page — it read "this section" until
+                   2026-09-08, pointing the operator at a row he never
+                   touched. */
+                surfaceNoun="page"
                 compact
                 hideClear
                 showColorFieldLabel={false}

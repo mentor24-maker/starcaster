@@ -35,6 +35,29 @@ Worth recording why it got that far: the automatic layout check had been passing
 because the test page it measures never had a video on a column, so those
 fourteen settings had never once been on screen when the check looked. It has a
 video column now, so this can never again pass by not looking.
+
+A second review pass found two more things, both of them the column panel
+inheriting words and buttons written back when only a whole row could play
+video. The warning about a missing poster picture said "this section will be
+blank" while you were looking at a single column — pointing you at the wrong
+box to go and fix. It now names whatever you are actually standing on: a
+column, a row, or the whole page.
+
+And there was no way to get a video into a column on a site that had never
+uploaded one. The row's panel offers "Choose Video" next to "Upload Video";
+the column's offered only Choose, so picking Video on a column opened an empty
+library with no way to add anything to it — the column already switched over to
+video, with nothing to play. The column panel now has its own Upload button.
+Its own, deliberately, and not the row's borrowed: the row's would have quietly
+repainted the entire row when you asked for one column.
+
+That upload also knows the difference between a film and a photograph. The
+older upload buttons all assume whatever you hand them is a picture, which is
+why uploading a video to a ROW background turns it into an image background and
+throws the clip away — a real fault, filed separately as its own job. The
+column's upload does not do that, and the piece that gets it right is written
+to be shared, so fixing the row is a one-line change when that job is picked up.
+
 ## 2026-09-08 — The Builder now says when a background video is too heavy (#664)
 
 A background video starts playing the second somebody lands on the page, before

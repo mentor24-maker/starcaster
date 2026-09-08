@@ -37,6 +37,7 @@ import {
   type BuilderTheme,
   type BuilderThemeSummary
 } from "@/lib/builder-template";
+import { applyUploadedBackgroundMedia } from "@/lib/background-uploaded-media";
 import { getDefaultEmailTemplateName, type BuilderEmailFunction } from "@/lib/builder-email-template";
 import { inferModuleClassFromBuilderModules, resolveModuleClassForBuilderModule } from "@/lib/module-class-triggers";
 
@@ -2283,6 +2284,26 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     }, file);
   }
 
+  /**
+   * Upload straight into ONE cell's background.
+   *
+   * Cell-scoped on purpose: the row's handler writes the row's own fill, so
+   * lending it to the cell panel would repaint the whole row when the operator
+   * asked for a single column. And it routes through
+   * `applyUploadedBackgroundMedia` rather than hard-coding `mode: "image"` the
+   * way the older upload handlers do — one `onUploadImage` callback serves both
+   * the "Upload Background" and "Upload Video" buttons, so forcing image here
+   * would convert the cell the operator just set to Video straight back into an
+   * image background and throw the clip away. That is filed against the ROW as
+   * 86bbwe98a and is deliberately not fixed here; the helper is shared so that
+   * ticket can adopt it in one line.
+   */
+  function uploadMediaForCellBackground(sectionId: string, column: string, file: File | null) {
+    void uploadMedia((m) => {
+      updateCellBackground(sectionId, column, (current) => applyUploadedBackgroundMedia(current, m));
+    }, file);
+  }
+
   function uploadMediaForSectionBackground(sectionId: string, file: File | null) {
     void uploadMedia((m) => {
       updateSection(sectionId, (c) => ({ ...c, background: { ...c.background, mode: "image", imageUrl: normalizeBuilderAssetUrl(m.path) } }));
@@ -3297,6 +3318,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             onCloneSection={() => cloneSection(section.id)}
                             onSaveSection={() => void saveSection(section.id)}
                             onUpdateCellBackground={(col, updater) => updateCellBackground(section.id, col, updater)}
+                            onUploadCellBackgroundMedia={(col, file) => uploadMediaForCellBackground(section.id, col, file)}
                             onUpdateCellBorderWidth={(col, value) => updateCellBorderWidth(section.id, col, value)}
                             onUpdateCellBorderColor={(col, value) => updateCellBorderColor(section.id, col, value)}
                             onUpdateCellBorderRadius={(col, value) => updateCellBorderRadius(section.id, col, value)}
@@ -3384,6 +3406,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         onCloneSection={() => cloneSection(section.id)}
                         onSaveSection={() => void saveSection(section.id)}
                         onUpdateCellBackground={(col, updater) => updateCellBackground(section.id, col, updater)}
+                        onUploadCellBackgroundMedia={(col, file) => uploadMediaForCellBackground(section.id, col, file)}
                         onUpdateCellBorderWidth={(col, value) => updateCellBorderWidth(section.id, col, value)}
                         onUpdateCellBorderColor={(col, value) => updateCellBorderColor(section.id, col, value)}
                         onUpdateCellBorderRadius={(col, value) => updateCellBorderRadius(section.id, col, value)}
