@@ -1,3 +1,33 @@
+## 2026-09-08 — The Builder now says when a background video is too heavy (#664)
+
+A background video starts playing the second somebody lands on the page, before
+anything else can finish. The gallery only ever showed you a file's name and a
+little picture of it — never how big it was — so a 34MB clip could go onto a
+client's front page with nothing anywhere warning that a visitor on their phone
+would sit staring at a blank band for several seconds.
+
+The Video panel now tells you. Under the Choose Video button it names the file's
+size, and if it is over 10MB it says so in a plain sentence: *"This video is
+34 MB. Visitors on phone data will wait several seconds for it. Under 10MB is a
+comfortable size for a background."*
+
+**It is advice, not a rule.** Nothing is blocked, nothing is greyed out, the
+upload still works and the video still saves and plays exactly as before. You
+can ignore it whenever you have a reason to — it is there so the decision is
+yours instead of accidental.
+
+The size is remembered on the page itself, so it is still there when you come
+back to that page next week, not just in the minute after you picked the file.
+And it is thrown away the moment you type a different video into the box, which
+matters more than it sounds: a leftover number would confidently describe the
+wrong file, and a wrong number nobody can spot is worse than no number at all.
+
+**One thing to know while you use it.** A video set as a *row* background does
+not survive pressing Save Page — it comes back as None — and it has never
+survived, on this change or before it. That is a separate bug, already written
+up and waiting its turn, and this work neither caused it nor could fix it. Until
+that one lands, the size warning is doing its job in the moment you pick the
+clip; it just has nothing left to describe after a save.
 ## 2026-09-08 — The job roll call stops calling slow jobs dead (#661)
 
 There is a shared record of when each scheduled job last finished successfully —

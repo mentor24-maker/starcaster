@@ -199,6 +199,35 @@ export type BackgroundSettings = {
    */
   posterUrl?: string;
   posterAssetId?: string;
+  /**
+   * The clip's size in bytes, recorded when it is chosen from the gallery, so
+   * the panel can warn that a heavy background video will make a client's site
+   * slow. Advisory only — nothing reads this at render time and nothing is
+   * refused because of it.
+   *
+   * STORED rather than looked up because the alternative is a number that
+   * exists only in the session that picked the file: the size lives on the
+   * asset row, and nothing fetches the asset list on a page load. A stored
+   * value means the operator opening a page he built in March still sees that
+   * its hero video is 34MB.
+   *
+   * It is CLEARED whenever the URL is set by any route that does not also
+   * supply a size — see the Video URL box in builder-background-controls. A
+   * size left behind from the previous clip would name the wrong number with
+   * complete confidence, which is worse than saying nothing.
+   *
+   * ON A ROW (SECTION) BACKGROUND IT IS INERT UNTIL 86bbwfc8n LANDS, and so is
+   * every other video key. The vanilla builder's save serializer rebuilds each
+   * row background from scratch — `normalizeBackgroundSettings` in
+   * `public/js/builder.js`, whose mode whitelist has no `video` in it — so a
+   * row video background is turned back into `none` on every Save Page and the
+   * video keys are dropped with it. Nothing here causes that and nothing here
+   * can work around it; it predates this field. The page background is not put
+   * through that serializer at all — the vanilla save payload never rebuilds it
+   * — so this is a row-background problem rather than a universal one. The
+   * measurements are on 86bbwfc8n.
+   */
+  videoBytes?: number;
   /** Playback rate, 0.25–2. */
   videoSpeed?: number;
   videoLoop?: boolean;
@@ -1326,6 +1355,7 @@ export function createDefaultBackgroundSettings(): BackgroundSettings {
     videoAssetId: "",
     posterUrl: "",
     posterAssetId: "",
+    videoBytes: 0,
     videoSpeed: 1,
     videoLoop: true,
     videoLoopFade: 0.6,
@@ -1360,6 +1390,8 @@ export function normalizeBackgroundSettings(value: unknown): BackgroundSettings 
     videoAssetId: safeText(background.videoAssetId, 120),
     posterUrl: normalizeBuilderAssetUrl(background.posterUrl),
     posterAssetId: safeText(background.posterAssetId, 120),
+    // 0 means "unknown", which is an ordinary state, not an error.
+    videoBytes: clampBackgroundNumber(background.videoBytes, 0, Number.MAX_SAFE_INTEGER, 0),
     videoSpeed: clampBackgroundNumber(
       background.videoSpeed,
       BUILDER_VIDEO_SPEED_MIN,

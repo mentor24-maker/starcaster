@@ -937,6 +937,14 @@ const buildPanelCheckSection = (ids) => {
     mode: 'video',
     videoUrl: '/images/render-fixture-background.mp4',
     posterUrl: '/images/render-fixture-background-poster.jpg',
+    /*
+     * Over the 10MB advisory threshold, so the file-size warning RENDERS and
+     * gets measured. It is a wrapping sentence in a narrow settings column —
+     * the shape most likely to push its column's shared track wider than its
+     * siblings and stagger the panel — and seeding a comfortable size instead
+     * would report a confident green over a row the check never saw.
+     */
+    videoBytes: 34_000_000,
     videoSpeed: 1,
     videoLoop: true,
     /*
