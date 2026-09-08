@@ -53,6 +53,131 @@ test('a beat older than the overdue threshold is QUIET, not merely old', () => {
   assert.match(r.overdue[0].reason, /last succeeded/);
 });
 
+// --- the per-role overdue window --------------------------------------------
+//
+// The roll call used to judge every job against one 25-hour window. That is
+// right for a job that runs every ten minutes and impossible for one that runs
+// daily or weekly, whose honest beats land further apart than the window — so
+// the watchdog would report a healthy job as dead, every day, which is the
+// false-alarm failure this whole feature is written against. These tests are
+// what stop the window being quietly widened for a fast job on the way past.
+
+/** A role table with one slow job in it — the case that has no live example yet. */
+const ROLES_WITH_DAILY = {
+  'bus-relay': { owner: 'mac-mini' },
+  'nightly-thing': { owner: 'mac-mini' },
+};
+const EMITTERS_WITH_DAILY = {
+  'bus-relay': { intervalMs: 10 * 60 * 1000, beatMeans: 'success', why: 'fixture' },
+  'nightly-thing': { intervalMs: 24 * HOUR, beatMeans: 'success', why: 'fixture' },
+};
+
+test('each role has its overdue window sized from its own cadence, not one global number', () => {
+  assert.equal(hb.overdueAfterFor('nightly-thing', EMITTERS_WITH_DAILY), 48 * HOUR,
+    'a daily job gets the push resolution plus one of its own runs');
+  assert.equal(hb.overdueAfterFor('bus-relay', EMITTERS_WITH_DAILY), 25 * HOUR,
+    'a job that runs oftener than the slack is covered by the slack');
+});
+
+test('no existing role has its window moved — this cannot quietly loosen bus-relay', () => {
+  // BREAK TEST, the loosening direction, and the reason this change could be
+  // adopted everywhere at once. Every role declaring a cadence today runs
+  // hourly or oftener, so the slack term wins for all four and each keeps the
+  // exact 25 hours it has always had. Anyone who "improves" the formula by
+  // adding the interval on top of the slack instead of taking the larger of
+  // the two widens bus-relay to 25h10m and the three hourly jobs to 26h, and
+  // fails here by name rather than shipping a looser watchdog.
+  for (const role of ['bus-relay', 'pipeline-pulse', 'loop-build', 'loop-review']) {
+    assert.equal(hb.overdueAfterFor(role), 25 * HOUR,
+      `${role}: its overdue window moved off the 25 hours it has always had`);
+  }
+});
+
+test('a role that declares no cadence gets the floor, never an unmeasurable pass', () => {
+  // The counterpart of quietAfterFor returning null. That check reports an
+  // unsizeable role as "cannot judge", which is honest because it has a fourth
+  // answer to put it in. This one has no such column — every role either beats
+  // or is overdue — so an unsizeable role must land on a real window rather
+  // than on Infinity, or it becomes permanently unable to be reported dead.
+  assert.equal(hb.overdueAfterFor('weekly-report'), hb.OVERDUE_AFTER_MS);
+  assert.equal(hb.overdueAfterFor('nonsense-role'), hb.OVERDUE_AFTER_MS);
+  assert.equal(hb.OVERDUE_AFTER_MS, 25 * HOUR, 'the floor is still the 25 hours everything used to get');
+  assert.equal(hb.OVERDUE_AFTER_MS, hb.PUSH_EVERY_MS + hb.OVERDUE_SLACK_MS,
+    'the floor falls out of the same formula rather than being a separate number somebody liked');
+});
+
+test('a daily job beating once a day reads as BEATING, not as dead', () => {
+  // The bug, stated as a test. Under the old flat 25-hour window this row was
+  // reported overdue and posted to the bus — a false alarm on a job that had
+  // just run exactly as designed. 48h is the boundary the ticket names (a full
+  // day of push throttle plus one of the job's own runs) and it is inclusive
+  // by design: the comparison is `>`, so a beat landing precisely on its
+  // window is healthy.
+  const r = hb.rollCallReport({
+    rows: [
+      { node: 'mac-mini', role: 'bus-relay', at: agoHours(2) },
+      { node: 'mac-mini', role: 'nightly-thing', at: agoHours(48) },
+    ],
+    now: NOW,
+    roles: ROLES_WITH_DAILY,
+    emitters: EMITTERS_WITH_DAILY,
+  });
+  assert.equal(r.silent, false, 'a daily job that beat a day ago is not a silence');
+  assert.deepEqual(r.overdue, []);
+  assert.ok(r.beating.some((b) => b.role === 'nightly-thing'));
+  assert.ok(hb.OVERDUE_AFTER_MS < 48 * HOUR,
+    'if the old flat window were still in force this fixture could not distinguish the fix');
+});
+
+test('a daily job that genuinely stopped is still reported overdue', () => {
+  // BREAK TEST, the direction that matters: the whole risk of this change is
+  // loosening a window so far that a real outage stops being reported. Widen
+  // nightly-thing's window past four days and this fails.
+  const r = hb.rollCallReport({
+    rows: [
+      { node: 'mac-mini', role: 'bus-relay', at: agoHours(2) },
+      { node: 'mac-mini', role: 'nightly-thing', at: agoHours(96) },
+    ],
+    now: NOW,
+    roles: ROLES_WITH_DAILY,
+    emitters: EMITTERS_WITH_DAILY,
+  });
+  assert.equal(r.silent, true, 'four days of silence from a daily job is an outage');
+  assert.equal(r.overdue[0].role, 'nightly-thing');
+  assert.equal(r.overdue[0].overdueAfterMs, 48 * HOUR);
+});
+
+test('every existing role keeps the verdict it has today, role by role', () => {
+  // A fixture PER ROLE rather than one for the set, so a regression names the
+  // role it loosened instead of failing as an anonymous count.
+  for (const role of ['bus-relay', 'pipeline-pulse', 'loop-build', 'loop-review']) {
+    const roles = { [role]: { owner: 'mac-mini' } };
+    const healthy = hb.rollCallReport({
+      rows: [{ node: 'mac-mini', role, at: agoHours(24.5) }], now: NOW, roles,
+    });
+    assert.equal(healthy.silent, false, `${role}: 24.5h must still read as healthy`);
+
+    const dead = hb.rollCallReport({
+      rows: [{ node: 'mac-mini', role, at: agoHours(26) }], now: NOW, roles,
+    });
+    assert.equal(dead.silent, true, `${role}: 26h must still read as overdue`);
+  }
+});
+
+test('an overdue reason names the window it was judged against', () => {
+  // Once the window is per-role, "last succeeded 30 hours ago" stops being a
+  // verdict on its own: 30 hours is dead for the relay and perfectly healthy
+  // for a daily job, and a reader on the bus cannot tell which without being
+  // told what it was measured against.
+  const r = hb.rollCallReport({
+    rows: [{ node: 'mac-mini', role: 'bus-relay', at: agoHours(30) }],
+    now: NOW,
+    roles: ROLES,
+  });
+  assert.match(r.overdue[0].reason, /overdue after/);
+  assert.equal(r.overdue[0].overdueAfterMs, 25 * HOUR);
+});
+
 test('the threshold has slack, so a run that drifts past 24h is not a false alarm', () => {
   // The push is throttled to once a day. A threshold equal to the interval
   // would report a healthy job as dead roughly daily, and an alarm that cries
