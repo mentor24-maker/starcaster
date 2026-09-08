@@ -108,7 +108,14 @@ const ADMIN_ALLOWED: Record<string, string> = {
   "admin-team-users": "ADMIN PAGE — the user list on admin-* slugs",
   "admin-site-settings": "ADMIN PAGE — the settings form on admin-* slugs",
   "admin-support-form": "ADMIN PAGE — the tenant's support request form on admin-* slugs",
-  "admin-blog-links": "ADMIN PAGE — the blog link/tag manager on admin-* slugs",
+  // 86bbuhph0 added both of these to PRIVATE_ONLY_MODULE_TYPES, so their reason
+  // strengthens from ADMIN PAGE to STRIPPED. admin-blog-links had been on the
+  // weaker footing since it shipped — placed on a public page it WOULD have
+  // painted (a panel of 401s rather than a tenant's data, but painted). The
+  // split put a second management module beside it, which is when that was
+  // noticed; both are removed by filterPublicSections now.
+  "admin-blog-links": "STRIPPED — the blog tag manager; filterPublicSections removes it from every public page",
+  "admin-related-articles": "STRIPPED — the related-articles picker; same filter",
 };
 
 /**

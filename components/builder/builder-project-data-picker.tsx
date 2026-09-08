@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
+import { sortPagesByName } from "../../public/shared/pageSort.js";
 
 /**
  * The shared "pick it from a list" control — master rules C1/C2
@@ -55,7 +56,10 @@ function loadOptions(source: BuilderPickerSource): Promise<BuilderPickerOption[]
       const response = await builderAdminFetch("/api/admin/pages", { cache: "no-store" });
       const data = await response.json().catch(() => null);
       const pages = Array.isArray(data?.pages) ? data.pages : [];
-      return pages.map((page: { id?: string; name?: string; slug?: string }) => {
+      // A-Z by the name the operator reads, before the mapping flattens name
+      // and slug into one label — sorting after it would file an unnamed page
+      // under "Untitled page" instead of sending it to the end.
+      return sortPagesByName(pages).map((page: { id?: string; name?: string; slug?: string }) => {
         const slug = String(page.slug ?? "").replace(/^\/+/, "");
         return {
           id: String(page.id ?? ""),
