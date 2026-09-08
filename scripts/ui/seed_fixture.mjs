@@ -264,6 +264,18 @@ const buildTuned = (ids) => ({
       effect: 'tumbleweed', effectRotationRate: '40', effectFrequency: '6',
       effectBounceHeight: '150', effectDirection: 'rtl',
       effectSpeed: '16', effectRepeat: 'once', effectDelay: '2',
+      // Drop shadow ON for the same reason the carousel's is: the shadow
+      // controls are visibleWhen-gated behind the tickbox, so an unticked
+      // fixture measures the Frame axis without them and reports OK on rows
+      // it never saw. Shadow Angle and Shadow Distance joined that run on
+      // 2026-08-25, which is two more rows nothing would otherwise look at.
+      // 12 / -9 is deliberately OFF the 15-degree grid — it derives to 37
+      // degrees at a distance of 15, which is the case where the Angle
+      // control has to show a value its own option list does not contain
+      // rather than snap it and rewrite the page.
+      imageShadow: 'true',
+      imageShadowX: '12', imageShadowY: '-9',
+      imageShadowBlur: '24', imageShadowSpread: '2', imageShadowOpacity: '40',
     },
   },
   // The rich-text module's Structure / Text / Placement / Frame axes

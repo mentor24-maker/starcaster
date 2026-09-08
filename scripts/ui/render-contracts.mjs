@@ -296,6 +296,28 @@ export const RENDER_DIFFERENTIALS = [
     setting: 'imageShadowBlur', from: '0', to: '60',
     why: 'Proves the five detail controls reach the shadow and are not decoration around a hardcoded one — the checkbox differential above passes even if every number is ignored.',
   },
+  /*
+   * THE ANGLE CONTROL'S OUTPUT (2026-08-25, "add the angle of dropshadow").
+   *
+   * Shadow Angle and Shadow Distance store NOTHING of their own — they are a
+   * second view of `imageShadowX` and `imageShadowY`, so a differential named
+   * after the angle would be varying a key no renderer reads and would fail
+   * for the wrong reason. What the angle actually does is move the offsets,
+   * and these are the offsets. If either goes dead, the whole dial is dead
+   * with it while both panels keep swinging convincingly.
+   */
+  {
+    id: 'image-drop-shadow-x',
+    module: { type: 'image', settings: { ...PICTURE, imageShadow: 'true' } },
+    setting: 'imageShadowX', from: '0', to: '40',
+    why: 'Half of where the shadow falls, and the half the angle moves first. 0 is the default, so a dead X reads as a shadow that simply never swings sideways.',
+  },
+  {
+    id: 'image-drop-shadow-y',
+    module: { type: 'image', settings: { ...PICTURE, imageShadow: 'true' } },
+    setting: 'imageShadowY', from: '6', to: '-40',
+    why: 'The other half, and the one that carries the sign convention: 0 degrees is right and 90 is UP, which a CSS shadow reaches on a NEGATIVE y. Crossing the default rather than starting at it, so a renderer that ignored the setting could not pass by accident.',
+  },
   {
     id: 'text-line-height',
     module: { type: 'text', text: '<p>Two lines of body copy for the differential to measure against.</p>', settings: {} },
