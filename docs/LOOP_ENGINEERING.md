@@ -2636,7 +2636,7 @@ git rev-list --count HEAD..origin/main          # 0 = the branch already has mai
 | `CONFLICTING` | conflicts | A real conflict; both sources agree | **Resolve it** — `git merge origin/main`, fix the files, commit, `npm run ship` |
 | `CONFLICTING` | clean, branch behind main | The #630 case: stale branch, phantom reading | **Catch up** — `npm run ship` merges `origin/main` in first |
 | `CONFLICTING` | clean, branch already current | GitHub is holding a stale computation and there is nothing to catch up | **Make it recompute** — `git commit --allow-empty -m "Recompute mergeability" && git push` |
-| `CONFLICTING` | clean, but the distance was never measured | **Unconfirmed — merges cleanly, behind-ness not established.** `git fetch` failed, or `HEAD..origin/main` would not count | **Catch up** — the same remedy as the row above; only the evidence line differs, and it says the reading was not taken |
+| `CONFLICTING` | clean, but the distance was never measured | **Unconfirmed — merges cleanly, behind-ness not established.** `git fetch` failed, or `HEAD..origin/main` would not count | **Catch up** — the same remedy as the `clean, branch behind main` row; only the evidence line differs, and it says the reading was not taken |
 | `CONFLICTING` | no reading could be taken | **Unconfirmed — nothing was measured at all** | **Catch up** — the measured remedy, and safe against an unconfirmed conflict |
 
 **Resolve both refs before the exit code means anything.** `git merge-tree
