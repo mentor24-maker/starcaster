@@ -1187,9 +1187,20 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     id: "admin-blog-links",
     type: "admin-blog-links",
     group: "admin",
-    label: "Blog Tags & Links",
+    label: "Blog Tag Manager",
+    icon: "🏷️",
+    description: "A manager for blog TAGS. Lists every tag with its post count; click a count to see the posts carrying that tag and open any of them. Rename a tag across every post that carries it (renaming onto an existing tag merges them) or remove it everywhere. Categories are managed by the Blog Category Manager module, and relating articles to each other is the Related Articles module - neither is here.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "admin-related-articles",
+    type: "admin-related-articles",
+    group: "admin",
+    label: "Related Articles",
     icon: "🔗",
-    description: "A manager for blog TAGS, plus hand-picked related articles. Lists every tag with its post count; rename one across every post that carries it (renaming onto an existing tag merges them) or remove it everywhere. Then pick a category or tag, tick the articles that belong together and press Relate Checked - those become the related articles the Related Posts module shows in its hand-picked mode. Categories are managed by the Blog Category Manager module, not here.",
+    description: "Hand-pick the articles that belong together. Choose a category or tag, tick the articles, and press Relate Checked - those become the related articles the Related Posts module shows in its hand-picked mode. Relations are mutual: relating A to B relates B to A. Categories appear here only as a way to choose articles; the Blog Category Manager module owns editing them.",
     name: "",
     text: "",
     settings: {}

@@ -121,6 +121,7 @@ import { BuilderAdminNavLinkModuleSettings } from "./builder-admin-nav-link-modu
 import { BuilderBugReportModuleSettings } from "./builder-bug-report-module-settings";
 import { BuilderAdminSiteSettingsModuleSettings } from "./builder-admin-site-settings-module-settings";
 import { BuilderAdminBlogLinksModuleSettings } from "./builder-admin-blog-links-module-settings";
+import { BuilderAdminRelatedArticlesModuleSettings } from "./builder-admin-related-articles-module-settings";
 import { BuilderAdminSupportFormModuleSettings } from "./builder-admin-support-form-module-settings";
 import { BuilderCurrentPollModuleSettings } from "./builder-current-poll-module-settings";
 import { BuilderSocialModuleSettings } from "./builder-social-module-settings";
@@ -2334,9 +2335,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
 
   if (module.type === "admin-blog-links") {
     const showTitle   = module.settings.showTitle !== "false";
-    const title       = module.settings.panelTitle || "Blog Links";
-    const showRelate  = module.settings.showRelate !== "false";
-    const relateLabel = module.settings.relateButtonLabel || "Relate Checked";
+    const title       = module.settings.panelTitle || "Tag Manager";
     const showTags    = module.settings.showTags !== "false";
     const headCell: React.CSSProperties = { fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#8ba9be" };
     const tagRow = (name: string, count: string, last = false) => (
@@ -2364,17 +2363,34 @@ function renderModulePreview(module: BuilderTemplateModule) {
             </div>
           </>
         )}
-        {showRelate && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#18324a", marginBottom: 4 }}>Related Articles</div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <div style={{ flex: "1 1 auto", minWidth: 0, padding: "4px 8px", border: "1px solid #c9dcea", borderRadius: 5, background: "#fff", fontSize: 11, color: "#8ba9be" }}>
-                Choose a category or tag…
-              </div>
-              <div style={{ flex: "0 0 auto", padding: "4px 10px", background: "#0f4f8f", color: "#fff", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "default" }}>{relateLabel}</div>
-            </div>
-          </>
-        )}
+      </div>
+    );
+  }
+
+  if (module.type === "admin-related-articles") {
+    const showTitle   = module.settings.showTitle !== "false";
+    const title       = module.settings.panelTitle || "Related Articles";
+    const relateLabel = module.settings.relateButtonLabel || "Relate Checked";
+    const articleRow = (name: string, last = false) => (
+      <div style={{ display: "flex", gap: 7, alignItems: "center", padding: "5px 9px", borderBottom: last ? undefined : "1px solid #f0f4f8", fontSize: 11 }}>
+        <span style={{ flex: "0 0 auto", width: 10, height: 10, border: "1px solid #c9dcea", borderRadius: 2, background: "#fff" }} />
+        <span style={{ fontWeight: 600, color: "#18324a" }}>{name}</span>
+      </div>
+    );
+    return (
+      <div className="builder-module-preview-copy">
+        {showTitle && <div style={{ fontWeight: 700, fontSize: 14, color: "#18324a", marginBottom: 8 }}>{title}</div>}
+        <div style={{ fontSize: 11, color: "#8ba9be", marginBottom: 4 }}>Show articles filed under</div>
+        <div style={{ padding: "4px 8px", border: "1px solid #c9dcea", borderRadius: 5, background: "#fff", fontSize: 11, color: "#8ba9be", marginBottom: 8 }}>
+          Choose a category or tag…
+        </div>
+        <div style={{ border: "1px solid #c9dcea", borderRadius: 7, overflow: "hidden", background: "#fff", marginBottom: 8 }}>
+          {articleRow("Delray Beach Junior Tennis Program")}
+          {articleRow("Spring and Summer Junior Programs", true)}
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ padding: "4px 10px", background: "#0f4f8f", color: "#fff", borderRadius: 5, fontSize: 11, fontWeight: 700, cursor: "default" }}>{relateLabel}</div>
+        </div>
       </div>
     );
   }
@@ -3235,6 +3251,7 @@ export function BuilderModuleCard({
     const isAdminSiteSettingsModule = module.type === "admin-site-settings";
     const isAdminSupportFormModule = module.type === "admin-support-form";
     const isAdminBlogLinksModule = module.type === "admin-blog-links";
+    const isAdminRelatedArticlesModule = module.type === "admin-related-articles";
     const isPollRuntimeModule = isCurrentPollModule || module.type === "previous-results";
     // The rich-text editor left the shared chrome on 2026-08-15: its
     // Background / Alignment / margins / Width now live on the D8 axes in
@@ -3299,7 +3316,8 @@ export function BuilderModuleCard({
       isAdminNavLinkModule ||
       isAdminSiteSettingsModule ||
       isAdminSupportFormModule ||
-      isAdminBlogLinksModule;
+      isAdminBlogLinksModule ||
+      isAdminRelatedArticlesModule;
 
     /**
      * The module's internal name. Rendered in ONE of two places and never
@@ -3556,6 +3574,8 @@ export function BuilderModuleCard({
               <BuilderAdminNavLinkModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminBlogLinksModule ? (
               <BuilderAdminBlogLinksModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isAdminRelatedArticlesModule ? (
+              <BuilderAdminRelatedArticlesModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminSiteSettingsModule ? (
               <BuilderAdminSiteSettingsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminSupportFormModule ? (

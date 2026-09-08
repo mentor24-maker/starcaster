@@ -143,6 +143,7 @@ export const BUILDER_MODULE_TYPES = [
   "admin-site-settings",
   "admin-support-form",
   "admin-blog-links",
+  "admin-related-articles",
   "bug-report"
 ] as const;
 
@@ -2308,6 +2309,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "admin-site-settings" ||
     type === "admin-support-form" ||
     type === "admin-blog-links" ||
+    type === "admin-related-articles" ||
     type === "bug-report"
   ) {
     return type;
@@ -4024,18 +4026,25 @@ export function createEmptyModule(
                           }
                       : type === "admin-blog-links"
                         ? {
-                            panelTitle: "Blog Links",
+                            panelTitle: "Tag Manager",
                             showTitle: "true",
-                            // Categories and Tags are the two taxonomies the
-                            // blog actually has: categories are a table, tags
-                            // are a text[] on each post. Both on by default -
-                            // a manager showing neither has nothing to manage.
-                            showCategories: "true",
+                            // Tags are the taxonomy this module owns: not a
+                            // table, but a text[] on each post, so the list is
+                            // derived from the posts themselves.
                             showTags: "true",
-                            // The right-hand article list and its Relate
-                            // Checked button. Turning this off leaves a plain
-                            // taxonomy editor.
-                            showRelate: "true",
+                            // Where a post opens from the post-count popup.
+                            // Defaults are the admin scaffold's own slugs.
+                            managerPageUrl: "/admin-blog-manager",
+                            postViewUrl: "/blog-post-view"
+                          }
+                      : type === "admin-related-articles"
+                        ? {
+                            panelTitle: "Related Articles",
+                            showTitle: "true",
+                            // Categories are offered only as a way to CHOOSE
+                            // which articles to relate; they are never edited
+                            // here (blog-category-manager owns that).
+                            showCategories: "true",
                             relateButtonLabel: "Relate Checked",
                             articleStatus: "all"
                           }

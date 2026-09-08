@@ -12,18 +12,21 @@ type Props = {
  * D8 logical axes (docs/UI_RULES.md): Content and Structure.
  *
  * PAIRING RULE - a toggle that gates ONE specific sibling field stays adjacent
- * to it in the same strip, toggle first. Two such pairs exist here:
- * `showTitle` gates `panelTitle`, and `showRelate` gates `relateButtonLabel`.
- * Neither is split across strips or axes.
+ * to it in the same strip, toggle first. One such pair is left here:
+ * `showTitle` gates `panelTitle`.
  *
- * WHICH AXIS: `showTags` (the tag manager table) and `showCategories` (whether
- * categories are offered in the article picker) change what the page is made
- * of, so they are Structure. `articleStatus` filters which articles the picker
- * lists, which is content selection, so it sits on Content beside the Relate
- * pair it qualifies.
+ * WHICH AXIS: `showTags` (the tag manager table) changes what the page is made
+ * of, so it is Structure. The two page-address fields are Structure too: they
+ * decide where the post-count popup sends you, not what the panel shows.
  *
- * The two keys kept their original names on purpose. They were saved onto live
- * tenant pages by the first version of this module, and renaming a settings key
+ * THE RELATE SETTINGS MOVED. `showRelate`, `relateButtonLabel`, `articleStatus`
+ * and `showCategories` belong to the `admin-related-articles` module now
+ * (86bbuhph0). A page saved before that split still carries them in its stored
+ * settings; they are simply ignored here, which is harmless and is why the
+ * module type id was NOT renamed.
+ *
+ * `showTags` kept its original name on purpose. It was saved onto live tenant
+ * pages by the first version of this module, and renaming a settings key
  * silently resets it to its fallback on every page already carrying it.
  *
  * A1 SORT: no theme overrides here at all - no colour, border, radius, shadow
@@ -51,46 +54,12 @@ const SCHEMA: BuilderSettingsSchema = {
             label: "Title text",
             width: "text-md",
             control: "text",
-            placeholder: "Blog Links",
-            fallback: "Blog Links",
+            placeholder: "Tag Manager",
+            fallback: "Tag Manager",
             visibleWhen: (s) => (s.showTitle ?? "true") === "true",
             rendersVia: RENDERS_VIA
           }
         ],
-        [
-          {
-            key: "showRelate",
-            label: "Relate articles",
-            width: "check",
-            control: "checkbox",
-            fallback: "true",
-            rendersVia: RENDERS_VIA
-          },
-          {
-            key: "relateButtonLabel",
-            label: "Button text",
-            width: "text-md",
-            control: "text",
-            placeholder: "Relate Checked",
-            fallback: "Relate Checked",
-            visibleWhen: (s) => (s.showRelate ?? "true") === "true",
-            rendersVia: RENDERS_VIA
-          },
-          {
-            key: "articleStatus",
-            label: "Articles",
-            width: "select-md",
-            control: "select",
-            options: [
-              { value: "all", label: "All" },
-              { value: "published", label: "Published only" },
-              { value: "draft", label: "Drafts only" }
-            ],
-            fallback: "all",
-            visibleWhen: (s) => (s.showRelate ?? "true") === "true",
-            rendersVia: RENDERS_VIA
-          }
-        ]
       ]
     },
     {
@@ -105,14 +74,6 @@ const SCHEMA: BuilderSettingsSchema = {
             fallback: "true",
             rendersVia: RENDERS_VIA
           },
-          {
-            key: "showCategories",
-            label: "Categories in picker",
-            width: "check",
-            control: "checkbox",
-            fallback: "true",
-            rendersVia: RENDERS_VIA
-          }
         ],
         [
           /*
