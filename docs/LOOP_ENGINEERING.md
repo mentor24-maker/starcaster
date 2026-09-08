@@ -2838,6 +2838,90 @@ What did **not** change: a message that reached neither surface is still
 undelivered, still lands in "Could not fully verify", still exits 1, and still
 moves no ticket. The gate was re-pointed, not weakened.
 
+### And on 2026-09-07 it happened again — where an alarm goes now
+
+Same symptoms, symptom for symptom: every chat write on the party line
+returning `HTTP 400 Invalid Request` — a one-word body fails identically —
+while reads on that same channel with that same token return 200, and every
+custom-field write returning `usages exceeded`. Last message that landed
+before the gap: **2026-09-07T21:39:49Z**. The plan was checked again and was
+again unchanged (`Free Forever`, `plan_id` 13). **Nobody should be asked to
+pay for this**; see the paragraphs above, which is the whole reason they are
+written down.
+
+What that outage exposed is that the receipt chain above covers **relayed
+messages only**. A relayed message has a ticket to fall back to, because the
+message is about one. The pipeline's *alarms* have no ticket, so they had no
+fallback, and every one of them was discarded — each of these posts to the
+party line and nowhere else:
+
+* `heartbeat --check` / `--stale-check` — a scheduled job stopped firing
+* `throughput --check` — the queue is STALLED, or a reading could not be taken
+* `report_job_failure.mjs` — any scheduled job that failed
+* `reconcile --check` — ClickUp and the branches disagree
+* the pause reminder — a pipeline paused and forgotten
+
+**They now go to a standing ticket called "Undelivered alarms"** in the Loop
+Queue, found by name and created on first need, in the same shape the roll call
+and the pulse digest use. Each alarm arrives as one comment carrying the alarm
+text verbatim, which machine raised it, and the reason the bus refused it.
+**Do not close it and do not delete it** — a comment on it means something else
+is broken, so read the alarm, not the ticket.
+
+The fallback lives in the `chat` command itself
+(`saveUndeliveredAlarm`, `lib/busFallback.js`), not in each of the seven
+callers. `postBusMessage` shells out to exactly that command, and every calling
+job already treats *the command threw* as "not delivered, do not stamp the
+suppression window, retry next pass" and *it returned* as delivered. Sitting
+behind that contract covers all seven without touching a line of throttle
+logic. Three consequences worth knowing:
+
+* The comment is **read back** before the delivery counts. If both the bus and
+  the noticeboard refuse, the command exits non-zero so the caller retries
+  rather than going quiet for six hours on a message nobody received.
+* `--no-fallback` gets the raw verdict, for a caller keeping its own durable
+  record.
+* **Reaching the ClickUp reserve is not a refusal** and does not fall back: it
+  is this pipeline standing down on purpose, and it keeps its own words and its
+  own exit code (7).
+
+**The noticeboard is not work, and nothing may count it as work.** It is
+created in `Live`, which is a closed-type status, so ClickUp stamps
+`date_closed` on it the instant it exists — and `npm run throughput` counts a
+closure off `date_closed` and nothing else. Unexcluded, saving a single alarm
+during an outage read as a ticket that shipped, and because the verdict
+short-circuits to `MOVING` the moment anything closed inside the window, it
+would have flipped `STALLED` to `MOVING` for the following 24 hours. The stall
+detector silenced by the alarm it was trying to save, on exactly the day it is
+most needed. All **four** standing tickets are registered in
+**`lib/loopNoticeboards.js`** and excluded there — the roll call, the pipeline
+pulse, this noticeboard, and the **pause switch**; a fifth one written in the
+same shape and left out of that registry fails
+`scripts/builder/loopNoticeboards.test.js`.
+
+**That sentence said "three" and was wrong on the day it was written**, which
+is worth keeping because of how it was wrong rather than by how much. The
+pause switch (`npm run pipeline -- pause`, created on first need in `Live`,
+opening with the same "Do not build this…" sentence) had been the fourth one
+all along, and the test that was supposed to make an omission impossible
+scanned `lib/` only — the switch is seeded from `scripts/pipeline.mjs`. So the
+registry shipped stale, the suite was green, and this paragraph told the next
+reader they were covered. Two things changed: the seed text moved to
+`scripts/builder/pipelinePause.js`, beside the `SWITCH_TASK_NAME` it seeds, and
+the test now scans `scripts/builder/` as well as `lib/` **and fails if the seed
+sentence appears anywhere it cannot require** — an ESM script runs on import,
+so it can never be scanned that way, and widening the scan without closing that
+door would have fixed one ticket and left the hole. Standing rule: **seed text
+lives in the CommonJS module that exports its `*_TASK_NAME`.**
+
+The reach is wider than the throughput check, too. `stage-counts` — which
+`scripts/weekly_report.mjs` reads for its stage table, its total and its
+"closed this week" figure — filtered on `date_closed` alone, so the weekly
+report would have credited a noticeboard's creation as a shipped ticket.
+It applies the same registry now. When you add a reader of the Loop Queue,
+the question to ask is not "does this count closures" but **"does this count
+tickets at all"**.
+
 ### Running the relay by hand
 
 `bus-relay` belongs to the Mac Mini (`lib/nodeRoles.js`), so every hand-run of
@@ -3248,6 +3332,24 @@ the round counting and both sides of the round-3/round-4 boundary).
 1. On the Loop Queue list: Columns → + → Create field → **Text**, named
    exactly **Loop note**. Add it to the List view. Until it exists the loops
    print `CANNOT STAMP` and carry on — the note is missing, nothing else is.
+
+   **A stamp can refuse for a second reason, and it is not benign.** On
+   2026-09-08 the workspace ran out of custom-field usages and every write to
+   the field began failing with `Custom field usages exceeded for your plan`
+   (task 86bbwab1n). The field EXISTS; it just will not take a value. That is
+   the opposite of "not set up yet": the Loop note is the only surface on
+   which a pass in flight is visible to another pass, so a refusal here means
+   the claim is **invisible** and a second pass may take the ticket — which is
+   the 2026-08-22 double-review failure (PR #362) with the guard switched off.
+   The two now print different things (`lib/busFallback.js`
+   → `classifyFieldRefusal`), and the exhausted one says outright what the
+   move is — which is **not** to pay for anything. Both times this has happened
+   the chat 400s and the field refusals arrived together, on an unchanged
+   *Free Forever* plan, and 2026-08-23's cleared itself in about sixteen hours;
+   the section below ("The party line is not the only way out") records that an
+   upgrade was proposed then and would have fixed nothing. Say it in the run
+   report, treat no empty Loop note as proof a ticket is free, and check
+   whether it is a window before you go looking for a permission.
 2. Create one ticket named **Loop heartbeat** in the list; put its id in
    `CLICKUP_HEARTBEAT_TASK` (Doppler) so `loop-heartbeat` has a home.
 

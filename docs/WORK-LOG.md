@@ -1,3 +1,94 @@
+## 2026-09-08 — Alarms stopped being thrown away when the chat room refuses them (#666)
+
+The system has one way of telling anyone that something has broken: it posts a
+message to the party line, the ClickUp chat room. Seven different background
+jobs use it and nothing else — the one that notices a job has stopped running,
+the one that notices the queue is not moving, the one that reports a failed
+job, and four more.
+
+Since about ten to ten on Sunday night, ClickUp has been refusing every message
+sent to that room. Not the account, not the room — reading it works perfectly
+and writing comments onto tickets works perfectly; it is only chat messages,
+and only writing them. So for fifteen hours every alarm the system raised was
+simply thrown away, leaving one line in a log file that nobody reads.
+
+Now, when the chat room refuses an alarm, the alarm gets written as a comment
+on a ticket called **Undelivered alarms** instead. The ticket makes itself the
+first time it is needed. The wording of the alarm is kept exactly as it was
+written, with a note on top saying which machine raised it and what the chat
+room said when it refused. The system checks the comment really landed before
+it counts the alarm as delivered — if both the chat room and the ticket refuse,
+it says nothing was delivered, so the job that raised the alarm tries again
+later instead of going quiet for six hours on a message nobody received.
+
+The second half of the same fault: every pass that picks up a ticket writes a
+short note on it saying "I am working on this", and that note is the only way
+two passes running at once can see each other. ClickUp has been refusing those
+too, with a message about the plan running out of custom fields. The trouble
+was that it read exactly like the harmless case — a note field nobody has
+created yet — which the passes are told to shrug off. Those two now say
+different things, and the serious one says plainly that the claim is invisible
+and another pass may take the ticket.
+
+One correction worth recording. The ticket asking for this work suggested
+paying ClickUp to raise the plan limit. The same pair of symptoms happened on
+23 August, the same purchase was suggested then, and it was wrong: the plan
+never changed and the problem cleared itself after about sixteen hours. The
+plan reads the same today as it did yesterday when everything worked, so
+nobody is being asked to buy anything — and the message the system now prints
+says so, and names the earlier day, so the next person to see it does not go
+down that road a third time.
+Sent back once by review, for a fault that was the same shape as the one it was
+fixing. The **Undelivered alarms** ticket is created in the "Live" column so
+that no pass tries to build it — but "Live" is how a finished ticket looks, so
+ClickUp marks it finished the moment it exists, and the report that watches
+whether work is actually shipping counted it as a ticket that shipped. On a
+quiet day during an outage, saving one alarm would have been enough to make
+that report say the queue was moving when nothing had moved at all — the alarm
+silencing the very check that was supposed to notice. Two other standing
+tickets, *Node roll call* and *Pipeline pulse*, were being counted the same
+way. All three are now listed in one place as noticeboards rather than work,
+and a test fails if a fourth one is ever added and left off the list. Measured
+against the real queue: today's count of finished tickets goes from 3 to 2, and
+the two it drops were never work.
+
+Four smaller things from the same review: a deliberate stop — the system
+standing down to leave ClickUp capacity for whoever is actually at the keyboard
+— was being reported as a failure and losing its own exit code; the fallback
+could crash instead of reporting a clean "nothing was delivered" if ClickUp
+answered with something that was not proper data; the alarm comment was losing
+its blank lines, which turned a dividing rule into a heading; and two machines
+falling back in the same minute could have made two noticeboards, so they now
+agree on the older one and say out loud that a duplicate needs deleting.
+
+Sent back a second time, and the finding was the same shape again — a check
+that says it is guarding something and is not. There was a **fourth** standing
+ticket nobody had counted: the *Pipeline pause switch*, the ticket that records
+when Dane takes the deck. It is made the same way, in the same column, opening
+with the same "do not build this" sentence, and it was being counted as a
+finished ticket exactly like the other three. The test written last round to
+make that impossible could not see it: it looked only in one folder, and the
+pause switch is created from a file in a different one. So the registry shipped
+already out of date, the test passed, and the written notes said in as many
+words that a fourth one would be caught.
+
+The switch is registered now, and the two ways that could happen again are shut.
+The sentence the test searches for was moved to sit beside the name it belongs
+to, so the search can reach it; and a second test fails if that sentence is ever
+written somewhere the search cannot look. The rule is now one line: the wording
+that creates a standing ticket lives with the name of the ticket it creates.
+
+Two more from the same review. The weekly report was reading a different counter
+that had never been told about noticeboards at all — so this week's report would
+have credited *Undelivered alarms*, a ticket this very change created, as a
+piece of work that shipped. And the "standing down to leave capacity for whoever
+is at the keyboard" fix from last round only covered the first step of sending
+an alarm; if the system ran out of capacity a moment later, while saving the
+alarm to the ticket instead, it went back to announcing the alarm as lost. Every
+step of that save now knows the difference between "ClickUp said no" and "I
+stopped on purpose", and a test counts the steps so a new one cannot be added
+without one.
+
 ## 2026-09-08 — Module settings panels now line up top to bottom (#667)
 
 Open any module's settings in the Builder and you are really looking at two
