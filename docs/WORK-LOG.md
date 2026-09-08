@@ -1,3 +1,24 @@
+## 2026-09-08 — Answering a question no longer puts finished work back in the queue (#660)
+
+When Dane answers a question on a ticket, a background job hands that ticket
+back to the machines. Where it handed it was a fixed answer: always back into
+the build queue, whatever the ticket was. The build queue is the shopping list
+a build loop picks its next job from.
+
+So the day before, a ticket whose code had already been written, merged and put
+live went back on that shopping list. Somebody happened to be watching and
+closed it by hand within minutes. Nobody watching, and a build loop would have
+picked up finished work, started building it a second time, and gone looking
+for a branch GitHub had already deleted.
+
+The hand-back now looks at the ticket first. If the work is merged, the ticket
+goes to Live, where finished work belongs. If its pull request is still open,
+it goes to Rework, so the loop carries on with the branch that already exists
+rather than starting over. If there is no pull request at all — the ordinary
+case, and much the commonest — nothing changes and it goes back in the queue as
+before. And if GitHub cannot be reached to find out, the ticket does not move
+at all and the job says so out loud, because guessing is the whole of what went
+wrong here.
 ## 2026-09-07 — The panel checker was passing 35 crooked panels, and now it names them (#653)
 
 Every module in the Builder has a settings panel, and Dane pointed at a problem
