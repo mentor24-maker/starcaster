@@ -176,14 +176,14 @@ describe('what the operator reads', () => {
       failed: 0,
       skipped: [],
       writtenWithPreservedEdits: [{ pageId: '1446', name: 'Block States', copies: 1 }],
-    })).toBe('Saved "Menu" and updated 1 page. A hand-edited copy on 1 of those pages was left as it is.');
+    })).toBe('Saved "Menu" and updated 1 page. A hand-edited copy on 1 of the pages just updated was left as it is.');
 
     // Copies, not pages: one page can preserve several.
     expect(describePropagationOutcome('Menu', {
       updated: 3,
       failed: 0,
       writtenWithPreservedEdits: [{ pageId: '1446', name: 'Block States', copies: 2 }],
-    })).toBe('Saved "Menu" and updated 3 pages. 2 hand-edited copies on 1 of those pages were left as they are.');
+    })).toBe('Saved "Menu" and updated 3 pages. 2 hand-edited copies on 1 of the pages just updated were left as they are.');
 
     // Both facts at once, and they stay separate sentences about separate
     // sets: `skipped` pages were NOT written, these ones were.
@@ -193,7 +193,32 @@ describe('what the operator reads', () => {
       skipped: [{ name: 'Rates' }],
       writtenWithPreservedEdits: [{ pageId: '1', name: 'Block States', copies: 1 }, { pageId: '2', name: 'Home', copies: 1 }],
     })).toBe('Saved "Menu" and updated 2 pages. 1 page has local changes and was skipped.'
-      + ' 2 hand-edited copies on 2 of those pages were left as they are.');
+      + ' 2 hand-edited copies on 2 of the pages just updated were left as they are.');
+
+    // ONE updated, ONE skipped, ONE preserved — the case that sent round 2
+    // back, and the only one where the counts cannot disambiguate the
+    // referent for you. Every other case here has counts that differ, which is
+    // exactly why "1 of those pages" got through: the reader was left to
+    // attach it to the nearest set the sentence named, which is the SKIPPED
+    // page — while the surviving hand edit is on the page that was written,
+    // and on a Save & Publish that page has just gone live. The clause names
+    // the updated set outright now, so there is nothing to attach wrongly.
+    expect(describePropagationOutcome('Menu', {
+      updated: 1,
+      failed: 0,
+      skipped: [{ name: 'Rates' }],
+      writtenWithPreservedEdits: [{ pageId: '1446', name: 'Block States', copies: 1 }],
+    })).toBe('Saved "Menu" and updated 1 page. 1 page has local changes and was skipped.'
+      + ' A hand-edited copy on 1 of the pages just updated was left as it is.');
+
+    // The other way the demonstrative failed: on a partly-failed fan-out
+    // "those pages" reads as the pages that could NOT be updated.
+    expect(describePropagationOutcome('Menu', {
+      updated: 2,
+      failed: 1,
+      writtenWithPreservedEdits: [{ pageId: '1446', name: 'Block States', copies: 1 }],
+    })).toBe('Saved "Menu" and updated 2 pages, but 1 page could not be updated.'
+      + ' Reload and save again to finish. A hand-edited copy on 1 of the pages just updated was left as it is.');
 
     // An older route response with no such key reads exactly as before.
     expect(describePropagationOutcome('Menu', { updated: 2, failed: 0, writtenWithPreservedEdits: [] }))

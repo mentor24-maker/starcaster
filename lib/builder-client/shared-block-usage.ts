@@ -466,11 +466,19 @@ export function describePropagationOutcome(
     : [];
   const preservedPages = preserved.length;
   const preservedCopies = preserved.reduce((sum, row) => sum + (Number(row?.copies ?? 1) || 1), 0);
-  const onThose = preservedPages === 1 ? '1 of those pages' : `${preservedPages} of those pages`;
+  // "the pages just updated", never "those pages". A demonstrative attaches to
+  // the nearest set the sentence mentioned, and that is the SKIPPED page in
+  // `Saved "X" and updated 1 page. 1 page has local changes and was skipped.
+  // A hand-edited copy on 1 of those pages was left as it is.` — pointing the
+  // operator at the page nothing was written to, when the surviving edit is on
+  // the page a Save & Publish just put live. Both counts are 1 there, so the
+  // numbers cannot disambiguate it either. On a partly-failed fan-out the same
+  // words attach to the page that FAILED. Naming the set is the whole fix.
+  const ofUpdated = `${preservedPages} of the pages just updated`;
   const preservedClause = preservedPages > 0
     ? (preservedCopies === 1
-      ? ` A hand-edited copy on ${onThose} was left as it is.`
-      : ` ${preservedCopies} hand-edited copies on ${onThose} were left as they are.`)
+      ? ` A hand-edited copy on ${ofUpdated} was left as it is.`
+      : ` ${preservedCopies} hand-edited copies on ${ofUpdated} were left as they are.`)
     : '';
 
   if (failed > 0) {

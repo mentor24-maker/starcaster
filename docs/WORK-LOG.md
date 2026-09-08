@@ -24,8 +24,15 @@ not write at all**, every copy on them hand-edited — and those are the pages
 the "Overwrite anyway?" button offers you. A page that WAS rewritten, and still
 carries an edit of yours the push stepped around, is now reported separately
 and counted in copies, so the message reads *"updated 2 pages. A hand-edited
-copy on 1 of those pages was left as it is"* rather than implying a third page
-you never had.
+copy on 1 of the pages just updated was left as it is"* rather than implying a
+third page you never had.
+
+That message says "the pages just updated" rather than "those pages" for a
+reason worth a sentence. When a save updates one page, skips another, and
+spares an edit on the one it updated, all three numbers are 1 — and "1 of those
+pages" then reads as the page that was *skipped*, which is the opposite of
+where your surviving edit actually is. Naming the set outright is what makes
+the message point at the right page every time.
 
 Nothing about what gets written changed — hand edits were always safe. This was
 the builder failing to tell you so.
