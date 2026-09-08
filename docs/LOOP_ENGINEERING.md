@@ -2636,14 +2636,34 @@ git rev-list --count HEAD..origin/main          # 0 = the branch already has mai
 | `CONFLICTING` | conflicts | A real conflict; both sources agree | **Resolve it** — `git merge origin/main`, fix the files, commit, `npm run ship` |
 | `CONFLICTING` | clean, branch behind main | The #630 case: stale branch, phantom reading | **Catch up** — `npm run ship` merges `origin/main` in first |
 | `CONFLICTING` | clean, branch already current | GitHub is holding a stale computation and there is nothing to catch up | **Make it recompute** — `git commit --allow-empty -m "Recompute mergeability" && git push` |
-| `CONFLICTING` | no reading could be taken | Unconfirmed | **Catch up** — the measured remedy, and safe against an unconfirmed conflict |
+| `CONFLICTING` | clean, but the distance was never measured | **Unconfirmed — merges cleanly, behind-ness not established.** `git fetch` failed, or `HEAD..origin/main` would not count | **Catch up** — the same remedy as the `clean, branch behind main` row; only the evidence line differs, and it says the reading was not taken |
+| `CONFLICTING` | no reading could be taken | **Unconfirmed — nothing was measured at all** | **Catch up** — the measured remedy, and safe against an unconfirmed conflict |
 
 **Resolve both refs before the exit code means anything.** `git merge-tree
 --write-tree` exits **1** for a ref it cannot resolve as well as for a conflict
 (measured on git 2.50.1: `merge-tree: nosuchref - not something we can merge`).
 Reading that bare `1` as a conflict sends you to resolve one that does not
 exist, over a typo. Every unreadable case here is a **CANNOT TELL** that falls
-back to the catch-up merge — never "clean".
+back to the catch-up merge — never a measured "clean".
+
+**The two Unconfirmed rows are unconfirmed about different things, and the
+message says which** (task 86bbvyfuu). `classifyLocalMerge` used to answer plain
+`clean` whenever the merge read cleanly but the distance did not — a failed
+`git fetch origin main`, which is not exotic in a repo where git and `gh`
+authenticate by different routes, or a count that would not parse. The message
+renders `clean` as *"origin/main merges in cleanly, and this branch is behind
+it"*, under a heading that says **WHAT WAS READ** — so a reading nobody took was
+printed as a measurement, which is the one defect class `docs/DOCTRINE.md` is
+most emphatic about, sitting inside the fix for a ticket about misleading
+checkless-PR messages. There is a fourth state now, `clean-unconfirmed`, which
+chooses the **same** `catch-up-merge` remedy and renders its own evidence line:
+*"origin/main merges in cleanly, but whether this branch is BEHIND it was NOT
+established"*. Nothing about the advice changed; what the operator gains is the
+second pass. If the catch-up merge turns out to be a no-op — the loop this
+section exists to kill — the old message gave him no way to know the reading was
+never taken, so he could not tell that **Make it recompute** is the row he is
+actually standing on. No message claims a branch is behind main unless
+`behindCount` was read against a base ref that run refreshed.
 
 **`npm run ship` asks this itself now.** `scripts/builder/waitForChecks.js`
 polls mergeability while no check has ever appeared, and returns its own
