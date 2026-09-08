@@ -35,6 +35,112 @@ Worth recording why it got that far: the automatic layout check had been passing
 because the test page it measures never had a video on a column, so those
 fourteen settings had never once been on screen when the check looked. It has a
 video column now, so this can never again pass by not looking.
+## 2026-09-08 — Answering a question no longer puts finished work back in the queue (#660)
+
+When Dane answers a question on a ticket, a background job hands that ticket
+back to the machines. Where it handed it was a fixed answer: always back into
+the build queue, whatever the ticket was. The build queue is the shopping list
+a build loop picks its next job from.
+
+So the day before, a ticket whose code had already been written, merged and put
+live went back on that shopping list. Somebody happened to be watching and
+closed it by hand within minutes. Nobody watching, and a build loop would have
+picked up finished work, started building it a second time, and gone looking
+for a branch GitHub had already deleted.
+
+The hand-back now looks at the ticket first. If the work is merged, the ticket
+goes to Live, where finished work belongs. If its pull request is still open,
+it goes to Rework, so the loop carries on with the branch that already exists
+rather than starting over. If there is no pull request at all — the ordinary
+case, and much the commonest — nothing changes and it goes back in the queue as
+before. And if GitHub cannot be reached to find out, the ticket does not move
+at all and the job says so out loud, because guessing is the whole of what went
+wrong here.
+## 2026-09-07 — The panel checker was passing 35 crooked panels, and now it names them (#653)
+
+Every module in the Builder has a settings panel, and Dane pointed at a problem
+in them back in August: the boxes in the top block and the boxes in the block
+below it don't start at the same place, so an open panel reads as two ragged
+halves rather than one tidy rectangle.
+
+There is an automatic checker that is supposed to catch exactly this. It has
+been reporting a clean pass, every time, for weeks — while 35 of the 37 panels
+were crooked. The reason is a genuinely easy mistake to make: the checker
+looked at the top block and confirmed everything in it agreed with itself, then
+looked at the bottom block and confirmed the same, and called it a pass. It
+never asked whether the two blocks agreed with *each other*. Two halves that
+are each internally tidy can still be badly out of line with one another, and
+that is precisely what was happening.
+
+This change makes the checker ask that question. It does not straighten a
+single panel — that is the next job, and Dane has already chosen how it gets
+done. What it does is turn an invisible problem into a counted one: the 31
+panels currently out of line are written down in a list, and from now on the
+list can only get shorter. A panel that goes crooked and isn't on the list
+fails the check as a new fault; a panel on the list that gets fixed also fails,
+until it is taken off. So the fix cannot be quietly half-done, and nothing can
+slip back.
+
+Two things turned up while measuring that the original description had wrong,
+and both would have sent the repair off in the wrong direction. The top block
+is actually at the *bottom* on 30 of the 35 panels. And one panel that looked
+like the worst offender of all isn't broken at all — its two blocks sit side by
+side rather than stacked, so there is no shared edge for them to miss.
+
+The checker also caught an error of mine while I was writing it. I had measured
+one panel by hand and recorded it as crooked; the moment the new rule ran, it
+objected that the panel was fine. It was right and I was wrong — I had measured
+a full-width box, which by design starts further left than the others. That is
+the check doing its job before the work had even shipped, which is the best
+evidence it works that I could offer.
+
+Review sent this back once, and the catch was a good one: the new rule could
+still go completely blind and report a green pass. If the checker lost track of
+where the top block lives — which an ordinary bit of tidying-up elsewhere in the
+code would do without anyone noticing — it measured nothing at all, printed a
+note politely explaining that this was not a pass, and then reported a pass
+anyway. The same thing happened to a panel that quietly stopped appearing on the
+test page: its entry sat in the list, unchecked forever, under a green tick.
+That is the exact fault this whole job was written to fix, reproduced one level
+down inside the fix. Both now stop the run with "could not take a reading",
+which is a distinct third answer from pass and fail and is the one everything
+else here already uses when an instrument cannot see. It matters most over the
+next few weeks: the straightening job empties that list as it goes, and a
+checker that had gone blind would make an emptied list look exactly like
+success.
+
+Review sent it back a second time, and the second catch was the same shape as
+the first with the polarity reversed: the answers were right and the sentences
+printed beside them were wrong. On a run that failed, the closing note said
+every panel lined up — printed directly underneath the list of panels that
+didn't. That is not a corner case, because it only appeared once the list was
+empty, and emptying the list is precisely what the straightening job is going to
+do; a fault introduced during that work would have announced itself as the work
+succeeding. A second note told the reader the run "could not take a reading"
+when it had in fact failed outright, which are two different answers that people
+here rely on telling apart. And the run checks three screen widths but was
+quietly reporting the best of the three as though it spoke for all of them, so a
+width that measured nothing could sit inside a green pass unnoticed. All three
+are fixed, and each one was reproduced on purpose first: I made a width go blind
+and watched the old code report a cheerful pass over it, then watched the new
+code stop and name the width.
+
+Two smaller things went in alongside. When the check reports a panel as crooked
+it quotes the boxes it measured, and it had been quoting the wrong pair — the
+right numbers attached to the wrong names, which sends whoever reads it to the
+wrong place. And it will no longer demand a panel be struck off the list on half
+a measurement: where it can only see one of the two edges it needs, it now says
+so and stops, rather than declaring the panel fixed on evidence it doesn't have.
+
+One thing the check caught on its own while all this was going on, which is
+worth recording because it is the first time it has earned its keep unprompted.
+A new module landed on the live code this morning — the Related Articles panel,
+split out of the Tag manager earlier today — and the moment this branch caught
+up with it, the check stopped and reported it as a newly crooked panel that
+nobody had straightened. It was right. Nothing had gone wrong; a new panel had
+simply arrived with the same old fault, and for the first time something noticed
+on the day rather than a month later. It has been written onto the list with the
+others.
 ## 2026-09-07 — A ship message no longer says it measured something it did not (#657)
 
 When `npm run ship` finishes and finds a pull request that GitHub has run no
