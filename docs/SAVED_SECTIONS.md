@@ -244,6 +244,10 @@ already reached for it there.
   `overwriteDrifted` does. It used to be filled in whenever any copy on a
   written page had drifted, which reported "1 page with local changes was
   overwritten" about an edit still sitting untouched on that page.
+  `writtenWithPreservedEdits` is that same page said truthfully — written, and
+  carrying `copies` hand edits this push left alone. It is a subset of
+  `updatedPages`; `skipped` is disjoint from it. See "Drift is measured per
+  COPY" below for why the two cannot be one field.
 - That `runId` is what `POST /api/builder/propagation-runs/:runId/undo` rolls
   back. A page skipped for drift was never written, so it holds no revision
   for this run and undo never touches it either — consistent either way.
@@ -266,6 +270,23 @@ come apart there. A page carrying one hand-edited copy *and* one untouched copy
 **is written** — the untouched copy takes the update — while the edited one is
 left exactly as it was. It is therefore not "skipped", it is not left alone, and
 it *is* published by a Save & Publish.
+
+That page still holds a fact the operator wants: **his hand edit survived.**
+It has its own bucket, `writtenWithPreservedEdits`, and the two are not
+interchangeable:
+
+| Bucket | Means | Overlaps `updatedPages`? |
+|---|---|---|
+| `skipped` | the push wrote **nothing** on this page — every copy on it had drifted | never |
+| `writtenWithPreservedEdits` | the page **was** written, and *n* hand-edited copies on it were left as they were | always — it is a subset |
+
+Widening `skipped` to cover both was tried and sent back on 2026-09-08: three
+surfaces read it as "pages this push did not write", so the toast counted one
+page twice ("updated 1 page. 1 page … was skipped" — there is one page), and
+the "Overwrite anyway?" banner offered to overwrite a page the same click had
+just published. The per-copy verdict was still being reported per page; it had
+only moved one layer out. The count in the new bucket is in **copies**, and the
+sentence built from it says so, because a page may have preserved more than one.
 
 Two separate pieces of code said otherwise, and both were found on 2026-09-03
 only because the UI fixture's own **Block States** page happens to have that
