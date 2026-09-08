@@ -12723,15 +12723,16 @@ function AdminBlogLinksPreview({
   /** True on the published admin site, false inside the Builder's own preview. */
   liveSite?: boolean;
 }) {
-  const panelTitle     = settings.panelTitle || "Blog Links";
+  /*
+   * "Tag Manager" is what this module now is (86bbuhph0), and it is the
+   * fallback its own settings panel declares. It used to default to "Blog
+   * Links" while the panel said "Tag Manager", so the panel showed the
+   * operator an effective title the page did not render.
+   */
+  const panelTitle     = settings.panelTitle || "Tag Manager";
   const showTitle      = settings.showTitle !== "false";
   /** The tag table. Keeps the original `showTags` key so saved pages carry over. */
   const showTagManager = settings.showTags !== "false";
-  /** Whether categories are offered in the article picker (they are never edited here). */
-  const offerCategories = settings.showCategories !== "false";
-  const showRelate     = settings.showRelate !== "false";
-  const relateLabel    = settings.relateButtonLabel || "Relate Checked";
-  const articleStatus  = settings.articleStatus || "all";
   const accent         = settings.accentColor || "#0f4f8f";
   /*
    * Where a post in the "posts with this tag" popup opens. The default is the
@@ -12746,13 +12747,8 @@ function AdminBlogLinksPreview({
   const autoTagLabel   = settings.autoTagButtonLabel || "Auto-tag";
 
   const [terms, setTerms]       = useState<BlogLinkTerm[]>([]);
-  const [selectedKey, setSelectedKey] = useState("");
-  const [articles, setArticles] = useState<BlogLinkArticle[]>([]);
-  const [checked, setChecked]   = useState<Set<string>>(new Set());
-  const [relatedTitles, setRelatedTitles] = useState<Record<string, string[]>>({});
 
   const [loadingTerms, setLoadingTerms]       = useState(true);
-  const [loadingArticles, setLoadingArticles] = useState(false);
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState("");
   const [note, setNote]     = useState("");
@@ -12823,25 +12819,20 @@ function AdminBlogLinksPreview({
     return () => document.removeEventListener("keydown", onKey);
   }, [postsTag, closeTagPosts]);
 
-  /** Reload both taxonomies. Called after every write, so counts stay true. */
+  /*
+   * Reload the tags. Called after every write, so counts stay true.
+   *
+   * Tags only. This module used to fetch the categories as well, because it
+   * also held the article picker, which offered either taxonomy. The picker
+   * moved to `admin-related-articles` (86bbuhph0) and the category rows were
+   * left being fetched and then dropped on the floor -- a request on every
+   * load for rows that reach nothing, since the table below renders
+   * `tagTerms` alone.
+   */
   const loadTerms = useCallback(async () => {
     setLoadingTerms(true);
     try {
       const next: BlogLinkTerm[] = [];
-      if (offerCategories) {
-        const d = await api(`/api/blog/categories?${projectQuery()}`);
-        const rows = (d?.categories ?? d?.data ?? []) as Array<Record<string, unknown>>;
-        for (const row of Array.isArray(rows) ? rows : []) {
-          next.push({
-            kind: "category",
-            key: String(row.id || ""),
-            label: String(row.name || "(untitled)"),
-            slug: String(row.slug || ""),
-            postCount: 0,
-            livePostCount: null,
-          });
-        }
-      }
       const d = await api(`/api/blog/tags?${projectQuery()}`);
       const rows = (d?.tags ?? d?.data ?? []) as Array<Record<string, unknown>>;
       for (const row of Array.isArray(rows) ? rows : []) {
@@ -12862,11 +12853,11 @@ function AdminBlogLinksPreview({
       setTerms(next);
       setError("");
     } catch (e) {
-      setError((e as Error).message || "Could not load the blog taxonomy.");
+      setError((e as Error).message || "Could not load the blog tags.");
     } finally {
       setLoadingTerms(false);
     }
-  }, [api, projectQuery, offerCategories]);
+  }, [api, projectQuery]);
 
   useEffect(() => { void loadTerms(); }, [loadTerms]);
 
