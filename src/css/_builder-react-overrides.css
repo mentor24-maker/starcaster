@@ -7616,8 +7616,160 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   margin-top: var(--space-4);
 }
 
+/* ── Event Manager: Repeat (task 86bbzt259) ──────────────────────────────
+ * A fieldset so the weekday buttons, the end date and the date list read as
+ * one question — "when does this happen again?" — and screen readers announce
+ * the group. The browser's default fieldset border and padding are reset:
+ * this module does not own them and they vary between engines. */
+.builder-react-root .builder-event-manager-repeat {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  min-width: 0;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+}
+
+.builder-react-root .builder-event-manager-repeat > legend {
+  padding: 0 var(--space-2);
+}
+
+.builder-react-root .builder-event-manager-repeat .builder-event-manager-field-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.builder-react-root .builder-event-manager-repeat-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.builder-react-root .builder-event-manager-repeat-day {
+  min-width: 3.25rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--bg-input);
+  color: var(--ink-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* The fill is the module's accent (set inline, like the Save button beside
+ * it), so the label takes the ink meant for text over a strong colour. */
+.builder-react-root .builder-event-manager-repeat-day.is-on {
+  color: var(--on-media-ink);
+}
+
+.builder-react-root .builder-event-manager-hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-event-manager-dates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.builder-react-root .builder-event-manager-date-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 22rem;
+  overflow-y: auto;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-input);
+}
+
+.builder-react-root .builder-event-manager-date {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.builder-react-root .builder-event-manager-date:last-child {
+  border-bottom: 0;
+}
+
+.builder-react-root .builder-event-manager-date-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-event-manager-date-day {
+  min-width: 7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-event-manager-date-time {
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-event-manager-date.is-cancelled .builder-event-manager-date-day,
+.builder-react-root .builder-event-manager-date.is-cancelled .builder-event-manager-date-time {
+  text-decoration: line-through;
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-event-manager-date-badge {
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  background: var(--bg-hover);
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-event-manager-date.is-cancelled .builder-event-manager-date-badge {
+  background: var(--status-warn-bg);
+  color: var(--status-warn-ink);
+}
+
+.builder-react-root .builder-event-manager-date-note {
+  color: var(--ink-secondary);
+  font-style: italic;
+}
+
+.builder-react-root .builder-event-manager-date-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.builder-react-root .builder-event-manager-date-edit {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 8rem)) minmax(0, 1fr);
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.builder-react-root .builder-event-manager-date-edit .builder-event-manager-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.builder-react-root .builder-event-manager-when-rule,
+.builder-react-root .builder-event-manager-when-sub {
+  display: block;
+}
+
+.builder-react-root .builder-event-manager-when-sub {
+  color: var(--ink-secondary);
+}
+
 @media (max-width: 700px) {
-  .builder-react-root .builder-event-manager-field-row {
+  .builder-react-root .builder-event-manager-field-row,
+  .builder-react-root .builder-event-manager-repeat .builder-event-manager-field-row,
+  .builder-react-root .builder-event-manager-date-edit {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
   }
