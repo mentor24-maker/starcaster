@@ -7619,17 +7619,17 @@ function EventManagerPreview({
                         {occ.note ? <span className="builder-event-manager-date-note">{occ.note}</span> : null}
                         <span className="builder-event-manager-date-actions">
                           {occ.cancelled ? (
-                            <button type="button" className="btn tiny-btn" onClick={() => setOverrides((l) => applyEventOverride(l, occ.date, { cancelled: false }))}>
+                            <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setOverrides((l) => applyEventOverride(l, occ.date, { cancelled: false }))}>
                               Restore
                             </button>
                           ) : (
                             <>
                               {!isAllDay ? (
-                                <button type="button" className="btn tiny-btn" onClick={() => setChangingDate(editing ? null : occ.date)}>
+                                <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setChangingDate(editing ? null : occ.date)}>
                                   {editing ? "Done" : "Change"}
                                 </button>
                               ) : null}
-                              <button type="button" className="btn tiny-btn" onClick={() => setOverrides((l) => applyEventOverride(l, occ.date, { cancelled: true }))}>
+                              <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setOverrides((l) => applyEventOverride(l, occ.date, { cancelled: true }))}>
                                 Cancel date
                               </button>
                             </>
@@ -7637,7 +7637,7 @@ function EventManagerPreview({
                           {entry && !occ.cancelled ? (
                             <button
                               type="button"
-                              className="btn tiny-btn"
+                              className="btn btn-ghost tiny-btn"
                               onClick={() => { setOverrides((l) => applyEventOverride(l, occ.date, null)); setChangingDate(null); }}
                             >
                               Undo change
