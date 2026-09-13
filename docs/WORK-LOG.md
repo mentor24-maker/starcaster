@@ -1,3 +1,53 @@
+## 2026-09-12 — Pulse's two jobs now report in, so an outage is noticed instead of stumbled upon (#673)
+
+Pulse runs two jobs on the Mac Mini: one every fifteen minutes, one once a day.
+On 4 September Pulse ran out of Anthropic credit and both of them stopped for 33
+hours — 127 runs that should have happened and did not — and nothing anywhere
+said a word. It was noticed the next day by chance. The time before that, 820
+runs failed over twelve days, also noticed by chance.
+
+This system already has the right instrument. Every scheduled job leaves a short
+note saying "I ran, and it worked", and something reads those notes and speaks up
+when they stop arriving. These two jobs were excused from it because the code
+that runs them lives in a different project folder — which was true, and was
+never a reason they could not report in. Now they do, so a Pulse outage gets
+named within hours.
+
+Three things had to be fixed before a line of it was written, and none of them
+was in the ticket. The ticket said these jobs belong to the laptop; they moved to
+the Mini five days earlier, and the report matches a job to its home machine by
+exact name, so the wrong name would have reported a perfectly healthy job as one
+that had never run at all. The ticket said the hands-on test could not be done on
+the Mini; it can, which followed from the same error. And one of the two things
+this was supposed to wait for had merged but was **not actually running** — the
+Mini's copy of the Pulse project was one commit behind, so the piece that writes
+the note did not exist on the machine and nothing had been reporting at all.
+Building on top of that would have produced exactly the false alarm the ticket
+warned about. That copy was brought up to date, and a real note appeared five
+minutes later.
+
+The interesting part of the build is a small refusal. Pulse writes its note to
+the machine's own disk and stops there, deliberately, so that leaving a note
+never needs a password or a working internet connection inside a job nobody is
+watching. Something had to carry that note to the shared page the report reads,
+and the obvious shortcut — stamp it with the current time on arrival — would have
+been a disaster nobody would ever have seen: it would refresh the page every ten
+minutes over a job that died on Tuesday, and permanently silence the alarm it was
+built to feed. It carries the note's own timestamp instead, and there is a test
+named after that property. The carrying step also runs *before* the watchdog
+rather than after, because the other order would have had the very first run
+announce two healthy jobs as dead and only then write the records that would have
+prevented it.
+
+One thing turned up by running the report on the machine rather than by reading
+the code. The daily job had a perfectly healthy schedule and simply had not run
+yet since gaining the ability to leave notes, and the report said "a job that
+stops firing writes nothing anywhere — this is that". It had not stopped
+anything. "Never reported" and "stopped reporting" now read as the two different
+problems they are; the alarm still fires, it just no longer sends anybody hunting
+a broken schedule that is fine. Every future job added to this system had that
+same first-day trap waiting for it.
+
 ## 2026-09-08 — Module settings panels now line up top to bottom (#667)
 
 Open any module's settings in the Builder and you are really looking at two
