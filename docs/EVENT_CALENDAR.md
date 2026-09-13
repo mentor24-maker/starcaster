@@ -199,6 +199,57 @@ when the rule does not run that day, the rule in words, and the next six dates.
 `event-calendar-weekly-schedule-draws-a-whole-week` — broken on purpose twice
 (days in a row; Week Starts ignored) and watched to fail.
 
+## Harvest PDF — reading a flyer into programs (task 86bbztj0e, 2026-09-12)
+
+A **Harvest PDF** button on the Event Manager takes a club's printed schedule
+(PDF, PNG, JPEG, WebP, GIF, up to ~7MB), has Claude read it, and shows what it
+found in an editable review table. **Nothing is written until Create.**
+
+| Piece | Where |
+|---|---|
+| Model call, merge, matching | `lib/eventHarvest.js` |
+| Route | `routes/eventHarvest.js` — `GET /api/event-harvest/available`, `POST /api/event-harvest/extract` |
+| Review rows → event bodies | `lib/builder-client/event-harvest.ts` (tested) |
+| Screen | `components/builder/builder-event-harvest.tsx` |
+
+**The model transcribes; code merges.** Claude Opus 5 (official SDK, structured
+JSON output, `fallbacks: "default"`) is asked for one line per program per day,
+exactly as printed. `mergeSessions` then makes one weekly series per identical
+program + instructor + start + end + venue — "Intro to WWO · Vincent W · 8:30"
+and "Intro to WWO · Danny Z/Mark W · 9:00" are two programs. On the Delray guide:
+40 lines → 24 programs, every day, time and coach correct against the paper.
+
+**Already on the calendar = unticked.** Same name, same start time in the
+event's zone, a weekday in common. Created rows leave the table, so a second
+press cannot duplicate them.
+
+**Time zone: the club's, never the reviewer's.** The review defaults to the
+zone the project's events use most (UTC skipped — it is a project default, not
+a club's zone). With none, the field is empty and must be filled: Dane reviews
+in Mountain time and Delray runs on Eastern, so a browser-zone guess would put
+every program two hours out.
+
+**Venues** from the flyer's key take the project's own spelling when they
+match ("PICKLEBALL" files under "Pickleball"); a new ALL-CAPS venue is tidied
+("Delray Swim & Tennis Club"), initials kept (DBTC). Only venues a kept row uses
+are created.
+
+**Who may use it — Alphire staff only (Dane, 2026-09-12).** Each upload bills
+Alphire's Anthropic account (~30s, a few cents). The Event Manager only works on
+the club's admin page behind a club admin login — a platform session never
+reaches a rendered Event Manager (Builder shows its settings; Builder Preview
+strips admin modules) — so staff is decided per request in `isAlphireStaff`: a
+platform session, or a club admin whose email also has a StarCaster platform
+account. A club's own admins get no button and a 403. A failed lookup refuses.
+Known limit: club admin emails are unverified, so a club admin able to add
+admins could add one under a staff address; that buys only rate-limited AI
+spend (`events.harvest`, 12/hour), no data.
+
+**Metering.** Every call goes through `recordAiUsage` (feature
+`event_harvest`). This was the repo's first use of the Anthropic SDK, which never
+spells the endpoint URL, so `check:ai-metering` now also flags any file that
+requires `@anthropic-ai/sdk` — broken on purpose to watch it fail.
+
 ## The public read exemption — a security decision, made here
 
 `event-calendar` is read by visitors with no login, so

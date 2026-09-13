@@ -7818,6 +7818,104 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: normal;
 }
 
+/* ── Event Manager: Harvest PDF (task 86bbztj0e) ─────────────────────────
+ * The review table reuses the admin data table; what is new is a row of
+ * seven day toggles and inputs sitting inside cells, which a tenant theme's
+ * `input { width: 100% }` would otherwise stretch unevenly (DOCTRINE §5.28). */
+.builder-react-root .builder-event-harvest {
+  margin: var(--space-4) 0;
+  padding: var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-event-harvest-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.builder-react-root .builder-event-harvest-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
+}
+
+/* A tenant theme's input { width: 100% } stretched the file chooser across the
+ * panel and pushed its button onto a line of its own. */
+.builder-react-root .builder-event-harvest-upload input[type="file"] {
+  width: auto;
+  max-width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.builder-react-root .builder-event-harvest-table select {
+  min-width: 13rem;
+}
+
+.builder-react-root .builder-event-harvest-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: var(--space-3);
+}
+
+.builder-react-root .builder-event-harvest-table td {
+  vertical-align: top;
+}
+
+.builder-react-root .builder-event-harvest-table input[type="checkbox"] {
+  width: auto;
+  margin: var(--space-2) 0 0;
+}
+
+.builder-react-root .builder-event-harvest-table input[type="time"] {
+  min-width: 7.5rem;
+}
+
+.builder-react-root .builder-event-harvest-table tr.is-skipped td {
+  opacity: 0.55;
+}
+
+.builder-react-root .builder-event-harvest-exists {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--status-warn-ink);
+}
+
+.builder-react-root .builder-event-harvest-days {
+  display: flex;
+  gap: 2px;
+}
+
+.builder-react-root .builder-event-harvest-day {
+  width: 1.9rem;
+  padding: var(--space-1) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--bg-input);
+  color: var(--ink-primary);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-event-harvest-day.is-on {
+  color: var(--on-media-ink);
+}
+
+.builder-react-root .builder-event-harvest-failures {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
 /* ── Event Manager: venues & categories (task 86bbzt25g) ──────────────── */
 .builder-react-root .builder-event-manager-categories {
   margin: var(--space-4) 0;
