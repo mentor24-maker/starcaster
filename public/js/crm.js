@@ -199,8 +199,28 @@ App.crm = (function () {
     );
   }
 
-  function findGoNavyTheme(themes) {
-    return (Array.isArray(themes) ? themes : []).find((theme) => /go[\s-]*navy/i.test(safeText(theme?.name))) || null;
+  /**
+   * The theme whose colours the editor offers (task 86bbzxdf6).
+   *
+   * This used to be whichever theme was NAMED "Go Navy" — Marinoff's — and in
+   * every other project (Delray, IZIT, Normie) that found nothing, so every
+   * colour control on the form editor offered only "None" and looked dead.
+   * Now: the theme the project's pages use most, else its first theme.
+   */
+  function pickFormEditorTheme(themes, pages) {
+    const list = (Array.isArray(themes) ? themes : []).filter((theme) => theme && theme.id);
+    if (!list.length) return null;
+    const uses = new Map();
+    (Array.isArray(pages) ? pages : []).forEach((page) => {
+      const id = safeText(page?.themeId || page?.theme_id);
+      if (id) uses.set(id, (uses.get(id) || 0) + 1);
+    });
+    let best = null;
+    list.forEach((theme) => {
+      const count = uses.get(safeText(theme.id)) || 0;
+      if (count > 0 && (!best || count > best.count)) best = { theme, count };
+    });
+    return best ? best.theme : list[0];
   }
 
   function themeRecordToEditorPalette(themeRecord) {
@@ -233,15 +253,15 @@ App.crm = (function () {
       const pages = Array.isArray(pagesRes?.pages)
         ? pagesRes.pages
         : (Array.isArray(pagesRes?.data) ? pagesRes.data : []);
-      const goNavyTheme = findGoNavyTheme(themes);
-      if (!goNavyTheme) {
+      const editorTheme = pickFormEditorTheme(themes, pages);
+      if (!editorTheme) {
         formEditorThemePalette = null;
         formEditorThemeTypography = null;
       } else {
-        formEditorThemePalette = themeRecordToEditorPalette(goNavyTheme);
-        const linkedPage = pickPageForTheme(pages, goNavyTheme.id);
+        formEditorThemePalette = themeRecordToEditorPalette(editorTheme);
+        const linkedPage = pickPageForTheme(pages, editorTheme.id);
         const pageTheme = linkedPage?.theme && typeof linkedPage.theme === 'object' ? linkedPage.theme : null;
-        formEditorThemeTypography = goNavyTheme.typography || pageTheme?.typography || null;
+        formEditorThemeTypography = editorTheme.typography || pageTheme?.typography || null;
       }
     } catch {
       formEditorThemePalette = null;
@@ -503,6 +523,16 @@ App.crm = (function () {
       btn.classList.toggle('is-selected', safeText(btn.dataset.color).toLowerCase() === value);
     });
     const control = document.querySelector(`[data-crm-color-input="${inputId}"]`);
+    const custom = control?.querySelector('[data-crm-custom-color]');
+    if (custom) {
+      // A saved hex that is not one of the theme swatches IS the custom colour:
+      // show it in the picker and mark the picker selected.
+      const isHex = /^#[0-9a-f]{6}$/.test(value);
+      const matchedSwatch = Array.from(group.querySelectorAll('.crm-form-color-swatch'))
+        .some((btn) => safeText(btn.dataset.color).toLowerCase() === value);
+      if (isHex) custom.value = value;
+      custom.closest('.crm-form-color-custom')?.classList.toggle('is-selected', isHex && !matchedSwatch);
+    }
     const opacityInputId = control?.dataset.crmColorOpacityInput;
     if (opacityInputId) syncFormColorOpacityUI(opacityInputId);
   }
@@ -517,6 +547,32 @@ App.crm = (function () {
       control.dataset.crmColorBound = '1';
       const inputId = control.dataset.crmColorInput;
       const opacityInputId = control.dataset.crmColorOpacityInput;
+      // Any colour, not only the theme's (task 86bbzxdf6): a project with no
+      // theme, or a brand colour the theme lacks, still has something to pick.
+      const group = control.querySelector('.crm-form-color-options');
+      if (group && !group.querySelector('[data-crm-custom-color]')) {
+        const wrap = document.createElement('label');
+        wrap.className = 'crm-form-color-custom';
+        wrap.title = 'Custom colour';
+        const picker = document.createElement('input');
+        picker.type = 'color';
+        picker.value = '#000000';
+        picker.setAttribute('data-crm-custom-color', '');
+        picker.setAttribute('aria-label', 'Custom colour');
+        wrap.appendChild(picker);
+        group.appendChild(wrap);
+      }
+      const customPicker = group?.querySelector('[data-crm-custom-color]');
+      if (customPicker && customPicker.dataset.crmCustomBound !== '1') {
+        customPicker.dataset.crmCustomBound = '1';
+        customPicker.addEventListener('input', () => {
+          const input = el(inputId);
+          if (!input) return;
+          input.value = safeText(customPicker.value).toLowerCase();
+          syncFormColorPickerUI(inputId);
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
       control.querySelectorAll('.crm-form-color-swatch').forEach((btn) => {
         btn.addEventListener('click', () => {
           const input = el(inputId);
