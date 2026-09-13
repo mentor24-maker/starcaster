@@ -56,6 +56,11 @@ assert.equal(isPublicTenantContentReadRoute('/api/event-categories/ecat_1', 'PUT
 assert.equal(isPublicTenantContentReadRoute('/api/event-categories/ecat_1', 'DELETE', categoriesReq), false);
 assert.equal(acceptsProjectAdminSession('/api/event-categories', { isPublicCrmRoute: false, method: 'POST' }), true);
 
+// Schedule harvest bills Alphire's model account: platform login only (86bbztj0e).
+assert.equal(acceptsProjectAdminSession('/api/event-harvest/extract', { isPublicCrmRoute: false, method: 'POST' }), false);
+assert.equal(acceptsProjectAdminSession('/api/event-harvest/available', { isPublicCrmRoute: false, method: 'GET' }), false);
+assert.equal(isPublicTenantContentReadRoute('/api/event-harvest/available', 'GET', {}), false);
+
 assert.equal(isPublicTenantContentReadRoute('/api/builder/themes', 'GET', {}), true);
 assert.equal(isPublicTenantContentReadRoute('/api/community-assets', 'GET', {}), true);
 

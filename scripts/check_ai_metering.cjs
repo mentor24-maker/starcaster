@@ -37,6 +37,9 @@ const GENERATION_PATTERNS = [
   { provider: 'openai', re: /api\.openai\.com\/v1\/chat\/completions/ },
   { provider: 'openai', re: /api\.openai\.com\/v1\/responses/ },
   { provider: 'gemini', re: /generativelanguage\.googleapis\.com[^\n'"`]*generateContent/ },
+  // The official SDK never spells the endpoint URL, so a file calling Claude
+  // through it would pass this check unmetered (first SDK use: task 86bbztj0e).
+  { provider: 'anthropic', re: /require\(\s*['"]@anthropic-ai\/sdk['"]\s*\)|from\s+['"]@anthropic-ai\/sdk['"]/ },
 ];
 
 // Files exempt from the rule, each with the reason. A path lands here only
