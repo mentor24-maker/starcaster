@@ -40,9 +40,33 @@ test('nothing chooses a theme by the name "Go Navy" any more', () => {
   assert.doesNotMatch(SRC, /go\[\\s-\]\*navy/i, 'a name match found nothing in Delray, IZIT and Normie');
 });
 
-test('every colour control gets a custom colour picker that writes the hex to the saved input', () => {
-  const bind = lift('bindFormColorPickers');
-  assert.match(bind, /picker\.type = 'color'/);
-  assert.match(bind, /input\.value = safeText\(customPicker\.value\)\.toLowerCase\(\);/);
-  assert.match(bind, /input\.dispatchEvent\(new Event\('change', \{ bubbles: true \}\)\)/, 'the preview listens for change');
+const THEME_COLOR_FALLBACKS = { 'theme:primary': '#18324a', 'theme:heading': '#18324a' };
+const isThemeColorToken = (v) => String(v).startsWith('theme:');
+const conversions = new Function('safeText', 'isThemeColorToken', 'THEME_COLOR_FALLBACKS',
+  `${lift('pickerColorForSaved')}\n${lift('savedValueForPicked')}; return { pickerColorForSaved, savedValueForPicked };`,
+)(safeText, isThemeColorToken, THEME_COLOR_FALLBACKS);
+const SWATCHES = [
+  { label: 'Primary', token: 'theme:primary', hex: '#0B2D6B' },
+  { label: 'Accent', token: 'theme:accent', hex: '#72b62f' },
+];
+
+test('the standard picker keeps theme LINKS: a theme colour saves as its token, not as a fixed hex (86bbzxg9c)', () => {
+  assert.equal(conversions.savedValueForPicked('#0b2d6b', SWATCHES), 'theme:primary',
+    'picking the theme swatch must keep following the theme when its colour changes');
+  assert.equal(conversions.savedValueForPicked('#C0392B', SWATCHES), '#c0392b');
+});
+
+test('a saved value opens the picker on the colour it stands for', () => {
+  assert.equal(conversions.pickerColorForSaved('theme:primary', SWATCHES), '#0b2d6b');
+  assert.equal(conversions.pickerColorForSaved('theme:heading', SWATCHES), '#18324a', 'a link the theme lacks shows its fallback');
+  assert.equal(conversions.pickerColorForSaved('none', SWATCHES), '');
+  assert.equal(conversions.pickerColorForSaved('#abcdef', SWATCHES), '#abcdef');
+});
+
+test('every colour control mounts the standard field, and the old row is only the fallback', () => {
+  const render = lift('renderStandardColorField');
+  assert.match(render, /if \(!bridge \|\| typeof bridge\.mount !== 'function' \|\| !control \|\| !input\) return;/);
+  assert.match(render, /bridge\.mount\(host, \{/);
+  assert.match(render, /onClear: \(\) => commit\('none'\)/);
+  assert.match(lift('syncFormColorPickerUI'), /renderStandardColorField\(inputId\);/);
 });

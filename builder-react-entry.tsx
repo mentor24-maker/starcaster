@@ -11,6 +11,7 @@ import { BuilderSeoAltTextPage } from './components/builder/builder-seo-alt-text
 import { BuilderAgentsPage } from './components/builder/builder-agents-page';
 import SiteImportPage, { SiteImportErrorBoundary } from './components/builder/site-import-page';
 import { SavedSectionEditorModal } from './components/builder/saved-section-editor-modal';
+import { BuilderThemeColorField } from './components/builder/builder-theme-color-field';
 
 let activeRoot: Root | null = null;
 let activeHost: HTMLElement | null = null;
@@ -294,8 +295,52 @@ export function unmountSavedSectionEditor() {
   savedSectionEditorHost = null;
 }
 
+/*
+ * The standard theme colour field, for the vanilla admin screens (task
+ * 86bbzxg9c). The CRM form editor lives in public/js and grew its own swatch
+ * row; Dane asked for "our standard selector that provides links directly to
+ * the theme colors, like we use elsewhere". One root per host, so several
+ * fields on one screen are independent; calling mount again re-renders with
+ * the new props rather than stacking roots.
+ */
+type ThemeColorFieldBridgeProps = {
+  value: string;
+  onChange: (hex: string) => void;
+  themeColors?: Array<{ label: string; hex: string }>;
+  fallback?: string;
+  dialogLabel?: string;
+  opacity?: number;
+  onChangeOpacity?: (opacity: number) => void;
+  onClear?: () => void;
+};
+
+const themeColorFieldRoots = new Map<HTMLElement, Root>();
+
+export function mountThemeColorField(host: HTMLElement | null, props: ThemeColorFieldBridgeProps) {
+  if (!host) return;
+  let root = themeColorFieldRoots.get(host);
+  if (!root) {
+    root = createRoot(host);
+    themeColorFieldRoots.set(host, root);
+  }
+  root.render(<BuilderThemeColorField {...props} />);
+}
+
+export function unmountThemeColorField(host: HTMLElement | null) {
+  if (!host) return;
+  const root = themeColorFieldRoots.get(host);
+  if (root) {
+    root.unmount();
+    themeColorFieldRoots.delete(host);
+  }
+}
+
 declare global {
   interface Window {
+    ThemeColorFieldReact: {
+      mount: typeof mountThemeColorField;
+      unmount: typeof unmountThemeColorField;
+    };
     BuilderReact: {
       mount: typeof mountBuilderReact;
       unmount: typeof unmountBuilderReact;
@@ -342,6 +387,11 @@ declare global {
     };
   }
 }
+
+window.ThemeColorFieldReact = {
+  mount: mountThemeColorField,
+  unmount: unmountThemeColorField,
+};
 
 window.BuilderReact = {
   mount: mountBuilderReact,
