@@ -155,10 +155,8 @@ import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import { BuilderImagePickerField } from "@/components/builder/builder-image-picker-field";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import {
-  eventOccursOn,
   formatEventWhen,
   isSameDay,
-  isUpcomingEvent,
   monthGrid,
   normalizeEventStatus,
 } from "@/lib/event-format";
@@ -172,9 +170,23 @@ import {
   isValidTimeZone,
   isoToZonedInput,
   zonedInputToIso,
+  addDays,
+  weekdayOf,
   type RecurrenceOverride,
   type RecurrenceRule,
 } from "@/lib/event-recurrence";
+import {
+  calendarTimeZone,
+  datesRange,
+  eventPageHref,
+  formatWeekLabel,
+  groupByDate,
+  occurrenceOn,
+  scheduleBetween,
+  todayIn,
+  weekDates,
+  type ScheduleItem,
+} from "@/lib/event-schedule";
 import { BuilderImagePreview } from "@/components/builder/builder-image-preview";
 import {
   BuilderFloatingImageRuntime,
@@ -5821,7 +5833,13 @@ type DetailEvent = {
   organizerContact: string;
   seoTitle: string;
   seoDescription: string;
+  instructor?: string;
+  recurrence?: RecurrenceRule | null;
+  recurrenceOverrides?: RecurrenceOverride[];
 };
+
+/** How many coming dates a repeating event's page lists. */
+const EVENT_DETAIL_NEXT_DATES = 6;
 
 /**
  * A contact as something to act on: an email becomes mailto:, a phone number
@@ -5861,6 +5879,8 @@ function EventDetailPreview({
     || "We could not find that event. It may have been removed.";
 
   const [slug, setSlug] = useState("");
+  // One date of a repeating event (?date=YYYY-MM-DD), as the calendar links it.
+  const [dateParam, setDateParam] = useState("");
   /* See BlogPostViewPreview: "" is also the value before the URL is read. */
   const [urlRead, setUrlRead] = useState(false);
   const [event, setEvent] = useState<DetailEvent | null>(null);
@@ -5871,7 +5891,10 @@ function EventDetailPreview({
   // so popstate is listened for rather than read once at mount.
   useEffect(() => {
     function syncSlugFromUrl() {
-      setSlug(new URLSearchParams(window.location.search).get("event") ?? "");
+      const params = new URLSearchParams(window.location.search);
+      setSlug(params.get("event") ?? "");
+      const date = params.get("date") ?? "";
+      setDateParam(/^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "");
       setUrlRead(true);
     }
     syncSlugFromUrl();
@@ -6000,7 +6023,28 @@ function EventDetailPreview({
     );
   }
 
-  const cancelled = normalizeEventStatus(event.status) === "cancelled";
+  /*
+   * A repeating event's page is about ONE date when the address names one —
+   * that session's time, instructor and whether it is on — and otherwise
+   * about the next date still to come. The rule and the coming dates are
+   * listed underneath either way.
+   */
+  const repeating = Boolean(event.recurrence);
+  const zoneForEvent = eventTimeZone(event);
+  const upcoming = repeating
+    ? scheduleBetween([{ ...event, title: event.title }], Date.now(), CALENDAR_HORIZON_MS)
+      .filter((i) => Date.parse(String(i.occurrence.endsAt || i.occurrence.startsAt)) >= Date.now())
+      .slice(0, EVENT_DETAIL_NEXT_DATES + 1)
+    : [];
+  const requested = repeating && dateParam ? occurrenceOn(event, dateParam) : null;
+  const notOnThatDate = repeating && Boolean(dateParam) && !requested;
+  const focus = requested || (repeating ? upcoming[0]?.occurrence ?? null : null);
+  const sessionCancelled = Boolean(focus?.cancelled);
+  const instructorName = (focus?.instructor || event.instructor || "").trim();
+  const nextDates = upcoming.filter((i) => i.occurrence.date !== focus?.date).slice(0, EVENT_DETAIL_NEXT_DATES);
+  const pageBase = typeof window !== "undefined" ? window.location.pathname : "";
+
+  const cancelled = normalizeEventStatus(event.status) === "cancelled" || sessionCancelled;
   const imageUrl = showImage ? resolvePublicBuilderAssetUrl(event.imageUrl) : "";
   const contactHref = organizerContactHref(event.organizerContact || "");
   const hasLocation = showLocation && Boolean(event.locationName || event.locationAddress);
@@ -6017,18 +6061,41 @@ function EventDetailPreview({
         */}
       {cancelled ? (
         <p className="builder-event-detail-cancelled" role="status">
-          <strong>This event has been cancelled.</strong>
+          <strong>{sessionCancelled && focus
+            ? `The ${formatOccurrenceDate(focus.date, undefined, true)} session has been cancelled.`
+            : "This event has been cancelled."}</strong>
+          {focus?.note ? <span> {focus.note}</span> : null}
         </p>
       ) : null}
 
       <h1 className="builder-event-detail-title">{event.title || "Untitled event"}</h1>
 
+      {notOnThatDate ? (
+        <p className="builder-event-detail-note" role="status">
+          {event.title || "This event"} does not run on {formatOccurrenceDate(dateParam, undefined, true)}.
+        </p>
+      ) : null}
+
       <p className="builder-event-detail-when">
-        {formatEventWhen(event)}
+        {focus
+          ? `${formatOccurrenceDate(focus.date, undefined, true)}, ${formatTimeRange(focus.startsAt, focus.endsAt, zoneForEvent, focus.allDay)}`
+          : formatEventWhen(event)}
         {event.timezone ? (
           <span className="builder-event-detail-timezone"> ({event.timezone.replace(/_/g, " ")})</span>
         ) : null}
       </p>
+
+      {repeating ? (
+        <p className="builder-event-detail-repeat">{describeRecurrence(event.recurrence)}</p>
+      ) : null}
+
+      {instructorName ? (
+        <p className="builder-event-detail-instructor">With {instructorName}</p>
+      ) : null}
+
+      {focus?.note && !sessionCancelled ? (
+        <p className="builder-event-detail-note">{focus.note}</p>
+      ) : null}
 
       {hasLocation ? (
         <p className="builder-event-detail-where">
@@ -6077,6 +6144,24 @@ function EventDetailPreview({
         </p>
       ) : null}
 
+      {repeating && nextDates.length ? (
+        <div className="builder-event-detail-dates">
+          <h2 className="builder-event-detail-dates-title">Coming dates</h2>
+          <ul>
+            {nextDates.map((item) => (
+              <li key={item.occurrence.key} className={item.occurrence.cancelled ? "is-cancelled" : undefined}>
+                <a href={eventPageHref(pageBase, event.slug, item)}>
+                  {formatOccurrenceDate(item.occurrence.date)}
+                </a>
+                <span> {formatTimeRange(item.occurrence.startsAt, item.occurrence.endsAt, zoneForEvent, item.occurrence.allDay)}</span>
+                {item.occurrence.cancelled ? <span className="builder-event-detail-date-flag"> Cancelled</span> : null}
+                {item.occurrence.instructor ? <span> · with {item.occurrence.instructor}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {showOrganizer && (event.organizerName || event.organizerContact) ? (
         <p className="builder-event-detail-organizer">
           {event.organizerName ? <span>Organised by {event.organizerName}</span> : null}
@@ -6114,10 +6199,24 @@ type CalendarEvent = {
   startsAt: string | null;
   endsAt: string | null;
   allDay: boolean;
+  timezone?: string;
   locationName: string;
+  instructor?: string;
+  categoryId?: string;
+  recurrence?: RecurrenceRule | null;
+  recurrenceOverrides?: RecurrenceOverride[];
 };
 
+type CalendarCategory = { id: string; name: string; color: string; sortOrder: number };
+
 const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** Far enough ahead for any list; a repeating rule stops itself at 800 days. */
+const CALENDAR_HORIZON_MS = Date.UTC(2100, 0, 1);
+
+function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 function EventCalendarPreview({
   settings,
@@ -6139,18 +6238,27 @@ function EventCalendarPreview({
   const showImages = (settings.showImages ?? "true") !== "false";
   const showLocation = (settings.showLocation ?? "true") !== "false";
   const showExcerpt = (settings.showExcerpt ?? "true") !== "false";
+  const showInstructor = (settings.showInstructor ?? "true") !== "false";
+  const showCategoryKey = (settings.showCategoryKey ?? "true") !== "false";
   const emptyMessage = (settings.emptyMessage || "").trim()
     || "No events scheduled just yet — check back soon.";
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [categories, setCategories] = useState<CalendarCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  // The venue a visitor has narrowed the calendar to; "" is every venue.
+  const [onlyCategory, setOnlyCategory] = useState("");
   // The month on view. Held in state so Prev/Next can move it; seeded to the
   // month we are actually in.
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
+  // Weeks away from the current one, for the weekly schedule. An offset
+  // rather than a date, so "this week" is worked out in the calendar's zone
+  // once the events (and so the zone) have loaded.
+  const [weekOffset, setWeekOffset] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -6167,8 +6275,19 @@ function EventCalendarPreview({
       })
       .catch(() => { if (live) setFailed(true); })
       .finally(() => { if (live) setLoading(false); });
+    // Venue names and colours. A failure here costs the colour key only — the
+    // calendar itself still draws, uncoloured, which is the honest fallback.
+    fetch("/api/event-categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const list = d?.categories ?? d?.data;
+        if (live && Array.isArray(list)) setCategories(list as CalendarCategory[]);
+      })
+      .catch(() => {});
     return () => { live = false; };
   }, []);
+
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
   /** A published event only. The API filters too; this is the belt to its braces. */
   const published = useMemo(
@@ -6176,23 +6295,37 @@ function EventCalendarPreview({
     [events]
   );
 
-  const listed = useMemo(() => {
-    const now = new Date();
-    const chosen = showPast ? published : published.filter((e) => isUpcomingEvent(e, now));
-    return [...chosen]
-      .sort((a, b) => {
-        // Unscheduled events have nowhere to sit on a timeline, so they go
-        // last rather than to 1970 — which is where a plain Date.parse of an
-        // empty string would put them.
-        if (!a.startsAt && !b.startsAt) return a.title.localeCompare(b.title);
-        if (!a.startsAt) return 1;
-        if (!b.startsAt) return -1;
-        return Date.parse(a.startsAt) - Date.parse(b.startsAt);
-      })
-      .slice(0, limit);
-  }, [published, showPast, limit]);
+  /** Only venues some published event actually uses belong in the key. */
+  const usedCategories = useMemo(
+    () => categories.filter((c) => published.some((e) => e.categoryId === c.id)),
+    [categories, published]
+  );
 
-  function hrefFor(event: CalendarEvent): string | undefined {
+  const shown = useMemo(
+    () => (onlyCategory ? published.filter((e) => e.categoryId === onlyCategory) : published),
+    [published, onlyCategory]
+  );
+
+  const zone = useMemo(() => calendarTimeZone(published), [published]);
+
+  const listed = useMemo(() => {
+    const now = Date.now();
+    const items = scheduleBetween(shown, showPast ? 0 : now, CALENDAR_HORIZON_MS);
+    const kept = showPast ? items : items.filter((item) => {
+      const end = Date.parse(String(item.occurrence.endsAt || ""));
+      const finish = Number.isFinite(end)
+        ? end
+        : Date.parse(item.occurrence.startsAt) + (item.occurrence.allDay ? 86400000 - 1 : 0);
+      return finish >= now;
+    });
+    return kept.slice(0, limit);
+  }, [shown, showPast, limit]);
+
+  // Unscheduled events have nowhere to sit on a timeline; the list shows them
+  // after every dated one, as it always has.
+  const unscheduled = useMemo(() => shown.filter((e) => !e.startsAt), [shown]);
+
+  function hrefFor(event: CalendarEvent, item?: ScheduleItem<CalendarEvent> | null): string | undefined {
     /*
      * The site's own event page wins, and the event's external link is the
      * FALLBACK — not the other way round.
@@ -6205,22 +6338,64 @@ function EventCalendarPreview({
      * belongs to.
      *
      * With no event page configured the external link is still better than a
-     * dead title, so it stays as the fallback.
+     * dead title, so it stays as the fallback. A repeating program's link
+     * carries its date, so the page can say whether THAT session is on.
      */
-    if (eventPageUrl && event.slug) {
-      const sep = eventPageUrl.includes("?") ? "&" : "?";
-      return `${eventPageUrl}${sep}event=${encodeURIComponent(event.slug)}`;
-    }
-    return event.url || undefined;
+    return eventPageHref(eventPageUrl, event.slug, item) || event.url || undefined;
   }
+
+  /** The venue colour an event is painted with, as the chip's accent. */
+  function colorStyle(event: CalendarEvent): React.CSSProperties | undefined {
+    const color = categoryById.get(event.categoryId || "")?.color;
+    return color ? { ["--evt-accent" as string]: color } : undefined;
+  }
+
+  function instructorFor(item: ScheduleItem<CalendarEvent>): string {
+    if (!showInstructor) return "";
+    return item.occurrence.instructor || item.event.instructor || "";
+  }
+
+  const frameStyle = { ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) };
 
   const Title = heading
     ? <h2 className="builder-event-calendar-heading">{heading}</h2>
     : null;
 
+  /*
+   * The venue key doubles as a filter: a club with three sites is asked
+   * "what is on at MY courts?" more than anything else. Drawn only when more
+   * than one venue is in use — a key with a single entry explains nothing.
+   */
+  const CategoryKey = showCategoryKey && usedCategories.length > 1 ? (
+    <div className="builder-event-calendar-key" role="group" aria-label="Show events at">
+      <button
+        type="button"
+        className={`builder-event-calendar-key-item${onlyCategory ? "" : " is-active"}`}
+        aria-pressed={!onlyCategory}
+        onClick={() => setOnlyCategory("")}
+      >
+        All
+      </button>
+      {usedCategories.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          className={`builder-event-calendar-key-item${onlyCategory === c.id ? " is-active" : ""}`}
+          aria-pressed={onlyCategory === c.id}
+          onClick={() => setOnlyCategory((cur) => (cur === c.id ? "" : c.id))}
+        >
+          <span className="builder-event-calendar-swatch" style={{ background: c.color || "transparent" }} aria-hidden="true" />
+          {c.name}
+        </button>
+      ))}
+    </div>
+  ) : null;
+
+  const filterName = onlyCategory ? categoryById.get(onlyCategory)?.name || "" : "";
+
   if (loading) {
     return (
-      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar" style={frameStyle}>
         {Title}
         <p className="builder-event-calendar-empty">Loading events…</p>
       </div>
@@ -6232,9 +6407,97 @@ function EventCalendarPreview({
   // something false about the club.
   if (failed) {
     return (
-      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar" style={frameStyle}>
         {Title}
         <p className="builder-event-calendar-empty">Events are unavailable just now. Please try again shortly.</p>
+      </div>
+    );
+  }
+
+  /* ── Weekly schedule ────────────────────────────────────────────────────
+   * The club's printed Weekly Program Guide as a page: each day down the
+   * side, its programs with time and instructor, coloured by venue. */
+  if (layout === "week") {
+    const today = todayIn(zone);
+    const dates = weekDates(addDays(today, weekOffset * 7), weekStartsOn);
+    const [from, to] = datesRange(dates, zone);
+    const byDate = groupByDate(scheduleBetween(shown, from, to), dates);
+    const weekLabel = formatWeekLabel(dates);
+    const anything = dates.some((d) => (byDate.get(d) || []).length > 0);
+
+    return (
+      <div className="builder-event-calendar builder-event-calendar--week" style={frameStyle}>
+        {Title}
+        <div className="builder-event-calendar-nav">
+          <button type="button" className="builder-event-calendar-nav-btn" aria-label="Previous week" onClick={() => setWeekOffset((w) => w - 1)}>‹</button>
+          <span className="builder-event-calendar-month" aria-live="polite">Week of {weekLabel}</span>
+          <button type="button" className="builder-event-calendar-nav-btn" aria-label="Next week" onClick={() => setWeekOffset((w) => w + 1)}>›</button>
+          {weekOffset !== 0 ? (
+            <button type="button" className="builder-event-calendar-today" onClick={() => setWeekOffset(0)}>This week</button>
+          ) : null}
+        </div>
+        {CategoryKey}
+        {!anything ? (
+          // Says WHICH week and, when filtered, WHICH venue — an unexplained
+          // empty schedule reads as a broken one (landmine 17).
+          <p className="builder-event-calendar-empty">
+            {filterName
+              ? `Nothing at ${filterName} the week of ${weekLabel}.`
+              : published.length
+                ? `No programs scheduled the week of ${weekLabel}.`
+                : emptyMessage}
+          </p>
+        ) : null}
+        <div className="builder-event-calendar-week" role="list" aria-label={`Week of ${weekLabel}`}>
+          {dates.map((date) => {
+            const items = byDate.get(date) || [];
+            const isToday = date === today;
+            return (
+              <section
+                key={date}
+                role="listitem"
+                className={`builder-event-calendar-weekday-row${isToday ? " is-today" : ""}${items.length ? "" : " is-empty"}`}
+                aria-label={formatOccurrenceDate(date, undefined, true)}
+              >
+                <div className="builder-event-calendar-weekday-label">
+                  <span className="builder-event-calendar-weekday-name">{WEEKDAY_LABELS[weekdayOf(date)]}</span>
+                  <span className="builder-event-calendar-weekday-date">{Number(date.slice(5, 7))}/{Number(date.slice(8, 10))}</span>
+                </div>
+                {items.length ? (
+                  <ul className="builder-event-calendar-programs">
+                    {items.map((item) => {
+                      const href = hrefFor(item.event, item);
+                      const label = item.event.title || "Untitled event";
+                      const who = instructorFor(item);
+                      const cancelled = item.occurrence.cancelled;
+                      return (
+                        <li
+                          key={item.occurrence.key}
+                          className={`builder-event-calendar-program${cancelled ? " is-cancelled" : ""}`}
+                          style={colorStyle(item.event)}
+                        >
+                          <span className="builder-event-calendar-program-title">
+                            {href ? <a href={href}>{label}</a> : label}
+                            {cancelled ? <span className="builder-event-calendar-badge">Cancelled</span> : null}
+                          </span>
+                          <span className="builder-event-calendar-program-who">{who}</span>
+                          <span className="builder-event-calendar-program-time">
+                            {formatTimeRange(item.occurrence.startsAt, item.occurrence.endsAt, item.timeZone, item.occurrence.allDay)}
+                          </span>
+                          {item.occurrence.note ? (
+                            <span className="builder-event-calendar-program-note">{item.occurrence.note}</span>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="builder-event-calendar-program-none">Nothing scheduled</p>
+                )}
+              </section>
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -6250,15 +6513,22 @@ function EventCalendarPreview({
       const d = new Date(c.year, c.month + by, 1);
       return { year: d.getFullYear(), month: d.getMonth() };
     });
+    const cellDates = weeks.flat().map((cell) => localDateKey(cell.date));
+    // A day either side of the grid, so an evening program in a zone behind
+    // the viewer's still lands on the grid's first and last cells.
+    const [from] = datesRange([addDays(cellDates[0], -1)], zone);
+    const [, to] = datesRange([addDays(cellDates[cellDates.length - 1], 1)], zone);
+    const byDate = groupByDate(scheduleBetween(shown, from, to), cellDates);
 
     return (
-      <div className="builder-event-calendar builder-event-calendar--month" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar builder-event-calendar--month" style={frameStyle}>
         {Title}
         <div className="builder-event-calendar-nav">
           <button type="button" className="builder-event-calendar-nav-btn" aria-label="Previous month" onClick={() => step(-1)}>‹</button>
           <span className="builder-event-calendar-month" aria-live="polite">{monthName}</span>
           <button type="button" className="builder-event-calendar-nav-btn" aria-label="Next month" onClick={() => step(1)}>›</button>
         </div>
+        {CategoryKey}
         <div className="builder-event-calendar-grid" role="grid" aria-label={monthName}>
           {dayNames.map((name) => (
             // The short form is decoration; the full name is what a screen
@@ -6270,7 +6540,7 @@ function EventCalendarPreview({
             </div>
           ))}
           {weeks.flat().map((cell) => {
-            const onThisDay = published.filter((e) => eventOccursOn(e, cell.date));
+            const onThisDay = byDate.get(localDateKey(cell.date)) || [];
             const isToday = isSameDay(cell.date, today);
             return (
               <div
@@ -6284,40 +6554,55 @@ function EventCalendarPreview({
                 ].filter(Boolean).join(" ")}
               >
                 <span className="builder-event-calendar-daynum">{cell.date.getDate()}</span>
-                {onThisDay.map((event) => {
-                  const href = hrefFor(event);
-                  const label = event.title || "Untitled event";
+                {onThisDay.map((item) => {
+                  const href = hrefFor(item.event, item);
+                  const label = item.event.title || "Untitled event";
+                  const cancelled = item.occurrence.cancelled;
                   const body = (
                     <>
                       <span className="builder-event-calendar-chip-title">{label}</span>
-                      {!event.allDay && event.startsAt ? (
+                      {!item.occurrence.allDay ? (
                         <span className="builder-event-calendar-chip-time">
-                          {new Date(event.startsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                          {cancelled ? "Cancelled" : formatTimeRange(item.occurrence.startsAt, null, item.timeZone)}
                         </span>
                       ) : null}
                     </>
                   );
+                  const className = `builder-event-calendar-chip${cancelled ? " is-cancelled" : ""}`;
+                  const title = cancelled ? `${label} (cancelled)` : label;
                   return href ? (
-                    <a key={event.id} className="builder-event-calendar-chip" href={href} title={label}>{body}</a>
+                    <a key={item.occurrence.key} className={className} href={href} title={title} style={colorStyle(item.event)}>{body}</a>
                   ) : (
-                    <span key={event.id} className="builder-event-calendar-chip" title={label}>{body}</span>
+                    <span key={item.occurrence.key} className={className} title={title} style={colorStyle(item.event)}>{body}</span>
                   );
                 })}
               </div>
             );
           })}
         </div>
-        {published.length === 0 ? <p className="builder-event-calendar-empty">{emptyMessage}</p> : null}
+        {shown.length === 0 ? (
+          <p className="builder-event-calendar-empty">
+            {filterName ? `Nothing scheduled at ${filterName}.` : emptyMessage}
+          </p>
+        ) : null}
       </div>
     );
   }
 
   /* ── List and cards ─────────────────────────────────────────────────── */
-  if (!listed.length) {
+  const rows: Array<{ key: string; event: CalendarEvent; item: ScheduleItem<CalendarEvent> | null }> = [
+    ...listed.map((item) => ({ key: item.occurrence.key, event: item.event, item })),
+    ...unscheduled.slice(0, Math.max(0, limit - listed.length)).map((event) => ({ key: event.id, event, item: null })),
+  ];
+
+  if (!rows.length) {
     return (
-      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar" style={frameStyle}>
         {Title}
-        <p className="builder-event-calendar-empty">{emptyMessage}</p>
+        {CategoryKey}
+        <p className="builder-event-calendar-empty">
+          {filterName ? `Nothing coming up at ${filterName}.` : emptyMessage}
+        </p>
       </div>
     );
   }
@@ -6327,24 +6612,30 @@ function EventCalendarPreview({
   return (
     <div
       className={`builder-event-calendar builder-event-calendar--${isCards ? "cards" : "list"}`}
-      style={{
-        ["--evt-accent" as string]: accent,
-        ["--evt-columns" as string]: String(columns),
-        ...getAdminDataTableThemeStyle(themePalette, theme),
-      }}
+      style={{ ...frameStyle, ["--evt-columns" as string]: String(columns) }}
     >
       {Title}
+      {CategoryKey}
       <ul className="builder-event-calendar-items">
-        {listed.map((event) => {
-          const href = hrefFor(event);
+        {rows.map(({ key, event, item }) => {
+          const href = hrefFor(event, item);
           const label = event.title || "Untitled event";
-          const start = event.startsAt ? new Date(event.startsAt) : null;
           const image = showImages && isCards ? resolvePublicBuilderAssetUrl(event.imageUrl) : "";
+          const cancelled = Boolean(item?.occurrence.cancelled);
+          // A one-off keeps the sentence it always had; a date of a series says
+          // which date and its own time, since that is what differs.
+          const when = !item
+            ? formatEventWhen(event)
+            : item.occurrence.recurring
+              ? `${formatOccurrenceDate(item.occurrence.date, undefined, true)} · ${formatTimeRange(item.occurrence.startsAt, item.occurrence.endsAt, item.timeZone, item.occurrence.allDay)}`
+              : formatEventWhen({ ...event, startsAt: item.occurrence.startsAt, endsAt: item.occurrence.endsAt });
+          const who = item ? instructorFor(item) : (showInstructor ? event.instructor || "" : "");
+          const chipDate = item ? item.occurrence.date : "";
           const titleNode = href
             ? <a className="builder-event-calendar-item-title" href={href}>{label}</a>
             : <span className="builder-event-calendar-item-title">{label}</span>;
           return (
-            <li key={event.id} className="builder-event-calendar-item">
+            <li key={key} className={`builder-event-calendar-item${cancelled ? " is-cancelled" : ""}`} style={colorStyle(event)}>
               {image ? (
                 <img
                   className="builder-event-calendar-item-image"
@@ -6354,19 +6645,24 @@ function EventCalendarPreview({
                 />
               ) : null}
               <div className="builder-event-calendar-item-body">
-                {start && !isCards ? (
+                {chipDate && !isCards ? (
                   <span className="builder-event-calendar-datechip" aria-hidden="true">
                     <span className="builder-event-calendar-datechip-month">
-                      {start.toLocaleDateString(undefined, { month: "short" }).toUpperCase()}
+                      {new Date(`${chipDate}T12:00:00Z`).toLocaleDateString(undefined, { month: "short", timeZone: "UTC" }).toUpperCase()}
                     </span>
-                    <span className="builder-event-calendar-datechip-day">{start.getDate()}</span>
+                    <span className="builder-event-calendar-datechip-day">{Number(chipDate.slice(8, 10))}</span>
                   </span>
                 ) : null}
                 <div className="builder-event-calendar-item-text">
                   {titleNode}
-                  <p className="builder-event-calendar-item-when">{formatEventWhen(event)}</p>
+                  {cancelled ? <span className="builder-event-calendar-badge">Cancelled</span> : null}
+                  <p className="builder-event-calendar-item-when">{when}</p>
+                  {who ? <p className="builder-event-calendar-item-where">with {who}</p> : null}
                   {showLocation && event.locationName ? (
                     <p className="builder-event-calendar-item-where">{event.locationName}</p>
+                  ) : null}
+                  {item?.occurrence.note ? (
+                    <p className="builder-event-calendar-item-where">{item.occurrence.note}</p>
                   ) : null}
                   {showExcerpt && event.excerpt ? (
                     <p className="builder-event-calendar-item-excerpt">{event.excerpt}</p>
