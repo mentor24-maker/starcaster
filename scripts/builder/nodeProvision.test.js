@@ -202,14 +202,40 @@ test('a blocked schedule says WHY, so CANNOT DO YET is never mistaken for a skip
   }
 });
 
-test('pulse-pipelines stays blocked, and names the ticket that unblocks it', () => {
-  // The load-bearing one. If this row ever quietly becomes an installer
-  // before Slice B exists, the provisioner starts reporting a green check on a
-  // machine that runs no scheduled pipelines at all — the precise failure the
-  // NODES plan was written against.
-  const spec = provision.JOB_SCHEDULES['pulse-pipelines'];
-  assert.ok(spec.blocked, 'pulse-pipelines must report CANNOT DO YET until Slice B lands');
-  assert.strictEqual(spec.blockedBy, '86bbh9kh2');
+test('the two pulse pipelines stay blocked, and say WHY rather than naming a ticket', () => {
+  // The load-bearing one. If either row ever quietly gains an installer, the
+  // provisioner starts reporting a green check on a machine that runs no
+  // scheduled pipelines at all — the precise failure the NODES plan was written
+  // against.
+  //
+  // What changed on 2026-09-12 (task 86bbw9nbj): the old single `pulse-pipelines`
+  // row was blocked on "Slice B is not written yet", and Slice B has since been
+  // written (pulse PR #4). Blocking on a ticket id was what let the reason go
+  // stale invisibly — the id stayed true-looking long after the sentence stopped
+  // being true. So these rows carry the reason instead, and the reason is about
+  // THIS repo: an installer path is resolved inside the starcaster checkout
+  // (scripts/verify_node_roles.mjs), so one living in the pulse repo cannot be
+  // expressed here at all.
+  //
+  // The assertion deliberately does NOT accept a bare `blocked` string: it
+  // insists the sentence names the other repo. A future edit that replaced it
+  // with "not done yet" would pass a truthiness check and lose the only thing a
+  // reader needs.
+  for (const role of ['channel-steward', 'librarian-sweep']) {
+    const spec = provision.JOB_SCHEDULES[role];
+    assert.ok(spec, `${role} must have a row in JOB_SCHEDULES`);
+    assert.ok(spec.blocked, `${role} must report CANNOT DO YET — this repo cannot run pulse's installer`);
+    assert.match(spec.blocked, /pulse/, `${role}'s reason must name the repo the installer actually lives in`);
+    assert.ok(!spec.installer, `${role} must not claim an installer this provisioner cannot reach`);
+  }
+});
+
+test('no pulse-pipelines row survives anywhere in the provisioner', () => {
+  // The rename's own break-test. `pulse-pipelines` was retired from
+  // lib/nodeRoles.js, and a leftover row here would be a schedule spec for a
+  // role no machine owns — `schedulesForNode` would never return it, so it would
+  // sit unreachable and read as covered.
+  assert.strictEqual(provision.JOB_SCHEDULES['pulse-pipelines'], undefined);
 });
 
 test('db-refresh has no schedule on purpose, and says so', () => {

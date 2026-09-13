@@ -245,7 +245,7 @@ test('a beat whose timestamp cannot be read as a date is overdue, not treated as
 test('a rendered roll call round-trips through the parser', () => {
   const rows = [
     { node: 'mac-mini', role: 'bus-relay', at: agoHours(1) },
-    { node: 'macbook-pro', role: 'pulse-pipelines', at: agoHours(3) },
+    { node: 'mac-mini', role: 'channel-steward', at: agoHours(3) },
   ];
   const parsed = hb.parseRollCall(hb.renderRollCall(rows, { now: NOW }));
   assert.equal(parsed.parsed, true);
@@ -295,7 +295,12 @@ test('merging never moves a row backwards', () => {
 test('merging advances a row and leaves every other machine\'s row untouched', () => {
   const existing = [
     { node: 'mac-mini', role: 'bus-relay', at: agoHours(9) },
-    { node: 'macbook-pro', role: 'pulse-pipelines', at: agoHours(4) },
+    // A row for a role mac-mini owns, beaten on the OTHER machine. Not a
+    // mistake: a non-owner's beat is a real row (scripts/run_bus_relay.sh
+    // records one on every machine that wakes), and `rollCallReport` ignores it
+    // because only the owner's row counts. What matters here is that merging one
+    // machine's beat leaves the other machine's row alone.
+    { node: 'macbook-pro', role: 'bus-relay', at: agoHours(4) },
   ];
   const merged = hb.mergeRollCall(existing, [{ node: 'mac-mini', role: 'bus-relay', at: agoHours(1) }]);
   assert.equal(merged.length, 2);
@@ -621,4 +626,259 @@ test('the alarm quotes the job real cadence, not the threshold divided back down
   assert.equal(r.quiet[0].intervalMs, 10 * 60 * 1000);
   assert.match(r.quiet[0].reason, /expected about every 10m/);
   assert.doesNotMatch(r.quiet[0].reason, /every 30m/);
+});
+
+// --- the two Pulse pipelines (task 86bbw9nbj) --------------------------------
+//
+// These roles replaced one `pulse-pipelines` row that sat in the NOT_REPORTING
+// column with the reason "lives in the pulse repo; its runner is not in this
+// checkout". True, and not a reason it could not beat: on 2026-09-04 both jobs
+// were dead for 33 hours — 127 skipped runs — and nothing said so, found the
+// next day by accident. The time before that was 820 failed runs over twelve
+// days, also found by accident.
+
+test('both pulse pipelines are expected to beat, at the cadence their schedules declare', () => {
+  // The numbers are not decoration: every window in this file is derived from
+  // intervalMs, so a wrong cadence here silently produces a wrong verdict rather
+  // than an error. They come from pulse's own plists —
+  // launchd/com.danechristensen.pulse.channel-steward.plist StartInterval 900,
+  // and librarian-sweep's 86400.
+  assert.equal(hb.BEAT_EMITTERS['channel-steward'].intervalMs, 15 * 60 * 1000);
+  assert.equal(hb.BEAT_EMITTERS['librarian-sweep'].intervalMs, 24 * HOUR);
+  for (const role of ['channel-steward', 'librarian-sweep']) {
+    assert.equal(hb.BEAT_EMITTERS[role].beatMeans, 'success',
+      `${role} beats only on a run that completed, so its beat means success rather than liveness`);
+    assert.equal(hb.NOT_REPORTING_WHY[role], undefined,
+      `${role} cannot be both expected to beat and excused from beating`);
+  }
+});
+
+test('the daily pipeline is judged against a DAILY window, which is the whole reason it waited', () => {
+  // This ticket had to land behind the per-role window (task 86bbw9n9f) for
+  // exactly this number. On the old flat 25 hours, librarian-sweep — which runs
+  // every 24h, pushed at most once a day — would have read as overdue while
+  // perfectly healthy, on day one, which is this feature's own failure mode.
+  assert.equal(hb.overdueAfterFor('librarian-sweep'), 48 * HOUR);
+  assert.ok(hb.overdueAfterFor('librarian-sweep') > 24 * HOUR + hb.PUSH_EVERY_MS - HOUR,
+    'a daily job needs a window of a day plus one of its own runs, or an honest beat reads as dead');
+
+  // And the fast one is unchanged from every other frequent role: 25 hours.
+  assert.equal(hb.overdueAfterFor('channel-steward'), hb.OVERDUE_AFTER_MS);
+
+  // The local alarm's thresholds, which are a different question and a different
+  // surface. channel-steward lands on the three-hour floor (six missed runs is
+  // 90 minutes, well inside a launchd job's ordinary drift), and that 3h is the
+  // number the ticket's own break test waits out.
+  assert.equal(hb.quietAfterFor('channel-steward'), hb.MIN_QUIET_AFTER_MS);
+  assert.equal(hb.quietAfterFor('librarian-sweep'), 6 * 24 * HOUR);
+});
+
+test('a healthy daily beat reads as BEATING, and one that has missed two days does not', () => {
+  // The break-test in both directions, which is what makes the number above
+  // evidence rather than an assertion about itself.
+  const roles = { 'librarian-sweep': { owner: 'mac-mini' } };
+  const healthy = hb.rollCallReport({
+    rows: [{ node: 'mac-mini', role: 'librarian-sweep', at: agoHours(30) }], now: NOW, roles,
+  });
+  assert.equal(healthy.overdue.length, 0, 'a daily job 30 hours after its last beat is healthy, not dead');
+  assert.equal(healthy.beating.length, 1);
+
+  const dead = hb.rollCallReport({
+    rows: [{ node: 'mac-mini', role: 'librarian-sweep', at: agoHours(60) }], now: NOW, roles,
+  });
+  assert.equal(dead.overdue.length, 1);
+  assert.match(dead.overdue[0].reason, /overdue after 2d 0h/);
+});
+
+test('the retired pulse-pipelines role is gone from every column', () => {
+  // The rename's break-test. A leftover row in either column would be a role no
+  // machine owns: `rollCallReport` iterates the REGISTRY, so the row would never
+  // be reached, and an unreachable excuse reads exactly like a covered one.
+  assert.equal(hb.BEAT_EMITTERS['pulse-pipelines'], undefined);
+  assert.equal(hb.NOT_REPORTING_WHY['pulse-pipelines'], undefined);
+  const nodeRoles = require('../../lib/nodeRoles.js');
+  assert.equal(nodeRoles.ROLES['pulse-pipelines'], undefined);
+  assert.equal(nodeRoles.roleOwner('channel-steward'), 'mac-mini');
+  assert.equal(nodeRoles.roleOwner('librarian-sweep'), 'mac-mini');
+});
+
+// --- relaying a local stamp onto the shared row (task 86bbw9nbj) -------------
+//
+// The half the Pulse slice deliberately left for this ticket. Pulse writes only
+// the LOCAL stamp — no credential, no network call inside an unattended pipeline
+// runner — so without a relay its rows never reach the shared surface that
+// `rollCallReport` actually reads, and two healthy jobs read as overdue forever.
+
+/** A push entry as `doPushOwned` assembles one. */
+const pushEntry = (role, at, lastPushAt = '') => ({ role, beat: beatAt(at), lastPushAt });
+
+test('a beat that has never been pushed is relayed, carrying the STAMP instant', () => {
+  const plan = hb.rollCallPushPlan({ entries: [pushEntry('channel-steward', agoHours(0.2))], now: NOW });
+  assert.equal(plan.push.length, 1);
+  assert.equal(plan.push[0].role, 'channel-steward');
+  assert.equal(plan.push[0].at, agoHours(0.2), 'the pushed instant is the stamp own, never the clock');
+  assert.deepEqual(plan.held, []);
+  assert.deepEqual(plan.unknown, []);
+});
+
+test('RELAYING CANNOT MAKE A DEAD JOB LOOK ALIVE — the property the whole mechanism rests on', () => {
+  // The break-test for this feature's worst failure, which would also have been
+  // its quietest: a relay that stamped `now` instead of the beat's own instant
+  // would refresh the row every ten minutes over a job that died on Tuesday, and
+  // permanently silence the alarm it exists to feed. Nothing else here would
+  // fail — the row would parse, the table would render, every count would look
+  // right.
+  const diedAt = agoHours(40);
+  const plan = hb.rollCallPushPlan({ entries: [pushEntry('channel-steward', diedAt)], now: NOW });
+  assert.equal(plan.push[0].at, diedAt);
+
+  // And the row it produces is still judged dead, end to end.
+  const verdict = hb.rollCallReport({
+    rows: [{ node: 'mac-mini', role: plan.push[0].role, at: plan.push[0].at }],
+    now: NOW,
+    roles: { 'channel-steward': { owner: 'mac-mini' } },
+  });
+  assert.equal(verdict.silent, true, 'a relayed stale beat must still report the job as quiet');
+  assert.equal(verdict.overdue[0].role, 'channel-steward');
+});
+
+test('a beat already on the roll call is not pushed again', () => {
+  // Otherwise a job producing no new beats costs a ClickUp round trip a day for
+  // ever, writing the same instant back over itself.
+  const plan = hb.rollCallPushPlan({
+    entries: [pushEntry('librarian-sweep', agoHours(30), agoHours(30))], now: NOW,
+  });
+  assert.deepEqual(plan.push, []);
+  assert.match(plan.held[0].why, /already on the roll call/);
+});
+
+test('the once-a-day throttle holds even when the local stamp is newer', () => {
+  // The shared row is documented at day resolution and every window in this file
+  // is derived from that. A relay firing on the ten-minute wake would otherwise
+  // push every ten minutes per role.
+  const throttled = hb.rollCallPushPlan({
+    entries: [pushEntry('channel-steward', agoHours(0.1), agoHours(3))], now: NOW,
+  });
+  assert.deepEqual(throttled.push, []);
+  assert.match(throttled.held[0].why, /pushed within the last 24h/);
+
+  // ...and releases on the far side of it, which is what makes the assertion
+  // above a threshold rather than a blanket refusal.
+  const due = hb.rollCallPushPlan({
+    entries: [pushEntry('channel-steward', agoHours(0.1), agoHours(25))], now: NOW,
+  });
+  assert.equal(due.push.length, 1);
+});
+
+test('a stamp that cannot be read is CANNOT TELL, never a quiet skip', () => {
+  // DOCTRINE 3.11. A corrupt stamp silently dropped from the plan is a role
+  // whose row stops being refreshed with nothing anywhere saying why — and the
+  // roll call would then report it overdue, sending somebody to look at a
+  // schedule that is fine.
+  const plan = hb.rollCallPushPlan({
+    entries: [
+      { role: 'channel-steward', beat: { found: false, readable: false, file: '/x', why: 'the stamp is not JSON' } },
+      { role: 'librarian-sweep', beat: beatAt('last tuesday') },
+    ],
+    now: NOW,
+  });
+  assert.deepEqual(plan.push, []);
+  assert.equal(plan.unknown.length, 2);
+  assert.match(plan.unknown[0].why, /not JSON/);
+  assert.match(plan.unknown[1].why, /cannot be read as a date/);
+});
+
+test('a stamp dated in the future is a clock problem, not a fresh beat', () => {
+  // Pushing it would park the row ahead of real time and keep the role reading
+  // as fresh for as long as the skew lasted — the same refusal recencyReport
+  // makes, for the same reason.
+  const plan = hb.rollCallPushPlan({
+    entries: [pushEntry('channel-steward', new Date(NOW + 2 * HOUR).toISOString())], now: NOW,
+  });
+  assert.deepEqual(plan.push, []);
+  assert.match(plan.unknown[0].why, /in the future/);
+});
+
+test('a role that has never beaten here is not relayed, and says the roll call already has it', () => {
+  // Not `unknown`: there is genuinely nothing to carry, and "never beaten" is
+  // already reported as overdue by rollCallReport. Counting it twice would put
+  // one silence on two surfaces.
+  const plan = hb.rollCallPushPlan({
+    entries: [{ role: 'channel-steward', beat: { found: false, readable: true, file: '/x' } }], now: NOW,
+  });
+  assert.deepEqual(plan.push, []);
+  assert.deepEqual(plan.unknown, []);
+  assert.match(plan.held[0].why, /never beaten on this machine/);
+  assert.match(plan.held[0].why, /already reports that as overdue/);
+});
+
+test('several roles are planned together, so one write can carry them all', () => {
+  // The description is read-modify-written and two machines edit it, so N pushes
+  // would be N chances to lose an update for no gain.
+  const plan = hb.rollCallPushPlan({
+    entries: [pushEntry('channel-steward', agoHours(0.1)), pushEntry('librarian-sweep', agoHours(20))],
+    now: NOW,
+  });
+  assert.deepEqual(plan.push.map((p) => p.role), ['channel-steward', 'librarian-sweep']);
+});
+
+// --- never beaten is not the same failure as stopped beating -----------------
+//
+// Found by rehearsing the roll call on the Mini rather than by reading it (task
+// 86bbw9nbj). The day librarian-sweep was named as an emitter it had a perfectly
+// healthy daily schedule and no stamp yet, and the report said "A job that stops
+// firing writes nothing anywhere. This is that." — untrue of a role that has not
+// stopped anything. Every future emitter graduation has the same day-one window.
+
+test('a role that has never beaten is flagged as such, and still counts as overdue', () => {
+  // Flagged, NOT demoted. A role expected to beat that never has is genuinely
+  // not healthy, so it stays in `overdue` and still reaches the bus — the fix is
+  // to the sentence, not to the detection.
+  const r = hb.rollCallReport({
+    rows: [], now: NOW, roles: { 'channel-steward': { owner: 'mac-mini' } },
+  });
+  assert.equal(r.silent, true, 'never beaten must still be reported, not swallowed');
+  assert.equal(r.overdue.length, 1);
+  assert.equal(r.overdue[0].neverBeaten, true);
+  assert.equal(r.overdue[0].at, null);
+});
+
+test('a role that has stopped beating is NOT flagged as never beaten', () => {
+  // The other half of the distinction — without this, marking everything would
+  // pass the test above while losing the difference entirely.
+  const r = hb.rollCallReport({
+    rows: [{ node: 'mac-mini', role: 'channel-steward', at: agoHours(40) }],
+    now: NOW,
+    roles: { 'channel-steward': { owner: 'mac-mini' } },
+  });
+  assert.equal(r.overdue.length, 1);
+  assert.ok(!r.overdue[0].neverBeaten);
+  assert.equal(r.overdue[0].at, agoHours(40));
+});
+
+test('the bus post does not tell somebody a job stopped when it never started', () => {
+  const post = hb.renderSilencePost({
+    overdue: [{ role: 'librarian-sweep', owner: 'mac-mini', at: null, neverBeaten: true, reason: 'no beat has ever been recorded' }],
+    now: NOW,
+  });
+  assert.match(post, /has never reported/);
+  assert.doesNotMatch(post, /has gone quiet/);
+  assert.doesNotMatch(post, /the job stopped\nfiring/);
+  assert.match(post, /either nothing is installed to beat from/);
+});
+
+test('a mixed post keeps the quiet headline and still marks the new role', () => {
+  // The case that made a flag better than a second message type: one genuinely
+  // dead job and one newly-named role in the same reading. Claiming "never
+  // reported" about the dead one would be as wrong as the reverse.
+  const post = hb.renderSilencePost({
+    overdue: [
+      { role: 'bus-relay', owner: 'mac-mini', at: agoHours(100), reason: 'last succeeded 4d 4h ago' },
+      { role: 'librarian-sweep', owner: 'mac-mini', at: null, neverBeaten: true, reason: 'no beat has ever been recorded' },
+    ],
+    now: NOW,
+  });
+  assert.match(post, /has gone quiet/);
+  assert.match(post, /\*\*librarian-sweep\*\*.*Never beaten/s);
+  assert.doesNotMatch(post.split('librarian-sweep')[0], /Never beaten/);
 });

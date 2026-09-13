@@ -502,9 +502,14 @@ test('a machine with nothing probeable is not sent to a command that refuses it'
   // was added." with fix `npm run node:verify` — which exits 2 on exactly this
   // machine (scripts/verify_node_roles.mjs), so macbook-pro had a CANNOT TELL
   // it could never clear.
+  // What macbook-pro owns, as of 2026-09-12: `db-refresh` and nothing else. It
+  // used to be this plus `pulse-pipelines`, which moved to the Mini on
+  // 2026-09-07 and was retired into two roles on 2026-09-12 — and the verdict is
+  // unchanged either way, because the branch keys off the COUNT of probeable
+  // roles rather than off a machine name. The one-row version is the stronger
+  // fixture: it is the smallest inventory that can reach this branch at all.
   const macbookPro = [
     { role: 'db-refresh', manual: true, why: 'Deliberately has no schedule; it spends production disk IO.' },
-    { role: 'pulse-pipelines', blocked: 'Installing these needs pulse\'s bin/install-launchd.sh, which is Slice B.' },
   ];
   for (const stored of [{ found: false, readable: true, file: '/tmp/nope.json' }, storedRecord()]) {
     const verdict = rt.rebootTestReport({ boot: boot(), stored, node: 'macbook-pro', owned: macbookPro });
@@ -717,6 +722,10 @@ test('a stale row does not read as a fourth role with no schedule', () => {
     { role: 'loop-build', blocked: 'The loops run inside a long-lived agent session. There is no installer in this repo yet.' },
     { role: 'loop-review', blocked: 'Same as loop-build. One session runs both lanes.' },
   ];
+  // `pulse-pipelines` is a genuinely retired role name since 2026-09-12 (split
+  // into channel-steward and librarian-sweep), which makes it the most honest
+  // fixture this test could use: a row in an old record naming a role that no
+  // registry carries any more is exactly the case being described.
   const stale = 'pulse-pipelines';
   const withStale = (rows) => storedRecord({ roles: [...rows, { role: stale, installed: true, loaded: true }] });
 

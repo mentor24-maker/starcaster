@@ -13,6 +13,7 @@
  *   npm run heartbeat -- --beat --role X    record a successful run of X (jobs call this)
  *   npm run heartbeat -- --stale-check      the LOCAL recency alarm, read-only, no ClickUp read
  *   npm run heartbeat -- --stale-check --check   the same, and post to the bus
+ *   npm run heartbeat -- --push-owned       relay this machine's local stamps onto the shared row
  *
  * WHY --stale-check IS A SEPARATE MODE AND NOT PART OF --check
  * The roll call is a network read, and it is the surface that answers "is the
@@ -210,7 +211,13 @@ function printReport(state) {
   }
   for (const o of overdue) {
     out.push(`  ${red('QUIET')} ${o.role} on ${o.owner} — ${o.reason}.`);
-    out.push(`        ${dim('A job that stops firing writes nothing anywhere. This is that.')}`);
+    // Two different failures, two different sentences. Saying "a job that stops
+    // firing" about a role that has never beaten is a wrong fact in a report
+    // somebody acts on — it sends them looking for a dead schedule when the
+    // answer may be that the emitter is newer than the job's own cadence.
+    out.push(o.neverBeaten
+      ? `        ${dim('Never beaten — either nothing is installed to beat from, or its emitter is newer than the job\'s last run.')}`
+      : `        ${dim('A job that stops firing writes nothing anywhere. This is that.')}`);
   }
   for (const n of notReporting) {
     out.push(`  ${yellow('????')}  ${n.role} on ${n.owner} — not reporting.`);
@@ -424,6 +431,142 @@ async function doStaleCheck({ post }) {
   return 0;
 }
 
+// --- relaying local stamps onto the shared row -------------------------------
+
+/**
+ * `--push-owned` — carry this machine's local stamps to the shared roll call.
+ *
+ * THE HOLE THIS FILLS (task 86bbw9nbj). `--beat` does two things: it writes the
+ * local stamp and it pushes the shared row. Every job whose runner lives in this
+ * repo calls it, so both happen together. The two Pulse pipelines cannot: their
+ * runner is in the pulse repo and writes only the local stamp, deliberately, so
+ * that a beat needs no credential and no network call inside an unattended
+ * pipeline runner. Without this mode their stamps would sit on disk for ever
+ * while `rollCallReport` read the shared row, found nothing, and called two
+ * healthy jobs overdue — a false alarm, which is this feature's own failure mode.
+ *
+ * WHY IT RIDES THE RELAY'S WAKE AND NOT A SCHEDULE OF ITS OWN. The stamps are
+ * local files, so this has to run on the machine that owns the job; the relay
+ * wake is already there every ten minutes on every machine that has the
+ * schedule, and the plan only ever considers owned roles, so it is correct
+ * wherever it runs. It also runs BEFORE the relay's ownership check, alongside
+ * the watchdogs, which matters for a reason found this pass: the relay has been
+ * exiting non-zero and therefore never reaching its own `--beat` line, and a
+ * push hung off the success path would have gone missing in exactly the weeks
+ * something was wrong.
+ *
+ * ONE WRITE FOR EVERY ROLE, not one per role. The description is
+ * read-modify-written, so N pushes would be N round trips against a shared
+ * surface two machines edit — N chances to lose an update, for no gain.
+ *
+ * Exit codes follow the harness convention (scripts/ui/harness-exit.mjs):
+ *   0  nothing needed pushing, or everything that needed it went up
+ *   2  could not tell / could not do — an unknown machine, an unreachable roll
+ *      call, a refused write. NEVER rendered as "nothing to do".
+ * There is no 1: this mode makes no judgement about any job's health. It moves
+ * a fact from one surface to another, and the judging is `--check`'s job.
+ */
+async function doPushOwned() {
+  const out = [];
+  out.push('', bold('RELAY — are this machine\'s local beats on the shared roll call?'), '');
+
+  if (!nodeRoles.isKnownNode(NODE.name)) {
+    out.push(`  ${yellow('????')}  Cannot tell.`);
+    out.push(`        ${dim(`This machine calls itself "${NODE.name || '(nothing)'}", which is not a machine this system knows.`)}`);
+    out.push(`        ${dim('Without an identity there is no way to know which roles it owns, and a row pushed under the wrong')}`);
+    out.push(`        ${dim('name would report a beating job as one that has never beaten.')}`);
+    out.push(`        ${dim(`Fix it once:  echo ${nodeRoles.KNOWN_NODES[0]} > ${NODE.file}`)}`);
+    out.push('');
+    console.log(out.join('\n'));
+    return 2;
+  }
+
+  const owned = nodeRoles.rolesOwnedBy(NODE.name).filter((role) => heartbeat.BEAT_EMITTERS[role]);
+  const entries = owned.map((role) => ({
+    role,
+    beat: heartbeat.readBeat({ role }),
+    lastPushAt: readStamp(`push-${role}`),
+  }));
+  const plan = heartbeat.rollCallPushPlan({ entries, now: NOW });
+
+  for (const h of plan.held) out.push(`  ${dim('----')}  ${h.role} — nothing to relay: ${h.why}.`);
+  for (const u of plan.unknown) {
+    out.push(`  ${yellow('????')}  ${u.role} — cannot relay.`);
+    out.push(`        ${dim(`cannot tell: ${u.why}`)}`);
+  }
+  if (entries.length === 0) {
+    out.push(`  ${yellow('????')}  This machine owns no role that records a beat, so there is nothing to relay.`);
+  }
+
+  if (plan.push.length === 0) {
+    out.push('');
+    // A machine with nothing to relay is the ordinary steady state, and it is
+    // NOT the same answer as one that could not read its own stamps — hence the
+    // unknown count on the line rather than a bare all-clear.
+    out.push(plan.unknown.length
+      ? bold(yellow(`Nothing to relay, and ${plan.unknown.length} stamp${plan.unknown.length === 1 ? '' : 's'} could not be read.`))
+      : bold(green('Every local beat this machine owns is already on the shared roll call.')));
+    out.push('');
+    console.log(out.join('\n'));
+    return plan.unknown.length ? 2 : 0;
+  }
+
+  for (const item of plan.push) out.push(`  ${green('PUSH')}  ${item.role} — ${item.why}.`);
+
+  const found = await findRollCall();
+  if (!found.readable) {
+    out.push('');
+    out.push(bold(yellow('Could not reach the roll call — the local beats stand and the next wake tries again.')));
+    out.push(`        ${dim(`cannot tell: ${found.why}`)}`);
+    out.push('');
+    console.log(out.join('\n'));
+    return 2;
+  }
+
+  let task = found.task;
+  if (!found.found) {
+    const made = await createRollCall();
+    if (!made.ok) {
+      out.push('');
+      out.push(bold(yellow(`No "${heartbeat.ROLL_CALL_TASK_NAME}" ticket exists and it could not be created.`)));
+      out.push(`        ${dim(`cannot tell: ${made.why}`)}`);
+      out.push('');
+      console.log(out.join('\n'));
+      return 2;
+    }
+    task = made.task;
+  }
+
+  const fresh = await clickup.call('GET', `/api/v2/task/${task.id}`);
+  const existing = fresh.ok ? heartbeat.parseRollCall(descriptionOf(fresh.json)) : { parsed: false, rows: [] };
+  // The instant pushed is the STAMP's, never NOW. That is what makes relaying
+  // safe: a relay running every ten minutes over a job that died on Tuesday
+  // reports Tuesday, so it can never silence the alarm it feeds.
+  const incoming = plan.push.map((item) => ({ node: NODE.name, role: item.role, at: item.at }));
+  const rows = heartbeat.mergeRollCall(existing.parsed ? existing.rows : [], incoming);
+  if (!existing.parsed) {
+    out.push(`        ${dim('the existing roll-call block could not be read — rewriting it from these beats alone')}`);
+  }
+
+  const wrote = await clickup.call('PUT', `/api/v2/task/${task.id}`, {
+    markdown_description: heartbeat.renderRollCall(rows, { now: NOW }),
+  });
+  if (!wrote.ok) {
+    out.push('');
+    out.push(bold(yellow(`Could not write the roll call (HTTP ${wrote.status}). The local beats stand; nothing was stamped, so the next wake tries again.`)));
+    out.push('');
+    console.log(out.join('\n'));
+    return 2;
+  }
+
+  // Stamped only AFTER a confirmed write, so a failed push is retried rather
+  // than being recorded as done — the same discipline the bus posts above use.
+  for (const item of plan.push) writeStamp(`push-${item.role}`, item.at);
+  out.push('', bold(green(`Relayed ${plan.push.length} beat${plan.push.length === 1 ? '' : 's'} to the roll call.`)), dim(`  ${task.url}`), '');
+  console.log(out.join('\n'));
+  return 0;
+}
+
 // --- the watchdog -----------------------------------------------------------
 
 async function doCheck(state) {
@@ -468,6 +611,10 @@ if (flag('beat')) {
 
 if (flag('stale-check')) {
   process.exit(await doStaleCheck({ post: flag('check') }));
+}
+
+if (flag('push-owned')) {
+  process.exit(await doPushOwned());
 }
 
 const state = await loadReport();
