@@ -22,6 +22,16 @@ import { BuilderButtonBackgroundPicker } from "./builder-button-background-picke
 import { BuilderGalleryModal } from "./builder-gallery-modal";
 import { buildBuilderThemePaletteColors, seedThemeStylesPageBackground } from "./builder-utils";
 import { appApi, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
+import { builderAdminFetch } from "@/lib/builder-admin-fetch";
+import { publishNamedPages } from "@/lib/publish-pages";
+import {
+  describeThemeSaveImpact,
+  readThemeUsage,
+  themeUsagePageIds,
+  type ThemeUsagePage,
+} from "@/lib/theme-save-impact";
+import type { CanonicalOverwriteImpact } from "@/lib/shared-block-usage";
+import { BuilderSharedBlockSaveModal, type SharedBlockSaveChoice } from "./builder-shared-block-save-modal";
 import { BuilderThemeWizard } from "@/components/builder/builder-theme-wizard";
 
 type DevelopThemeRecord = {
@@ -214,6 +224,12 @@ export function BuilderThemesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isBackgroundGalleryOpen, setIsBackgroundGalleryOpen] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  // The Save / Save & Publish / Cancel question, while it is open. `resolve`
+  // hands the answer back to handleSave, which is waiting on it.
+  const [savePrompt, setSavePrompt] = useState<{
+    resolve: (choice: SharedBlockSaveChoice | null) => void;
+    impact: CanonicalOverwriteImpact;
+  } | null>(null);
 
   const themeColors = buildBuilderThemePaletteColors(draft);
 
@@ -255,14 +271,61 @@ export function BuilderThemesPage() {
     setStatus(null);
   }
 
+  function answerSavePrompt(choice: SharedBlockSaveChoice | null) {
+    savePrompt?.resolve(choice);
+    setSavePrompt(null);
+  }
+
+  /**
+   * Which pages does saving this theme reach? Null when the read failed —
+   * which is NOT zero: a theme dozens of pages follow must not save with no
+   * question asked because one request dropped.
+   */
+  async function loadThemeUsage(themeId: string): Promise<ThemeUsagePage[] | null> {
+    try {
+      const res = await appApi(`/api/builder/themes/${encodeURIComponent(themeId)}/usage`);
+      return readThemeUsage(res);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Save, or Save and put the pages that use this theme live?
+   *
+   * A theme is a reference: saving it writes the theme row and no page row,
+   * and the pages that use it pick the change up at render. But a PUBLISHED
+   * page is a snapshot, so until 2026-09-13 a theme save reached nobody —
+   * the Publish panel counted nothing as pending, and the operator's only
+   * way to get a new headline colour live was to open every page, save it
+   * by hand, and publish (task 86bbzy9ym). The server now counts a page as
+   * pending when its theme is newer than its build; this asks the same
+   * question the saved-section manager asks, and publishes THOSE pages by
+   * id — never the whole site.
+   *
+   * A brand-new theme has no pages yet, so it is created without the question.
+   */
   async function handleSave() {
     if (!draft.name.trim()) {
       setStatus({ message: "Theme name is required", isError: true });
       return;
     }
+    const isNew = !draft.id;
+    let publish = false;
+    let usage: ThemeUsagePage[] | null = [];
+    if (!isNew) {
+      usage = await loadThemeUsage(draft.id);
+      if (usage === null || usage.length > 0) {
+        const choice = await new Promise<SharedBlockSaveChoice | null>((resolve) => {
+          setSavePrompt({ resolve, impact: describeThemeSaveImpact(draft.name, usage) });
+        });
+        if (!choice) return;
+        publish = choice === "save-and-publish";
+      }
+    }
+
     setIsSaving(true);
     setStatus(null);
-    const isNew = !draft.id;
     const url = isNew
       ? "/api/builder/themes"
       : `/api/builder/themes/${encodeURIComponent(draft.id)}`;
@@ -286,7 +349,50 @@ export function BuilderThemesPage() {
             : finalizeThemeStylesPageBackground(draft.stylesPageBackground),
         typography: saved.typography ?? { ...DEFAULT_TYPOGRAPHY },
       });
-      setStatus({ message: isNew ? "Theme created" : "Theme saved", isError: false });
+
+      if (isNew) {
+        setStatus({ message: "Theme created", isError: false });
+        return;
+      }
+
+      const pageCount = usage?.length ?? 0;
+      const pagesWord = pageCount === 1 ? "page" : "pages";
+      if (!publish) {
+        setStatus({
+          message:
+            pageCount > 0
+              ? `Theme saved. ${pageCount} ${pagesWord} now ${pageCount === 1 ? "has" : "have"} changes to publish — open Publish to put ${pageCount === 1 ? "it" : "them"} live.`
+              : "Theme saved",
+          isError: false,
+        });
+        return;
+      }
+
+      // The save landed. A publish that does not is smaller, separate news —
+      // it must not read as the save having failed.
+      const outcome = await publishNamedPages(
+        (body) =>
+          builderAdminFetch("/api/admin/publish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }),
+        themeUsagePageIds(usage)
+      );
+      if (outcome.error) {
+        setStatus({
+          message: `Theme saved. Publishing did not finish: ${outcome.error} Open Publish to put these pages live.`,
+          isError: true,
+        });
+        return;
+      }
+      setStatus({
+        message:
+          outcome.published > 0
+            ? `Theme saved and published on ${outcome.published} ${outcome.published === 1 ? "page" : "pages"}.`
+            : "Theme saved. Nothing needed publishing — those pages were already live with this theme.",
+        isError: false,
+      });
     } catch (err: unknown) {
       setStatus({ message: (err as Error).message || "Could not save theme", isError: true });
     } finally {
@@ -351,6 +457,16 @@ export function BuilderThemesPage() {
 
   return (
     <div className="builder-themes-page">
+      {savePrompt ? (
+        <BuilderSharedBlockSaveModal
+          blockKind="theme"
+          name={draft.name}
+          impact={savePrompt.impact}
+          isSaving={isSaving}
+          onChoose={(choice) => answerSavePrompt(choice)}
+          onCancel={() => answerSavePrompt(null)}
+        />
+      ) : null}
       <div className="builder-themes-header">
         <button
           type="button"
