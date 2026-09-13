@@ -268,36 +268,10 @@
   background-color: #ffffff !important;
 }
 
-.crm-form-color-custom {
-  position: relative;
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
-  cursor: pointer;
-  /* A spectrum, deliberately not a theme colour: it means "any colour". */
-  background: conic-gradient(hsl(0 84% 60%), hsl(38 92% 50%), hsl(142 71% 45%), hsl(217 91% 60%), hsl(271 91% 65%), hsl(0 84% 60%));
-}
-
-.crm-form-color-custom.is-selected {
-  outline: 2px solid var(--ink-primary);
-  outline-offset: 2px;
-}
-
-/* The native control is stretched invisible over the rainbow tile, so the tile
- * reads as "pick any colour" while the browser's own picker does the work. */
-.crm-form-color-custom input[type="color"] {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-  border: 0;
-  padding: 0;
+/* The standard theme colour field replaces the swatch row when the builder
+ * bundle is loaded (task 86bbzxg9c); the row stays as the no-bundle fallback. */
+.crm-form-color-control.has-standard-picker .crm-form-color-row {
+  display: none;
 }
 
 .crm-form-color-opacity {

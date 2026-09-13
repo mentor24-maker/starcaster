@@ -523,18 +523,78 @@ App.crm = (function () {
       btn.classList.toggle('is-selected', safeText(btn.dataset.color).toLowerCase() === value);
     });
     const control = document.querySelector(`[data-crm-color-input="${inputId}"]`);
-    const custom = control?.querySelector('[data-crm-custom-color]');
-    if (custom) {
-      // A saved hex that is not one of the theme swatches IS the custom colour:
-      // show it in the picker and mark the picker selected.
-      const isHex = /^#[0-9a-f]{6}$/.test(value);
-      const matchedSwatch = Array.from(group.querySelectorAll('.crm-form-color-swatch'))
-        .some((btn) => safeText(btn.dataset.color).toLowerCase() === value);
-      if (isHex) custom.value = value;
-      custom.closest('.crm-form-color-custom')?.classList.toggle('is-selected', isHex && !matchedSwatch);
-    }
     const opacityInputId = control?.dataset.crmColorOpacityInput;
     if (opacityInputId) syncFormColorOpacityUI(opacityInputId);
+    renderStandardColorField(inputId);
+  }
+
+  /**
+   * The platform's standard theme colour field on a CRM colour control
+   * (task 86bbzxg9c): one swatch button that opens the Builder's picker —
+   * the theme colours as one-click links, a custom colour, opacity, and Clear.
+   *
+   * The picker speaks hex; this form stores THEME LINKS (`theme:primary`) so a
+   * form keeps following its theme. So a chosen colour equal to a theme swatch
+   * is saved as that swatch's token, anything else as hex, and Clear as 'none'.
+   * Without the builder bundle the old swatch row stays as the fallback.
+   */
+  /** What the picker shows for a saved value: a theme link as its colour, 'none' as nothing. */
+  function pickerColorForSaved(saved, swatches) {
+    const value = safeText(saved).toLowerCase();
+    if (!value || value === 'none') return '';
+    if (isThemeColorToken(value)) {
+      const entry = (swatches || []).find((item) => item.token === value);
+      return safeText(entry?.hex || THEME_COLOR_FALLBACKS[value]).toLowerCase();
+    }
+    return value;
+  }
+
+  /** What is saved for a picked colour: the theme link when it IS a theme colour, else the hex. */
+  function savedValueForPicked(hex, swatches) {
+    const chosen = safeText(hex).toLowerCase();
+    const match = (swatches || []).find((item) => safeText(item.hex).toLowerCase() === chosen);
+    return match ? match.token : chosen;
+  }
+
+  function renderStandardColorField(inputId) {
+    const bridge = window.ThemeColorFieldReact;
+    const control = document.querySelector(`[data-crm-color-input="${inputId}"]`);
+    const input = el(inputId);
+    if (!bridge || typeof bridge.mount !== 'function' || !control || !input) return;
+
+    let host = control.querySelector('.crm-form-standard-color');
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'crm-form-standard-color builder-react-root';
+      control.insertBefore(host, control.firstChild);
+      control.classList.add('has-standard-picker');
+    }
+
+    const swatches = buildFormThemeColorSwatches(formEditorThemePalette, formEditorThemeTypography);
+    const commit = (value) => {
+      input.value = value;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      syncFormColorPickerUI(inputId);
+    };
+    const opacityInputId = control.dataset.crmColorOpacityInput;
+    const opacityInput = opacityInputId ? el(opacityInputId) : null;
+    const label = control.querySelector('.crm-form-color-options')?.getAttribute('aria-label') || 'Choose color';
+
+    bridge.mount(host, {
+      value: pickerColorForSaved(input.value, swatches),
+      fallback: '#ffffff',
+      dialogLabel: label,
+      themeColors: swatches.map((item) => ({ label: item.label, hex: item.hex })),
+      opacity: opacityInput ? Number.parseInt(opacityInput.value || '100', 10) : undefined,
+      onChange: (hex) => commit(savedValueForPicked(hex, swatches)),
+      onChangeOpacity: opacityInput ? (next) => {
+        opacityInput.value = String(next);
+        opacityInput.dispatchEvent(new Event('input', { bubbles: true }));
+        opacityInput.dispatchEvent(new Event('change', { bubbles: true }));
+        syncFormColorPickerUI(inputId);
+      } : undefined,
+      onClear: () => commit('none'),
+    });
   }
 
   function syncAllFormColorPickers() {
@@ -547,32 +607,6 @@ App.crm = (function () {
       control.dataset.crmColorBound = '1';
       const inputId = control.dataset.crmColorInput;
       const opacityInputId = control.dataset.crmColorOpacityInput;
-      // Any colour, not only the theme's (task 86bbzxdf6): a project with no
-      // theme, or a brand colour the theme lacks, still has something to pick.
-      const group = control.querySelector('.crm-form-color-options');
-      if (group && !group.querySelector('[data-crm-custom-color]')) {
-        const wrap = document.createElement('label');
-        wrap.className = 'crm-form-color-custom';
-        wrap.title = 'Custom colour';
-        const picker = document.createElement('input');
-        picker.type = 'color';
-        picker.value = '#000000';
-        picker.setAttribute('data-crm-custom-color', '');
-        picker.setAttribute('aria-label', 'Custom colour');
-        wrap.appendChild(picker);
-        group.appendChild(wrap);
-      }
-      const customPicker = group?.querySelector('[data-crm-custom-color]');
-      if (customPicker && customPicker.dataset.crmCustomBound !== '1') {
-        customPicker.dataset.crmCustomBound = '1';
-        customPicker.addEventListener('input', () => {
-          const input = el(inputId);
-          if (!input) return;
-          input.value = safeText(customPicker.value).toLowerCase();
-          syncFormColorPickerUI(inputId);
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-      }
       control.querySelectorAll('.crm-form-color-swatch').forEach((btn) => {
         btn.addEventListener('click', () => {
           const input = el(inputId);
