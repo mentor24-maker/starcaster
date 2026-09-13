@@ -56,6 +56,7 @@ import path from 'node:path';
 import os from 'node:os';
 import loopNoteLib from './builder/loopNote.js';
 const { loopNote, heartbeatNote } = loopNoteLib;
+import loopNoteComment from './builder/loopNoteComment.js';
 import { spawnSync } from 'node:child_process';
 import clickupLib from './lib/clickup.cjs';
 const { clickupFetch, ledger: clickupLedger, callerKind } = clickupLib;
@@ -691,10 +692,34 @@ function assigneeNames(t) {
  * NAME, like stampLoopNote, so no field id is hardcoded.
  */
 function loopNoteOf(t) {
-  const f = (t.custom_fields || []).find(
-    (x) => String(x.name || '').trim().toLowerCase() === 'loop note'
-  );
-  return String(f?.value ?? '').trim();
+  // The newest note COMMENT when one was read, else the field (task
+  // 86bbzww8m): on 2026-09-08 the Free plan ran out of custom-field usages and
+  // the field has refused every write since. scripts/builder/loopNoteComment.js.
+  return loopNoteComment.resolveLoopNote(t);
+}
+
+/** A ticket's comments, for the note readers. Throws on a failed read so the
+ *  caller counts it rather than reading "no note" into a read that never happened. */
+async function noteComments(taskId) {
+  const out = await call('GET', `/api/v2/task/${taskId}/comment`);
+  if (!out.res.ok) throw new Error(`HTTP ${out.res.status}`);
+  return out.json?.comments || [];
+}
+
+/**
+ * Post a Loop note as a comment and prove it stuck. Returns { ok, why }.
+ * The comment is the note's record now; the field is attempted as well, for
+ * the board column, but no longer decides anything.
+ */
+async function writeNoteComment(noteTaskId, text) {
+  let body;
+  try { body = loopNoteComment.renderNoteComment(text); } catch (e) { return { ok: false, why: e.message }; }
+  const out = await call('POST', `/api/v2/task/${noteTaskId}/comment`, { comment_text: body, notify_all: false });
+  if (!out.res.ok) return { ok: false, why: `HTTP ${out.res.status}` };
+  const back = await call('GET', `/api/v2/task/${noteTaskId}/comment`);
+  const stuck = back.res.ok && (back.json?.comments || []).some(
+    (c) => String(c.id) === String(out.json?.id) || String(c.comment_text || '').trim() === body);
+  return stuck ? { ok: true, why: '' } : { ok: false, why: 'posted, but not found when read back' };
 }
 
 /** Run `gh` and report honestly. gh carries its OWN GitHub credentials; no
@@ -808,6 +833,7 @@ function capProbe({ repo } = {}) {
       // extra call, and it is the SAME map rather than a parallel one: two
       // inputs built at one call site is how the 2026-08-31 disagreement
       // happened (see probeCap).
+      await loopNoteComment.hydrateLoopNotes(listed.tasks, noteComments);
       const byId = Object.create(null);
       for (const t of listed.tasks) {
         byId[String(t.id)] = {
@@ -852,6 +878,27 @@ async function postToBus(channel, content, { simulate } = {}) {
  * because a fallback reported as delivered when it was not would silence the
  * alarm's suppression window on the strength of a comment nobody received.
  */
+/**
+ * Post to the party line, and when it refuses, save the message to the
+ * "Undelivered alarms" ticket instead (task 86bbzwxrw). Returns
+ * { ok, via: 'chat' | 'ticket' | '', why }.
+ *
+ * The relay's daily digest and its latch reminder posted with `postToBus`
+ * alone, so while the party line refused every post (from 2026-09-07) each
+ * pass ended "could not fully verify" and exited 1 — the relay never beat
+ * again and read QUIET for five days while doing all its real work. A message
+ * verifiably saved on the fallback ticket HAS been delivered somewhere a person
+ * reads, so it counts; only a failure of both is a failure.
+ */
+async function postOrSaveToBus(channel, text) {
+  const bus = await postToBus(channel, text);
+  if (bus && bus.ok) return { ok: true, via: 'chat', why: '' };
+  const why = String(bus?.why || 'the party line refused it');
+  const saved = await saveUndeliveredAlarm({ text, channel, why });
+  if (saved.ok) return { ok: true, via: 'ticket', why, url: saved.url };
+  return { ok: false, via: '', why: `${why}; the "${busFallback.FALLBACK_TASK_NAME}" ticket refused it too (${saved.why})` };
+}
+
 async function saveUndeliveredAlarm({ text, channel, why }) {
   // A RESERVE STOP IS NOT A FAILED SAVE (task 86bbwab1n, review round 2).
   // Every `call()` below can come back yielded — `res.ok === false` with the
@@ -2617,9 +2664,16 @@ function clockAt(ms) {
  * catastrophic inside a pass that still has tickets to get through.
  */
 async function stampLoopNoteSoftly(taskId, text, unchecked) {
+  // The comment first: it is the record every reader prefers (task 86bbzww8m).
+  // Only when it fails does a field failure below leave the note unrecorded.
+  const asComment = await writeNoteComment(taskId, text);
   const before = await call('GET', `/api/v2/task/${taskId}?include_markdown_description=false`);
   const field = before.res.ok && (before.json.custom_fields || []).find(
     (f) => String(f.name || '').trim().toLowerCase() === 'loop note');
+  if (asComment.ok) {
+    if (field) await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text });
+    return;
+  }
   if (!field) {
     unchecked.push(`${taskId}: could not stamp the Loop note (the field was not found) — the queue will not show the auto-merge state`);
     return;
@@ -3339,6 +3393,8 @@ if (cmd === 'whoami') {
         - (PRIORITY_RANK[b.priority?.priority] ?? loopStatuses.PRIORITY_UNKNOWN)
       || Number(a.date_created) - Number(b.date_created));
   }
+  const notes = await loopNoteComment.hydrateLoopNotes(wanted, noteComments);
+  if (notes.failed) console.error(`  (${notes.failed} in-flight ticket(s) had their Loop note comments unreadable — their note column may be stale)`);
   for (const t of wanted) {
     const created = new Date(Number(t.date_created)).toISOString().slice(0, 10);
     // The repo a task declares (Charter: a task declares its repo). A loop
@@ -3562,6 +3618,9 @@ if (cmd === 'whoami') {
   const out = await call('GET', `/api/v2/task/${task}?include_markdown_description=true`);
   if (!out.res.ok) die('get task', out);
   const t = out.json;
+  try {
+    t.loop_note_comment = loopNoteComment.latestNote(await noteComments(task));
+  } catch { /* unreadable comments: the field's note is shown, as before */ }
   console.log(`id:       ${t.id}`);
   console.log(`name:     ${t.name}`);
   console.log(`status:   ${t.status?.status ?? '?'}`);
@@ -5429,7 +5488,7 @@ if (cmd === 'whoami') {
       const line = `[CC-starcaster bus-relay] AUTO-MERGE IS STILL LATCHED OFF — ${nag.why}. ${selfDisable.why}${latchItemLines(selfDisable)}\n\nNothing will auto-merge until a human says "resume auto-merging". Your own merge commands still work.`;
       if (dryRun) console.error(`  DRY RUN — would post to the bus: ${line}`);
       else {
-        const posted = await postToBus(channel, line);
+        const posted = await postOrSaveToBus(channel, line);
         // Only a delivered nag resets the clock. Stamping it on a failed post
         // would buy silence for a day on the strength of a message nobody got.
         if (posted && posted.ok) ledger = ledgerAfterLatchNag(ledger, now);
@@ -5641,7 +5700,7 @@ if (cmd === 'whoami') {
         sinceLabel: ledger.lastDigestAt > 0 ? `the last digest (${clockAt(since)})` : 'the last 24 hours',
         clockLabel: clockAt(now),
       });
-      const bus = await postToBus(channel, body);
+      const bus = await postOrSaveToBus(channel, body);
       if (bus.ok) ledger = ledgerAfterDigest(ledger, now);
       else reportBusFailure({ cosmetic: false, unchecked, busSkipped, line: `the daily auto-merge digest could not be posted (${bus.why}) — it will be retried next pass` });
     }
@@ -5799,7 +5858,7 @@ if (cmd === 'whoami') {
     console.error(`\nloop-note: ${e.message}`);
     process.exit(2);
   }
-  await stampLoopNote(task, text);
+  await stampLoopNote(task, text, { comment: true });
 
 } else if (cmd === 'loop-heartbeat') {
   // One write per loop pass, onto the pinned "Loop heartbeat" ticket, so the
@@ -6003,7 +6062,26 @@ function nowDateClock() {
  * Resolves the field id by NAME from the task's own custom_fields, so no id is
  * hardcoded. Missing field → CANNOT STAMP, loud, exit 1 (never a silent pass).
  */
-async function stampLoopNote(taskId, text) {
+async function stampLoopNote(taskId, text, { comment = false } = {}) {
+  // `comment` (task 86bbzww8m): a transition note is written as a comment,
+  // which the Free plan never refuses, and every reader prefers it. The
+  // heartbeat ticket keeps the field only — a comment per pass would bury it.
+  if (comment) {
+    const asComment = await writeNoteComment(taskId, text);
+    if (asComment.ok) {
+      const before = await call('GET', `/api/v2/task/${taskId}?include_markdown_description=false`);
+      const field = before.res.ok && (before.json.custom_fields || []).find(
+        (f) => String(f.name || '').trim().toLowerCase() === 'loop note');
+      const fieldOut = field ? await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text }) : null;
+      const fieldSay = !field ? 'no Loop note field on this list'
+        : fieldOut.res.ok ? 'the field was updated too'
+          : 'the field refused the write, which no longer matters — readers use the comment';
+      console.log(`Loop note on ${taskId}: ${text} (written as a comment and read back; ${fieldSay}).`);
+      reportLimits(fieldOut?.res);
+      return;
+    }
+    console.error(`\nThe Loop note comment could not be written (${asComment.why}) — trying the field.`);
+  }
   const before = await call('GET', `/api/v2/task/${taskId}?include_markdown_description=false`);
   if (!before.res.ok) die('read task for loop-note', before);
   const field = (before.json.custom_fields || []).find(

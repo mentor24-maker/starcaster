@@ -177,6 +177,14 @@ npm run clickup -- loop-note --task <id> --transition pr-open --pr <n>   # when 
 npm run clickup -- loop-note --task <id> --transition escalated       # when you move it to Needs your input
 ```
 
+**The note is written as a ticket comment** (`🔖 Loop note: …`) and every
+reader — `queue`, `get`, the in-flight cap, the pause sweep — takes the newest
+one (task 86bbzww8m). Since 2026-09-08 ClickUp's Free plan refuses every write
+to the custom field ("Custom field usages exceeded for your plan"), so the field
+column is stale and is NOT the record; a line saying the field refused is
+expected and is not a failure. Only "the Loop note comment could not be
+written" means the note is missing — say so in your run report.
+
 If it prints `CANNOT STAMP — custom field "Loop note" not found`, that is not a
 failure of your build: the field is a one-time ClickUp setup (see
 `docs/LOOP_ENGINEERING.md`). Note it in your run report and carry on.
