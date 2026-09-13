@@ -72,6 +72,7 @@ const admin       = require('./admin');
 const associations = require('./associations');
 const siteImport  = require('./siteImport');
 const themeWizard = require('./themeWizard');
+const themeUsage  = require('./themeUsage');
 const publicSite  = require('./publicSite');
 
 // Route modules are tried in order — first match wins.
@@ -105,6 +106,10 @@ const ROUTE_MODULES = [
   // Ahead of `builder`: both claim '/api/builder/*', and publish owns the
   // narrower '/api/builder/publish' prefix.
   publish,
+  // Ahead of `builder` for the same reason: it owns one path under
+  // '/api/builder/themes/<id>/', which builder's one-segment regex ignores
+  // today and would 405 the day it grows a catch-all.
+  themeUsage,
   builder,
   siteImport,
   seoAltText,
