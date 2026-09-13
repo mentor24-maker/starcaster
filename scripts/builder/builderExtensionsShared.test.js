@@ -23,6 +23,7 @@ const ALL_DEFAULT_SLUGS = [
   'thumbnail',
   'populate-module-titles',
   'seo-alt-text',
+  'auto-tag',
   'nav-probe',
 ];
 
@@ -109,7 +110,7 @@ test('a project missing the newer defaults gets them seeded', async () => {
       .map((call) => (Array.isArray(call.body) ? call.body[0] : call.body))
       .map((row) => row.slug);
 
-    assert.deepEqual(seeded.sort(), ['nav-probe', 'populate-module-titles', 'seo-alt-text']);
+    assert.deepEqual(seeded.sort(), ['auto-tag', 'nav-probe', 'populate-module-titles', 'seo-alt-text']);
   } finally {
     restore();
   }

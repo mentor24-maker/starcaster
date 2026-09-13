@@ -1329,6 +1329,17 @@ CREATE TABLE "public"."blog_post_relations" (
     CONSTRAINT "blog_post_relations_not_self" CHECK (("post_id_a" <> "post_id_b"))
 );
 
+CREATE TABLE "public"."blog_tag_runs" (
+    "id" "text" NOT NULL,
+    "project_id" "text" NOT NULL,
+    "owner_user_id" "text",
+    "run_id" "text" NOT NULL,
+    "post_id" "text" NOT NULL,
+    "tags_added" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "undone_at" timestamp with time zone
+);
+
 --
 -- Name: blog_posts; Type: TABLE; Schema: public; Owner: -
 --

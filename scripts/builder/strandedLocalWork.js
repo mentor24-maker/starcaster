@@ -58,6 +58,13 @@
  *                nothing there" (DOCTRINE 3.11). The ticket is reported with
  *                the command to look by hand, and NOT moved.
  *
+ * AND ONE SEAT IS ALWAYS ASKED ABOUT, WHETHER OR NOT IT IS IN THE NODE LIST —
+ * the one this reading is being taken FROM. A `hereId` that matches no known
+ * machine used to make every seat remote, so the local disk was never probed
+ * and no row could carry `hereId`; the answer read as a confident reading of a
+ * fleet with the reader's own disk missing from it. `findWorkInProgress` now
+ * adds an `unseen` row for that seat itself (round-2 review, 2026-09-07).
+ *
  * A FOURTH MACHINE STATE, AND IT IS NOT A VERDICT — `unrouted` (round-1
  * review, 2026-09-05). Some machines have no ssh route at all: the inventory
  * declares the Mini reachable "key-based, from the MacBook", one direction
@@ -112,6 +119,45 @@ const PROBE_NO_REPO = 'NO-REPO';
 
 /** The probe found a checkout but git would not answer about it. */
 const PROBE_GIT_FAILED = 'GIT-FAILED';
+
+/**
+ * WHY A BLIND SPOT IS BLIND — the two kinds, told apart in a field rather than
+ * in prose.
+ *
+ * An `unseen` row means "a disk that should have answered did not", and every
+ * reader of one used to have nothing but its `why` sentence to go on. That was
+ * enough while the only cause was a machine going quiet. It stopped being
+ * enough the moment `localWorkReading` started writing rows for a reading that
+ * never reached a disk at all — because "I asked and got no answer" and "I
+ * never knew where to look" want DIFFERENT moves, and only the second one can
+ * be fixed by a human editing the ticket.
+ *
+ * THE COST OF NOT DISTINGUISHING THEM (round-3 review, 2026-09-07, finding 1).
+ * A ticket carrying `repo:does-not-exist` made the reading answer `cannot-tell`
+ * naming this seat, `build-start` exit 1, and the loop-build skill's exit-1
+ * branch says "Stop and say so" — so the pass ended with nothing posted
+ * anywhere. `reconciledBuildDestination` then returned the ticket to `Rework`,
+ * `queue --claimable` sorts rework first and oldest-first on a key that never
+ * changes, and the ticket sat at the head of the claim line being claimed and
+ * refused by every pass. One mis-tagged ticket killed the lane, silently. The
+ * rule that handles exactly that ticket — escalate it to `Needs your input` —
+ * already existed in the skill, three paragraphs BELOW the stop.
+ *
+ * These are the marker, not the fix. What each one means to do about it is
+ * `buildStart.describeNextMove`; what it means for a verdict is unchanged, and
+ * deliberately so: both are still `cannot-tell`, so `pass-reconcile` and the
+ * stranded sweep read them exactly as they did before this field existed
+ * (this ticket's non-goals).
+ */
+
+/** The ticket's own `repo:` tag does not resolve, or names a repo with no
+ *  checkout here — so no disk was probed, and no amount of waiting fixes it.
+ *  A human has to correct the ticket. */
+const BLOCKED_REPO = 'repo';
+
+/** The ticket itself could not be read, so which repo to look in is unknown.
+ *  Transient: the next pass may well get an answer. Not an escalation. */
+const BLOCKED_TICKET = 'ticket';
 
 /**
  * The shell one-liner, as text.
@@ -429,6 +475,43 @@ function findWorkInProgress({
     }
     rows.push(machineVerdict({ machine, ran: res?.ran !== false, why: res?.why, out: res?.out }));
   }
+  // THE SEAT THIS READING IS TAKEN FROM — WAS ITS OWN DISK ACTUALLY READ?
+  //
+  // WHY (round-2 review, 2026-09-07, finding 1). Everything above walks
+  // `nodes`, and `repoPathOn` calls a machine local only when it equals
+  // `hereId`. So a `hereId` that is in no row — a machine this system cannot
+  // NAME — makes every seat remote, including the disk under our feet: each
+  // one is ssh'd, none of them is known to be this one, and no `unseen` row
+  // can ever carry `hereId`. `build-start`'s "this seat going quiet is fatal"
+  // rule is then empty by construction, and the answer came back `fresh`,
+  // exit 0, with not one disk read. Reproduced with `hereId: 'danes-new-mac'`:
+  //
+  //   verdict = cannot-tell  unseen = ["macbook-pro","mac-mini"]  action = fresh
+  //
+  // That is not exotic. `nodeRoles.thisNode()` falls back to the HOSTNAME when
+  // `~/.alphire-node` is missing, so a renamed Mac, a third node, or a DHCP
+  // name gets there — and `thisNodeName()` hands on the literal string
+  // "an unidentified machine" when even that is empty.
+  //
+  // The question is therefore asked as the reading's own, not as a caller's
+  // policy: is there a row for the seat we are standing on? No row means the
+  // local disk was never looked at, which is `unseen` — a reading that was
+  // owed and not taken — and never "there is nothing here" (DOCTRINE 3.11).
+  // It is CLAUDE.md's standing fleet rule in the one place both callers come
+  // through: "a machine whose name is not recognised does not quietly skip;
+  // it refuses out loud, because 'another machine is doing it' and 'nobody is
+  // doing it' look identical otherwise, and only one of them is safe."
+  if (!rows.some((r) => r.machine === hereId)) {
+    rows.push({
+      machine: hereId || '',
+      seen: false,
+      why: hereId
+        ? `this machine calls itself "${hereId}", which is not one of the machines this system knows`
+          + `${nodes.length ? ` (${nodes.join(', ')})` : ''} — so every seat was treated as remote and its OWN disk was never looked at`
+        : 'the reading was not told which machine it is standing on, so this machine\'s own disk was never looked at',
+      work: [],
+    });
+  }
   return combineVerdicts(rows);
 }
 
@@ -489,6 +572,8 @@ function preservedLine({ id, name, verdict, work = [], unseen = [], unlooked = [
 
 module.exports = {
   PROBE_DONE,
+  BLOCKED_REPO,
+  BLOCKED_TICKET,
   PROBE_NO_REPO,
   PROBE_GIT_FAILED,
   probeScript,

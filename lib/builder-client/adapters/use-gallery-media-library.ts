@@ -15,6 +15,7 @@ import { normalizeGalleryMediaAspect } from '../gallery-media-aspect';
 import { starcasterApi, unwrapEnvelope } from './starcaster-app';
 import { registerGalleryMediaThumbnail } from './gallery-media-thumbnail';
 import { registerImageRenditions, type ImageRendition } from '../image-renditions';
+import { rememberAssetByteSize } from '../background-video-size';
 
 const PAGE_SIZE = 60;
 
@@ -33,6 +34,8 @@ type StarcasterAsset = {
   imageHeight?: number;
   renditions?: ImageRendition[];
   createdAt?: string;
+  /** Bytes. `/api/assets` returns this per row (see lib/assetsStore.js). */
+  size?: number;
   source?: string;
 };
 
@@ -59,6 +62,19 @@ export function assetToAdminMediaItem(asset: StarcasterAsset): AdminMediaItem | 
   // The builder preview renders the same modules as the live site, so it should
   // pick from the same scaled-down copies rather than pulling every original.
   if (asset.renditions) registerImageRenditions(location, asset.renditions);
+  /*
+   * The size goes out BOTH ways on purpose, because two different callers ask
+   * two different questions.
+   *
+   * On the item, for the picker's caller: "how big is the file just chosen?"
+   * — answered at the click, and written onto the background setting so it
+   *   survives the session.
+   * In the registry, for a panel holding only a URL: "how big is the video
+   *   already on this row?" — the case of every page built before this
+   *   shipped, which has no stored size and never will until it is re-picked.
+   */
+  const size = Number(asset.size || 0) || 0;
+  if (size > 0) rememberAssetByteSize(location, size);
   return {
     name: String(asset.assetName ?? '').trim() || location.split('/').pop() || location,
     path: location,
@@ -72,6 +88,7 @@ export function assetToAdminMediaItem(asset: StarcasterAsset): AdminMediaItem | 
     imageWidth: Number(asset.imageWidth || 0) || undefined,
     imageHeight: Number(asset.imageHeight || 0) || undefined,
     createdAt: asset.createdAt || undefined,
+    size: size || undefined,
     source: String(asset.source ?? '').trim() || undefined
   };
 }

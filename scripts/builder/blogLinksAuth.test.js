@@ -9,7 +9,14 @@ const {
 } = require('../../lib/projectAdminApiAuth');
 
 /**
- * Ticket 86bbu4qh5 - the admin-blog-links module.
+ * Ticket 86bbu4qh5 - the relate feature, and who may read it back.
+ *
+ * SCOPE NOTE (86bbuhph0). This was written when one module, `admin-blog-links`,
+ * held both the tag table and the article picker. The picker is now its own
+ * module, `admin-related-articles`. Nothing here changed: these assertions are
+ * about `/api/blog/relations` and the auth rules around it, which are shared,
+ * and the file is named for the ticket rather than for the component. The
+ * "Relate Checked" button below now lives in the new module.
  *
  * Two different callers reach this feature and they must NOT get the same
  * access:

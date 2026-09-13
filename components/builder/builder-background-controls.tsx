@@ -10,6 +10,7 @@ import {
   createDefaultBackgroundSettings,
   normalizeBuilderAssetUrl
 } from "@/lib/builder-template";
+import { backgroundVideoSizeNotice, recallAssetByteSize } from "@/lib/background-video-size";
 import {
   BACKGROUND_PARALLAX_SPEED_MAX,
   BACKGROUND_PARALLAX_SPEED_MIN,
@@ -33,8 +34,40 @@ type BuilderBackgroundControlsProps = {
    * label it is. Defaults to `label`, so every existing caller is unchanged.
    */
   modeLabel?: string;
+  /**
+   * What this surface is CALLED in the one sentence that names it out loud —
+   * the missing-poster warning, which reads "Without a poster image this
+   * <noun> will be blank until the video loads".
+   *
+   * It has to be a prop rather than a constant because this component is worn
+   * by three surfaces that can play video and they are three different things
+   * to the operator: a row ("section"), one column inside a row ("column"),
+   * and the whole page ("page"). Until 2026-09-08 the noun was hard-coded to
+   * "section", which was true of the only surface that had video when the
+   * sentence was written and became wrong the moment the page (#663) and the
+   * cell (this ticket) gained it — a warning that names the wrong box sends
+   * the operator to fix the wrong box.
+   *
+   * Defaults to "section", so every caller that IS a section is unchanged.
+   */
+  surfaceNoun?: string;
   background: BackgroundSettings;
   onChange: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
+  /**
+   * Told the mode the operator just PICKED, alongside the `onChange` that
+   * writes it — for the one thing a surface may need to do that the picker
+   * cannot see: write a setting that is not part of `BackgroundSettings`.
+   *
+   * The cell uses it to seed its tint when it first becomes a video cell, the
+   * way the row seeds its own (`changeSectionBackgroundMode`). It is a
+   * separate callback rather than something inferred from `onChange` because
+   * `onChange` hands over an updater, not a value: a caller wanting the new
+   * mode would have to run that updater a second time and hope it is pure.
+   *
+   * Optional, and fired only on a real mode CHANGE, so every existing caller
+   * is unchanged.
+   */
+  onModeChange?: (mode: BackgroundSettings["mode"]) => void;
   onChooseImage?: () => void;
   onUploadImage?: (file: File | null) => void;
   compact?: boolean;
@@ -74,8 +107,10 @@ type BuilderBackgroundControlsProps = {
 export function BuilderBackgroundControls({
   label,
   modeLabel,
+  surfaceNoun = "section",
   background,
   onChange,
+  onModeChange,
   onChooseImage,
   onUploadImage,
   compact = false,
@@ -119,6 +154,9 @@ export function BuilderBackgroundControls({
       }
       return next;
     });
+    // AFTER the fill write, and outside the updater on purpose: an updater
+    // React may call more than once is no place for a second surface's write.
+    onModeChange?.(newMode);
   }
 
   /**
@@ -142,6 +180,19 @@ export function BuilderBackgroundControls({
   const videoUrl = background.videoUrl ?? "";
   const posterUrl = background.posterUrl ?? "";
   const needsPoster = background.mode === "video" && !posterUrl;
+  /*
+   * Advice, not a gate. `null` when the size is unknown — a url typed in by
+   * hand, or a page built before the size was recorded and whose gallery has
+   * not been opened this session — and the panel then says nothing at all,
+   * which is the honest answer rather than a permanent shrug.
+   *
+   * The STORED size wins: it was written in the same breath as this exact url
+   * and is cleared whenever the url changes without one. The registry is the
+   * fallback for the pages that predate the field entirely.
+   */
+  const videoSizeNotice = backgroundVideoSizeNotice(
+    background.videoBytes || recallAssetByteSize(videoUrl)
+  );
 
   const videoGallery = openVideoPicker ? (
     <BuilderGalleryModal
@@ -157,11 +208,15 @@ export function BuilderBackgroundControls({
        * Clear brings the whole library back.
        */
       initialKind={openVideoPicker === "clip" ? "video" : "image"}
-      onSelectImage={(path) => {
+      onSelectImage={(path, item) => {
         const url = normalizeBuilderAssetUrl(path);
         onChange((current) =>
           openVideoPicker === "clip"
-            ? { ...current, videoUrl: url }
+            ? // The size travels WITH the url, in the same write. Two separate
+              // updates could interleave and leave one clip's bytes on
+              // another clip's url, which is the stale-number failure this
+              // whole field is written to avoid.
+              { ...current, videoUrl: url, videoBytes: Number(item?.size || 0) || 0 }
             : { ...current, posterUrl: url }
         );
         setOpenVideoPicker(null);
@@ -191,7 +246,14 @@ export function BuilderBackgroundControls({
             onChange={(event) =>
               onChange((current) => ({
                 ...current,
-                videoUrl: normalizeBuilderAssetUrl(event.target.value)
+                videoUrl: normalizeBuilderAssetUrl(event.target.value),
+                /*
+                 * Typing a url supplies no size, so the old clip's size must
+                 * go with the old clip. Leaving it would put a confident,
+                 * specific, wrong number under a different video — worse than
+                 * the silence this feature was written to replace.
+                 */
+                videoBytes: 0
               }))
             }
             placeholder="/api/admin/media-file/..."
@@ -224,6 +286,25 @@ export function BuilderBackgroundControls({
           </div>
         </BuilderSettingRow>
 
+        {videoSizeNotice ? (
+          <BuilderSettingRow label="" fullWidth>
+            {/*
+              * The size ONCE. An oversized video's warning already names it
+              * ("This video is 34 MB. ..."), so printing the number above the
+              * sentence that repeats it reads like a stutter — and a panel that
+              * looks careless is a panel whose advice gets ignored.
+              */}
+            <p
+              className={`builder-video-background-size${
+                videoSizeNotice.isOversized ? " builder-video-background-size-warn" : ""
+              }`}
+              data-oversized={videoSizeNotice.isOversized ? "true" : "false"}
+            >
+              {videoSizeNotice.warning || videoSizeNotice.sizeText}
+            </p>
+          </BuilderSettingRow>
+        ) : null}
+
         <BuilderSettingRow label="Poster Image" fullWidth>
           <input
             type="text"
@@ -251,7 +332,7 @@ export function BuilderBackgroundControls({
         {needsPoster ? (
           <BuilderSettingRow label="" fullWidth>
             <p className="builder-video-background-warning">
-              Without a poster image this section will be blank until the video loads — and it is
+              Without a poster image this {surfaceNoun} will be blank until the video loads — and it is
               what phones and visitors who have asked for reduced motion see instead of the video.
             </p>
           </BuilderSettingRow>

@@ -96,6 +96,51 @@ const VIDEO_SECTION = {
   modules: [{ type: 'heading', text: 'Text over video', settings: {} }],
 };
 
+/*
+ * A video in the LEFT cell of a two-column row, and nothing in the right one.
+ *
+ * The asymmetry is the whole scene. A per-cell background that leaked would
+ * leak sideways, so a row with footage in both cells could not tell a working
+ * layer from one bleeding across the gap — both would look like video
+ * everywhere. The right cell is the control, and it carries a module of its
+ * own so there is something visible for stray footage to land on.
+ */
+const CELL_VIDEO_SECTION = {
+  layout: 'two-column',
+  cellBackgrounds: {
+    left: {
+      mode: 'video',
+      videoUrl: '/images/render-fixture-background.mp4',
+      posterUrl: '/images/render-fixture-background-poster.jpg',
+      videoSpeed: 1,
+      videoLoop: true,
+    },
+  },
+  modules: [
+    { type: 'heading', text: 'Text over cell video', settings: {}, column: 'left' },
+    { type: 'heading', text: 'Plain neighbour', settings: {}, column: 'right' },
+  ],
+};
+
+/**
+ * THE PAGE-LEVEL video background — the same clip, set on the PAGE rather than
+ * on a row, with two spacer sections so the page is tall enough to scroll past
+ * it. The subject row carries no background of its own, which is what lets the
+ * clip show through it; the contracts below check both halves of that.
+ */
+const VIDEO_PAGE = {
+  layout: 'single',
+  spacers: 2,
+  pageBackground: {
+    mode: 'video',
+    videoUrl: '/images/render-fixture-background.mp4',
+    posterUrl: '/images/render-fixture-background-poster.jpg',
+    videoSpeed: 1,
+    videoLoop: true,
+  },
+  modules: [{ type: 'heading', text: 'Text over a page video', settings: {} }],
+};
+
 /**
  * ─────────────────────────────────────────────────────────────────────────
  * THE SETTINGS SWEEP — coverage nobody has to remember to write.
@@ -296,6 +341,28 @@ export const RENDER_DIFFERENTIALS = [
     setting: 'imageShadowBlur', from: '0', to: '60',
     why: 'Proves the five detail controls reach the shadow and are not decoration around a hardcoded one — the checkbox differential above passes even if every number is ignored.',
   },
+  /*
+   * THE ANGLE CONTROL'S OUTPUT (2026-08-25, "add the angle of dropshadow").
+   *
+   * Shadow Angle and Shadow Distance store NOTHING of their own — they are a
+   * second view of `imageShadowX` and `imageShadowY`, so a differential named
+   * after the angle would be varying a key no renderer reads and would fail
+   * for the wrong reason. What the angle actually does is move the offsets,
+   * and these are the offsets. If either goes dead, the whole dial is dead
+   * with it while both panels keep swinging convincingly.
+   */
+  {
+    id: 'image-drop-shadow-x',
+    module: { type: 'image', settings: { ...PICTURE, imageShadow: 'true' } },
+    setting: 'imageShadowX', from: '0', to: '40',
+    why: 'Half of where the shadow falls, and the half the angle moves first. 0 is the default, so a dead X reads as a shadow that simply never swings sideways.',
+  },
+  {
+    id: 'image-drop-shadow-y',
+    module: { type: 'image', settings: { ...PICTURE, imageShadow: 'true' } },
+    setting: 'imageShadowY', from: '6', to: '-40',
+    why: 'The other half, and the one that carries the sign convention: 0 degrees is right and 90 is UP, which a CSS shadow reaches on a NEGATIVE y. Crossing the default rather than starting at it, so a renderer that ignored the setting could not pass by accident.',
+  },
   {
     id: 'text-line-height',
     module: { type: 'text', text: '<p>Two lines of body copy for the differential to measure against.</p>', settings: {} },
@@ -448,6 +515,37 @@ export const RENDER_CONTRACTS = [
       const columns = String(sample.styles.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
       if (columns.length !== 7) {
         return `the month grid has ${columns.length} columns, not 7 — a week is seven days and the dates will sit under the wrong weekdays.`;
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'event-calendar-weekly-schedule-draws-a-whole-week',
+    why:
+      "The weekly schedule is Delray's printed Weekly Program Guide as a page (task 86bbzt25j): every " +
+      'day of the week down the side, whether or not anything is on it. The date arithmetic is ' +
+      'unit-tested in lib/builder-client/event-schedule.ts; what a test cannot see is that seven day ' +
+      'rows reach the page stacked in a column. With no database here the week is empty, which is the ' +
+      'state a club meets before its programs are entered — a missing day, or days laid out side by ' +
+      'side, would be a schedule that reads wrong to every visitor.',
+    module: { type: 'event-calendar', settings: { layout: 'week', weekStartsOn: '1', calendarTitle: 'Weekly program guide' } },
+    selector: '.builder-event-calendar-week',
+    read: ['display', 'flexDirection', 'height'],
+    expect(sample) {
+      if (sample.styles.display !== 'flex' || sample.styles.flexDirection !== 'column') {
+        return `the week renders as ${sample.styles.display} ${sample.styles.flexDirection}, not a column of days — its layout CSS is not reaching the page.`;
+      }
+      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      const missing = days.filter((d) => !sample.text.includes(d));
+      if (missing.length) {
+        return `the week is missing ${missing.join(', ')} — a program guide must draw every day, even an empty one.`;
+      }
+      if (!/^\s*Monday/.test(sample.text)) {
+        return `the week begins "${sample.text.slice(0, 20)}", not Monday — the Week Starts setting is not reaching the weekly layout.`;
+      }
+      if (sample.box.height < 7 * 40) {
+        return `the week is ${sample.box.height}px tall — seven day rows are collapsing on top of each other.`;
       }
       return null;
     },
@@ -840,6 +938,219 @@ export const RENDER_CONTRACTS = [
       }
       return null;
     },
+  },
+
+  /*
+   * ── THE CELL'S OWN VIDEO ──────────────────────────────────────────────
+   *
+   * The same shared layer as the row's, mounted on a smaller surface, so
+   * these deliberately mirror the row contracts above rather than inventing
+   * new questions. What is genuinely new is the CLIPPING one: a row's layer
+   * has nothing beside it to spill onto, and a cell's has the next column.
+   */
+  {
+    id: 'cell-video-background-renders-a-real-video',
+    why:
+      'Video is the one background mode that is not an element-free CSS property, and the cell ' +
+      'paints the POSTER as its own background either way. So a cell whose layer never mounts looks ' +
+      'exactly like one working correctly with a slow clip — a still picture, no error, nothing to ' +
+      'see. This is the contract that tells those two apart.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: 'video[data-builder-video-background="cell"]',
+    read: ['objectFit', 'position'],
+    expect(sample) {
+      if (sample.styles.objectFit !== 'cover') {
+        return `the cell video is \`object-fit: ${sample.styles.objectFit || 'none'}\`, not cover — ` +
+          'it would letterbox or stretch instead of filling the cell.';
+      }
+      if (sample.styles.position !== 'absolute') {
+        return `the cell video is \`position: ${sample.styles.position}\` — it is in the cell's flow ` +
+          'rather than behind it, so it would push the column\'s content down.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-is-clipped-to-its-own-cell',
+    why:
+      'THE reason this is a per-cell feature and not a per-row one. The layer is scaled to cover, so ' +
+      'without `overflow: hidden` on the column the footage spills sideways over the column beside ' +
+      'it — one cell\'s background silently painting over its neighbour\'s words. It is invisible to ' +
+      'every other check here: the video renders, the poster is right, the z-index is right, and the ' +
+      'row still looks like a row.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '.builder-preview-column-layered',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow !== 'hidden') {
+        return `the cell carrying the video is \`overflow: ${sample.styles.overflow || 'visible'}\` — its ` +
+          'footage is free to bleed across the gap into the next column.';
+      }
+      if (sample.styles.position === 'static') {
+        return 'the cell is `position: static`, so the absolutely positioned video escapes it entirely ' +
+          'and sizes itself against the row (or the page) instead.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-stays-behind-the-words',
+    why:
+      'The video is absolutely positioned inside the cell and the modules are ordinary in-flow ' +
+      'siblings, so without the content rung the footage paints OVER the operator\'s text. That is ' +
+      'the one outcome a background must never produce, and it is the same failure the cell tint ' +
+      'screen already guards — this one arrives through a different element.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '.builder-preview-column-layered > .builder-preview-module',
+    read: ['position', 'zIndex'],
+    expect(sample) {
+      if (sample.styles.position === 'static') {
+        return 'the module is `position: static`, so its z-index does nothing and the video paints over it.';
+      }
+      const zIndex = Number(sample.styles.zIndex);
+      if (!Number.isFinite(zIndex) || zIndex < 1) {
+        return `the module sits at z-index ${sample.styles.zIndex || 'auto'}, which is not above the cell ` +
+          'video layer (0) — the words in that column would be behind the footage.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-leaves-the-next-column-without-a-video',
+    why:
+      'The control for every contract above, and they need one badly: a cell background that mounted ' +
+      'its layer for EVERY column would satisfy all of them and still be flatly wrong — the operator ' +
+      'asked ONE column for footage, not the row. The neighbour was given no background at all, so a ' +
+      'video inside it can only have come from the mount condition being blind to which cell it is on.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector:
+      '.builder-preview-column + .builder-preview-column video[data-builder-video-background="cell"]',
+    absent: true,
+  },
+
+  {
+    id: 'cell-video-background-does-not-clip-a-cell-that-has-no-video',
+    why:
+      'The containment that keeps footage inside its own cell is deliberately conditional, and this ' +
+      'is what holds it that way. Clipping every column unconditionally would pass every other ' +
+      'contract here and silently start cutting off the floating images and overhanging decor that ' +
+      'are SUPPOSED to reach out of their cell — a regression with no error, in a feature nobody was ' +
+      'touching.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '.builder-preview-column + .builder-preview-column',
+    read: ['overflow'],
+    expect(sample) {
+      if (sample.styles.overflow === 'hidden') {
+        return 'the cell with NO video of its own is `overflow: hidden` — containment is being applied ' +
+          'to every column rather than only the ones carrying a layer, so overhanging decor elsewhere ' +
+          'on the page is now being clipped.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-honours-reduce-motion',
+    why:
+      'Reduce Motion is turned on for migraines and motion sickness, and it has to hold per CELL as ' +
+      'well as per row — a setting honoured on one surface and quietly dropped on the next is worse ' +
+      'than one that was never offered. The poster underneath is already painted, so this costs the ' +
+      'look nothing.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: 'video[data-builder-video-background="cell"]',
+    emulate: { reducedMotion: 'reduce' },
+    absent: true,
+  },
+
+  {
+    id: 'cell-video-background-falls-back-to-the-poster-on-phones',
+    why:
+      'A background video is megabytes of someone else\'s cell data spent on decoration, and a row of ' +
+      'video cells multiplies that by the column count. The phone fallback has to hold per cell for ' +
+      'the same reason it holds per row, and it fails silently: nobody testing on a desktop can see ' +
+      'that phones are being charged for the clips.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: 'video[data-builder-video-background="cell"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    absent: true,
+  },
+
+  {
+    id: 'page-video-background-is-fixed-to-the-window',
+    why:
+      'A PAGE video is the same element as a row video and differs by exactly one CSS declaration: ' +
+      '`position: fixed`, which is what makes the clip fill the window while the sections scroll ' +
+      'over it. Lose that declaration and it becomes an absolutely-positioned layer inside a shell ' +
+      'as tall as the whole page — the clip stretches to the full document height and scrolls away ' +
+      'with the content, which reads as a badly-cropped picture rather than as a broken setting. ' +
+      'Nothing else can see it: the element is present, playing, and in the right place at the top ' +
+      'of the page, so every static check and every screenshot of the first fold agrees it is fine.',
+    section: { ...VIDEO_PAGE },
+    selector: 'video[data-builder-video-background="page"]',
+    read: ['objectFit', 'position', 'zIndex'],
+    expect(sample) {
+      if (sample.styles.position !== 'fixed') {
+        return `the page video background is \`position: ${sample.styles.position}\`, not fixed — it would ` +
+          'scroll away with the page instead of staying in the window behind it.';
+      }
+      if (sample.styles.objectFit !== 'cover') {
+        return `the page video background is \`object-fit: ${sample.styles.objectFit || 'none'}\`, not cover — ` +
+          'it would letterbox or stretch instead of filling the window.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'page-video-background-sits-behind-the-page',
+    why:
+      'The whole page has to paint IN FRONT of a full-window element, and the only thing making that ' +
+      'true is `.builder-viewport-shell-content` carrying its own stacking context. Without it the ' +
+      'clip covers every section on the site — text, navigation, forms — and the page reads as having ' +
+      'gone blank rather than as a background being in the wrong layer. It is also the exact failure ' +
+      'a fixed layer invites, which is why it is asserted rather than assumed.',
+    section: { ...VIDEO_PAGE },
+    selector: '.builder-viewport-shell-content',
+    read: ['position', 'zIndex'],
+    expect(sample) {
+      if (sample.styles.position === 'static') {
+        return 'the page content is `position: static`, so its z-index does nothing and the video paints over it.';
+      }
+      const zIndex = Number(sample.styles.zIndex);
+      if (!Number.isFinite(zIndex) || zIndex < 1) {
+        return `the page content sits at z-index ${sample.styles.zIndex || 'auto'}, which is not above the ` +
+          'page video layer (0) — every section on the site would be hidden behind the clip.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'page-video-background-honours-reduce-motion',
+    why:
+      'A full-WINDOW looping clip is louder than a full-bleed row, and it is on every screen of the ' +
+      'site rather than one band of one page. The fallback is the poster the shell already paints, ' +
+      'so honouring this costs nothing — and it is invisible to everyone not affected by it, which ' +
+      'is precisely why it needs a check rather than a reviewer.',
+    section: { ...VIDEO_PAGE },
+    selector: 'video[data-builder-video-background="page"]',
+    emulate: { reducedMotion: 'reduce' },
+    absent: true,
+  },
+
+  {
+    id: 'page-video-background-falls-back-to-the-poster-on-phones',
+    why:
+      'Megabytes of a visitor\'s cell data, spent on decoration, on every page of the site rather ' +
+      'than on one row of one page. Same default as a row background and the same silent failure ' +
+      'mode: nobody testing on a desktop can see that phones are being charged for the clip.',
+    section: { ...VIDEO_PAGE },
+    selector: 'video[data-builder-video-background="page"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    absent: true,
   },
 
   {

@@ -218,42 +218,6 @@ export function BuilderCrmFormModuleSettings({
         the Feature Cards card list.
       */}
 
-      {/*
-        ONE strip, and therefore one grid — the same shape `sharedModuleChrome`
-        uses in builder-module-card.tsx. Background used to be a SIBLING of the
-        strip here, which is the exact arrangement that laid the chrome out as
-        two ragged sub-columns: the background block at the left edge and the
-        alignment/margin stack floating to its right. `crm-form` renders its own
-        chrome on purpose (it is excluded from `needsRestoredChrome` so there is
-        never a second copy, E6), so it has to render the right one.
-      */}
-      <div className="builder-module-chrome">
-        <BuilderModuleFieldStrip>
-          <BuilderBackgroundControls
-            label="Background"
-            background={getModuleBackgroundSettings(s)}
-            horizontal
-            onChange={onUpdateModuleBackground}
-            themeBackgroundColor={themeBackgroundColor}
-            themeColors={themeColors}
-            themePrimaryColor={themePrimaryColor}
-          />
-          <BuilderModuleField label="Alignment" width="align">
-            <BuilderAlignmentIconGroup
-              value={moduleAlignment}
-              onChange={(alignment) => updateModuleSetting("alignment", alignment)}
-            />
-          </BuilderModuleField>
-          {/* W7 names and side order, E4b pairing — the same component
-              marginFields() gives a generated panel. */}
-          <BuilderModuleSpacingFields
-            box="margin"
-            max={160}
-            onChange={updateModuleSettings}
-            settings={s}
-          />
-        </BuilderModuleFieldStrip>
-      </div>
 
       {/* D8 axes, the same shape the sibling crm-contacts-table panel gets
           from the schema generator: which form this module shows is Content,
@@ -286,6 +250,52 @@ export function BuilderCrmFormModuleSettings({
               </select>
             )}
           </BuilderModuleField>
+
+          {/*
+            ONE strip, and therefore one grid — the same shape
+            `sharedModuleChrome` uses in builder-module-card.tsx. Background
+            used to be a SIBLING of the strip here, which is the exact
+            arrangement that laid the chrome out as two ragged sub-columns: the
+            background block at the left edge and the alignment/margin stack
+            floating to its right. `crm-form` renders its own chrome on purpose
+            (it is excluded from `needsRestoredChrome` so there is never a
+            second copy, E6), so it has to render the right one.
+
+            INSIDE the Content column since 2026-09-08 (ticket 86bbq065f),
+            where it used to hang off the editor root above the columns. That
+            is the same place the slot puts the shared chrome on every other
+            panel, reached without a slot because this panel owns its chrome
+            outright: the rows become grid items of the column, so `max-content`
+            measures "Background" and "CRM Form" against one pair of tracks
+            rather than two. It was -12px on the control track before.
+          */}
+          <div className="builder-module-chrome">
+            <BuilderModuleFieldStrip>
+              <BuilderBackgroundControls
+                label="Background"
+                background={getModuleBackgroundSettings(s)}
+                horizontal
+                onChange={onUpdateModuleBackground}
+                themeBackgroundColor={themeBackgroundColor}
+                themeColors={themeColors}
+                themePrimaryColor={themePrimaryColor}
+              />
+              <BuilderModuleField label="Alignment" width="align">
+                <BuilderAlignmentIconGroup
+                  value={moduleAlignment}
+                  onChange={(alignment) => updateModuleSetting("alignment", alignment)}
+                />
+              </BuilderModuleField>
+              {/* W7 names and side order, E4b pairing — the same component
+                  marginFields() gives a generated panel. */}
+              <BuilderModuleSpacingFields
+                box="margin"
+                max={160}
+                onChange={updateModuleSettings}
+                settings={s}
+              />
+            </BuilderModuleFieldStrip>
+          </div>
         </div>
 
         {/* These six write to the CRM FORM RECORD over the API, not to the

@@ -17,6 +17,12 @@ export type AdminMediaItem = {
   imageWidth?: number;
   imageHeight?: number;
   createdAt?: string;
+  /**
+   * File size in bytes, when the source knows it. Optional because it
+   * genuinely is: `/api/assets` carries a size per row, the community library
+   * does not, and a row written before sizes were recorded has 0.
+   */
+  size?: number;
   /** Which surface this file was uploaded through. See lib/assetSource.js. */
   source?: string;
 };

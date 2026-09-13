@@ -323,7 +323,15 @@ if (!queueRead.tasks) {
 // evidence about anything else.
 if (CHECK) clearUnknownStamp('unreadable');
 
-const tasks = queueRead.tasks;
+// WORK ONLY — the standing noticeboards are not tickets (task 86bbwab1n).
+// The lib readers exclude them for themselves, so this line is not what makes
+// the counts right. It is here because two derivations BELOW never pass
+// through the lib at all — `queueTouched` and `ticketStatusById` are computed
+// from this array directly — and `queueTouched` is the one that matters: an
+// alarm comment bumps the noticeboard's `date_updated`, so without this the
+// answer to "was the Loop Queue touched in the last 24 hours?" could be yes
+// on the strength of the watchdog writing to itself.
+const tasks = throughput.workTickets(queueRead.tasks);
 const queue = throughput.queueShape(tasks);
 const closed = throughput.closedPerDay({ tasks, now: NOW, days: DAYS });
 const closedLast24h = throughput.closedSince({ tasks, now: NOW });

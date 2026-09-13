@@ -153,17 +153,41 @@ import {
 import { BuilderCodeEmbed } from "@/components/builder/builder-code-embed";
 import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import { BuilderImagePickerField } from "@/components/builder/builder-image-picker-field";
+import { BuilderEventHarvest } from "@/components/builder/builder-event-harvest";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import {
-  eventOccursOn,
   formatEventWhen,
   isSameDay,
-  isoToLocalInput,
-  isUpcomingEvent,
-  localInputToIso,
   monthGrid,
   normalizeEventStatus,
 } from "@/lib/event-format";
+import {
+  WEEKDAY_SHORT,
+  describeRecurrence,
+  eventTimeZone,
+  expandOccurrences,
+  formatOccurrenceDate,
+  formatTimeRange,
+  isValidTimeZone,
+  isoToZonedInput,
+  zonedInputToIso,
+  addDays,
+  weekdayOf,
+  type RecurrenceOverride,
+  type RecurrenceRule,
+} from "@/lib/event-recurrence";
+import {
+  calendarTimeZone,
+  datesRange,
+  eventPageHref,
+  formatWeekLabel,
+  groupByDate,
+  occurrenceOn,
+  scheduleBetween,
+  todayIn,
+  weekDates,
+  type ScheduleItem,
+} from "@/lib/event-schedule";
 import { BuilderImagePreview } from "@/components/builder/builder-image-preview";
 import {
   BuilderFloatingImageRuntime,
@@ -620,6 +644,15 @@ function CrmFormPreview({
   const visibleFields = publicFormFields(form.fields ?? []).filter(
     (field) => !(liveSite && crmSelectHasNothingToChoose(field))
   );
+  /*
+   * Every field was dropped by the filter above. On a published page that is a
+   * heading and a Submit button over nothing — and a click posts, writes an
+   * empty contact row and thanks the visitor for it (ticket 86bbvqcbk,
+   * finding 3). `saveForm` refuses a form with no fields at all, so reaching
+   * this takes a form whose fields are ALL option-less dropdowns: rare, not
+   * impossible. The canvas still draws it, which is where it can be fixed.
+   */
+  if (liveSite && visibleFields.length === 0) return null;
   const labelStyle = {
     justifySelf: renderStyles.cssVars['--crm-form-label-justify'],
     textAlign: renderStyles.normalized.labelAlign as CSSProperties['textAlign'],
@@ -1349,11 +1382,25 @@ function CrmContactsTablePreview({
   );
 }
 
-function MerchProductCard({ settings }: { settings: Record<string, string> }) {
+function MerchProductCard({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
   const productName = settings.productName || "Merch product";
   const imageUrl = resolvePublicBuilderAssetUrl(settings.imageUrl);
   const productUrl = resolvePublicBuilderAssetUrl(settings.productUrl);
   const buttonLabel = settings.buttonLabel || "Buy on Redbubble";
+  /*
+   * Nothing has been filled in, so the card would render the words "Merch
+   * product" as if they were the product — sample copy on a client's shop
+   * (ticket 86bbvqcbk). The canvas keeps it: it is the placeholder that shows
+   * the card is there to configure.
+   */
+  if (liveSite && !settings.productName && !imageUrl && !productUrl) return null;
 
   return (
     <div className="product-card">
@@ -1907,6 +1954,41 @@ function BuilderSectionPreview({
             ? undefined
             : getBuilderRowOverlayScreenStyle(section.cellOverlayScreens?.[columnKey]);
         /*
+         * The cell's own video layer — the per-cell twin of the row's, and the
+         * SAME component (`BuilderBackgroundLayer`), which is what keeps "pause
+         * off screen", "honour reduce motion" and "fall back to the poster on a
+         * phone" from existing twice. Its `surface` prop already had "cell" in
+         * the union before anything mounted one.
+         *
+         * `columnStyle` above has already painted the POSTER as an ordinary CSS
+         * background, exactly as the row does, so the cell reads correctly
+         * before this layer mounts, while it buffers, and in every state where
+         * the layer decides not to play at all. The <video> only ever covers a
+         * still that is already right.
+         *
+         * The two collapsed-slot guards mirror the overlay screen's directly
+         * above, and they mirror the ROW's `isOverlayLayoutCollapsed` guard for
+         * the same reason: an overlay-flow column and a section-scoped overlay
+         * slot are decor mounts with their box thrown away, and the containment
+         * this layer needs (`overflow: hidden`) would clip the very thing they
+         * exist to let overflow.
+         *
+         * There is no parallax twin here. An image background parallaxes by
+         * mounting this same layer, but the driver measures `parentElement` as
+         * the surface and translates against the SCROLL — a row-height effect.
+         * Cells are not offered it (no `allowParallax` on the cell panel), so
+         * mounting a layer for a plain cell image would give every one of them
+         * the containment above and start clipping overhanging decor for no
+         * gain. Video only, which is exactly what the panel can produce.
+         */
+        const columnVideoBackground =
+          !isPageOverlayFlowColumn &&
+          !isSectionOverlayColumn &&
+          columnBackground?.mode === "video" &&
+          Boolean(columnBackground?.videoUrl)
+            ? columnBackground
+            : null;
+        /*
          * The cell's own numbers, as one answer each, used BOTH by the inline
          * properties below and by the variables the narrow-screen rules read.
          *
@@ -1972,7 +2054,21 @@ function BuilderSectionPreview({
                 section.cellHAlign?.[columnKey] ?? "left",
                 section.cellVAlign?.[columnKey] ?? "top"
               )),
-          position: "relative"
+          position: "relative",
+          /*
+           * Containment for the video layer, and the reason this ticket is
+           * about cells rather than rows: the layer is scaled to cover, so
+           * without `overflow: hidden` a cell's footage spills sideways over
+           * the column beside it — the one thing a per-cell background must
+           * never do. The row clips its own layer for the same reason.
+           *
+           * Applied ONLY when a video layer is actually mounted. Clipping
+           * every cell unconditionally would silently start cutting off the
+           * floating images and overhanging decor that deliberately reach out
+           * of their column, which is why the collapsed-slot guards sit on
+           * `columnVideoBackground` itself.
+           */
+          ...(columnVideoBackground ? { overflow: "hidden" } : {})
         };
 
         return (
@@ -1983,10 +2079,24 @@ function BuilderSectionPreview({
             } ${isNavigationColumn ? "builder-preview-column-navigation" : ""}${
               isPageOverlayFlowColumn ? " builder-preview-column-overlay-flow" : ""
             } ${isSectionOverlayColumn ? " builder-preview-column-overlay-slot" : ""}${
-              cellOverlayScreenStyle ? " builder-preview-column-layered" : ""
+              cellOverlayScreenStyle || columnVideoBackground ? " builder-preview-column-layered" : ""
             }`}
             style={columnStyle}
           >
+            {/*
+              The video sits UNDER the tint screen and under the modules. Order
+              here is the fill, then this, then the screen, then the words —
+              the same stack the row paints, so a cell that carries both a
+              video and an overlay dims the footage rather than the text.
+
+              `builder-preview-column-layered` is on the column above whenever
+              EITHER is mounted, which is what lifts the modules to the content
+              rung; this element stays at 0 with the screen, from the shared
+              `.builder-preview-video-background` rule.
+            */}
+            {columnVideoBackground ? (
+              <BuilderBackgroundLayer background={columnVideoBackground} surface="cell" />
+            ) : null}
             {/*
               Above the cell's own fill, below its modules. The stacking is not
               done here — the class above is what the stylesheet hangs two
@@ -2112,7 +2222,7 @@ function BuilderModulePreview({
   const variant = module.settings.variant ?? "";
 
   if (module.type === "navigation") {
-    return <NavigationModulePreview module={module} previewMode={previewMode} />;
+    return <NavigationModulePreview module={module} previewMode={previewMode} liveSite={liveSite} />;
   }
 
   if (module.type === "heading") {
@@ -2186,7 +2296,7 @@ function BuilderModulePreview({
   }
 
   if (module.type === "merch") {
-    return <MerchProductCard settings={module.settings} />;
+    return <MerchProductCard settings={module.settings} liveSite={liveSite} />;
   }
 
   if (module.type === "quote") {
@@ -2251,6 +2361,15 @@ function BuilderModulePreview({
   }
 
   if (module.type === "player-portal") {
+    /*
+     * StarCaster has no player portal (BUILDER_CAPABILITIES.playerPortal), so
+     * this module renders a stub reading "Player Portal modules are not
+     * available in StarCaster." That is a note to whoever is building the
+     * page — it names our product on a tenant's own site, to a reader who can
+     * do nothing about it (ticket 86bbvqcbk). It stays on the canvas, where
+     * it is the only thing explaining why the module is blank.
+     */
+    if (liveSite) return null;
     return (
       <PlayerPortalAuthForm
         settings={getPlayerPortalAuthSettings(module.settings)}
@@ -2263,6 +2382,12 @@ function BuilderModulePreview({
     const embed = getVideoEmbedSource(module.settings.url);
     const title = module.settings.videoName || module.name || module.text || "Video";
     const opensInNewTab = module.settings.newTab !== "false";
+    /*
+     * No URL: the frame below is empty and the caption falls back to the word
+     * "Video" — an empty box under the module's own name, which is design-time
+     * chrome rather than anything a visitor can use (ticket 86bbvqcbk).
+     */
+    if (liveSite && !embed) return null;
 
     return (
       <figure className="builder-preview-video-card">
@@ -2303,6 +2428,7 @@ function BuilderModulePreview({
           module={module}
           variant={variant}
           placeholder="Choose a floating image"
+          liveSite={liveSite}
         />
       );
     }
@@ -2319,6 +2445,7 @@ function BuilderModulePreview({
             sectionScopedDecor={isSectionScopedOverlayDecor(module)}
             variant={variant}
             placeholder="Choose a floating image"
+            liveSite={liveSite}
           />
         ) : null}
         {usesOverlayHost ? (
@@ -2341,12 +2468,13 @@ function BuilderModulePreview({
         variant={variant}
         placeholder="Choose an image"
         columnWidthPercent={columnWidthPercent}
+        liveSite={liveSite}
       />
     );
   }
 
   if (module.type === "table") {
-    return <TableModulePreview module={module} />;
+    return <TableModulePreview module={module} liveSite={liveSite} />;
   }
 
   if (module.type === "social") {
@@ -2370,7 +2498,14 @@ function BuilderModulePreview({
   }
 
   if (module.type === "confetti") {
-    return <BuilderConfettiRuntime preview settings={module.settings} />;
+    /*
+     * `preview` was hardcoded true, so a published page ran the module's
+     * BUILDER chrome: an on-load confetti told the visitor "Confetti runs when
+     * this page loads" and offered them a Test Burst button, and a game-trigger
+     * module explained that it has no button on the live page — on the live
+     * page (ticket 86bbvqcbk).
+     */
+    return <BuilderConfettiRuntime preview={!liveSite} settings={module.settings} />;
   }
 
   if (module.type === "tractor-nav") {
@@ -2381,7 +2516,7 @@ function BuilderModulePreview({
     if (shouldRenderBlogPostManager(module.settings)) {
       return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
     }
-    return <BlogPostListPreview settings={module.settings} />;
+    return <BlogPostListPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-post-create") {
     return <BlogPostCreatePreview settings={module.settings} />;
@@ -2390,7 +2525,7 @@ function BuilderModulePreview({
     return <BlogPostManagerPreview settings={resolveBlogPostManagerSettings(module.settings)} />;
   }
   if (module.type === "event-detail") {
-    return <EventDetailPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
+    return <EventDetailPreview settings={module.settings} theme={theme} themePalette={themePalette} liveSite={liveSite} />;
   }
   if (module.type === "event-calendar") {
     return <EventCalendarPreview settings={module.settings} theme={theme} themePalette={themePalette} />;
@@ -2424,7 +2559,7 @@ function BuilderModulePreview({
     return <BlogPostTagsPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-post") {
-    return <BlogPostViewPreview settings={module.settings} />;
+    return <BlogPostViewPreview settings={module.settings} liveSite={liveSite} />;
   }
   if (module.type === "blog-newsletter-subscribe") {
     return (
@@ -2487,7 +2622,12 @@ function BuilderModulePreview({
   }
 
   if (module.type === "admin-blog-links") {
-    return <AdminBlogLinksPreview settings={module.settings} projectId={projectId} />;
+    // liveSite: the Auto-tag button is real on the admin site and inert in the Builder.
+    return <AdminBlogLinksPreview settings={module.settings} projectId={projectId} liveSite={liveSite} />;
+  }
+
+  if (module.type === "admin-related-articles") {
+    return <AdminRelatedArticlesPreview settings={module.settings} projectId={projectId} />;
   }
 
   if (module.type === "admin-support-form") {
@@ -2613,7 +2753,25 @@ function usePostPageUrl(settings: Record<string, string>): string {
  */
 const UNMATCHED_FILTER_VALUE = "__starcaster_unmatched_filter__";
 
-function BlogPostListPreview({ settings }: { settings: Record<string, string> }) {
+/*
+ * "tagged X" + "by Y" -> "tagged X and by Y"; three or more take commas. The
+ * empty-state sentence names EVERY filter that is narrowing the page, because
+ * naming only the first one blames it for an emptiness a later one caused —
+ * which is the defect this whole message was rewritten to stop.
+ */
+function joinFilterPhrases(phrases: string[]): string {
+  if (phrases.length <= 1) return phrases[0] || "";
+  return `${phrases.slice(0, -1).join(", ")} and ${phrases[phrases.length - 1]}`;
+}
+
+function BlogPostListPreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
   const [allPosts, setAllPosts] = useState<BlogPostRecord[]>([]);
   /*
    * Whether allPosts is the WHOLE published archive or as much of it as could
@@ -2800,10 +2958,22 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
     );
   }, [allAuthors, authorFilter]);
 
-  const filteredPosts = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  /*
+   * The dropdown filters on their own, with the search box left out of it.
+   * Two sentences on this module are statements about THIS list rather than
+   * about the one on screen, and neither could be written while the only list
+   * in scope had the typed word already folded into it (task 86bbw4j6e):
+   *
+   *   - whether the search term had anything to do with an empty page. If the
+   *     dropdowns alone leave nothing, clearing the word brings nothing back,
+   *     so naming it is an invitation the page cannot honour.
+   *   - what the results line is allowed to claim its count is a count OF.
+   *
+   * The search is applied to this array below rather than beside it, so the
+   * two can never drift into filtering by different rules.
+   */
+  const postsBeforeSearch = useMemo(() => {
     return allPosts.filter((post) => {
-      if (q && !`${post.title} ${post.excerpt || ""}`.toLowerCase().includes(q)) return false;
       if (missingCatSlug) return false;
       if (catFilter && !post.categoryIds?.includes(catFilter)) return false;
       if (tagFilter && !post.tags?.includes(tagFilter)) return false;
@@ -2812,7 +2982,15 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
       if (dateTo && (!post.published_at || new Date(post.published_at) > new Date(dateTo + "T23:59:59"))) return false;
       return true;
     });
-  }, [allPosts, search, catFilter, missingCatSlug, tagFilter, authorFilter, dateFrom, dateTo]);
+  }, [allPosts, catFilter, missingCatSlug, tagFilter, authorFilter, dateFrom, dateTo]);
+
+  const filteredPosts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return postsBeforeSearch;
+    return postsBeforeSearch.filter((post) =>
+      `${post.title} ${post.excerpt || ""}`.toLowerCase().includes(q)
+    );
+  }, [postsBeforeSearch, search]);
 
   /*
    * A new filter starts a new list, so it starts at page one again. Without
@@ -2845,6 +3023,22 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
    * parameter that did nothing — which is exactly how a working page read as a
    * broken one on 2026-09-03. Name the value that emptied the page.
    */
+  const searchTerm = search.trim();
+  /*
+   * The dates are shown exactly as the visitor set them, which is the string
+   * sitting in the date input. Formatting them would mean parsing an ISO date
+   * back through `new Date`, whose midnight is UTC — so "2026-01-01" renders
+   * as December 31 anywhere west of Greenwich, and the sentence would name a
+   * bound the filter is not using.
+   */
+  const dateRangePhrase =
+    dateFrom && dateTo
+      ? `published between ${dateFrom} and ${dateTo}`
+      : dateFrom
+        ? `published on or after ${dateFrom}`
+        : dateTo
+          ? `published on or before ${dateTo}`
+          : "";
   /*
    * "Blog posts matching the tag \u201cjunior tennis\u201d: 13" — the operator's
    * wording, 2026-09-03. It renders only when the mode HAS a value: with
@@ -2856,17 +3050,117 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
       : singleFilter === "category" ? activeCategoryName
         : singleFilter === "author" ? authorFilter
           : "";
+  /*
+   * Whether the typed word had anything to do with the page being empty.
+   * `postsBeforeSearch` is the dropdowns on their own: when it is already
+   * empty, the word is innocent, and naming it — "No posts tagged \u201cjunior
+   * tennis\u201d match \u201ctennis\u201d." — invites the visitor to clear
+   * something whose clearing brings nothing back.
+   *
+   * #643 wrote exactly that reason above the `missingCatSlug` carve-out and
+   * then applied it to that one case. Every dropdown can empty the list on its
+   * own: 97 tags on the Delray project carry no published post at all (22 are
+   * published in total) and the live tag cloud links to all of them, an
+   * `?author=` naming nobody does the same, and so does a date bound outside
+   * the archive. So the carve-out becomes the general rule it was always
+   * describing, and `missingCatSlug` falls out of it — that slug drops every
+   * post, so `postsBeforeSearch` is empty and the word is innocent by the same
+   * arithmetic (task 86bbw4j6e).
+   *
+   * The other direction is unchanged and is what #643 exists to protect: while
+   * the dropdowns DO leave posts standing, the search is what emptied the page
+   * and the sentence names it alongside them, never instead of them.
+   *
+   * It sits HERE, above the results line, because BOTH sentences have to
+   * answer this question the same way. Round 1 of this ticket gated only the
+   * empty state on it and left the results line naming the search
+   * unconditionally, so a tag with no published posts put two sentences on
+   * screen at once that contradicted each other — "matching the tag
+   * \u201cjunior tennis\u201d and the search \u201ctennis\u201d: 0" ten lines
+   * above "No posts tagged \u201cjunior tennis\u201d." The top one re-issued
+   * the clear-the-word invitation the bottom one had just withdrawn. One test,
+   * read by both, is what keeps them from drifting apart again; a second copy
+   * of the condition would be free to rot.
+   */
+  const searchTermIsBlamable = Boolean(searchTerm) && postsBeforeSearch.length > 0;
+  /*
+   * Everything narrowing the list BEYOND the one filter this line is titled
+   * after. The number printed is `filteredPosts.length` — the count of cards
+   * actually on the page — so a sentence naming only the tag was claiming a
+   * count of tag matches while printing a number something else had already
+   * cut down. On the client's live /tags page (2026-09-07): three posts carry
+   * "beginner tennis", the visitor types "Clinics", and the line went on
+   * reading `matching the tag "beginner tennis": 1`. Both halves confident,
+   * one of them false, and the two screens counting the same thing differently
+   * with neither saying what it counts (landmine 17, \u00a75.31).
+   *
+   * The number is the half that stays, because it is the one a visitor can
+   * check against the cards in front of them. The sentence widens to cover it.
+   *
+   * The search is not the only route in. `?tag=`, `?category=` and `?author=`
+   * each seed their filter from the URL whatever `filterMode` says, so
+   * `?tag=X&author=Y` on a tag-results page narrows the count exactly as a
+   * typed word does, and the date bounds do too wherever the operator has
+   * turned that filter on. Naming only the search would leave the identical
+   * false sentence reachable three other ways.
+   */
+  const otherNarrowingPhrases = [
+    singleFilter !== "tag" && tagFilter ? `the tag \u201c${tagFilter}\u201d` : "",
+    singleFilter !== "category" && activeCategoryName
+      ? `the category \u201c${activeCategoryName}\u201d`
+      : "",
+    singleFilter !== "author" && authorFilter ? `the author \u201c${authorFilter}\u201d` : "",
+    dateRangePhrase,
+    searchTermIsBlamable ? `the search \u201c${searchTerm}\u201d` : "",
+  ].filter(Boolean);
   const resultsLine = singleFilterValue
-    ? `Blog posts matching the ${singleFilter} \u201c${singleFilterValue}\u201d: ${filteredPosts.length}`
+    ? `Blog posts matching ${joinFilterPhrases([
+        `the ${singleFilter} \u201c${singleFilterValue}\u201d`,
+        ...otherNarrowingPhrases,
+      ])}: ${filteredPosts.length}`
     : "";
 
-  const emptyFilteredMessage = tagFilter
-    ? `No posts tagged \u201c${tagFilter}\u201d.`
-    : activeCategoryName
-      ? `No posts in the category \u201c${activeCategoryName}\u201d.`
-      : authorFilter
-        ? `No posts by \u201c${authorFilter}\u201d.`
-        : "No posts match your filters.";
+  /*
+   * The dropdown filters name themselves; the search box did not, and that is
+   * the same defect one step further on. Typing a word nothing matches read
+   * "No posts match your filters." \u2014 which does not say WHICH word emptied
+   * the page (\u00a75.31) \u2014 and typing it while a tag was selected read
+   * "No posts tagged \u201ctennis\u201d.", a sentence that is flatly FALSE when
+   * posts carry that tag and the search is what emptied the list. A confident
+   * wrong message is the worst of the three. So the search term is named
+   * whenever it is one of the reasons the page is empty, and a filter takes
+   * credit alongside it rather than instead of it.
+   *
+   * #643 wrote that rule without the first clause, as though the search were
+   * always one of the reasons. It is not: when the dropdowns empty the list on
+   * their own, the typed word changed nothing and naming it is the same false
+   * confidence pointing the other way. `searchTermIsBlamable` above is the
+   * test, and it decides for the results line and this message together \u2014
+   * do not reintroduce an unconditional mention of the search in either one.
+   */
+  /*
+   * `missingCatSlug` keeps a branch of its own HERE only for the wording: the
+   * slug names a category that does not exist, so it is the whole of the
+   * phrase rather than one clause joined onto others. Whether the search gets
+   * blamed alongside it is no longer decided here \u2014 that slug drops every
+   * post, so `postsBeforeSearch` is empty and `searchTermIsBlamable` reaches
+   * the same answer this special case used to reach by hand.
+   */
+  const activeFilterPhrase = missingCatSlug
+    ? `in the category \u201c${missingCatSlug}\u201d`
+    : joinFilterPhrases([
+        tagFilter ? `tagged \u201c${tagFilter}\u201d` : "",
+        activeCategoryName ? `in the category \u201c${activeCategoryName}\u201d` : "",
+        authorFilter ? `by \u201c${authorFilter}\u201d` : "",
+        dateRangePhrase,
+      ].filter(Boolean));
+  const emptyFilteredMessage = searchTermIsBlamable
+    ? activeFilterPhrase
+      ? `No posts ${activeFilterPhrase} match \u201c${searchTerm}\u201d.`
+      : `No posts match \u201c${searchTerm}\u201d.`
+    : activeFilterPhrase
+      ? `No posts ${activeFilterPhrase}.`
+      : "No posts match your filters.";
   /*
    * Said whenever a count or an empty state was computed from a partial read.
    * "No posts tagged X" is a claim about the whole archive; if the archive was
@@ -2982,7 +3276,16 @@ function BlogPostListPreview({ settings }: { settings: Record<string, string> })
       {visiblePosts.length === 0 ? (
         <div style={{ padding: "2rem", textAlign: "center", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
           {allPosts.length === 0 ? (
-            "No published posts yet. Use the Create Post module to add your first post."
+            /*
+             * "Use the Create Post module" names a tool the visitor cannot
+             * reach — it was unguarded on five published pages across two
+             * tenants (ticket 86bbvqcbk). A visitor gets the reason the list
+             * is empty and nothing else (landmine 17); the builder keeps the
+             * affordance.
+             */
+            liveSite
+              ? "No posts published yet."
+              : "No published posts yet. Use the Create Post module to add your first post."
           ) : (
             <>
               <div>{emptyFilteredMessage}</div>
@@ -5594,7 +5897,13 @@ type DetailEvent = {
   organizerContact: string;
   seoTitle: string;
   seoDescription: string;
+  instructor?: string;
+  recurrence?: RecurrenceRule | null;
+  recurrenceOverrides?: RecurrenceOverride[];
 };
+
+/** How many coming dates a repeating event's page lists. */
+const EVENT_DETAIL_NEXT_DATES = 6;
 
 /**
  * A contact as something to act on: an email becomes mailto:, a phone number
@@ -5614,10 +5923,13 @@ function EventDetailPreview({
   settings,
   theme,
   themePalette,
+  liveSite = false,
 }: {
   settings: Record<string, string>;
   theme?: import("@/lib/builder-template").BuilderTheme;
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
 }) {
   const accent = settings.accentColor || "#0f4f8f";
   const backLinkUrl = (settings.backLinkUrl || "").trim();
@@ -5631,6 +5943,10 @@ function EventDetailPreview({
     || "We could not find that event. It may have been removed.";
 
   const [slug, setSlug] = useState("");
+  // One date of a repeating event (?date=YYYY-MM-DD), as the calendar links it.
+  const [dateParam, setDateParam] = useState("");
+  /* See BlogPostViewPreview: "" is also the value before the URL is read. */
+  const [urlRead, setUrlRead] = useState(false);
   const [event, setEvent] = useState<DetailEvent | null>(null);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -5639,7 +5955,11 @@ function EventDetailPreview({
   // so popstate is listened for rather than read once at mount.
   useEffect(() => {
     function syncSlugFromUrl() {
-      setSlug(new URLSearchParams(window.location.search).get("event") ?? "");
+      const params = new URLSearchParams(window.location.search);
+      setSlug(params.get("event") ?? "");
+      const date = params.get("date") ?? "";
+      setDateParam(/^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "");
+      setUrlRead(true);
     }
     syncSlugFromUrl();
     window.addEventListener("popstate", syncSlugFromUrl);
@@ -5720,6 +6040,25 @@ function EventDetailPreview({
   // No slug at all: the page has been opened directly rather than through a
   // calendar link. Said plainly, because a blank panel here reads as broken.
   if (!slug) {
+    /*
+     * A visitor cannot be asked to edit the address bar, so the
+     * "?event=your-event-slug" half of the note below is for whoever is
+     * BUILDING the page — and it was live on
+     * delraytennis.starcaster.pro/events-details (ticket 86bbvqcbk). They get
+     * the plain reason instead, and nothing at all until the URL has been
+     * read, so a valid event link no longer flashes this on its way in.
+     */
+    if (liveSite) {
+      if (!urlRead) return null;
+      return (
+        <div className="builder-event-detail" style={frameStyle}>
+          <p className="builder-event-detail-note">
+            No event selected. Open an event from the calendar to see its details.
+          </p>
+          {backLink}
+        </div>
+      );
+    }
     return (
       <div className="builder-event-detail" style={frameStyle}>
         <p className="builder-event-detail-note">
@@ -5748,7 +6087,28 @@ function EventDetailPreview({
     );
   }
 
-  const cancelled = normalizeEventStatus(event.status) === "cancelled";
+  /*
+   * A repeating event's page is about ONE date when the address names one —
+   * that session's time, instructor and whether it is on — and otherwise
+   * about the next date still to come. The rule and the coming dates are
+   * listed underneath either way.
+   */
+  const repeating = Boolean(event.recurrence);
+  const zoneForEvent = eventTimeZone(event);
+  const upcoming = repeating
+    ? scheduleBetween([{ ...event, title: event.title }], Date.now(), CALENDAR_HORIZON_MS)
+      .filter((i) => Date.parse(String(i.occurrence.endsAt || i.occurrence.startsAt)) >= Date.now())
+      .slice(0, EVENT_DETAIL_NEXT_DATES + 1)
+    : [];
+  const requested = repeating && dateParam ? occurrenceOn(event, dateParam) : null;
+  const notOnThatDate = repeating && Boolean(dateParam) && !requested;
+  const focus = requested || (repeating ? upcoming[0]?.occurrence ?? null : null);
+  const sessionCancelled = Boolean(focus?.cancelled);
+  const instructorName = (focus?.instructor || event.instructor || "").trim();
+  const nextDates = upcoming.filter((i) => i.occurrence.date !== focus?.date).slice(0, EVENT_DETAIL_NEXT_DATES);
+  const pageBase = typeof window !== "undefined" ? window.location.pathname : "";
+
+  const cancelled = normalizeEventStatus(event.status) === "cancelled" || sessionCancelled;
   const imageUrl = showImage ? resolvePublicBuilderAssetUrl(event.imageUrl) : "";
   const contactHref = organizerContactHref(event.organizerContact || "");
   const hasLocation = showLocation && Boolean(event.locationName || event.locationAddress);
@@ -5765,18 +6125,41 @@ function EventDetailPreview({
         */}
       {cancelled ? (
         <p className="builder-event-detail-cancelled" role="status">
-          <strong>This event has been cancelled.</strong>
+          <strong>{sessionCancelled && focus
+            ? `The ${formatOccurrenceDate(focus.date, undefined, true)} session has been cancelled.`
+            : "This event has been cancelled."}</strong>
+          {focus?.note ? <span> {focus.note}</span> : null}
         </p>
       ) : null}
 
       <h1 className="builder-event-detail-title">{event.title || "Untitled event"}</h1>
 
+      {notOnThatDate ? (
+        <p className="builder-event-detail-note" role="status">
+          {event.title || "This event"} does not run on {formatOccurrenceDate(dateParam, undefined, true)}.
+        </p>
+      ) : null}
+
       <p className="builder-event-detail-when">
-        {formatEventWhen(event)}
+        {focus
+          ? `${formatOccurrenceDate(focus.date, undefined, true)}, ${formatTimeRange(focus.startsAt, focus.endsAt, zoneForEvent, focus.allDay)}`
+          : formatEventWhen(event)}
         {event.timezone ? (
           <span className="builder-event-detail-timezone"> ({event.timezone.replace(/_/g, " ")})</span>
         ) : null}
       </p>
+
+      {repeating ? (
+        <p className="builder-event-detail-repeat">{describeRecurrence(event.recurrence)}</p>
+      ) : null}
+
+      {instructorName ? (
+        <p className="builder-event-detail-instructor">With {instructorName}</p>
+      ) : null}
+
+      {focus?.note && !sessionCancelled ? (
+        <p className="builder-event-detail-note">{focus.note}</p>
+      ) : null}
 
       {hasLocation ? (
         <p className="builder-event-detail-where">
@@ -5825,6 +6208,24 @@ function EventDetailPreview({
         </p>
       ) : null}
 
+      {repeating && nextDates.length ? (
+        <div className="builder-event-detail-dates">
+          <h2 className="builder-event-detail-dates-title">Coming dates</h2>
+          <ul>
+            {nextDates.map((item) => (
+              <li key={item.occurrence.key} className={item.occurrence.cancelled ? "is-cancelled" : undefined}>
+                <a href={eventPageHref(pageBase, event.slug, item)}>
+                  {formatOccurrenceDate(item.occurrence.date)}
+                </a>
+                <span> {formatTimeRange(item.occurrence.startsAt, item.occurrence.endsAt, zoneForEvent, item.occurrence.allDay)}</span>
+                {item.occurrence.cancelled ? <span className="builder-event-detail-date-flag"> Cancelled</span> : null}
+                {item.occurrence.instructor ? <span> · with {item.occurrence.instructor}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {showOrganizer && (event.organizerName || event.organizerContact) ? (
         <p className="builder-event-detail-organizer">
           {event.organizerName ? <span>Organised by {event.organizerName}</span> : null}
@@ -5862,10 +6263,24 @@ type CalendarEvent = {
   startsAt: string | null;
   endsAt: string | null;
   allDay: boolean;
+  timezone?: string;
   locationName: string;
+  instructor?: string;
+  categoryId?: string;
+  recurrence?: RecurrenceRule | null;
+  recurrenceOverrides?: RecurrenceOverride[];
 };
 
+type CalendarCategory = { id: string; name: string; color: string; sortOrder: number };
+
 const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** Far enough ahead for any list; a repeating rule stops itself at 800 days. */
+const CALENDAR_HORIZON_MS = Date.UTC(2100, 0, 1);
+
+function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 function EventCalendarPreview({
   settings,
@@ -5887,18 +6302,27 @@ function EventCalendarPreview({
   const showImages = (settings.showImages ?? "true") !== "false";
   const showLocation = (settings.showLocation ?? "true") !== "false";
   const showExcerpt = (settings.showExcerpt ?? "true") !== "false";
+  const showInstructor = (settings.showInstructor ?? "true") !== "false";
+  const showCategoryKey = (settings.showCategoryKey ?? "true") !== "false";
   const emptyMessage = (settings.emptyMessage || "").trim()
     || "No events scheduled just yet — check back soon.";
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [categories, setCategories] = useState<CalendarCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  // The venue a visitor has narrowed the calendar to; "" is every venue.
+  const [onlyCategory, setOnlyCategory] = useState("");
   // The month on view. Held in state so Prev/Next can move it; seeded to the
   // month we are actually in.
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
+  // Weeks away from the current one, for the weekly schedule. An offset
+  // rather than a date, so "this week" is worked out in the calendar's zone
+  // once the events (and so the zone) have loaded.
+  const [weekOffset, setWeekOffset] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -5915,8 +6339,19 @@ function EventCalendarPreview({
       })
       .catch(() => { if (live) setFailed(true); })
       .finally(() => { if (live) setLoading(false); });
+    // Venue names and colours. A failure here costs the colour key only — the
+    // calendar itself still draws, uncoloured, which is the honest fallback.
+    fetch("/api/event-categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const list = d?.categories ?? d?.data;
+        if (live && Array.isArray(list)) setCategories(list as CalendarCategory[]);
+      })
+      .catch(() => {});
     return () => { live = false; };
   }, []);
+
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
   /** A published event only. The API filters too; this is the belt to its braces. */
   const published = useMemo(
@@ -5924,23 +6359,37 @@ function EventCalendarPreview({
     [events]
   );
 
-  const listed = useMemo(() => {
-    const now = new Date();
-    const chosen = showPast ? published : published.filter((e) => isUpcomingEvent(e, now));
-    return [...chosen]
-      .sort((a, b) => {
-        // Unscheduled events have nowhere to sit on a timeline, so they go
-        // last rather than to 1970 — which is where a plain Date.parse of an
-        // empty string would put them.
-        if (!a.startsAt && !b.startsAt) return a.title.localeCompare(b.title);
-        if (!a.startsAt) return 1;
-        if (!b.startsAt) return -1;
-        return Date.parse(a.startsAt) - Date.parse(b.startsAt);
-      })
-      .slice(0, limit);
-  }, [published, showPast, limit]);
+  /** Only venues some published event actually uses belong in the key. */
+  const usedCategories = useMemo(
+    () => categories.filter((c) => published.some((e) => e.categoryId === c.id)),
+    [categories, published]
+  );
 
-  function hrefFor(event: CalendarEvent): string | undefined {
+  const shown = useMemo(
+    () => (onlyCategory ? published.filter((e) => e.categoryId === onlyCategory) : published),
+    [published, onlyCategory]
+  );
+
+  const zone = useMemo(() => calendarTimeZone(published), [published]);
+
+  const listed = useMemo(() => {
+    const now = Date.now();
+    const items = scheduleBetween(shown, showPast ? 0 : now, CALENDAR_HORIZON_MS);
+    const kept = showPast ? items : items.filter((item) => {
+      const end = Date.parse(String(item.occurrence.endsAt || ""));
+      const finish = Number.isFinite(end)
+        ? end
+        : Date.parse(item.occurrence.startsAt) + (item.occurrence.allDay ? 86400000 - 1 : 0);
+      return finish >= now;
+    });
+    return kept.slice(0, limit);
+  }, [shown, showPast, limit]);
+
+  // Unscheduled events have nowhere to sit on a timeline; the list shows them
+  // after every dated one, as it always has.
+  const unscheduled = useMemo(() => shown.filter((e) => !e.startsAt), [shown]);
+
+  function hrefFor(event: CalendarEvent, item?: ScheduleItem<CalendarEvent> | null): string | undefined {
     /*
      * The site's own event page wins, and the event's external link is the
      * FALLBACK — not the other way round.
@@ -5953,22 +6402,67 @@ function EventCalendarPreview({
      * belongs to.
      *
      * With no event page configured the external link is still better than a
-     * dead title, so it stays as the fallback.
+     * dead title, so it stays as the fallback. A repeating program's link
+     * carries its date, so the page can say whether THAT session is on.
      */
-    if (eventPageUrl && event.slug) {
-      const sep = eventPageUrl.includes("?") ? "&" : "?";
-      return `${eventPageUrl}${sep}event=${encodeURIComponent(event.slug)}`;
-    }
-    return event.url || undefined;
+    return eventPageHref(eventPageUrl, event.slug, item) || event.url || undefined;
   }
+
+  /** The venue colour an event is painted with, as the chip's accent. */
+  function colorStyle(event: CalendarEvent): React.CSSProperties | undefined {
+    const color = categoryById.get(event.categoryId || "")?.color;
+    // --evt-venue is set ONLY for an event with a venue, so an event without
+    // one gets no coloured edge — inheriting the module accent made a venue-less
+    // dinner look like a Tennis Center program. Chips also take it as their accent.
+    return color ? { ["--evt-accent" as string]: color, ["--evt-venue" as string]: color } : undefined;
+  }
+
+  function instructorFor(item: ScheduleItem<CalendarEvent>): string {
+    if (!showInstructor) return "";
+    return item.occurrence.instructor || item.event.instructor || "";
+  }
+
+  const frameStyle = { ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) };
 
   const Title = heading
     ? <h2 className="builder-event-calendar-heading">{heading}</h2>
     : null;
 
+  /*
+   * The venue key doubles as a filter: a club with three sites is asked
+   * "what is on at MY courts?" more than anything else. Drawn only when more
+   * than one venue is in use — a key with a single entry explains nothing.
+   */
+  const CategoryKey = showCategoryKey && usedCategories.length > 1 ? (
+    <div className="builder-event-calendar-key" role="group" aria-label="Show events at">
+      <button
+        type="button"
+        className={`builder-event-calendar-key-item${onlyCategory ? "" : " is-active"}`}
+        aria-pressed={!onlyCategory}
+        onClick={() => setOnlyCategory("")}
+      >
+        All
+      </button>
+      {usedCategories.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          className={`builder-event-calendar-key-item${onlyCategory === c.id ? " is-active" : ""}`}
+          aria-pressed={onlyCategory === c.id}
+          onClick={() => setOnlyCategory((cur) => (cur === c.id ? "" : c.id))}
+        >
+          <span className="builder-event-calendar-swatch" style={{ background: c.color || "transparent" }} aria-hidden="true" />
+          {c.name}
+        </button>
+      ))}
+    </div>
+  ) : null;
+
+  const filterName = onlyCategory ? categoryById.get(onlyCategory)?.name || "" : "";
+
   if (loading) {
     return (
-      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar" style={frameStyle}>
         {Title}
         <p className="builder-event-calendar-empty">Loading events…</p>
       </div>
@@ -5980,9 +6474,97 @@ function EventCalendarPreview({
   // something false about the club.
   if (failed) {
     return (
-      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar" style={frameStyle}>
         {Title}
         <p className="builder-event-calendar-empty">Events are unavailable just now. Please try again shortly.</p>
+      </div>
+    );
+  }
+
+  /* ── Weekly schedule ────────────────────────────────────────────────────
+   * The club's printed Weekly Program Guide as a page: each day down the
+   * side, its programs with time and instructor, coloured by venue. */
+  if (layout === "week") {
+    const today = todayIn(zone);
+    const dates = weekDates(addDays(today, weekOffset * 7), weekStartsOn);
+    const [from, to] = datesRange(dates, zone);
+    const byDate = groupByDate(scheduleBetween(shown, from, to), dates);
+    const weekLabel = formatWeekLabel(dates);
+    const anything = dates.some((d) => (byDate.get(d) || []).length > 0);
+
+    return (
+      <div className="builder-event-calendar builder-event-calendar--week" style={frameStyle}>
+        {Title}
+        <div className="builder-event-calendar-nav">
+          <button type="button" className="builder-event-calendar-nav-btn" aria-label="Previous week" onClick={() => setWeekOffset((w) => w - 1)}>‹</button>
+          <span className="builder-event-calendar-month" aria-live="polite">Week of {weekLabel}</span>
+          <button type="button" className="builder-event-calendar-nav-btn" aria-label="Next week" onClick={() => setWeekOffset((w) => w + 1)}>›</button>
+          {weekOffset !== 0 ? (
+            <button type="button" className="builder-event-calendar-today" onClick={() => setWeekOffset(0)}>This week</button>
+          ) : null}
+        </div>
+        {CategoryKey}
+        {!anything ? (
+          // Says WHICH week and, when filtered, WHICH venue — an unexplained
+          // empty schedule reads as a broken one (landmine 17).
+          <p className="builder-event-calendar-empty">
+            {filterName
+              ? `Nothing at ${filterName} the week of ${weekLabel}.`
+              : published.length
+                ? `No programs scheduled the week of ${weekLabel}.`
+                : emptyMessage}
+          </p>
+        ) : null}
+        <div className="builder-event-calendar-week" role="list" aria-label={`Week of ${weekLabel}`}>
+          {dates.map((date) => {
+            const items = byDate.get(date) || [];
+            const isToday = date === today;
+            return (
+              <section
+                key={date}
+                role="listitem"
+                className={`builder-event-calendar-weekday-row${isToday ? " is-today" : ""}${items.length ? "" : " is-empty"}`}
+                aria-label={formatOccurrenceDate(date, undefined, true)}
+              >
+                <div className="builder-event-calendar-weekday-label">
+                  <span className="builder-event-calendar-weekday-name">{WEEKDAY_LABELS[weekdayOf(date)]}</span>
+                  <span className="builder-event-calendar-weekday-date">{Number(date.slice(5, 7))}/{Number(date.slice(8, 10))}</span>
+                </div>
+                {items.length ? (
+                  <ul className="builder-event-calendar-programs">
+                    {items.map((item) => {
+                      const href = hrefFor(item.event, item);
+                      const label = item.event.title || "Untitled event";
+                      const who = instructorFor(item);
+                      const cancelled = item.occurrence.cancelled;
+                      return (
+                        <li
+                          key={item.occurrence.key}
+                          className={`builder-event-calendar-program${cancelled ? " is-cancelled" : ""}`}
+                          style={colorStyle(item.event)}
+                        >
+                          <span className="builder-event-calendar-program-title">
+                            {href ? <a href={href}>{label}</a> : label}
+                            {cancelled ? <span className="builder-event-calendar-badge">Cancelled</span> : null}
+                          </span>
+                          <span className="builder-event-calendar-program-who">{who}</span>
+                          <span className="builder-event-calendar-program-time">
+                            {formatTimeRange(item.occurrence.startsAt, item.occurrence.endsAt, item.timeZone, item.occurrence.allDay)}
+                          </span>
+                          {item.occurrence.note ? (
+                            <span className="builder-event-calendar-program-note">{item.occurrence.note}</span>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="builder-event-calendar-program-none">Nothing scheduled</p>
+                )}
+              </section>
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -5998,15 +6580,22 @@ function EventCalendarPreview({
       const d = new Date(c.year, c.month + by, 1);
       return { year: d.getFullYear(), month: d.getMonth() };
     });
+    const cellDates = weeks.flat().map((cell) => localDateKey(cell.date));
+    // A day either side of the grid, so an evening program in a zone behind
+    // the viewer's still lands on the grid's first and last cells.
+    const [from] = datesRange([addDays(cellDates[0], -1)], zone);
+    const [, to] = datesRange([addDays(cellDates[cellDates.length - 1], 1)], zone);
+    const byDate = groupByDate(scheduleBetween(shown, from, to), cellDates);
 
     return (
-      <div className="builder-event-calendar builder-event-calendar--month" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar builder-event-calendar--month" style={frameStyle}>
         {Title}
         <div className="builder-event-calendar-nav">
           <button type="button" className="builder-event-calendar-nav-btn" aria-label="Previous month" onClick={() => step(-1)}>‹</button>
           <span className="builder-event-calendar-month" aria-live="polite">{monthName}</span>
           <button type="button" className="builder-event-calendar-nav-btn" aria-label="Next month" onClick={() => step(1)}>›</button>
         </div>
+        {CategoryKey}
         <div className="builder-event-calendar-grid" role="grid" aria-label={monthName}>
           {dayNames.map((name) => (
             // The short form is decoration; the full name is what a screen
@@ -6018,7 +6607,7 @@ function EventCalendarPreview({
             </div>
           ))}
           {weeks.flat().map((cell) => {
-            const onThisDay = published.filter((e) => eventOccursOn(e, cell.date));
+            const onThisDay = byDate.get(localDateKey(cell.date)) || [];
             const isToday = isSameDay(cell.date, today);
             return (
               <div
@@ -6032,40 +6621,55 @@ function EventCalendarPreview({
                 ].filter(Boolean).join(" ")}
               >
                 <span className="builder-event-calendar-daynum">{cell.date.getDate()}</span>
-                {onThisDay.map((event) => {
-                  const href = hrefFor(event);
-                  const label = event.title || "Untitled event";
+                {onThisDay.map((item) => {
+                  const href = hrefFor(item.event, item);
+                  const label = item.event.title || "Untitled event";
+                  const cancelled = item.occurrence.cancelled;
                   const body = (
                     <>
                       <span className="builder-event-calendar-chip-title">{label}</span>
-                      {!event.allDay && event.startsAt ? (
+                      {!item.occurrence.allDay ? (
                         <span className="builder-event-calendar-chip-time">
-                          {new Date(event.startsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                          {cancelled ? "Cancelled" : formatTimeRange(item.occurrence.startsAt, null, item.timeZone)}
                         </span>
                       ) : null}
                     </>
                   );
+                  const className = `builder-event-calendar-chip${cancelled ? " is-cancelled" : ""}`;
+                  const title = cancelled ? `${label} (cancelled)` : label;
                   return href ? (
-                    <a key={event.id} className="builder-event-calendar-chip" href={href} title={label}>{body}</a>
+                    <a key={item.occurrence.key} className={className} href={href} title={title} style={colorStyle(item.event)}>{body}</a>
                   ) : (
-                    <span key={event.id} className="builder-event-calendar-chip" title={label}>{body}</span>
+                    <span key={item.occurrence.key} className={className} title={title} style={colorStyle(item.event)}>{body}</span>
                   );
                 })}
               </div>
             );
           })}
         </div>
-        {published.length === 0 ? <p className="builder-event-calendar-empty">{emptyMessage}</p> : null}
+        {shown.length === 0 ? (
+          <p className="builder-event-calendar-empty">
+            {filterName ? `Nothing scheduled at ${filterName}.` : emptyMessage}
+          </p>
+        ) : null}
       </div>
     );
   }
 
   /* ── List and cards ─────────────────────────────────────────────────── */
-  if (!listed.length) {
+  const rows: Array<{ key: string; event: CalendarEvent; item: ScheduleItem<CalendarEvent> | null }> = [
+    ...listed.map((item) => ({ key: item.occurrence.key, event: item.event, item })),
+    ...unscheduled.slice(0, Math.max(0, limit - listed.length)).map((event) => ({ key: event.id, event, item: null })),
+  ];
+
+  if (!rows.length) {
     return (
-      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar" style={frameStyle}>
         {Title}
-        <p className="builder-event-calendar-empty">{emptyMessage}</p>
+        {CategoryKey}
+        <p className="builder-event-calendar-empty">
+          {filterName ? `Nothing coming up at ${filterName}.` : emptyMessage}
+        </p>
       </div>
     );
   }
@@ -6075,24 +6679,30 @@ function EventCalendarPreview({
   return (
     <div
       className={`builder-event-calendar builder-event-calendar--${isCards ? "cards" : "list"}`}
-      style={{
-        ["--evt-accent" as string]: accent,
-        ["--evt-columns" as string]: String(columns),
-        ...getAdminDataTableThemeStyle(themePalette, theme),
-      }}
+      style={{ ...frameStyle, ["--evt-columns" as string]: String(columns) }}
     >
       {Title}
+      {CategoryKey}
       <ul className="builder-event-calendar-items">
-        {listed.map((event) => {
-          const href = hrefFor(event);
+        {rows.map(({ key, event, item }) => {
+          const href = hrefFor(event, item);
           const label = event.title || "Untitled event";
-          const start = event.startsAt ? new Date(event.startsAt) : null;
           const image = showImages && isCards ? resolvePublicBuilderAssetUrl(event.imageUrl) : "";
+          const cancelled = Boolean(item?.occurrence.cancelled);
+          // A one-off keeps the sentence it always had; a date of a series says
+          // which date and its own time, since that is what differs.
+          const when = !item
+            ? formatEventWhen(event)
+            : item.occurrence.recurring
+              ? `${formatOccurrenceDate(item.occurrence.date, undefined, true)} · ${formatTimeRange(item.occurrence.startsAt, item.occurrence.endsAt, item.timeZone, item.occurrence.allDay)}`
+              : formatEventWhen({ ...event, startsAt: item.occurrence.startsAt, endsAt: item.occurrence.endsAt });
+          const who = item ? instructorFor(item) : (showInstructor ? event.instructor || "" : "");
+          const chipDate = item ? item.occurrence.date : "";
           const titleNode = href
             ? <a className="builder-event-calendar-item-title" href={href}>{label}</a>
             : <span className="builder-event-calendar-item-title">{label}</span>;
           return (
-            <li key={event.id} className="builder-event-calendar-item">
+            <li key={key} className={`builder-event-calendar-item${cancelled ? " is-cancelled" : ""}`} style={colorStyle(event)}>
               {image ? (
                 <img
                   className="builder-event-calendar-item-image"
@@ -6102,19 +6712,24 @@ function EventCalendarPreview({
                 />
               ) : null}
               <div className="builder-event-calendar-item-body">
-                {start && !isCards ? (
+                {chipDate && !isCards ? (
                   <span className="builder-event-calendar-datechip" aria-hidden="true">
                     <span className="builder-event-calendar-datechip-month">
-                      {start.toLocaleDateString(undefined, { month: "short" }).toUpperCase()}
+                      {new Date(`${chipDate}T12:00:00Z`).toLocaleDateString(undefined, { month: "short", timeZone: "UTC" }).toUpperCase()}
                     </span>
-                    <span className="builder-event-calendar-datechip-day">{start.getDate()}</span>
+                    <span className="builder-event-calendar-datechip-day">{Number(chipDate.slice(8, 10))}</span>
                   </span>
                 ) : null}
                 <div className="builder-event-calendar-item-text">
                   {titleNode}
-                  <p className="builder-event-calendar-item-when">{formatEventWhen(event)}</p>
+                  {cancelled ? <span className="builder-event-calendar-badge">Cancelled</span> : null}
+                  <p className="builder-event-calendar-item-when">{when}</p>
+                  {who ? <p className="builder-event-calendar-item-where">with {who}</p> : null}
                   {showLocation && event.locationName ? (
                     <p className="builder-event-calendar-item-where">{event.locationName}</p>
+                  ) : null}
+                  {item?.occurrence.note ? (
+                    <p className="builder-event-calendar-item-where">{item.occurrence.note}</p>
                   ) : null}
                   {showExcerpt && event.excerpt ? (
                     <p className="builder-event-calendar-item-excerpt">{event.excerpt}</p>
@@ -6918,9 +7533,59 @@ type EventRecord = {
   organizerContact: string;
   seoTitle: string;
   seoDescription: string;
+  recurrence?: RecurrenceRule | null;
+  recurrenceOverrides?: RecurrenceOverride[];
+  instructor?: string;
+  categoryId?: string;
 };
 
+/** A venue or program type the calendar colours events by (task 86bbzt25g). */
+type EventCategoryRecord = { id: string; name: string; color: string; sortOrder: number };
+
+/** Offered for a new venue, in the order Delray's program guide uses them. */
+const EVENT_CATEGORY_DEFAULT_COLORS = ["#0b2d6b", "#72b62f", "#f7a600", "#b91c5c", "#0e7490", "#6b21a8"];
+
 type EventFormValues = Record<string, string>;
+
+/** The Repeat section of the form, kept apart from the flat string fields. */
+type EventRepeatForm = { enabled: boolean; interval: number; weekdays: number[]; until: string };
+
+const EMPTY_EVENT_REPEAT: EventRepeatForm = { enabled: false, interval: 1, weekdays: [], until: "" };
+
+/** Monday first, the way a club's weekly program guide reads. */
+const EVENT_REPEAT_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+/** How far ahead the Upcoming Dates list looks. */
+const EVENT_REPEAT_PREVIEW_WEEKS = 12;
+const EVENT_REPEAT_PREVIEW_MAX = 60;
+
+/** Offered in the Time Zone box; any real zone name may still be typed. */
+const EVENT_TIME_ZONE_SUGGESTIONS = [
+  "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+  "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu",
+];
+
+/**
+ * Change one date of a series. An entry left changing nothing is removed, so
+ * "Restore" and clearing both times leave no trace behind.
+ */
+function applyEventOverride(
+  list: RecurrenceOverride[],
+  date: string,
+  patch: Partial<RecurrenceOverride> | null,
+): RecurrenceOverride[] {
+  const rest = list.filter((o) => o.date !== date);
+  if (!patch) return rest;
+  const merged: RecurrenceOverride = { ...(list.find((o) => o.date === date) || { date }), ...patch, date };
+  const clean: RecurrenceOverride = { date };
+  if (merged.cancelled) clean.cancelled = true;
+  if (merged.startTime) clean.startTime = merged.startTime;
+  if (merged.endTime) clean.endTime = merged.endTime;
+  if (merged.instructor && merged.instructor.trim()) clean.instructor = merged.instructor;
+  if (merged.note && merged.note.trim()) clean.note = merged.note;
+  if (Object.keys(clean).length === 1) return rest;
+  return [...rest, clean].sort((a, b) => a.date.localeCompare(b.date));
+}
 
 const EVENT_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "draft", label: "Draft" },
@@ -6940,6 +7605,7 @@ const EMPTY_EVENT_FORM: EventFormValues = {
   organizerName: "", organizerContact: "",
   seoTitle: "", seoDescription: "",
   featured: "false",
+  instructor: "", categoryId: "",
 };
 
 /** The viewer's own zone, offered as the default for a new event. */
@@ -6982,6 +7648,22 @@ function EventManagerPreview({
   const [errorMsg, setErrorMsg] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<EventRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [repeat, setRepeat] = useState<EventRepeatForm>(EMPTY_EVENT_REPEAT);
+  const [overrides, setOverrides] = useState<RecurrenceOverride[]>([]);
+  const [changingDate, setChangingDate] = useState<string | null>(null);
+  const [categories, setCategories] = useState<EventCategoryRecord[]>([]);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [newCategory, setNewCategory] = useState({ name: "", color: EVENT_CATEGORY_DEFAULT_COLORS[0] });
+  const [categoryBusy, setCategoryBusy] = useState(false);
+  // Harvest PDF is a platform-login tool (task 86bbztj0e): the probe answers
+  // only for a platform session, so a club admin never sees the button.
+  const [harvestAvailable, setHarvestAvailable] = useState(false);
+  const [harvestOpen, setHarvestOpen] = useState(false);
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  // Dates and times in the form are read in the EVENT's zone, so a repeat
+  // stays at 8:30am local across a clock change and an admin travelling
+  // elsewhere still types the club's own times.
+  const formZone = eventTimeZone({ timezone: form.timezone });
 
   function loadEvents() {
     setLoading(true);
@@ -6997,7 +7679,60 @@ function EventManagerPreview({
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadEvents(); }, []);
+  function loadCategories() {
+    fetch("/api/event-categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, `Failed to load venues (${r.status})`));
+        const list = (d?.categories ?? d?.data ?? []) as EventCategoryRecord[];
+        setCategories(Array.isArray(list) ? list : []);
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Failed to load venues."));
+  }
+
+  useEffect(() => {
+    loadEvents();
+    loadCategories();
+    fetch("/api/event-harvest/available", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setHarvestAvailable(Boolean((d?.data ?? d)?.available)))
+      .catch(() => setHarvestAvailable(false));
+  }, []);
+
+  /**
+   * One request per change, then the list read back — so what the admin sees
+   * is what saved, never what they typed.
+   */
+  async function categoryRequest(url: string, method: string, body?: unknown) {
+    setCategoryBusy(true);
+    setErrorMsg("");
+    try {
+      const res = await fetch(url, {
+        method,
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(readApiErrorMessage(data, "Could not save the venue."));
+      return true;
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Could not save the venue.");
+      return false;
+    } finally {
+      loadCategories();
+      setCategoryBusy(false);
+    }
+  }
+
+  async function addCategory() {
+    const name = newCategory.name.trim();
+    if (!name) { setErrorMsg("Give the venue or category a name."); return; }
+    const sortOrder = categories.reduce((max, c) => Math.max(max, c.sortOrder), 0) + 1;
+    if (await categoryRequest("/api/event-categories", "POST", { name, color: newCategory.color, sortOrder })) {
+      setNewCategory({ name: "", color: EVENT_CATEGORY_DEFAULT_COLORS[(categories.length + 1) % EVENT_CATEGORY_DEFAULT_COLORS.length] });
+    }
+  }
 
   function setField(key: string, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -7007,12 +7742,18 @@ function EventManagerPreview({
     setFormOpen(false);
     setEditId(null);
     setForm(EMPTY_EVENT_FORM);
+    setRepeat(EMPTY_EVENT_REPEAT);
+    setOverrides([]);
+    setChangingDate(null);
     setErrorMsg("");
   }
 
   function startCreate() {
     setEditId(null);
     setForm({ ...EMPTY_EVENT_FORM, timezone: localTimeZoneName() });
+    setRepeat(EMPTY_EVENT_REPEAT);
+    setOverrides([]);
+    setChangingDate(null);
     setErrorMsg("");
     setStatusMsg("");
     setFormOpen(true);
@@ -7020,13 +7761,14 @@ function EventManagerPreview({
 
   function startEdit(event: EventRecord) {
     const allDay = Boolean(event.allDay);
+    const zone = eventTimeZone(event);
     setEditId(event.id);
     setForm({
       title: event.title ?? "",
       slug: event.slug ?? "",
       status: event.status || "draft",
-      startsAt: isoToLocalInput(event.startsAt, allDay),
-      endsAt: isoToLocalInput(event.endsAt, allDay),
+      startsAt: isoToZonedInput(event.startsAt, zone, allDay),
+      endsAt: isoToZonedInput(event.endsAt, zone, allDay),
       allDay: allDay ? "true" : "false",
       timezone: event.timezone ?? "",
       locationName: event.locationName ?? "",
@@ -7042,7 +7784,15 @@ function EventManagerPreview({
       seoTitle: event.seoTitle ?? "",
       seoDescription: event.seoDescription ?? "",
       featured: event.featured ? "true" : "false",
+      instructor: event.instructor ?? "",
+      categoryId: event.categoryId ?? "",
     });
+    const rule = event.recurrence;
+    setRepeat(rule
+      ? { enabled: true, interval: rule.interval || 1, weekdays: [...rule.weekdays], until: rule.until || "" }
+      : EMPTY_EVENT_REPEAT);
+    setOverrides(Array.isArray(event.recurrenceOverrides) ? event.recurrenceOverrides : []);
+    setChangingDate(null);
     setErrorMsg("");
     setStatusMsg("");
     setFormOpen(true);
@@ -7056,21 +7806,33 @@ function EventManagerPreview({
     setForm((prev) => ({
       ...prev,
       allDay: next ? "true" : "false",
-      startsAt: prev.startsAt ? isoToLocalInput(localInputToIso(prev.startsAt), next) : "",
-      endsAt: prev.endsAt ? isoToLocalInput(localInputToIso(prev.endsAt), next) : "",
+      startsAt: prev.startsAt ? isoToZonedInput(zonedInputToIso(prev.startsAt, formZone), formZone, next) : "",
+      endsAt: prev.endsAt ? isoToZonedInput(zonedInputToIso(prev.endsAt, formZone), formZone, next) : "",
     }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) { setErrorMsg("Event name is required."); return; }
-    const startsAt = localInputToIso(form.startsAt);
-    const endsAt = localInputToIso(form.endsAt);
+    const startsAt = zonedInputToIso(form.startsAt, formZone);
+    const endsAt = zonedInputToIso(form.endsAt, formZone);
     // An end before its start is the one date mistake worth refusing: it makes
     // every calendar view render the event backwards or not at all.
     if (startsAt && endsAt && Date.parse(endsAt) < Date.parse(startsAt)) {
       setErrorMsg("The end of an event cannot come before its start.");
       return;
+    }
+    if (repeat.enabled) {
+      if (!startsAt) { setErrorMsg("A repeating event needs a start date — the first day it happens."); return; }
+      if (!repeat.weekdays.length) { setErrorMsg("Pick at least one day of the week for the event to repeat on."); return; }
+      if (!isValidTimeZone(form.timezone)) {
+        setErrorMsg("A repeating event needs a real time zone, such as America/New_York, so its time stays put when the clocks change.");
+        return;
+      }
+      if (repeat.until && repeat.until < form.startsAt.slice(0, 10)) {
+        setErrorMsg("The repeat end date is before the event starts.");
+        return;
+      }
     }
     setSaving(true);
     setErrorMsg("");
@@ -7096,6 +7858,14 @@ function EventManagerPreview({
       seoTitle: form.seoTitle.trim(),
       seoDescription: form.seoDescription.trim(),
       featured: form.featured === "true",
+      instructor: form.instructor.trim(),
+      categoryId: form.categoryId,
+      recurrence: repeat.enabled
+        ? { freq: "weekly", interval: repeat.interval, weekdays: repeat.weekdays, until: repeat.until || null }
+        : null,
+      // Turning Repeat off drops the single-date changes with it: they belong
+      // to dates that no longer exist.
+      recurrenceOverrides: repeat.enabled ? overrides : [],
     };
     try {
       const res = await fetch(
@@ -7147,6 +7917,225 @@ function EventManagerPreview({
   const isAllDay = form.allDay === "true";
   const dateInputType = isAllDay ? "date" : "datetime-local";
 
+  function toggleRepeat(enabled: boolean) {
+    setRepeat((prev) => {
+      if (!enabled) return { ...prev, enabled: false };
+      // Starting from the start date's own weekday is what "repeat weekly"
+      // means to anyone who has used a calendar app.
+      const firstDay = /^\d{4}-\d{2}-\d{2}/.test(form.startsAt)
+        ? new Date(`${form.startsAt.slice(0, 10)}T12:00:00Z`).getUTCDay()
+        : null;
+      const weekdays = prev.weekdays.length ? prev.weekdays : (firstDay === null ? [] : [firstDay]);
+      return { ...prev, enabled: true, weekdays };
+    });
+  }
+
+  function toggleRepeatDay(day: number) {
+    setRepeat((prev) => ({
+      ...prev,
+      weekdays: prev.weekdays.includes(day)
+        ? prev.weekdays.filter((d) => d !== day)
+        : [...prev.weekdays, day].sort((a, b) => a - b),
+    }));
+  }
+
+  const repeatPreview = (() => {
+    if (!formOpen || !repeat.enabled) return null;
+    const startIso = zonedInputToIso(form.startsAt, formZone);
+    if (!startIso) return { dates: [], reason: "Set a start date to see the dates this event repeats on." };
+    if (!repeat.weekdays.length) return { dates: [], reason: "Pick at least one day to see the dates this event repeats on." };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const from = Math.max(today.getTime(), Date.parse(startIso) - 1);
+    const dates = expandOccurrences({
+      id: "preview",
+      startsAt: startIso,
+      endsAt: zonedInputToIso(form.endsAt, formZone),
+      allDay: isAllDay,
+      timezone: formZone,
+      recurrence: { freq: "weekly", interval: repeat.interval, weekdays: repeat.weekdays, until: repeat.until || null },
+      recurrenceOverrides: overrides,
+    }, from, from + EVENT_REPEAT_PREVIEW_WEEKS * 7 * 86400000).slice(0, EVENT_REPEAT_PREVIEW_MAX);
+    // An empty list says why, or it reads as the feature being broken.
+    const reason = dates.length
+      ? ""
+      : `No dates in the next ${EVENT_REPEAT_PREVIEW_WEEKS} weeks${repeat.until ? ` — the repeat ends ${formatOccurrenceDate(repeat.until, undefined, true)}` : ""}.`;
+    return { dates, reason };
+  })();
+
+  const repeatSection = (
+    <fieldset className="builder-event-manager-repeat">
+      <legend className="builder-event-manager-label">Repeat</legend>
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <select
+            id="event-repeat"
+            aria-label="Repeat"
+            className="builder-event-manager-input"
+            value={repeat.enabled ? "weekly" : "none"}
+            onChange={(e) => toggleRepeat(e.target.value === "weekly")}
+          >
+            <option value="none">Does not repeat</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </div>
+        {repeat.enabled ? (
+          <div className="builder-event-manager-field">
+            <select
+              id="event-repeat-interval"
+              aria-label="How often"
+              className="builder-event-manager-input"
+              value={String(repeat.interval)}
+              onChange={(e) => setRepeat((prev) => ({ ...prev, interval: Number(e.target.value) || 1 }))}
+            >
+              <option value="1">Every week</option>
+              <option value="2">Every 2 weeks</option>
+              <option value="3">Every 3 weeks</option>
+              <option value="4">Every 4 weeks</option>
+            </select>
+          </div>
+        ) : null}
+        {repeat.enabled ? (
+          <div className="builder-event-manager-field">
+            <label className="builder-event-manager-label" htmlFor="event-repeat-until">Until (optional)</label>
+            <input
+              id="event-repeat-until"
+              className="builder-event-manager-input"
+              type="date"
+              value={repeat.until}
+              onChange={(e) => setRepeat((prev) => ({ ...prev, until: e.target.value }))}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      {repeat.enabled ? (
+        <>
+          <div className="builder-event-manager-repeat-days" role="group" aria-label="Repeat on">
+            {EVENT_REPEAT_DAY_ORDER.map((day) => {
+              const on = repeat.weekdays.includes(day);
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  className={`builder-event-manager-repeat-day${on ? " is-on" : ""}`}
+                  aria-pressed={on}
+                  onClick={() => toggleRepeatDay(day)}
+                  style={on ? { background: accent, borderColor: accent } : undefined}
+                >
+                  {WEEKDAY_SHORT[day]}
+                </button>
+              );
+            })}
+          </div>
+          <p className="builder-event-manager-hint">
+            {describeRecurrence({ freq: "weekly", interval: repeat.interval, weekdays: repeat.weekdays, until: repeat.until || null }) || "Pick the days it happens on."}
+            {" · "}Times are {formZone.replace(/_/g, " ")} time.
+          </p>
+
+          <div className="builder-event-manager-dates">
+            <div className="builder-event-manager-label">Upcoming dates</div>
+            {repeatPreview && repeatPreview.reason ? (
+              <p className="builder-event-manager-hint">{repeatPreview.reason}</p>
+            ) : null}
+            {repeatPreview && repeatPreview.dates.length ? (
+              <ul className="builder-event-manager-date-list">
+                {repeatPreview.dates.map((occ) => {
+                  const entry = overrides.find((o) => o.date === occ.date);
+                  const editing = changingDate === occ.date;
+                  return (
+                    <li
+                      key={occ.date}
+                      className={`builder-event-manager-date${occ.cancelled ? " is-cancelled" : ""}${occ.changed && !occ.cancelled ? " is-changed" : ""}`}
+                    >
+                      <div className="builder-event-manager-date-line">
+                        <span className="builder-event-manager-date-day">{formatOccurrenceDate(occ.date)}</span>
+                        <span className="builder-event-manager-date-time">
+                          {formatTimeRange(occ.startsAt, occ.endsAt, formZone, occ.allDay)}
+                        </span>
+                        {occ.cancelled ? <span className="builder-event-manager-date-badge">Cancelled</span> : null}
+                        {occ.changed && !occ.cancelled ? <span className="builder-event-manager-date-badge">Changed</span> : null}
+                        {occ.instructor ? <span className="builder-event-manager-date-note">with {occ.instructor}</span> : null}
+                        {occ.note ? <span className="builder-event-manager-date-note">{occ.note}</span> : null}
+                        <span className="builder-event-manager-date-actions">
+                          {occ.cancelled ? (
+                            <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setOverrides((l) => applyEventOverride(l, occ.date, { cancelled: false }))}>
+                              Restore
+                            </button>
+                          ) : (
+                            <>
+                              {!isAllDay ? (
+                                <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setChangingDate(editing ? null : occ.date)}>
+                                  {editing ? "Done" : "Change"}
+                                </button>
+                              ) : null}
+                              <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setOverrides((l) => applyEventOverride(l, occ.date, { cancelled: true }))}>
+                                Cancel date
+                              </button>
+                            </>
+                          )}
+                          {entry && !occ.cancelled ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost tiny-btn"
+                              onClick={() => { setOverrides((l) => applyEventOverride(l, occ.date, null)); setChangingDate(null); }}
+                            >
+                              Undo change
+                            </button>
+                          ) : null}
+                        </span>
+                      </div>
+                      {editing && !occ.cancelled ? (
+                        <div className="builder-event-manager-date-edit">
+                          <label className="builder-event-manager-label">
+                            Starts
+                            <input
+                              type="time"
+                              className="builder-event-manager-input"
+                              value={entry?.startTime || isoToZonedInput(occ.startsAt, formZone).slice(11)}
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { startTime: e.target.value }))}
+                            />
+                          </label>
+                          <label className="builder-event-manager-label">
+                            Ends
+                            <input
+                              type="time"
+                              className="builder-event-manager-input"
+                              value={entry?.endTime || (occ.endsAt ? isoToZonedInput(occ.endsAt, formZone).slice(11) : "")}
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { endTime: e.target.value }))}
+                            />
+                          </label>
+                          <label className="builder-event-manager-label">
+                            Instructor this date
+                            <input
+                              className="builder-event-manager-input"
+                              value={entry?.instructor || ""}
+                              placeholder={form.instructor || "Substitute"}
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { instructor: e.target.value }))}
+                            />
+                          </label>
+                          <label className="builder-event-manager-label">
+                            Note for this date
+                            <input
+                              className="builder-event-manager-input"
+                              value={entry?.note || ""}
+                              placeholder="e.g. Moved to Court 4"
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { note: e.target.value }))}
+                            />
+                          </label>
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+    </fieldset>
+  );
+
   const eventForm = formOpen ? (
     <form className="builder-event-manager-form" onSubmit={handleSubmit}>
       <h3 className="builder-event-manager-form-title">{editId ? "Edit Event" : "New Event"}</h3>
@@ -7186,6 +8175,38 @@ function EventManagerPreview({
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-instructor">Instructor</label>
+          <input
+            id="event-instructor"
+            className="builder-event-manager-input"
+            value={form.instructor}
+            onChange={(e) => setField("instructor", e.target.value)}
+            placeholder="e.g. Wayne L"
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-category">Venue / Category</label>
+          <div className="builder-event-manager-category-pick">
+            <span
+              className="builder-event-manager-swatch"
+              aria-hidden="true"
+              style={{ background: categoryById.get(form.categoryId)?.color || "transparent" }}
+            />
+            <select
+              id="event-category"
+              className="builder-event-manager-input"
+              value={categoryById.has(form.categoryId) ? form.categoryId : ""}
+              onChange={(e) => setField("categoryId", e.target.value)}
+            >
+              <option value="">{categories.length ? "No category" : "No venues yet — add them with Venues"}</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -7236,10 +8257,16 @@ function EventManagerPreview({
             className="builder-event-manager-input"
             value={form.timezone}
             onChange={(e) => setField("timezone", e.target.value)}
-            placeholder="America/Denver"
+            placeholder="America/New_York"
+            list="event-timezone-suggestions"
           />
+          <datalist id="event-timezone-suggestions">
+            {EVENT_TIME_ZONE_SUGGESTIONS.map((zone) => <option key={zone} value={zone} />)}
+          </datalist>
         </div>
       </div>
+
+      {repeatSection}
 
       <div className="builder-event-manager-field-row">
         <div className="builder-event-manager-field">
@@ -7400,6 +8427,92 @@ function EventManagerPreview({
       {loadError ? <div className="builder-event-manager-error">{loadError}</div> : null}
       {errorMsg && !formOpen ? <div className="builder-event-manager-error">{errorMsg}</div> : null}
 
+      {harvestOpen && harvestAvailable ? (
+        <BuilderEventHarvest
+          accent={accent}
+          categories={categories}
+          headers={() => getCrmProjectHeaders()}
+          onClose={() => setHarvestOpen(false)}
+          onCreated={() => { loadEvents(); loadCategories(); }}
+        />
+      ) : null}
+
+      {categoriesOpen ? (
+        <div className="builder-event-manager-categories">
+          <h3 className="builder-event-manager-form-title">Venues &amp; categories</h3>
+          <p className="builder-event-manager-hint">
+            Each event can belong to one. The public calendar colours events by it and shows the names as a key.
+          </p>
+          {categories.length ? (
+            <ul className="builder-event-manager-category-list">
+              {categories.map((c) => (
+                // Keyed on what was saved, so a row whose save failed or changed
+                // re-mounts showing the stored values rather than the typed ones.
+                <li key={`${c.id}:${c.name}:${c.color}`} className="builder-event-manager-category">
+                  <input
+                    type="color"
+                    aria-label={`Colour for ${c.name}`}
+                    className="builder-event-manager-color"
+                    defaultValue={c.color || "#888888"}
+                    disabled={categoryBusy}
+                    onBlur={(e) => { if (e.target.value !== c.color) categoryRequest(`/api/event-categories/${encodeURIComponent(c.id)}`, "PUT", { color: e.target.value }); }}
+                  />
+                  <input
+                    aria-label="Name"
+                    className="builder-event-manager-input"
+                    defaultValue={c.name}
+                    disabled={categoryBusy}
+                    onBlur={(e) => {
+                      const name = e.target.value.trim();
+                      if (name && name !== c.name) categoryRequest(`/api/event-categories/${encodeURIComponent(c.id)}`, "PUT", { name });
+                      else e.target.value = c.name;
+                    }}
+                  />
+                  <span className="builder-event-manager-category-count">
+                    {(() => {
+                      const n = events.filter((ev) => ev.categoryId === c.id).length;
+                      return `${n} event${n === 1 ? "" : "s"}`;
+                    })()}
+                  </span>
+                  <AdminTableIconButton
+                    icon="delete"
+                    label={`Delete ${c.name}`}
+                    danger
+                    onClick={() => {
+                      const n = events.filter((ev) => ev.categoryId === c.id).length;
+                      const ok = window.confirm(n
+                        ? `Delete "${c.name}"? Its ${n} event${n === 1 ? "" : "s"} will stay, with no venue.`
+                        : `Delete "${c.name}"?`);
+                      if (ok) categoryRequest(`/api/event-categories/${encodeURIComponent(c.id)}`, "DELETE");
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="builder-event-manager-hint">No venues or categories yet. Add the first one below.</p>
+          )}
+          <div className="builder-event-manager-category builder-event-manager-category-new">
+            <input
+              type="color"
+              aria-label="Colour for the new venue"
+              className="builder-event-manager-color"
+              value={newCategory.color}
+              onChange={(e) => setNewCategory((v) => ({ ...v, color: e.target.value }))}
+            />
+            <input
+              aria-label="New venue or category name"
+              className="builder-event-manager-input"
+              placeholder="e.g. Delray Swim & Tennis Club"
+              value={newCategory.name}
+              onChange={(e) => setNewCategory((v) => ({ ...v, name: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCategory(); } }}
+            />
+            <button type="button" className="btn tiny-btn" disabled={categoryBusy} onClick={addCategory}>Add</button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="builder-admin-data-table-wrap">
         <table className="builder-admin-data-table">
           <thead>
@@ -7410,7 +8523,29 @@ function EventManagerPreview({
               * and reads as a fifth column heading rather than a control.
               */}
             <tr className="builder-admin-data-table-filter-row table-filter-row">
-              <th />
+              {/* Venues sits at the far left of the filter row: the actions
+                * column is sized for one button, and a second one there was
+                * cut off at 1280px (task 86bbzt25g). */}
+              <th>
+                <button
+                  type="button"
+                  className="btn btn-ghost tiny-btn"
+                  aria-expanded={categoriesOpen}
+                  onClick={() => setCategoriesOpen((v) => !v)}
+                >
+                  Venues
+                </button>
+                {harvestAvailable ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost tiny-btn"
+                    aria-expanded={harvestOpen}
+                    onClick={() => setHarvestOpen((v) => !v)}
+                  >
+                    Harvest PDF
+                  </button>
+                ) : null}
+              </th>
               {showStatus ? <th /> : null}
               {showDate ? <th /> : null}
               {showLocation ? <th /> : null}
@@ -7444,7 +8579,17 @@ function EventManagerPreview({
               return (
                 <tr key={event.id}>
                   <td className="builder-admin-data-table-cell">
-                    <span className="builder-event-manager-title">{event.title || "Untitled event"}</span>
+                    <span className="builder-event-manager-title">
+                      {categoryById.get(event.categoryId || "") ? (
+                        <span
+                          className="builder-event-manager-swatch"
+                          title={categoryById.get(event.categoryId || "")!.name}
+                          style={{ background: categoryById.get(event.categoryId || "")!.color || "transparent" }}
+                        />
+                      ) : null}
+                      {event.title || "Untitled event"}
+                    </span>
+                    {event.instructor ? <span className="builder-event-manager-when-sub">{event.instructor}</span> : null}
                     {event.featured ? <span className="builder-event-manager-featured">Featured</span> : null}
                   </td>
                   {showStatus ? (
@@ -7454,7 +8599,14 @@ function EventManagerPreview({
                   ) : null}
                   {showDate ? (
                     <td className="builder-admin-data-table-cell builder-admin-data-table-date">
-                      {formatEventWhen(event)}
+                      {event.recurrence ? (
+                        <>
+                          <span className="builder-event-manager-when-rule">{describeRecurrence(event.recurrence)}</span>
+                          <span className="builder-event-manager-when-sub">
+                            {formatTimeRange(event.startsAt, event.endsAt, eventTimeZone(event), event.allDay)}
+                          </span>
+                        </>
+                      ) : formatEventWhen(event)}
                     </td>
                   ) : null}
                   {showLocation ? (
@@ -8060,7 +9212,14 @@ function BlogPostTagsPreview({
   );
 }
 
-function BlogPostViewPreview({ settings }: { settings: Record<string, string> }) {
+function BlogPostViewPreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
   type LivePost = BlogPostRecord & {
     body?: string;
     author?: string;
@@ -8072,6 +9231,13 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
   };
 
   const [postSlug, setPostSlug] = useState("");
+  /*
+   * Has the URL been read yet? `postSlug` is "" for the first render even when
+   * the address bar carries ?post=slug, so judging "no post" on that empty
+   * first value flashed the builder placeholder over a perfectly good post
+   * (ticket 86bbvqcbk).
+   */
+  const [urlRead, setUrlRead] = useState(false);
   const [post, setPost] = useState<LivePost | null>(null);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -8079,6 +9245,7 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
   useEffect(() => {
     function syncSlugFromUrl() {
       setPostSlug(new URLSearchParams(window.location.search).get("post") ?? "");
+      setUrlRead(true);
     }
     syncSlugFromUrl();
     window.addEventListener("popstate", syncSlugFromUrl);
@@ -8162,6 +9329,26 @@ function BlogPostViewPreview({ settings }: { settings: Record<string, string> })
             dangerouslySetInnerHTML={{ __html: formatRichTextContent(post.body) || "" }}
           />
         ) : null}
+      </article>
+    );
+  }
+
+  /*
+   * No ?post= in the URL. Everything below is the BUILDER's placeholder —
+   * "Post Title", "Post body will appear here when opened with ?post=slug." —
+   * and with no liveSite prop it was reaching visitors on
+   * delraytennis.starcaster.pro/blog-post and on a law firm's public site,
+   * brandonmarinoff.com/blog-post-view (ticket 86bbvqcbk).
+   *
+   * A visitor gets plain copy naming the reason instead of a blank panel
+   * (landmine 17) — and nothing at all until the URL has actually been read,
+   * so a valid post link no longer flashes this on its way in.
+   */
+  if (liveSite) {
+    if (!urlRead) return null;
+    return (
+      <article className="blog-post-page">
+        <p className="blog-post-body">No post selected. Open a post from the blog to read it.</p>
       </article>
     );
   }
@@ -10106,7 +11293,8 @@ function NavMegaItem({
   onOpen,
   onClose,
   previewMode,
-  activePath
+  activePath,
+  liveSite = false
 }: {
   item: NavRenderItem;
   columns: NavMegaColumn<NavRenderItem>[];
@@ -10115,6 +11303,8 @@ function NavMegaItem({
   onClose: () => void;
   previewMode: boolean;
   activePath: string;
+  /** The feature slot below renders a whole module (ticket 86bbvqcbk). */
+  liveSite?: boolean;
 }) {
   const panelId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -10225,7 +11415,7 @@ function NavMegaItem({
             */}
           {item.featureModule ? (
             <div className="site-nav-mega-feature-module">
-              <BuilderModulePreview module={item.featureModule} previewMode={previewMode} />
+              <BuilderModulePreview module={item.featureModule} previewMode={previewMode} liveSite={liveSite} />
             </div>
           ) : featureImage || item.featureHeading ? (
             <Link className="site-nav-mega-feature" href={href}>
@@ -10244,10 +11434,13 @@ function NavMegaItem({
 
 function NavigationModulePreview({
   module,
-  previewMode = false
+  previewMode = false,
+  liveSite = false
 }: {
   module: import("@/lib/builder-template").BuilderTemplateModule;
   previewMode?: boolean;
+  /** A mega-menu column can hold a whole module — see NavMegaItem. */
+  liveSite?: boolean;
 }) {
   const pathname = usePathname();
   const activePath = normalizeNavPath(pathname || "/");
@@ -10379,6 +11572,7 @@ function NavigationModulePreview({
               item={item}
               activePath={activePath}
               previewMode={previewMode}
+              liveSite={liveSite}
               columns={buildMegaColumns(children, childrenOf, megaColumnCount)}
               isOpen={openMegaId === itemId}
               onOpen={() => setOpenMegaId(itemId)}
@@ -10427,7 +11621,18 @@ function NavigationModulePreview({
   );
 }
 
-function TableModulePreview({ module }: { module: import("@/lib/builder-template").BuilderTemplateModule }) {
+function TableModulePreview({
+  module,
+  liveSite = false
+}: {
+  module: import("@/lib/builder-template").BuilderTemplateModule;
+  /**
+   * A table CELL holds ordinary modules, so every liveSite guard in every one
+   * of them was bypassed inside a table until this prop existed — the guard
+   * was there, the prop never arrived (ticket 86bbvqcbk, finding 1).
+   */
+  liveSite?: boolean;
+}) {
   const td = parseTableData(module.settings);
   const borderW = Number.parseInt(module.settings.borderWidth || "1", 10);
   const borderC = module.settings.borderColor || "#cccccc";
@@ -10460,7 +11665,7 @@ function TableModulePreview({ module }: { module: import("@/lib/builder-template
                   <td key={ci} style={{ border: `${borderW}px solid ${borderC}`, padding: `${cellPad}px`, verticalAlign: "top" }}>
                     {cellMods.map((m) => (
                       <div key={m.id} className={`builder-preview-module ${getAlignmentClass(getModuleAlignment(m.settings))}`}>
-                        <BuilderModulePreview module={m} />
+                        <BuilderModulePreview module={m} liveSite={liveSite} />
                       </div>
                     ))}
                   </td>
@@ -12363,6 +13568,45 @@ function AdminModulesPreview({
   );
 }
 
+/*
+ * The fetch plumbing both blog admin modules need. ONE definition on purpose:
+ * the memoisation below is not a tidiness preference, it is the fix for an
+ * unbounded request loop, and two copies of it would be two places for that
+ * discipline to rot.
+ *
+ * getCrmProjectHeaders() builds a fresh object on every call, so an unmemoised
+ * `headers` is a new identity each render — which makes every dependent
+ * useCallback new, which makes the load effect fire again, which sets state,
+ * which renders again. The browser gave up with ERR_INSUFFICIENT_RESOURCES
+ * rather than a React warning.
+ */
+function useBlogAdminApi(projectIdProp: string) {
+  const headers = useMemo(() => getCrmProjectHeaders(projectIdProp), [projectIdProp]);
+  const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
+
+  const projectQuery = useCallback(() => {
+    const projectId = headers["X-Project-ID"] || "";
+    return projectId ? `projectId=${encodeURIComponent(projectId)}` : "";
+  }, [headers]);
+
+  const api = useCallback(async (path: string, init?: RequestInit) => {
+    const r = await fetch(path, {
+      credentials: "include",
+      ...init,
+      headers: { ...(init?.body ? { "Content-Type": "application/json" } : {}), ...headers, ...(init?.headers || {}) },
+    });
+    if (r.status === 401 && !isPreview) {
+      window.location.href = "/admin-login";
+      return null;
+    }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(readApiErrorMessage(d, `Request failed (${r.status})`));
+    return d;
+  }, [headers, isPreview]);
+
+  return { headers, api, projectQuery };
+}
+
 // ── Blog Links manager (admin-blog-links) ───────────────────────────────────
 
 type BlogLinkTerm = {
@@ -12388,6 +13632,32 @@ type BlogLinkArticle = {
   slug: string;
   status: string;
 };
+
+/** One tag the Auto-tag run added to a post, with the words that earned it. */
+type AutoTagAdded = { tag: string; evidence: string[] };
+type AutoTagResultRow = { postId: string; title: string; added: AutoTagAdded[] };
+type AutoTagFailure = { postId: string; error: string };
+/**
+ * The Auto-tag run as the panel sees it (ticket 86bbw4dcp). The CLIENT is the
+ * loop: the server takes ten posts per call (lib/blogAutoTagRun.js), so this
+ * state advances one batch at a time and the progress line reads off it.
+ * `runId` is what Undo needs, and it survives a batch failing partway -- the
+ * posts already tagged stay undoable.
+ */
+type AutoTagRun = {
+  step: "idle" | "running" | "done";
+  runId: string;
+  read: number;
+  total: number;
+  results: AutoTagResultRow[];
+  failed: AutoTagFailure[];
+  undone: boolean;
+};
+const AUTO_TAG_IDLE: AutoTagRun = { step: "idle", runId: "", read: 0, total: 0, results: [], failed: [], undone: false };
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
 
 /**
  * Only a PUBLISHED post is on the website. The manager counts every post
@@ -12451,19 +13721,23 @@ function liveCountTitle(term: BlogLinkTerm): string {
 function AdminBlogLinksPreview({
   settings,
   projectId: projectIdProp = "",
+  liveSite = false,
 }: {
   settings: Record<string, string>;
   projectId?: string;
+  /** True on the published admin site, false inside the Builder's own preview. */
+  liveSite?: boolean;
 }) {
-  const panelTitle     = settings.panelTitle || "Blog Links";
+  /*
+   * "Tag Manager" is what this module now is (86bbuhph0), and it is the
+   * fallback its own settings panel declares. It used to default to "Blog
+   * Links" while the panel said "Tag Manager", so the panel showed the
+   * operator an effective title the page did not render.
+   */
+  const panelTitle     = settings.panelTitle || "Tag Manager";
   const showTitle      = settings.showTitle !== "false";
   /** The tag table. Keeps the original `showTags` key so saved pages carry over. */
   const showTagManager = settings.showTags !== "false";
-  /** Whether categories are offered in the article picker (they are never edited here). */
-  const offerCategories = settings.showCategories !== "false";
-  const showRelate     = settings.showRelate !== "false";
-  const relateLabel    = settings.relateButtonLabel || "Relate Checked";
-  const articleStatus  = settings.articleStatus || "all";
   const accent         = settings.accentColor || "#0f4f8f";
   /*
    * Where a post in the "posts with this tag" popup opens. The default is the
@@ -12473,18 +13747,17 @@ function AdminBlogLinksPreview({
    */
   const managerPageUrl = (settings.managerPageUrl || "/admin-blog-manager").trim();
   const postViewUrl    = (settings.postViewUrl || "/blog-post-view").trim();
+  /** The Auto-tag extension's button (ticket 86bbw4dcp). */
+  const showAutoTag    = settings.showAutoTag !== "false";
+  const autoTagLabel   = settings.autoTagButtonLabel || "Auto-tag";
 
   const [terms, setTerms]       = useState<BlogLinkTerm[]>([]);
-  const [selectedKey, setSelectedKey] = useState("");
-  const [articles, setArticles] = useState<BlogLinkArticle[]>([]);
-  const [checked, setChecked]   = useState<Set<string>>(new Set());
-  const [relatedTitles, setRelatedTitles] = useState<Record<string, string[]>>({});
 
   const [loadingTerms, setLoadingTerms]       = useState(true);
-  const [loadingArticles, setLoadingArticles] = useState(false);
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState("");
   const [note, setNote]     = useState("");
+  const [autoTag, setAutoTag] = useState<AutoTagRun>(AUTO_TAG_IDLE);
 
   /** The tag being renamed, and the box holding the new name. */
   const [editTag, setEditTag]   = useState<string | null>(null);
@@ -12502,36 +13775,7 @@ function AdminBlogLinksPreview({
   const [tagPostsLoading, setTagPostsLoading] = useState(false);
   const [tagPostsError, setTagPostsError] = useState("");
 
-  /*
-   * MEMOISED, and it has to be. getCrmProjectHeaders() builds a fresh object
-   * on every call, so an unmemoised `headers` is a new identity each render —
-   * which makes every useCallback below new, which makes the load effect fire
-   * again, which sets state, which renders again. That is an unbounded request
-   * loop, and it is not subtle: the browser gave up with
-   * ERR_INSUFFICIENT_RESOURCES rather than a React warning.
-   */
-  const headers = useMemo(() => getCrmProjectHeaders(projectIdProp), [projectIdProp]);
-  const isPreview = typeof window !== "undefined" && window.location.pathname.includes("builder-preview");
-
-  const projectQuery = useCallback(() => {
-    const projectId = headers["X-Project-ID"] || "";
-    return projectId ? `projectId=${encodeURIComponent(projectId)}` : "";
-  }, [headers]);
-
-  const api = useCallback(async (path: string, init?: RequestInit) => {
-    const r = await fetch(path, {
-      credentials: "include",
-      ...init,
-      headers: { ...(init?.body ? { "Content-Type": "application/json" } : {}), ...headers, ...(init?.headers || {}) },
-    });
-    if (r.status === 401 && !isPreview) {
-      window.location.href = "/admin-login";
-      return null;
-    }
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(readApiErrorMessage(d, `Request failed (${r.status})`));
-    return d;
-  }, [headers, isPreview]);
+  const { headers, api, projectQuery } = useBlogAdminApi(projectIdProp);
 
   /*
    * Open the popup for one tag and load its posts. The same endpoint the
@@ -12580,25 +13824,20 @@ function AdminBlogLinksPreview({
     return () => document.removeEventListener("keydown", onKey);
   }, [postsTag, closeTagPosts]);
 
-  /** Reload both taxonomies. Called after every write, so counts stay true. */
+  /*
+   * Reload the tags. Called after every write, so counts stay true.
+   *
+   * Tags only. This module used to fetch the categories as well, because it
+   * also held the article picker, which offered either taxonomy. The picker
+   * moved to `admin-related-articles` (86bbuhph0) and the category rows were
+   * left being fetched and then dropped on the floor -- a request on every
+   * load for rows that reach nothing, since the table below renders
+   * `tagTerms` alone.
+   */
   const loadTerms = useCallback(async () => {
     setLoadingTerms(true);
     try {
       const next: BlogLinkTerm[] = [];
-      if (offerCategories) {
-        const d = await api(`/api/blog/categories?${projectQuery()}`);
-        const rows = (d?.categories ?? d?.data ?? []) as Array<Record<string, unknown>>;
-        for (const row of Array.isArray(rows) ? rows : []) {
-          next.push({
-            kind: "category",
-            key: String(row.id || ""),
-            label: String(row.name || "(untitled)"),
-            slug: String(row.slug || ""),
-            postCount: 0,
-            livePostCount: null,
-          });
-        }
-      }
       const d = await api(`/api/blog/tags?${projectQuery()}`);
       const rows = (d?.tags ?? d?.data ?? []) as Array<Record<string, unknown>>;
       for (const row of Array.isArray(rows) ? rows : []) {
@@ -12619,108 +13858,13 @@ function AdminBlogLinksPreview({
       setTerms(next);
       setError("");
     } catch (e) {
-      setError((e as Error).message || "Could not load the blog taxonomy.");
+      setError((e as Error).message || "Could not load the blog tags.");
     } finally {
       setLoadingTerms(false);
     }
-  }, [api, projectQuery, offerCategories]);
+  }, [api, projectQuery]);
 
   useEffect(() => { void loadTerms(); }, [loadTerms]);
-
-  /** Articles under a term, plus each one's existing relations. */
-  const loadArticles = useCallback(async (term: BlogLinkTerm) => {
-    setLoadingArticles(true);
-    setChecked(new Set());
-    try {
-      const q = projectQuery();
-      const path = term.kind === "category"
-        ? `/api/blog/posts?category=${encodeURIComponent(term.slug)}&limit=100${q ? `&${q}` : ""}`
-        : `/api/blog/tags/posts?tag=${encodeURIComponent(term.slug)}${q ? `&${q}` : ""}`;
-      const d = await api(path);
-      const rows = (d?.posts ?? d?.data ?? []) as Array<Record<string, unknown>>;
-      let list: BlogLinkArticle[] = (Array.isArray(rows) ? rows : []).map((row) => ({
-        id: String(row.id || ""),
-        title: String(row.title || "(untitled)"),
-        slug: String(row.slug || ""),
-        status: String(row.status || ""),
-      })).filter((a) => a.id);
-      if (articleStatus !== "all") list = list.filter((a) => a.status === articleStatus);
-      setArticles(list);
-
-      // ONE request for the whole project's relations, not one per article: a
-      // per-article loop is N+1 requests, and on a blog of any size that is a
-      // request storm rather than a page load. The pairing arithmetic is the
-      // same tested helper the store uses, so the two cannot disagree.
-      const all = await api(`/api/blog/relations${q ? `?${q}` : ""}`);
-      const pairs = (Array.isArray(all?.relations) ? all.relations : Array.isArray(all?.data) ? all.data : []) as PostRelationPair[];
-      const byId = new Map(list.map((a) => [a.id, a.title]));
-      const titles: Record<string, string[]> = {};
-      for (const article of list) {
-        titles[article.id] = relatedIdsFor(article.id, pairs)
-          .map((id) => byId.get(String(id)) || "")
-          .filter(Boolean);
-      }
-      setRelatedTitles(titles);
-      setError("");
-    } catch (e) {
-      setError((e as Error).message || "Could not load the articles.");
-      setArticles([]);
-    } finally {
-      setLoadingArticles(false);
-    }
-  }, [api, projectQuery, articleStatus]);
-
-  const selected = terms.find((t) => t.key === selectedKey) || null;
-
-  function selectTerm(key: string) {
-    setSelectedKey(key);
-    setNote("");
-    const term = terms.find((t) => t.key === key);
-    if (term) void loadArticles(term);
-    else { setArticles([]); setRelatedTitles({}); setChecked(new Set()); }
-  }
-
-  function toggleChecked(id: string) {
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-    setNote("");
-  }
-
-  async function handleRelate() {
-    const ids = [...checked];
-    if (ids.length < 2) {
-      setError("Check at least two articles to relate them to each other.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    setNote("");
-    try {
-      const d = await api(`/api/blog/relations`, {
-        method: "POST",
-        body: JSON.stringify({ postIds: ids, projectId: headers["X-Project-ID"] || "" }),
-      });
-      const result = (d?.result ?? d?.data ?? {}) as { added?: number; alreadyRelated?: number };
-      const added = Number(result.added ?? 0);
-      const already = Number(result.alreadyRelated ?? 0);
-      setNote(
-        added > 0
-          ? `Linked ${ids.length} articles${already > 0 ? ` (${already} link${already === 1 ? "" : "s"} already existed)` : ""}.`
-          : "Those articles were already related to each other."
-      );
-      // Read the relations back rather than trusting the response: this is the
-      // list the module will actually render.
-      if (selected) await loadArticles(selected);
-      setChecked(new Set(ids));
-    } catch (e) {
-      setError((e as Error).message || "Could not save the relations.");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   function startRenameTag(tag: string) {
     setEditTag(tag);
@@ -12752,7 +13896,6 @@ function AdminBlogLinksPreview({
       );
       cancelRenameTag();
       await loadTerms();
-      if (selected?.kind === "tag") { setSelectedKey(""); setArticles([]); }
     } catch (err) {
       setError((err as Error).message || "Could not rename the tag.");
     } finally {
@@ -12776,7 +13919,6 @@ function AdminBlogLinksPreview({
       setNote(`Removed the tag from ${Number(result.updated ?? 0)} post${Number(result.updated ?? 0) === 1 ? "" : "s"}.`);
       if (editTag === tag) cancelRenameTag();
       await loadTerms();
-      if (selected?.kind === "tag") { setSelectedKey(""); setArticles([]); }
     } catch (err) {
       setError((err as Error).message || "Could not remove the tag.");
     } finally {
@@ -12784,8 +13926,115 @@ function AdminBlogLinksPreview({
     }
   }
 
+  /**
+   * One click: read every post, add the clearly matching EXISTING tags, show
+   * what changed. Confirms with the real counts first, then drives the server
+   * in batches (the same shape BlogImportPanel uses -- one long request would
+   * be cut off). A batch that fails leaves the earlier ones applied AND
+   * undoable: the run id is kept, so the Undo button still appears.
+   */
+  async function handleAutoTag() {
+    setError("");
+    setNote("");
+    setBusy(true);
+    let run: AutoTagRun = AUTO_TAG_IDLE;
+    try {
+      const q = projectQuery();
+      const c = await api(`/api/blog/tags/auto-tag/candidates${q ? `?${q}` : ""}`);
+      const cand = (c?.candidates ?? c?.data ?? {}) as { postIds?: string[]; total?: number; tagCount?: number; batchSize?: number };
+      const ids = Array.isArray(cand.postIds) ? cand.postIds.map(String) : [];
+      const tagCount = Number(cand.tagCount ?? 0);
+      const batchSize = Math.max(1, Number(cand.batchSize ?? 10));
+      if (!ids.length) { setError("This project has no blog posts to tag."); return; }
+      if (!tagCount) { setError("No tags exist yet — add one on a post first, and Auto-tag can spread it."); return; }
+      const ok = window.confirm(
+        `Read ${plural(ids.length, "post")} and add matching tags from your ${plural(tagCount, "existing tag")}? Nothing new is invented, and you can undo the run.`
+      );
+      if (!ok) return;
+
+      run = { ...AUTO_TAG_IDLE, step: "running", total: ids.length };
+      setAutoTag(run);
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const slice = ids.slice(i, i + batchSize);
+        const d = await api(`/api/blog/tags/auto-tag`, {
+          method: "POST",
+          body: JSON.stringify({ runId: run.runId || undefined, postIds: slice, projectId: headers["X-Project-ID"] || "" }),
+        });
+        const batch = (d?.run ?? d?.data ?? {}) as { runId?: string; results?: AutoTagResultRow[]; failed?: AutoTagFailure[] };
+        run = {
+          ...run,
+          runId: String(batch.runId || run.runId),
+          read: Math.min(ids.length, i + slice.length),
+          results: [...run.results, ...(Array.isArray(batch.results) ? batch.results : [])],
+          failed: [...run.failed, ...(Array.isArray(batch.failed) ? batch.failed : [])],
+        };
+        setAutoTag(run);
+      }
+      run = { ...run, step: "done" };
+      setAutoTag(run);
+      const tagged = run.results.filter((r) => r.added.length > 0);
+      const tags = tagged.reduce((n, r) => n + r.added.length, 0);
+      const untouched = run.results.length - tagged.length;
+      setNote(
+        tagged.length > 0
+          ? `Added ${plural(tags, "tag")} across ${plural(tagged.length, "post")}.${untouched > 0 ? ` ${plural(untouched, "post")} already had every matching tag.` : ""}${run.failed.length ? ` ${plural(run.failed.length, "post")} could not be saved — listed below.` : ""}`
+          : "No post gained a tag — every clear match was already tagged."
+      );
+      // Read the counts back rather than trusting the response.
+      await loadTerms();
+    } catch (e) {
+      setError((e as Error).message || "Auto-tag could not finish.");
+      // Whatever was tagged before the failure is real and undoable: keep the run visible.
+      if (run.step === "running") setAutoTag({ ...run, step: "done" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Remove exactly what this run added -- the server recomputes the scope now, then confirms with it. */
+  async function handleUndoAutoTag() {
+    const runId = autoTag.runId;
+    if (!runId) return;
+    setError("");
+    setNote("");
+    setBusy(true);
+    try {
+      const q = projectQuery();
+      const d = await api(`/api/blog/tags/auto-tag/${encodeURIComponent(runId)}${q ? `?${q}` : ""}`);
+      const scope = (d?.run ?? d?.data ?? {}) as { tagsStillPresent?: number; postCount?: number; undone?: boolean };
+      if (scope.undone) {
+        setNote("This run was already undone.");
+        setAutoTag((prev) => ({ ...prev, undone: true }));
+        return;
+      }
+      const n = Number(scope.tagsStillPresent ?? 0);
+      const ok = window.confirm(
+        `Remove the ${plural(n, "tag")} this run added across ${plural(Number(scope.postCount ?? 0), "post")}? Tags you added by hand stay.`
+      );
+      if (!ok) return;
+      const u = await api(`/api/blog/tags/auto-tag/${encodeURIComponent(runId)}/undo`, {
+        method: "POST",
+        body: JSON.stringify({ projectId: headers["X-Project-ID"] || "" }),
+      });
+      const result = (u?.undo ?? u?.data ?? {}) as { restored?: unknown[]; failed?: AutoTagFailure[]; undone?: boolean };
+      const restored = Array.isArray(result.restored) ? result.restored.length : 0;
+      const failed = Array.isArray(result.failed) ? result.failed : [];
+      setNote(
+        failed.length
+          ? `Restored ${plural(restored, "post")}; ${plural(failed.length, "post")} could not be restored: ${failed.map((f) => f.error).join("; ")}`
+          : `Restored ${plural(restored, "post")}. The tags this run added are gone.`
+      );
+      setAutoTag((prev) => ({ ...prev, undone: Boolean(result.undone) }));
+      await loadTerms();
+    } catch (e) {
+      setError((e as Error).message || "Could not undo the run.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const tagTerms      = terms.filter((t) => t.kind === "tag");
-  const categoryTerms = terms.filter((t) => t.kind === "category");
+  const autoTagged    = autoTag.results.filter((r) => r.added.length > 0);
 
   /*
    * The same three inline-style vocabularies BlogCategoryManagerPreview uses,
@@ -12815,6 +14064,82 @@ function AdminBlogLinksPreview({
       {showTagManager && (
         <section style={{ marginBottom: "1.75rem" }}>
           <h4 style={sectionTitle}>Tags</h4>
+
+          {showAutoTag && (
+            <div className="admin-blog-links-autotag" style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+              <button
+                type="button"
+                className="admin-blog-links-autotag-btn"
+                onClick={() => void handleAutoTag()}
+                disabled={busy || !liveSite || autoTag.step === "running"}
+                style={{
+                  padding: "0.5rem 1rem", background: accent, color: "#fff", border: "none",
+                  borderRadius: 6, fontWeight: 700, fontSize: "0.875rem",
+                  cursor: busy || !liveSite ? "default" : "pointer",
+                  opacity: busy || !liveSite ? 0.45 : 1,
+                }}
+                title={liveSite ? "Add your existing tags to every post that clearly matches them" : "Runs on the admin site, not in the Builder"}
+              >
+                {autoTag.step === "running" ? "Tagging…" : autoTagLabel}
+              </button>
+              {autoTag.step !== "idle" && (
+                <span className="admin-blog-links-autotag-progress" aria-live="polite" style={{ fontSize: "0.8125rem", color: "#4b5563" }}>
+                  {autoTag.read} of {autoTag.total} posts read{autoTag.step === "done" ? " — done" : "…"}
+                </span>
+              )}
+              {autoTag.step === "done" && autoTag.runId && !autoTag.undone && (
+                <button
+                  type="button"
+                  className="admin-blog-links-autotag-undo"
+                  onClick={() => void handleUndoAutoTag()}
+                  disabled={busy}
+                  style={{ padding: "0.45rem 0.9rem", background: "#fff", color: "#b91c1c", border: "1px solid #fca5a5", borderRadius: 6, fontWeight: 600, fontSize: "0.8125rem", cursor: busy ? "default" : "pointer" }}
+                  title="Remove exactly the tags this run added"
+                >
+                  Undo this run
+                </button>
+              )}
+              <BuilderOnlyNote liveSite={liveSite} style={{ margin: 0, padding: "0.4rem 0.75rem", fontSize: "0.8125rem" }}>
+                {autoTagLabel} runs on the admin site, not in the Builder — open the admin page to use it.
+              </BuilderOnlyNote>
+            </div>
+          )}
+
+          {showAutoTag && autoTag.step === "done" && (autoTagged.length > 0 || autoTag.failed.length > 0) && (
+            <div className="admin-blog-links-autotag-results" style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden", marginBottom: "0.75rem" }}>
+              <div style={{ ...headStyle, gridTemplateColumns: "1fr 1.4fr" }}>
+                <span>{autoTag.undone ? "Post (tags removed again)" : "Post"}</span>
+                <span>{autoTag.undone ? "Tags this run had added" : "Tags added"}</span>
+              </div>
+              {autoTagged.map((row, i) => {
+                const editHref = `${managerPageUrl}${managerPageUrl.includes("?") ? "&" : "?"}id=${encodeURIComponent(row.postId)}`;
+                return (
+                  <div
+                    key={row.postId}
+                    className="admin-blog-links-autotag-row"
+                    style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: "0 12px", padding: "8px 12px", alignItems: "start", borderBottom: i < autoTagged.length - 1 || autoTag.failed.length ? "1px solid #f0f4f8" : undefined, opacity: autoTag.undone ? 0.6 : 1 }}
+                  >
+                    <a href={editHref} style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c", overflowWrap: "anywhere" }}>{row.title || "(untitled)"}</a>
+                    <span style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                      {row.added.map((a) => (
+                        <span
+                          key={a.tag}
+                          className="admin-blog-links-autotag-tag"
+                          title={a.evidence.length ? `Earned by: ${a.evidence.join(", ")}` : undefined}
+                          style={{ fontSize: "0.75rem", fontWeight: 600, padding: "2px 8px", borderRadius: 999, background: "#eef4fb", color: accent, textDecoration: autoTag.undone ? "line-through" : "none" }}
+                        >{a.tag}</span>
+                      ))}
+                    </span>
+                  </div>
+                );
+              })}
+              {autoTag.failed.map((f) => (
+                <div key={f.postId} className="admin-blog-links-autotag-failed" role="alert" style={{ padding: "8px 12px", fontSize: "0.8125rem", color: "#b91c1c", background: "#fef2f2" }}>
+                  Post {f.postId}: {f.error}
+                </div>
+              ))}
+            </div>
+          )}
 
           {loadingTerms ? (
             <div style={{ padding: "1rem", color: "#888", textAlign: "center" }}>Loading…</div>
@@ -12959,109 +14284,6 @@ function AdminBlogLinksPreview({
         </section>
       )}
 
-      {showRelate && (
-        <section>
-          <h4 style={sectionTitle}>Related Articles</h4>
-
-          {/* Full width, and a select rather than a narrow sidebar list — the
-              old two-column layout cut every term name off with an ellipsis. */}
-          <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "0.9rem" }}>
-            <div style={{ flex: "1 1 320px", minWidth: 0 }}>
-              <label style={labelStyle} htmlFor="admin-blog-links-term">Show articles filed under</label>
-              <select
-                id="admin-blog-links-term"
-                style={{ ...inputStyle, background: "#fff" }}
-                value={selectedKey}
-                onChange={(e) => selectTerm(e.target.value)}
-                disabled={loadingTerms}
-              >
-                <option value="">Choose a category or tag…</option>
-                {categoryTerms.length > 0 && (
-                  <optgroup label="Categories">
-                    {categoryTerms.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-                  </optgroup>
-                )}
-                {tagTerms.length > 0 && (
-                  <optgroup label="Tags">
-                    {tagTerms.map((t) => (
-                      <option key={t.key} value={t.key}>{t.label} ({t.postCount})</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            </div>
-            <button
-              type="button"
-              onClick={handleRelate}
-              disabled={busy || checked.size < 2}
-              style={{
-                padding: "0.5rem 1rem", background: accent, color: "#fff", border: "none",
-                borderRadius: 6, fontWeight: 700, fontSize: "0.875rem",
-                cursor: checked.size < 2 ? "default" : "pointer",
-                opacity: busy || checked.size < 2 ? 0.45 : 1,
-                marginBottom: "0.75rem",
-              }}
-              title={checked.size < 2 ? "Check at least two articles" : `Relate the ${checked.size} checked articles to each other`}
-            >
-              {busy ? "Linking…" : relateLabel}
-            </button>
-          </div>
-
-          {!selected ? (
-            <div style={{ padding: "1rem", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
-              Pick a category or tag above to see the articles filed under it, then tick the ones
-              that belong together and press {relateLabel}.
-            </div>
-          ) : loadingArticles ? (
-            <div style={{ padding: "1rem", color: "#888", textAlign: "center" }}>Loading…</div>
-          ) : articles.length === 0 ? (
-            <div style={{ padding: "1rem", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
-              No articles are filed under “{selected.label}”.
-            </div>
-          ) : (
-            <>
-              <div style={{ fontSize: "0.8125rem", color: "#718096", marginBottom: "0.5rem" }}>
-                {articles.length} article{articles.length === 1 ? "" : "s"} under “{selected.label}”
-                {checked.size > 0 ? ` · ${checked.size} checked` : ""}
-              </div>
-              <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
-                {articles.map((article, i) => (
-                  <label
-                    key={article.id}
-                    className="admin-blog-links-article"
-                    style={{
-                      display: "flex", alignItems: "flex-start", gap: 10,
-                      padding: "9px 12px", cursor: "pointer",
-                      borderBottom: i < articles.length - 1 ? "1px solid #f0f4f8" : undefined,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked.has(article.id)}
-                      onChange={() => toggleChecked(article.id)}
-                    />
-                    <span style={{ display: "flex", flexDirection: "column", gap: 2, flex: "1 1 auto", minWidth: 0 }}>
-                      <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c", overflowWrap: "anywhere" }}>
-                        {article.title}
-                      </span>
-                      {article.status && article.status !== "published" && (
-                        <span style={{ alignSelf: "flex-start", padding: "1px 6px", borderRadius: 999, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: "0.6875rem", textTransform: "capitalize", color: "#718096" }}>
-                          {article.status}
-                        </span>
-                      )}
-                      {(relatedTitles[article.id]?.length ?? 0) > 0 && (
-                        <span style={{ fontSize: "0.75rem", color: "#718096", overflowWrap: "anywhere" }}>
-                          Related to: {relatedTitles[article.id].join(", ")}
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
-      )}
 
       {/*
         The posts carrying one tag. Portalled to <body> through
@@ -13181,6 +14403,315 @@ function AdminBlogLinksPreview({
           </div>
         </BuilderBodyPortal>
       )}
+    </div>
+  );
+}
+
+/**
+ * Related Articles (`admin-related-articles`).
+ *
+ * Split out of `admin-blog-links` on 2026-09-03 (86bbuhph0) at the operator's
+ * request: "The Related Articles section is part of the Tag Manager module.
+ * That should be a separate module." They had shared a component only because
+ * the original spec described one "blog links" panel — they share no state,
+ * and each already had its own on/off setting.
+ *
+ * Categories appear here ONLY as a way to choose which articles to relate.
+ * Creating, renaming and deleting them belongs to `blog-category-manager`,
+ * which already does it properly — shipping a second, worse category list is
+ * a mistake this feature has already made once (86bbue8ux).
+ *
+ * Relations are MUTUAL: relating A to B relates B to A, which is why the
+ * button reads "Relate Checked" rather than "Relate to".
+ */
+function AdminRelatedArticlesPreview({
+  settings,
+  projectId: projectIdProp = "",
+}: {
+  settings: Record<string, string>;
+  projectId?: string;
+}) {
+  const panelTitle     = settings.panelTitle || "Related Articles";
+  const showTitle      = settings.showTitle !== "false";
+  /** Whether categories are offered in the picker (they are never edited here). */
+  const offerCategories = settings.showCategories !== "false";
+  const relateLabel    = settings.relateButtonLabel || "Relate Checked";
+  const articleStatus  = settings.articleStatus || "all";
+  const accent         = settings.accentColor || "#0f4f8f";
+
+  const [terms, setTerms]       = useState<BlogLinkTerm[]>([]);
+  const [selectedKey, setSelectedKey] = useState("");
+  const [articles, setArticles] = useState<BlogLinkArticle[]>([]);
+  const [checked, setChecked]   = useState<Set<string>>(new Set());
+  const [relatedTitles, setRelatedTitles] = useState<Record<string, string[]>>({});
+
+  const [loadingTerms, setLoadingTerms]       = useState(true);
+  const [loadingArticles, setLoadingArticles] = useState(false);
+  const [busy, setBusy]     = useState(false);
+  const [error, setError]   = useState("");
+  const [note, setNote]     = useState("");
+
+  const { headers, api, projectQuery } = useBlogAdminApi(projectIdProp);
+
+  /** Both taxonomies, because either can be used to choose articles. */
+  const loadTerms = useCallback(async () => {
+    setLoadingTerms(true);
+    try {
+      const next: BlogLinkTerm[] = [];
+      if (offerCategories) {
+        const d = await api(`/api/blog/categories?${projectQuery()}`);
+        const rows = (d?.categories ?? d?.data ?? []) as Array<Record<string, unknown>>;
+        for (const row of Array.isArray(rows) ? rows : []) {
+          next.push({
+            kind: "category",
+            key: String(row.id || ""),
+            label: String(row.name || "(untitled)"),
+            slug: String(row.slug || ""),
+            postCount: 0,
+            livePostCount: null,
+          });
+        }
+      }
+      const d = await api(`/api/blog/tags?${projectQuery()}`);
+      const rows = (d?.tags ?? d?.data ?? []) as Array<Record<string, unknown>>;
+      for (const row of Array.isArray(rows) ? rows : []) {
+        const tag = String(row.tag || "");
+        if (!tag) continue;
+        // This picker never shows a live count, but the field is part of the
+        // shared term shape. Null, not 0, when the server does not send one —
+        // 0 would be a claim that the tag has no published posts.
+        const live = row.livePostCount;
+        next.push({
+          kind: "tag",
+          key: `tag:${tag}`,
+          label: tag,
+          slug: tag,
+          postCount: Number(row.postCount ?? 0),
+          livePostCount: live === undefined || live === null ? null : Number(live),
+        });
+      }
+      setTerms(next);
+      setError("");
+    } catch (e) {
+      setError((e as Error).message || "Could not load the blog taxonomy.");
+    } finally {
+      setLoadingTerms(false);
+    }
+  }, [api, projectQuery, offerCategories]);
+
+  useEffect(() => { void loadTerms(); }, [loadTerms]);
+
+
+  /** Articles under a term, plus each one's existing relations. */
+  const loadArticles = useCallback(async (term: BlogLinkTerm) => {
+    setLoadingArticles(true);
+    setChecked(new Set());
+    try {
+      const q = projectQuery();
+      const path = term.kind === "category"
+        ? `/api/blog/posts?category=${encodeURIComponent(term.slug)}&limit=100${q ? `&${q}` : ""}`
+        : `/api/blog/tags/posts?tag=${encodeURIComponent(term.slug)}${q ? `&${q}` : ""}`;
+      const d = await api(path);
+      const rows = (d?.posts ?? d?.data ?? []) as Array<Record<string, unknown>>;
+      let list: BlogLinkArticle[] = (Array.isArray(rows) ? rows : []).map((row) => ({
+        id: String(row.id || ""),
+        title: String(row.title || "(untitled)"),
+        slug: String(row.slug || ""),
+        status: String(row.status || ""),
+      })).filter((a) => a.id);
+      if (articleStatus !== "all") list = list.filter((a) => a.status === articleStatus);
+      setArticles(list);
+
+      // ONE request for the whole project's relations, not one per article: a
+      // per-article loop is N+1 requests, and on a blog of any size that is a
+      // request storm rather than a page load. The pairing arithmetic is the
+      // same tested helper the store uses, so the two cannot disagree.
+      const all = await api(`/api/blog/relations${q ? `?${q}` : ""}`);
+      const pairs = (Array.isArray(all?.relations) ? all.relations : Array.isArray(all?.data) ? all.data : []) as PostRelationPair[];
+      const byId = new Map(list.map((a) => [a.id, a.title]));
+      const titles: Record<string, string[]> = {};
+      for (const article of list) {
+        titles[article.id] = relatedIdsFor(article.id, pairs)
+          .map((id) => byId.get(String(id)) || "")
+          .filter(Boolean);
+      }
+      setRelatedTitles(titles);
+      setError("");
+    } catch (e) {
+      setError((e as Error).message || "Could not load the articles.");
+      setArticles([]);
+    } finally {
+      setLoadingArticles(false);
+    }
+  }, [api, projectQuery, articleStatus]);
+
+  const selected = terms.find((t) => t.key === selectedKey) || null;
+
+  function selectTerm(key: string) {
+    setSelectedKey(key);
+    setNote("");
+    const term = terms.find((t) => t.key === key);
+    if (term) void loadArticles(term);
+    else { setArticles([]); setRelatedTitles({}); setChecked(new Set()); }
+  }
+
+  function toggleChecked(id: string) {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setNote("");
+  }
+
+  async function handleRelate() {
+    const ids = [...checked];
+    if (ids.length < 2) {
+      setError("Check at least two articles to relate them to each other.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setNote("");
+    try {
+      const d = await api(`/api/blog/relations`, {
+        method: "POST",
+        body: JSON.stringify({ postIds: ids, projectId: headers["X-Project-ID"] || "" }),
+      });
+      const result = (d?.result ?? d?.data ?? {}) as { added?: number; alreadyRelated?: number };
+      const added = Number(result.added ?? 0);
+      const already = Number(result.alreadyRelated ?? 0);
+      setNote(
+        added > 0
+          ? `Linked ${ids.length} articles${already > 0 ? ` (${already} link${already === 1 ? "" : "s"} already existed)` : ""}.`
+          : "Those articles were already related to each other."
+      );
+      // Read the relations back rather than trusting the response: this is the
+      // list the module will actually render.
+      if (selected) await loadArticles(selected);
+      setChecked(new Set(ids));
+    } catch (e) {
+      setError((e as Error).message || "Could not save the relations.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const tagTerms      = terms.filter((t) => t.kind === "tag");
+  const categoryTerms = terms.filter((t) => t.kind === "category");
+
+  const labelStyle: CSSProperties = { display: "block", fontSize: "0.8125rem", fontWeight: 600, color: "#374151", marginBottom: "0.25rem" };
+  const inputStyle: CSSProperties = { width: "100%", padding: "0.5rem 0.625rem", border: "1px solid #d1d5db", borderRadius: 6, fontSize: "0.875rem", boxSizing: "border-box" };
+  const sectionTitle: CSSProperties = { margin: "0 0 0.75rem", fontSize: "1rem", fontWeight: 700, color: "#1a202c" };
+
+  return (
+    <div className="admin-blog-links" style={{ fontFamily: "sans-serif" }}>
+      {showTitle && <h3 className="admin-blog-links-title">{panelTitle}</h3>}
+
+      {error && <div className="admin-blog-links-error" role="alert">{error}</div>}
+      {note && !error && <div className="admin-blog-links-note">{note}</div>}
+
+      <section>
+        <h4 style={sectionTitle}>Related Articles</h4>
+
+        {/* Full width, and a select rather than a narrow sidebar list — the
+            old two-column layout cut every term name off with an ellipsis. */}
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "0.9rem" }}>
+          <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+            <label style={labelStyle} htmlFor="admin-blog-links-term">Show articles filed under</label>
+            <select
+              id="admin-blog-links-term"
+              style={{ ...inputStyle, background: "#fff" }}
+              value={selectedKey}
+              onChange={(e) => selectTerm(e.target.value)}
+              disabled={loadingTerms}
+            >
+              <option value="">Choose a category or tag…</option>
+              {categoryTerms.length > 0 && (
+                <optgroup label="Categories">
+                  {categoryTerms.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                </optgroup>
+              )}
+              {tagTerms.length > 0 && (
+                <optgroup label="Tags">
+                  {tagTerms.map((t) => (
+                    <option key={t.key} value={t.key}>{t.label} ({t.postCount})</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={handleRelate}
+            disabled={busy || checked.size < 2}
+            style={{
+              padding: "0.5rem 1rem", background: accent, color: "#fff", border: "none",
+              borderRadius: 6, fontWeight: 700, fontSize: "0.875rem",
+              cursor: checked.size < 2 ? "default" : "pointer",
+              opacity: busy || checked.size < 2 ? 0.45 : 1,
+              marginBottom: "0.75rem",
+            }}
+            title={checked.size < 2 ? "Check at least two articles" : `Relate the ${checked.size} checked articles to each other`}
+          >
+            {busy ? "Linking…" : relateLabel}
+          </button>
+        </div>
+
+        {!selected ? (
+          <div style={{ padding: "1rem", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
+            Pick a category or tag above to see the articles filed under it, then tick the ones
+            that belong together and press {relateLabel}.
+          </div>
+        ) : loadingArticles ? (
+          <div style={{ padding: "1rem", color: "#888", textAlign: "center" }}>Loading…</div>
+        ) : articles.length === 0 ? (
+          <div style={{ padding: "1rem", color: "#888", border: "1px dashed #ccc", borderRadius: 8 }}>
+            No articles are filed under “{selected.label}”.
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: "0.8125rem", color: "#718096", marginBottom: "0.5rem" }}>
+              {articles.length} article{articles.length === 1 ? "" : "s"} under “{selected.label}”
+              {checked.size > 0 ? ` · ${checked.size} checked` : ""}
+            </div>
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+              {articles.map((article, i) => (
+                <label
+                  key={article.id}
+                  className="admin-blog-links-article"
+                  style={{
+                    display: "flex", alignItems: "flex-start", gap: 10,
+                    padding: "9px 12px", cursor: "pointer",
+                    borderBottom: i < articles.length - 1 ? "1px solid #f0f4f8" : undefined,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked.has(article.id)}
+                    onChange={() => toggleChecked(article.id)}
+                  />
+                  <span style={{ display: "flex", flexDirection: "column", gap: 2, flex: "1 1 auto", minWidth: 0 }}>
+                    <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a202c", overflowWrap: "anywhere" }}>
+                      {article.title}
+                    </span>
+                    {article.status && article.status !== "published" && (
+                      <span style={{ alignSelf: "flex-start", padding: "1px 6px", borderRadius: 999, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: "0.6875rem", textTransform: "capitalize", color: "#718096" }}>
+                        {article.status}
+                      </span>
+                    )}
+                    {(relatedTitles[article.id]?.length ?? 0) > 0 && (
+                      <span style={{ fontSize: "0.75rem", color: "#718096", overflowWrap: "anywhere" }}>
+                        Related to: {relatedTitles[article.id].join(", ")}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
     </div>
   );
 }

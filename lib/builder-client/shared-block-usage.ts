@@ -373,10 +373,31 @@ export type PropagationTally = {
   updated?: number;
   failed?: number;
   runId?: string;
-  /** Drifted copies LEFT ALONE by this push. */
+  /**
+   * PAGES THIS PUSH DID NOT WRITE — every following copy on them had drifted.
+   *
+   * It is disjoint from {@link updatedPages}, and three surfaces depend on
+   * that: this file's sentence adds it to `updated` as a separate set, the
+   * editor's "Overwrite anyway?" banner offers exactly these pages to a force
+   * run, and `docs/SAVED_SECTIONS.md` §"Drift is measured per COPY" states it.
+   * A page that WAS written but still carries a hand edit is a different fact
+   * and lives in {@link writtenWithPreservedEdits}.
+   */
   skipped?: ReadonlyArray<{ pageId?: string; name?: string }>;
   /** Drifted copies written anyway because the caller opted in — never described as skipped. */
   overwritten?: ReadonlyArray<{ pageId?: string; name?: string }>;
+  /**
+   * Pages that WERE written and still carry a hand-edited copy left as it was.
+   *
+   * A page can hold several copies of one master, so "was this page written"
+   * and "was a copy on it left alone" are different questions (landmine 17 /
+   * DOCTRINE §5.30). This bucket is a strict subset of {@link updatedPages} —
+   * a page here was written and, on a Save & Publish, published. `copies` is
+   * how many hand-edited copies were preserved on it, because the unit is the
+   * copy: a sentence that adds these into the page count is arithmetically
+   * false.
+   */
+  writtenWithPreservedEdits?: ReadonlyArray<{ pageId?: string; name?: string; copies?: number }>;
   /**
    * WHICH pages this push actually rewrote — one entry per page written.
    *
@@ -430,16 +451,41 @@ export function describePropagationOutcome(
   const skipped = Array.isArray(propagation?.skipped) ? propagation!.skipped!.length : 0;
   const overwritten = Array.isArray(propagation?.overwritten) ? propagation!.overwritten!.length : 0;
   const skippedClause = (skipped > 0
-    ? ` ${skipped === 1 ? '1 page has' : `${skipped} pages have`} local changes and were skipped.`
+    ? ` ${skipped === 1 ? '1 page has' : `${skipped} pages have`} local changes and ${skipped === 1 ? 'was' : 'were'} skipped.`
     : '') + (overwritten > 0
     ? ` ${overwritten === 1 ? '1 page with local changes was' : `${overwritten} pages with local changes were`} overwritten.`
     : '');
 
+  // Counted in COPIES, and worded so it cannot be added to the page count:
+  // these pages ARE among the ones just updated, unlike `skipped`. Saying
+  // "1 page was skipped" about a page the same sentence reported as updated
+  // is the arithmetic the operator was reading before 2026-09-08 — and on a
+  // Save & Publish that page had just gone live.
+  const preserved = Array.isArray(propagation?.writtenWithPreservedEdits)
+    ? propagation!.writtenWithPreservedEdits!
+    : [];
+  const preservedPages = preserved.length;
+  const preservedCopies = preserved.reduce((sum, row) => sum + (Number(row?.copies ?? 1) || 1), 0);
+  // "the pages just updated", never "those pages". A demonstrative attaches to
+  // the nearest set the sentence mentioned, and that is the SKIPPED page in
+  // `Saved "X" and updated 1 page. 1 page has local changes and was skipped.
+  // A hand-edited copy on 1 of those pages was left as it is.` — pointing the
+  // operator at the page nothing was written to, when the surviving edit is on
+  // the page a Save & Publish just put live. Both counts are 1 there, so the
+  // numbers cannot disambiguate it either. On a partly-failed fan-out the same
+  // words attach to the page that FAILED. Naming the set is the whole fix.
+  const ofUpdated = `${preservedPages} of the pages just updated`;
+  const preservedClause = preservedPages > 0
+    ? (preservedCopies === 1
+      ? ` A hand-edited copy on ${ofUpdated} was left as it is.`
+      : ` ${preservedCopies} hand-edited copies on ${ofUpdated} were left as they are.`)
+    : '';
+
   if (failed > 0) {
-    return `Saved "${label}" and updated ${updated} ${updated === 1 ? 'page' : 'pages'}, but ${failed} ${failed === 1 ? 'page' : 'pages'} could not be updated. Reload and save again to finish.${skippedClause}`;
+    return `Saved "${label}" and updated ${updated} ${updated === 1 ? 'page' : 'pages'}, but ${failed} ${failed === 1 ? 'page' : 'pages'} could not be updated. Reload and save again to finish.${skippedClause}${preservedClause}`;
   }
   if (updated > 0) {
-    return `Saved "${label}" and updated ${updated} ${updated === 1 ? 'page' : 'pages'}.${skippedClause}`;
+    return `Saved "${label}" and updated ${updated} ${updated === 1 ? 'page' : 'pages'}.${skippedClause}${preservedClause}`;
   }
   if (skipped > 0) {
     return `Saved "${label}". ${skipped === 1 ? '1 page has' : `${skipped} pages have`} local changes and ${skipped === 1 ? 'was' : 'were'} skipped — nothing else changed.`;

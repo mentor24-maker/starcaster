@@ -31,6 +31,1099 @@ One thing worth a second look, flagged on the ticket: white lettering on the
 bright green is fainter than it should be for comfortable reading. Black
 lettering on the same green would fix it and keep the exact colour. That is
 Dane's call, and it is one line to change.
+## 2026-09-08 — Alarms stopped being thrown away when the chat room refuses them (#666)
+
+The system has one way of telling anyone that something has broken: it posts a
+message to the party line, the ClickUp chat room. Seven different background
+jobs use it and nothing else — the one that notices a job has stopped running,
+the one that notices the queue is not moving, the one that reports a failed
+job, and four more.
+
+Since about ten to ten on Sunday night, ClickUp has been refusing every message
+sent to that room. Not the account, not the room — reading it works perfectly
+and writing comments onto tickets works perfectly; it is only chat messages,
+and only writing them. So for fifteen hours every alarm the system raised was
+simply thrown away, leaving one line in a log file that nobody reads.
+
+Now, when the chat room refuses an alarm, the alarm gets written as a comment
+on a ticket called **Undelivered alarms** instead. The ticket makes itself the
+first time it is needed. The wording of the alarm is kept exactly as it was
+written, with a note on top saying which machine raised it and what the chat
+room said when it refused. The system checks the comment really landed before
+it counts the alarm as delivered — if both the chat room and the ticket refuse,
+it says nothing was delivered, so the job that raised the alarm tries again
+later instead of going quiet for six hours on a message nobody received.
+
+The second half of the same fault: every pass that picks up a ticket writes a
+short note on it saying "I am working on this", and that note is the only way
+two passes running at once can see each other. ClickUp has been refusing those
+too, with a message about the plan running out of custom fields. The trouble
+was that it read exactly like the harmless case — a note field nobody has
+created yet — which the passes are told to shrug off. Those two now say
+different things, and the serious one says plainly that the claim is invisible
+and another pass may take the ticket.
+
+One correction worth recording. The ticket asking for this work suggested
+paying ClickUp to raise the plan limit. The same pair of symptoms happened on
+23 August, the same purchase was suggested then, and it was wrong: the plan
+never changed and the problem cleared itself after about sixteen hours. The
+plan reads the same today as it did yesterday when everything worked, so
+nobody is being asked to buy anything — and the message the system now prints
+says so, and names the earlier day, so the next person to see it does not go
+down that road a third time.
+Sent back once by review, for a fault that was the same shape as the one it was
+fixing. The **Undelivered alarms** ticket is created in the "Live" column so
+that no pass tries to build it — but "Live" is how a finished ticket looks, so
+ClickUp marks it finished the moment it exists, and the report that watches
+whether work is actually shipping counted it as a ticket that shipped. On a
+quiet day during an outage, saving one alarm would have been enough to make
+that report say the queue was moving when nothing had moved at all — the alarm
+silencing the very check that was supposed to notice. Two other standing
+tickets, *Node roll call* and *Pipeline pulse*, were being counted the same
+way. All three are now listed in one place as noticeboards rather than work,
+and a test fails if a fourth one is ever added and left off the list. Measured
+against the real queue: today's count of finished tickets goes from 3 to 2, and
+the two it drops were never work.
+
+Four smaller things from the same review: a deliberate stop — the system
+standing down to leave ClickUp capacity for whoever is actually at the keyboard
+— was being reported as a failure and losing its own exit code; the fallback
+could crash instead of reporting a clean "nothing was delivered" if ClickUp
+answered with something that was not proper data; the alarm comment was losing
+its blank lines, which turned a dividing rule into a heading; and two machines
+falling back in the same minute could have made two noticeboards, so they now
+agree on the older one and say out loud that a duplicate needs deleting.
+
+Sent back a second time, and the finding was the same shape again — a check
+that says it is guarding something and is not. There was a **fourth** standing
+ticket nobody had counted: the *Pipeline pause switch*, the ticket that records
+when Dane takes the deck. It is made the same way, in the same column, opening
+with the same "do not build this" sentence, and it was being counted as a
+finished ticket exactly like the other three. The test written last round to
+make that impossible could not see it: it looked only in one folder, and the
+pause switch is created from a file in a different one. So the registry shipped
+already out of date, the test passed, and the written notes said in as many
+words that a fourth one would be caught.
+
+The switch is registered now, and the two ways that could happen again are shut.
+The sentence the test searches for was moved to sit beside the name it belongs
+to, so the search can reach it; and a second test fails if that sentence is ever
+written somewhere the search cannot look. The rule is now one line: the wording
+that creates a standing ticket lives with the name of the ticket it creates.
+
+Two more from the same review. The weekly report was reading a different counter
+that had never been told about noticeboards at all — so this week's report would
+have credited *Undelivered alarms*, a ticket this very change created, as a
+piece of work that shipped. And the "standing down to leave capacity for whoever
+is at the keyboard" fix from last round only covered the first step of sending
+an alarm; if the system ran out of capacity a moment later, while saving the
+alarm to the ticket instead, it went back to announcing the alarm as lost. Every
+step of that save now knows the difference between "ClickUp said no" and "I
+stopped on purpose", and a test counts the steps so a new one cannot be added
+without one.
+## 2026-09-08 — Video can now play behind a single column, not just a whole row (#665)
+
+A row in the Builder can be split into columns. A background video could only
+go behind a whole row or a whole page, so "footage behind just this half"
+was not something you could ask for — you had to fake it by splitting the
+content into two rows and hoping the seam did not show.
+
+Each column can now carry its own video. One column plays a clip while the
+column beside it stays completely plain, with a clean edge between them and no
+footage spilling across the gap. It is the same Video setting you already know
+from the row background, offered on the cell — nothing new to learn.
+
+Under the hood it is the same single piece of video machinery the row and page
+backgrounds already use, rather than a second copy written for cells. That
+matters for the things nobody sees until they matter: the clip still pauses
+when it scrolls off the screen, still gives way to a still picture for people
+who have asked their computer to reduce motion, and still falls back to the
+poster image on phones instead of spending someone's mobile data on decoration.
+All of that works per column now because it was never rewritten.
+
+One thing worth knowing before reaching for it: a row of four video cells is
+noticeably rough. A background clip is drawn twice so it can dissolve smoothly
+at the loop point, so four video columns means eight videos playing at once.
+Two or three is comfortable; four is not, and that is noted rather than fixed.
+
+Review caught one thing before any of this went out: choosing Video on a column
+made that column's own settings panel go crooked. The fourteen video settings
+arrived carrying their own alignment, so they sat on a different edge from the
+Opacity and Border boxes above and below them — a staggered form, in the middle
+of the panel you were working in. Every box in the group now lines up on one
+edge, and the panel is the same width either way; only where the boxes start
+changed.
+
+Worth recording why it got that far: the automatic layout check had been passing
+because the test page it measures never had a video on a column, so those
+fourteen settings had never once been on screen when the check looked. It has a
+video column now, so this can never again pass by not looking.
+
+A second review pass found two more things, both of them the column panel
+inheriting words and buttons written back when only a whole row could play
+video. The warning about a missing poster picture said "this section will be
+blank" while you were looking at a single column — pointing you at the wrong
+box to go and fix. It now names whatever you are actually standing on: a
+column, a row, or the whole page.
+
+And there was no way to get a video into a column on a site that had never
+uploaded one. The row's panel offers "Choose Video" next to "Upload Video";
+the column's offered only Choose, so picking Video on a column opened an empty
+library with no way to add anything to it — the column already switched over to
+video, with nothing to play. The column panel now has its own Upload button.
+Its own, deliberately, and not the row's borrowed: the row's would have quietly
+repainted the entire row when you asked for one column.
+
+That upload also knows the difference between a film and a photograph. The
+older upload buttons all assume whatever you hand them is a picture, which is
+why uploading a video to a ROW background turns it into an image background and
+throws the clip away — a real fault, filed separately as its own job. The
+column's upload does not do that, and the piece that gets it right is written
+to be shared, so fixing the row is a one-line change when that job is picked up.
+
+A third review pass found the same shape a third time: a column doing less than
+a row does. When you set a ROW to Video, the Builder automatically dims the
+footage slightly — a dark tint laid over the clip, on by default since the end
+of August, because words sitting on moving film are close to unreadable without
+something between them. Setting a COLUMN to Video did not do it. You got bright
+footage with your own text on top and nothing on screen to suggest a tint was
+the thing you were missing; you had to already know the setting existed and go
+and switch it on yourself.
+
+A column now turns its tint on the moment it becomes a video column, exactly as
+a row does, and each column gets its own — putting video in the left column does
+not dim the right one. It only ever switches the tint ON: if you had already
+chosen a colour or a strength for that column, yours is kept untouched, and
+switching the column back off video leaves your tint exactly where it was rather
+than quietly deleting a setting you can see.
+## 2026-09-12 — The last of the panel sweep: the six tenant-admin panels (#670)
+
+This is 15 of 15 — the end of the sweep that started when Dane looked at a
+module editor on 13 August and said the column width varied arbitrarily between
+the Settings fields and the Layout fields. The six panels here are the ones a
+tenant's own back-end is built from: Admin Login, Admin Modules, Admin Nav Link,
+Admin Site Settings, Admin Support Form, Admin Team Users.
+
+Most of the news is that there was almost nothing left to do, and that is a real
+result rather than a shrug. These six are built from a shared description of
+their fields rather than from hand-written layout, so the rules that were rolled
+out in the earlier sweeps — one label width and one field width per column, a
+ceiling no control may exceed — had already reached them without anyone touching
+these files. Measuring them one by one confirmed it: five of the six already
+read as a single rectangle at all three screen widths.
+
+The sixth did not. On Admin Nav Link the "Link URL" row ran 286 pixels past
+every other row in the panel, so six rows stopped short and one stuck out. The
+cause is a nice example of a rule that was right but did not reach far enough.
+That row is not one control, it is two — a dropdown of pages plus a box for
+typing a custom address — and they sit together inside a wrapper. The rule that
+caps how wide a control may get was written to look only one level deep, so it
+never saw the pair inside that wrapper. They grew to 846 pixels, and because a
+column sizes itself to its widest row, that one row then decided the width of
+the whole column. Everything else in the column obediently stopped at the cap
+and therefore finished 286 pixels before the edge the wide row had set.
+
+The fix caps the pair, not the parts — the same answer the rules already give
+when the width rule and the edge rule disagree: bound the block rather than
+stretch the controls. The two controls now share the cap and the panel closes up
+into one rectangle. The other five panels are pixel-for-pixel unchanged, which
+was checked with photographs rather than assumed.
+
+Two things worth knowing for next time. The same defect is sitting on ten more
+panels — the blog, search and event ones — and they belong to sweep tickets that
+are still queued, so each can reach for the same one-line fix. And the automated
+panel checker could not see this one at all: it passed before the fix and after
+it. It measures the slot a control sits in, and the slot was filling the column
+perfectly; what stopped short was the control drawn inside it. That is a gap the
+rules doc already admits to, and it is the reason looking at the screen is still
+part of the job.
+
+## 2026-09-08 — Module settings panels now line up top to bottom (#667)
+
+Open any module's settings in the Builder and you are really looking at two
+stacks of fields: the strip that every module shares — Label, Background,
+Alignment, the margins — and the module's own settings columns underneath. Those
+two stacks have never started on the same vertical line. Not by much: 25px one
+way on the image panel, 78px the other on breadcrumb. Enough to see, and enough
+to make a panel read as assembled rather than built. 32 of the 35 panels that
+have both were out. They line up now, so a panel is one rectangle from the Label
+row down to the last setting.
+
+The reason it took this long is worth writing down, because it is not what the
+ticket assumed. The two stacks were two separate layout grids, and a grid can
+only line things up with things inside it — no measurement passes between two of
+them. Two panels in the whole builder already lined up, and they did it by a
+trick that needs the two halves to be close relatives in the page structure;
+everywhere else there is a wrapper in between whose job is to let columns wrap
+onto a second row on a narrow panel, and that wrapper is exactly what blocks the
+trick. Ten of these panels already wrap, so removing it to close the seam would
+have broken something more important than the thing being fixed.
+
+So the fix stopped trying to make two grids agree and put the shared strip
+inside the first settings column instead. One grid, one measurement, no
+agreement needed. One module — the CRM form — already owned its own copy of that
+strip, so it simply moved. And one module, Social, has quietly been doing this
+by hand since long before anyone noticed; it is the only one that never had the
+problem.
+
+One thing you will see and should look at: when two stacks share a measurement,
+they both get the wider of the two. On panels with a wide first column the
+shared strip's own boxes widen to match — on the blog search panel they go from
+a fairly tight box out to the full width of the column above them. That is what
+sharing an edge costs, and it is the intended outcome rather than a side effect,
+but it is a real change in how those panels look. Before-and-after photographs
+of six panels are on the ticket.
+
+Two smaller notes. On four panels the shared strip used to sit above the
+settings and now sits below them, inside the first column — where the other
+thirty already had it. And the check that measures all this did not retire when
+the list of broken panels was emptied: it now watches the merged panels instead,
+and it was deliberately broken twice and watched to fail before the list was
+cleared, so a future panel that quietly stops joining in gets caught by name.
+
+## 2026-09-08 — The Builder now says when a background video is too heavy (#664)
+
+A background video starts playing the second somebody lands on the page, before
+anything else can finish. The gallery only ever showed you a file's name and a
+little picture of it — never how big it was — so a 34MB clip could go onto a
+client's front page with nothing anywhere warning that a visitor on their phone
+would sit staring at a blank band for several seconds.
+
+The Video panel now tells you. Under the Choose Video button it names the file's
+size, and if it is over 10MB it says so in a plain sentence: *"This video is
+34 MB. Visitors on phone data will wait several seconds for it. Under 10MB is a
+comfortable size for a background."*
+
+**It is advice, not a rule.** Nothing is blocked, nothing is greyed out, the
+upload still works and the video still saves and plays exactly as before. You
+can ignore it whenever you have a reason to — it is there so the decision is
+yours instead of accidental.
+
+The size is remembered on the page itself, so it is still there when you come
+back to that page next week, not just in the minute after you picked the file.
+And it is thrown away the moment you type a different video into the box, which
+matters more than it sounds: a leftover number would confidently describe the
+wrong file, and a wrong number nobody can spot is worse than no number at all.
+
+**One thing to know while you use it.** A video set as a *row* background does
+not survive pressing Save Page — it comes back as None — and it has never
+survived, on this change or before it. That is a separate bug, already written
+up and waiting its turn, and this work neither caused it nor could fix it. Until
+that one lands, the size warning is doing its job in the moment you pick the
+clip; it just has nothing left to describe after a save.
+## 2026-09-08 — The job roll call stops calling slow jobs dead (#661)
+
+There is a shared record of when each scheduled job last finished successfully —
+the roll call — and something reads it and shouts if a job has gone quiet. It
+judged every job by the same yardstick: silent for more than 25 hours, presumed
+dead. That is a sensible yardstick for a job that runs every ten minutes. It is
+nonsense for one that runs once a day or once a week, because such a job can go
+quiet for longer than that while working perfectly — so the alarm would go off
+about a healthy job, over and over. An alarm that keeps being wrong is one
+everybody learns to ignore, which would take the real alarms down with it. This
+was already known: it is the stated reason the weekly report has never been
+allowed to check in at all.
+
+Each job is now measured against its own schedule instead of one shared number:
+a day (which is as often as the shared record gets updated) plus one more of
+that job's own runs. Every job we currently run goes hourly or oftener, so all
+four come out at exactly the 25 hours they already had — nothing about today's
+behaviour changes, which is what made it safe to switch over everywhere at once.
+A daily job would now get two days before anyone worries about it, and a weekly
+job eight. The alarm still names a job that has genuinely stopped, and it now
+also says what it measured that job against, because "quiet for 30 hours" means
+disaster for one job and a normal Tuesday for another.
+
+The weekly report is still switched off deliberately. Letting a job start
+checking in is a change in its own right and gets its own test.
+## 2026-09-08 — When a push spares your hand edit, it now says so (#662)
+
+A shared section is one block you build once and reuse on many pages. When you
+change the master and push it out, the builder deliberately does NOT flatten a
+copy you have since hand-edited on its own page — your edit wins — and it
+reports which pages it left alone, so you know.
+
+A single page can carry more than one copy of the same shared section. When one
+of those copies was clean and another had been hand-edited, the push did exactly
+the right thing — rewrote the clean one, left your edit alone — and then said
+nothing whatsoever about the copy it had spared. It fell out of the report
+entirely. So the one message that exists to tell you your edit survived was the
+one message you never saw.
+
+The cause was that the engine asked "did anything on this page have a hand
+edit?" and "did anything on this page get rewritten?" as two yes/no questions
+about the whole page, when the real question is about each copy. It counts
+copies now.
+
+The report keeps the two facts apart on purpose, because they are different
+things and reading them as one is what produced the wrong message in the first
+place. "Skipped" still means what it has always meant — **pages this push did
+not write at all**, every copy on them hand-edited — and those are the pages
+the "Overwrite anyway?" button offers you. A page that WAS rewritten, and still
+carries an edit of yours the push stepped around, is now reported separately
+and counted in copies, so the message reads *"updated 2 pages. A hand-edited
+copy on 1 of the pages just updated was left as it is"* rather than implying a
+third page you never had.
+
+That message says "the pages just updated" rather than "those pages" for a
+reason worth a sentence. When a save updates one page, skips another, and
+spares an edit on the one it updated, all three numbers are 1 — and "1 of those
+pages" then reads as the page that was *skipped*, which is the opposite of
+where your surviving edit actually is. Naming the set outright is what makes
+the message point at the right page every time.
+
+Nothing about what gets written changed — hand edits were always safe. This was
+the builder failing to tell you so.
+## 2026-09-08 — A whole page can now sit on a video, not just one band (#663)
+
+A row on a page could already carry a video behind it. A page could not: the
+only way to get moving footage behind a whole site was to put one video row at
+the top and leave everything below it flat.
+
+Page Details → Background now offers **Video**, exactly the way a row's
+background does — same clip picker, same poster, same speed, trim, blur and
+focal point, with the same names in the same order. Choose one and the clip
+fills the browser window while the page's sections scroll over the top of it.
+A section that carries its own colour or picture still paints over the video,
+so the clip shows through only where the page is transparent, and that is what
+lets a page mix the two.
+
+There is exactly **one** video background in the whole system — the same piece
+of code a row uses (`BuilderBackgroundLayer`). That matters more than it
+sounds: it means the careful parts cannot drift apart. Phones still get the
+still picture instead of the clip, so nobody is charged for megabytes of
+someone else's decoration; a visitor who has asked their computer to reduce
+motion still gets the still picture; the layer still cannot swallow a click or
+be read out by a screen reader; and it still stops playing when it is not on
+screen. None of that had to be written a second time, so none of it can be
+fixed in one place and forgotten in the other.
+
+Four new checks drive a real browser over a page wearing a video and prove the
+two things that were new: that the clip stays put in the window while the page
+moves over it, and that the page's own content paints in front of it rather
+than behind. Each was broken on purpose first and watched to fail.
+## 2026-09-07 — The tag page stops telling visitors a number that is not the tag's (#659)
+
+On the Delray tags page, a visitor who clicked "beginner tennis" saw a heading
+counting the posts with that tag. Three of them. Then they typed "Clinics" into
+the search box, the list narrowed to one — and the heading changed to say the
+tag had one post. It does not. Three posts still carry it; the search is what
+put the other two out of sight. The heading was naming one thing and counting
+another, confidently, on a live client site.
+
+The number is the half that stays, because it is the one a visitor can count for
+themselves against the cards in front of them. So the sentence widens to cover
+it: "Blog posts matching the tag 'beginner tennis' and the search 'Clinics': 1".
+Anything else narrowing the list gets named the same way, because the search is
+not the only way in — a link can set an author or a date range alongside the
+tag, and each of those could produce the same false sentence.
+
+The second fix is the message you get when nothing comes back at all. Ninety-
+seven of Delray's tags have no published post behind them — they are all on
+drafts — and the tag cloud links to every one. Ask for one of those and then
+type a word, and the page used to say "No posts tagged 'junior tennis' match
+'tennis'", which reads as an invitation to delete the word and try again.
+Deleting it brings nothing back; the tag was empty before you typed. Now the
+page names the tag alone and leaves the "Show all posts" button where it was.
+Where a search genuinely is what emptied the page, it is still named — that part
+was right and is untouched.
+
+The first attempt at this fixed the message at the bottom of the page and forgot
+the heading at the top, so the two ended up arguing with each other in front of
+the visitor: the heading said "matching the tag 'junior tennis' and the search
+'tennis': 0" while the message ten lines below said "No posts tagged 'junior
+tennis'." One blamed the typed word, the other cleared it. Both sentences now
+ask the same question — did the typed word actually change anything? — from one
+place in the code, so they cannot drift apart again, and the heading on that
+page reads simply "Blog posts matching the tag 'junior tennis': 0".
+## 2026-09-08 — Answering a question no longer puts finished work back in the queue (#660)
+
+When Dane answers a question on a ticket, a background job hands that ticket
+back to the machines. Where it handed it was a fixed answer: always back into
+the build queue, whatever the ticket was. The build queue is the shopping list
+a build loop picks its next job from.
+
+So the day before, a ticket whose code had already been written, merged and put
+live went back on that shopping list. Somebody happened to be watching and
+closed it by hand within minutes. Nobody watching, and a build loop would have
+picked up finished work, started building it a second time, and gone looking
+for a branch GitHub had already deleted.
+
+The hand-back now looks at the ticket first. If the work is merged, the ticket
+goes to Live, where finished work belongs. If its pull request is still open,
+it goes to Rework, so the loop carries on with the branch that already exists
+rather than starting over. If there is no pull request at all — the ordinary
+case, and much the commonest — nothing changes and it goes back in the queue as
+before. And if GitHub cannot be reached to find out, the ticket does not move
+at all and the job says so out loud, because guessing is the whole of what went
+wrong here.
+## 2026-09-07 — The panel checker was passing 35 crooked panels, and now it names them (#653)
+
+Every module in the Builder has a settings panel, and Dane pointed at a problem
+in them back in August: the boxes in the top block and the boxes in the block
+below it don't start at the same place, so an open panel reads as two ragged
+halves rather than one tidy rectangle.
+
+There is an automatic checker that is supposed to catch exactly this. It has
+been reporting a clean pass, every time, for weeks — while 35 of the 37 panels
+were crooked. The reason is a genuinely easy mistake to make: the checker
+looked at the top block and confirmed everything in it agreed with itself, then
+looked at the bottom block and confirmed the same, and called it a pass. It
+never asked whether the two blocks agreed with *each other*. Two halves that
+are each internally tidy can still be badly out of line with one another, and
+that is precisely what was happening.
+
+This change makes the checker ask that question. It does not straighten a
+single panel — that is the next job, and Dane has already chosen how it gets
+done. What it does is turn an invisible problem into a counted one: the 31
+panels currently out of line are written down in a list, and from now on the
+list can only get shorter. A panel that goes crooked and isn't on the list
+fails the check as a new fault; a panel on the list that gets fixed also fails,
+until it is taken off. So the fix cannot be quietly half-done, and nothing can
+slip back.
+
+Two things turned up while measuring that the original description had wrong,
+and both would have sent the repair off in the wrong direction. The top block
+is actually at the *bottom* on 30 of the 35 panels. And one panel that looked
+like the worst offender of all isn't broken at all — its two blocks sit side by
+side rather than stacked, so there is no shared edge for them to miss.
+
+The checker also caught an error of mine while I was writing it. I had measured
+one panel by hand and recorded it as crooked; the moment the new rule ran, it
+objected that the panel was fine. It was right and I was wrong — I had measured
+a full-width box, which by design starts further left than the others. That is
+the check doing its job before the work had even shipped, which is the best
+evidence it works that I could offer.
+
+Review sent this back once, and the catch was a good one: the new rule could
+still go completely blind and report a green pass. If the checker lost track of
+where the top block lives — which an ordinary bit of tidying-up elsewhere in the
+code would do without anyone noticing — it measured nothing at all, printed a
+note politely explaining that this was not a pass, and then reported a pass
+anyway. The same thing happened to a panel that quietly stopped appearing on the
+test page: its entry sat in the list, unchecked forever, under a green tick.
+That is the exact fault this whole job was written to fix, reproduced one level
+down inside the fix. Both now stop the run with "could not take a reading",
+which is a distinct third answer from pass and fail and is the one everything
+else here already uses when an instrument cannot see. It matters most over the
+next few weeks: the straightening job empties that list as it goes, and a
+checker that had gone blind would make an emptied list look exactly like
+success.
+
+Review sent it back a second time, and the second catch was the same shape as
+the first with the polarity reversed: the answers were right and the sentences
+printed beside them were wrong. On a run that failed, the closing note said
+every panel lined up — printed directly underneath the list of panels that
+didn't. That is not a corner case, because it only appeared once the list was
+empty, and emptying the list is precisely what the straightening job is going to
+do; a fault introduced during that work would have announced itself as the work
+succeeding. A second note told the reader the run "could not take a reading"
+when it had in fact failed outright, which are two different answers that people
+here rely on telling apart. And the run checks three screen widths but was
+quietly reporting the best of the three as though it spoke for all of them, so a
+width that measured nothing could sit inside a green pass unnoticed. All three
+are fixed, and each one was reproduced on purpose first: I made a width go blind
+and watched the old code report a cheerful pass over it, then watched the new
+code stop and name the width.
+
+Two smaller things went in alongside. When the check reports a panel as crooked
+it quotes the boxes it measured, and it had been quoting the wrong pair — the
+right numbers attached to the wrong names, which sends whoever reads it to the
+wrong place. And it will no longer demand a panel be struck off the list on half
+a measurement: where it can only see one of the two edges it needs, it now says
+so and stops, rather than declaring the panel fixed on evidence it doesn't have.
+
+One thing the check caught on its own while all this was going on, which is
+worth recording because it is the first time it has earned its keep unprompted.
+A new module landed on the live code this morning — the Related Articles panel,
+split out of the Tag manager earlier today — and the moment this branch caught
+up with it, the check stopped and reported it as a newly crooked panel that
+nobody had straightened. It was right. Nothing had gone wrong; a new panel had
+simply arrived with the same old fault, and for the first time something noticed
+on the day rather than a month later. It has been written onto the list with the
+others.
+## 2026-09-07 — A ship message no longer says it measured something it did not (#657)
+
+When `npm run ship` finishes and finds a pull request that GitHub has run no
+checks on, it stops and prints an explanation. Part of that explanation is a
+short block headed **WHAT WAS READ** — the facts it gathered, laid out so the
+next move is obvious. One of the lines it could print said *"origin/main merges
+in cleanly, and this branch is behind it."*
+
+It printed that sentence in three different situations, and only one of them had
+actually measured anything. The other two were: the command that goes and asks
+GitHub for the latest main **failed**, and the count of how far behind the
+branch is **could not be read**. In both of those, nothing whatsoever had
+established that the branch was behind — but the message said so anyway, under a
+heading promising these were things it had read.
+
+The advice underneath was never wrong. "Bring main in" is the safe thing to do
+when you are not sure, and that has not changed here. What it cost was the
+*second* try. If bringing main in turns out to change nothing at all — which is
+the exact loop this whole area of the code was written to kill — the old message
+gave no hint that the reading had never been taken, so there was no way to work
+out that the other fix (push a small commit so GitHub recalculates) was the one
+needed. Now the message says plainly that the distance was not established, and
+the reference table in the engineering notes was updated to call the two
+"unconfirmed" cases the same thing the message calls them, so the document and
+the program cannot drift apart.
+
+Both halves of the fix were deliberately broken and watched to fail before the
+green run was believed: first by folding the new honest answer back into the old
+one, then by leaving it in place but printing the old wording for it. Three
+named tests failed each time.
+
+## 2026-09-07 — A drop shadow can now be pointed, not just nudged (#645)
+
+A shadow under a picture was set by two numbers: how far right it sat, and how
+far down. That is fine for nudging one a few pixels, and awkward for the thing
+people actually want, which is to swing the shadow round to the other side of
+the picture while keeping it the same distance away. Doing that meant working
+out two new numbers in your head.
+
+There are now two more controls beside the old ones — **Shadow Angle**, which
+way it falls, and **Shadow Distance**, how far out. All four are live at the
+same time and they move together: pick an angle and the old two change to
+match, type into the old two and the angle and distance follow. Both places
+that frame a picture get them, the image module and the Carousel, from one
+shared control so the two can never grow apart.
+
+Nothing new is saved. The angle and the distance are worked out from the two
+numbers already stored, each time the panel is opened, so there is still one
+answer to where a shadow sits rather than two that could disagree. That is also
+what makes this safe on sites already running: every shadow anyone has ever
+saved keeps its exact look, and the check that photographs pages before and
+after confirmed it — a picture with a shadow at each of the four quarters comes
+out pixel for pixel identical to the version live today.
+
+The one thing that took care was the distance dial reaching further than the
+two numbers do. A shadow parked in the far corner is 57 pixels away even though
+neither number goes past 40. Had the dial stopped at 40, opening that panel
+would have shown the wrong figure and quietly pulled the shadow in — a live page
+changing because somebody looked at it. It goes to 57.
+
+Reviewing it in the real panel turned up three things that reading the code
+would never have shown, all from one cause: the direction lives only in those
+two whole-number offsets, and whole numbers cannot hold twenty-four separate
+directions when the shadow is only a few pixels out. So picking **15** left the
+box reading **16** — on sixteen of the twenty-four positions. Taking the
+distance down to nothing and back turned the shadow a quarter of the way round
+on its own, because at zero there is no direction left in the numbers to come
+back to. And at zero, picking a direction did nothing whatsoever and said
+nothing about it.
+
+The panel now simply remembers what was picked, for as long as the numbers
+underneath are still the ones that pick produced. Pick 15 and it says 15; go
+out to nothing and back and the shadow returns the way it was pointing; pick a
+direction before there is any distance and it holds the choice until you give
+it one. Touch Shadow X or Shadow Y by hand and the panel drops what it
+remembered instantly and goes back to describing the picture as it actually is
+— which is the part that matters, because a panel quietly describing a shadow
+that is not on the page is a worse bug than the three it fixes. Nothing extra
+is saved.
+
+A second look at the real panel found two more, and they are the reason this
+went round twice. The first: **dragging the distance slider out past about 41
+turned the shadow all by itself.** Pick a direction, touch nothing but the
+distance, and by the far end the shadow had swung twelve degrees. The cause is
+worth stating plainly, because it looked like a safety feature. Neither of the
+two stored numbers may go past 40, and each was being trimmed to 40 on its own
+— so once one of them hit the limit the shadow stopped travelling along the
+line the angle described and started sliding around the edge of the box towards
+its corner. Trimming both by the same amount instead keeps the shadow pointing
+exactly where it was told to; it simply stops getting further away, and the
+distance box says so honestly rather than drifting. Checked at every one of the
+twenty-four directions, at every distance: it no longer moves at all, where
+before it moved on 189 of them.
+
+The second was quieter and had no visible symptom on a page. The panel's memory
+of what was picked was a single note with no name on it, and in the Builder
+several modules are open at once — so a direction picked on one module was being
+shown by another module that happened to sit at the same offsets. The note now
+carries the name of the module that wrote it. And the comment in that file said
+the memory "lives in the open panel and is gone when it closes", which was never
+true; it is corrected, because a note claiming a safety that does not exist is
+the thing somebody trusts later.
+
+A third look found the same defect once more, arriving a way nobody had tried.
+Naming the module on that note settled which module was allowed to *read* it —
+but there was still only ever **one note**, so the moment a second module had a
+direction picked on it, the first module's note was thrown away and its box
+went straight back to the number the pixels work out to. Pick 15 on the photo,
+then pick 45 on the slideshow, and the photo's box reads 16 again — while the
+shadow itself has not moved a pixel. That is the very first bug on this ticket,
+returning through a door neither earlier check opened, because both of them
+only ever drove one module at a time.
+
+There is now one note per module instead of one note in total, so a direction
+picked on one panel survives any number of picks made on the others. Measured
+in a real browser with three modules open at once: each keeps its own, and the
+photo still says 15 after the other two have been set to 45 and 120. The test
+that catches it drives two modules, which nothing in the suite had done before
+— it fails on the old code with exactly the wrong number the panel was showing.
+## 2026-09-07 — Every dropdown that lists your pages now lists them A to Z (#656)
+
+Pick a page anywhere in the admin app — the Post Page on a Blog Post List
+module, a link on a Table, the Theme Wizard's preview page, a Campaign's
+destination — and until now the list came at you in whatever order the database
+happened to hand the pages over, which is roughly the order they were created
+in. On Delray, with about forty pages, that means reading the whole list every
+time. Dane hit it on the Post Page picker, where "Tennis Drills & Clinics" sat
+between "Events Details" and "Welcome to Delray Beach Tennis Center".
+
+They are all alphabetical now, by the name shown on the row. Capital letters do
+not split the list into two blocks, "Page 2" comes before "Page 10" rather than
+after it, a page with no name is filed under its web address instead, and a page
+with neither drops to the bottom rather than sitting at the top where you look
+first. A "None" or "Default" choice stays pinned above the list, because it is
+not a page. Nothing about what gets saved changed — the ordering is purely what
+you see, and picking a page still stores exactly what it stored before.
+
+The ticket listed six places to fix. Two of them turned out not to be page
+dropdowns at all: one was a strip of screenshots from the site-import tool, and
+the other was the Facebook Page chooser you use when connecting a Facebook
+account. Both were left alone and the correction written on the ticket. The four
+real ones share a single file, so the two halves of the app — the newer Builder
+and the older admin screens, which cannot share code any other way — can never
+drift into two different alphabets.
+
+One thing turned up only by opening the actual dropdown rather than reading the
+code: the Campaigns list labelled a page that has no name by its internal id
+number, while every other dropdown labels that same page by its web address. So
+it would have been sorted under a word that appears nowhere on the row. It now
+uses the same name everywhere. A list sorted by something you cannot see is not
+really sorted.
+
+## 2026-09-07 — The cleanup found the half-finished work, and the next job branched over it anyway (#644)
+
+Yesterday's fix (#637) taught the overnight cleanup to look on the Macs before
+declaring that nothing had been built for a ticket. It now finds the
+half-finished folder, writes on the ticket which machine and which folder it is
+in, and deliberately leaves the work alone.
+
+What it could not do was stop the next job starting over the top of it. Before a
+session begins work it runs a check whose entire job is to ask "has anybody
+started this already?" — and that check was still asking GitHub, which only sees
+work that has been sent there. A job that wrote code and stopped before sending
+it leaves nothing for GitHub to show. So the check answered "nothing here, go
+ahead", and a second session began a fresh copy of the work, right on top of the
+folder the cleanup had just carefully preserved. The note the cleanup wrote only
+helps somebody who reads it, and the step that acts on it was not reading.
+
+That check now takes exactly the same look at the Macs that the cleanup takes,
+using the same piece of code rather than a second copy of it — so the two can
+never disagree about the same ticket. If it finds unfinished work on the machine
+it is standing on, it refuses and names the folder to carry on in. If the work is
+on the *other* Mac, which it cannot reach into, it refuses differently and says
+where the work is, rather than pretending it can continue it. And if it could not
+get an answer at all, it says so and stops, which is never the same as "there is
+nothing there".
+
+The opposite mistake mattered just as much: a check that refuses everything is a
+production line that has quietly stopped — and the first version of this fix made
+exactly that mistake, which is why it went back for a second round. It treated
+any Mac that did not answer as a reason to stop. Dane's laptop is closed at the
+end of every day, so from the Mac Mini it did not answer all night, and the check
+refused every new job until the laptop was opened again. Overnight is precisely
+when the Mini is supposed to be working.
+
+What settles it is *which* Mac went quiet. The machine the job is standing on is
+the one it is about to start work on: if its own folders cannot be read, it stops,
+because it has no idea whether it is about to bury its own half-finished work. A
+different Mac going quiet is written down by name on an answer that carries on —
+work sitting over there could not have been continued from here in any case. The
+risk left over is real and is stated in plain sight every time: if the sleeping
+Mac was holding unfinished work for that exact job, a second copy gets started.
+That is rare and recoverable — the work is still on that disk, and the cleanup
+names it every run — while a line that is dead every night is neither.
+
+Four smaller things came out of the same review. A ticket that ClickUp failed to
+return was being treated as an ordinary one, which sent the check looking in the
+wrong project's folder and finding nothing there — the same false all-clear,
+arriving through the new check itself. Work found on the unreachable Mac used to
+be refused with nowhere to go, so the queue put the same ticket back at the front
+and refused it again on every pass; it now prints the exact escalation to send to
+Dane and moves on to the next ticket. The two other places that describe this
+step — the hand-run instructions in `CLAUDE.md` and the command's own help — were
+still describing the old single answer. And a job whose earlier pull request had
+already been merged printed that old branch's name directly under the words "no
+open pull request", which is the one branch nobody should check out.
+
+A third round closed the last way the rule could fail — and it was the rule
+failing against itself. Deciding "did *my own* Mac go quiet?" means knowing which
+Mac you are standing on, and the check works that out from a small identity file,
+falling back to the machine's network name if the file is missing. Rename a Mac,
+add a third one, or let the network hand out a name nobody recognises, and the
+answer is a name this system has never heard of. The check then treated *every*
+Mac as somewhere else — including the one under its own feet — asked them all
+over the network, and never looked at the disk it was about to start work on. It
+said "go ahead" having read nothing. It is not live today, because the Mini's
+identity file is correct, but the bug this whole job fixes was latent in exactly
+the same way. Now the look always includes the machine taking it: a seat that
+could not be read is written down as a seat that could not be read, and an
+unrecognised machine is a stop rather than a shrug.
+
+Three smaller ones came with it. Work found while the machine's own name was
+unknown used to be reported as "it is on the other Mac", stated confidently, when
+the truth was that nobody had checked. A refusal that pointed at the other Mac
+did not mention when this Mac's own disk had also gone unread, which is the one
+fact somebody needs to judge it. And the list of folders it prints was written in
+a single voice, so a folder on the *other* Mac looked exactly like one you could
+walk into — each line now says which. Finally, the fuller hand-run instructions
+in `docs/LOOP_ENGINEERING.md`, the third and last place this step is written
+down, still described the old single answer, and would have handed Dane a command
+that cannot work on a folder that was never sent to GitHub.
+
+A fourth round found that the new check had introduced a way to stop the
+production line dead — the exact fault it was written to prevent, arriving
+through the fix. Every ticket says which project it belongs to with a small
+label. Get that label wrong — a typo, or two of them on one ticket — and the
+check cannot work out where to go looking, so it honestly answers "I cannot
+tell" and the job stops. That part is right. What was missing is that it stopped
+without telling anybody. The ticket then went back into the queue, at the front,
+because the queue deals with returned work first and oldest first — so the very
+next job picked up the same ticket, could not tell again, and stopped again.
+Every job, all day, on one mistyped label, in silence. The rule that handles a
+mistyped label — send it to Dane and ask him which project he meant — was
+already written down, three paragraphs further down the page than the "stop"
+the job had just obeyed.
+
+The fix separates two things that had been jumbled together. A Mac that went
+quiet will answer next time, so stopping and waiting is the whole of it. A
+mistyped label will still be mistyped tomorrow, so waiting achieves nothing at
+all — and that case now prints the ready-to-run command to hand it to Dane, the
+same way work-on-the-other-Mac already did. The opposite mistake is guarded just
+as hard: a sleeping laptop must never turn into a question in Dane's inbox, and
+neither must a moment's trouble reaching ClickUp.
+
+The last one is a command that could not work. When this check finds unfinished
+work it prints where it is, and there turned out to be three shapes it can
+print, not two — the third being a branch of work that is on the Mac with no
+folder open for it, which is exactly what the tidy-up leaves behind and exactly
+what this whole job is named after. All three places that describe this step
+offered only two moves, and neither of them works on the third shape: one asks
+GitHub for something that was never sent there, the other says "go into the
+folder" when there is no folder. The move that does work is one line, and it is
+now written down in all three, held together by a test so the next edit cannot
+fix two of them and forget the third — which has now happened twice.
+
+## 2026-09-07 — The search box on the tags page told a visitor the wrong thing when it found nothing (#643)
+
+The `/tags` page on the Delray site has a search box that does nothing at all —
+type a word, press Search, and the page does not change by a single character.
+Dane picked the fix on the ticket: switch that page over to the search field the
+post feed already carries, and take the dead box away. Both of those are clicks
+in the Builder on a live client page, so they are his; this is the code half
+they depend on.
+
+The feed's own search field works, but it was not honest about coming up empty.
+Typing a word nothing matched said "No posts match your filters", which never
+tells the visitor *which* word emptied the page — the same complaint that was
+fixed for the tag and category dropdowns back in the summer, one step further
+on. And with a tag also selected it said something worse: "No posts tagged
+'beginner tennis'", while posts carrying that tag were sitting right there. The
+search had emptied the list and the tag was taking the blame. A confidently
+wrong message is worse than a vague one, because nobody thinks to doubt it.
+
+Now the word the visitor typed is named — "No posts match 'zzzz'" — and when a
+tag is also in play both are named, so no filter takes credit for an emptiness
+it did not cause. The "Show all posts" way back was already there and still is,
+and the wording when nothing was typed is untouched.
+
+The review caught this making the very mistake it was written to stop, in two
+corners it had not covered. The feed can also filter by a date range, and that
+was left out of the new sentence — so setting a date that matched nothing while
+a search word was typed read "No posts match 'Tennis'" with two Tennis posts on
+screen. Same lie, different culprit. Every filter that is narrowing the page now
+names itself, dates included, and several read as one sentence: "No posts tagged
+'beginner tennis' and published on or after 2030-01-01 match 'Level'."
+
+The other corner: if the web address names a category that does not exist, the
+page is empty no matter what else is set, and nothing will bring it back. The
+new message was still naming the search word there, which quietly invited the
+visitor to delete it and try again. It now says only what is true — "No posts in
+the category 'ghost-slug'."
+
+Deliberately left alone: making the post feed obey a search word arriving in the
+web address. The chosen fix does not need it, and doing it carelessly would let
+a page filter itself with no visible box to clear — that wants its own think
+first.
+
+## 2026-09-07 — "Two headers on every new page" was one header placed twice (#642)
+
+Every page built from the Delray site's main template came up with two header
+bars, one of them named after a section everyone believed had been retired
+months ago. Nothing was actually left over. The site has one header, and the
+template simply listed it twice. One of the two copies was still linked to the
+original, so it showed the original's current name, "2a - Public Header"; the
+other had been unlinked at some point and kept the name the original carried
+back then, "2 - Menu Banner". Two names on screen, one section underneath.
+
+The first write-up of this asked for the old section to be deleted. That would
+have stripped the header off all 58 pages of the Delray site, because the row it
+named for deletion is the good header — only renamed. Dane made the two edits
+himself in the Builder instead of letting a machine touch live client content:
+he removed the duplicate slot from the template and cleaned up the one scratch
+page that had picked it up.
+
+This entry records the check that it worked. Read live from production: the
+template lists the header once, no page anywhere holds two copies of it, no page
+carries the old name, and the live site renders a single header on both the home
+page and the scratch page. Two things were left alone on purpose — a test
+fixture that still uses the old name locally, and one stored title on the blog
+template that is stale in the database but never reaches the screen. No code
+changed; the whole thing was data.
+## 2026-09-06 — An answer you wrote could go permanently missing if a job died at the wrong second (#640)
+
+When you answer a question on a ticket, a background job does two things with
+your reply: it copies it onto the team chat, and it puts the ticket back into
+the machines' queue so the work can carry on. Those two steps were joined at the
+hip — the second one only ever happened in the same run as the first, and the
+first leaves a permanent "already sent" mark behind. So if the run died in
+between, every later run saw the mark, decided there was nothing new, and did
+nothing at all. For ever. The only thing that could release the ticket had
+already happened and could never happen again.
+
+That is what put your `C` on the Lane A ticket into a hole for three and a half
+hours on Saturday. The 9:46 run delivered your answer, ran out of its ClickUp
+request allowance before it could move the ticket, and reported the problem
+honestly — into a chat message the same allowance then refused to send. You
+found it yourself.
+
+The job now asks a question it can answer every single time it looks: is there
+an answer from you, newer than the newest question, that has reached somebody?
+Both halves are read off the ticket itself, so a crash costs ten minutes rather
+than the work. The safety rule is untouched — a ticket still never moves on an
+answer nobody received.
+
+Two things came with it. A hand-back that fails now writes a short note on the
+ticket saying so, rather than only into a chat message that can vanish. And
+there is a new watchdog, `npm run stale-answer`, that watches for exactly one
+shape: you replied, and nothing moved. None of the four watchdogs already
+running could see it — the relay's own heartbeat was perfectly healthy that
+morning; one ticket had simply fallen out of it. This one notices within half an
+hour, says out loud that it is not waiting on you, and goes quiet again as soon
+as the ticket moves.
+
+**Checked over a second time (2026-09-07), and four things needed fixing before
+it could go live.** The new watchdog's "did your answer actually reach anybody?"
+test was reading the wrong thing entirely, so it never once got an answer — and
+its report would have blamed the wrong part of the system on the one screen you
+read. Quoting the question above your reply, which is a perfectly normal way to
+answer, stopped the ticket being released at all — and the watchdog called that
+same ticket healthy. The alarm could go off once about a ticket and then never
+again about it. And a ticket you had deliberately parked back in "needs your
+input" by hand would have been dragged straight out again within ten minutes,
+with your name taken off it. All four are fixed and each one was proved by
+breaking it on purpose and watching a test catch it.
+## 2026-09-07 — The pipeline had started filing tickets about itself faster than we could do them (#641)
+
+The tooling that runs the build pipeline checks its own health, and it is good
+at it — good enough that it was writing up more problems with itself than
+anyone could work through. Counted on Saturday: back in mid-August it was
+filing about six of these a day, and by the start of September it was up to
+about sixteen. None of them were wrong. They were all genuine findings about
+genuine gaps. But the client work — Delray, the product itself — was sitting in
+line behind them.
+
+Dane went through and set 31 of them aside that day. Six stayed, and the thing
+that separated the six from the 31 is the whole point: each of the six named a
+failure that had actually happened and actually cost something. A lane that
+stopped. Work that got lost. An alarm nobody heard. The other 31 described gaps
+that were real but had never once bitten us.
+
+So the rule is now written down: the pipeline only opens a ticket on itself
+when something actually went wrong and cost us something, and the ticket has to
+say what that was. A gap somebody merely noticed goes as one line in a parked
+list instead, where it keeps its full write-up and can be brought back any time
+by flipping it to Queued. Nothing is thrown away — it is set aside.
+
+Two things deliberately stayed the way they were, and both are spelled out so
+nobody reads this rule too widely later. A bug on a client's site or in the
+admin app still gets filed the moment it is spotted, no questions asked. And
+the handful of tickets the machinery creates for its own bookkeeping — the
+pause switch, the roll call, the pipeline report — are not affected either.
+
+The second half of this is about names. Dane's words: "your descriptions of
+tickets is so cryptic and full of fanciful turns of phrases that it is
+difficult for me to understand which ones are really important and which ones
+aren't." A ticket's name now has to say in plain words what breaks and who
+feels it, so a list of seventy can be read down at a glance. The clever
+one-line diagnosis still gets written — it just belongs in the description,
+where it helps.
+
+All of this lives in five different documents, which is a lot of prose that
+could quietly get edited away. So there is a test that fails if any of it does.
+Every one of the six files was broken on purpose to confirm the test actually
+notices.
+## 2026-09-06 — Nine modules were talking to the page builder on the visitor's screen, and now something checks all 61 (#636)
+
+A Builder module has two audiences: whoever is building the page, and whoever
+reads it. Several were addressing the builder on the visitor's screen. Three
+were doing it on live client sites this morning — the Blog Post module showing
+"Post Title" and "Post body will appear here when opened with ?post=slug." on
+delraytennis.starcaster.pro and on a law firm's public site; the Event Detail
+module telling visitors to type "?event=your-event-slug" into their address
+bar; and the Blog Post List naming the Create Post module, on five published
+pages across two tenants. Each now says something a visitor can use — "No post
+selected", "No event selected", "No posts published yet." — and keeps its
+original wording on the Builder canvas, which is where it belongs.
+
+The reason this is worth an entry is the second half. Four rounds of review had
+each closed the placeholder the round before had named and missed the next one,
+because there is no way to close "find all of them" by re-reading a
+twelve-thousand-line file with sixty-one module types in it. So there is now a
+check that renders **every** module as a visitor would see it and reads the
+words that come out. It runs on every commit and every build, and takes about a
+second and a half.
+
+It found six more the moment it existed: an unset image telling visitors to
+"Choose an image", the Player Portal module announcing our own product name on
+a client's site, an empty video box captioned "Video", a merch card whose
+product name was the words "Merch product", and the Confetti module running its
+design-time controls — including a "Test Burst" button — on live pages. All
+fixed here. It also renders each module in three places rather than one, which
+turned out to matter: two containers (a table cell, and the drop-down mega-menu's
+feature slot) were not passing the "this is a real page" flag down at all, so
+every guard inside them was being bypassed.
+
+Every fix was broken on purpose to watch the check go red, and the check's own
+instrument was tested first — which caught it rendering nothing at all in the
+mega-menu, sixty-one assertions passing while measuring nothing.
+
+That same trap then caught a quieter version of itself. Review found that in
+those two nested places the check was reading the container's words and the
+module's words run together as one string — "ColumnChoose an image" — so four
+of the ten guards it was built for were passing there without measuring
+anything. It now reads each module's own corner of the page instead, which
+fixes the run-together problem and a second one underneath it, and there are
+new controls that fail if either comes back. Both were broken on purpose and
+watched to fail. The lesson is the one the mega-menu already taught: a check
+that has never been seen to fail is not known to work, and "the words are on
+the page somewhere" is not the same question as "the check can find them".
+
+Round three found the third version of the same trap, and this one had made an
+*older* check worse. There are two guards here, not one: the new renderer that
+reads what comes out on screen, and an older word-search that reads the code
+itself. Fixing a false alarm in the word-search had involved telling it to
+ignore the bits of a line that are plumbing rather than words — but the way it
+was written, "ignore the plumbing" turned into "ignore everything except a
+short list of things we thought of", and ordinary visitor text handed from one
+part of the page to another stopped being read. Two of the exact phrases this
+whole ticket is about were being missed in a shape that appears throughout the
+files it scans. Nothing was leaking, and nothing would have complained; the net
+had simply got a bigger hole in it while everyone was looking elsewhere. It is
+turned around now — it ignores only the handful of things a reader definitely
+cannot see, and keeps everything else — and there are tests pinning it in both
+directions, which is what was missing. The old behaviour was measured, the new
+behaviour was measured, and the phrase was put back on purpose to watch the
+check go red.
+
+The other two are about a check being honest when it cannot do its job. If the
+testing tool was not installed in a folder — which is the normal state of a
+freshly-made folder before it is set up — the new renderer was announcing "a
+module is showing Builder text to visitors" and telling whoever read it to go
+and fix a module. Nothing was wrong with any module; it simply had not run.
+That now says "could not take a reading" in its own words and with its own
+signal, which this repo already distinguishes from both a pass and a failure —
+the difference matters because one of them sends a person hunting for a bug
+that is not there. And if the check ever runs but finds no tests to run, it now
+refuses to report success rather than cheerfully announcing that all sixty-one
+modules are fine. Both were caused on purpose and watched to behave correctly,
+and the old version was run against the same condition to confirm it really did
+call an uninstalled tool a leaking module.
+## 2026-09-07 — The message that told you to do two opposite things at once (#639)
+
+The work above taught `npm run ship` that a pull request can go untested for two
+completely different reasons, and that the cure for one is useless for the
+other. It then went and printed both cures in the same message. The wording was
+assembled in two halves — a paragraph about what it had already tried, and a
+note about what it had found out — and glued together they said "this branch
+needs a new commit" and then, four lines later, "not another commit: pull main
+in". You can do one of those. Nothing on the screen said which.
+
+That is the exact failure this whole piece of work exists to prevent — advice
+that cannot work, handed to somebody who has no way to tell — reproduced inside
+the fix for it. So the repair is not a better paragraph. There is now one place
+that writes this message, it picks its advice from a table, and there is exactly
+one slot for advice to go in. A future edit cannot add a second one by accident,
+because there is nowhere to put it.
+
+While it was being rebuilt, two more things got sorted out. GitHub's opinion
+about whether a branch conflicts is a cached guess and it is wrong here often
+enough to be notorious — it was wrong about this very pull request — so ship now
+asks *git*, on the spot, and the two answers together tell it which of three
+situations it is actually in: a real conflict to resolve by hand, a branch that
+is genuinely behind and needs main pulled in, or GitHub simply holding a stale
+answer, where pulling main in does nothing at all and what is needed is a nudge
+to make it recompute. Telling those apart matters because ship already pulls
+main in as its first step, so the stale-answer case was the one that could send
+you round in a circle. And if one of the non-testing services on a pull request
+has failed — a preview deployment, say — the message now names it, because
+nothing else would have.
+
+## 2026-09-06 — A pull request that quietly gets no testing at all, and the fix that could not work (#639)
+
+Sometimes a pull request opens and GitHub never runs any of its tests. Nothing
+says so. The page looks like one whose tests simply have not started yet, so
+whoever is watching waits — and nothing ever comes, because nothing was ever
+going to. Work that is finished then sits there unmergeable, because the safety
+gate quite rightly refuses to merge anything nothing has tested.
+
+We already knew one way this happens, and had a fix for it. What we did not know
+is that there is a second way, it looks exactly the same from outside, and the
+fix for the first one does nothing at all for it.
+
+The second way is a merge conflict. Our tests run against the branch *combined
+with* the live site's code — that is the only honest thing to test — and if
+GitHub thinks the two disagree, it cannot build that combination, so it declines
+to run anything. Silently. That is what happened on 6 September: two lots of
+work were pushed eleven minutes apart and neither got a single test, while other
+pull requests in the same repository were being tested normally the whole time.
+The known fix is to push a tiny empty commit to prod GitHub into noticing — and
+it was tried, and it did nothing, because the new commit did not merge either.
+What actually fixed it was pulling the live site's latest code into the branch.
+The moment that happened, the tests started within seconds.
+
+So `npm run ship` now asks GitHub *why* the tests are missing before it settles
+in to wait. If the answer is "this branch conflicts", it stops immediately and
+tells you to pull main in, and says in as many words that the empty-commit trick
+is not the fix here. It is careful about one thing: for the first few seconds
+after any push GitHub genuinely has not worked out yet whether a branch
+conflicts, and treating that "don't know yet" as a conflict would have made ship
+give up on almost every healthy branch — so it asks again instead of guessing.
+It is also careful to only ask while *no* test has appeared, because a branch can
+go stale after its tests have already run and passed, and a green board must
+never be reported as blocked.
+
+The written instructions now carry both causes side by side with a one-command
+way to tell them apart, so the next person to meet a silent pull request does not
+have to work it out from scratch, and does not spend twenty minutes applying the
+wrong remedy.
+
+**And then the review caught that all of the above could never actually fire.**
+The new check waited for a pull request with *no test results on it at all*, and
+a pull request here never has none: Vercel, the service that builds the preview
+link, posts its own two rows onto every single one, and they go green on their
+own. So the page for a pull request that had run nothing showed a tidy little
+board of passes. The check looked at that board, saw results, and concluded the
+testing had finished — the exact opposite of the truth, and it never once asked
+GitHub the question the whole change exists to ask.
+
+The same mistake was quietly hiding something worse that had been there all
+along: because those Vercel rows count as passes, `npm run ship` would read a
+pull request with **no testing whatsoever** as fully green and go ahead and try
+to merge it. GitHub itself refused, which is the only reason this never did any
+damage.
+
+Both are fixed by teaching the code the difference between our own tests and
+somebody else's status message — a real test run belongs to one of our test
+workflows and says so; an outside service's row does not. Now "no tests" means
+"none of *ours*", which is what it always meant in English. One more nicety: a
+conflict has to be confirmed by a second reading a moment later before ship acts
+on it, because GitHub caches that answer and can briefly still report the
+conflict you have *just this second fixed* — which would have had ship telling
+you to go and do the thing you had already done.
 
 ## 2026-09-06 — The overnight cleanup could tell a half-finished job it had never been started (#637)
 

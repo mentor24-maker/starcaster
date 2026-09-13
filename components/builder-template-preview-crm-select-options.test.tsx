@@ -55,7 +55,15 @@ const EMPTY_DROPDOWN_LABEL = "How did you hear about us?";
 const CONFIGURED_DROPDOWN_LABEL = "Preferred court";
 
 /** A real tenant form: one ordinary field, one configured dropdown, one with its Options box left blank. */
-function stubCrmForm() {
+const FORM_HEADING = "Get in touch";
+
+const DEFAULT_FIELDS = [
+  { key: "email", label: "Email", type: "email", required: true },
+  { key: "court", label: CONFIGURED_DROPDOWN_LABEL, type: "select", required: false, options: ["Clay", "Hard"] },
+  { key: "how_heard", label: EMPTY_DROPDOWN_LABEL, type: "select", required: true, options: [] }
+];
+
+function stubCrmForm(fields: unknown[] = DEFAULT_FIELDS) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     if (!String(url).includes("/api/crm/forms/")) return { ok: false, status: 404, json: async () => ({}) };
     return {
@@ -63,24 +71,20 @@ function stubCrmForm() {
       json: async () => ({
         data: {
           id: "form_1",
-          heading: "Get in touch",
+          heading: FORM_HEADING,
           submitLabel: "Send",
           successMessage: "Thanks",
           errorMessage: "Sorry",
           crmConfigId: "crm_1",
-          fields: [
-            { key: "email", label: "Email", type: "email", required: true },
-            { key: "court", label: CONFIGURED_DROPDOWN_LABEL, type: "select", required: false, options: ["Clay", "Hard"] },
-            { key: "how_heard", label: EMPTY_DROPDOWN_LABEL, type: "select", required: true, options: [] }
-          ]
+          fields
         }
       })
     };
   }));
 }
 
-async function renderCrmForm(liveSite: boolean) {
-  stubCrmForm();
+async function renderCrmForm(liveSite: boolean, fields: unknown[] = DEFAULT_FIELDS) {
+  stubCrmForm(fields);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -209,5 +213,47 @@ describe("the contact form's Custom-mode note never reaches a visitor", () => {
     // leave whoever picked "Custom" with no explanation of what they got.
     await renderContactForm(false, "custom");
     expect(text()).toContain(COMING_SOON);
+  });
+});
+
+describe("a form with nothing left to fill in is not a form", () => {
+  /*
+   * Ticket 86bbvqcbk, finding 3, from the round-5 review of 86bbugd2e.
+   *
+   * The filter above leaves an option-less dropdown out of a published form.
+   * If EVERY field on the form is one, `visibleFields` is empty and the form
+   * used to render anyway: a heading and a Submit button over nothing, and a
+   * click posted, wrote an empty contact row and thanked the visitor for it.
+   *
+   * Unreachable in production when it was found — 2 crm_forms rows, 0 with a
+   * select field — and `saveForm` refuses a form with no fields at all, so it
+   * takes this specific shape to reach. Guarded rather than argued about.
+   */
+  const ALL_EMPTY_DROPDOWNS = [
+    { key: "how_heard", label: EMPTY_DROPDOWN_LABEL, type: "select", required: true, options: [] },
+    { key: "interest", label: "What are you after?", type: "select", required: false, options: [] }
+  ];
+
+  it("renders nothing at all to a visitor — no heading, no Submit", async () => {
+    await renderCrmForm(true, ALL_EMPTY_DROPDOWNS);
+    expect(text()).not.toContain(FORM_HEADING);
+    expect(container?.querySelector("form.builder-contact-form")).toBeNull();
+    expect(container?.querySelector("button.builder-contact-form-submit")).toBeNull();
+  });
+
+  it("still draws the whole form on the Builder canvas", async () => {
+    // The other half. The canvas is the only place this is fixable, so hiding
+    // it there too would leave the operator with a form that silently is not
+    // on their page.
+    await renderCrmForm(false, ALL_EMPTY_DROPDOWNS);
+    expect(text()).toContain(FORM_HEADING);
+    expect(container?.querySelector("button.builder-contact-form-submit")).not.toBeNull();
+  });
+
+  it("leaves a form with one usable field alone", async () => {
+    // The guard is "nothing left", not "something was dropped".
+    await renderCrmForm(true);
+    expect(text()).toContain(FORM_HEADING);
+    expect(text()).toContain("Email");
   });
 });

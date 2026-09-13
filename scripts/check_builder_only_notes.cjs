@@ -81,6 +81,66 @@ function sh(cmd) {
   return execSync(cmd, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
 
+/*
+ * Attributes that are MACHINERY — the value is never read by a visitor, so a
+ * phrase found inside one is not a leak. Everything else on a JSX line is kept
+ * and tested.
+ *
+ * The list is deny-by-default on purpose, and it was allow-by-default for one
+ * round (ticket 86bbvqcbk, round-2 review). Blanking every attribute except a
+ * short "visible" list also blanked ordinary React props that carry visitor
+ * copy, which is a shape that appears throughout the scanned files:
+ *
+ *   caught on main, MISSED by an allow-list:
+ *     <EmptyState message="No posts found. Add posts in the Messaging section." />
+ *     <Note text="Set a Form ID in module settings" />
+ *
+ * Both phrases are landmine 16's own examples. A prop name cannot be predicted
+ * — message, text, label, emptyText, caption, whatever the component chose —
+ * so the only list that can be complete is the list of things a visitor
+ * definitely cannot read.
+ *
+ * What this list has to keep out is the case it was added for: className etc.
+ * turned every `builder-*` CSS class into evidence that a line "names our
+ * tooling", so the coming-soon rule matched ordinary tenant copy —
+ *
+ *   no     <p>Coming soon.</p>
+ *   MATCH  <p className="builder-public-site-empty">Coming soon.</p>      <- wrong
+ *   MATCH  <div className="builder-preview-module">Our clubhouse is coming soon.</div>
+ *
+ * scripts/builder/builderOnlyNotesVisibleText.test.js pins BOTH directions:
+ * those four stay clean, and a phrase passed as a prop is still caught.
+ */
+const MACHINERY_ATTRS = new Set([
+  'classname', 'style', 'href', 'src', 'srcset', 'key', 'id', 'ref', 'type', 'role',
+  'target', 'rel', 'name', 'htmlfor', 'width', 'height', 'loading', 'method', 'action',
+]);
+
+/**
+ * Is this attribute machinery — something a visitor can never read?
+ *
+ * `data-*` always is. `aria-*` mostly is, but aria-label and aria-description
+ * are spoken to a screen-reader user, so they are text a person receives and
+ * stay in scope.
+ */
+function isMachineryAttr(name) {
+  const attr = name.toLowerCase();
+  if (attr === 'aria-label' || attr === 'aria-description') return false;
+  if (attr.startsWith('data-') || attr.startsWith('aria-')) return true;
+  return MACHINERY_ATTRS.has(attr);
+}
+
+const ATTR = /([A-Za-z][A-Za-z0-9_:-]*)\s*=\s*("[^"]*"|'[^']*'|\{(?:[^{}]|\{[^{}]*\})*\})/g;
+
+/**
+ * The part of a line a visitor would actually read: text between the tags,
+ * plus every attribute value that is not machinery.
+ */
+function visibleText(line) {
+  return line.replace(ATTR, (match, name) =>
+    (isMachineryAttr(name) ? `${name}=` : match));
+}
+
 /**
  * Is this line inside a <BuilderOnlyNote> block?
  *
@@ -108,7 +168,7 @@ function scan(content, where, failures) {
   lines.forEach((line, i) => {
     // A phrase inside a comment is documentation, including this file's own
     // explanation and the comments left on every fix.
-    const code = line.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');
+    const code = visibleText(line.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, ''));
     const hit = BUILDER_PHRASES.find((re) => re.test(code));
     if (!hit) return;
     if (insideBuilderOnlyNote(lines, i)) return;
@@ -161,4 +221,4 @@ if (require.main === module) {
   console.log('[builder-notes] OK — every builder-only instruction is guarded.');
 }
 
-module.exports = { run, BUILDER_PHRASES };
+module.exports = { run, BUILDER_PHRASES, visibleText };

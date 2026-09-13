@@ -31,6 +31,17 @@
 
 const BANNER = '/images/Gemini_Generated_starcaster_banner.png';
 
+/** One picture, shot four times with the shadow pointed a different way. */
+const SHADOW_PICTURE = {
+  url: BANNER,
+  alt: 'Scene picture',
+  size: '25',
+  effect: 'none',
+  imageShadow: 'true',
+  imageShadowBlur: '10',
+  imageShadowOpacity: '70',
+};
+
 const CARDS = JSON.stringify([
   { title: 'First card', body: 'Body copy that wraps onto a second line so line-height shows up.' },
   { title: 'Second card', body: 'A shorter body.' },
@@ -85,6 +96,29 @@ export const SHOT_SCENES = [
         type: 'image',
         settings: { url: BANNER, alt: 'Scene picture', size: '60', borderRadius: '18', borderThickness: '2', borderColor: '#214c71', effect: 'none' },
       },
+    ],
+  },
+  {
+    /*
+     * THE SHADOW AT ALL FOUR QUARTERS (2026-08-25, "add the angle of
+     * dropshadow"). Angle and Distance store nothing — they are a second view
+     * of `imageShadowX` and `imageShadowY` — so what a scene can hold still is
+     * the OFFSETS, which is also what makes this the pixel-identity proof the
+     * feature needed: every one of these four is a shadow a page could already
+     * have been saved with, and the merge-base's build draws it too. If the
+     * pair differs at all, a shadow already on a live site has moved.
+     *
+     * Distance 24 at 0 / 90 / 180 / 270 degrees, in that order: right, above,
+     * left, below.
+     */
+    id: 'picture-shadow-angles',
+    title: 'A drop shadow at each quarter of the dial',
+    why: 'Where a shadow falls is the one thing an angle control can get backwards, and it would be backwards on every picture at once.',
+    modules: [
+      { type: 'image', settings: { ...SHADOW_PICTURE, imageShadowX: '24', imageShadowY: '0' } },
+      { type: 'image', settings: { ...SHADOW_PICTURE, imageShadowX: '0', imageShadowY: '-24' } },
+      { type: 'image', settings: { ...SHADOW_PICTURE, imageShadowX: '-24', imageShadowY: '0' } },
+      { type: 'image', settings: { ...SHADOW_PICTURE, imageShadowX: '0', imageShadowY: '24' } },
     ],
   },
   {
