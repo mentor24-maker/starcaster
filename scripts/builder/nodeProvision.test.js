@@ -353,3 +353,103 @@ test('provision_node.sh exits non-zero when it cannot read the inventory', () =>
   assert.match(run.stderr, /Refusing to continue/, 'it must say why it stopped');
   assert.ok(!/passed,.*fixed/.test(run.stdout), 'it must not print a tally it did not earn');
 });
+
+// --- the CANNOT DO YET headline states a meaning, never a cause -------------
+
+/**
+ * Three places render a blocked row for the operator, and all three used to
+ * hardcode the sentence "no installer exists." beside the row's own reason.
+ *
+ * That was true of every blocked row until 2026-09-13, when `channel-steward`
+ * and `librarian-sweep` arrived blocked on a reason that opens "The installer
+ * exists but lives in the pulse repo". `doctor:node` then printed two lines
+ * that contradicted each other, for two schedules that are installed and
+ * beating — the machine's own set-up report telling the operator that live,
+ * working jobs have nothing installed. That is the CANNOT-TELL-rendered-as-fact
+ * shape the NODES work exists against, arriving through the report meant to
+ * catch it (task 86bbw9nbj, round 3).
+ *
+ * The rule these two tests pin: the headline says what `blocked` MEANS — this
+ * provisioner cannot install it — and the row's own `blocked` string is the
+ * only thing that says why. A future role whose reason names an installer that
+ * exists therefore cannot make the headline false again.
+ */
+
+const HEADLINE_SITES = [
+  // `headline: true` means this surface prints the operator-facing CANNOT DO YET
+  // line. node:verify does not — it records a skip reason for the reboot record —
+  // but it carries the same meaning, and that is what all three are pinned on.
+  { file: path.join(__dirname, '..', 'doctor_node.mjs'), what: 'doctor:node', headline: true },
+  { file: path.join(__dirname, '..', 'verify_node_roles.mjs'), what: 'node:verify' },
+  { file: path.join(__dirname, '..', 'provision_node.sh'), what: 'provision:node', headline: true },
+];
+
+test('no blocked-row headline asserts that an installer does not exist', () => {
+  const fs = require('node:fs');
+  for (const site of HEADLINE_SITES) {
+    const source = fs.readFileSync(site.file, 'utf8');
+    // Strip comments — the story above is allowed to quote the old wording, and
+    // a test that could not tell prose from output would be unfixable.
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*(?:\/\/|#).*$/gm, '');
+    assert.ok(
+      !/no installer exists/i.test(code),
+      `${site.what} (${path.basename(site.file)}) asserts "no installer exists" in what it PRINTS. `
+      + 'The headline must state what `blocked` means; the row\'s own reason says why.',
+    );
+  }
+});
+
+test('all three surfaces state the same meaning for a blocked row', () => {
+  // The review's ask was "fix the shared headline, not the two strings", and it
+  // is only shared if all three keep saying it. They do not all say it the same
+  // way, and that difference is real rather than drift: doctor:node and
+  // provision:node print an operator-facing CANNOT DO YET line, while
+  // node:verify records a machine-readable skip REASON that the reboot record
+  // stores. Writing this test as "one identical sentence" failed on exactly that
+  // distinction, which is the test doing its job — so it pins the clause they
+  // genuinely share, and the full headline only where a headline is printed.
+  const fs = require('node:fs');
+  const MEANING = 'this provisioner cannot install it';
+  const HEADLINE = `CANNOT DO YET — ${MEANING}.`;
+  for (const site of HEADLINE_SITES) {
+    // provision_node.sh builds its line with printf, so the colour escapes sit
+    // INSIDE the sentence ("%sCANNOT DO YET%s — this provisioner..."). Strip the
+    // format specifiers so the shell surface is compared on the words it prints
+    // rather than on how it colours them — another failure this test caught.
+    const source = fs.readFileSync(site.file, 'utf8').replace(/%s/g, '');
+    assert.ok(
+      source.includes(MEANING),
+      `${site.what} (${path.basename(site.file)}) no longer states what \`blocked\` means`,
+    );
+    if (site.headline) {
+      assert.ok(
+        source.includes(HEADLINE),
+        `${site.what} (${path.basename(site.file)}) no longer prints the shared headline "${HEADLINE}"`,
+      );
+    }
+  }
+});
+
+test('a blocked reason may say its installer exists without contradicting anything', () => {
+  // The live case, asserted as a property rather than a spot-check: these rows
+  // are blocked BECAUSE the installer is in another repo, so their reason names
+  // an installer that exists. Nothing that renders them may claim otherwise.
+  for (const role of ['channel-steward', 'librarian-sweep']) {
+    const spec = provision.JOB_SCHEDULES[role];
+    assert.ok(spec.blocked, `${role} must still be blocked`);
+    assert.match(
+      spec.blocked, /installer/i,
+      `${role}'s reason must keep naming the installer it cannot reach`,
+    );
+  }
+  // And the field's own docstring must not re-teach the reading that caused it.
+  const fs = require('node:fs');
+  const doc = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'nodeProvision.js'), 'utf8');
+  const intro = doc.slice(0, doc.indexOf('const JOB_SCHEDULES'));
+  assert.ok(
+    !/`blocked` is the honest entry for a job whose installer does not exist yet/.test(intro),
+    'the docstring defines `blocked` as absence again — that definition is what the three headlines copied',
+  );
+});

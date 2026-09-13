@@ -429,7 +429,17 @@ if (!knownNode) {
     if (job.blocked) {
       // CANNOT DO YET. Loud, every run, and never a pass — the whole reason
       // this ticket did not ship a green-across-the-board provisioner.
-      waiting(`${job.role}: CANNOT DO YET — no installer exists.`, job.blocked);
+      //
+      // The headline says what `blocked` MEANS — this provisioner cannot install
+      // it — and never why, because why is `job.blocked`'s job and it is printed
+      // on the very next line. It used to assert "no installer exists", which was
+      // true of every blocked row until 2026-09-13, when channel-steward and
+      // librarian-sweep arrived blocked on a reason that begins "The installer
+      // exists but lives in the pulse repo". The two lines then contradicted each
+      // other, about two schedules that are installed and beating — the machine's
+      // own set-up report telling the operator that live, working jobs have
+      // nothing installed (task 86bbw9nbj, round 3).
+      waiting(`${job.role}: CANNOT DO YET — this provisioner cannot install it.`, job.blocked);
       if (job.blockedBy) note(`Blocked by ticket ${job.blockedBy}.`);
       continue;
     }

@@ -110,6 +110,29 @@ composed its whole report and printed it in one go at the end, so a dropped
 connection threw the report away along with the lines saying what it had been
 about to write. It now prints what it knows either way.
 
+A third review pass found one wrong sentence, in the report the operator reads
+to answer "is this machine set up?". That report lists every job the machine
+should be running, and for the ones it cannot set up itself it printed a fixed
+headline — "no installer exists" — above the row's own explanation. That headline
+had been true of every such job until this work added these two, whose
+explanation opens "The installer exists, but it lives in the Pulse project". So
+the report gave two consecutive, contradictory lines about the same job. Worse
+than untidy: these two schedules are installed and running right now — that is
+how the rest of this ticket passes — so the machine's own set-up report was
+telling him that two live, working jobs had nothing installed at all.
+
+The fix is not the two new sentences but the headline, because the headline was
+answering the wrong question. Whether an installer exists is the explanation's
+job, and it is printed directly underneath. What the field actually means is
+narrower and always true: *this* set-up script cannot install this one. It now
+says that, in all three places that report it — two of which print it to him and
+one of which files it away in the machine's records. The third was not named in
+the review and would have been left saying the old thing. Three tests hold the
+line: one that no such headline may claim an installer is missing, one that all
+three places still say the same thing (it caught two real differences between
+them while being written), and one that the definition this mistake was copied
+from does not quietly come back. Each was broken on purpose and watched to fail.
+
 ## 2026-09-08 — Alarms stopped being thrown away when the chat room refuses them (#666)
 
 The system has one way of telling anyone that something has broken: it posts a

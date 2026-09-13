@@ -99,7 +99,10 @@ const unprobeable = [];
 
 for (const job of owned) {
   if (job.blocked) {
-    skipped.push({ role: job.role, why: `no installer exists yet — ${job.blocked}` });
+    // The prefix states what `blocked` means, not why — the reason follows it
+    // verbatim. Asserting absence here was wrong the moment a row appeared whose
+    // reason says the installer exists (task 86bbw9nbj, round 3).
+    skipped.push({ role: job.role, why: `this provisioner cannot install it — ${job.blocked}` });
     continue;
   }
   if (job.manual) {
