@@ -7818,6 +7818,30 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: normal;
 }
 
+/* ── CRM form: the form box follows its cell's and its own alignment ────────
+ * (task 86bbzxx09). The module is forced to `align-self: stretch` in
+ * _builder-react.css so a centred or right cell cannot collapse it to content
+ * width (the Marinoff /contact bug). That left the form's own box — 75% wide
+ * on Delray's "Field Width" — always at the LEFT of a full-width shell,
+ * whatever the cell's Horizontal setting or the module's Alignment said. The
+ * shell is a flex column now: `stretch` (the default) is exactly the old
+ * block layout for a left cell, and a right or centred cell reaches the box
+ * through the variable the column sets. The module's own Alignment wins over
+ * the cell's when both are set. */
+.builder-react-root .builder-crm-form-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: var(--cell-h-align, stretch);
+}
+
+.builder-react-root .builder-preview-module.is-align-center > .builder-crm-form-shell {
+  align-items: center;
+}
+
+.builder-react-root .builder-preview-module.is-align-right > .builder-crm-form-shell {
+  align-items: flex-end;
+}
+
 /* ── Event Manager: Harvest PDF (task 86bbztj0e) ─────────────────────────
  * The review table reuses the admin data table; what is new is a row of
  * seven day toggles and inputs sitting inside cells, which a tenant theme's
