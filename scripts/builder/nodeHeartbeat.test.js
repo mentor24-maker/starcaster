@@ -882,3 +882,170 @@ test('a mixed post keeps the quiet headline and still marks the new role', () =>
   assert.match(post, /\*\*librarian-sweep\*\*.*Never beaten/s);
   assert.doesNotMatch(post.split('librarian-sweep')[0], /Never beaten/);
 });
+
+// --- closing an alarm, which is half of having one ---------------------------
+//
+// Task 86bbw9nbj round 1. Every clear in this system lived inside `--beat`, so
+// the two roles whose runner is in another repo — the two this feature exists
+// to instrument — could raise an alarm and never close it. All of these are
+// written against that shape: the fire half working and the clear half missing
+// is indistinguishable from a job that is still dead.
+
+test('a job that recovered after its silence was reported gets its alarm closed AND announced', () => {
+  const plan = hb.alarmCloseoutPlan({
+    fresh: [{ role: 'channel-steward' }],
+    quietSince: { 'channel-steward': agoHours(5) },
+  });
+  assert.deepEqual(plan.clear, ['channel-steward']);
+  assert.equal(plan.announce.length, 1);
+  assert.equal(plan.announce[0].role, 'channel-steward');
+  assert.equal(plan.announce[0].quietSince, agoHours(5));
+});
+
+test('a healthy job nobody ever reported quiet is cleared SILENTLY — no all-clear x365', () => {
+  const plan = hb.alarmCloseoutPlan({
+    fresh: [{ role: 'bus-relay' }, { role: 'channel-steward' }],
+    quietSince: {},
+  });
+  assert.deepEqual(plan.clear, ['bus-relay', 'channel-steward']);
+  assert.deepEqual(plan.announce, [], 'posting here would be routine good news, which the non-goals forbid');
+});
+
+test('an empty stale stamp is not an alarm — it announces nothing', () => {
+  const plan = hb.alarmCloseoutPlan({
+    fresh: [{ role: 'librarian-sweep' }],
+    quietSince: { 'librarian-sweep': '   ' },
+  });
+  assert.deepEqual(plan.clear, ['librarian-sweep']);
+  assert.deepEqual(plan.announce, []);
+});
+
+test('A JOB THAT IS STILL DEAD CANNOT CLOSE ITS OWN ALARM — only fresh roles are ever passed in', () => {
+  // The gate is recencyReport's own arithmetic, so this asserts the join: a
+  // role whose newest beat is past its threshold lands in `quiet`, never in
+  // `fresh`, and therefore never reaches the closeout plan at all. Without
+  // this the relay would clear an alarm every ten minutes and the stale check
+  // would raise it again — churn, in place of an honest silence.
+  const report = hb.recencyReport({
+    entries: [{
+      role: 'channel-steward',
+      owner: 'mac-mini',
+      beat: { readable: true, found: true, beat: { at: agoHours(30) } },
+    }],
+    now: NOW,
+  });
+  assert.equal(report.fresh.length, 0);
+  assert.equal(report.quiet.length, 1);
+
+  const plan = hb.alarmCloseoutPlan({
+    fresh: report.fresh,
+    quietSince: { 'channel-steward': agoHours(20) },
+  });
+  assert.deepEqual(plan.clear, []);
+  assert.deepEqual(plan.announce, []);
+});
+
+test('several recovered roles are closed in one pass, each announced on its own merit', () => {
+  const plan = hb.alarmCloseoutPlan({
+    fresh: [{ role: 'channel-steward' }, { role: 'librarian-sweep' }, { role: 'bus-relay' }],
+    quietSince: { 'channel-steward': agoHours(9), 'bus-relay': agoHours(4) },
+  });
+  assert.deepEqual(plan.clear, ['channel-steward', 'librarian-sweep', 'bus-relay']);
+  assert.deepEqual(plan.announce.map((a) => a.role), ['channel-steward', 'bus-relay']);
+});
+
+// --- the relay's verdict -----------------------------------------------------
+
+test('an unreadable stamp is CANNOT TELL even when another role pushed successfully', () => {
+  // The exact round-1 defect: the zero-push path returned 2 for this and the
+  // success path returned 0 flat, so one good push washed out a blind reading.
+  const v = hb.relayVerdict({ ownedEmitters: 3, pushed: 1, unknown: 1 });
+  assert.equal(v.exit, 2);
+  assert.equal(v.reading, false);
+});
+
+test('a machine that owns no beating role is NOT a green all-clear', () => {
+  // Reachable on macbook-pro, which owns only db-refresh. "Every local beat
+  // this machine owns is already on the roll call" is vacuously true of zero
+  // beats, and doStaleCheck already refuses to call the same situation clear.
+  const v = hb.relayVerdict({ ownedEmitters: 0, pushed: 0, unknown: 0 });
+  assert.equal(v.exit, 2);
+  assert.equal(v.reading, false);
+  assert.match(v.why, /no job that records a beat/);
+});
+
+test('a clean relay pass, with something pushed and nothing unreadable, is a pass', () => {
+  const v = hb.relayVerdict({ ownedEmitters: 2, pushed: 2, unknown: 0 });
+  assert.equal(v.exit, 0);
+  assert.equal(v.reading, true);
+});
+
+test('nothing to push and nothing unreadable is the ordinary steady state, and passes', () => {
+  const v = hb.relayVerdict({ ownedEmitters: 2, pushed: 0, unknown: 0 });
+  assert.equal(v.exit, 0);
+  assert.equal(v.reading, true);
+});
+
+test('the relay never returns 1 — it moves a fact, it judges no job', () => {
+  for (const args of [
+    { ownedEmitters: 0, pushed: 0, unknown: 0 },
+    { ownedEmitters: 2, pushed: 0, unknown: 2 },
+    { ownedEmitters: 2, pushed: 2, unknown: 0 },
+    { ownedEmitters: 5, pushed: 1, unknown: 3 },
+  ]) {
+    assert.ok([0, 2].includes(hb.relayVerdict(args).exit), `${JSON.stringify(args)} answered 1`);
+  }
+});
+
+// --- one place knows where the stamps live -----------------------------------
+
+test('EVERY alarm clear in the CLI lives in one function, so a role cannot be given half a clear', () => {
+  // This is the shape of the round-1 defect rather than the defect itself: the
+  // clears were inline in `--beat`, so the paths that do not call `--beat` —
+  // which is the only two roles this whole slice exists for — silently got
+  // none of them. A second inline site is how that comes back, and nothing
+  // else in the repo would notice, because the CLI has no other test.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'node_heartbeat.mjs'), 'utf8');
+  const body = src.slice(src.indexOf('function closeAlarms('), src.indexOf('// --- the roll call on ClickUp'));
+  assert.ok(body.length > 0, 'closeAlarms() has moved or been renamed — this guard is now measuring nothing');
+
+  const callSites = src.match(/clearStamp\(`/g) || [];
+  const inside = body.match(/clearStamp\(`/g) || [];
+  assert.equal(callSites.length, inside.length,
+    `${callSites.length - inside.length} clearStamp() call(s) sit outside closeAlarms()`);
+
+  const posts = src.match(/renderRecoveredPost\(/g) || [];
+  assert.equal(posts.length, 1, 'the "beating again" post is sent from more than one place');
+});
+
+test('BOTH paths that see a successful run close its alarms — the recency check as well as --beat', () => {
+  // The defect, stated structurally. `--beat` closed alarms and the recency
+  // check did not, so a role whose runner never calls `--beat` — channel-steward
+  // and librarian-sweep, the two this ticket exists for — could alarm and never
+  // recover. Deleting either call site is silent otherwise: the CLI runs its
+  // work at import, so nothing else here can drive it.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'node_heartbeat.mjs'), 'utf8');
+  const fnBody = (name, endsBefore) => {
+    const from = src.indexOf(`function ${name}(`);
+    assert.ok(from >= 0, `${name}() has moved or been renamed — this guard is now measuring nothing`);
+    const to = src.indexOf(endsBefore, from);
+    assert.ok(to > from, `the marker after ${name}() has moved — this guard is now measuring nothing`);
+    return src.slice(from, to);
+  };
+  assert.match(fnBody('doBeat', '// --- the recency alarm'), /closeAlarms\(/,
+    'a job reporting its own success no longer closes its own alarm');
+  const staleCheck = fnBody('doStaleCheck', '// --- relaying local stamps');
+  assert.match(staleCheck, /closeAlarms\(/,
+    'the check that RAISES the silence alarm no longer closes it — the two pulse roles reach no other path');
+
+  // AND IT IS FED ONLY BY `report.fresh`. Found by break-testing: widening that
+  // input to include `report.quiet` closes the alarm of a job that is still
+  // dead, and every unit test here still passed, because the plan is pure and
+  // was being handed the wrong set. The safety property lives at the call site,
+  // so this is where it has to be pinned.
+  const call = staleCheck.slice(staleCheck.indexOf('closeAlarms('));
+  const fedBy = call.slice(0, call.indexOf('}))'));
+  assert.match(fedBy, /report\.fresh\.map\(/, 'the closeout is no longer fed from report.fresh');
+  assert.doesNotMatch(fedBy, /report\.quiet/,
+    'a role judged QUIET is being handed to the closeout — a job that is still dead would close its own alarm');
+});

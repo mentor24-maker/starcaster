@@ -47,6 +47,28 @@ anything. "Never reported" and "stopped reporting" now read as the two different
 problems they are; the alarm still fires, it just no longer sends anybody hunting
 a broken schedule that is fine. Every future job added to this system had that
 same first-day trap waiting for it.
+
+Review caught something the first pass missed, and it was the other half of the
+whole idea. An alarm that goes off and never goes quiet again is worse than no
+alarm at all — after a week of it nobody looks. Every other job in this system
+switches its own alarm off the moment it works again, and announces that it is
+back, but it does that from a line of code the two Pulse jobs never reach: they
+leave their note from another project folder entirely. So these two — the only
+two this whole piece of work exists for — could go dark, raise the alarm,
+recover, and stay flagged as dead for ever, with nobody told they had come back.
+Pulse's own history is nothing but recovery events: 33 hours dark, 820 failed
+runs over twelve days. Switching off is now done in one place that both routes
+reach, and only when the job's most recent note is genuinely recent — carrying a
+note from Tuesday must not switch off Tuesday's alarm on Friday.
+
+Two smaller ones from the same review, both in the same file, both the same
+mistake in different clothes: the carrying step said "everything is on the shared
+page" when it had in fact failed to read one of the records, and said the same
+thing on a machine that has no records to carry at all. Neither is a lie anybody
+told on purpose; both are a check that could not take a reading reporting itself
+as a clean one, which is the failure this project keeps writing rules against.
+Both now say plainly that nothing was measured.
+
 ## 2026-09-08 — Video can now play behind a single column, not just a whole row (#665)
 
 A row in the Builder can be split into columns. A background video could only
