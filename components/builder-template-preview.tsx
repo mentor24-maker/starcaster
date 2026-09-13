@@ -8368,7 +8368,6 @@ function EventManagerPreview({
         <BuilderEventHarvest
           accent={accent}
           categories={categories}
-          defaultTimeZone={eventTimeZone(events.find((e) => isValidTimeZone(e.timezone)) || {})}
           headers={() => getCrmProjectHeaders()}
           onClose={() => setHarvestOpen(false)}
           onCreated={() => { loadEvents(); loadCategories(); }}

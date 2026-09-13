@@ -80,9 +80,20 @@ test('a program already on the calendar is recognised, not proposed twice', () =
   assert.equal(matched.find((s) => s.title === 'Elite').existingEventId, '');
 });
 
-test('flyer venues are matched to the project venues by name', () => {
-  const venues = matchVenues([{ name: 'Pickleball', color: '#f7a600' }, { name: 'New Courts', color: '' }], [{ id: 'ecat_1', name: 'pickleball' }]);
-  assert.deepEqual(venues.map((v) => v.categoryId), ['ecat_1', '']);
+test('flyer venues take the project spelling, and a shouted new venue is tidied', () => {
+  const { venues, series } = matchVenues(
+    [{ name: 'PICKLEBALL', color: '#f7a600' }, { name: 'DELRAY SWIM & TENNIS CLUB', color: '#72b62f' }, { name: 'DBTC', color: '' }],
+    [{ id: 'ecat_1', name: 'Pickleball' }],
+    [{ title: 'PB 101', venue: 'PICKLEBALL' }, { title: 'Elite', venue: 'DELRAY SWIM & TENNIS CLUB' }],
+  );
+  assert.deepEqual(venues.map((v) => [v.name, v.categoryId]), [['Pickleball', 'ecat_1'], ['Delray Swim & Tennis Club', ''], ['DBTC', '']]);
+  assert.deepEqual(series.map((s) => s.venue), ['Pickleball', 'Delray Swim & Tennis Club'], 'series follow their venue name');
+});
+
+test("the flyer's times default to the zone the club's events already use — never a guess", () => {
+  const { suggestTimeZone } = harvest;
+  assert.equal(suggestTimeZone([{ timezone: 'America/Denver' }, { timezone: 'America/New_York' }, { timezone: 'America/New_York' }, { timezone: 'UTC' }, { timezone: 'UTC' }, { timezone: 'UTC' }]), 'America/New_York');
+  assert.equal(suggestTimeZone([{ timezone: 'UTC' }, { timezone: 'Nowhere/Real' }, {}]), '', 'no usable zone means the reviewer must enter one');
 });
 
 test('the model call: a transcription comes back parsed and its cost is recorded', async (t) => {

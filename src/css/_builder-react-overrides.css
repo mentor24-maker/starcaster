@@ -7804,6 +7804,20 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   margin: var(--space-3) 0;
 }
 
+/* A tenant theme's input { width: 100% } stretched the file chooser across the
+ * panel and pushed its button onto a line of its own. */
+.builder-react-root .builder-event-harvest-upload input[type="file"] {
+  width: auto;
+  max-width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.builder-react-root .builder-event-harvest-table select {
+  min-width: 13rem;
+}
+
 .builder-react-root .builder-event-harvest-options {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: var(--space-3);

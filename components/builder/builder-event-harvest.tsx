@@ -33,8 +33,6 @@ type Category = { id: string; name: string; color: string; sortOrder: number };
 type Props = {
   accent: string;
   categories: Category[];
-  /** The zone the project's events already use; the review defaults to it. */
-  defaultTimeZone: string;
   headers: () => Record<string, string>;
   onClose: () => void;
   /** Called after creating, so the manager reloads its table and venues. */
@@ -52,14 +50,16 @@ function readAsBase64(file: File): Promise<string> {
   });
 }
 
-export function BuilderEventHarvest({ accent, categories, defaultTimeZone, headers, onClose, onCreated }: Props) {
+export function BuilderEventHarvest({ accent, categories, headers, onClose, onCreated }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<HarvestResult | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [weekStart, setWeekStart] = useState("");
-  const [timeZone, setTimeZone] = useState(defaultTimeZone);
+  // Filled from the zone the club's events already use. Never the reviewer's
+  // own zone: Dane reviews in Mountain time, Delray runs on Eastern.
+  const [timeZone, setTimeZone] = useState("");
   const [status, setStatus] = useState("published");
   const [creating, setCreating] = useState(false);
   const [progress, setProgress] = useState("");
@@ -80,7 +80,8 @@ export function BuilderEventHarvest({ accent, categories, defaultTimeZone, heade
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(readApiErrorMessage(body, `The schedule could not be read (${res.status}).`));
-      const data = (body?.data ?? body) as HarvestResult;
+      const data = (body?.data ?? body) as HarvestResult & { timeZone?: string };
+      setTimeZone(data.timeZone || "");
       setResult(data);
       setRows(rowsFromHarvest(data));
       setWeekStart(data.weekStart ? mondayOf(data.weekStart) : mondayOf(new Date().toISOString().slice(0, 10)));
@@ -231,7 +232,13 @@ export function BuilderEventHarvest({ accent, categories, defaultTimeZone, heade
             <div className="builder-event-manager-field">
               <label className="builder-event-manager-label" htmlFor="harvest-zone">Time zone</label>
               <input id="harvest-zone" className="builder-event-manager-input" value={timeZone}
-                onChange={(e) => setTimeZone(e.target.value)} placeholder="America/New_York" />
+                onChange={(e) => setTimeZone(e.target.value)} placeholder="America/New_York"
+                aria-invalid={!isValidTimeZone(timeZone)} />
+              {!isValidTimeZone(timeZone) ? (
+                <span className="builder-event-harvest-exists">
+                  {timeZone ? "Not a time zone name." : "This site has no events with a time zone yet — enter the club's, e.g. America/New_York."}
+                </span>
+              ) : null}
             </div>
             <div className="builder-event-manager-field">
               <label className="builder-event-manager-label" htmlFor="harvest-status">Create as</label>

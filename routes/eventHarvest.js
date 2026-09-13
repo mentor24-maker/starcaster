@@ -26,7 +26,7 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { listEvents } = require('../lib/eventsStore');
 const { listEventCategories } = require('../lib/eventCategoriesStore');
 const {
-  HarvestError, isAvailable, extractSchedule, mergeSessions, matchExisting, matchVenues,
+  HarvestError, isAvailable, extractSchedule, mergeSessions, matchExisting, matchVenues, suggestTimeZone,
 } = require('../lib/eventHarvest');
 const { logActivity } = require('../lib/activityLog');
 const { findUserByEmail } = require('../lib/authStore');
@@ -80,8 +80,9 @@ async function handle(req, res, pathname, method) {
         listEvents({ limit: 500 }, scope),
         listEventCategories(scope),
       ]);
-      const series = matchExisting(mergeSessions(extraction.sessions), events);
-      const venues = matchVenues(extraction.venues, categories);
+      const matched = matchVenues(extraction.venues, categories, mergeSessions(extraction.sessions));
+      const series = matchExisting(matched.series, events);
+      const venues = matched.venues;
       logActivity({
         action: 'event.harvest', entityType: 'event', entityId: '',
         summary: `Schedule read from "${String(body.fileName || 'upload').slice(0, 80)}": ${extraction.sessions.length} lines, ${series.length} programs`,
@@ -90,6 +91,7 @@ async function handle(req, res, pathname, method) {
         weekStart: extraction.weekStart,
         venues,
         series,
+        timeZone: suggestTimeZone(events),
         lineCount: extraction.sessions.length,
         dropped: extraction.dropped,
       }), true;
