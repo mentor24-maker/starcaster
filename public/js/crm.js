@@ -13,6 +13,15 @@ App.crm = (function () {
   let currentForms = [];
   let editingContactId = null;
   let editingFormId = null;
+  /*
+   * Whether the form editor on screen was actually OPENED (task 86bbzxjx4).
+   * A reload on #page=crmFormEditorPage shows the page's bare markup without
+   * running openFormEditor: no form, no fields, no theme, no colour pickers —
+   * every colour control dead and the theme swatches blank. Dane hard-refreshed
+   * on that page repeatedly and saw exactly that; every test opened the editor
+   * through Edit or New Form and never met it.
+   */
+  let formEditorReady = false;
   let configFieldRows = [];
   let setupFieldRows = [];
   let fieldConfigDragIndex = null;
@@ -1689,7 +1698,50 @@ ${fieldHtml}
       };
     }
 
+    formEditorReady = true;
     setActivePage('crmFormEditorPage');
+    // The form's id in the address, so a reload reopens THIS form rather than
+    // a bare page. setActivePage writes "#page=…" and drops extra keys, so this
+    // comes after it.
+    if (editingFormId) {
+      try {
+        window.history.replaceState(window.history.state, '', `#page=crmFormEditorPage&crmForm=${encodeURIComponent(editingFormId)}`);
+      } catch (_) { /* the editor works without it; only a reload loses the form */ }
+    }
+  }
+
+  /** Open the editor from the address alone — a reload, a pasted link, Back. */
+  async function openFormEditorFromAddress() {
+    if (!currentConfig) {
+      try {
+        const res = await api('/api/crm/configs');
+        const configs = App.normalizeApiArray(res, 'configs');
+        currentConfig = configs.length ? configs[0] : null;
+      } catch (_) {
+        currentConfig = null;
+      }
+    }
+    if (!currentConfig) {
+      notify('Set up the CRM before editing forms.', true);
+      openPage();
+      return;
+    }
+    const formId = typeof App.readHashParam === 'function' ? App.readHashParam('crmForm') : '';
+    if (!formId) {
+      await openFormEditor(null);
+      return;
+    }
+    try {
+      const res = await api(`/api/crm/forms/${encodeURIComponent(formId)}`);
+      const form = res.form || res.data || null;
+      if (form?.id) {
+        await openFormEditor(form);
+        return;
+      }
+    } catch (_) { /* reported below */ }
+    notify('That form could not be found — it may have been deleted.', true);
+    activeCrmTab = 'forms';
+    openPage();
   }
 
   async function saveForm() {
@@ -1922,7 +1974,12 @@ ${fieldHtml}
       pagePrefixes: ['crm'],
     },
     onPageActivated(targetPageId) {
+      if (targetPageId === 'crmFormEditorPage') {
+        if (!formEditorReady) return openFormEditorFromAddress();
+        return undefined;
+      }
       if (targetPageId === 'crmPage') {
+        formEditorReady = false;
         if (!currentConfig) {
           loadPage();
           return;
