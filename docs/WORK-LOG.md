@@ -1,4 +1,4 @@
-## 2026-09-07 — A part of the video catalog accepted junk and quietly stored something else (#646)
+## 2026-09-13 — A part of the video catalog accepted junk and quietly stored something else (#646)
 
 The video catalog is the part of the Studio that keeps track of recording
 sessions and the media files in them. Some of its fields only accept a short
@@ -33,6 +33,24 @@ Every one of these fixes was undone on purpose afterwards, to watch the test
 written for it fail — seven of them, seven failures, then put back. A test that
 cannot fail is not a test, and this part of the code has been sent back for that
 before.
+
+The review pass sent this back once, and it was right to. One of the fixes above
+— the one about dates being handed to a part of the language that reads them
+differently on different computers — came with a note promising it now *always*
+hands over a date written the one agreed way. It did not, in two cases, and both
+of them were introduced by that very fix: a date ending in a lowercase `z`
+instead of a capital one, and a date whose fraction-of-a-second was not exactly
+three digits long. Both are perfectly ordinary — the second is what the video
+tools and the database themselves emit — and both went straight to the part of
+the language the note said they never would.
+
+Worse, the test written to guard that promise was checking something looser than
+the promise, so it stayed green on both. It has been tightened to spell the
+agreed format exactly, the two cases are in its list, and both were undone on
+purpose and watched to fail. Nothing a person can see changes; the value stored
+is the same either way on the Macs here. What changes is that the sentence in
+the code is now true, which is the only reason anyone would trust it later.
+
 ## 2026-09-08 — Alarms stopped being thrown away when the chat room refuses them (#666)
 
 The system has one way of telling anyone that something has broken: it posts a

@@ -168,8 +168,18 @@ test('a zone that is absent or Z is still read as UTC', () => {
  * an engine that reads the fallback differently.
  */
 test('every date-time is normalized into the format the spec defines', () => {
-  // The format: YYYY-MM-DDTHH:mm[:ss[.sss]] then Z or ±HH:mm — colon required.
-  const SPEC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|z|[+-]\d{2}:\d{2})$/;
+  /*
+   * The format: YYYY-MM-DDTHH:mm[:ss[.sss]] then Z or ±HH:mm — colon required,
+   * the designator uppercase, the fraction exactly three digits.
+   *
+   * This regex used to admit `z` and `(\.\d{1,9})`, which is looser than both
+   * its own name and its failure message, and looser than the docstring on the
+   * function it guards. It therefore passed on two strings that DO reach the
+   * implementation-defined fallback parser — the exact defect the test exists
+   * to catch, inside the test. Whatever this pattern spells is what "the spec
+   * format" means to this repo, so it spells the spec and nothing wider.
+   */
+  const SPEC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{3})?)?(Z|[+-]\d{2}:\d{2})$/;
   for (const input of [
     '2026-08-26T12:34:56-0500',   // colon-less offset — valid ISO, not valid here
     '2026-08-26T12:34+0530',
@@ -178,6 +188,12 @@ test('every date-time is normalized into the format the spec defines', () => {
     '2026-08-26T12:34:56',        // no zone at all
     '2026-08-26T12:34:56.789Z',
     '2026-08-26T12:34:56+05:00',
+    '2026-08-26T12:34:56z',       // lowercase designator — valid ISO, not valid here
+    '2026-08-26 12:34:56z',
+    '2026-08-26T12:34z',
+    '2026-08-26T12:34:56.7Z',     // a fraction that is not three digits wide
+    '2026-08-26T12:34:56.123456789Z',
+    '2026-08-26T12:34:56.7-0500', // every normalisation at once
   ]) {
     const out = toSpecDateTime(input, false);
     assert.match(out, SPEC,
@@ -187,4 +203,29 @@ test('every date-time is normalized into the format the spec defines', () => {
 
   // A date with no time is already UTC per the language spec and is left alone.
   assert.equal(toSpecDateTime('2026-08-26', true), '2026-08-26');
+});
+
+/**
+ * The fraction normalisation is the one that rewrites DIGITS rather than
+ * punctuation, so it is the one that could move a stored instant. It cannot:
+ * the spec'd parser reads exactly three fractional digits and discards the
+ * rest — truncation, not rounding — so padding `.7` to `.700` and cutting
+ * `.999999` to `.999` both land on the millisecond V8 was already reading.
+ *
+ * Asserted rather than reasoned about, because "this normalisation is
+ * lossless" is a claim about the engine, and the whole point of the function
+ * is that claims about the engine get checked.
+ */
+test('normalizing the fraction to three digits does not move the instant', () => {
+  for (const input of [
+    '2026-08-26T12:34:56.7Z',
+    '2026-08-26T12:34:56.12Z',
+    '2026-08-26T12:34:56.123456789Z',
+    '2026-08-26T12:34:56.999999Z',
+    '2026-08-26T12:34:56.000001Z',
+    '2026-08-26T12:34:56.789999-05:00',
+  ]) {
+    assert.equal(new Date(toSpecDateTime(input, false)).toISOString(), new Date(input).toISOString(),
+      `normalizing ${input} changed the instant it denotes`);
+  }
 });
