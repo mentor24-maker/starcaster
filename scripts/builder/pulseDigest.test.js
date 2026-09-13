@@ -548,3 +548,21 @@ test('a verified record says so, with nothing to report', () => {
   const v = digest.digestWriteVerdict({ sent, readBack: sent });
   assert.deepEqual(v, { ok: true, verified: true, why: '' });
 });
+
+test('a run with hundreds of findings still renders a post ClickUp will accept (task 86bbzwxrw)', () => {
+  // 2026-09-13: 382 findings rendered a post over ClickUp's 40,000-character
+  // limit; the post and its fallback were both refused and the pulse exited 1
+  // every hour without beating.
+  const long = 'a pass started 2026-09-02 22:06:13 and never printed an END banner 4.7d later — it hung or was killed '.repeat(3);
+  const items = [
+    ...Array.from({ length: 380 }, (_, i) => ({ severity: 'alarm', key: `a${i}`, detail: `${i} ${long}` })),
+    ...Array.from({ length: 30 }, (_, i) => ({ severity: 'cannot-tell', key: `c${i}`, detail: `${i} could not read` })),
+  ];
+  const post = digest.renderPulsePost({ items, node: 'mac-mini', now: 0, everyMs: 6 * 3600000, digestUrl: 'https://app.clickup.com/t/86bbt7f0j' });
+  assert.ok(post.length < 10000, `the post is ${post.length} characters`);
+  assert.match(post, /\*\*380 alarms\*\*/, 'the headline still counts every finding');
+  assert.match(post, /…and 368 more — every one is on https:\/\/app\.clickup\.com\/t\/86bbt7f0j/);
+  assert.match(post, /…and 18 more/);
+  const few = digest.renderPulsePost({ items: items.slice(0, 3), node: 'mac-mini', now: 0, everyMs: 6 * 3600000 });
+  assert.doesNotMatch(few, /more — every one/, 'a short run lists everything');
+});

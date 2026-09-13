@@ -56,6 +56,7 @@ import path from 'node:path';
 import os from 'node:os';
 import loopNoteLib from './builder/loopNote.js';
 const { loopNote, heartbeatNote } = loopNoteLib;
+import loopNoteComment from './builder/loopNoteComment.js';
 import { spawnSync } from 'node:child_process';
 import clickupLib from './lib/clickup.cjs';
 const { clickupFetch, ledger: clickupLedger, callerKind } = clickupLib;
@@ -67,6 +68,8 @@ import buildStart from './builder/buildStart.js';
 import operatorCard from './builder/operatorCard.js';
 import machineComment from './builder/machineComment.js';
 import nodeRoles from '../lib/nodeRoles.js';
+import busFallback from '../lib/busFallback.js';
+import loopNoticeboards from '../lib/loopNoticeboards.js';
 import taskRepo from './builder/taskRepo.js';
 import loopInterval from './builder/loopInterval.js';
 import branchCatchUp from './builder/branchCatchUp.js';
@@ -387,6 +390,23 @@ function yieldedResult(yielded) {
 }
 
 /**
+ * Did this result stop at the ClickUp reserve rather than fail?
+ *
+ * A yield travels in the ordinary `{res}` shape with `res.ok === false`, which
+ * is indistinguishable from a refusal to any caller that only asks `ok`. Every
+ * place that branches on failure and means something different by "the server
+ * said no" has to ask this first. Written once because it was got wrong twice
+ * on the same call path: at the chat POST (review round 1) and then one level
+ * down inside the fallback (review round 2).
+ *
+ * Accepts both `call()` results and `fetchAllTasks`'s non-fatal return, which
+ * carries the same `res` and `yielded` fields.
+ */
+function stoppedAtReserve(out) {
+  return Boolean(out && (out.yielded || (out.res && out.res.status === YIELDED_STATUS)));
+}
+
+/**
  * Exit 7 means "I stopped on purpose at the ClickUp reserve", and it is not
  * 1. A scheduled job that yields has NOT done its work — so it must not exit 0
  * (the ticket's Non-goal) — but it also has not failed, and reporting it as a
@@ -633,7 +653,11 @@ async function fetchAllTasks(list, { includeClosed = false, fatal = true } = {})
   for (let page = 0; page < 50; page++) {
     const out = await call('GET', `/api/v2/list/${list}/task?archived=false${closedParam}&page=${page}`);
     if (!out.res.ok) {
-      if (!fatal) return { tasks: null, res: out.res, failed: `HTTP ${out.res.status}` };
+      // `yielded` travels with the failure so a non-fatal caller can tell a
+      // deliberate stop at the ClickUp reserve from a refusal. Without it the
+      // only signal was `res.status`, and the shape `die()` needs to print the
+      // reserve's own words was lost (task 86bbwab1n, review round 2).
+      if (!fatal) return { tasks: null, res: out.res, json: null, text: out.text, yielded: out.yielded, failed: `HTTP ${out.res.status}` };
       die('list tasks', out);
     }
     // A 200 carrying a body that is not the expected JSON — a proxy's error
@@ -668,10 +692,34 @@ function assigneeNames(t) {
  * NAME, like stampLoopNote, so no field id is hardcoded.
  */
 function loopNoteOf(t) {
-  const f = (t.custom_fields || []).find(
-    (x) => String(x.name || '').trim().toLowerCase() === 'loop note'
-  );
-  return String(f?.value ?? '').trim();
+  // The newest note COMMENT when one was read, else the field (task
+  // 86bbzww8m): on 2026-09-08 the Free plan ran out of custom-field usages and
+  // the field has refused every write since. scripts/builder/loopNoteComment.js.
+  return loopNoteComment.resolveLoopNote(t);
+}
+
+/** A ticket's comments, for the note readers. Throws on a failed read so the
+ *  caller counts it rather than reading "no note" into a read that never happened. */
+async function noteComments(taskId) {
+  const out = await call('GET', `/api/v2/task/${taskId}/comment`);
+  if (!out.res.ok) throw new Error(`HTTP ${out.res.status}`);
+  return out.json?.comments || [];
+}
+
+/**
+ * Post a Loop note as a comment and prove it stuck. Returns { ok, why }.
+ * The comment is the note's record now; the field is attempted as well, for
+ * the board column, but no longer decides anything.
+ */
+async function writeNoteComment(noteTaskId, text) {
+  let body;
+  try { body = loopNoteComment.renderNoteComment(text); } catch (e) { return { ok: false, why: e.message }; }
+  const out = await call('POST', `/api/v2/task/${noteTaskId}/comment`, { comment_text: body, notify_all: false });
+  if (!out.res.ok) return { ok: false, why: `HTTP ${out.res.status}` };
+  const back = await call('GET', `/api/v2/task/${noteTaskId}/comment`);
+  const stuck = back.res.ok && (back.json?.comments || []).some(
+    (c) => String(c.id) === String(out.json?.id) || String(c.comment_text || '').trim() === body);
+  return stuck ? { ok: true, why: '' } : { ok: false, why: 'posted, but not found when read back' };
 }
 
 /** Run `gh` and report honestly. gh carries its OWN GitHub credentials; no
@@ -785,6 +833,7 @@ function capProbe({ repo } = {}) {
       // extra call, and it is the SAME map rather than a parallel one: two
       // inputs built at one call site is how the 2026-08-31 disagreement
       // happened (see probeCap).
+      await loopNoteComment.hydrateLoopNotes(listed.tasks, noteComments);
       const byId = Object.create(null);
       for (const t of listed.tasks) {
         byId[String(t.id)] = {
@@ -811,6 +860,177 @@ async function postToBus(channel, content, { simulate } = {}) {
     type: 'message', content, content_format: 'text/md',
   });
   return { ok: out.res.ok, why: out.res.ok ? '' : `HTTP ${out.res.status}` };
+}
+
+/**
+ * Put an alarm the party line refused somewhere durable, and PROVE it landed.
+ *
+ * The destination is a standing ticket found by its NAME (task 86bbwab1n).
+ * Not an id in an env var or a constant: an id rots the moment somebody
+ * deletes the ticket, and a destination that cannot be resolved fails in
+ * precisely the way this fallback exists to prevent. The roll call
+ * (`lib/nodeHeartbeat.js`) and the pulse digest (`lib/pulseDigest.js`) both
+ * make the same choice; `CLICKUP_ALARM_TASK` is a shortcut, never the
+ * definition, so a shortcut pointing at a deleted task falls through to the
+ * name rather than reporting the destination gone.
+ *
+ * Never throws. Returns { ok, url, why } — `ok` is the caller's whole verdict,
+ * because a fallback reported as delivered when it was not would silence the
+ * alarm's suppression window on the strength of a comment nobody received.
+ */
+/**
+ * Post to the party line, and when it refuses, save the message to the
+ * "Undelivered alarms" ticket instead (task 86bbzwxrw). Returns
+ * { ok, via: 'chat' | 'ticket' | '', why }.
+ *
+ * The relay's daily digest and its latch reminder posted with `postToBus`
+ * alone, so while the party line refused every post (from 2026-09-07) each
+ * pass ended "could not fully verify" and exited 1 — the relay never beat
+ * again and read QUIET for five days while doing all its real work. A message
+ * verifiably saved on the fallback ticket HAS been delivered somewhere a person
+ * reads, so it counts; only a failure of both is a failure.
+ */
+async function postOrSaveToBus(channel, text) {
+  const bus = await postToBus(channel, text);
+  if (bus && bus.ok) return { ok: true, via: 'chat', why: '' };
+  const why = String(bus?.why || 'the party line refused it');
+  const saved = await saveUndeliveredAlarm({ text, channel, why });
+  if (saved.ok) return { ok: true, via: 'ticket', why, url: saved.url };
+  return { ok: false, via: '', why: `${why}; the "${busFallback.FALLBACK_TASK_NAME}" ticket refused it too (${saved.why})` };
+}
+
+async function saveUndeliveredAlarm({ text, channel, why }) {
+  // A RESERVE STOP IS NOT A FAILED SAVE (task 86bbwab1n, review round 2).
+  // Every `call()` below can come back yielded — `res.ok === false` with the
+  // reserve's own status — and the caller's failure branch says "Nothing was
+  // delivered. This alarm is lost unless the caller retries" and exits 1. That
+  // is a monitor printing a wrong diagnosis about a deliberate, healthy stand-
+  // down, which is the fault this whole ticket was opened about; round 1 fixed
+  // it at the chat POST and this is the same thing one level further down.
+  //
+  // So a yield returns `{ ok: false, stopped: <the yielded result> }`, and the
+  // caller `die()`s on it exactly as it does for the primary POST: the
+  // reserve's own words, exit 7, and `run_bus_relay.sh` reads "I stood down"
+  // rather than "I broke". Nothing is lost by not spending the reserve here —
+  // the next scheduled pass raises the same alarm, and the reserve exists to
+  // leave budget for the sessions Dane is actually in.
+  const stop = (out) => ({ ok: false, stopped: out, why: 'it stopped at the ClickUp reserve' });
+
+  const shortcut = process.env.CLICKUP_ALARM_TASK || '';
+  let task = null;
+
+  if (shortcut) {
+    const got = await call('GET', `/api/v2/task/${shortcut}`);
+    if (stoppedAtReserve(got)) return stop(got);
+    if (got.res.ok && got.json && got.json.id) task = got.json;
+    // A 401 covers both a bad token and a task this token cannot see, deleted
+    // ones included — so fall through to the name rather than conclude.
+  }
+
+  if (!task) {
+    const listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+    if (stoppedAtReserve(listed)) return stop(listed);
+    if (!listed.tasks) return { ok: false, why: `could not read the Loop Queue to find it (${listed.failed || 'no reason given'})` };
+    // OLDEST WINS, not first-paged. If two machines ever raced the create (see
+    // below), `find()` would hand each caller whichever copy its paging turned
+    // up first and the record would go on splitting for good. Choosing by
+    // creation date is an answer every machine reaches independently.
+    const matches = listed.tasks.filter(
+      (t) => String(t.name || '').trim().toLowerCase() === busFallback.FALLBACK_TASK_NAME.toLowerCase(),
+    );
+    task = matches.length
+      ? matches.reduce((a, b) => (Number(a.date_created || 0) <= Number(b.date_created || 0) ? a : b))
+      : null;
+  }
+
+  if (!task) {
+    const status = process.env.CLICKUP_ALARM_TASK_STATUS || busFallback.FALLBACK_TASK_STATUS;
+    const made = await call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
+      name: busFallback.FALLBACK_TASK_NAME,
+      status,
+      markdown_description: busFallback.renderFallbackSeed(),
+    });
+    if (stoppedAtReserve(made)) return stop(made);
+    if (!made.res.ok) {
+      return {
+        ok: false,
+        why: `could not create it (HTTP ${made.res.status} ${String(made.json?.err || made.text || '').slice(0, 160)})`
+          + `. If that names the status, this list has no "${status}" status — set CLICKUP_ALARM_TASK_STATUS`
+          + ' to one it has that no loop claims from.',
+      };
+    }
+    // A 200 IS NOT PROOF OF A PARSED BODY (review round 1, 2026-09-08).
+    // `clickupFetch` returns `json: null` on a 200 whose body is not JSON — a
+    // proxy's error page, a truncated response — and `made.json.id` on that is
+    // a TypeError escaping a function whose contract says it never throws. The
+    // caller would get a stack trace where it was promised "nothing was
+    // delivered", which is the difference between an alarm it knows to retry
+    // and a pass that simply dies. `fetchAllTasks` guards the same shape at
+    // its own page loop, and the comment there says it cost a review round.
+    if (!made.json || !made.json.id) {
+      return { ok: false, why: 'it was created but ClickUp\'s reply was not the expected JSON, so there is no id to comment on' };
+    }
+    task = made.json;
+
+    // TWO MACHINES FALLING BACK IN THE SAME MINUTE (review round 1). Find-or-
+    // create is check-then-act, so the Mini and the MacBook can both miss the
+    // lookup and both create a noticeboard, after which `find()` takes
+    // whichever pages first and the record splits in two. Re-reading the list
+    // and keeping the OLDEST is not a lock and does not pretend to be one —
+    // the create has already happened — but it makes every later comment land
+    // on one ticket, which is the part that matters. A read that fails here
+    // changes nothing: the ticket just made is a perfectly good destination.
+    const again = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+    // Guarded like every other call here even though this read is best-effort:
+    // the reserve gate is sticky within a process, so a yield reaching this
+    // line means the comment post below yields too. Standing down now says so
+    // one call earlier and leaves no ClickUp call in this function that can
+    // return a yield dressed as a refusal.
+    if (stoppedAtReserve(again)) return stop(again);
+    const all = (again.tasks || []).filter(
+      (t) => String(t.name || '').trim().toLowerCase() === busFallback.FALLBACK_TASK_NAME.toLowerCase(),
+    );
+    if (all.length > 1) {
+      const oldest = all.reduce((a, b) => (Number(a.date_created || 0) <= Number(b.date_created || 0) ? a : b));
+      console.error(`Two "${busFallback.FALLBACK_TASK_NAME}" tickets exist — two machines fell back at once.`);
+      console.error(`Using the older one (${oldest.id}); the duplicate can be deleted by hand.`);
+      task = oldest;
+    }
+  }
+
+  const at = new Date().toISOString();
+  const body = busFallback.renderFallbackComment({
+    text, channel, why, node: nodeRoles.thisNode().name, at,
+  });
+  const out = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body, notify_all: false });
+  if (stoppedAtReserve(out)) return stop(out);
+  if (!out.res.ok) return { ok: false, why: `could not comment on it (HTTP ${out.res.status})` };
+
+  // Read it back before calling it delivered. A 200 proves a write happened,
+  // not that this one stuck — and this verdict is what lets the calling job
+  // stamp its suppression window and stay quiet for the next six hours.
+  //
+  // A COMMENT THAT LANDED BUT COULD NOT BE READ BACK RETURNS ok:false, exactly
+  // like one that was never written, and the caller then re-posts on its next
+  // pass. Over a long outage that is a duplicate every pass — roughly 96 of
+  // them across the sixteen hours of 2026-08-23. THAT IS THE PRICE AND IT WAS
+  // CHOSEN ON PURPOSE (review round 2): the alternative is stamping the six-
+  // hour suppression window on an alarm nobody can prove is anywhere, which
+  // silences the monitor for six hours on the strength of an unread 200. A
+  // duplicate is noise; a swallowed alarm is the failure this ticket exists
+  // about. Do not "fix" this into an optimistic pass.
+  const id = out.json && out.json.id;
+  const back = await call('GET', `/api/v2/task/${task.id}/comment`);
+  if (stoppedAtReserve(back)) return stop(back);
+  // `back.json` is null on a 200 that did not parse, and `null.comments` threw
+  // out of a function documented "Never throws" (review round 1, 2026-09-08).
+  // An unreadable body is exactly the case this read-back exists for, so it
+  // reads as "could not confirm" rather than as a crash.
+  const comments = (back.res.ok && back.json && Array.isArray(back.json.comments)) ? back.json.comments : null;
+  const stuck = Boolean(comments && comments.some((c) => String(c.id) === String(id)));
+  if (!stuck) return { ok: false, why: 'the comment was accepted but could not be read back' };
+
+  return { ok: true, url: task.url || `https://app.clickup.com/t/${task.id}` };
 }
 
 /**
@@ -2444,15 +2664,35 @@ function clockAt(ms) {
  * catastrophic inside a pass that still has tickets to get through.
  */
 async function stampLoopNoteSoftly(taskId, text, unchecked) {
+  // The comment first: it is the record every reader prefers (task 86bbzww8m).
+  // Only when it fails does a field failure below leave the note unrecorded.
+  const asComment = await writeNoteComment(taskId, text);
   const before = await call('GET', `/api/v2/task/${taskId}?include_markdown_description=false`);
   const field = before.res.ok && (before.json.custom_fields || []).find(
     (f) => String(f.name || '').trim().toLowerCase() === 'loop note');
+  if (asComment.ok) {
+    if (field) await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text });
+    return;
+  }
   if (!field) {
     unchecked.push(`${taskId}: could not stamp the Loop note (the field was not found) — the queue will not show the auto-merge state`);
     return;
   }
   const out = await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text });
-  if (!out.res.ok) unchecked.push(`${taskId}: the Loop note write failed — the queue will not show the auto-merge state`);
+  if (!out.res.ok) {
+    // Name the cause, not just the failure (task 86bbwab1n). "The write
+    // failed" is the same sentence for a field nobody created and a field the
+    // workspace has run out of usages for, and only one of those is somebody's
+    // to fix. `unchecked` is read by a human; give them the deciding fact.
+    const refusal = busFallback.classifyFieldRefusal({
+      status: out.res.status,
+      body: String(out.json?.err || out.json?.error || out.text || ''),
+    });
+    const why = refusal.kind === 'plan-exhausted'
+      ? 'ClickUp is out of custom-field usages on this plan, so the field exists but refuses every write — this needs Dane, not a retry'
+      : `HTTP ${out.res.status}`;
+    unchecked.push(`${taskId}: the Loop note write failed (${why}) — the queue will not show the auto-merge state`);
+  }
 }
 
 /**
@@ -2740,16 +2980,77 @@ if (cmd === 'whoami') {
   }
 
 } else if (cmd === 'chat') {
+  // THE ONE DOOR EVERY ALARM GOES THROUGH (task 86bbwab1n).
+  //
+  // `scripts/lib/clickup.cjs` -> postBusMessage shells out to exactly this
+  // command, and seven scheduled jobs shell out to that: the heartbeat, the
+  // stale check, the throughput check, the job-failure reporter, the
+  // reconciler, the stale-answer sweep and the checkout-currency check. Every
+  // one of them raises its alarm on the party line and NOWHERE ELSE.
+  //
+  // So the fallback lives here rather than in each caller. That is not merely
+  // less code: each of those callers already treats "this command threw" as
+  // "the alarm was not delivered, do not stamp the suppression window, try
+  // again next pass", and "it returned" as delivered. Putting the fallback
+  // behind that contract fixes all seven without touching one line of their
+  // throttle logic — which is the logic it would be easiest to get wrong.
+  //
+  // `--no-fallback` is for a caller that keeps a durable record of its own and
+  // wants the raw verdict instead.
   const channel = arg('channel'), bodyFile = arg('body-file');
   if (!channel || !bodyFile) usage();
+  const body = readBody(bodyFile);
   const out = await call('POST', `/api/v3/workspaces/${WORKSPACE}/chat/channels/${channel}/messages`, {
     type: 'message',
-    content: readBody(bodyFile),
+    content: body,
     content_format: 'text/md',
   });
-  if (!out.res.ok) die('send chat message', out);
-  console.log(`\nPosted to channel ${channel}. Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
-  reportLimits(out.res);
+  if (out.res.ok) {
+    console.log(`\n${busFallback.renderRouteLine({ via: 'chat', channel })} Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
+    reportLimits(out.res);
+  } else if (stoppedAtReserve(out)) {
+    // A YIELD IS NOT A REFUSAL, AND IT MUST NOT ENTER THE FALLBACK (review
+    // round 1, 2026-09-08). Reaching the ClickUp reserve is this file stopping
+    // on purpose, and `die` has carried its own words and its own exit code
+    // for it since task 86bbugd8j — exit 7, which `scripts/run_bus_relay.sh`
+    // reads to tell "I stood down" from "I broke".
+    //
+    // A yielded result travels in the ordinary `{res}` shape with
+    // `res.ok === false`, so the fallback branch below swallowed it: its own
+    // calls yielded too, and a deliberate healthy stop printed "Nothing was
+    // delivered. This alarm is lost" and exited 1. That is a monitor reporting
+    // a wrong diagnosis, which is the fault this whole ticket is about.
+    //
+    // Nothing is lost by declining to fall back here. The reserve exists so a
+    // scheduled job leaves budget for the sessions Dane is in; the next
+    // scheduled pass raises the same alarm, and spending the reserve on a
+    // noticeboard write would defeat the point of yielding at all.
+    die('send chat message', out);
+  } else if (flag('no-fallback')) {
+    die('send chat message', out);
+  } else {
+    const why = `HTTP ${out.res.status} ${String(out.json?.err || out.json?.error || out.text || '').slice(0, 200)}`.trim();
+    const saved = await saveUndeliveredAlarm({ text: body, channel, why });
+    if (saved.stopped) {
+      // The bus refused AND the fallback reached the ClickUp reserve. Nothing
+      // was delivered, but this is a stand-down, not a break: exit 7 with the
+      // reserve's own words, so `run_bus_relay.sh` reads it as the yield it is
+      // and the next scheduled pass raises the alarm again. The bus failure is
+      // printed first so the reader knows what was being saved when it stopped.
+      console.error(`\nsend chat message FAILED — ${why}`);
+      console.error(`The "${busFallback.FALLBACK_TASK_NAME}" fallback did not run to the end either:`);
+      die('saving the alarm to the fallback ticket', saved.stopped);
+    }
+    if (!saved.ok) {
+      // BOTH surfaces refused, so nothing was delivered and the caller must
+      // not stamp this as announced. Exiting non-zero is what tells it that.
+      console.error(`\nsend chat message FAILED — ${why}`);
+      console.error(`and the "${busFallback.FALLBACK_TASK_NAME}" fallback ALSO failed — ${saved.why}`);
+      console.error('Nothing was delivered. This alarm is lost unless the caller retries.');
+      process.exit(1);
+    }
+    console.log(busFallback.renderRouteLine({ via: 'ticket', channel, why, url: saved.url }));
+  }
 
 } else if (cmd === 'pass-reconcile') {
   // THE FIRST THING A LOOP-BUILD PASS DOES (2026-09-02, task 86bbtmbpc).
@@ -3092,6 +3393,8 @@ if (cmd === 'whoami') {
         - (PRIORITY_RANK[b.priority?.priority] ?? loopStatuses.PRIORITY_UNKNOWN)
       || Number(a.date_created) - Number(b.date_created));
   }
+  const notes = await loopNoteComment.hydrateLoopNotes(wanted, noteComments);
+  if (notes.failed) console.error(`  (${notes.failed} in-flight ticket(s) had their Loop note comments unreadable — their note column may be stale)`);
   for (const t of wanted) {
     const created = new Date(Number(t.date_created)).toISOString().slice(0, 10);
     // The repo a task declares (Charter: a task declares its repo). A loop
@@ -3286,7 +3589,15 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
 
-  const { tasks } = await fetchAllTasks(list, { includeClosed: true });
+  // THE NOTICEBOARDS ARE NOT WORK, AND THIS READER COUNTED THEM (task
+  // 86bbwab1n, review round 2). `lib/loopThroughput.js` was taught to exclude
+  // them; this command was not, and `scripts/weekly_report.mjs` feeds off
+  // exactly these three numbers — so the weekly report would have credited
+  // "Undelivered alarms", created inside its own window, as a ticket that
+  // shipped, and inflated `total` by one per standing ticket. Same filter,
+  // same registry, applied before anything is derived from the array.
+  const { tasks: allTasks } = await fetchAllTasks(list, { includeClosed: true });
+  const tasks = loopNoticeboards.workTickets(allTasks);
   const byStatus = {};
   for (const t of tasks) {
     const key = (t.status?.status ?? 'unknown').toLowerCase();
@@ -3307,6 +3618,9 @@ if (cmd === 'whoami') {
   const out = await call('GET', `/api/v2/task/${task}?include_markdown_description=true`);
   if (!out.res.ok) die('get task', out);
   const t = out.json;
+  try {
+    t.loop_note_comment = loopNoteComment.latestNote(await noteComments(task));
+  } catch { /* unreadable comments: the field's note is shown, as before */ }
   console.log(`id:       ${t.id}`);
   console.log(`name:     ${t.name}`);
   console.log(`status:   ${t.status?.status ?? '?'}`);
@@ -5174,7 +5488,7 @@ if (cmd === 'whoami') {
       const line = `[CC-starcaster bus-relay] AUTO-MERGE IS STILL LATCHED OFF — ${nag.why}. ${selfDisable.why}${latchItemLines(selfDisable)}\n\nNothing will auto-merge until a human says "resume auto-merging". Your own merge commands still work.`;
       if (dryRun) console.error(`  DRY RUN — would post to the bus: ${line}`);
       else {
-        const posted = await postToBus(channel, line);
+        const posted = await postOrSaveToBus(channel, line);
         // Only a delivered nag resets the clock. Stamping it on a failed post
         // would buy silence for a day on the strength of a message nobody got.
         if (posted && posted.ok) ledger = ledgerAfterLatchNag(ledger, now);
@@ -5386,7 +5700,7 @@ if (cmd === 'whoami') {
         sinceLabel: ledger.lastDigestAt > 0 ? `the last digest (${clockAt(since)})` : 'the last 24 hours',
         clockLabel: clockAt(now),
       });
-      const bus = await postToBus(channel, body);
+      const bus = await postOrSaveToBus(channel, body);
       if (bus.ok) ledger = ledgerAfterDigest(ledger, now);
       else reportBusFailure({ cosmetic: false, unchecked, busSkipped, line: `the daily auto-merge digest could not be posted (${bus.why}) — it will be retried next pass` });
     }
@@ -5544,7 +5858,7 @@ if (cmd === 'whoami') {
     console.error(`\nloop-note: ${e.message}`);
     process.exit(2);
   }
-  await stampLoopNote(task, text);
+  await stampLoopNote(task, text, { comment: true });
 
 } else if (cmd === 'loop-heartbeat') {
   // One write per loop pass, onto the pinned "Loop heartbeat" ticket, so the
@@ -5748,7 +6062,26 @@ function nowDateClock() {
  * Resolves the field id by NAME from the task's own custom_fields, so no id is
  * hardcoded. Missing field → CANNOT STAMP, loud, exit 1 (never a silent pass).
  */
-async function stampLoopNote(taskId, text) {
+async function stampLoopNote(taskId, text, { comment = false } = {}) {
+  // `comment` (task 86bbzww8m): a transition note is written as a comment,
+  // which the Free plan never refuses, and every reader prefers it. The
+  // heartbeat ticket keeps the field only — a comment per pass would bury it.
+  if (comment) {
+    const asComment = await writeNoteComment(taskId, text);
+    if (asComment.ok) {
+      const before = await call('GET', `/api/v2/task/${taskId}?include_markdown_description=false`);
+      const field = before.res.ok && (before.json.custom_fields || []).find(
+        (f) => String(f.name || '').trim().toLowerCase() === 'loop note');
+      const fieldOut = field ? await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text }) : null;
+      const fieldSay = !field ? 'no Loop note field on this list'
+        : fieldOut.res.ok ? 'the field was updated too'
+          : 'the field refused the write, which no longer matters — readers use the comment';
+      console.log(`Loop note on ${taskId}: ${text} (written as a comment and read back; ${fieldSay}).`);
+      reportLimits(fieldOut?.res);
+      return;
+    }
+    console.error(`\nThe Loop note comment could not be written (${asComment.why}) — trying the field.`);
+  }
   const before = await call('GET', `/api/v2/task/${taskId}?include_markdown_description=false`);
   if (!before.res.ok) die('read task for loop-note', before);
   const field = (before.json.custom_fields || []).find(
@@ -5761,7 +6094,28 @@ async function stampLoopNote(taskId, text) {
     process.exit(1);
   }
   const out = await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text });
-  if (!out.res.ok) die('set loop-note field', out);
+  if (!out.res.ok) {
+    // TWO CAUSES THAT USED TO PRINT THE SAME THING (task 86bbwab1n).
+    //
+    // The field being ABSENT is benign and the skills say so: the pass carries
+    // on, only the note is missing. The field EXISTING and refusing writes is
+    // the opposite — the pass's claim is invisible and another pass may take
+    // the ticket. On 2026-09-08 the workspace ran out of custom-field usages
+    // and every stamp began failing with `Custom field usages exceeded for
+    // your plan`, which read exactly like "not set up yet" to anyone following
+    // the skill. busFallback.classifyFieldRefusal owns the distinction so the
+    // words can be tested without a network.
+    const refusal = busFallback.classifyFieldRefusal({
+      status: out.res.status,
+      body: String(out.json?.err || out.json?.error || out.text || ''),
+    });
+    if (refusal.kind === 'plan-exhausted') {
+      console.error(`\nset loop-note field FAILED — HTTP ${out.res.status}`);
+      for (const line of refusal.lines) console.error(line);
+      process.exit(1);
+    }
+    die('set loop-note field', out);
+  }
 
   // Verify from a fresh read — a 200 is not proof the value stuck.
   const after = await call('GET', `/api/v2/task/${taskId}`);

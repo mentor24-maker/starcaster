@@ -100,7 +100,13 @@ while true; do
 
   echo "" >> "$LOG"
   echo "===== $(date "+%Y-%m-%d %H:%M:%S") START /$SKILL =====" >> "$LOG"
-  "$CLAUDE_BIN" -p "/$SKILL" \
+  # A time limit, because a pass that freezes otherwise blocks this lane
+  # forever: on 2026-09-12 one sat idle for eleven hours and nothing was built
+  # overnight (task 86bbzwuz6). A pass takes 10-15 minutes; two hours is dead.
+  # Exit 124 means it was stopped; the next pass's pass-reconcile hands back
+  # any ticket it had claimed.
+  "$REPO/scripts/run_with_time_limit.sh" "${LOOP_PASS_LIMIT_SECONDS:-7200}" -- \
+    "$CLAUDE_BIN" -p "/$SKILL" \
     --allowedTools Bash Edit Write Read Glob Grep Task TodoWrite WebFetch \
     >> "$LOG" 2>&1
   CODE=$?

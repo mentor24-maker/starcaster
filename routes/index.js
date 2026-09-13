@@ -67,6 +67,7 @@ const crm         = require('./crm');
 const blog        = require('./blog');
 const events      = require('./events');
 const eventCategories = require('./eventCategories');
+const eventHarvest = require('./eventHarvest');
 const admin       = require('./admin');
 const associations = require('./associations');
 const siteImport  = require('./siteImport');
@@ -120,6 +121,7 @@ const ROUTE_MODULES = [
   blog,
   events,
   eventCategories,
+  eventHarvest,
   publicSite,
 ];
 

@@ -56,6 +56,13 @@ assert.equal(isPublicTenantContentReadRoute('/api/event-categories/ecat_1', 'PUT
 assert.equal(isPublicTenantContentReadRoute('/api/event-categories/ecat_1', 'DELETE', categoriesReq), false);
 assert.equal(acceptsProjectAdminSession('/api/event-categories', { isPublicCrmRoute: false, method: 'POST' }), true);
 
+// Schedule harvest: a club admin session IS resolved (the Event Manager only
+// works on the club page), and routes/eventHarvest.js decides staff from it.
+// It must never be a PUBLIC read — that would bill Alphire for anonymous calls.
+assert.equal(acceptsProjectAdminSession('/api/event-harvest/extract', { isPublicCrmRoute: false, method: 'POST' }), true);
+assert.equal(isPublicTenantContentReadRoute('/api/event-harvest/extract', 'POST', {}), false);
+assert.equal(isPublicTenantContentReadRoute('/api/event-harvest/available', 'GET', {}), false);
+
 assert.equal(isPublicTenantContentReadRoute('/api/builder/themes', 'GET', {}), true);
 assert.equal(isPublicTenantContentReadRoute('/api/community-assets', 'GET', {}), true);
 

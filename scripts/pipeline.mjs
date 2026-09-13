@@ -48,7 +48,7 @@ import clickupLib from './lib/clickup.cjs';
 const { clickupFetch, getBudget } = clickupLib;
 
 const {
-  SWITCH_TASK_NAME, STRANDED_AFTER_MS,
+  SWITCH_TASK_NAME, SWITCH_SEED_DESCRIPTION, STRANDED_AFTER_MS,
   pauseRecord, resumeRecord, readTrail, pauseVerdict,
   inFlight, describeTickets, strandedExplanation, drainReport,
   resumedMessage, sweptSummary, sweepExitCode, resumeAuthorization, numericOption,
@@ -506,12 +506,12 @@ if (cmd === 'check') {
     const made = await tryCall('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
       name: SWITCH_TASK_NAME,
       status: SWITCH_STATUS,
-      description:
-        'The pipeline pause switch. Do not build this, do not close it, do not delete it.\n\n' +
-        'Its COMMENTS are the flag: the newest `[pipeline] PAUSED` / `[pipeline] RUNNING` record is the state '
-        + 'of the whole build pipeline, and every loop, the bus relay and every hand-driven session asks it '
-        + 'before claiming a ticket or merging anything.\n\n'
-        + 'Run `npm run pipeline -- status` to read it in plain English. Only the operator resumes.',
+      // The seed text lives beside the name it seeds, in pipelinePause.js, so
+      // the noticeboard-registry test can find this standing ticket by its own
+      // words. It could not while the sentence was written inline here — this
+      // file is an ESM script that runs on import, so nothing can require it
+      // (task 86bbwab1n, review round 2).
+      description: SWITCH_SEED_DESCRIPTION,
     });
     if (!made.ok) {
       console.error(`\nCould not create the switch ticket (${whyOf(made)}).`);
