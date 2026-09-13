@@ -1,3 +1,120 @@
+## 2026-09-08 — Video can now play behind a single column, not just a whole row (#665)
+
+A row in the Builder can be split into columns. A background video could only
+go behind a whole row or a whole page, so "footage behind just this half"
+was not something you could ask for — you had to fake it by splitting the
+content into two rows and hoping the seam did not show.
+
+Each column can now carry its own video. One column plays a clip while the
+column beside it stays completely plain, with a clean edge between them and no
+footage spilling across the gap. It is the same Video setting you already know
+from the row background, offered on the cell — nothing new to learn.
+
+Under the hood it is the same single piece of video machinery the row and page
+backgrounds already use, rather than a second copy written for cells. That
+matters for the things nobody sees until they matter: the clip still pauses
+when it scrolls off the screen, still gives way to a still picture for people
+who have asked their computer to reduce motion, and still falls back to the
+poster image on phones instead of spending someone's mobile data on decoration.
+All of that works per column now because it was never rewritten.
+
+One thing worth knowing before reaching for it: a row of four video cells is
+noticeably rough. A background clip is drawn twice so it can dissolve smoothly
+at the loop point, so four video columns means eight videos playing at once.
+Two or three is comfortable; four is not, and that is noted rather than fixed.
+
+Review caught one thing before any of this went out: choosing Video on a column
+made that column's own settings panel go crooked. The fourteen video settings
+arrived carrying their own alignment, so they sat on a different edge from the
+Opacity and Border boxes above and below them — a staggered form, in the middle
+of the panel you were working in. Every box in the group now lines up on one
+edge, and the panel is the same width either way; only where the boxes start
+changed.
+
+Worth recording why it got that far: the automatic layout check had been passing
+because the test page it measures never had a video on a column, so those
+fourteen settings had never once been on screen when the check looked. It has a
+video column now, so this can never again pass by not looking.
+
+A second review pass found two more things, both of them the column panel
+inheriting words and buttons written back when only a whole row could play
+video. The warning about a missing poster picture said "this section will be
+blank" while you were looking at a single column — pointing you at the wrong
+box to go and fix. It now names whatever you are actually standing on: a
+column, a row, or the whole page.
+
+And there was no way to get a video into a column on a site that had never
+uploaded one. The row's panel offers "Choose Video" next to "Upload Video";
+the column's offered only Choose, so picking Video on a column opened an empty
+library with no way to add anything to it — the column already switched over to
+video, with nothing to play. The column panel now has its own Upload button.
+Its own, deliberately, and not the row's borrowed: the row's would have quietly
+repainted the entire row when you asked for one column.
+
+That upload also knows the difference between a film and a photograph. The
+older upload buttons all assume whatever you hand them is a picture, which is
+why uploading a video to a ROW background turns it into an image background and
+throws the clip away — a real fault, filed separately as its own job. The
+column's upload does not do that, and the piece that gets it right is written
+to be shared, so fixing the row is a one-line change when that job is picked up.
+
+A third review pass found the same shape a third time: a column doing less than
+a row does. When you set a ROW to Video, the Builder automatically dims the
+footage slightly — a dark tint laid over the clip, on by default since the end
+of August, because words sitting on moving film are close to unreadable without
+something between them. Setting a COLUMN to Video did not do it. You got bright
+footage with your own text on top and nothing on screen to suggest a tint was
+the thing you were missing; you had to already know the setting existed and go
+and switch it on yourself.
+
+A column now turns its tint on the moment it becomes a video column, exactly as
+a row does, and each column gets its own — putting video in the left column does
+not dim the right one. It only ever switches the tint ON: if you had already
+chosen a colour or a strength for that column, yours is kept untouched, and
+switching the column back off video leaves your tint exactly where it was rather
+than quietly deleting a setting you can see.
+## 2026-09-12 — The last of the panel sweep: the six tenant-admin panels (#670)
+
+This is 15 of 15 — the end of the sweep that started when Dane looked at a
+module editor on 13 August and said the column width varied arbitrarily between
+the Settings fields and the Layout fields. The six panels here are the ones a
+tenant's own back-end is built from: Admin Login, Admin Modules, Admin Nav Link,
+Admin Site Settings, Admin Support Form, Admin Team Users.
+
+Most of the news is that there was almost nothing left to do, and that is a real
+result rather than a shrug. These six are built from a shared description of
+their fields rather than from hand-written layout, so the rules that were rolled
+out in the earlier sweeps — one label width and one field width per column, a
+ceiling no control may exceed — had already reached them without anyone touching
+these files. Measuring them one by one confirmed it: five of the six already
+read as a single rectangle at all three screen widths.
+
+The sixth did not. On Admin Nav Link the "Link URL" row ran 286 pixels past
+every other row in the panel, so six rows stopped short and one stuck out. The
+cause is a nice example of a rule that was right but did not reach far enough.
+That row is not one control, it is two — a dropdown of pages plus a box for
+typing a custom address — and they sit together inside a wrapper. The rule that
+caps how wide a control may get was written to look only one level deep, so it
+never saw the pair inside that wrapper. They grew to 846 pixels, and because a
+column sizes itself to its widest row, that one row then decided the width of
+the whole column. Everything else in the column obediently stopped at the cap
+and therefore finished 286 pixels before the edge the wide row had set.
+
+The fix caps the pair, not the parts — the same answer the rules already give
+when the width rule and the edge rule disagree: bound the block rather than
+stretch the controls. The two controls now share the cap and the panel closes up
+into one rectangle. The other five panels are pixel-for-pixel unchanged, which
+was checked with photographs rather than assumed.
+
+Two things worth knowing for next time. The same defect is sitting on ten more
+panels — the blog, search and event ones — and they belong to sweep tickets that
+are still queued, so each can reach for the same one-line fix. And the automated
+panel checker could not see this one at all: it passed before the fix and after
+it. It measures the slot a control sits in, and the slot was filling the column
+perfectly; what stopped short was the control drawn inside it. That is a gap the
+rules doc already admits to, and it is the reason looking at the screen is still
+part of the job.
+
 ## 2026-09-08 — Module settings panels now line up top to bottom (#667)
 
 Open any module's settings in the Builder and you are really looking at two
