@@ -155,9 +155,16 @@ as a rule first, then gets a checker where one is possible.
   failure.** `grid-template-columns` resolves to used pixel values only for
   an element that generates a box; inside a `display: none` ancestor it
   computes back to the specified value, which the track parser counts as 5
-  against a declared 3 and reports as a drift that has not happened. The
-  check confirms the manager has a box before counting, and records a blind
-  spot (exit 2) when it does not. Not reachable through today's declarers —
+  against a declared 3 and reports as a drift that has not happened. **On
+  the flat shape** the check confirms the manager has a box before counting,
+  and records a blind spot (exit 2) when it does not — whether the manager is
+  hidden by an ancestor or on itself. That cover does **not** extend to the
+  nav and table shapes: a boxless manager of either reads every rect as 0,
+  passes all four comparative assertions trivially, and is reported as
+  measured. Confirmed by hiding the Navigation manager — exit 0, still
+  counted. Said here rather than left to be rediscovered, because a green run
+  over a nav or table manager nobody could see is worth nothing. Not
+  reachable through today's declarers —
   a collapsed module card unmounts its editor rather than hiding it — so
   this is a guard against a future hidden surface, said out loud so a green
   run over it is never counted as evidence.

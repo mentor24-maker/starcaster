@@ -97,6 +97,32 @@ fault that did not exist; it now reports that it could not take a reading, which
 is the honest answer. Both were broken on purpose and watched, in both
 directions.
 
+Review sent it back a third time, and it found the same shape of fault one
+level up. The checker now had a rule saying "this grid must have a row of
+titles across the top" — the whole point of a panel opting in. But it worked
+out which row was the titles by taking whichever row came first. When the
+titles are there, that is them. When they are NOT there, the first row is the
+first trail item, and the checker silently treated that item as the titles. So
+the one rule it exists to enforce could never fire: there was always a title
+row, even when there wasn't. Deleting the three titles from the panel and
+running it proved it — a clean pass, and a count quietly reporting two rows
+where three items were on screen. It now finds the title row by the mark the
+panel puts on it rather than by position, so a panel with no titles fails and
+says so. Confirmed both ways: the old version passes that broken panel green,
+the new one fails it at all three screen widths, and with the titles back the
+count reads three rows instead of two.
+
+Two smaller repairs went with that one. A grid hidden on screen was already
+handled when something above it was doing the hiding, but not when the grid was
+hidden directly — in that case the checker fell through to a different branch
+and told you to go and add test content, which is a confident instruction based
+on a measurement it never took. It now reports that it could not take a reading
+either way. And the message that names the culprit row could print "item NaN" —
+literally the word NaN, computer for "not a number" — for any panel that labels
+its rows with something other than a plain count, losing the single detail that
+message exists to give. It now quotes the label back. Both broken on purpose
+and watched, each against the old version to confirm the fault was real.
+
 One thing found along the way is deliberately NOT fixed here: eleven panels
 leave a wide empty strip down their right-hand side, always the same 286 pixels.
 It is caused by the shared frame every panel sits in rather than by any one

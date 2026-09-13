@@ -1126,8 +1126,30 @@ function measureColumnGrids(page) {
       // manager that LOST its header band still has `.builder-nav-items`, so
       // it stays a nav manager and keeps failing with "no header band" rather
       // than being quietly re-read as a flat grid.
+      //
+      // `display` is readable only on an element that GENERATES a box: with
+      // `display: none` on the manager itself it computes to `none`, never
+      // `grid`. Taking the shape from it while boxless dropped a hidden flat
+      // grid into the nav branch below, which then reports "rendered no rows
+      // - nothing was measured. Seed real content for this module in
+      // scripts/ui/seed_fixture.mjs" - a confident instruction to go fix a
+      // fixture, about a reading that was never taken (review round 3, task
+      // 86bbjt1b6). The ancestor-hidden case reached the CANNOT TELL guard
+      // below because the ancestor's `none` does not reach the manager's own
+      // computed `display`; the manager hidden ON ITSELF did not, and it is
+      // the same class of wrong verdict the guard was written against.
+      //
+      // So ask whether there is a box FIRST, and when there is none, let a
+      // non-table non-nav manager be read as the flat shape its markup says
+      // it is. Nothing is measured either way - the guard inside the branch
+      // turns it into a blind spot. The two other shapes are decided by
+      // markup (`tagName`, a `querySelector`), both of which read correctly
+      // on a hidden element, so their behaviour is unchanged here; a boxless
+      // nav or table manager still goes green, which is pre-existing and
+      // named in docs/UI_RULES.md rather than fixed under this ticket.
+      const hasBox = m.getClientRects().length > 0;
       const isFlat = !isTable && !navItems && !navHeader
-        && getComputedStyle(m).display.includes('grid');
+        && (!hasBox || getComputedStyle(m).display.includes('grid'));
       const header = isTable
         ? m.querySelector(':scope > thead > tr')
         : navHeader;
@@ -1237,7 +1259,7 @@ function measureColumnGrids(page) {
          * live bug — said out loud so a green run over it is never counted as
          * evidence of anything.
          */
-        if (!m.getClientRects().length) {
+        if (!hasBox) {
           return { index, name, declared, shape: 'boxless', header: null, rows: [] };
         }
         const lines = flatLines();
@@ -1291,8 +1313,29 @@ function measureColumnGrids(page) {
               .filter(Boolean).length;
           })(),
           trackSource: getComputedStyle(m).gridTemplateColumns.trim(),
-          header: lines[0] || null,
-          rows: lines.slice(1)
+          /*
+           * THE HEADER IS THE GROUP THAT SAYS IT IS THE HEADER, NOT THE FIRST
+           * ONE (review round 3, task 86bbjt1b6).
+           *
+           * `lines` is the declared groups in first-appearance order, so
+           * `lines[0]` is the header band when one exists - and ITEM 0 when
+           * one does not. That silently promoted the first trail item into
+           * the header's role, which made the "declares data-lattice-columns
+           * but has no header band to title the columns" failure below
+           * unreachable on this shape: there was always a header, so the one
+           * thing `data-lattice-columns` exists to assert could not fire.
+           * Broken on purpose and watched: deleting the three
+           * `builder-item-grid-header` spans from the crumbs grid gave exit
+           * 0, and reported "2 row(s)" where three items render, because one
+           * of them was being counted as the titles.
+           *
+           * Picking it by key also makes `rows` mean what it says. A grid
+           * that renders ONLY a header band now has no rows and fails on the
+           * "rendered no rows" message above, which is the true thing to say
+           * about it.
+           */
+          header: lines.find((l) => l.key === 'header') || null,
+          rows: lines.filter((l) => l.key !== 'header')
         };
       }
       return {
@@ -1403,8 +1446,23 @@ function assertColumnGrids(managers, width) {
      */
     const wrong = [m.header, ...m.rows].filter((r) => r.cells.length !== m.declared);
     if (wrong.length) {
+      /*
+       * The stamp is a STRING, and only the flat shape sets one at all.
+       * `Number(r.key) + 1` printed `item NaN` for any non-numeric key other
+       * than "header" - a future manager stamping `item.id`, say - which
+       * loses the single detail the whole stamp exists to report, on the one
+       * message whose job is to name the row that is wrong (review round 3,
+       * task 86bbjt1b6). A key that is not a run of digits is quoted back
+       * verbatim instead. Tested for digits rather than with `Number()`,
+       * which reads "" and " " as 0 and would report them as `item 1`.
+       */
+      const rowName = (r) => {
+        if (r.key === undefined) return 'row';
+        if (r.key === 'header') return 'the header';
+        return /^\d+$/.test(r.key) ? `item ${Number(r.key) + 1}` : `item "${r.key}"`;
+      };
       const named = wrong
-        .map((r) => `${r.key === undefined ? 'row' : r.key === 'header' ? 'the header' : `item ${Number(r.key) + 1}`} renders ${r.cells.length}`)
+        .map((r) => `${rowName(r)} renders ${r.cells.length}`)
         .join(', ');
       failures.push(
         `${where}: declares ${m.declared} column(s) but ${wrong.length} row(s) render ` +
