@@ -34,8 +34,40 @@ type BuilderBackgroundControlsProps = {
    * label it is. Defaults to `label`, so every existing caller is unchanged.
    */
   modeLabel?: string;
+  /**
+   * What this surface is CALLED in the one sentence that names it out loud —
+   * the missing-poster warning, which reads "Without a poster image this
+   * <noun> will be blank until the video loads".
+   *
+   * It has to be a prop rather than a constant because this component is worn
+   * by three surfaces that can play video and they are three different things
+   * to the operator: a row ("section"), one column inside a row ("column"),
+   * and the whole page ("page"). Until 2026-09-08 the noun was hard-coded to
+   * "section", which was true of the only surface that had video when the
+   * sentence was written and became wrong the moment the page (#663) and the
+   * cell (this ticket) gained it — a warning that names the wrong box sends
+   * the operator to fix the wrong box.
+   *
+   * Defaults to "section", so every caller that IS a section is unchanged.
+   */
+  surfaceNoun?: string;
   background: BackgroundSettings;
   onChange: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
+  /**
+   * Told the mode the operator just PICKED, alongside the `onChange` that
+   * writes it — for the one thing a surface may need to do that the picker
+   * cannot see: write a setting that is not part of `BackgroundSettings`.
+   *
+   * The cell uses it to seed its tint when it first becomes a video cell, the
+   * way the row seeds its own (`changeSectionBackgroundMode`). It is a
+   * separate callback rather than something inferred from `onChange` because
+   * `onChange` hands over an updater, not a value: a caller wanting the new
+   * mode would have to run that updater a second time and hope it is pure.
+   *
+   * Optional, and fired only on a real mode CHANGE, so every existing caller
+   * is unchanged.
+   */
+  onModeChange?: (mode: BackgroundSettings["mode"]) => void;
   onChooseImage?: () => void;
   onUploadImage?: (file: File | null) => void;
   compact?: boolean;
@@ -75,8 +107,10 @@ type BuilderBackgroundControlsProps = {
 export function BuilderBackgroundControls({
   label,
   modeLabel,
+  surfaceNoun = "section",
   background,
   onChange,
+  onModeChange,
   onChooseImage,
   onUploadImage,
   compact = false,
@@ -120,6 +154,9 @@ export function BuilderBackgroundControls({
       }
       return next;
     });
+    // AFTER the fill write, and outside the updater on purpose: an updater
+    // React may call more than once is no place for a second surface's write.
+    onModeChange?.(newMode);
   }
 
   /**
@@ -295,7 +332,7 @@ export function BuilderBackgroundControls({
         {needsPoster ? (
           <BuilderSettingRow label="" fullWidth>
             <p className="builder-video-background-warning">
-              Without a poster image this section will be blank until the video loads — and it is
+              Without a poster image this {surfaceNoun} will be blank until the video loads — and it is
               what phones and visitors who have asked for reduced motion see instead of the video.
             </p>
           </BuilderSettingRow>
