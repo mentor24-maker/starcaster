@@ -159,6 +159,16 @@ describe("Post Feed: the list and its own count agree", () => {
     expect(showingLine()).toBe("");
   });
 
+  it("honours a count the old preset list could not express — 14 of 20", async () => {
+    // The panel offered 3/6/9/12/18 until task 86bbzy7g0; the renderer never
+    // cared. This pins that the render side takes any whole number as-is.
+    await renderFeed(makePosts(20, "junior tennis"), "?tag=junior%20tennis", { filterMode: "tag", postsPerPage: "14" });
+
+    expect(cardCount()).toBe(14);
+    expect(showingLine()).toBe("Showing 14 of 20");
+    expect(moreButton()).not.toBeNull();
+  });
+
   it("shows no control at all when everything already fits", async () => {
     await renderFeed(THIRTEEN, "?tag=junior%20tennis", { filterMode: "tag", postsPerPage: "20" });
 
