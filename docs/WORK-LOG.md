@@ -69,6 +69,47 @@ told on purpose; both are a check that could not take a reading reporting itself
 as a clean one, which is the failure this project keeps writing rules against.
 Both now say plainly that nothing was measured.
 
+Then review caught the fix itself going wrong, which is the part worth reading.
+Switching an alarm off "only when the job's most recent note is genuinely recent"
+is the right rule for one of the three switches and the wrong rule for the other
+two, and the difference is easy to miss. "Recent" here means a note from within
+the last three to six hours, depending on the job — a deliberately generous
+window, so that a job which runs every ten minutes is not called dead the first
+time it is a little late. But one of those three switches is not asking "has this
+job been heard from lately". It is the one that stops a *failure* being shouted
+about more than once every six hours, and it is supposed to come off only when
+the job actually succeeds again. Taking it off because there is a note from two
+hours ago, while the job is failing right now, removes the very thing that keeps
+one failure from becoming a stream of identical messages.
+
+And the two steps sit in the same ten-minute cycle, a hundred and forty lines
+apart: the first would have switched the muzzle off, the second would have
+reported the same failure as though it were new. A job failing steadily for three
+hours would have sent about eighteen messages instead of one. That is precisely
+the alarm fatigue this whole piece of work was written against, arriving through
+the fix for it — and it would have started the moment the message channel came
+back to life, which makes it the kind of thing that goes wrong on the day
+everything else is already going wrong.
+
+The rule is now one sentence applied to all three switches alike: an alarm comes
+off only when the job succeeded *after* the alarm went on. For the silence alarm
+that is the same thing as before, so nothing about it changes; for the other two
+it is the fix. One rule rather than three special cases, because a special case
+is something the next reader has to work out for themselves, and working it out
+wrong is what produced this. Where the job has genuinely not succeeded since, the
+report now says so in as many words, so a line reading "last succeeded ten
+minutes ago" is not mistaken for an all-clear over a job that is failing.
+
+Two more from the same review, both older than this work and both fixed while the
+file was open. The shared page that holds every machine's records is read, added
+to, and written back — and if the *reading* failed for a moment, the writing went
+ahead anyway and rebuilt the page from this machine's records alone, quietly
+deleting every other machine's. A failed reading is now simply a failed reading:
+nothing is written, and the next cycle tries again. The other: the carrying step
+composed its whole report and printed it in one go at the end, so a dropped
+connection threw the report away along with the lines saying what it had been
+about to write. It now prints what it knows either way.
+
 ## 2026-09-08 — Alarms stopped being thrown away when the chat room refuses them (#666)
 
 The system has one way of telling anyone that something has broken: it posts a

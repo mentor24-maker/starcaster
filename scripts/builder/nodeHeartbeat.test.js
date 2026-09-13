@@ -890,33 +890,39 @@ test('a mixed post keeps the quiet headline and still marks the new role', () =>
 // to instrument — could raise an alarm and never close it. All of these are
 // written against that shape: the fire half working and the clear half missing
 // is indistinguishable from a job that is still dead.
+//
+// Round 2 then broke the other direction: the fix cleared all three suppression
+// stamps on FRESHNESS, which is a three-to-six-hour window and not a success,
+// so a job failing right now had its failure-alert throttle removed on the same
+// ten-minute wake that reported the failure. Everything below asserts the rule
+// that settles both: an alarm is closed only by a beat newer than the alarm.
+
+const closeout = (role, beatAt, stamps) => hb.alarmCloseoutPlan({ fresh: [{ role, beatAt, stamps }] });
+const kinds = (list) => list.map((c) => `${c.role}:${c.kind}`);
 
 test('a job that recovered after its silence was reported gets its alarm closed AND announced', () => {
-  const plan = hb.alarmCloseoutPlan({
-    fresh: [{ role: 'channel-steward' }],
-    quietSince: { 'channel-steward': agoHours(5) },
-  });
-  assert.deepEqual(plan.clear, ['channel-steward']);
+  const plan = closeout('channel-steward', agoHours(1), { stale: agoHours(5) });
+  assert.deepEqual(kinds(plan.clear), ['channel-steward:stale']);
   assert.equal(plan.announce.length, 1);
   assert.equal(plan.announce[0].role, 'channel-steward');
   assert.equal(plan.announce[0].quietSince, agoHours(5));
 });
 
-test('a healthy job nobody ever reported quiet is cleared SILENTLY — no all-clear x365', () => {
+test('a healthy job nobody ever reported quiet has nothing to clear and says nothing — no all-clear x365', () => {
   const plan = hb.alarmCloseoutPlan({
-    fresh: [{ role: 'bus-relay' }, { role: 'channel-steward' }],
-    quietSince: {},
+    fresh: [
+      { role: 'bus-relay', beatAt: agoHours(1), stamps: {} },
+      { role: 'channel-steward', beatAt: agoHours(1), stamps: {} },
+    ],
   });
-  assert.deepEqual(plan.clear, ['bus-relay', 'channel-steward']);
+  assert.deepEqual(plan.clear, []);
+  assert.deepEqual(plan.keep, []);
   assert.deepEqual(plan.announce, [], 'posting here would be routine good news, which the non-goals forbid');
 });
 
 test('an empty stale stamp is not an alarm — it announces nothing', () => {
-  const plan = hb.alarmCloseoutPlan({
-    fresh: [{ role: 'librarian-sweep' }],
-    quietSince: { 'librarian-sweep': '   ' },
-  });
-  assert.deepEqual(plan.clear, ['librarian-sweep']);
+  const plan = closeout('librarian-sweep', agoHours(1), { stale: '   ' });
+  assert.deepEqual(plan.clear, []);
   assert.deepEqual(plan.announce, []);
 });
 
@@ -938,8 +944,7 @@ test('A JOB THAT IS STILL DEAD CANNOT CLOSE ITS OWN ALARM — only fresh roles a
   assert.equal(report.quiet.length, 1);
 
   const plan = hb.alarmCloseoutPlan({
-    fresh: report.fresh,
-    quietSince: { 'channel-steward': agoHours(20) },
+    fresh: report.fresh.map((f) => ({ role: f.role, beatAt: f.at, stamps: { stale: agoHours(20) } })),
   });
   assert.deepEqual(plan.clear, []);
   assert.deepEqual(plan.announce, []);
@@ -947,11 +952,86 @@ test('A JOB THAT IS STILL DEAD CANNOT CLOSE ITS OWN ALARM — only fresh roles a
 
 test('several recovered roles are closed in one pass, each announced on its own merit', () => {
   const plan = hb.alarmCloseoutPlan({
-    fresh: [{ role: 'channel-steward' }, { role: 'librarian-sweep' }, { role: 'bus-relay' }],
-    quietSince: { 'channel-steward': agoHours(9), 'bus-relay': agoHours(4) },
+    fresh: [
+      { role: 'channel-steward', beatAt: agoHours(1), stamps: { stale: agoHours(9) } },
+      { role: 'librarian-sweep', beatAt: agoHours(1), stamps: {} },
+      { role: 'bus-relay', beatAt: agoHours(1), stamps: { stale: agoHours(4) } },
+    ],
   });
-  assert.deepEqual(plan.clear, ['channel-steward', 'librarian-sweep', 'bus-relay']);
+  assert.deepEqual(kinds(plan.clear), ['channel-steward:stale', 'bus-relay:stale']);
   assert.deepEqual(plan.announce.map((a) => a.role), ['channel-steward', 'bus-relay']);
+});
+
+// --- round 2: freshness decides WHO is considered, not WHICH alarms go -------
+//
+// `failed-<role>` is the six-hour suppression stamp for the failure alert and
+// report_job_failure.mjs states its contract in as many words: cleared by the
+// next SUCCESS, not by a timer. Both steps run in ONE pass of run_bus_relay.sh
+// — the closeout at line 121, the failure report at line 265 — so clearing it
+// off an hours-old beat turned one bus post into roughly eighteen over three
+// hours. `quiet-<role>` is the same bug on the shared-row channel.
+
+test('A FAILURE ALARM RAISED SINCE THE LAST BEAT STANDS — the fresh window is not a success', () => {
+  // bus-relay's threshold is floored at 3h. Beat at -2h, failure at -1h: the
+  // job is "fresh" and is failing right now. Round 2 cleared the stamp here.
+  const plan = closeout('bus-relay', agoHours(2), { failed: agoHours(1) });
+  assert.deepEqual(plan.clear, [], 'the failure throttle was removed from a job that has not succeeded since it failed');
+  assert.deepEqual(kinds(plan.keep), ['bus-relay:failed']);
+  assert.match(plan.keep[0].why, /nothing has succeeded since/);
+});
+
+test('a silence alarm raised since the last beat stands too — same rule, shared-row channel', () => {
+  const plan = closeout('bus-relay', agoHours(2), { quiet: agoHours(1) });
+  assert.deepEqual(plan.clear, []);
+  assert.deepEqual(kinds(plan.keep), ['bus-relay:quiet']);
+});
+
+test('a failure alarm older than the newest beat IS closed — a success since the fault clears it', () => {
+  const plan = closeout('bus-relay', agoHours(1), { failed: agoHours(2), quiet: agoHours(2) });
+  assert.deepEqual(kinds(plan.clear), ['bus-relay:quiet', 'bus-relay:failed']);
+  assert.deepEqual(plan.keep, []);
+  assert.deepEqual(plan.announce, [], 'a failure alert is not a silence report — nothing to announce');
+});
+
+test('the three stamps are judged SEPARATELY — one can go while another stands', () => {
+  // The whole point of the round-2 fix. A job that was reported quiet, came
+  // back, and has since failed again: the silence is genuinely over, the
+  // failure is genuinely current, and one pass must answer both.
+  const plan = closeout('pipeline-pulse', agoHours(2), { stale: agoHours(6), failed: agoHours(1) });
+  assert.deepEqual(kinds(plan.clear), ['pipeline-pulse:stale']);
+  assert.deepEqual(kinds(plan.keep), ['pipeline-pulse:failed']);
+  assert.equal(plan.announce.length, 1, 'the recovery from silence is still announced');
+});
+
+test('a beat at exactly the alarm instant does NOT close it — strictly newer, or the alarm stands', () => {
+  const plan = closeout('bus-relay', agoHours(2), { failed: agoHours(2) });
+  assert.deepEqual(plan.clear, []);
+  assert.deepEqual(kinds(plan.keep), ['bus-relay:failed']);
+});
+
+test('an unreadable stamp is CANNOT TELL, and the alarm is left standing', () => {
+  const plan = closeout('bus-relay', agoHours(1), { failed: 'last tuesday' });
+  assert.deepEqual(plan.clear, []);
+  assert.deepEqual(plan.keep, []);
+  assert.deepEqual(kinds(plan.cannotTell), ['bus-relay:failed']);
+  assert.match(plan.cannotTell[0].why, /cannot be read as a date/);
+});
+
+test('an unreadable BEAT is CANNOT TELL for every alarm the role carries', () => {
+  const plan = closeout('bus-relay', 'no idea', { failed: agoHours(2), stale: agoHours(3) });
+  assert.deepEqual(plan.clear, []);
+  assert.deepEqual(kinds(plan.cannotTell), ['bus-relay:failed', 'bus-relay:stale']);
+  assert.deepEqual(plan.announce, [], 'nothing may be announced off a beat that cannot be read');
+});
+
+test('the announce rides on the stale CLEAR, never on the stamp merely existing', () => {
+  // Otherwise a role whose silence alarm is deliberately left standing would
+  // still be announced as beating again — good news about a job nobody has
+  // established is back.
+  const plan = closeout('channel-steward', agoHours(4), { stale: agoHours(2) });
+  assert.deepEqual(plan.clear, []);
+  assert.deepEqual(kinds(plan.keep), ['channel-steward:stale']);
+  assert.deepEqual(plan.announce, [], 'announced a recovery it had just refused to close');
 });
 
 // --- the relay's verdict -----------------------------------------------------
@@ -1048,4 +1128,81 @@ test('BOTH paths that see a successful run close its alarms — the recency chec
   assert.match(fedBy, /report\.fresh\.map\(/, 'the closeout is no longer fed from report.fresh');
   assert.doesNotMatch(fedBy, /report\.quiet/,
     'a role judged QUIET is being handed to the closeout — a job that is still dead would close its own alarm');
+});
+
+test('NO STAMP IS CLEARED EXCEPT ONE THE PLAN NAMED — the round-2 defect was at the call site', () => {
+  // Round 2 is the reason this guard exists at all. `alarmCloseoutPlan` was
+  // pure and correct at the question it was asked; the CLI then cleared all
+  // three stamps for every role the plan listed, so the rule the plan enforced
+  // was overwritten one line later. Every unit test passed. The property is
+  // structural: the clear loop must be driven by `plan.clear`, which carries a
+  // per-stamp decision, and never by the roles handed in.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'node_heartbeat.mjs'), 'utf8');
+  const from = src.indexOf('function closeAlarms(');
+  assert.ok(from >= 0, 'closeAlarms() has moved or been renamed — this guard is now measuring nothing');
+  const body = src.slice(from, src.indexOf('// --- the roll call on ClickUp'));
+
+  const clears = [...body.matchAll(/for \(const (\w+) of ([\w.]+)\) clearStamp\(/g)];
+  assert.equal(clears.length, 1, 'the clear is no longer a single loop — count the sites by hand before trusting this');
+  assert.equal(clears[0][2], 'plan.clear',
+    `stamps are being cleared from "${clears[0][2]}" rather than from plan.clear — the per-stamp decision is being bypassed`);
+
+  // And the plan must be given the beat to compare against. Without it every
+  // stamp is a cannot-tell and alarms stand for ever, which fails safe but is
+  // still a silent loss of the feature.
+  assert.match(body, /beatAt: r\.beatAt/, 'the closeout is no longer told when the role last beat');
+  for (const kind of ['quiet', 'failed', 'stale']) {
+    assert.ok(body.includes(`${kind}: readStamp(\`${kind}-`),
+      `the ${kind}-<role> stamp is no longer read, so the plan cannot judge it`);
+  }
+});
+
+test('the failure alert and the closeout name the SAME stamp — a rename on either side is silent', () => {
+  // The clear lives in this repo and the raise lives in another file that
+  // nothing imports. They agree only by the string `failed-<job>`, and if they
+  // stop agreeing the alert is raised for ever and closed never — which is the
+  // exact shape of the round-1 defect, arriving through a rename instead.
+  const closeSrc = fs.readFileSync(path.join(__dirname, '..', 'node_heartbeat.mjs'), 'utf8');
+  const raiseSrc = fs.readFileSync(path.join(__dirname, '..', 'report_job_failure.mjs'), 'utf8');
+  assert.match(raiseSrc, /failed-\$\{job/, 'report_job_failure.mjs no longer writes a failed-<job> stamp under that name');
+  assert.match(closeSrc, /failed: readStamp\(`failed-\$\{r\.role\}`\)/,
+    'the closeout no longer reads failed-<role> — the failure alert would be raised and never cleared');
+});
+
+test('A FAILED ROLL-CALL READ NEVER BECOMES AN EMPTY ONE — both read-modify-write sites', () => {
+  // Round-2 review, finding 3. `clickup.call` resolves on an HTTP error rather
+  // than throwing, so `fresh.ok === false` used to fall into the same branch as
+  // "the description carries no readable block" — and the PUT then rewrote the
+  // shared roll call from this machine's beats alone, deleting every other
+  // machine's row. `--push-owned` makes it worse than `--beat` did, because it
+  // writes N roles in one go.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'node_heartbeat.mjs'), 'utf8');
+  const reads = [...src.matchAll(/const fresh = await clickup\.call\('GET'/g)];
+  assert.equal(reads.length, 2, 'the roll-call read sites have changed in number — check each one by hand');
+  for (const read of reads) {
+    const after = src.slice(read.index, read.index + 2500);
+    const guardAt = after.indexOf('if (!fresh.ok)');
+    const mergeAt = after.indexOf('mergeRollCall');
+    assert.ok(guardAt >= 0,
+      'a roll-call read is not checked before the merge — a failed GET would rewrite the shared row from nothing');
+    assert.ok(mergeAt >= 0, 'the merge has moved away from its read — check this site by hand');
+    assert.ok(guardAt < mergeAt,
+      'the failed-read guard sits AFTER the merge, so it cannot prevent the wipe');
+  }
+  assert.doesNotMatch(src, /fresh\.ok \? heartbeat\.parseRollCall/,
+    'the failed-read and unparseable-block cases are conflated again');
+});
+
+test('the relay report survives a transport failure — it is buffered, so a throw would eat it', () => {
+  // Round-2 review, finding 4. `clickup.call` throws on a transport failure by
+  // contract; `doPushOwned` builds its whole report in an array and prints once
+  // at the end, so an uncaught throw lost every line including the PUSH lines
+  // saying what was about to be written.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'node_heartbeat.mjs'), 'utf8');
+  const from = src.indexOf('async function doPushOwned()');
+  assert.ok(from >= 0, 'doPushOwned() has moved or been renamed — this guard is now measuring nothing');
+  const body = src.slice(from, src.indexOf('async function pushOwnedPass('));
+  assert.match(body, /try \{/, 'the buffered relay pass is no longer wrapped, so a network blip loses the whole report');
+  assert.match(body, /console\.log\(out\.join/, 'the catch no longer prints the buffer it was written to rescue');
+  assert.match(body, /return 2;/, 'a transport failure is not reported as a cannot-tell');
 });
