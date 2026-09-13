@@ -1,5 +1,7 @@
 'use strict';
 
+const loopNoteComment = require('./loopNoteComment.js');
+
 /**
  * pipelinePauseStore — reading the pause switch out of ClickUp.
  *
@@ -61,11 +63,10 @@ function whyOf(out) {
 }
 
 /** The "Loop note" custom field's text, resolved by name (never by id). */
+// The note comment when one was read (task 86bbzww8m — the field refuses
+// writes on the Free plan), else the field. See scripts/builder/loopNoteComment.js.
 function loopNoteOf(task) {
-  const f = (task?.custom_fields || []).find(
-    (x) => String(x.name || '').trim().toLowerCase() === 'loop note',
-  );
-  return String(f?.value ?? '').trim();
+  return loopNoteComment.resolveLoopNote(task);
 }
 
 /**
@@ -90,7 +91,17 @@ async function fetchQueue({ call, list, maxPages = 50 }) {
     // tasks that reports the switch ABSENT, which is fail-open in the one
     // feature built to fail safe. scripts/lib/clickup.cjs `listTasks` learned
     // this first; an absent flag means "fetch the next page", not "stop and hope".
-    if (batch.length === 0 || out.json?.last_page === true) return { readable: true, why: '', tasks };
+    if (batch.length === 0 || out.json?.last_page === true) {
+      // The in-flight tickets' note comments, so a drain or a sweep sees a
+      // review's claim. A ticket whose comments could not be read keeps its
+      // field note; the queue itself was read, so this stays readable.
+      const notes = await loopNoteComment.hydrateLoopNotes(tasks, async (id) => {
+        const got = await safely(call, 'GET', `/api/v2/task/${id}/comment`);
+        if (!okOf(got)) throw new Error(whyOf(got));
+        return got.json?.comments || [];
+      });
+      return { readable: true, why: '', tasks, notesUnread: notes.failed };
+    }
   }
   // Ran past the cap without ever being told the end. We do not know whether
   // the switch is in the pages we never read, so this is UNREADABLE, which
