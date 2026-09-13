@@ -5932,7 +5932,7 @@ App.builder = (function () {
 
   function normalizeBackgroundMode(value) {
     const mode = safeText(value).toLowerCase();
-    if (['none', 'transparent', 'color', 'gradient', 'image', 'style'].includes(mode)) return mode;
+    if (['none', 'transparent', 'color', 'gradient', 'image', 'style', 'video'].includes(mode)) return mode;
     return 'none';
   }
 
@@ -6011,6 +6011,19 @@ App.builder = (function () {
       imageUrl: safeText(background.imageUrl, 2000),
       imageAssetId: safeText(background.imageAssetId, 120),
       styleKey: safeText(background.styleKey, 80) === 'blue-yellow-circles' ? 'blue-yellow-circles' : '',
+      videoUrl: safeText(background.videoUrl, 2000),
+      videoAssetId: safeText(background.videoAssetId, 120),
+      posterUrl: safeText(background.posterUrl, 2000),
+      posterAssetId: safeText(background.posterAssetId, 120),
+      videoSpeed: typeof background.videoSpeed === 'number' ? background.videoSpeed : 1,
+      videoLoop: background.videoLoop === undefined ? true : background.videoLoop !== false,
+      videoLoopFade: typeof background.videoLoopFade === 'number' ? background.videoLoopFade : 0.6,
+      videoTrimStart: typeof background.videoTrimStart === 'number' ? background.videoTrimStart : 0,
+      videoTrimEnd: typeof background.videoTrimEnd === 'number' ? background.videoTrimEnd : 0,
+      videoBlur: typeof background.videoBlur === 'number' ? background.videoBlur : 0,
+      videoPlayOnMobile: background.videoPlayOnMobile === true,
+      videoFocalX: typeof background.videoFocalX === 'number' ? background.videoFocalX : 50,
+      videoFocalY: typeof background.videoFocalY === 'number' ? background.videoFocalY : 50,
     };
     if (normalized.mode === 'image' && !normalized.imageUrl && normalized.imageAssetId) {
       normalized.imageUrl = getLandingPageAssetUrl(normalized.imageAssetId) || '';

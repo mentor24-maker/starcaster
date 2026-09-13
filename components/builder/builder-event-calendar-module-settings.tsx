@@ -13,15 +13,16 @@ type Props = {
   themeColors?: BuilderThemePalette;
 };
 
-/** The month grid has no card count and no cap — every day of the month shows. */
+/** Only the list and cards take a count: the month and the week draw every day. */
 const isCardLayout = (settings: Record<string, string>) =>
-  (settings.layout || "month") !== "month";
+  ["list", "cards"].includes(settings.layout || "month");
 
 const isGridLayout = (settings: Record<string, string>) =>
   (settings.layout || "month") === "cards";
 
+/** Both calendar-shaped layouts need to know which day a week begins on. */
 const isMonthLayout = (settings: Record<string, string>) =>
-  (settings.layout || "month") === "month";
+  ["month", "week"].includes(settings.layout || "month");
 
 export function BuilderEventCalendarModuleSettings({
   module,
@@ -79,7 +80,8 @@ export function BuilderEventCalendarModuleSettings({
               options: [
                 { value: "month", label: "Month Grid" },
                 { value: "list", label: "Upcoming List" },
-                { value: "cards", label: "Cards" }
+                { value: "cards", label: "Cards" },
+                { value: "week", label: "Weekly Schedule" }
               ],
               rendersVia: "EventCalendarPreview"
             },
@@ -116,7 +118,7 @@ export function BuilderEventCalendarModuleSettings({
                 { value: "1", label: "Monday" }
               ],
               visibleWhen: isMonthLayout,
-              rendersVia: "EventCalendarPreview monthGrid"
+              rendersVia: "EventCalendarPreview monthGrid / weekDates"
             }
           ],
           [
@@ -136,6 +138,22 @@ export function BuilderEventCalendarModuleSettings({
               fallback: "true",
               visibleWhen: isCardLayout,
               rendersVia: "EventCalendarPreview"
+            },
+            {
+              key: "showInstructor",
+              label: "Instructor",
+              width: "check",
+              control: "checkbox",
+              fallback: "true",
+              rendersVia: "EventCalendarPreview instructor line"
+            },
+            {
+              key: "showCategoryKey",
+              label: "Venue Key",
+              width: "check",
+              control: "checkbox",
+              fallback: "true",
+              rendersVia: "EventCalendarPreview venue key and filter"
             },
             {
               key: "showLocation",

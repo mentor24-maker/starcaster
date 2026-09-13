@@ -14,6 +14,34 @@ type BuilderCellStyleSettingsProps = {
   section: BuilderTemplateSection;
   editorDevice: "browser" | "mobile";
   onUpdateCellBackground: (column: string, updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
+  /**
+   * The cell's background MODE was just changed — the one step that does more
+   * than write the fill. Choosing Video seeds the cell's tint, exactly as
+   * choosing Video on a row seeds the row's.
+   *
+   * It is separate from `onUpdateCellBackground` because the tint is not part
+   * of `BackgroundSettings`: it lives on the section as
+   * `cellOverlayScreens[column]`, so only the card can write it. The row draws
+   * the same line for the same reason — `changeSectionBackgroundMode` sits
+   * outside the picker rather than inside it.
+   *
+   * Optional: the two modal surfaces that draw this panel with no seeding
+   * wired pass nothing and keep their present behaviour.
+   */
+  onChangeCellBackgroundMode?: (column: string, mode: BackgroundSettings["mode"]) => void;
+  /**
+   * Upload a file straight into THIS cell's background — a cell-scoped
+   * handler, deliberately not the row's passed through: the row's writes the
+   * row's own fill, so wiring it here would repaint the whole row when the
+   * operator asked for one column.
+   *
+   * Optional, and the button only renders when it is supplied. The two modal
+   * surfaces that also draw this panel (the saved-section editor and the
+   * module repository) have no upload pipeline at all and pass nothing, which
+   * is honest — the alternative is a no-op handler drawing an Upload button
+   * that silently does nothing.
+   */
+  onUploadCellBackgroundMedia?: (column: string, file: File | null) => void;
   onUpdateCellBorderWidth: (column: string, value: string) => void;
   onUpdateCellBorderColor: (column: string, value: string) => void;
   onUpdateCellBorderRadius: (column: string, value: string) => void;
@@ -74,6 +102,8 @@ export function BuilderCellStyleSettings({
   section,
   editorDevice,
   onUpdateCellBackground,
+  onChangeCellBackgroundMode,
+  onUploadCellBackgroundMedia,
   onUpdateCellBorderWidth,
   onUpdateCellBorderColor,
   onUpdateCellBorderRadius,
@@ -183,11 +213,36 @@ export function BuilderCellStyleSettings({
           {/* D9, blast radius descending: the fill moves the most, then how
               much of it shows, then the border — style first because it gates
               width and colour — and the shadow last. */}
+          {/* `allowVideo` is ON here and OFF on the Overlay group below, and the
+              difference is the same one the ROW panel draws: this is the cell's
+              own fill, so its video is the ONE <video> that cell paints, while
+              an overlay video would be a second element screening the first.
+
+              It gets no CHOOSE callback for the same reason the fill's image
+              mode gets none — handing it the row's would repaint the row — so
+              "Choose Video" and "Choose Poster" open the shared picker's own
+              gallery. UPLOAD is a different question and gets a different
+              answer: without one, a project whose library holds no video shows
+              the operator an empty gallery and no way to add anything, with
+              the cell already switched to video and nothing to fill it. So the
+              handler here is cell-scoped rather than the row's borrowed.
+
+              There is deliberately no `allowParallax`: parallax is a row-scale
+              effect, and offering it per cell would be a new control rather
+              than the same one on a smaller surface. */}
           <BuilderBackgroundControls
+            allowVideo
             label="Background"
+            surfaceNoun="column"
             background={section.cellBackgrounds[column] ?? createDefaultBackgroundSettings()}
             horizontal
             onChange={(updater) => onUpdateCellBackground(column, updater)}
+            onModeChange={(mode) => onChangeCellBackgroundMode?.(column, mode)}
+            onUploadImage={
+              onUploadCellBackgroundMedia
+                ? (file) => onUploadCellBackgroundMedia(column, file)
+                : undefined
+            }
             themeBackgroundColor={themeBackgroundColor}
             themeColors={themeColors}
             themePrimaryColor={themePrimaryColor}

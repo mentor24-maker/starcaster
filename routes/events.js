@@ -6,12 +6,9 @@
  * Mirrors routes/blog.js: a thin layer over lib/eventsStore.js that unwraps
  * the request, scopes it to the project, and logs what changed.
  *
- * Auth is decided centrally in routes/index.js. These routes carry no public
- * exemption yet — the admin manager is the only caller, and it runs behind
- * either a platform session or a project-admin one. The public calendar
- * module (a later ticket) is what will need the published-only read exemption
- * in lib/projectAdminApiAuth.js, and that is a security decision to make with
- * the module that needs it, not in advance.
+ * Auth is decided centrally in routes/index.js. The public reads a visitor's
+ * calendar makes are exempted, narrowly, in lib/projectAdminApiAuth.js — see
+ * docs/EVENT_CALENDAR.md, "The public read exemption".
  */
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
@@ -19,6 +16,9 @@ const {
   listEvents, getEvent, getEventBySlug, createEvent, updateEvent, deleteEvent,
 } = require('../lib/eventsStore');
 const { logActivity } = require('../lib/activityLog');
+const {
+  RecurrenceError, parseRecurrence, parseOverrides, isValidTimeZone,
+} = require('../lib/eventRecurrence');
 
 function requestScope(req) {
   return {
@@ -36,7 +36,7 @@ function requestScope(req) {
  */
 const TEXT_FIELDS = [
   'title', 'slug', 'status', 'description', 'excerpt',
-  'imageUrl', 'imageAlt', 'url', 'timezone',
+  'imageUrl', 'imageAlt', 'url', 'timezone', 'instructor', 'categoryId',
   'locationName', 'locationAddress', 'locationUrl',
   'organizerName', 'organizerContact',
   'seoTitle', 'seoDescription',
@@ -64,7 +64,45 @@ function readEventPatch(body) {
   for (const key of BOOL_FIELDS) {
     if (body[key] !== undefined) patch[key] = readBool(body[key]);
   }
+  // Throws RecurrenceError on a rule that cannot be saved as written — a rule
+  // dropped here would save a one-off event and report success.
+  if (body.recurrence !== undefined) patch.recurrence = parseRecurrence(body.recurrence);
+  if (body.recurrenceOverrides !== undefined) patch.recurrenceOverrides = parseOverrides(body.recurrenceOverrides);
   return patch;
+}
+
+/**
+ * The checks that need the WHOLE event, not just the fields sent: a repeat
+ * rule is read from the start date in the event's own time zone, so without
+ * either one the dates it produces would be a guess.
+ */
+function repeatProblem(event) {
+  if (!event || !event.recurrence) return '';
+  if (!event.startsAt) return 'A repeating event needs a start date — the first date it happens on.';
+  if (!isValidTimeZone(event.timezone)) {
+    return `A repeating event needs a real time zone (e.g. America/New_York), so its time stays the same when the clocks change${event.timezone ? ` — "${event.timezone}" is not one` : ''}.`;
+  }
+  // Compared as the LOCAL start date: a 9pm Florida start is the next day in
+  // UTC, and slicing the ISO string would refuse a repeat ending that day.
+  const localStart = new Intl.DateTimeFormat('en-CA', {
+    timeZone: event.timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(event.startsAt));
+  if (event.recurrence.until && event.recurrence.until < localStart) {
+    return `The repeat ends (${event.recurrence.until}) before the event starts.`;
+  }
+  return '';
+}
+
+function readPatchOrRefuse(res, body) {
+  try {
+    return readEventPatch(body);
+  } catch (err) {
+    if (err instanceof RecurrenceError) {
+      sendErr(res, 400, err.message, { code: err.code });
+      return null;
+    }
+    throw err;
+  }
 }
 
 function eventSummary(event) {
@@ -86,7 +124,11 @@ async function handle(req, res, pathname, method) {
     const body = await parseJsonBody(req);
     const title = String(body.title || '').trim();
     if (!title) return sendErr(res, 400, 'title is required', { code: 'VALIDATION_ERROR' }), true;
-    const created = await createEvent({ ...readEventPatch(body), title }, requestScope(req));
+    const patch = readPatchOrRefuse(res, body);
+    if (!patch) return true;
+    const problem = repeatProblem(patch);
+    if (problem) return sendErr(res, 400, problem, { code: 'VALIDATION_ERROR' }), true;
+    const created = await createEvent({ ...patch, title }, requestScope(req));
     if (!created) return sendErr(res, 500, 'Failed to create event'), true;
     logActivity({
       action: 'event.created', entityType: 'event', entityId: created.id,
@@ -117,7 +159,16 @@ async function handle(req, res, pathname, method) {
   if (eventMatch && method === 'PUT') {
     const id = decodeURIComponent(eventMatch[1]);
     const body = await parseJsonBody(req);
-    const updated = await updateEvent(id, readEventPatch(body), requestScope(req));
+    const patch = readPatchOrRefuse(res, body);
+    if (!patch) return true;
+    const touchesRepeat = ['recurrence', 'startsAt', 'timezone'].some((key) => patch[key] !== undefined);
+    if (touchesRepeat) {
+      const existing = await getEvent(id, requestScope(req));
+      if (!existing) return sendErr(res, 404, 'Event not found', { code: 'NOT_FOUND' }), true;
+      const problem = repeatProblem({ ...existing, ...patch });
+      if (problem) return sendErr(res, 400, problem, { code: 'VALIDATION_ERROR' }), true;
+    }
+    const updated = await updateEvent(id, patch, requestScope(req));
     if (!updated) return sendErr(res, 404, 'Event not found', { code: 'NOT_FOUND' }), true;
     logActivity({
       action: 'event.updated', entityType: 'event', entityId: id,
@@ -146,4 +197,4 @@ const manifest = {
   prefixes: ['/api/events'],
 };
 
-module.exports = { handle, manifest, readEventPatch };
+module.exports = { handle, manifest, readEventPatch, repeatProblem };
