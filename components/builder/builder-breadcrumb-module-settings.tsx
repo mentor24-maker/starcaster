@@ -66,7 +66,25 @@ function BreadcrumbItemsManager({ settings, set }: BuilderSchemaFieldContext) {
     <>
       <div className="builder-breadcrumb-items-label">Trail items — last item is the current page</div>
 
-      <div className="builder-item-grid builder-item-grid--crumbs">
+      {/*
+        `data-lattice-columns="3"` is what puts this manager under
+        `check_panels` at all (panel sweep 10/15, 2026-09-13). It matched
+        neither of the two shapes the check knew — it is not the Navigation
+        list's header-band-plus-rows, and it is not the Table editor's real
+        <table> — and `check_panels` also excludes `.builder-item-grid` from
+        the ordinary lattice measurement, so the largest thing in this panel
+        had never been measured by ANY sweep. Every green run over this panel
+        was green over nothing, which is the Carousel finding word for word:
+        a manager that opts into neither attribute is not passing, it is
+        absent, and the summary line cannot tell the two apart.
+
+        The count is the number of titled columns, Action included. On this
+        flat-grid shape the check holds it to the resolved
+        `grid-template-columns` and to every line rendering three cells —
+        the per-column offset comparisons are true by construction here and
+        the run says so rather than counting them as checked.
+      */}
+      <div className="builder-item-grid builder-item-grid--crumbs" data-lattice-columns="3">
         <span className="builder-item-grid-header">Label</span>
         <span className="builder-item-grid-header">URL</span>
         <span className="builder-item-grid-header">Action</span>
@@ -142,8 +160,22 @@ export function BuilderBreadcrumbModuleSettings({
           [
             {
               key: "separator",
+              // W0, panel sweep 10/15 (2026-09-13): this carried
+              // `style={{ width: 48 }}` and the `auto` token, which is the one
+              // thing the lattice rule forbids by name — "never a width on an
+              // individual field". Its slot was the column's full 213px like
+              // every other field's; the input inside it was 48px, so it
+              // stopped 165px short of the block's right edge while Label,
+              // Background and both margins reached it.
+              //
+              // `text-md` is the same shared token Label uses, so the input
+              // now takes the column's field track rather than a number typed
+              // into this file. A separator is one character and the box is
+              // wide for it — that is W0's own trade ("one label width and one
+              // field width per column"), the same one Feature Cards made for
+              // its buttons. `maxLength` still holds the value to 4.
               label: "Separator",
-              width: "auto",
+              width: "text-md",
               control: "custom",
               rendersVia: "builder-module-card breadcrumb preview",
               render: (ctx) => (
@@ -152,7 +184,6 @@ export function BuilderBreadcrumbModuleSettings({
                   maxLength={4}
                   value={ctx.settings.separator ?? "›"}
                   onChange={(e) => ctx.set("separator", e.target.value)}
-                  style={{ width: 48 }}
                 />
               )
             }

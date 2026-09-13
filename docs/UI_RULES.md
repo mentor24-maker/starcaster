@@ -97,6 +97,41 @@ as a rule first, then gets a checker where one is possible.
   columns) takes the labelled block, because that is the one where the
   spanning secondary row was already breaking the column alignment.
 
+  **A THIRD markup shape wears `data-lattice-columns`: one flat grid**
+  (panel sweep 10/15, ticket 86bbjt1b6, 2026-09-13). `.builder-item-grid`
+  — the breadcrumb trail manager — puts its header titles and every row's
+  cells in a single grid as direct children. It is neither the Navigation
+  list's header-band-plus-rows nor the Table editor's real `<table>`, so it
+  matched no selector `check_panels` had and could not opt in at all; and
+  `check_panels` separately excludes `.builder-item-grid` from the ordinary
+  lattice measurement, so **the largest control in the breadcrumb panel had
+  never been measured by any sweep.** Declaring it took the run from 12
+  titled-column managers to 15. Carousel's lesson word for word: a manager
+  that opts into neither attribute is not passing, it is absent.
+
+  **What a green run on a flat grid is evidence of, and is not.** Measured
+  in the browser, this shape's header spans and row cells sit at *exactly*
+  the same offsets and widths (0/121, 129/121, 258/86) — one grid, one set
+  of tracks, every child stretched to the track it lands in. So the four
+  comparative assertions (row widths, per-column offsets, per-column
+  widths, title containment) are satisfied before any CSS is written and
+  **cannot fail here**, and the run says so on every pass rather than
+  counting them as checked. What it does assert on this shape, and what
+  both break-tested red: the resolved `grid-template-columns` track count
+  against the declared one, and every line rendering the declared number of
+  cells. That is the same discipline the single-pair count uses, for the
+  same reason — a count must not read as a verdict.
+
+  **A per-field width can be invisible to `check_panels` by construction**,
+  and the breadcrumb Separator was, for as long as it existed. The check
+  measures a field's SLOT — the grid cell — and that slot was always the
+  column's full 213px and always correct; the `style={{ width: 48 }}` was
+  on the `<input>` inside it, so the control stopped 165px short of the
+  block edge while every field around it reached it. No browser run could
+  have caught it and none did. The guard is a unit test on the rendered
+  markup (`builder-breadcrumb-module-settings.test.tsx`), which is where
+  "never a width on an individual field" is actually enforceable.
+
   **Carousel is the second adopter, converted in the panel sweep
   (2026-08-26, task 86bbjt1az).** It is the test case for the sentence
   above rather than a new decision: an image picker, a description

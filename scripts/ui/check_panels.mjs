@@ -1014,7 +1014,7 @@ function measureColumnGrids(page) {
     return managers.map((m, index) => {
       const declared = Number(m.getAttribute('data-lattice-columns') || '0') || 0;
       const name = (m.className || '').split(/\s+/)[0] || `manager ${index}`;
-      // TWO markup shapes wear this declaration.
+      // THREE markup shapes wear this declaration.
       //
       // The Navigation Links list is a div grid: a header band, a rows
       // container, and rows, all reading one set of CSS tracks. The Table
@@ -1025,10 +1025,43 @@ function measureColumnGrids(page) {
       // manager opt in at all. Before this, declaring on a <table> failed
       // with "rendered no rows", so the only options were to leave it
       // unmeasured or to rewrite a spreadsheet as a div grid.
+      //
+      // The THIRD is `.builder-item-grid` (breadcrumb, panel sweep 10/15,
+      // 2026-09-13): ONE flat grid whose header titles and every row's cells
+      // are all direct children, laid out in document order. It matched
+      // neither selector above, so it could not opt in at all — and
+      // `check_panels` excludes `.builder-item-grid` from the ordinary
+      // lattice measurement too, so the largest thing in the breadcrumb panel
+      // had never been measured by anything. That is the Carousel finding
+      // again: a manager that opts into neither attribute is not passing, it
+      // is absent, and the two read identically from the summary line.
+      //
+      // WHAT IS AND IS NOT WORTH ASSERTING ON THIS SHAPE. A flat grid cannot
+      // compute its columns per row — there is one grid and one set of
+      // tracks, and every child stretches to the track it lands in. Measured
+      // on the breadcrumb manager, the header spans and the row inputs sit at
+      // exactly the same offsets and widths (0/121, 129/121, 258/86), so the
+      // four comparative assertions below are satisfied BY CONSTRUCTION and
+      // could not fail whatever the CSS said. Saying that out loud is the
+      // point of the note this run prints (docs/UI_RULES.md, "what a green
+      // run on a declared block is, and is not, evidence of").
+      //
+      // What CAN fail here, and does: a row rendering a different number of
+      // children from the header — which silently shifts every cell after it
+      // — and a track list that has drifted from the declared count. Those
+      // are asserted in `assertColumnGrids`, and both are real.
       const isTable = m.tagName === 'TABLE';
+      const navItems = m.querySelector('.builder-nav-items');
+      const navHeader = m.querySelector('.builder-nav-items-header');
+      // Flat only when neither of the other two shapes is present. A nav
+      // manager that LOST its header band still has `.builder-nav-items`, so
+      // it stays a nav manager and keeps failing with "no header band" rather
+      // than being quietly re-read as a flat grid.
+      const isFlat = !isTable && !navItems && !navHeader
+        && getComputedStyle(m).display.includes('grid');
       const header = isTable
         ? m.querySelector(':scope > thead > tr')
-        : m.querySelector('.builder-nav-items-header');
+        : navHeader;
       // Every direct grid cell of a row, in visual order. `display: contents`
       // wrappers have no box, so descend through them the same way the
       // lattice measurement does.
@@ -1041,8 +1074,42 @@ function measureColumnGrids(page) {
       const rowsOf = (root) => (isTable
         ? [...root.querySelectorAll(':scope > tr')]
         : [...root.querySelectorAll(':scope > .builder-nav-item-row')]);
-      const items = isTable ? m.querySelector(':scope > tbody') : m.querySelector('.builder-nav-items');
+      const items = isTable ? m.querySelector(':scope > tbody') : navItems;
       const rows = items ? rowsOf(items) : [];
+      /*
+       * A flat grid has no row ELEMENT to measure, so a line is read from the
+       * cells that make it up. Its box is the manager's own content box
+       * rather than the span of its cells: every line of a flat grid occupies
+       * the same tracks, and taking min-left..max-right of the cells would
+       * make the header band — three short titles — read as a narrower "row"
+       * than the inputs under it and fail the equal-widths assertion for
+       * doing exactly what it should.
+       */
+      const flatLines = () => {
+        const mb = rect(m);
+        const cells = [...m.children]
+          .flatMap((c) => (getComputedStyle(c).display === 'contents' ? [...c.children] : [c]))
+          .filter((c) => {
+            const s = getComputedStyle(c);
+            if (s.display === 'none') return false;
+            // A cell spanning the whole grid is its own line (the sub-row an
+            // item grid puts under its primary row), not one of the n columns.
+            return !(s.gridColumnStart === '1' && s.gridColumnEnd === '-1');
+          });
+        const lines = [];
+        for (let i = 0; i < cells.length; i += declared) {
+          const slice = cells.slice(i, i + declared);
+          lines.push({
+            left: Math.round(mb.left),
+            width: Math.round(mb.width),
+            cells: slice.map((c) => ({
+              x: Math.round(rect(c).left - mb.left),
+              w: Math.round(rect(c).width)
+            }))
+          });
+        }
+        return lines;
+      };
       const read = (row) => {
         const rr = rect(row);
         return {
@@ -1063,10 +1130,27 @@ function measureColumnGrids(page) {
             }))
         };
       };
+      if (isFlat) {
+        const lines = flatLines();
+        return {
+          index,
+          name,
+          declared,
+          shape: 'flat',
+          // The resolved track list, so the declaration can be held to the
+          // CSS rather than to itself. `repeat()` and `fr` are already
+          // resolved to used pixel values here, so splitting on whitespace
+          // is a real count.
+          tracks: getComputedStyle(m).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length,
+          header: lines[0] || null,
+          rows: lines.slice(1)
+        };
+      }
       return {
         index,
         name,
         declared,
+        shape: isTable ? 'table' : 'nav',
         header: header ? read(header) : null,
         rows: rows.map(read)
       };
@@ -1089,6 +1173,27 @@ function assertColumnGrids(managers, width) {
     }
     if (!m.header) {
       failures.push(`${where}: declares data-lattice-columns but has no header band to title the columns`);
+      continue;
+    }
+
+    /*
+     * A FLAT grid's declaration held to the CSS rather than to itself.
+     *
+     * On this shape the four comparative assertions below are satisfied by
+     * construction — one grid, one set of tracks, every child stretched to
+     * the track it lands in — so they can never fail here and a green run
+     * over them is worth nothing on its own. This is the assertion that CAN
+     * fail: the number of tracks the CSS actually resolved against the count
+     * the markup declared. They drift the moment somebody adds a column to
+     * one and forgets the other, and every cell after the drift lands in the
+     * wrong column with no error anywhere.
+     */
+    if (m.shape === 'flat' && m.tracks !== m.declared) {
+      failures.push(
+        `${where}: declares ${m.declared} column(s) but its CSS resolves ${m.tracks} track(s) — ` +
+        'the markup and grid-template-columns have drifted apart, so the cells after the ' +
+        'difference land in the wrong column'
+      );
       continue;
     }
 
@@ -1204,6 +1309,19 @@ let cardsSeen = 0;
 let seamFailureCount = 0;
 let columnGridsSeen = 0;
 /*
+ * Titled-column managers built as ONE flat grid (breadcrumb's trail items).
+ *
+ * Counted and named, never failed — the same discipline the single-pair count
+ * uses, and for the same reason. On a flat grid the header titles and the row
+ * cells are children of one grid reading one set of tracks, so every child
+ * stretches to its column and the four comparative assertions are true before
+ * any CSS is written. A run that reported them as "checked" would be claiming
+ * to have verified something it structurally cannot. What it CAN verify on
+ * this shape — the resolved track count against the declared one, and every
+ * line rendering the declared number of cells — is asserted and can fail.
+ */
+const flatGrids = new Map();   // manager class -> { tracks, rows, widths }
+/*
  * Declared managers that rendered a SINGLE label/field pair.
  *
  * Counted and reported, never failed. A one-row manager can be entirely
@@ -1285,6 +1403,13 @@ for (const width of WIDTHS) {
 
     const columnGrids = await measureColumnGrids(page);
     columnGridsSeen += columnGrids.length;
+    // Keyed by name, not summed over the widths — the same lesson the
+    // single-pair count learned on 2026-09-05, where adding the per-width
+    // count three times printed 9 declared managers for 3 real blocks.
+    for (const g of columnGrids.filter((g) => g.shape === 'flat')) {
+      if (!flatGrids.has(g.name)) flatGrids.set(g.name, { tracks: g.tracks, rows: g.rows.length, widths: [] });
+      flatGrids.get(g.name).widths.push(width);
+    }
     allFailures.push(...assertColumnGrids(columnGrids, width));
   } finally {
     await browser.close();
@@ -1419,6 +1544,20 @@ if (seamUnreached.size) {
  * the opposite of its code is worse than no comment, because it is read as
  * evidence. Zero now says so out loud.
  */
+function flatGridNote() {
+  if (!flatGrids.size) return '';
+  const rows = [...flatGrids.entries()]
+    .map(([name, g]) => `      · ${name} — ${g.tracks} track(s), ${g.rows} row(s) (at ${g.widths.join('/')}px)`)
+    .join('\n');
+  return `[check:panels] NOTE — ${flatGrids.size} titled-column manager(s) are ONE flat grid, so\n`
+    + '  their header titles and row cells read the same tracks by construction. The four\n'
+    + '  comparative assertions (row widths, per-column offsets, per-column widths, title\n'
+    + '  containment) are therefore satisfied before any CSS is written and could not fail\n'
+    + '  on them. What WAS asserted here, and can fail: the resolved track count against the\n'
+    + '  declared one, and every line rendering the declared number of cells.\n'
+    + rows;
+}
+
 function uncomparableNote() {
   if (!uncomparableManagers.size) {
     return '[check:panels] NOTE — every declared item manager rendered at least two label/field\n'
@@ -1589,6 +1728,7 @@ if (code === EXIT_FAIL) {
     );
   }
   console.error(`\n${uncomparableNote()}`);
+  if (flatGridNote()) console.error(flatGridNote());
   console.error(`${seamNote(code)}\n`);
   console.error(
     '\nW0: one label width and one field width per panel. The two numbers live in\n' +
@@ -1605,6 +1745,7 @@ if (code === EXIT_CANNOT_TELL) {
   // reaches — leaving them out would make that comment describe the opposite
   // of its code, which this file has already paid for once.
   console.error(`\n${uncomparableNote()}`);
+  if (flatGridNote()) console.error(flatGridNote());
   console.error(seamNote(code));
   cannotTell('check:panels', blind.join('\n\n'));
 }
@@ -1615,4 +1756,5 @@ console.log(
 );
 
 console.log(uncomparableNote());
+if (flatGridNote()) console.log(flatGridNote());
 console.log(seamNote(code));
