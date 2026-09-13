@@ -137,12 +137,18 @@ export function getCellContentAlignmentStyle(hAlign: string, vAlign: string): CS
     return {};
   }
 
+  const alignItems = horizontal === "center" ? "center" : horizontal === "right" ? "flex-end" : "stretch";
   return {
     display: "flex",
     flexDirection: "column",
-    alignItems: horizontal === "center" ? "center" : horizontal === "right" ? "flex-end" : "stretch",
-    justifyContent: vertical === "center" ? "center" : vertical === "bottom" ? "flex-end" : "flex-start"
-  };
+    alignItems,
+    justifyContent: vertical === "center" ? "center" : vertical === "bottom" ? "flex-end" : "flex-start",
+    // The cell's alignment, readable by a module that must NOT take it as a
+    // flex item (task 86bbzxx09). A form module is forced to `align-self:
+    // stretch` so it never collapses to content width; its own box then reads
+    // this to sit at the cell's edge instead of always at the left.
+    ["--cell-h-align" as string]: alignItems
+  } as CSSProperties;
 }
 
 /**
