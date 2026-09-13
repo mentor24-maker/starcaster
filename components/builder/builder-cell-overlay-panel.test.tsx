@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  BUILDER_VIDEO_DEFAULT_OVERLAY_OPACITY,
+  BUILDER_VIDEO_DEFAULT_OVERLAY_TINT,
   createDefaultBackgroundSettings,
   createEmptySection,
+  hasActiveRowOverlayScreen,
   type BuilderTemplateSection
 } from "@/lib/builder-template";
 import { BuilderSectionCard } from "./builder-section-card";
@@ -291,12 +294,27 @@ describe("the cell panel's Background fill", () => {
     for (const mode of ["none", "color", "gradient", "image"]) expect(modes).toContain(mode);
   });
 
-  it("writes Video to the cell's FILL, and leaves that cell's overlay alone", () => {
+  it("writes Video to the cell's FILL, and never into that cell's overlay picker", () => {
     const next = mount().choose("Background", "video");
 
     expect(next.cellBackgrounds.left.mode).toBe("video");
-    // The overlay is the mirror of the mistake the overlay tests guard: same
-    // type, same picker, one wrong prop in the other direction.
+    /*
+     * The mirror of the mistake the overlay tests guard: same type, same
+     * picker, one wrong prop in the other direction. It used to be written
+     * `overlay.mode === "none"`, which stopped being the right assertion the
+     * moment Video began seeding the tint — the seed writes "color" there on
+     * purpose. What must never happen is the FILL's chosen mode landing in the
+     * overlay, so that is what is asserted now: the overlay is not a video.
+     */
+    expect(next.cellOverlayScreens?.left?.background.mode).not.toBe("video");
+  });
+
+  it("leaves the overlay alone for a mode that does not seed", () => {
+    // The plain form of the wrong-prop guard above, on a mode where nothing
+    // is expected to touch the overlay at all.
+    const next = mount().choose("Background", "gradient");
+
+    expect(next.cellBackgrounds.left.mode).toBe("gradient");
     expect(next.cellOverlayScreens?.left?.background.mode).toBe("none");
   });
 
@@ -305,5 +323,85 @@ describe("the cell panel's Background fill", () => {
 
     expect(next.cellBackgrounds.left.mode).toBe("video");
     expect(next.cellBackgrounds.right.mode).toBe("none");
+  });
+});
+
+/*
+ * THE CELL'S DEFAULT TINT — the round-3 send-back.
+ *
+ * Choosing Video on a ROW has seeded the overlay tint since 2026-08-31
+ * (operator's call: "Default overlay tint ON"). Choosing Video on a CELL did
+ * not, so an operator who set one column to video got his own words laid over
+ * moving footage with nothing between them — and nothing on screen telling him
+ * a tint was the thing he was missing.
+ *
+ * These mount the real card and drive the real dropdown, for the reason the
+ * row's own tint tests spell out: `seedVideoBackgroundOverlayScreen` already
+ * had passing tests while the CALL to it could be deleted outright. What is
+ * covered here is the wiring — the step the operator actually performs.
+ */
+describe("choosing Video on a cell", () => {
+  it("turns that cell's tint on, so text over the footage is readable by default", () => {
+    const next = mount().choose("Background", "video");
+
+    expect(hasActiveRowOverlayScreen(next.cellOverlayScreens?.left)).toBe(true);
+    expect(next.cellOverlayScreens?.left?.background.color).toBe(BUILDER_VIDEO_DEFAULT_OVERLAY_TINT);
+    expect(next.cellOverlayScreens?.left?.opacity).toBe(BUILDER_VIDEO_DEFAULT_OVERLAY_OPACITY);
+  });
+
+  it("seeds the column whose panel was used, and leaves the other one plain", () => {
+    // A tint seeded across the whole row would dim a neighbour the operator
+    // never touched — the cell-scoping mistake this panel is prone to.
+    const next = mount().choose("Background", "video");
+
+    expect(hasActiveRowOverlayScreen(next.cellOverlayScreens?.left)).toBe(true);
+    expect(hasActiveRowOverlayScreen(next.cellOverlayScreens?.right)).toBe(false);
+  });
+
+  it("leaves a tint the operator already set exactly as it was", () => {
+    const section = {
+      ...createEmptySection("two-column"),
+      cellOverlayScreens: {
+        left: { background: { mode: "color", color: "#ff0000" }, opacity: 20 },
+        right: { background: { mode: "none" }, opacity: 100 }
+      }
+    } as unknown as BuilderTemplateSection;
+
+    // It seeds, it does not lock: his colour and his strength both survive.
+    const next = mount(section).choose("Background", "video");
+
+    expect(next.cellOverlayScreens?.left?.background.color).toBe("#ff0000");
+    expect(next.cellOverlayScreens?.left?.opacity).toBe(20);
+  });
+
+  it("does not crash on a row saved before cell overlays existed", () => {
+    const bare = createEmptySection("two-column") as unknown as Record<string, unknown>;
+    delete bare.cellOverlayScreens;
+
+    const next = mount(bare as unknown as BuilderTemplateSection).choose("Background", "video");
+    expect(next.cellOverlayScreens?.left?.background.color).toBe(BUILDER_VIDEO_DEFAULT_OVERLAY_TINT);
+  });
+});
+
+describe("choosing any other mode on a cell", () => {
+  it("does not seed a tint", () => {
+    for (const mode of ["color", "gradient", "image", "style"]) {
+      const next = mount().choose("Background", mode);
+      expect(hasActiveRowOverlayScreen(next.cellOverlayScreens?.left)).toBe(false);
+    }
+  });
+
+  it("does NOT tear out a tint that is already there", () => {
+    const mine = { background: { mode: "color", color: "#ff0000" }, opacity: 20 };
+    const section = {
+      ...createEmptySection("two-column"),
+      cellOverlayScreens: { left: mine }
+    } as unknown as BuilderTemplateSection;
+
+    // Switching a cell away from Video must not delete a setting the operator
+    // can see and did not ask about — the same silent edit the row guards.
+    const next = mount(section).choose("Background", "color");
+
+    expect(next.cellOverlayScreens?.left).toEqual(mine);
   });
 });

@@ -57,6 +57,22 @@ why uploading a video to a ROW background turns it into an image background and
 throws the clip away — a real fault, filed separately as its own job. The
 column's upload does not do that, and the piece that gets it right is written
 to be shared, so fixing the row is a one-line change when that job is picked up.
+
+A third review pass found the same shape a third time: a column doing less than
+a row does. When you set a ROW to Video, the Builder automatically dims the
+footage slightly — a dark tint laid over the clip, on by default since the end
+of August, because words sitting on moving film are close to unreadable without
+something between them. Setting a COLUMN to Video did not do it. You got bright
+footage with your own text on top and nothing on screen to suggest a tint was
+the thing you were missing; you had to already know the setting existed and go
+and switch it on yourself.
+
+A column now turns its tint on the moment it becomes a video column, exactly as
+a row does, and each column gets its own — putting video in the left column does
+not dim the right one. It only ever switches the tint ON: if you had already
+chosen a colour or a strength for that column, yours is kept untouched, and
+switching the column back off video leaves your tint exactly where it was rather
+than quietly deleting a setting you can see.
 ## 2026-09-08 — Module settings panels now line up top to bottom (#667)
 
 Open any module's settings in the Builder and you are really looking at two

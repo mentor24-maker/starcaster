@@ -13,7 +13,8 @@ import type { CSSProperties, DragEvent } from "react";
 import {
   getLayoutColumns,
   getLayoutGridTemplate,
-  normalizeRowOverlayScreenSettings
+  normalizeRowOverlayScreenSettings,
+  seedVideoBackgroundOverlayScreen
 } from "@/lib/builder-template";
 import { describeBlockLineage } from "@/lib/block-lineage";
 import { resolveSharedSectionTitle } from "@/lib/saved-section-name";
@@ -503,6 +504,31 @@ export function BuilderSectionCard({
     updateCellOverlay(column, (overlay) => ({ ...overlay, opacity }));
   }
 
+  /**
+   * Choosing a background mode on a CELL, plus the one thing choosing Video
+   * also does: turn that cell's tint on. The row has done this since
+   * 2026-08-31 (`changeSectionBackgroundMode`, operator's call — "Default
+   * overlay tint ON"), and a cell that did not was the round-3 send-back:
+   * footage under the operator's own words with nothing between them, and
+   * nothing on screen naming the tint as the thing he is missing.
+   *
+   * It seeds and it never removes, the same rule the row follows. An overlay
+   * already configured comes back untouched (`seedVideoBackgroundOverlayScreen`
+   * returns it as-is), and switching AWAY from Video is not a mode this
+   * function acts on at all — tearing out a tint he can see, as a side effect
+   * of a change he made for another reason, is the silent edit both surfaces
+   * are written against.
+   *
+   * It lives here, beside `updateCellOverlay`, because the tint is a SECTION
+   * setting — `cellOverlayScreens[column]` — and the fill picker only ever
+   * sees the `BackgroundSettings` object. Same reason the row's seeding sits
+   * outside the picker rather than inside it.
+   */
+  function changeCellBackgroundMode(column: string, mode: BackgroundSettings["mode"]) {
+    if (mode !== "video") return;
+    updateCellOverlay(column, seedVideoBackgroundOverlayScreen);
+  }
+
   return (
     <article className={`builder-section-card${isCanonical ? " builder-section-card-canonical" : ""}`} style={getSectionStyle()}>
       <div aria-expanded={!isCollapsed} className="builder-section-header" ref={sectionHeaderRef}>
@@ -667,6 +693,7 @@ export function BuilderSectionCard({
                         section={section}
                         editorDevice={editorDevice}
                         onUpdateCellBackground={onUpdateCellBackground}
+                        onChangeCellBackgroundMode={changeCellBackgroundMode}
                         onUploadCellBackgroundMedia={onUploadCellBackgroundMedia}
                         onUpdateCellBorderWidth={onUpdateCellBorderWidth}
                         onUpdateCellBorderColor={onUpdateCellBorderColor}

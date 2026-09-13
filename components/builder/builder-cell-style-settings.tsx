@@ -15,6 +15,21 @@ type BuilderCellStyleSettingsProps = {
   editorDevice: "browser" | "mobile";
   onUpdateCellBackground: (column: string, updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
   /**
+   * The cell's background MODE was just changed — the one step that does more
+   * than write the fill. Choosing Video seeds the cell's tint, exactly as
+   * choosing Video on a row seeds the row's.
+   *
+   * It is separate from `onUpdateCellBackground` because the tint is not part
+   * of `BackgroundSettings`: it lives on the section as
+   * `cellOverlayScreens[column]`, so only the card can write it. The row draws
+   * the same line for the same reason — `changeSectionBackgroundMode` sits
+   * outside the picker rather than inside it.
+   *
+   * Optional: the two modal surfaces that draw this panel with no seeding
+   * wired pass nothing and keep their present behaviour.
+   */
+  onChangeCellBackgroundMode?: (column: string, mode: BackgroundSettings["mode"]) => void;
+  /**
    * Upload a file straight into THIS cell's background — a cell-scoped
    * handler, deliberately not the row's passed through: the row's writes the
    * row's own fill, so wiring it here would repaint the whole row when the
@@ -87,6 +102,7 @@ export function BuilderCellStyleSettings({
   section,
   editorDevice,
   onUpdateCellBackground,
+  onChangeCellBackgroundMode,
   onUploadCellBackgroundMedia,
   onUpdateCellBorderWidth,
   onUpdateCellBorderColor,
@@ -221,6 +237,7 @@ export function BuilderCellStyleSettings({
             background={section.cellBackgrounds[column] ?? createDefaultBackgroundSettings()}
             horizontal
             onChange={(updater) => onUpdateCellBackground(column, updater)}
+            onModeChange={(mode) => onChangeCellBackgroundMode?.(column, mode)}
             onUploadImage={
               onUploadCellBackgroundMedia
                 ? (file) => onUploadCellBackgroundMedia(column, file)

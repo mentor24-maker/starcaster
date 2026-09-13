@@ -53,6 +53,21 @@ type BuilderBackgroundControlsProps = {
   surfaceNoun?: string;
   background: BackgroundSettings;
   onChange: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
+  /**
+   * Told the mode the operator just PICKED, alongside the `onChange` that
+   * writes it — for the one thing a surface may need to do that the picker
+   * cannot see: write a setting that is not part of `BackgroundSettings`.
+   *
+   * The cell uses it to seed its tint when it first becomes a video cell, the
+   * way the row seeds its own (`changeSectionBackgroundMode`). It is a
+   * separate callback rather than something inferred from `onChange` because
+   * `onChange` hands over an updater, not a value: a caller wanting the new
+   * mode would have to run that updater a second time and hope it is pure.
+   *
+   * Optional, and fired only on a real mode CHANGE, so every existing caller
+   * is unchanged.
+   */
+  onModeChange?: (mode: BackgroundSettings["mode"]) => void;
   onChooseImage?: () => void;
   onUploadImage?: (file: File | null) => void;
   compact?: boolean;
@@ -95,6 +110,7 @@ export function BuilderBackgroundControls({
   surfaceNoun = "section",
   background,
   onChange,
+  onModeChange,
   onChooseImage,
   onUploadImage,
   compact = false,
@@ -138,6 +154,9 @@ export function BuilderBackgroundControls({
       }
       return next;
     });
+    // AFTER the fill write, and outside the updater on purpose: an updater
+    // React may call more than once is no place for a second surface's write.
+    onModeChange?.(newMode);
   }
 
   /**
