@@ -6347,7 +6347,10 @@ function EventCalendarPreview({
   /** The venue colour an event is painted with, as the chip's accent. */
   function colorStyle(event: CalendarEvent): React.CSSProperties | undefined {
     const color = categoryById.get(event.categoryId || "")?.color;
-    return color ? { ["--evt-accent" as string]: color } : undefined;
+    // --evt-venue is set ONLY for an event with a venue, so an event without
+    // one gets no coloured edge — inheriting the module accent made a venue-less
+    // dinner look like a Tennis Center program. Chips also take it as their accent.
+    return color ? { ["--evt-accent" as string]: color, ["--evt-venue" as string]: color } : undefined;
   }
 
   function instructorFor(item: ScheduleItem<CalendarEvent>): string {

@@ -8250,7 +8250,7 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 }
 
 .builder-react-root .builder-event-calendar-item {
-  border-left: 4px solid var(--evt-accent, transparent);
+  border-left: 4px solid var(--evt-venue, transparent);
 }
 
 .builder-react-root .builder-event-calendar-week {
@@ -8313,7 +8313,7 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   align-items: baseline;
   gap: 0 var(--space-4);
   padding: var(--space-1) var(--space-4);
-  border-left: 4px solid var(--evt-accent, transparent);
+  border-left: 4px solid var(--evt-venue, transparent);
 }
 
 .builder-react-root .builder-event-calendar-program-title {
