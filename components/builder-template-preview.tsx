@@ -158,12 +158,23 @@ import {
   eventOccursOn,
   formatEventWhen,
   isSameDay,
-  isoToLocalInput,
   isUpcomingEvent,
-  localInputToIso,
   monthGrid,
   normalizeEventStatus,
 } from "@/lib/event-format";
+import {
+  WEEKDAY_SHORT,
+  describeRecurrence,
+  eventTimeZone,
+  expandOccurrences,
+  formatOccurrenceDate,
+  formatTimeRange,
+  isValidTimeZone,
+  isoToZonedInput,
+  zonedInputToIso,
+  type RecurrenceOverride,
+  type RecurrenceRule,
+} from "@/lib/event-recurrence";
 import { BuilderImagePreview } from "@/components/builder/builder-image-preview";
 import {
   BuilderFloatingImageRuntime,
@@ -7159,9 +7170,50 @@ type EventRecord = {
   organizerContact: string;
   seoTitle: string;
   seoDescription: string;
+  recurrence?: RecurrenceRule | null;
+  recurrenceOverrides?: RecurrenceOverride[];
 };
 
 type EventFormValues = Record<string, string>;
+
+/** The Repeat section of the form, kept apart from the flat string fields. */
+type EventRepeatForm = { enabled: boolean; interval: number; weekdays: number[]; until: string };
+
+const EMPTY_EVENT_REPEAT: EventRepeatForm = { enabled: false, interval: 1, weekdays: [], until: "" };
+
+/** Monday first, the way a club's weekly program guide reads. */
+const EVENT_REPEAT_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+/** How far ahead the Upcoming Dates list looks. */
+const EVENT_REPEAT_PREVIEW_WEEKS = 12;
+const EVENT_REPEAT_PREVIEW_MAX = 60;
+
+/** Offered in the Time Zone box; any real zone name may still be typed. */
+const EVENT_TIME_ZONE_SUGGESTIONS = [
+  "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+  "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu",
+];
+
+/**
+ * Change one date of a series. An entry left changing nothing is removed, so
+ * "Restore" and clearing both times leave no trace behind.
+ */
+function applyEventOverride(
+  list: RecurrenceOverride[],
+  date: string,
+  patch: Partial<RecurrenceOverride> | null,
+): RecurrenceOverride[] {
+  const rest = list.filter((o) => o.date !== date);
+  if (!patch) return rest;
+  const merged: RecurrenceOverride = { ...(list.find((o) => o.date === date) || { date }), ...patch, date };
+  const clean: RecurrenceOverride = { date };
+  if (merged.cancelled) clean.cancelled = true;
+  if (merged.startTime) clean.startTime = merged.startTime;
+  if (merged.endTime) clean.endTime = merged.endTime;
+  if (merged.note && merged.note.trim()) clean.note = merged.note;
+  if (Object.keys(clean).length === 1) return rest;
+  return [...rest, clean].sort((a, b) => a.date.localeCompare(b.date));
+}
 
 const EVENT_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "draft", label: "Draft" },
@@ -7223,6 +7275,13 @@ function EventManagerPreview({
   const [errorMsg, setErrorMsg] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<EventRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [repeat, setRepeat] = useState<EventRepeatForm>(EMPTY_EVENT_REPEAT);
+  const [overrides, setOverrides] = useState<RecurrenceOverride[]>([]);
+  const [changingDate, setChangingDate] = useState<string | null>(null);
+  // Dates and times in the form are read in the EVENT's zone, so a repeat
+  // stays at 8:30am local across a clock change and an admin travelling
+  // elsewhere still types the club's own times.
+  const formZone = eventTimeZone({ timezone: form.timezone });
 
   function loadEvents() {
     setLoading(true);
@@ -7248,12 +7307,18 @@ function EventManagerPreview({
     setFormOpen(false);
     setEditId(null);
     setForm(EMPTY_EVENT_FORM);
+    setRepeat(EMPTY_EVENT_REPEAT);
+    setOverrides([]);
+    setChangingDate(null);
     setErrorMsg("");
   }
 
   function startCreate() {
     setEditId(null);
     setForm({ ...EMPTY_EVENT_FORM, timezone: localTimeZoneName() });
+    setRepeat(EMPTY_EVENT_REPEAT);
+    setOverrides([]);
+    setChangingDate(null);
     setErrorMsg("");
     setStatusMsg("");
     setFormOpen(true);
@@ -7261,13 +7326,14 @@ function EventManagerPreview({
 
   function startEdit(event: EventRecord) {
     const allDay = Boolean(event.allDay);
+    const zone = eventTimeZone(event);
     setEditId(event.id);
     setForm({
       title: event.title ?? "",
       slug: event.slug ?? "",
       status: event.status || "draft",
-      startsAt: isoToLocalInput(event.startsAt, allDay),
-      endsAt: isoToLocalInput(event.endsAt, allDay),
+      startsAt: isoToZonedInput(event.startsAt, zone, allDay),
+      endsAt: isoToZonedInput(event.endsAt, zone, allDay),
       allDay: allDay ? "true" : "false",
       timezone: event.timezone ?? "",
       locationName: event.locationName ?? "",
@@ -7284,6 +7350,12 @@ function EventManagerPreview({
       seoDescription: event.seoDescription ?? "",
       featured: event.featured ? "true" : "false",
     });
+    const rule = event.recurrence;
+    setRepeat(rule
+      ? { enabled: true, interval: rule.interval || 1, weekdays: [...rule.weekdays], until: rule.until || "" }
+      : EMPTY_EVENT_REPEAT);
+    setOverrides(Array.isArray(event.recurrenceOverrides) ? event.recurrenceOverrides : []);
+    setChangingDate(null);
     setErrorMsg("");
     setStatusMsg("");
     setFormOpen(true);
@@ -7297,21 +7369,33 @@ function EventManagerPreview({
     setForm((prev) => ({
       ...prev,
       allDay: next ? "true" : "false",
-      startsAt: prev.startsAt ? isoToLocalInput(localInputToIso(prev.startsAt), next) : "",
-      endsAt: prev.endsAt ? isoToLocalInput(localInputToIso(prev.endsAt), next) : "",
+      startsAt: prev.startsAt ? isoToZonedInput(zonedInputToIso(prev.startsAt, formZone), formZone, next) : "",
+      endsAt: prev.endsAt ? isoToZonedInput(zonedInputToIso(prev.endsAt, formZone), formZone, next) : "",
     }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) { setErrorMsg("Event name is required."); return; }
-    const startsAt = localInputToIso(form.startsAt);
-    const endsAt = localInputToIso(form.endsAt);
+    const startsAt = zonedInputToIso(form.startsAt, formZone);
+    const endsAt = zonedInputToIso(form.endsAt, formZone);
     // An end before its start is the one date mistake worth refusing: it makes
     // every calendar view render the event backwards or not at all.
     if (startsAt && endsAt && Date.parse(endsAt) < Date.parse(startsAt)) {
       setErrorMsg("The end of an event cannot come before its start.");
       return;
+    }
+    if (repeat.enabled) {
+      if (!startsAt) { setErrorMsg("A repeating event needs a start date — the first day it happens."); return; }
+      if (!repeat.weekdays.length) { setErrorMsg("Pick at least one day of the week for the event to repeat on."); return; }
+      if (!isValidTimeZone(form.timezone)) {
+        setErrorMsg("A repeating event needs a real time zone, such as America/New_York, so its time stays put when the clocks change.");
+        return;
+      }
+      if (repeat.until && repeat.until < form.startsAt.slice(0, 10)) {
+        setErrorMsg("The repeat end date is before the event starts.");
+        return;
+      }
     }
     setSaving(true);
     setErrorMsg("");
@@ -7337,6 +7421,12 @@ function EventManagerPreview({
       seoTitle: form.seoTitle.trim(),
       seoDescription: form.seoDescription.trim(),
       featured: form.featured === "true",
+      recurrence: repeat.enabled
+        ? { freq: "weekly", interval: repeat.interval, weekdays: repeat.weekdays, until: repeat.until || null }
+        : null,
+      // Turning Repeat off drops the single-date changes with it: they belong
+      // to dates that no longer exist.
+      recurrenceOverrides: repeat.enabled ? overrides : [],
     };
     try {
       const res = await fetch(
@@ -7387,6 +7477,215 @@ function EventManagerPreview({
 
   const isAllDay = form.allDay === "true";
   const dateInputType = isAllDay ? "date" : "datetime-local";
+
+  function toggleRepeat(enabled: boolean) {
+    setRepeat((prev) => {
+      if (!enabled) return { ...prev, enabled: false };
+      // Starting from the start date's own weekday is what "repeat weekly"
+      // means to anyone who has used a calendar app.
+      const firstDay = /^\d{4}-\d{2}-\d{2}/.test(form.startsAt)
+        ? new Date(`${form.startsAt.slice(0, 10)}T12:00:00Z`).getUTCDay()
+        : null;
+      const weekdays = prev.weekdays.length ? prev.weekdays : (firstDay === null ? [] : [firstDay]);
+      return { ...prev, enabled: true, weekdays };
+    });
+  }
+
+  function toggleRepeatDay(day: number) {
+    setRepeat((prev) => ({
+      ...prev,
+      weekdays: prev.weekdays.includes(day)
+        ? prev.weekdays.filter((d) => d !== day)
+        : [...prev.weekdays, day].sort((a, b) => a - b),
+    }));
+  }
+
+  const repeatPreview = (() => {
+    if (!formOpen || !repeat.enabled) return null;
+    const startIso = zonedInputToIso(form.startsAt, formZone);
+    if (!startIso) return { dates: [], reason: "Set a start date to see the dates this event repeats on." };
+    if (!repeat.weekdays.length) return { dates: [], reason: "Pick at least one day to see the dates this event repeats on." };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const from = Math.max(today.getTime(), Date.parse(startIso) - 1);
+    const dates = expandOccurrences({
+      id: "preview",
+      startsAt: startIso,
+      endsAt: zonedInputToIso(form.endsAt, formZone),
+      allDay: isAllDay,
+      timezone: formZone,
+      recurrence: { freq: "weekly", interval: repeat.interval, weekdays: repeat.weekdays, until: repeat.until || null },
+      recurrenceOverrides: overrides,
+    }, from, from + EVENT_REPEAT_PREVIEW_WEEKS * 7 * 86400000).slice(0, EVENT_REPEAT_PREVIEW_MAX);
+    // An empty list says why, or it reads as the feature being broken.
+    const reason = dates.length
+      ? ""
+      : `No dates in the next ${EVENT_REPEAT_PREVIEW_WEEKS} weeks${repeat.until ? ` — the repeat ends ${formatOccurrenceDate(repeat.until, undefined, true)}` : ""}.`;
+    return { dates, reason };
+  })();
+
+  const repeatSection = (
+    <fieldset className="builder-event-manager-repeat">
+      <legend className="builder-event-manager-label">Repeat</legend>
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <select
+            id="event-repeat"
+            aria-label="Repeat"
+            className="builder-event-manager-input"
+            value={repeat.enabled ? "weekly" : "none"}
+            onChange={(e) => toggleRepeat(e.target.value === "weekly")}
+          >
+            <option value="none">Does not repeat</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </div>
+        {repeat.enabled ? (
+          <div className="builder-event-manager-field">
+            <select
+              id="event-repeat-interval"
+              aria-label="How often"
+              className="builder-event-manager-input"
+              value={String(repeat.interval)}
+              onChange={(e) => setRepeat((prev) => ({ ...prev, interval: Number(e.target.value) || 1 }))}
+            >
+              <option value="1">Every week</option>
+              <option value="2">Every 2 weeks</option>
+              <option value="3">Every 3 weeks</option>
+              <option value="4">Every 4 weeks</option>
+            </select>
+          </div>
+        ) : null}
+        {repeat.enabled ? (
+          <div className="builder-event-manager-field">
+            <label className="builder-event-manager-label" htmlFor="event-repeat-until">Until (optional)</label>
+            <input
+              id="event-repeat-until"
+              className="builder-event-manager-input"
+              type="date"
+              value={repeat.until}
+              onChange={(e) => setRepeat((prev) => ({ ...prev, until: e.target.value }))}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      {repeat.enabled ? (
+        <>
+          <div className="builder-event-manager-repeat-days" role="group" aria-label="Repeat on">
+            {EVENT_REPEAT_DAY_ORDER.map((day) => {
+              const on = repeat.weekdays.includes(day);
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  className={`builder-event-manager-repeat-day${on ? " is-on" : ""}`}
+                  aria-pressed={on}
+                  onClick={() => toggleRepeatDay(day)}
+                  style={on ? { background: accent, borderColor: accent } : undefined}
+                >
+                  {WEEKDAY_SHORT[day]}
+                </button>
+              );
+            })}
+          </div>
+          <p className="builder-event-manager-hint">
+            {describeRecurrence({ freq: "weekly", interval: repeat.interval, weekdays: repeat.weekdays, until: repeat.until || null }) || "Pick the days it happens on."}
+            {" · "}Times are {formZone.replace(/_/g, " ")} time.
+          </p>
+
+          <div className="builder-event-manager-dates">
+            <div className="builder-event-manager-label">Upcoming dates</div>
+            {repeatPreview && repeatPreview.reason ? (
+              <p className="builder-event-manager-hint">{repeatPreview.reason}</p>
+            ) : null}
+            {repeatPreview && repeatPreview.dates.length ? (
+              <ul className="builder-event-manager-date-list">
+                {repeatPreview.dates.map((occ) => {
+                  const entry = overrides.find((o) => o.date === occ.date);
+                  const editing = changingDate === occ.date;
+                  return (
+                    <li
+                      key={occ.date}
+                      className={`builder-event-manager-date${occ.cancelled ? " is-cancelled" : ""}${occ.changed && !occ.cancelled ? " is-changed" : ""}`}
+                    >
+                      <div className="builder-event-manager-date-line">
+                        <span className="builder-event-manager-date-day">{formatOccurrenceDate(occ.date)}</span>
+                        <span className="builder-event-manager-date-time">
+                          {formatTimeRange(occ.startsAt, occ.endsAt, formZone, occ.allDay)}
+                        </span>
+                        {occ.cancelled ? <span className="builder-event-manager-date-badge">Cancelled</span> : null}
+                        {occ.changed && !occ.cancelled ? <span className="builder-event-manager-date-badge">Changed</span> : null}
+                        {occ.note ? <span className="builder-event-manager-date-note">{occ.note}</span> : null}
+                        <span className="builder-event-manager-date-actions">
+                          {occ.cancelled ? (
+                            <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setOverrides((l) => applyEventOverride(l, occ.date, { cancelled: false }))}>
+                              Restore
+                            </button>
+                          ) : (
+                            <>
+                              {!isAllDay ? (
+                                <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setChangingDate(editing ? null : occ.date)}>
+                                  {editing ? "Done" : "Change"}
+                                </button>
+                              ) : null}
+                              <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setOverrides((l) => applyEventOverride(l, occ.date, { cancelled: true }))}>
+                                Cancel date
+                              </button>
+                            </>
+                          )}
+                          {entry && !occ.cancelled ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost tiny-btn"
+                              onClick={() => { setOverrides((l) => applyEventOverride(l, occ.date, null)); setChangingDate(null); }}
+                            >
+                              Undo change
+                            </button>
+                          ) : null}
+                        </span>
+                      </div>
+                      {editing && !occ.cancelled ? (
+                        <div className="builder-event-manager-date-edit">
+                          <label className="builder-event-manager-label">
+                            Starts
+                            <input
+                              type="time"
+                              className="builder-event-manager-input"
+                              value={entry?.startTime || isoToZonedInput(occ.startsAt, formZone).slice(11)}
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { startTime: e.target.value }))}
+                            />
+                          </label>
+                          <label className="builder-event-manager-label">
+                            Ends
+                            <input
+                              type="time"
+                              className="builder-event-manager-input"
+                              value={entry?.endTime || (occ.endsAt ? isoToZonedInput(occ.endsAt, formZone).slice(11) : "")}
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { endTime: e.target.value }))}
+                            />
+                          </label>
+                          <label className="builder-event-manager-label">
+                            Note for this date
+                            <input
+                              className="builder-event-manager-input"
+                              value={entry?.note || ""}
+                              placeholder="e.g. Moved to Court 4"
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { note: e.target.value }))}
+                            />
+                          </label>
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+    </fieldset>
+  );
 
   const eventForm = formOpen ? (
     <form className="builder-event-manager-form" onSubmit={handleSubmit}>
@@ -7477,10 +7776,16 @@ function EventManagerPreview({
             className="builder-event-manager-input"
             value={form.timezone}
             onChange={(e) => setField("timezone", e.target.value)}
-            placeholder="America/Denver"
+            placeholder="America/New_York"
+            list="event-timezone-suggestions"
           />
+          <datalist id="event-timezone-suggestions">
+            {EVENT_TIME_ZONE_SUGGESTIONS.map((zone) => <option key={zone} value={zone} />)}
+          </datalist>
         </div>
       </div>
+
+      {repeatSection}
 
       <div className="builder-event-manager-field-row">
         <div className="builder-event-manager-field">
@@ -7695,7 +8000,14 @@ function EventManagerPreview({
                   ) : null}
                   {showDate ? (
                     <td className="builder-admin-data-table-cell builder-admin-data-table-date">
-                      {formatEventWhen(event)}
+                      {event.recurrence ? (
+                        <>
+                          <span className="builder-event-manager-when-rule">{describeRecurrence(event.recurrence)}</span>
+                          <span className="builder-event-manager-when-sub">
+                            {formatTimeRange(event.startsAt, event.endsAt, eventTimeZone(event), event.allDay)}
+                          </span>
+                        </>
+                      ) : formatEventWhen(event)}
                     </td>
                   ) : null}
                   {showLocation ? (
