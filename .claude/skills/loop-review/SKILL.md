@@ -162,6 +162,14 @@ now contradict the change (12:28pm)` — and reads both off the ticket's own
 verdict comments, so run it **after** `verdict --fail`, not before. Nothing to
 pass by hand.
 
+**The note is written as a ticket comment** (`🔖 Loop note: …`) and every
+reader — `queue`, `get`, the in-flight cap, the pause sweep — takes the newest
+one (task 86bbzww8m). Since 2026-09-08 ClickUp's Free plan refuses every write
+to the custom field ("Custom field usages exceeded for your plan"), so the field
+column is stale and is NOT the record; a line saying the field refused is
+expected and is not a failure. Only "the Loop note comment could not be
+written" means the note is missing — say so in your run report.
+
 `CANNOT STAMP` means the one-time "Loop note" field is not set up yet (see
 `docs/LOOP_ENGINEERING.md`) — note it and carry on; it never blocks a verdict.
 
