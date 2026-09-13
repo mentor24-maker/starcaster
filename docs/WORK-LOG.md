@@ -38,6 +38,22 @@ let that count as "checked", the run prints a note saying so, and checks the two
 things that genuinely can go wrong instead. All four of those were broken on
 purpose and watched to go red before any of this was believed.
 
+Review sent this back once, and it was right to. The panel work was fine; the
+changes to the checker itself had two faults, both of the kind that only show
+up later. The first: the checker keeps a tally of these grids, and it was
+filing them under the wrong name — a name three different grids share — so the
+moment a second one was added the tally would have quietly reported one where
+there were two, thrown the second one's measurements away, and printed a
+nonsense list of screen widths. Proved by adding a second grid and watching it
+collapse, then fixed and watched to come out right. The second: if anyone ever
+mistyped the number of columns — wrote "three" instead of 3 — the checker did
+not fail, it hung, ran out of memory, and died having said nothing at all. Run
+for six minutes to confirm that, against a normal run of about one. It now
+stops and names the bad value in plain words. Two smaller things went with
+them: a note whose explanatory comment described the opposite of what the code
+did, and a track count that could have been fooled by a perfectly legal bit of
+CSS into reporting a fault that was not there.
+
 One thing found along the way is deliberately NOT fixed here: eleven panels
 leave a wide empty strip down their right-hand side, always the same 286 pixels.
 It is caused by the shared frame every panel sits in rather than by any one

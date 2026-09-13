@@ -1011,9 +1011,54 @@ function assertLattice(panels, width) {
 function measureColumnGrids(page) {
   return page.evaluate(() => {
     const managers = [...document.querySelectorAll('[data-lattice-columns]')];
+    /*
+     * THE NAME HAS TO BE UNIQUE, because a run-level tally is keyed by it.
+     *
+     * It used to be the FIRST class token, which for the flat shape is the
+     * generic `builder-item-grid` — shared today by three variants in
+     * `src/css/_builder-react-overrides.css` (--crumbs, --prices, --sessions)
+     * and by every future adopter. One token for several managers means the
+     * per-run Map collapses them into a single entry: the count reads 1 when
+     * there are 2, the second manager's tracks and rows are thrown away, and
+     * its widths append to the first's list so the note prints
+     * `(at 1440/1600/1920/1440/1600/1920px)`. That is the same defect the
+     * single-pair count paid for on 2026-09-05 — a count that reads as a
+     * verdict while being quietly wrong — arriving through the key instead of
+     * through the arithmetic (review round 1, task 86bbjt1b6).
+     *
+     * The full class string separates the variants, and an ordinal separates
+     * two instances of the SAME component, so the identity is unique by
+     * construction rather than by nobody having adopted it yet. It is stable
+     * across the three widths because the DOM is: the settings panel is a
+     * fixed-width sidebar and the same elements are measured in the same
+     * document order at every width.
+     */
+    const seenClasses = new Map();
     return managers.map((m, index) => {
-      const declared = Number(m.getAttribute('data-lattice-columns') || '0') || 0;
-      const name = (m.className || '').split(/\s+/)[0] || `manager ${index}`;
+      const declaredRaw = m.getAttribute('data-lattice-columns');
+      const declared = Number(declaredRaw || '0') || 0;
+      const classes = (m.className || '').trim().replace(/\s+/g, ' ');
+      const ordinal = (seenClasses.get(classes) || 0) + 1;
+      seenClasses.set(classes, ordinal);
+      const name = `${classes || `manager ${index}`}${ordinal > 1 ? ` #${ordinal}` : ''}`;
+      /*
+       * A DECLARATION THAT IS NOT A POSITIVE NUMBER STOPS HERE, measuring
+       * nothing, so the failure is reported instead of the process hanging.
+       *
+       * `Number(x || '0') || 0` turns `data-lattice-columns=""`, `="0"` and a
+       * typo like `="three"` all into 0 — and the flat path steps the cells
+       * with `i += declared`, which at 0 never advances. That loop runs inside
+       * `page.evaluate` pushing a line per iteration, so the gate does not
+       * fail: it hangs and then dies on memory, having said nothing at all.
+       * A check that cannot report is worse than one that fails (review round
+       * 1, task 86bbjt1b6). The nav and table shapes never hung, but they gave
+       * a confusing "declares 0 column(s) but N row(s) render 3 cell(s)", so
+       * the guard is taken once here for all three shapes and names the
+       * attribute's actual value.
+       */
+      if (declared < 1) {
+        return { index, name, declared, declaredRaw, shape: 'undeclared', header: null, rows: [] };
+      }
       // THREE markup shapes wear this declaration.
       //
       // The Navigation Links list is a div grid: a header band, a rows
@@ -1140,8 +1185,33 @@ function measureColumnGrids(page) {
           // The resolved track list, so the declaration can be held to the
           // CSS rather than to itself. `repeat()` and `fr` are already
           // resolved to used pixel values here, so splitting on whitespace
-          // is a real count.
-          tracks: getComputedStyle(m).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length,
+          // is a real count — but only after two things are taken out of the
+          // string first, or this assertion reports a drift that did not
+          // happen. NAMED GRID LINES (`[label] 121px [field] 213px`) are part
+          // of the computed value and would each count as a track. And an
+          // element with no explicit `grid-template-columns` computes to the
+          // keyword `none`, which would split to a single token and read as
+          // one track; that is reported as 0 and failed on its own message
+          // rather than counted.
+          //
+          // MEASURED, rather than assumed (review round 1, task 86bbjt1b6).
+          // The named-line half is live: putting `[label] … [url] … [action]
+          // … [end]` on the crumbs grid makes the old parser count SEVEN
+          // tracks against a declared 3 and fail for a drift that did not
+          // happen; with the strip it stays 3 and passes. The `none` half is
+          // defensive and unreachable today — probed in this browser, a grid
+          // computes `none` only when it has NO children (an implicit grid
+          // WITH children resolves to used pixel widths), and a manager with
+          // no children is already stopped above by the no-rows check, which
+          // says something more useful. It is kept so `none` can never be
+          // counted as one track if that ordering ever changes.
+          tracks: (() => {
+            const raw = getComputedStyle(m).gridTemplateColumns.trim();
+            if (!raw || raw === 'none') return 0;
+            return raw.replace(/\[[^\]]*\]/g, ' ').trim().split(/\s+/)
+              .filter(Boolean).length;
+          })(),
+          trackSource: getComputedStyle(m).gridTemplateColumns.trim(),
           header: lines[0] || null,
           rows: lines.slice(1)
         };
@@ -1162,6 +1232,18 @@ function assertColumnGrids(managers, width) {
   const failures = [];
   for (const m of managers) {
     const where = `${width}px ${m.name}`;
+
+    // The declaration itself is unusable — see the guard in
+    // `measureColumnGrids`. Nothing was measured, on purpose, so this is the
+    // only thing worth saying about this manager.
+    if (m.shape === 'undeclared') {
+      failures.push(
+        `${where}: data-lattice-columns is "${m.declaredRaw === null ? '' : m.declaredRaw}", ` +
+        'which is not a column count — it must be a whole number of 1 or more, ' +
+        'counting the actions column. Nothing on this manager was measured.'
+      );
+      continue;
+    }
 
     if (!m.rows.length) {
       failures.push(
@@ -1188,6 +1270,15 @@ function assertColumnGrids(managers, width) {
      * one and forgets the other, and every cell after the drift lands in the
      * wrong column with no error anywhere.
      */
+    if (m.shape === 'flat' && m.tracks === 0) {
+      failures.push(
+        `${where}: declares ${m.declared} column(s) but its CSS resolves no explicit tracks ` +
+        `(grid-template-columns: ${m.trackSource || 'none'}) — the columns are being created ` +
+        'implicitly, so there is nothing for the declaration to be held to and the cells land ' +
+        'wherever the browser puts them'
+      );
+      continue;
+    }
     if (m.shape === 'flat' && m.tracks !== m.declared) {
       failures.push(
         `${where}: declares ${m.declared} column(s) but its CSS resolves ${m.tracks} track(s) — ` +
@@ -1406,6 +1497,11 @@ for (const width of WIDTHS) {
     // Keyed by name, not summed over the widths — the same lesson the
     // single-pair count learned on 2026-09-05, where adding the per-width
     // count three times printed 9 declared managers for 3 real blocks.
+    // The key has to be UNIQUE for that to hold, which is why `name` is the
+    // manager's full class string plus an ordinal rather than its first class
+    // token: see the comment at the top of `measureColumnGrids`. Keyed on the
+    // first token, a second adopter of `.builder-item-grid` would have
+    // collapsed into the first one's entry and gone unreported.
     for (const g of columnGrids.filter((g) => g.shape === 'flat')) {
       if (!flatGrids.has(g.name)) flatGrids.set(g.name, { tracks: g.tracks, rows: g.rows.length, widths: [] });
       flatGrids.get(g.name).widths.push(width);
@@ -1544,20 +1640,6 @@ if (seamUnreached.size) {
  * the opposite of its code is worse than no comment, because it is read as
  * evidence. Zero now says so out loud.
  */
-function flatGridNote() {
-  if (!flatGrids.size) return '';
-  const rows = [...flatGrids.entries()]
-    .map(([name, g]) => `      · ${name} — ${g.tracks} track(s), ${g.rows} row(s) (at ${g.widths.join('/')}px)`)
-    .join('\n');
-  return `[check:panels] NOTE — ${flatGrids.size} titled-column manager(s) are ONE flat grid, so\n`
-    + '  their header titles and row cells read the same tracks by construction. The four\n'
-    + '  comparative assertions (row widths, per-column offsets, per-column widths, title\n'
-    + '  containment) are therefore satisfied before any CSS is written and could not fail\n'
-    + '  on them. What WAS asserted here, and can fail: the resolved track count against the\n'
-    + '  declared one, and every line rendering the declared number of cells.\n'
-    + rows;
-}
-
 function uncomparableNote() {
   if (!uncomparableManagers.size) {
     return '[check:panels] NOTE — every declared item manager rendered at least two label/field\n'
@@ -1573,6 +1655,39 @@ function uncomparableNote() {
     + '  them. The per-field assertions — the label-room floor and ceiling, the cropped-word\n'
     + '  check, and control-right-of-label — did run. Seed a second row in\n'
     + '  scripts/ui/seed_fixture.mjs if these should be compared too:\n'
+    + rows;
+}
+
+/*
+ * WHAT A PASS OVER A FLAT-GRID MANAGER IS WORTH — printed whenever one was
+ * measured, and silent when none was.
+ *
+ * The silence is deliberate and it is NOT the case the note above covers.
+ * `uncomparableNote()` answers "were the comparative assertions live on the
+ * managers we measured?", which has a real answer at zero — yes, vacuously,
+ * and saying so is what stops a reader inferring coverage from silence. This
+ * one answers "of the managers we measured, which are one flat grid?", and at
+ * zero there is no such manager to say anything about: the run already names
+ * how many declared managers it saw. Every call site guards with
+ * `if (flatGridNote())` accordingly.
+ *
+ * It used to sit directly under the "Zero now says so out loud" comment,
+ * which belongs to `uncomparableNote()` and describes the opposite of what
+ * this function does — the exact shape that comment was written about. This
+ * file has paid twice for a comment read as evidence of the code beneath it
+ * (review round 1, task 86bbjt1b6).
+ */
+function flatGridNote() {
+  if (!flatGrids.size) return '';
+  const rows = [...flatGrids.entries()]
+    .map(([name, g]) => `      · ${name} — ${g.tracks} track(s), ${g.rows} row(s) (at ${g.widths.join('/')}px)`)
+    .join('\n');
+  return `[check:panels] NOTE — ${flatGrids.size} titled-column manager(s) are ONE flat grid, so\n`
+    + '  their header titles and row cells read the same tracks by construction. The four\n'
+    + '  comparative assertions (row widths, per-column offsets, per-column widths, title\n'
+    + '  containment) are therefore satisfied before any CSS is written and could not fail\n'
+    + '  on them. What WAS asserted here, and can fail: the resolved track count against the\n'
+    + '  declared one, and every line rendering the declared number of cells.\n'
     + rows;
 }
 
