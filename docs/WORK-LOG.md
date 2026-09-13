@@ -1,3 +1,49 @@
+## 2026-09-13 — Two settings panels were already right; the third had a hidden defect nothing could see (#675)
+
+The Builder's settings panels are being brought onto one set of rules, a few
+panels at a time — so every label starts on the same vertical line and every
+field ends on the same one, instead of each row being its own width. This batch
+was the three search-and-breadcrumb panels.
+
+Measured in a real browser first, and two of the three were already correct.
+Site Search and Site Search Results line up exactly as they should at every
+screen width. That is worth saying out loud rather than quietly finding nothing
+to change: the ticket assumed all three were wrong.
+
+The Breadcrumb panel had two problems, and the interesting thing about both is
+that no automatic check could have found them.
+
+The first was the Separator box — the field where you set the little arrow
+between trail items. Someone had typed a fixed width into it, 48 pixels, so it
+sat as a stub two-thirds of the way back from the edge while every field around
+it ran to the edge. The checker that measures these panels looks at the SLOT a
+field sits in, and the slot was the correct full width the whole time; the 48
+was on the box inside it. So the panel had been passing honestly and the defect
+was simply outside what the instrument looks at. It now uses the same shared
+width as the field above it, and there is a test that fails if anyone types a
+width into this panel again.
+
+The second was bigger. The Label / URL / Action grid where you actually edit the
+trail — the largest thing in the panel — was invisible to the checker
+altogether. It is built in a shape the checker had never been taught, so every
+sweep for months had looked at this panel, found nothing to measure there, and
+reported a clean pass. Not a pass: an absence, and from the summary line the two
+look identical. The checker has been taught the shape, the grid now announces
+itself, and the count of measured item-editors went from 12 to 15.
+
+It also now says what its own green is worth here. In this kind of grid the
+titles and the rows physically cannot disagree — they are one grid — so four of
+the checks it runs could never fail on it whatever the code said. Rather than
+let that count as "checked", the run prints a note saying so, and checks the two
+things that genuinely can go wrong instead. All four of those were broken on
+purpose and watched to go red before any of this was believed.
+
+One thing found along the way is deliberately NOT fixed here: eleven panels
+leave a wide empty strip down their right-hand side, always the same 286 pixels.
+It is caused by the shared frame every panel sits in rather than by any one
+panel, so fixing it here would have quietly changed eleven other screens. It is
+filed on its own, with the measurements.
+
 ## 2026-09-08 — Alarms stopped being thrown away when the chat room refuses them (#666)
 
 The system has one way of telling anyone that something has broken: it posts a
