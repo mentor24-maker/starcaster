@@ -131,8 +131,8 @@ date, in weeks counted from the start date's week, up to and including `until`.
 The start date itself counts only if its weekday is ticked.
 
 **Not built:** daily and monthly rules (Dane chose weekly-only, 2026-09-12;
-nothing on the program guide needs them). Public-site display of repeats is
-ticket 86bbzt25j; instructor and colour-coded venues are 86bbzt25g.
+nothing on the program guide needs them). Public display is "The public calendar with repeats"
+below; instructors and venues are the section after this one.
 
 ## Instructors and venues (task 86bbzt25g, 2026-09-12)
 
@@ -159,6 +159,45 @@ blanks it if one gets past.
 painted on the page anyway), stripped by `categoriesForCaller` to id, name,
 colour and order for a caller with no session. Every write and the by-id path
 still need one. Both directions are asserted and were broken on purpose.
+
+## The public calendar with repeats (task 86bbzt25j, 2026-09-12)
+
+**One schedule, every view.** `lib/builder-client/event-schedule.ts` turns
+events into dated items (`scheduleBetween`) and groups them by the dates they
+touch (`groupByDate`). The month grid, the list, the cards, the new weekly
+schedule and the event page all read it, so a repeating program is on the same
+dates everywhere. Unit-tested, including in a Tokyo-clock run.
+
+**The calendar is drawn in the club's zone, not the visitor's**
+(`calendarTimeZone`: the first event naming a real zone). A 7pm Tuesday program
+stays on Tuesday for a visitor in another zone.
+
+**Weekly schedule** (`layout: "week"`) is the printed *Weekly Program Guide* as
+a page: every day of the week down the side (empty days say *Nothing
+scheduled*), each program with instructor and time, a venue-coloured edge,
+previous/next week and *This week*. Week Starts applies to it as well as the
+month. An empty week names the week — and the venue, when filtered.
+
+**Venue key = filter.** Shown when more than one venue is in use (Venue Key
+setting); clicking one narrows every layout to it.
+
+**Cancelled dates are shown, struck through and labelled — never hidden.** A
+member who saw "Elite, Tuesday" last week needs to see that THIS Tuesday is off.
+A single date's note ("Courts resurfacing") and substitute instructor show too.
+
+**Only a venue colours an edge** (`--evt-venue`, set only when an event has a
+category). Inheriting the module accent made a venue-less dinner read as a
+Tennis Center program.
+
+**Links carry the date.** A repeating program links to
+`?event=<slug>&date=YYYY-MM-DD` (`eventPageHref`); the event page then shows
+that session's time and instructor, a cancelled banner naming the date, a line
+when the rule does not run that day, the rule in words, and the next six dates.
+
+**New settings:** Weekly Schedule layout, Instructor (default on), Venue Key
+(default on). `check:render` contract
+`event-calendar-weekly-schedule-draws-a-whole-week` — broken on purpose twice
+(days in a row; Week Starts ignored) and watched to fail.
 
 ## The public read exemption — a security decision, made here
 
