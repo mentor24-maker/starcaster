@@ -46,6 +46,16 @@ assert.equal(
   true
 );
 
+// Event categories — the calendar legend's names and colours (86bbzt25g).
+// The list is public; every write, and a single category by id, is not.
+const categoriesReq = { url: 'https://benvin.org/api/event-categories' };
+assert.equal(isPublicTenantContentReadRoute('/api/event-categories', 'GET', categoriesReq), true);
+assert.equal(isPublicTenantContentReadRoute('/api/event-categories', 'POST', categoriesReq), false);
+assert.equal(isPublicTenantContentReadRoute('/api/event-categories/ecat_1', 'GET', categoriesReq), false);
+assert.equal(isPublicTenantContentReadRoute('/api/event-categories/ecat_1', 'PUT', categoriesReq), false);
+assert.equal(isPublicTenantContentReadRoute('/api/event-categories/ecat_1', 'DELETE', categoriesReq), false);
+assert.equal(acceptsProjectAdminSession('/api/event-categories', { isPublicCrmRoute: false, method: 'POST' }), true);
+
 assert.equal(isPublicTenantContentReadRoute('/api/builder/themes', 'GET', {}), true);
 assert.equal(isPublicTenantContentReadRoute('/api/community-assets', 'GET', {}), true);
 

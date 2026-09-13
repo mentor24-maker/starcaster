@@ -49,9 +49,7 @@ start, end. The rest exist because a calendar without them misreports:
 ## What is deliberately not here
 
 - **Recurrence** was here until 2026-09-12 — see "Repeating events" below.
-- **Categories.** The blog has them, with colours, for filtering. Events will
-  want the same thing, but the public calendar is what makes that visible, so
-  it belongs with the module that filters by it.
+- **Categories** arrived 2026-09-12 as venues — see "Instructors and venues" below.
 - **Ticketing, RSVP, capacity, attachments.** All real; all their own feature.
 
 ## The public calendar (2/3)
@@ -136,6 +134,32 @@ The start date itself counts only if its weekday is ticked.
 nothing on the program guide needs them). Public-site display of repeats is
 ticket 86bbzt25j; instructor and colour-coded venues are 86bbzt25g.
 
+## Instructors and venues (task 86bbzt25g, 2026-09-12)
+
+Delray's program guide colours every program by where it runs — Delray Beach
+Tennis Center navy, Delray Swim & Tennis Club green, Pickleball orange — and
+names the coach. So an event now carries:
+
+- **`instructor`** — free text. A single date may name a substitute
+  (`recurrence_overrides[].instructor`), because the guide changes the coach
+  week to week far more often than the time.
+- **`category_id`** — one row of `event_categories` (name, `#rrggbb` colour,
+  sort order), managed from the **Venues** button on the Event Manager.
+
+**Not a foreign key, on purpose.** Deleting a venue leaves its events standing;
+every reader treats an id it cannot find as "no category", and the delete
+confirmation says how many events will lose theirs.
+
+**A colour is `#rrggbb` or nothing.** The value lands in a style attribute on a
+client's public page; the route answers a 400 for anything else and the store
+blanks it if one gets past.
+
+**Public read, narrowly** — a second exemption in
+`lib/projectAdminApiAuth.js`: `GET /api/event-categories` only (the legend is
+painted on the page anyway), stripped by `categoriesForCaller` to id, name,
+colour and order for a caller with no session. Every write and the by-id path
+still need one. Both directions are asserted and were broken on purpose.
+
 ## The public read exemption — a security decision, made here
 
 `event-calendar` is read by visitors with no login, so
@@ -209,7 +233,6 @@ be controls an operator fills in that render nowhere at all (Standard 13).
 - **"Add to calendar"** (an `.ics` download, and Google/Outlook links). The
   single most-expected control on an event page, and deliberately left out of
   this slice to keep it shippable. Everything it needs is already on the row.
-- **Categories** with colours, for filtering the public calendar.
 - **A month grid that lists a day's events on tap** at phone width. Today the
   grid degrades to dots per day below 700px, which says *that* something is on
   but not *what*.

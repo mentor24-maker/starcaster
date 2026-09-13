@@ -7750,7 +7750,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-event-manager-date-edit {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 8rem)) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 8rem)) repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
   margin-top: var(--space-2);
 }
@@ -7768,6 +7768,81 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-event-manager-when-sub {
   color: var(--ink-secondary);
+}
+
+/* The date column does not wrap (a date should stay on one line), but a
+ * repeat rule is a sentence — "Weekly on Mon, Tue, Wed, Thu, Fri, Sat until
+ * Dec 19, 2026" was clipped mid-word. */
+.builder-react-root .builder-admin-data-table-date .builder-event-manager-when-rule {
+  white-space: normal;
+}
+
+/* ── Event Manager: venues & categories (task 86bbzt25g) ──────────────── */
+.builder-react-root .builder-event-manager-categories {
+  margin: var(--space-4) 0;
+  padding: var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-event-manager-category-list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+}
+
+.builder-react-root .builder-event-manager-category {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.builder-react-root .builder-event-manager-category .builder-event-manager-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.builder-react-root .builder-event-manager-category-count {
+  flex: 0 0 5.5rem;
+  text-align: right;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+/* A colour input is a native control whose default size differs by engine;
+ * pinned so every row's swatch lines up. */
+.builder-react-root .builder-event-manager-color {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--bg-input);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-event-manager-swatch {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-right: var(--space-2);
+  border-radius: 999px;
+  vertical-align: baseline;
+}
+
+.builder-react-root .builder-event-manager-category-pick {
+  display: flex;
+  align-items: center;
+}
+
+.builder-react-root .builder-event-manager-category-pick .builder-event-manager-swatch {
+  width: 1rem;
+  height: 1rem;
 }
 
 @media (max-width: 700px) {
