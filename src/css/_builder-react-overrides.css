@@ -9451,3 +9451,43 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   font-size: var(--text-base);
   color: var(--ink-primary);
 }
+
+/*
+ * L8 / W9 — the project-data picker is a COMPOSITE control (a select plus an
+ * optional "Custom…" input), and nothing ever capped it.
+ *
+ * Every other control in a lattice column is bounded by
+ * `--builder-field-long-max`, but that rule matches only DIRECT children of
+ * `.builder-module-field-control`, and the picker's two parts sit inside a
+ * `<span class="builder-project-data-picker">` wrapper. So the picker escaped
+ * the ceiling: measured at 1440 on the admin-nav-link panel it came to 846px
+ * (select 560 + gap + input 280). The column's shared control track is sized
+ * by `max-content`, so THE PICKER SIZED THE TRACK — and every other control
+ * in that column, correctly stopping at the 560px ceiling, ended 286px short
+ * of the row that set it. One row reaching the edge and six stopping short is
+ * exactly the notch L8 names ("a control that stops short leaves a notch").
+ *
+ * Bounding the BLOCK rather than widening the controls, which is what W9 and
+ * L8 both ask for where they disagree. A panel whose track was already under
+ * the ceiling is untouched — `max-width` can only ever lower a used width —
+ * which is why admin-login, whose two columns already held the track to 560,
+ * renders byte-identically before and after.
+ *
+ * Scoped to this ticket's six panels ON PURPOSE. The identical defect is live
+ * on ten other panels (blog-tag-cloud, blog-category-filter, blog-post-tags,
+ * blog-post-manager, blog-search, blog-search-results, site-search,
+ * event-manager, event-calendar, event-detail — each an 846px track at 1440),
+ * and those belong to panel sweeps 10/15 and 12–14/15, which are still queued.
+ * One panel family per PR is the whole point of the sweep; widening this
+ * selector is the one-line fix each of those tickets can reach for.
+ *
+ * Panel sweep 15/15, ticket 86bbjt1bg.
+ */
+.builder-react-root .is-lattice.builder-module-editor--admin-login .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--admin-modules .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--admin-nav-link .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--admin-site-settings .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--admin-support-form .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--admin-team-users .builder-module-field-control > .builder-project-data-picker {
+  max-width: var(--builder-field-long-max, 560px);
+}

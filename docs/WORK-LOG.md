@@ -1,3 +1,45 @@
+## 2026-09-12 — The last of the panel sweep: the six tenant-admin panels (#670)
+
+This is 15 of 15 — the end of the sweep that started when Dane looked at a
+module editor on 13 August and said the column width varied arbitrarily between
+the Settings fields and the Layout fields. The six panels here are the ones a
+tenant's own back-end is built from: Admin Login, Admin Modules, Admin Nav Link,
+Admin Site Settings, Admin Support Form, Admin Team Users.
+
+Most of the news is that there was almost nothing left to do, and that is a real
+result rather than a shrug. These six are built from a shared description of
+their fields rather than from hand-written layout, so the rules that were rolled
+out in the earlier sweeps — one label width and one field width per column, a
+ceiling no control may exceed — had already reached them without anyone touching
+these files. Measuring them one by one confirmed it: five of the six already
+read as a single rectangle at all three screen widths.
+
+The sixth did not. On Admin Nav Link the "Link URL" row ran 286 pixels past
+every other row in the panel, so six rows stopped short and one stuck out. The
+cause is a nice example of a rule that was right but did not reach far enough.
+That row is not one control, it is two — a dropdown of pages plus a box for
+typing a custom address — and they sit together inside a wrapper. The rule that
+caps how wide a control may get was written to look only one level deep, so it
+never saw the pair inside that wrapper. They grew to 846 pixels, and because a
+column sizes itself to its widest row, that one row then decided the width of
+the whole column. Everything else in the column obediently stopped at the cap
+and therefore finished 286 pixels before the edge the wide row had set.
+
+The fix caps the pair, not the parts — the same answer the rules already give
+when the width rule and the edge rule disagree: bound the block rather than
+stretch the controls. The two controls now share the cap and the panel closes up
+into one rectangle. The other five panels are pixel-for-pixel unchanged, which
+was checked with photographs rather than assumed.
+
+Two things worth knowing for next time. The same defect is sitting on ten more
+panels — the blog, search and event ones — and they belong to sweep tickets that
+are still queued, so each can reach for the same one-line fix. And the automated
+panel checker could not see this one at all: it passed before the fix and after
+it. It measures the slot a control sits in, and the slot was filling the column
+perfectly; what stopped short was the control drawn inside it. That is a gap the
+rules doc already admits to, and it is the reason looking at the screen is still
+part of the job.
+
 ## 2026-09-08 — Module settings panels now line up top to bottom (#667)
 
 Open any module's settings in the Builder and you are really looking at two
