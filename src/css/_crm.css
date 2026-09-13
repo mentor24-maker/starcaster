@@ -268,6 +268,12 @@
   background-color: #ffffff !important;
 }
 
+/* The standard theme colour field replaces the swatch row when the builder
+ * bundle is loaded (task 86bbzxg9c); the row stays as the no-bundle fallback. */
+.crm-form-color-control.has-standard-picker .crm-form-color-row {
+  display: none;
+}
+
 .crm-form-color-opacity {
   display: flex;
   align-items: center;
