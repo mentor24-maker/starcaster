@@ -913,3 +913,116 @@ test('--out and --publish refuse to combine', () => {
   // It must refuse BEFORE doing any work — no branch, no PR, no ticket.
   assert.ok(!/Pull request:/.test(res.stdout + res.stderr), 'it stopped before publishing anything');
 });
+
+// ── The report has to clean up after itself at BOTH ends (task 86bbw8j37) ──
+//
+// The wrapper cleans the residue at the TOP of a run, which repairs the
+// checkout — a week later, because this job runs once a week. So the Mini sat
+// dirty six days out of seven, its self-update skipped every one of those days,
+// and every OTHER scheduled job on that machine ran the previous Monday's code.
+//
+// 2026-09-07: 11 commits behind from 07:01 until it was cleared by hand at
+// 17:50, and it was masking a `pulse` checkout 3 commits behind and a `vault`
+// 50 behind. The alarm fired correctly and posted to a bus that was refusing
+// writes (86bbw860m), so nothing was heard.
+//
+// These two tests drive the wrapper through a STUB report, because the real one
+// wants doppler, npm and the network. The stub leaves behind exactly what the
+// report leaves behind: two untracked files and a modified tracked index.html.
+
+function wrapperFixture(tmp) {
+  const origin = path.join(tmp, 'origin.git');
+  const work = path.join(tmp, 'work');
+
+  fs.mkdirSync(origin);
+  git(origin, 'init', '--bare', '-b', 'main', '.');
+
+  fs.mkdirSync(work);
+  git(work, 'init', '-b', 'main', '.');
+  git(work, 'remote', 'add', 'origin', origin);
+  fs.writeFileSync(path.join(work, 'README.md'), 'first\n');
+  fs.mkdirSync(path.join(work, 'scripts'), { recursive: true });
+  const wrapper = path.join(work, 'scripts', 'run_weekly_report.sh');
+  fs.copyFileSync(path.resolve(__dirname, '..', 'run_weekly_report.sh'), wrapper);
+  fs.chmodSync(wrapper, 0o755);
+
+  // index.html is TRACKED from the second published edition onward, which is
+  // the half `git clean` cannot touch.
+  fs.mkdirSync(path.join(work, 'docs', 'reports'), { recursive: true });
+  fs.writeFileSync(path.join(work, 'docs', 'reports', 'index.html'), 'edition list\n');
+
+  git(work, 'add', '-A');
+  git(work, 'commit', '-m', 'first');
+  git(work, 'push', '-u', 'origin', 'main');
+
+  // The stand-in for `node scripts/weekly_report.mjs --publish`: it writes what
+  // the report writes and leaves it behind, exactly as publishing does.
+  const stub = path.join(tmp, 'fake-report');
+  fs.writeFileSync(stub, [
+    '#!/bin/bash',
+    'mkdir -p docs/reports',
+    'echo published > docs/reports/2026-08-25.html',
+    'echo "{}" > docs/reports/2026-08-25.data.json',
+    'echo rewritten > docs/reports/index.html',
+    'exit ${STUB_EXIT:-0}',
+    '',
+  ].join('\n'));
+  fs.chmodSync(stub, 0o755);
+
+  return { work, wrapper, stub };
+}
+
+const dirty = (cwd) => spawnSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf8' }).stdout.trim();
+
+test('a successful publish leaves the checkout clean, so the self-update is not blocked all week', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-report-after-'));
+  try {
+    const { work, wrapper, stub } = wrapperFixture(tmp);
+
+    // The control, and it runs BEFORE the wrapper on purpose: prove the stub
+    // really does dirty this checkout, then put it back. Measuring the control
+    // afterwards would clean the tree itself and the assertion below would pass
+    // against a wrapper that cleans nothing.
+    spawnSync(stub, [], { cwd: work, encoding: 'utf8' });
+    assert.notEqual(dirty(work), '', 'the stub has to reproduce the dirty checkout, or this test is theatre');
+    spawnSync('git', ['clean', '-fdq', '--', 'docs/reports'], { cwd: work });
+    spawnSync('git', ['checkout', '--', 'docs/reports'], { cwd: work });
+    assert.equal(dirty(work), '', 'the control has to leave the fixture clean before the real run');
+
+    const res = spawnSync('bash', [wrapper], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...process.env, WEEKLY_REPORT_NODE: stub },
+    });
+    const out = `${res.stdout}\n${res.stderr}`;
+
+    assert.equal(res.status, 0, `the wrapper should pass the publish's exit code through:\n${out}`);
+    assert.equal(dirty(work), '', `the checkout is still dirty after a clean publish:\n${out}`);
+    assert.match(out, /cleanup: removing/, 'and it said what it removed');
+    assert.match(out, /cleanup: restoring/, 'including the tracked half git clean cannot touch');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('a publish that FAILED keeps its output, and the failure is not masked', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-report-fail-'));
+  try {
+    const { work, wrapper, stub } = wrapperFixture(tmp);
+
+    const res = spawnSync('bash', [wrapper], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...process.env, WEEKLY_REPORT_NODE: stub, STUB_EXIT: '3' },
+    });
+    const out = `${res.stdout}\n${res.stderr}`;
+
+    // The cleanup must not swallow the exit code — a failed report that reads
+    // as a success is the whole class of bug this file exists against.
+    assert.equal(res.status, 3, `the publish's exit code has to survive the cleanup:\n${out}`);
+    assert.match(out, /cleanup: skipped/, 'and it says why it left the output alone');
+    assert.notEqual(dirty(work), '', 'a failed run keeps its output for a person to look at');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

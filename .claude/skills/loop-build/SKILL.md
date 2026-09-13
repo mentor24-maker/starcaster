@@ -223,19 +223,98 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
    npm run clickup -- build-start --task <id>
    ```
 
-   *   **exit 0** — no PR, or its PR is closed/merged. A fresh branch is right;
-       carry on to step 2.
-   *   **exit 3** — a PR for this ticket is **still open**. Do NOT start a
-       second branch. Check that one out, read the send-back that returned the
-       ticket to `Rework`, fix what it named, and push to the SAME PR. The
-       command prints the branch. The ticket's Loop note says which round
-       this is (`↩ round 3 — <why>`); at round 3, read all of the earlier
-       send-backs before you touch anything — `npm run clickup --
-       send-back-rounds --task <id>` lists what each one found — because a
-       fourth would stop the loop and go to Dane instead.
-   *   **exit 1** — it could not tell. **Stop and say so.** Do not start a
-       branch on a guess; that is the failure this step exists to prevent,
-       arriving through the check meant to catch it.
+   *   **exit 0** — nothing exists on any disk that could be asked, and no
+       open PR. A fresh branch is right; carry on to step 2. **Read the line
+       anyway**: if it ends `(not looked at: <machine> ...)`, a seat was
+       skipped — a laptop that is shut, a machine with no ssh route — and that
+       belongs in your run report, because it is the one case where a second
+       branch could still be cut over somebody's work.
+   *   **exit 3** — work already exists. Do NOT start a second branch. Two
+       shapes, and the printed line says which one:
+       *   **`CONTINUE`** — either a PR is still open, or a half-finished
+           build is sitting on THIS machine with no PR yet (since 2026-09-07,
+           task 86bbvur5a). Work on what it names. **Three shapes, and the
+           line says which — the move is different for each, and two of the
+           three are NOT `origin/<branch>`:**
+           *   a **`pr:`** line → the branch is pushed.
+               `git worktree add .claude/worktrees/<topic> -b <branch>
+               origin/<branch>`. Read the send-back that returned the ticket
+               to `Rework`, fix what it named, and push to the SAME PR.
+           *   a **`work:`** line ending **`in <folder>`** → that folder is
+               already on this disk. `cd` into it. The branch was never
+               pushed, so `origin/<branch>` does not exist.
+           *   a **`work:`** line saying **`(no worktree — the branch exists
+               but is not checked out)`** → the branch is on this disk with no
+               folder to `cd` into, which is the shape a `tidy` leaves behind
+               and the one this ticket is named after. Attach the existing
+               local branch:
+
+               ```bash
+               git worktree add .claude/worktrees/<topic> <branch>
+               ```
+
+               **No `-b`** (the branch already exists, and `-b` on an existing
+               branch is a second error) and **no `origin/`** (it was never
+               pushed — `fatal: invalid reference` otherwise).
+
+           Either way: `npm ci`, `npm run build`, `npm run env:local`, and
+           stamp `git config branch.<branch>.clickup-task <id>` if it is
+           missing — that stamp is what `tidy` and `ship` read back.
+       *   **`WORK ON ANOTHER MACHINE`** — the worktree is on a disk this one
+           cannot reach, so there is nothing here to continue and nothing to
+           gain by handing it back: rework is claimed first and oldest-first,
+           so the next pass would claim it and refuse it again, every pass,
+           forever. The command prints a `next:` line with the escalation to
+           run — `ask` it to `Needs your input`, naming the machine and branch
+           and the two moves that exist (finish it there by hand, or abandon
+           that work so the loop can rebuild it) — then **take the next
+           ticket**.
+   *   **exit 1** — **this machine** could not tell. **Stop and say so.** Do
+       not start a branch on a guess; that is the failure this step exists to
+       prevent, arriving through the check meant to catch it.
+
+       **But read the `next:` line before you stop, because "stop" is not
+       always the whole instruction.** Exit 1 covers two situations that look
+       identical and want opposite moves. A disk that went quiet — a shut
+       laptop, a timed-out probe — clears itself: stopping is right, and there
+       is no `next:` line. A ticket whose **`repo:` tag does not resolve**
+       never clears: it carries the same tag on every pass, so a pass that
+       just stops leaves the ticket to be returned to `Rework`, claimed
+       first-and-oldest-first, and refused again — **every pass, for good.**
+       One mis-tagged ticket kills the lane, and quietly, which is the
+       2026-09-03 shape CLAUDE.md names. That case prints a `next:` line, and
+       **the `next:` line IS your instruction**: it is this step's own repo
+       rule below — escalate with `ask` to `Needs your input`, quoting the
+       printed line — and then you take the next ticket. Do not stop with
+       nothing posted anywhere. (Round-3 review of task 86bbvur5a: the repo
+       rule was three paragraphs below this stop, so a pass that obeyed the
+       stop never reached it.)
+
+   **Exit 1 is about the seat you are standing on, and that is deliberate**
+   (round-1 review of task 86bbvur5a). Round 1 stopped the build for ANY
+   machine that went quiet, and `docs/ecosystem/inventory.yaml` gives Dane's
+   laptop an ssh route while saying in the same entry that it sleeps and
+   travels — so a closed laptop refused every new build on the Mini, all night,
+   which is exactly when the loops work. A disk this pass cannot read HERE is
+   fatal, because it is the disk the pass is about to branch on. Another
+   machine going quiet is a blind spot **named** on an answer that goes ahead:
+   its work was unreachable from here whatever the reading said.
+
+   On the open-PR path, the ticket's Loop note says which round this is
+   (`↩ round 3 — <why>`); at round 3, read all of the earlier send-backs
+   before you touch anything — `npm run clickup -- send-back-rounds --task
+   <id>` lists what each one found — because a fourth would stop the loop and
+   go to Dane instead.
+
+   **The disk reading is the half a pull-request lookup structurally cannot
+   take.** A PR is the LAST thing a build produces, so a pass that wrote code
+   and died before pushing leaves nothing to look up: this step answered
+   "fresh", and the next pass cut a second branch over the work, which is the
+   2026-08-20 double-build shape produced by the system rather than by a second
+   session. `pass-reconcile` and the stranded sweep already took this reading
+   before asserting that nothing was built; the step whose whole job is *"has
+   this been started already?"* was the last one still answering from comments
+   alone.
 
    The claim in the line above and this check answer DIFFERENT questions, and
    conflating them cost two duplicate PRs on 2026-08-23 (#407 beside the still
@@ -441,6 +520,31 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
      `gh pr checks <pr>` lists a run before pushing it. If none has appeared
      after a couple of minutes, only a new commit can create one —
      `git commit --allow-empty -m "Nudge GitHub into creating a check run"`.
+   - **"No checks" is not an empty list — Vercel posts rows on every PR.** Ask
+     `gh pr checks <pr> --json name,bucket,state,workflow` and look for
+     **`verify`** and **`review-gate`**, the only two rows that mean CI ran.
+     The Vercel rows carry an empty `workflow` and go green on their own, so a
+     pull request with nothing running still shows a board of passes.
+   - **But ask WHY the checks are missing before you reach for that commit —
+     there are two causes and the remedies are opposite** (2026-09-06, PR #630):
+
+     ```bash
+     gh pr view <pr> --json mergeable,mergeStateStatus
+     ```
+
+     `CONFLICTING` / `DIRTY` means GitHub is running nothing on this PR *on
+     purpose*: the workflows here trigger on `pull_request`, which runs against
+     the merge of the branch and main, and it cannot build that merge. The
+     checks are not late — **they are never coming**, and the empty commit
+     cannot help because its new head SHA does not merge either. The remedy is
+     a catch-up merge: `git merge origin/main --no-edit && git push`, and the
+     runs start within seconds. `UNKNOWN` just means GitHub has not worked it
+     out yet; ask again. Only on `MERGEABLE` is the nudge commit the right move.
+
+     **A conflicting head is a CANNOT TELL, not a slow CI run.** Do not spend
+     the pass waiting on it. If you cannot get checks running inside this pass,
+     hand the ticket back to `Rework` with a note naming what is outstanding —
+     a green branch nobody can see is the failure in the guardrails below.
    - **Only ordinary pushes.** If a push is rejected because the branch is
      behind, merge `origin/main` in — never rebase-and-force. That is the same
      choice `npm run ship` makes on purpose (`docs/DOCTRINE.md` §6.6): the
@@ -522,7 +626,8 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
   is owned by another step or by the operator, and `claim` refuses them.
 - **A `Rework` ticket keeps its branch.** `build-start` will exit 3 and name
   it; fix what the send-back asked for and push to the SAME PR. Never open a
-  second one.
+  second one. It exits 3 for a half-finished **worktree** too, with no PR
+  anywhere — same rule: work on what is there, never a second branch over it.
 - **Never set `Ready to launch` and never clear `Needs your input`.** Those two
   are the operator's; only he moves a task out of them — in person, or through
   the bus-relay pass acting on a comment he wrote (an answer releases
@@ -536,4 +641,22 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
   description with `describe` to match his answer before you start. A ticket
   handed back to the claim line still carrying its original wide scope is how the
   risky half gets built by accident (Sync 6/7, 2026-08-22).
+- **A gap you notice while building is not a ticket — check the rule before
+  filing.** A pipeline or self-machinery ticket is filed only when a pipeline
+  failure **actually cost something observable** — lost work, a dead lane, a
+  silent outage, a wrong merge — and its description names that incident.
+  Without one it goes as one plain line in the ClickUp doc *The 31 parked
+  tickets* (`https://app.clickup.com/90141423066/docs/2kydhxeu-814`), under
+  **Parked tickets**; a pass with no route to write that doc says the line in
+  its run report and stops. Measured 2026-09-06, these tickets went from about
+  6 a day to about 16 a day, faster than the queue drains; 31 were parked and
+  the six that stayed all named a real failure. All 31 were genuine findings,
+  so "is it real?" is the wrong gate. **Product defects are unaffected** — a
+  tenant-site or admin-app bug is filed on sight. Canon: `docs/DOCTRINE.md`
+  §6.24.
+- **Ticket titles say in plain words what breaks and who feels it**, wherever
+  you create or rename one — the operator scans a list of seventy. The
+  diagnostic sentence goes in the description. This also applies to the PR
+  title only in the sense that it must match the ticket name byte for byte
+  (step 7): fix a cryptic name on the TICKET first, then copy it.
 - Leave the worktree in place until the PR merges; `loop-review` may reuse it.

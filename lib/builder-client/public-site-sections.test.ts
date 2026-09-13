@@ -36,12 +36,18 @@ describe("filterPublicSections — one filter for the preview and the live site"
 
   it("names exactly the admin-only surfaces", () => {
     expect([...PRIVATE_ONLY_MODULE_TYPES].sort()).toEqual([
+      // The two blog taxonomy admin surfaces were added by 86bbuhph0.
+      // `admin-blog-links` had been missing since it shipped; the split put a
+      // second management module beside it, which is when it was noticed.
+      "admin-blog-links",
+      "admin-related-articles",
       "blog-category-manager",
       "blog-post-create",
       "blog-post-manager",
       "event-manager",
     ]);
     expect(isPrivateOnlyModuleType("blog-post-create")).toBe(true);
+    expect(isPrivateOnlyModuleType("admin-related-articles")).toBe(true);
     expect(isPrivateOnlyModuleType("text")).toBe(false);
   });
 });

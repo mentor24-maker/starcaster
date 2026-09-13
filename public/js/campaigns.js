@@ -1754,7 +1754,21 @@ App.campaigns = (function () {
       currentValues.primaryVideoId
     );
 
-    const pageOptions = builderPages.map((page) => ({ value: page.id, label: `Builder: ${safeText(page.name) || page.id}` }));
+    // A-Z within the Builder group only — the Site and Social groups below keep
+    // the order they are written in, because those are fixed lists the operator
+    // already knows the shape of. App.pageSort is /shared/pageSort.js, the same
+    // rule the React builder's page pickers use; if the admin shell ever fails
+    // to load it, the group renders unsorted rather than not at all.
+    //
+    // The sort key and the LABEL are the same string on purpose. This list used
+    // to label a page with no name by its id ("Builder: 1442") while every page
+    // dropdown in the builder labels that same page by its slug — so sorting by
+    // name-then-slug would have filed it under a word the operator cannot see
+    // on the row. A list ordered by an invisible key is not a sorted list.
+    const builderPageName = (page) => safeText(page.name) || safeText(page.slug) || page.id;
+    const sortPages = App.pageSort ? App.pageSort.sortPagesByName : ((list) => list);
+    const pageOptions = sortPages(builderPages, builderPageName)
+      .map((page) => ({ value: page.id, label: `Builder: ${builderPageName(page)}` }));
     const externalSites = ['isitas.org', 'isitism.org', 'isitgame.org', 'itcoin.isitas.org'];
     externalSites.forEach(site => {
       pageOptions.push({ value: site, label: `Site: ${site}` });

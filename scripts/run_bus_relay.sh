@@ -150,6 +150,35 @@ npm run --silent throughput -- --check || true
 # fail the relay: it exits 1 on a finding and 2 on a cannot-tell, both of which
 # are readings, not this script's failure.
 npm run --silent stale-ready -- --check || true
+
+# THE FIFTH WATCHDOG — he replied, and nothing moved (task 86bbvr4w3).
+#
+# The four above watch the machines and one operator-held stage. This watches
+# the OTHER operator-held stage, `Needs your input`, and specifically the one
+# shape there that means a machine dropped something: an answer of Dane's that
+# is newer than the question and has still not released the ticket.
+#
+# On 2026-09-06 he answered `C` on 86bbv8nvy at 09:40. The 09:46 relay pass
+# delivered the answer, ran out of ClickUp request budget before it could move
+# the ticket, reported that honestly — into a bus post the SAME rate limit
+# skipped — and every later pass read the answer as already relayed and did
+# nothing at all. It sat 3.5 hours until he found it himself. The retry that
+# stops that being permanent is in busRelayPlan.js; this is the alarm for every
+# other reason the move might still not happen.
+#
+# Here the neighbours' own reasoning applies directly, unlike stale-ready's:
+# the failure being watched for is the RELAY not finishing its move, so a check
+# that ran only where the relay runs could not see the relay being dead. This
+# wake happens on the machine that does not own it, which is the vantage point
+# that survives the owning machine being off.
+#
+# Its threshold is 30 minutes (three relay passes), so it takes a fresh reading
+# every 20 rather than hourly — an hourly read against a half-hour window is a
+# check that looks like it works. Posts once per ticket per REASON per 6h,
+# cleared when the ticket stops being stuck, and it asks the pipeline switch
+# first. Never allowed to fail the relay: it exits 1 on a finding and 2 on a
+# cannot-tell, both of which are readings, not this script's failure.
+npm run --silent stale-answer -- --check || true
 # THE ONE REPAIR, on the idle wake (task 86bbtnk3k — audit Phase 4). The sweep
 # became reachable on 2026-09-02 and was then called by nothing, which is the
 # defect that opened that morning's stall report wearing a new coat. It rides

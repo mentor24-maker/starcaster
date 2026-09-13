@@ -29,14 +29,36 @@ const ROOT = path.join(__dirname, '..', '..');
 const stripJs = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/.*$/gm, ' ');
 const stripCss = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ');
 
-/** Just the AdminBlogLinksPreview component, which closes out the file. */
-function moduleSource() {
+/**
+ * ONE component's source, bounded at the next top-level declaration.
+ *
+ * This used to slice from `AdminBlogLinksPreview(` to the END of the file,
+ * which was correct only while that component closed the file out. Ticket
+ * 86bbuhph0 split the Related Articles half into `AdminRelatedArticlesPreview`
+ * and put it directly below, so the unbounded slice silently grew to cover
+ * BOTH modules: every "the module does X" assertion below could then be
+ * satisfied by the wrong component, and every "the module never does X" one
+ * quietly started policing a module it was never written about. The tests kept
+ * passing throughout, which is the point — nothing here would have said so.
+ *
+ * The bound is the next line that starts in column 1 with `function `, which
+ * is how every top-level component in this file is declared.
+ */
+function componentSource(name) {
   const full = fs.readFileSync(path.join(ROOT, 'components', 'builder-template-preview.tsx'), 'utf8');
-  const marker = 'function AdminBlogLinksPreview(';
-  const at = full.indexOf(marker);
-  assert.ok(at > 0, 'AdminBlogLinksPreview should still exist in builder-template-preview.tsx');
-  return stripJs(full.slice(at));
+  const marker = `function ${name}(`;
+  const at = full.indexOf(`\n${marker}`);
+  assert.ok(at > 0, `${name} should still exist, declared at top level, in builder-template-preview.tsx`);
+  const after = full.indexOf('\nfunction ', at + 1);
+  const end = after === -1 ? full.length : after;
+  return stripJs(full.slice(at, end));
 }
+
+/** Just the Tag Manager component. */
+const moduleSource = () => componentSource('AdminBlogLinksPreview');
+
+/** Just the Related Articles component (86bbuhph0). */
+const relateSource = () => componentSource('AdminRelatedArticlesPreview');
 
 /** Every CSS rule whose selector mentions this module. */
 function moduleCssBlocks() {
@@ -243,5 +265,105 @@ test('the popup rows do not clip a post title', () => {
     /grid-template-columns:\s*1fr\s+auto/,
     'the title should take the leftover width and the actions size to their icons, so a long headline ' +
     'never buys its room from the title'
+  );
+});
+
+// ── 4. The split holds (86bbuhph0) ────────────────────────────────────────
+//
+// Related Articles became its own module. These assertions are about the
+// SEPARATION rather than about either module's behaviour, because the
+// separation is the thing that can rot without anything noticing: both
+// components live in one file, so a stray reference compiles, ships and
+// renders fine while quietly putting half the relate feature back into the
+// Tag Manager.
+
+test('the two components are actually separate slices', () => {
+  /*
+   * The guard on the instrument, not on the code. Every assertion in this file
+   * is only as good as componentSource() being bounded - and before this
+   * ticket it was NOT: it ran to the end of the file, so it silently grew to
+   * cover the new component the moment that component was added, and every
+   * test here kept passing. If the bound ever breaks again, this fails first
+   * and says what happened, rather than the rest of the file quietly changing
+   * meaning.
+   */
+  const tags = moduleSource();
+  const relate = relateSource();
+
+  assert.ok(tags.length > 0 && relate.length > 0, 'both components should be found');
+  assert.ok(
+    !tags.includes('AdminRelatedArticlesPreview'),
+    'the Tag Manager slice reaches into the Related Articles component: componentSource() is no longer bounded, ' +
+    'and every other assertion in this file is now measuring both modules at once'
+  );
+  assert.ok(
+    !relate.includes('AdminBlogLinksPreview'),
+    'the Related Articles slice reaches into the Tag Manager component'
+  );
+});
+
+test('the Tag Manager keeps none of the relate half', () => {
+  const src = moduleSource();
+  for (const leftover of ['showRelate', 'relateButtonLabel', 'articleStatus', 'relatedTitles']) {
+    assert.ok(
+      !new RegExp(`\\b${leftover}\\b`).test(src),
+      `the Tag Manager still reads ${leftover}. That setting went to admin-related-articles; ` +
+      'a copy left here is either dead code or a second, divergent implementation of the picker'
+    );
+  }
+  assert.ok(
+    !/\/api\/blog\/relations/.test(src),
+    'the Tag Manager writes relations again — relating articles is the other module\'s whole job'
+  );
+});
+
+test('the Tag Manager does not fetch a taxonomy it never renders', () => {
+  /*
+   * It renders `tagTerms` alone. It used to fetch the categories too, for the
+   * article picker that has now moved out, and the fetch was left behind after
+   * the split — a request on every load whose rows reached nothing. Cheap to
+   * leave, invisible either way, and exactly the kind of thing that is never
+   * found again once the reason is forgotten.
+   */
+  const src = moduleSource();
+  assert.ok(
+    !/\/api\/blog\/categories/.test(src),
+    'the Tag Manager fetches /api/blog/categories, but renders only tagTerms — the rows go nowhere'
+  );
+});
+
+test('Related Articles picks taxonomy terms and never edits them', () => {
+  const src = relateSource();
+
+  // It reads both taxonomies on purpose: either one can choose articles.
+  assert.match(src, /\/api\/blog\/tags/, 'it should read the tags to offer them as a way to choose articles');
+  assert.match(src, /\/api\/blog\/categories/, 'it should read the categories for the same reason');
+
+  // Reading is all it may do. The 86bbue8ux report was this feature shipping a
+  // second category editor beside blog-category-manager on the same page.
+  assert.ok(
+    !/\/api\/blog\/categories\/\$\{/.test(src),
+    'this module addresses a single category by id, which only an edit or a delete does. ' +
+    'blog-category-manager owns that'
+  );
+  for (const call of src.match(/api\(\s*`\/api\/blog\/(categories|tags)[^`]*`[^)]*\)/g) || []) {
+    assert.ok(
+      !/method:\s*["'](POST|PUT|PATCH|DELETE)["']/.test(call),
+      `Related Articles writes to a taxonomy endpoint: ${call.slice(0, 90)}`
+    );
+  }
+  assert.ok(
+    !/\/api\/blog\/tags\/rename/.test(src),
+    'renaming a tag is the Tag Manager\'s job; two modules that both rename tags is the split coming undone'
+  );
+});
+
+test('Related Articles does not clip an article title or a taxonomy name', () => {
+  // The 86bbue8ux defect, asked of the module that inherited the picker it was
+  // originally reported against.
+  const src = relateSource();
+  assert.ok(
+    !/textOverflow:\s*["']ellipsis["']/.test(src),
+    'an inline ellipsis is in the picker — that is exactly what the operator reported on the live page'
   );
 });

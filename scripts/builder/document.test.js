@@ -422,3 +422,26 @@ test('migrateLegacyEmailBlocksToDocument creates single-section email doc', () =
   assert.equal(normalized.layoutSections.length, 1);
   assert.ok(normalized.layoutSections[0].modules.length >= 2);
 });
+
+test('migrateLegacyLayoutSections preserves video background mode and videoUrl', () => {
+  const migrated = migrateLegacyLayoutSections([{
+    id: 'section_video',
+    layout: 'single',
+    rowSettings: {
+      background: {
+        mode: 'video',
+        videoUrl: '/assets/background.mp4',
+        posterUrl: '/assets/poster.jpg',
+        videoSpeed: 1,
+        videoLoop: true,
+      },
+    },
+    modules: [],
+  }]);
+
+  const document = normalizeBuilderDocument(migrated);
+  assert.equal(document.layoutSections[0].background.mode, 'video');
+  assert.equal(document.layoutSections[0].background.videoUrl, '/assets/background.mp4');
+  assert.equal(document.layoutSections[0].background.posterUrl, '/assets/poster.jpg');
+});
+

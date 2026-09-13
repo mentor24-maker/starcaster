@@ -19,6 +19,14 @@ export const PRIVATE_ONLY_MODULE_TYPES: ReadonlySet<string> = new Set([
   "blog-post-manager",
   "blog-category-manager",
   "event-manager",
+  // The blog taxonomy admin surfaces. `admin-blog-links` was missing from this
+  // list from the day it shipped (86bbu4qh5) — its endpoints refuse an
+  // unauthenticated caller, so a visitor would have seen a panel of 401s
+  // rather than a tenant's data, but a management UI painting on a public page
+  // is not something to leave standing next to the module being added beside
+  // it. Both are listed now (86bbuhph0).
+  "admin-blog-links",
+  "admin-related-articles",
 ]);
 
 export function isPrivateOnlyModuleType(type: string): boolean {

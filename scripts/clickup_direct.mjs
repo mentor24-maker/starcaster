@@ -67,6 +67,8 @@ import buildStart from './builder/buildStart.js';
 import operatorCard from './builder/operatorCard.js';
 import machineComment from './builder/machineComment.js';
 import nodeRoles from '../lib/nodeRoles.js';
+import busFallback from '../lib/busFallback.js';
+import loopNoticeboards from '../lib/loopNoticeboards.js';
 import taskRepo from './builder/taskRepo.js';
 import loopInterval from './builder/loopInterval.js';
 import branchCatchUp from './builder/branchCatchUp.js';
@@ -88,7 +90,9 @@ import strandedLocalWork from './builder/strandedLocalWork.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
-  defaultWatches, handbackTarget, mergeEnabled, operatorComments,
+  defaultWatches, handbackTarget, handbackDestination, mergeEnabled, operatorComments,
+  answerAwaitingHandback, handbackFailureText, handbackDoneText,
+  repliesShowRelayed, repliesShowHandbackDone, repliesShowHandbackFailure,
   ticketsToRead, markAfterPass, DEFAULT_OVERLAP_MS,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
   SIMULATED_BUS_WHY, simulationGuard, simulationLine, sweepVerdict,
@@ -96,7 +100,7 @@ const {
 const { retryDecision } = clickupRetry;
 const {
   mergeDecision, githubGate, MERGE_PHRASES, MERGE_MARKER, latestMergeMarker, countMergeRefusals,
-  refusalNotice, refusalBusLine, conflictHandOffNotice, mergedNotice,
+  refusalNotice, refusalBusLine, conflictHandOffNotice, mergedNotice, findPullRequest,
 } = mergeOnComment;
 const {
   conflictTicketFiledComment, findConflictTicket, conflictTicketName,
@@ -385,6 +389,23 @@ function yieldedResult(yielded) {
 }
 
 /**
+ * Did this result stop at the ClickUp reserve rather than fail?
+ *
+ * A yield travels in the ordinary `{res}` shape with `res.ok === false`, which
+ * is indistinguishable from a refusal to any caller that only asks `ok`. Every
+ * place that branches on failure and means something different by "the server
+ * said no" has to ask this first. Written once because it was got wrong twice
+ * on the same call path: at the chat POST (review round 1) and then one level
+ * down inside the fallback (review round 2).
+ *
+ * Accepts both `call()` results and `fetchAllTasks`'s non-fatal return, which
+ * carries the same `res` and `yielded` fields.
+ */
+function stoppedAtReserve(out) {
+  return Boolean(out && (out.yielded || (out.res && out.res.status === YIELDED_STATUS)));
+}
+
+/**
  * Exit 7 means "I stopped on purpose at the ClickUp reserve", and it is not
  * 1. A scheduled job that yields has NOT done its work — so it must not exit 0
  * (the ticket's Non-goal) — but it also has not failed, and reporting it as a
@@ -445,6 +466,10 @@ function usage(code = 2) {
   console.error('  task --list <id> --name "<name>" --body-file <file|-> [--status S] [--priority urgent|high|normal|low] [--tags a,b] [--id-out <file>]');
   console.error('                                             --priority urgent needs --operator-asked too — Urgent is the');
   console.error('                                             operator\'s lane, agents file at High or below by default');
+  console.error('                                             --name says in PLAIN WORDS what breaks and who feels it — he scans a');
+  console.error('                                             list of 70; the diagnostic sentence goes in the body (DOCTRINE 6.24)');
+  console.error('                                             and a ticket about the PIPELINE needs an incident that actually cost');
+  console.error('                                             something — a theoretical gap is one line in the parked-backlog doc');
   console.error('  priority --task <id> --priority urgent|high|normal|low [--operator-asked]');
   console.error('                                             change an existing task\'s priority, verified by read-back;');
   console.error('                                             same --operator-asked rule as `task` for urgent');
@@ -505,9 +530,12 @@ function usage(code = 2) {
   console.error('                                             upload image(s) onto a task — the before/after pair');
   console.error("                                             the approval queue runs on; verified by reading the");
   console.error("                                             task's attachment list back");
-  console.error('  build-start --task <id>                    BEFORE branching: is a PR for this ticket already open?');
-  console.error('                                             exit 0 = start fresh, 3 = continue the existing branch,');
-  console.error('                                             1 = could not tell (do NOT guess)');
+  console.error('  build-start --task <id>                    BEFORE branching: has this ticket been started already —');
+  console.error('                                             an open PR, or a half-finished worktree on any disk?');
+  console.error('                                             exit 0 = start fresh, 3 = do NOT branch (the line says');
+  console.error('                                             which: continue the named branch, or the work is on');
+  console.error('                                             another machine — escalate, do not hand it back),');
+  console.error('                                             1 = could not tell here (do NOT guess)');
   console.error('  wip-check [--repo owner/name]              is the merge side already full? 0 = room to claim,');
   console.error('                                             3 = capped (a normal decline), 1 = could not tell.');
   console.error('                                             Reads only; a capped pass writes nothing.');
@@ -624,7 +652,11 @@ async function fetchAllTasks(list, { includeClosed = false, fatal = true } = {})
   for (let page = 0; page < 50; page++) {
     const out = await call('GET', `/api/v2/list/${list}/task?archived=false${closedParam}&page=${page}`);
     if (!out.res.ok) {
-      if (!fatal) return { tasks: null, res: out.res, failed: `HTTP ${out.res.status}` };
+      // `yielded` travels with the failure so a non-fatal caller can tell a
+      // deliberate stop at the ClickUp reserve from a refusal. Without it the
+      // only signal was `res.status`, and the shape `die()` needs to print the
+      // reserve's own words was lost (task 86bbwab1n, review round 2).
+      if (!fatal) return { tasks: null, res: out.res, json: null, text: out.text, yielded: out.yielded, failed: `HTTP ${out.res.status}` };
       die('list tasks', out);
     }
     // A 200 carrying a body that is not the expected JSON — a proxy's error
@@ -680,6 +712,27 @@ function gh(args) {
     stdout: String(out.stdout || ''),
     stderr: String(out.stderr || out.stdout || '').trim(),
   };
+}
+
+/**
+ * THE STATE OF THIS TICKET'S OWN PULL REQUEST, for the hand-back decision
+ * (2026-09-08, task 86bbw596q). `busRelayPlan.handbackDestination` owns what
+ * each answer MEANS; this only fetches it.
+ *
+ * A failed read comes back as `state: ''` with the reason attached, never as
+ * a guess and never as an exception: the decision function turns that into
+ * "cannot tell, move nothing", which is the fail-safe direction. `gh` carries
+ * its own credentials and is read-only here, so this is safe under --dry-run.
+ */
+function readPullRequestState(pr) {
+  const out = gh(buildStart.prLookupArgs(pr));
+  if (!out.ok) return { ...pr, state: '', why: out.stderr || 'gh could not read it' };
+  let json;
+  try { json = JSON.parse(out.stdout); }
+  catch (e) { return { ...pr, state: '', why: `gh's answer did not parse (${e.message})` }; }
+  const state = String(json?.state || '').trim();
+  if (!state) return { ...pr, state: '', why: 'gh returned no state field' };
+  return { ...pr, state };
 }
 
 /**
@@ -781,6 +834,156 @@ async function postToBus(channel, content, { simulate } = {}) {
     type: 'message', content, content_format: 'text/md',
   });
   return { ok: out.res.ok, why: out.res.ok ? '' : `HTTP ${out.res.status}` };
+}
+
+/**
+ * Put an alarm the party line refused somewhere durable, and PROVE it landed.
+ *
+ * The destination is a standing ticket found by its NAME (task 86bbwab1n).
+ * Not an id in an env var or a constant: an id rots the moment somebody
+ * deletes the ticket, and a destination that cannot be resolved fails in
+ * precisely the way this fallback exists to prevent. The roll call
+ * (`lib/nodeHeartbeat.js`) and the pulse digest (`lib/pulseDigest.js`) both
+ * make the same choice; `CLICKUP_ALARM_TASK` is a shortcut, never the
+ * definition, so a shortcut pointing at a deleted task falls through to the
+ * name rather than reporting the destination gone.
+ *
+ * Never throws. Returns { ok, url, why } — `ok` is the caller's whole verdict,
+ * because a fallback reported as delivered when it was not would silence the
+ * alarm's suppression window on the strength of a comment nobody received.
+ */
+async function saveUndeliveredAlarm({ text, channel, why }) {
+  // A RESERVE STOP IS NOT A FAILED SAVE (task 86bbwab1n, review round 2).
+  // Every `call()` below can come back yielded — `res.ok === false` with the
+  // reserve's own status — and the caller's failure branch says "Nothing was
+  // delivered. This alarm is lost unless the caller retries" and exits 1. That
+  // is a monitor printing a wrong diagnosis about a deliberate, healthy stand-
+  // down, which is the fault this whole ticket was opened about; round 1 fixed
+  // it at the chat POST and this is the same thing one level further down.
+  //
+  // So a yield returns `{ ok: false, stopped: <the yielded result> }`, and the
+  // caller `die()`s on it exactly as it does for the primary POST: the
+  // reserve's own words, exit 7, and `run_bus_relay.sh` reads "I stood down"
+  // rather than "I broke". Nothing is lost by not spending the reserve here —
+  // the next scheduled pass raises the same alarm, and the reserve exists to
+  // leave budget for the sessions Dane is actually in.
+  const stop = (out) => ({ ok: false, stopped: out, why: 'it stopped at the ClickUp reserve' });
+
+  const shortcut = process.env.CLICKUP_ALARM_TASK || '';
+  let task = null;
+
+  if (shortcut) {
+    const got = await call('GET', `/api/v2/task/${shortcut}`);
+    if (stoppedAtReserve(got)) return stop(got);
+    if (got.res.ok && got.json && got.json.id) task = got.json;
+    // A 401 covers both a bad token and a task this token cannot see, deleted
+    // ones included — so fall through to the name rather than conclude.
+  }
+
+  if (!task) {
+    const listed = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+    if (stoppedAtReserve(listed)) return stop(listed);
+    if (!listed.tasks) return { ok: false, why: `could not read the Loop Queue to find it (${listed.failed || 'no reason given'})` };
+    // OLDEST WINS, not first-paged. If two machines ever raced the create (see
+    // below), `find()` would hand each caller whichever copy its paging turned
+    // up first and the record would go on splitting for good. Choosing by
+    // creation date is an answer every machine reaches independently.
+    const matches = listed.tasks.filter(
+      (t) => String(t.name || '').trim().toLowerCase() === busFallback.FALLBACK_TASK_NAME.toLowerCase(),
+    );
+    task = matches.length
+      ? matches.reduce((a, b) => (Number(a.date_created || 0) <= Number(b.date_created || 0) ? a : b))
+      : null;
+  }
+
+  if (!task) {
+    const status = process.env.CLICKUP_ALARM_TASK_STATUS || busFallback.FALLBACK_TASK_STATUS;
+    const made = await call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
+      name: busFallback.FALLBACK_TASK_NAME,
+      status,
+      markdown_description: busFallback.renderFallbackSeed(),
+    });
+    if (stoppedAtReserve(made)) return stop(made);
+    if (!made.res.ok) {
+      return {
+        ok: false,
+        why: `could not create it (HTTP ${made.res.status} ${String(made.json?.err || made.text || '').slice(0, 160)})`
+          + `. If that names the status, this list has no "${status}" status — set CLICKUP_ALARM_TASK_STATUS`
+          + ' to one it has that no loop claims from.',
+      };
+    }
+    // A 200 IS NOT PROOF OF A PARSED BODY (review round 1, 2026-09-08).
+    // `clickupFetch` returns `json: null` on a 200 whose body is not JSON — a
+    // proxy's error page, a truncated response — and `made.json.id` on that is
+    // a TypeError escaping a function whose contract says it never throws. The
+    // caller would get a stack trace where it was promised "nothing was
+    // delivered", which is the difference between an alarm it knows to retry
+    // and a pass that simply dies. `fetchAllTasks` guards the same shape at
+    // its own page loop, and the comment there says it cost a review round.
+    if (!made.json || !made.json.id) {
+      return { ok: false, why: 'it was created but ClickUp\'s reply was not the expected JSON, so there is no id to comment on' };
+    }
+    task = made.json;
+
+    // TWO MACHINES FALLING BACK IN THE SAME MINUTE (review round 1). Find-or-
+    // create is check-then-act, so the Mini and the MacBook can both miss the
+    // lookup and both create a noticeboard, after which `find()` takes
+    // whichever pages first and the record splits in two. Re-reading the list
+    // and keeping the OLDEST is not a lock and does not pretend to be one —
+    // the create has already happened — but it makes every later comment land
+    // on one ticket, which is the part that matters. A read that fails here
+    // changes nothing: the ticket just made is a perfectly good destination.
+    const again = await fetchAllTasks(LOOP_QUEUE_LIST, { includeClosed: true, fatal: false });
+    // Guarded like every other call here even though this read is best-effort:
+    // the reserve gate is sticky within a process, so a yield reaching this
+    // line means the comment post below yields too. Standing down now says so
+    // one call earlier and leaves no ClickUp call in this function that can
+    // return a yield dressed as a refusal.
+    if (stoppedAtReserve(again)) return stop(again);
+    const all = (again.tasks || []).filter(
+      (t) => String(t.name || '').trim().toLowerCase() === busFallback.FALLBACK_TASK_NAME.toLowerCase(),
+    );
+    if (all.length > 1) {
+      const oldest = all.reduce((a, b) => (Number(a.date_created || 0) <= Number(b.date_created || 0) ? a : b));
+      console.error(`Two "${busFallback.FALLBACK_TASK_NAME}" tickets exist — two machines fell back at once.`);
+      console.error(`Using the older one (${oldest.id}); the duplicate can be deleted by hand.`);
+      task = oldest;
+    }
+  }
+
+  const at = new Date().toISOString();
+  const body = busFallback.renderFallbackComment({
+    text, channel, why, node: nodeRoles.thisNode().name, at,
+  });
+  const out = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body, notify_all: false });
+  if (stoppedAtReserve(out)) return stop(out);
+  if (!out.res.ok) return { ok: false, why: `could not comment on it (HTTP ${out.res.status})` };
+
+  // Read it back before calling it delivered. A 200 proves a write happened,
+  // not that this one stuck — and this verdict is what lets the calling job
+  // stamp its suppression window and stay quiet for the next six hours.
+  //
+  // A COMMENT THAT LANDED BUT COULD NOT BE READ BACK RETURNS ok:false, exactly
+  // like one that was never written, and the caller then re-posts on its next
+  // pass. Over a long outage that is a duplicate every pass — roughly 96 of
+  // them across the sixteen hours of 2026-08-23. THAT IS THE PRICE AND IT WAS
+  // CHOSEN ON PURPOSE (review round 2): the alternative is stamping the six-
+  // hour suppression window on an alarm nobody can prove is anywhere, which
+  // silences the monitor for six hours on the strength of an unread 200. A
+  // duplicate is noise; a swallowed alarm is the failure this ticket exists
+  // about. Do not "fix" this into an optimistic pass.
+  const id = out.json && out.json.id;
+  const back = await call('GET', `/api/v2/task/${task.id}/comment`);
+  if (stoppedAtReserve(back)) return stop(back);
+  // `back.json` is null on a 200 that did not parse, and `null.comments` threw
+  // out of a function documented "Never throws" (review round 1, 2026-09-08).
+  // An unreadable body is exactly the case this read-back exists for, so it
+  // reads as "could not confirm" rather than as a crash.
+  const comments = (back.res.ok && back.json && Array.isArray(back.json.comments)) ? back.json.comments : null;
+  const stuck = Boolean(comments && comments.some((c) => String(c.id) === String(id)));
+  if (!stuck) return { ok: false, why: 'the comment was accepted but could not be read back' };
+
+  return { ok: true, url: task.url || `https://app.clickup.com/t/${task.id}` };
 }
 
 /**
@@ -2422,7 +2625,20 @@ async function stampLoopNoteSoftly(taskId, text, unchecked) {
     return;
   }
   const out = await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text });
-  if (!out.res.ok) unchecked.push(`${taskId}: the Loop note write failed — the queue will not show the auto-merge state`);
+  if (!out.res.ok) {
+    // Name the cause, not just the failure (task 86bbwab1n). "The write
+    // failed" is the same sentence for a field nobody created and a field the
+    // workspace has run out of usages for, and only one of those is somebody's
+    // to fix. `unchecked` is read by a human; give them the deciding fact.
+    const refusal = busFallback.classifyFieldRefusal({
+      status: out.res.status,
+      body: String(out.json?.err || out.json?.error || out.text || ''),
+    });
+    const why = refusal.kind === 'plan-exhausted'
+      ? 'ClickUp is out of custom-field usages on this plan, so the field exists but refuses every write — this needs Dane, not a retry'
+      : `HTTP ${out.res.status}`;
+    unchecked.push(`${taskId}: the Loop note write failed (${why}) — the queue will not show the auto-merge state`);
+  }
 }
 
 /**
@@ -2710,16 +2926,77 @@ if (cmd === 'whoami') {
   }
 
 } else if (cmd === 'chat') {
+  // THE ONE DOOR EVERY ALARM GOES THROUGH (task 86bbwab1n).
+  //
+  // `scripts/lib/clickup.cjs` -> postBusMessage shells out to exactly this
+  // command, and seven scheduled jobs shell out to that: the heartbeat, the
+  // stale check, the throughput check, the job-failure reporter, the
+  // reconciler, the stale-answer sweep and the checkout-currency check. Every
+  // one of them raises its alarm on the party line and NOWHERE ELSE.
+  //
+  // So the fallback lives here rather than in each caller. That is not merely
+  // less code: each of those callers already treats "this command threw" as
+  // "the alarm was not delivered, do not stamp the suppression window, try
+  // again next pass", and "it returned" as delivered. Putting the fallback
+  // behind that contract fixes all seven without touching one line of their
+  // throttle logic — which is the logic it would be easiest to get wrong.
+  //
+  // `--no-fallback` is for a caller that keeps a durable record of its own and
+  // wants the raw verdict instead.
   const channel = arg('channel'), bodyFile = arg('body-file');
   if (!channel || !bodyFile) usage();
+  const body = readBody(bodyFile);
   const out = await call('POST', `/api/v3/workspaces/${WORKSPACE}/chat/channels/${channel}/messages`, {
     type: 'message',
-    content: readBody(bodyFile),
+    content: body,
     content_format: 'text/md',
   });
-  if (!out.res.ok) die('send chat message', out);
-  console.log(`\nPosted to channel ${channel}. Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
-  reportLimits(out.res);
+  if (out.res.ok) {
+    console.log(`\n${busFallback.renderRouteLine({ via: 'chat', channel })} Message id ${out.json?.data?.id ?? out.json?.id ?? '(unknown)'}`);
+    reportLimits(out.res);
+  } else if (stoppedAtReserve(out)) {
+    // A YIELD IS NOT A REFUSAL, AND IT MUST NOT ENTER THE FALLBACK (review
+    // round 1, 2026-09-08). Reaching the ClickUp reserve is this file stopping
+    // on purpose, and `die` has carried its own words and its own exit code
+    // for it since task 86bbugd8j — exit 7, which `scripts/run_bus_relay.sh`
+    // reads to tell "I stood down" from "I broke".
+    //
+    // A yielded result travels in the ordinary `{res}` shape with
+    // `res.ok === false`, so the fallback branch below swallowed it: its own
+    // calls yielded too, and a deliberate healthy stop printed "Nothing was
+    // delivered. This alarm is lost" and exited 1. That is a monitor reporting
+    // a wrong diagnosis, which is the fault this whole ticket is about.
+    //
+    // Nothing is lost by declining to fall back here. The reserve exists so a
+    // scheduled job leaves budget for the sessions Dane is in; the next
+    // scheduled pass raises the same alarm, and spending the reserve on a
+    // noticeboard write would defeat the point of yielding at all.
+    die('send chat message', out);
+  } else if (flag('no-fallback')) {
+    die('send chat message', out);
+  } else {
+    const why = `HTTP ${out.res.status} ${String(out.json?.err || out.json?.error || out.text || '').slice(0, 200)}`.trim();
+    const saved = await saveUndeliveredAlarm({ text: body, channel, why });
+    if (saved.stopped) {
+      // The bus refused AND the fallback reached the ClickUp reserve. Nothing
+      // was delivered, but this is a stand-down, not a break: exit 7 with the
+      // reserve's own words, so `run_bus_relay.sh` reads it as the yield it is
+      // and the next scheduled pass raises the alarm again. The bus failure is
+      // printed first so the reader knows what was being saved when it stopped.
+      console.error(`\nsend chat message FAILED — ${why}`);
+      console.error(`The "${busFallback.FALLBACK_TASK_NAME}" fallback did not run to the end either:`);
+      die('saving the alarm to the fallback ticket', saved.stopped);
+    }
+    if (!saved.ok) {
+      // BOTH surfaces refused, so nothing was delivered and the caller must
+      // not stamp this as announced. Exiting non-zero is what tells it that.
+      console.error(`\nsend chat message FAILED — ${why}`);
+      console.error(`and the "${busFallback.FALLBACK_TASK_NAME}" fallback ALSO failed — ${saved.why}`);
+      console.error('Nothing was delivered. This alarm is lost unless the caller retries.');
+      process.exit(1);
+    }
+    console.log(busFallback.renderRouteLine({ via: 'ticket', channel, why, url: saved.url }));
+  }
 
 } else if (cmd === 'pass-reconcile') {
   // THE FIRST THING A LOOP-BUILD PASS DOES (2026-09-02, task 86bbtmbpc).
@@ -3256,7 +3533,15 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
 
-  const { tasks } = await fetchAllTasks(list, { includeClosed: true });
+  // THE NOTICEBOARDS ARE NOT WORK, AND THIS READER COUNTED THEM (task
+  // 86bbwab1n, review round 2). `lib/loopThroughput.js` was taught to exclude
+  // them; this command was not, and `scripts/weekly_report.mjs` feeds off
+  // exactly these three numbers — so the weekly report would have credited
+  // "Undelivered alarms", created inside its own window, as a ticket that
+  // shipped, and inflated `total` by one per standing ticket. Same filter,
+  // same registry, applied before anything is derived from the array.
+  const { tasks: allTasks } = await fetchAllTasks(list, { includeClosed: true });
+  const tasks = loopNoticeboards.workTickets(allTasks);
   const byStatus = {};
   for (const t of tasks) {
     const key = (t.status?.status ?? 'unknown').toLowerCase();
@@ -3592,19 +3877,85 @@ if (cmd === 'whoami') {
     }
   };
 
-  const decision = buildStart.resolveBuildStart(got.json.comments || [], { lookupPr });
+  // AND THEN LOOK AT THE DISK (2026-09-07, task 86bbvur5a). A pull request is
+  // the LAST thing a build produces, so a pass that wrote code and died before
+  // pushing leaves nothing for the lookup above to find — and this command
+  // then said "fresh", exit 0, and the next pass cut a second branch over it.
+  // `pass-reconcile` and the stranded sweep already take this reading before
+  // they assert that nothing was built; the step whose whole job is "has this
+  // been started already?" was the one still answering from comments alone.
+  //
+  // The same module both of those use, so the three cannot disagree about one
+  // ticket.
+  //
+  // THE PULL REQUEST ANSWER FIRST, AND THE TICKET IS READ ONLY IF IT MATTERS.
+  // `needsLocalWorkReading` is the module's own predicate rather than a second
+  // copy of it here. Round 1 read the ticket unconditionally, so `continue` and
+  // `unknown` — the paths where `findLocalWork` is never called — each paid an
+  // extra ClickUp read on every claim, and the comment above claiming nothing
+  // is probed on those paths was contradicted by the line under it.
+  const fromPr = buildStart.resolveFromPullRequest(got.json.comments || [], lookupPr);
+  let decision = fromPr;
+  if (buildStart.needsLocalWorkReading(fromPr)) {
+    // The ticket read here is for its TAGS: `workInProgressFor` resolves the
+    // repo from the ticket's own `repo:` tag, so it looks in the checkout the
+    // builder would actually have used.
+    //
+    // AN UNREADABLE TICKET IS NOT HANDED ON AS `{ id }` (round-1 review,
+    // finding 2). That fabrication has no `tags`, `resolveTaskRepo` answers
+    // `starcaster` for a task with none — because no tag legitimately means
+    // starcaster — and a `repo:pulse` ticket was therefore probed against the
+    // STARCASTER checkout on any transient ClickUp failure, found nothing, and
+    // exited 0 "fresh". The false all-clear this whole reading exists to close,
+    // arriving through the reading itself, and the same scar the `lookupPr`
+    // comment above already carries from task 86bbqyyfn. It throws instead:
+    // `withLocalWork` turns that into CANNOT TELL, exit 1.
+    const ticketRes = await call('GET', `/api/v2/task/${task}`);
+    const findLocalWork = () => {
+      if (!ticketRes.res.ok) {
+        throw new Error(`the ticket itself could not be read (HTTP ${ticketRes.res.status}), `
+          + 'so which repo to look in is unknown and nothing was probed');
+      }
+      return localWorkReading.workInProgressFor(ticketRes.json, localWorkReading.workProbe());
+    };
+    decision = buildStart.withLocalWork(fromPr, {
+      findLocalWork,
+      hereId: localWorkReading.thisNodeName(),
+    });
+  }
+
   console.log(buildStart.describeBuildStart(decision));
   if (decision.pr) {
     console.log(`pr:     #${decision.pr.number}${decision.pr.branch ? ` (branch ${decision.pr.branch})` : ''}`);
     console.log(`url:    ${decision.pr.url}`);
   }
+  // The branch, the worktree and the machine, one per line — this is the
+  // sentence somebody has to be able to walk to the work with.
+  //
+  // EACH ONE SAYS WHETHER THIS PASS CAN ACT ON IT (round-2 review, "also worth
+  // a look"). This printed every branch the reading found, on every machine, in
+  // identical lines under a heading a reader takes to mean "the work to
+  // continue" — so a `continue` here also listed the other machine's branch in
+  // the same voice, and CLAUDE.md step 4 tells a session to check a named
+  // branch out. The list is unchanged; only the attribution is added, and it
+  // is built in `buildStart` so a test can pin the wording.
+  for (const line of buildStart.describeFoundWork(decision)) {
+    console.log(`work:   ${line}`);
+  }
+  // AND WHAT TO DO ABOUT IT, where refusing is not the whole instruction.
+  // `elsewhere` used to be a bare refusal with no way out: the ticket is
+  // already in "Building", the reconcile returns it to "Rework", rework is
+  // claimed first and oldest-first, and the lane then spends every pass on the
+  // one ticket it can never build.
+  const next = buildStart.describeNextMove(decision, { task });
+  if (next) console.log(`next:   ${next}`);
   reportLimits(got.res);
 
   // Exit codes so a shell can branch on this without parsing prose, matching
   // `node:owns`: 0 = go ahead, 3 = somebody else's work, 1 = cannot tell.
-  if (decision.action === 'continue') process.exit(3);
-  if (decision.action === 'unknown') process.exit(1);
-  process.exit(0);
+  // The mapping lives in `buildStart` so this command and its tests cannot
+  // drift; "work on another machine" is a 3 because it is still a refusal.
+  process.exit(buildStart.buildStartExitCode(decision));
 } else if (cmd === 'pr-opened') {
   // The build loop's audit trail, made into a command (task 86bbjt18r).
   // Until now step 7 of loop-build said "add the PR URL as a ClickUp
@@ -4456,6 +4807,17 @@ if (cmd === 'whoami') {
         isMachine: isMachineComment,
       });
 
+      // WHERE this ticket would go if his answer releases it (task 86bbw596q).
+      // Resolved ONCE per ticket, off the comments already in hand plus at most
+      // one `gh` call, and only on a status this watch actually releases — so a
+      // notify-only list and a "ready to launch" ticket cost nothing. Both the
+      // receipt below and the hand-back at the end of the loop read this same
+      // answer, so the note on the ticket can never name a different status
+      // from the one the move asks for.
+      const releasesThisStatus = Boolean(handbackTarget(watch, t.status?.status, 1));
+      const trailPr = releasesThisStatus ? findPullRequest(commentsOut.json.comments || []) : null;
+      const handbackPr = trailPr ? readPullRequestState(trailPr) : null;
+
       // The kill switch, as he may have set it on a ticket rather than on the
       // party line (standing condition 1: "on the bus or any Loop Queue
       // ticket"). Free — these comments are already in hand.
@@ -4480,6 +4842,18 @@ if (cmd === 'whoami') {
       // on the ticket — the gate is re-pointed at a durable surface, never
       // weakened.
       let fresh = 0;
+      // WHICH OF HIS COMMENTS HAVE ACTUALLY REACHED SOMEBODY — by the durable
+      // marker as well as by this pass's own success (task 86bbvr4w3). `fresh`
+      // above is still the count relayed THIS RUN, and it is still what the
+      // pass summary reports; it is no longer the hand-back trigger, because a
+      // trigger that can only fire once is a trigger a crash destroys for good.
+      const deliveredIds = new Set();
+      // ...and which of his answers a hand-back has ALREADY completed on, and
+      // which already carry a failure note. Both are read off the very same
+      // reply fetch `deliveredIds` uses, so they cost nothing: the request was
+      // already being spent (2026-09-07, round 1 review).
+      const handbackDoneIds = new Set();
+      const handbackNotedIds = new Set();
       // Merge commands this pass must NOT act on: either terminally acted on
       // (merged, or handed to an agent session for a conflict), or unknowable because
       // the reply read failed. The second case is deliberate — a comment
@@ -4524,8 +4898,18 @@ if (cmd === 'whoami') {
           mergeRefusedCount.set(String(c.id), countMergeRefusals(replies, marker.reason));
         }
         else if (marker) mergeHandled.add(String(c.id));
-        const already = replies.some((r) => (r.comment_text || '').startsWith(BUS_RELAY_MARKER));
-        if (already) { skipped++; continue; }
+        // Read BEFORE the `already` branch below returns: the answer that a
+        // hand-back acts on is by definition one that was relayed on an
+        // earlier pass, so anything read after that `continue` is never read
+        // on the comment that matters.
+        if (repliesShowHandbackDone(replies)) handbackDoneIds.add(String(c.id));
+        if (repliesShowHandbackFailure(replies)) handbackNotedIds.add(String(c.id));
+        const already = repliesShowRelayed(replies);
+        // Already relayed on an EARLIER pass. Nothing more to send — and this
+        // is exactly the state that used to end the story, because `fresh`
+        // stayed 0 and the hand-back could never fire again. The marker is the
+        // durable proof his answer was delivered, so it is read as such.
+        if (already) { deliveredIds.add(String(c.id)); skipped++; continue; }
 
         const when = new Date(Number(c.date)).toISOString().slice(0, 16).replace('T', ' ');
         console.error(`\nRelaying: task "${t.name}" (${t.id}), comment ${c.id} [${when}]`);
@@ -4533,12 +4917,12 @@ if (cmd === 'whoami') {
         // posted and asserts nothing about delivery. Under --simulate-bus-failure
         // it deliberately does NOT stop, because the whole point is to run the
         // fallback path rather than describe it.
-        if (dryRun && !simulateBusFailure) { console.error(`  DRY RUN — would post:\n  ${c.comment_text}`); relayed++; fresh++; continue; }
+        if (dryRun && !simulateBusFailure) { console.error(`  DRY RUN — would post:\n  ${c.comment_text}`); relayed++; fresh++; deliveredIds.add(String(c.id)); continue; }
 
         const busBody = `[CC-starcaster bus-relay] Dane replied on "${t.name}" (${t.url}):\n\n${c.comment_text}`;
         // Chat, then a receipt comment on this very ticket. Only if BOTH fail
         // is the answer genuinely undelivered.
-        const simTarget = handbackTarget(watch, t.status?.status, 1);
+        const simTarget = handbackDestination(watch, t.status?.status, 1, handbackPr).target;
         const delivery = await deliverToBus(channel, busBody, {
           taskId: t.id,
           target: simTarget,
@@ -4553,7 +4937,7 @@ if (cmd === 'whoami') {
         // #414 guarantee holds on THIS watch.
         if (simulateBusFailure) {
           console.error(simulationLine({ verdict: delivery, target: simTarget }));
-          if (delivery.ok) { relayed++; fresh++; }
+          if (delivery.ok) { relayed++; fresh++; deliveredIds.add(String(c.id)); }
           else unchecked.push(`${t.id} comment ${c.id}: SIMULATION — not delivered (${delivery.reason || delivery.why}); nothing was marked relayed`);
           continue;
         }
@@ -4580,7 +4964,7 @@ if (cmd === 'whoami') {
         // "already relayed" check reads.
         const markerText = relayMarkerText({ via: delivery.via, channel, at: new Date().toISOString() });
         const markOut = await call('POST', `/api/v2/comment/${c.id}/reply`, { comment_text: markerText });
-        if (!markOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: delivered (via ${delivery.via}) but could not write the dedup marker — will re-relay next run`); relayed++; fresh++; continue; }
+        if (!markOut.res.ok) { unchecked.push(`${t.id} comment ${c.id}: delivered (via ${delivery.via}) but could not write the dedup marker — will re-relay next run`); relayed++; fresh++; deliveredIds.add(String(c.id)); continue; }
 
         // Verify the marker actually landed, same discipline as `comment`'s
         // read-back (DOCTRINE 3.10) — a 200 here is not proof it stuck.
@@ -4591,6 +4975,7 @@ if (cmd === 'whoami') {
         console.error(`  delivered via ${delivery.via === 'chat' ? 'the party line' : 'a receipt on the ticket'}, marker ${stuck ? 'verified' : 'UNVERIFIED'}`);
         relayed++;
         fresh++;
+        deliveredIds.add(String(c.id));
       }
 
       // Comment-driven MERGE (task 86bbjd5nn): the other thing an operator
@@ -4685,12 +5070,62 @@ if (cmd === 'whoami') {
         }
       }
 
-      // Comment-driven handback (task 86bbh9g7k): a fresh answer from the
-      // operator on a "needs your input" ticket releases it back to the
-      // machine. His comment is the authorization; no fresh comment, no
-      // move — that is the doctrine checkpoint, enforced in handbackTarget.
-      const target = handbackTarget(watch, t.status?.status, fresh);
+      // Comment-driven handback (task 86bbh9g7k): an answer from the operator
+      // on a "needs your input" ticket releases it back to the machine. His
+      // comment is the authorization; no delivered answer, no move — that is
+      // the doctrine checkpoint, enforced in handbackTarget.
+      //
+      // THE AUTHORIZATION IS NOW DURABLE (2026-09-06, task 86bbvr4w3). It used
+      // to be `fresh` — comments relayed in THIS pass — which made the move a
+      // one-shot event. Relaying writes a permanent marker, so a pass that died
+      // between the relay and the move left a ticket that no later pass could
+      // ever release: `fresh` was 0 for ever after. That is not a hypothetical;
+      // 86bbv8nvy was stranded that way for 3.5 hours on 2026-09-06, and only
+      // Dane noticing broke the loop.
+      //
+      // So the question asked is a property of the TICKET, re-derivable every
+      // pass: is there a delivered answer of his newer than the newest
+      // escalation card? `answerAwaitingHandback` owns that rule and its
+      // reasoning.
+      const answered = answerAwaitingHandback({
+        comments: commentsOut.json.comments || [],
+        operatorId: OPERATOR_ID,
+        isMachine: isMachineComment,
+        delivered: (c) => deliveredIds.has(String(c.id)),
+        // An answer a hand-back has already completed on is SPENT, so a ticket
+        // he parks here again by hand is left where he put it rather than
+        // dragged back out ten minutes later on words he wrote for an earlier
+        // round. `Needs your input` is his; the only thing that may take a
+        // ticket out of it is a comment he wrote FOR the card it is parked on.
+        handled: (c) => handbackDoneIds.has(String(c.id)),
+      });
+      // No escalation card on the trail means there is no way to tell an answer
+      // from something he said last week, so the OLD fresh-only rule stands
+      // there and nothing regresses. `npm run stale-answer` reports those as
+      // CANNOT TELL rather than letting them read as quiet.
+      const authorized = answered.state === 'no-question'
+        ? fresh
+        : (answered.state === 'answered' && answered.delivered);
+      const plan = handbackDestination(watch, t.status?.status, authorized, handbackPr);
+      // A reading that failed is reported, never rounded down to "carry on".
+      // Moving on a guess here is the whole of the bug this fix removes.
+      if (plan.act === 'cannot-tell') {
+        unchecked.push(`${t.id}: his answer was delivered, but ${plan.why}`);
+        continue;
+      }
+      const target = plan.target;
       if (!target) continue;
+      // The reason is worth a line whenever it is NOT the ordinary case: it is
+      // the only place a reader can see why an answered ticket went somewhere
+      // other than back in the build queue.
+      if (trailPr) console.error(`  hand-back destination: ${target} — ${plan.why}`);
+      // A retry is worth a line of its own: it is the whole of this fix, and a
+      // pass that silently repaired yesterday's crash would leave nobody able
+      // to tell the repair had ever run.
+      if (!fresh) {
+        console.error(`  RETRYING a hand-back that an earlier pass did not complete: "${t.name}" -> ${target}`
+          + ` (his answer was delivered at ${new Date(answered.answerAt).toISOString()})`);
+      }
       if (dryRun) {
         console.error(`  DRY RUN — would hand back: "${t.name}" -> ${target}`);
         handedBack++;
@@ -4700,7 +5135,33 @@ if (cmd === 'whoami') {
       // them in the same write, and verify BOTH halves from its response.
       const rem = (t.assignees || []).map((a) => a.id);
       const moveOut = await call('PUT', `/api/v2/task/${t.id}`, { status: target, assignees: { add: [], rem } });
-      if (!moveOut.res.ok) { unchecked.push(`${t.id}: the answer was delivered but the hand-back to "${target}" FAILED — the ticket is still parked in "${t.status?.status}"`); continue; }
+      if (!moveOut.res.ok) {
+        const why = `HTTP ${moveOut.res.status}`;
+        unchecked.push(`${t.id}: the answer was delivered but the hand-back to "${target}" FAILED (${why}) — the ticket is still parked in "${t.status?.status}". The next pass re-derives this and tries again.`);
+        // Criterion 2: the failure goes on the TICKET, not only into a bus post
+        // that a rate limit can swallow. Best effort by design — the retry is
+        // derived from the trail and does NOT depend on this landing, which
+        // matters because the usual reason the move failed is the same budget
+        // this write needs.
+        //
+        // ONCE PER ANSWER, NOT ONCE PER PASS (2026-09-07, round 1 review). A
+        // persistent non-429 failure — a renamed status, a permission error —
+        // keeps the status write failing while comment writes keep succeeding,
+        // so an unconditional note is ~144 identical comments a day on the very
+        // ticket he is reading. Everything else in this family throttles; this
+        // is the same discipline, off a read this pass already paid for.
+        if (answered.answer && handbackNotedIds.has(String(answered.answer.id))) {
+          console.error(`  (the failed hand-back on ${t.id} is already noted on his answer — not repeating it)`);
+        } else if (answered.answer) {
+          const noteOut = await call('POST', `/api/v2/comment/${answered.answer.id}/reply`, {
+            comment_text: handbackFailureText({
+              target, status: t.status?.status, why, at: new Date().toISOString(),
+            }),
+          });
+          if (!noteOut.res.ok) console.error(`  (could not record the failed hand-back on ${t.id} either — HTTP ${noteOut.res.status}; the next pass still re-derives it)`);
+        }
+        continue;
+      }
       const now = moveOut.json.status?.status ?? '?';
       if (now.toLowerCase() !== target.toLowerCase()) {
         unchecked.push(`${t.id}: hand-back did not stick (asked "${target}", the write came back "${now}")`);
@@ -4708,6 +5169,18 @@ if (cmd === 'whoami') {
       }
       const leftover = (moveOut.json.assignees || []).map((a) => a.id);
       if (leftover.length) unchecked.push(`${t.id}: handed back to "${now}" but assignees did not clear ([${leftover.join(', ')}])`);
+      // The move stuck, so the answer that authorized it is spent. Written AFTER
+      // the verification and never before it: a marker on a move that did not
+      // happen would suppress the retry this whole ticket exists to add.
+      // Best-effort — if it fails, the behaviour degrades to what it was before
+      // the marker existed (a hand-park could be re-released), never to a
+      // stranding.
+      if (answered.answer) {
+        const doneOut = await call('POST', `/api/v2/comment/${answered.answer.id}/reply`, {
+          comment_text: handbackDoneText({ target: now, at: new Date().toISOString() }),
+        });
+        if (!doneOut.res.ok) console.error(`  (handed back, but could not mark his answer as acted on — HTTP ${doneOut.res.status}; re-parking this ticket by hand could release it again)`);
+      }
       console.error(`  handed back: "${t.name}" -> "${now}" (verified from the write response)`);
       handedBack++;
     }
@@ -5543,7 +6016,28 @@ async function stampLoopNote(taskId, text) {
     process.exit(1);
   }
   const out = await call('POST', `/api/v2/task/${taskId}/field/${field.id}`, { value: text });
-  if (!out.res.ok) die('set loop-note field', out);
+  if (!out.res.ok) {
+    // TWO CAUSES THAT USED TO PRINT THE SAME THING (task 86bbwab1n).
+    //
+    // The field being ABSENT is benign and the skills say so: the pass carries
+    // on, only the note is missing. The field EXISTING and refusing writes is
+    // the opposite — the pass's claim is invisible and another pass may take
+    // the ticket. On 2026-09-08 the workspace ran out of custom-field usages
+    // and every stamp began failing with `Custom field usages exceeded for
+    // your plan`, which read exactly like "not set up yet" to anyone following
+    // the skill. busFallback.classifyFieldRefusal owns the distinction so the
+    // words can be tested without a network.
+    const refusal = busFallback.classifyFieldRefusal({
+      status: out.res.status,
+      body: String(out.json?.err || out.json?.error || out.text || ''),
+    });
+    if (refusal.kind === 'plan-exhausted') {
+      console.error(`\nset loop-note field FAILED — HTTP ${out.res.status}`);
+      for (const line of refusal.lines) console.error(line);
+      process.exit(1);
+    }
+    die('set loop-note field', out);
+  }
 
   // Verify from a fresh read — a 200 is not proof the value stuck.
   const after = await call('GET', `/api/v2/task/${taskId}`);

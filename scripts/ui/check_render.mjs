@@ -112,6 +112,7 @@ function documentForSection({
   layout = 'single',
   modules = [],
   background,
+  pageBackground,
   overlayScreen,
   cellBackgrounds,
   cellOverlayScreens,
@@ -202,6 +203,15 @@ function documentForSection({
   return {
     name: 'Render Contract Section',
     layoutSections: [...before, subject, ...after],
+    /*
+     * THE PAGE's own background, for the same reason `background` above is
+     * carried: a page video background is a real ELEMENT behind the whole
+     * page, mounted by `BuilderViewportShellLayout`, and a contract cannot
+     * reach an element the fixture never asks for. Every other page-background
+     * mode is CSS on the shell and needs nothing here, which is why this field
+     * did not exist until a page could wear a video.
+     */
+    ...(pageBackground ? { pageBackground } : {}),
     ...theme,
   };
 }

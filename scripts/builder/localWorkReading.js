@@ -45,7 +45,7 @@ const { readFileSync } = require('node:fs');
 const nodeRoles = require('../../lib/nodeRoles.js');
 const taskRepo = require('./taskRepo.js');
 const remoteProbe = require('./remoteProbe.js');
-const { findWorkInProgress, sshRoutedMachines } = require('./strandedLocalWork.js');
+const { findWorkInProgress, sshRoutedMachines, BLOCKED_REPO, BLOCKED_TICKET } = require('./strandedLocalWork.js');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
@@ -110,13 +110,41 @@ function workProbe({ readFile = readFileSync, repoRoot = REPO_ROOT } = {}) {
  * @param {object} probe  the value `workProbe()` returned
  */
 function workInProgressFor(task, probe) {
-  const resolved = taskRepo.resolveTaskRepo(task?.tags);
+  // THE SEAT IS NAMED, so a caller can tell a blind spot HERE from one on
+  // another machine. `build-start` draws exactly that line — a disk it cannot
+  // read here is fatal, another machine going quiet is stated and stepped past
+  // — and it cannot draw it against the literal string this used to write.
+  const here = probe?.here || 'this machine';
+
+  // A TICKET THAT WAS NEVER READ IS NOT A TICKET WITH NO TAGS (round-1 review,
+  // finding 2). `resolveTaskRepo(undefined)` answers `starcaster`, because no
+  // `repo:` tag legitimately MEANS starcaster — so a caller that fabricated
+  // `{ id }` after a failed ClickUp read had a `repo:pulse` ticket probed
+  // against the starcaster checkout, found nothing there, and answered `none`:
+  // the exact false all-clear this reading exists to close, arriving through
+  // the reading itself. The API always returns a `tags` array, so its absence
+  // is the fabrication's own fingerprint, and this is the one wiring both
+  // callers come through — the guard belongs here rather than at each of them.
+  if (!task || !Array.isArray(task.tags)) {
+    return { verdict: 'cannot-tell', work: [], unlooked: [], unseen: [{ machine: here, blocked: BLOCKED_TICKET, why: 'the ticket itself was not read, so which repo to look in is unknown — nothing was probed' }] };
+  }
+  // A REPO THAT DOES NOT RESOLVE IS MARKED, NOT JUST DESCRIBED (round-3
+  // review, finding 1, 2026-09-07). Both of the returns below are blind spots
+  // that WAITING CANNOT CLEAR: the ticket carries a tag naming no known repo,
+  // or a repo whose checkout is not on this machine, and it will carry it
+  // again on the next pass and every pass after that. Left as a plain `unseen`
+  // row they were indistinguishable from a laptop that happened to be shut, so
+  // `build-start` stopped the pass with nothing to say and the ticket went
+  // back to the head of the claim line to be refused again — for good.
+  // `BLOCKED_REPO` is what lets `describeNextMove` print the escalation the
+  // loop-build skill already prescribes for exactly this ticket.
+  const resolved = taskRepo.resolveTaskRepo(task.tags);
   if (resolved.action !== 'build' || !resolved.repo) {
-    return { verdict: 'cannot-tell', work: [], unlooked: [], unseen: [{ machine: 'this machine', why: `the task's repo could not be resolved (${resolved.reason})` }] };
+    return { verdict: 'cannot-tell', work: [], unlooked: [], unseen: [{ machine: here, blocked: BLOCKED_REPO, why: `the task's repo could not be resolved (${resolved.reason})` }] };
   }
   const home = taskRepo.repoHome(resolved.repo);
   if (!home) {
-    return { verdict: 'cannot-tell', work: [], unlooked: [], unseen: [{ machine: 'this machine', why: `no checkout path is known for repo:${resolved.repo}` }] };
+    return { verdict: 'cannot-tell', work: [], unlooked: [], unseen: [{ machine: here, blocked: BLOCKED_REPO, why: `no checkout path is known for repo:${resolved.repo}` }] };
   }
   return findWorkInProgress({
     taskId: task.id,

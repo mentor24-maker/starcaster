@@ -503,6 +503,23 @@ function parseSchemaText(sqlText) {
       continue;
     }
 
+    match = /^alter table (?:public\.)?([a-z_][a-z0-9_]*) add column if not exists (.+)$/i.exec(normalized);
+    if (match) {
+      const [, tableName, definition] = match;
+      const target = tables.get(tableName);
+      if (!target) throw new Error(`sqlSchemaFake: alter table ${tableName} before it is created`);
+      const column = parseColumn(definition);
+      if (!column) throw new Error(`sqlSchemaFake: could not parse added column — ${definition}`);
+      if (column.primaryKey || column.unique || column.references) {
+        throw new Error(
+          `sqlSchemaFake: added column ${tableName}.${column.name} carries a constraint this fake does not apply on ALTER. `
+          + 'Implement it or the fake would be enforcing less than the SQL says.'
+        );
+      }
+      if (!target.columns.has(column.name)) target.columns.set(column.name, column);
+      continue;
+    }
+
     match = /^alter table public\.([a-z_][a-z0-9_]*) enable row level security$/i.exec(normalized);
     if (match) {
       rlsEnabled.add(match[1]);

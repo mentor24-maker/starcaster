@@ -1,13 +1,80 @@
-# Blog Links Manager (`admin-blog-links`)
+# Blog tags and related articles — two modules
 
-A **tag manager** for the blog, plus hand-picking related articles. Tickets
-86bbu4qh5 and 86bbue8ux, 2026-09-03.
+Tickets 86bbu4qh5 and 86bbue8ux (2026-09-03), split into two modules by
+86bbuhph0 (2026-09-07).
+
+| Module | Palette label | What it does |
+|---|---|---|
+| `admin-blog-links` | Blog Tag Manager | A table of every tag with its post count, a pencil to rename it across every post that carries it, a cross to remove it from all of them, and the Auto-tag button (86bbw4dcp). Click a count to see the posts behind it. |
+| `admin-related-articles` | Related Articles | Pick a category or tag; the articles filed under it appear with checkboxes and a **Relate Checked** button that links the ticked ones to each other. |
+
+## Why they were split, and why `admin-blog-links` kept its id
+
+They shipped as one module because they were specced as one "blog links" panel.
+They were never one feature: the two halves already had their own on/off
+settings, shared no state beyond a fetch helper, and rendered as two sibling
+sections. The operator asked for the split on 2026-09-03:
+
+> The Related Articles section is part of the Tag Manager module. That should
+> be a separate module.
+
+Separate modules can be placed, hidden, ordered and sized independently, which
+is the whole of what he was asking for.
+
+**The Tag Manager kept the type id `admin-blog-links`.** That is the reason no
+page migration was needed and no alias exists: every page already carrying the
+module keeps working untouched, and its `showTags` setting still means what it
+always meant. Renaming the id would have meant migrating live tenant pages for
+a cosmetic gain. What changed is the LABEL — "Blog Tag Manager" — because that
+is now what the module is.
+
+A page saved before the split still carries `showRelate`, `relateButtonLabel`,
+`articleStatus` and `showCategories` in its stored settings. They are simply
+ignored by the Tag Manager now. That is harmless, and it is the other half of
+why keeping the id was safe.
+
+**The new module has no `showRelate` toggle**, deliberately. On the combined
+module that setting hid one of two halves. Here it would hide the module's
+entire contents and leave a heading over empty space — and the module not being
+on the page is what "don't show it" already means.
+
+### Landmine 1 applies to any further split
+
+`admin-related-articles` had to be registered in
+`lib/builder-client/builder-template.ts` **and** the generated server bundle
+rebuilt with `npm run build:builder-template`. A type the server bundle does
+not know is coerced to `"text"` on every page load: the module becomes an empty
+text block, nothing throws and nothing is logged.
+
+`scripts/builder/relatedArticlesModuleRegistered.test.js` asserts this against
+the GENERATED bundle rather than the TypeScript source, because the source
+being right is exactly the state that hides the bug. It was break-tested:
+removing the type from the source and rebuilding turns
+`normalizeModuleType('admin-related-articles')` into `"text"` and fails three
+of its five assertions.
+
+### The tests are sliced per component
+
+Both components live in `components/builder-template-preview.tsx`.
+`scripts/builder/blogLinksNoTruncation.test.js` reads one component's source at
+a time, bounded at the next top-level `function`. That bound matters: it used
+to run to the end of the file, which was correct only while the Tag Manager
+closed the file out — adding the new component below it silently widened every
+assertion to cover both modules, with everything still passing. One test now
+guards the instrument itself.
+
+## What each module does with the taxonomy
 
 Top: a table of every tag with its post count, a pencil to rename it across
 every post that carries it, and a cross to remove it from all of them.
-Below: pick a category or tag, and the articles filed under it appear with
-checkboxes and a **Relate Checked** button that links the ticked ones to each
-other.
+In the other module: pick a category or tag, and the articles filed under it
+appear with checkboxes and a **Relate Checked** button that links the ticked
+ones to each other.
+
+**The Tag Manager fetches tags only.** It used to fetch the categories too, for
+the picker; after the split that fetch was left behind, loading category rows
+on every page load that reached nothing, since the table renders tags alone.
+Removed, and asserted against.
 
 ## It does NOT manage categories, and that is deliberate
 
@@ -19,8 +86,10 @@ and the operator spotted it immediately (2026-09-03):
 > we already have a Category manager. What we need is the Tag manager that
 > follows the same basic format.
 
-So categories appear here only as a way to CHOOSE which articles to relate.
-Creating, renaming and deleting them belongs to the Category manager.
+So categories appear only as a way to CHOOSE which articles to relate — which
+is now `admin-related-articles`, and it reads the two taxonomies without ever
+writing to either. Creating, renaming and deleting categories belongs to the
+Category manager.
 
 **Tags are the half that never had a manager**, because they are not a table —
 see below.

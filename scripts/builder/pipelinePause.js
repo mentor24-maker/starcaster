@@ -73,6 +73,37 @@ const NAG_MARKER = '[pipeline] STILL PAUSED';
  *  than by CLICKUP_PAUSE_TASK. Matched trimmed and case-insensitively. */
 const SWITCH_TASK_NAME = 'Pipeline pause switch';
 
+/**
+ * The body `npm run pipeline -- pause` writes when it creates the switch.
+ *
+ * IT LIVES HERE, NOT IN `scripts/pipeline.mjs`, AND THAT IS THE POINT (task
+ * 86bbwab1n, review round 2, 2026-09-08). The pause switch is the FOURTH
+ * standing ticket — a Loop Queue ticket created in a closed-type status and
+ * rewritten in place, which `lib/loopThroughput.js` would otherwise count as
+ * a ticket that shipped. `lib/loopNoticeboards.js` registers the other three
+ * by requiring the module that owns each name, and the test that keeps that
+ * registry honest finds them by searching requireable CJS modules for the
+ * seed sentence below.
+ *
+ * With the sentence written inline in `scripts/pipeline.mjs` — an ESM script
+ * that runs on import and so cannot be required by a test — that search could
+ * not see this ticket at all. The registry shipped stale, the test passed, and
+ * `docs/LOOP_ENGINEERING.md` said in as many words that a fourth one would
+ * fail it. Keeping the seed text beside the name it seeds is what makes the
+ * search structurally capable of finding it.
+ *
+ * The sentence is written out in full, exactly as the other three standing
+ * tickets write theirs, rather than imported from `lib/loopNoticeboards.js`:
+ * that module requires this one to read the name above, so importing back
+ * would be a require cycle.
+ */
+const SWITCH_SEED_DESCRIPTION =
+  'The pipeline pause switch. Do not build this, do not close it, do not delete it.\n\n'
+  + 'Its COMMENTS are the flag: the newest `[pipeline] PAUSED` / `[pipeline] RUNNING` record is the state '
+  + 'of the whole build pipeline, and every loop, the bus relay and every hand-driven session asks it '
+  + 'before claiming a ticket or merging anything.\n\n'
+  + 'Run `npm run pipeline -- status` to read it in plain English. Only the operator resumes.';
+
 /** Two hours before the first nag, hourly after that (acceptance criterion 5). */
 const NAG_AFTER_MS = 2 * 60 * 60 * 1000;
 const NAG_EVERY_MS = 60 * 60 * 1000;
@@ -1091,6 +1122,7 @@ module.exports = {
   RESUME_MARKER,
   NAG_MARKER,
   SWITCH_TASK_NAME,
+  SWITCH_SEED_DESCRIPTION,
   NAG_AFTER_MS,
   NAG_EVERY_MS,
   STRANDED_AFTER_MS,

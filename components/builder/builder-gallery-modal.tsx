@@ -21,7 +21,14 @@ import type { AdminMediaItem, AdminMediaKind } from "@/lib/admin-media-shared";
 type BuilderGalleryModalProps = {
   anchor?: BuilderModalAnchor | null;
   isUploading: boolean;
-  onSelectImage: (imagePath: string) => void;
+  /**
+   * The chosen file. `item` is the gallery row behind `imagePath` — it carries
+   * what the path alone cannot (today: byte size, for the background video
+   * size warning). A second, OPTIONAL parameter rather than a changed shape,
+   * so the dozen existing callers that take only the path stay correct and
+   * untouched.
+   */
+  onSelectImage: (imagePath: string, item?: AdminMediaItem) => void;
   onClose: () => void;
   onUploadImage?: (file: File | null) => void | Promise<void>;
   /**
@@ -444,7 +451,7 @@ export function BuilderGalleryModal({
                       <td className="builder-gallery-table-select-col">
                         <button
                           className="submit-button builder-gallery-table-select"
-                          onClick={() => onSelectImage(image.path)}
+                          onClick={() => onSelectImage(image.path, image)}
                           type="button"
                         >
                           Select
@@ -467,7 +474,7 @@ export function BuilderGalleryModal({
                   className="builder-gallery-card"
                   key={image.path}
                   title={mediaSource === "community" ? image.name : undefined}
-                  onClick={() => onSelectImage(image.path)}
+                  onClick={() => onSelectImage(image.path, image)}
                   onMouseEnter={(event) => showPreview(image, event.currentTarget)}
                   onMouseLeave={hidePreview}
                   type="button"

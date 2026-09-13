@@ -3038,6 +3038,10 @@ an epic. It was a one-line bug report whose text already existed in the tracker.
 The repair is not to close the older ticket. It is to fold the finished half
 into it, leave the unfinished half visible, and say plainly which is which.
 
+This section asks *has this already been filed?* §6.24 asks the question before
+it — *should this be filed at all?* — and for a ticket about the pipeline
+itself, that one is answered first.
+
 ### 6.20 A command handed to the operator is plain text — formatting silently breaks the match
 
 2026-09-03, 11:11pm. The auto-merge lane had latched itself off thirteen hours
@@ -3209,6 +3213,72 @@ step earlier, where nothing was dispatched at all and every existing check still
 passes. §6.16 is the nearest neighbour and is about build claims, not operator
 decisions; §6.9 is the same family from the other side — handing Dane a command
 is a claim that CC cannot run it.
+
+### 6.24 A pipeline ticket is filed for a COST, not for a gap — and its title says what breaks
+
+**2026-09-06, Dane's decision; task 86bbvtnfn.** The pipeline had started
+filing tickets about itself faster than the queue could drain them. Measured
+that day, pipeline self-maintenance tickets went from roughly **6 a day in
+mid-August to roughly 16 a day in early September**. Every one was a real
+finding, honestly filed, and none of them stood between the company and
+shipping — the paying work (Delray, product) queued behind them.
+
+**31 tickets were parked that day. Six stayed.** All six trace to a failure
+that actually happened: pipeline code that could not auto-merge overnight
+(86bbuzyra), Pulse's silent low-credit alarm (86bbvr5zv), Pulse invisible to
+the roll call (86bbvr5ym), a relay crash that can lose Dane's answer for good
+(86bbvr4w3), a conflicted PR that runs no checks (86bbvqkr1), hand-run cleanup
+mislabelling a half-built ticket (86bbvj44f). Not one of the 31 could name an
+incident.
+
+That ratio is the rule. A tool that inspects itself will always find more than
+it can fix, so *"is this a real finding?"* is the wrong gate — every one of the
+31 passed it. The gate has to be **did it cost us anything.**
+
+- **The stopping rule.** File a pipeline or self-machinery ticket only when a
+  pipeline failure **actually cost something observable** — lost work, a dead
+  lane, a silent outage, a wrong merge. Name the incident in the description.
+  A theoretical gap noticed while reviewing or building is not a ticket, however
+  correct it is.
+- **Where the gap goes instead.** One plain line in the parked-backlog doc,
+  *The 31 parked tickets* —
+  `https://app.clickup.com/90141423066/docs/2kydhxeu-814` — under **Parked
+  tickets**. Say what breaks and who feels it, and stop. If the pass cannot
+  reach that doc (a headless loop has no ClickUp-doc write route), put the line
+  in its run report and as a plain comment on the ticket it was already
+  working, and say there that it is a parked finding. **What it must not do is
+  file it.**
+- **A parked ticket is not a killed one.** The 31 were closed as **Live** with
+  the tag **`deferred`** — never `wont-do` — keeping every description and
+  comment. To revive one: open it and set its status back to `Queued`. That is
+  the whole procedure.
+- **Title style, everywhere a ticket is created.** The name says **in plain
+  words what breaks and who feels it**, readable by the operator scanning a
+  list of seventy. The clever diagnostic sentence goes in the description,
+  where it is useful. Dane, verbatim: *"your descriptions of tickets is so
+  cryptic and full of fanciful turns of phrases that it is difficult for me to
+  understand which ones are really important and which ones aren't."*
+
+**This does not touch product defects.** A client-facing bug is filed on
+sight, exactly as before; the rule is about the pipeline's tickets on itself.
+Nor does it touch the tickets the machinery files **automatically** for a lane
+that is actually stopped — the merge-conflict tickets of §"...and a hand-off
+now names who is going to act" (`docs/LOOP_ENGINEERING.md`). A blocked pull
+request is a dead lane, which is a cost, and that path files nothing when the
+merge comes back clean. Nor the three tickets that are not work at all but
+places to write — the pause switch (`scripts/pipeline.mjs`), the roll call
+(`scripts/node_heartbeat.mjs`) and the pipeline pulse record
+(`scripts/pulse_publish.mjs`), each created once and rewritten in place
+thereafter. This rule governs the ones an agent files on judgment.
+Nor does it lower the bar for the ones that do get filed — §6.19 still says
+search the queue for the symptom first, and the spec lane's evidence rule
+(a defect ticket cites its mechanism) is unchanged.
+
+§6.23 is the nearest neighbour from the other direction: that one is about a
+decision that should have been dispatched to Dane and was not; this one is
+about findings that should never have been dispatched to the queue at all.
+Both are the same underlying question — *who is this for, and will they act on
+it?*
 
 ## 7. Operator-facing gotchas
 

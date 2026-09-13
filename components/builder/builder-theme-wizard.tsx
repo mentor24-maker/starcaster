@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 import { BuilderTemplatePreview } from "@/components/builder-template-preview";
 import { BuilderImagePickerField } from "@/components/builder/builder-image-picker-field";
+import { sortPagesByName } from "../../public/shared/pageSort.js";
 import {
   createWizardClient,
   splitThemePatch,
@@ -605,7 +606,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
               <label className="tw-field">
                 <span>Preview the looks on this page</span>
                 <select value={previewPageId} onChange={(e) => setPreviewPageId(e.target.value)}>
-                  {pages.map((page) => (
+                  {sortPagesByName(pages).map((page: PageRecord) => (
                     <option key={page.id} value={page.id}>{page.name || page.slug || page.id}</option>
                   ))}
                 </select>

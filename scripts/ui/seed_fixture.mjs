@@ -264,6 +264,18 @@ const buildTuned = (ids) => ({
       effect: 'tumbleweed', effectRotationRate: '40', effectFrequency: '6',
       effectBounceHeight: '150', effectDirection: 'rtl',
       effectSpeed: '16', effectRepeat: 'once', effectDelay: '2',
+      // Drop shadow ON for the same reason the carousel's is: the shadow
+      // controls are visibleWhen-gated behind the tickbox, so an unticked
+      // fixture measures the Frame axis without them and reports OK on rows
+      // it never saw. Shadow Angle and Shadow Distance joined that run on
+      // 2026-08-25, which is two more rows nothing would otherwise look at.
+      // 12 / -9 is deliberately OFF the 15-degree grid — it derives to 37
+      // degrees at a distance of 15, which is the case where the Angle
+      // control has to show a value its own option list does not contain
+      // rather than snap it and rewrite the page.
+      imageShadow: 'true',
+      imageShadowX: '12', imageShadowY: '-9',
+      imageShadowBlur: '24', imageShadowSpread: '2', imageShadowOpacity: '40',
     },
   },
   // The rich-text module's Structure / Text / Placement / Frame axes
@@ -837,25 +849,48 @@ const buildTuned = (ids) => ({
     settings: { showTitle: 'true', panelTitle: LONG },
   },
   /*
-   * Every gating toggle is ON deliberately. Three of this panel's fields are
+   * Every gating toggle is ON deliberately. Two of this panel's fields are
    * `visibleWhen`-gated — `panelTitle` behind `showTitle`, and
-   * `relateButtonLabel` + `articleStatus` behind `showRelate` — so seeding
-   * either toggle off would measure the panel three controls short and still
-   * report green. That is exactly how the proximity-effects panel passed
-   * while two gated fields went unseen.
+   * `autoTagButtonLabel` behind `showAutoTag` — so seeding either toggle off
+   * would measure the panel two controls short and still report green. That is
+   * exactly how the proximity-effects panel passed while two gated fields went
+   * unseen.
    *
    * The tag NAMES here are long on purpose, and they are the real ones from
    * the Delray blog. The first version of this module truncated them with an
    * ellipsis ("Delray Te…", "advanced…"), which is the defect 86bbue8ux was
    * filed for — a fixture of short words could not have shown it.
+   *
+   * The relate settings moved to `admin-related-articles` (86bbuhph0) and are
+   * seeded there now. `showAutoTag` arrived with the Auto-tag extension
+   * (86bbw4dcp) and had never been seeded, so its gated label field was one of
+   * the unseen ones this comment warns about.
    */
   'admin-blog-links': {
     name: 'Blog Links',
     settings: {
       showTitle: 'true', panelTitle: LONG,
-      showCategories: 'true', showTags: 'true',
-      showRelate: 'true', relateButtonLabel: 'Relate the checked articles',
+      showTags: 'true',
+      showAutoTag: 'true', autoTagButtonLabel: 'Auto-tag every untagged post',
+    },
+  },
+
+  /*
+   * The Related Articles half, its own module since 86bbuhph0.
+   *
+   * `panelTitle` is gated behind `showTitle`, so that toggle is on for the
+   * same reason as above. The other three fields are ungated here — on the
+   * combined module `relateButtonLabel` and `articleStatus` sat behind
+   * `showRelate`, and this module has no such toggle: it IS the relate
+   * feature, so hiding its contents would leave a heading over empty space.
+   */
+  'admin-related-articles': {
+    name: 'Related Articles',
+    settings: {
+      showTitle: 'true', panelTitle: LONG,
+      relateButtonLabel: 'Relate the checked articles',
       articleStatus: 'published',
+      showCategories: 'true',
     },
   },
   'admin-login': {
@@ -902,6 +937,14 @@ const buildPanelCheckSection = (ids) => {
     mode: 'video',
     videoUrl: '/images/render-fixture-background.mp4',
     posterUrl: '/images/render-fixture-background-poster.jpg',
+    /*
+     * Over the 10MB advisory threshold, so the file-size warning RENDERS and
+     * gets measured. It is a wrapping sentence in a narrow settings column —
+     * the shape most likely to push its column's shared track wider than its
+     * siblings and stagger the panel — and seeding a comfortable size instead
+     * would report a confident green over a row the check never saw.
+     */
+    videoBytes: 34_000_000,
     videoSpeed: 1,
     videoLoop: true,
     /*
@@ -942,6 +985,42 @@ const buildPanelCheckSection = (ids) => {
   overlayScreen: {
     background: { mode: 'gradient', color: '#1b2a4a', color2: '#4cbb17' },
     opacity: 45,
+  },
+  /*
+   * AND A VIDEO CELL FILL, which is a THIRD panel again — and the one that
+   * reached the operator staggered.
+   *
+   * The row background above seeds the SECTION editor's Video sub-panel. The
+   * CELL editor renders the same shared picker in its own Frame group, and
+   * seeding one does nothing for the other: with this key absent the cell
+   * panel was always measured on Background = "None", so the fourteen video
+   * controls never rendered and `check_panels` reported a confident green
+   * over zero of them. That is how nine W0 violations reached review in PR #665
+   * with a 681-panel pass attached — the exact hole Definition-of-done #7
+   * names, one panel along from the cell Overlay note below.
+   *
+   * Measured, not assumed: with this seed removed, reverting the nested-column
+   * rule in `_builder-react-overrides.css` reports a clean pass at all three
+   * widths. With it, the same revert fails nine ways.
+   *
+   * `main` because this section is single-column, and the same clip and poster
+   * the row background uses — a second asset would prove nothing the first does
+   * not, and these two already exist for `check:render`.
+   */
+  cellBackgrounds: {
+    main: {
+      mode: 'video',
+      videoUrl: '/images/render-fixture-background.mp4',
+      posterUrl: '/images/render-fixture-background-poster.jpg',
+      videoSpeed: 1,
+      videoLoop: true,
+      /*
+       * A non-zero fade, because it is the shipped default (0.6) and so the
+       * state every operator opens the panel in. Zero would measure the one
+       * value the control is almost never on.
+       */
+      videoLoopFade: 0.6,
+    },
   },
   /*
    * AND THE SAME THING ON THE CELL, which is a different panel.
