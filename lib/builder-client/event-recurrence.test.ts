@@ -145,3 +145,14 @@ describe("display helpers", () => {
     expect(formatOccurrenceDate("2026-09-14", "en-US")).toBe("Mon, Sep 14");
   });
 });
+
+describe("substitute instructor", () => {
+  it("carries a single date's instructor and marks the date changed", () => {
+    const [occ] = expandOccurrences(
+      { ...drills, recurrenceOverrides: [{ date: "2026-09-01", instructor: "Danny Z" }] },
+      ...range("2026-09-01T00:00:00Z", "2026-09-01T23:00:00Z"),
+    );
+    expect(occ.instructor).toBe("Danny Z");
+    expect(occ.changed).toBe(true);
+  });
+});

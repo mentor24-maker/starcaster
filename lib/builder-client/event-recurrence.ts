@@ -28,6 +28,8 @@ export type RecurrenceOverride = {
   cancelled?: boolean;
   startTime?: string;
   endTime?: string;
+  /** A substitute instructor for this date only. */
+  instructor?: string;
   note?: string;
 };
 
@@ -51,6 +53,8 @@ export type Occurrence = {
   allDay: boolean;
   cancelled: boolean;
   note: string;
+  /** This date's substitute instructor, or '' when the event's own applies. */
+  instructor: string;
   /** True when a single-date change altered this date. */
   changed: boolean;
   recurring: boolean;
@@ -238,7 +242,7 @@ export function expandOccurrences(event: RepeatableEvent, from: Date | number, t
       date: zonedDate(startMs, tz),
       startsAt: new Date(startMs).toISOString(),
       endsAt: endMs === null ? null : new Date(endMs).toISOString(),
-      allDay, cancelled: false, note: "", changed: false, recurring: false,
+      allDay, cancelled: false, note: "", instructor: "", changed: false, recurring: false,
     }];
   }
 
@@ -290,7 +294,8 @@ export function expandOccurrences(event: RepeatableEvent, from: Date | number, t
       allDay,
       cancelled: Boolean(o?.cancelled),
       note: String(o?.note || ""),
-      changed: Boolean(o && (o.cancelled || o.startTime || o.endTime || o.note)),
+      instructor: String(o?.instructor || ""),
+      changed: Boolean(o && (o.cancelled || o.startTime || o.endTime || o.instructor || o.note)),
       recurring: true,
     });
   }

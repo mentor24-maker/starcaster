@@ -7172,7 +7172,15 @@ type EventRecord = {
   seoDescription: string;
   recurrence?: RecurrenceRule | null;
   recurrenceOverrides?: RecurrenceOverride[];
+  instructor?: string;
+  categoryId?: string;
 };
+
+/** A venue or program type the calendar colours events by (task 86bbzt25g). */
+type EventCategoryRecord = { id: string; name: string; color: string; sortOrder: number };
+
+/** Offered for a new venue, in the order Delray's program guide uses them. */
+const EVENT_CATEGORY_DEFAULT_COLORS = ["#0b2d6b", "#72b62f", "#f7a600", "#b91c5c", "#0e7490", "#6b21a8"];
 
 type EventFormValues = Record<string, string>;
 
@@ -7210,6 +7218,7 @@ function applyEventOverride(
   if (merged.cancelled) clean.cancelled = true;
   if (merged.startTime) clean.startTime = merged.startTime;
   if (merged.endTime) clean.endTime = merged.endTime;
+  if (merged.instructor && merged.instructor.trim()) clean.instructor = merged.instructor;
   if (merged.note && merged.note.trim()) clean.note = merged.note;
   if (Object.keys(clean).length === 1) return rest;
   return [...rest, clean].sort((a, b) => a.date.localeCompare(b.date));
@@ -7233,6 +7242,7 @@ const EMPTY_EVENT_FORM: EventFormValues = {
   organizerName: "", organizerContact: "",
   seoTitle: "", seoDescription: "",
   featured: "false",
+  instructor: "", categoryId: "",
 };
 
 /** The viewer's own zone, offered as the default for a new event. */
@@ -7278,6 +7288,11 @@ function EventManagerPreview({
   const [repeat, setRepeat] = useState<EventRepeatForm>(EMPTY_EVENT_REPEAT);
   const [overrides, setOverrides] = useState<RecurrenceOverride[]>([]);
   const [changingDate, setChangingDate] = useState<string | null>(null);
+  const [categories, setCategories] = useState<EventCategoryRecord[]>([]);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [newCategory, setNewCategory] = useState({ name: "", color: EVENT_CATEGORY_DEFAULT_COLORS[0] });
+  const [categoryBusy, setCategoryBusy] = useState(false);
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
   // Dates and times in the form are read in the EVENT's zone, so a repeat
   // stays at 8:30am local across a clock change and an admin travelling
   // elsewhere still types the club's own times.
@@ -7297,7 +7312,53 @@ function EventManagerPreview({
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadEvents(); }, []);
+  function loadCategories() {
+    fetch("/api/event-categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, `Failed to load venues (${r.status})`));
+        const list = (d?.categories ?? d?.data ?? []) as EventCategoryRecord[];
+        setCategories(Array.isArray(list) ? list : []);
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Failed to load venues."));
+  }
+
+  useEffect(() => { loadEvents(); loadCategories(); }, []);
+
+  /**
+   * One request per change, then the list read back — so what the admin sees
+   * is what saved, never what they typed.
+   */
+  async function categoryRequest(url: string, method: string, body?: unknown) {
+    setCategoryBusy(true);
+    setErrorMsg("");
+    try {
+      const res = await fetch(url, {
+        method,
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(readApiErrorMessage(data, "Could not save the venue."));
+      return true;
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Could not save the venue.");
+      return false;
+    } finally {
+      loadCategories();
+      setCategoryBusy(false);
+    }
+  }
+
+  async function addCategory() {
+    const name = newCategory.name.trim();
+    if (!name) { setErrorMsg("Give the venue or category a name."); return; }
+    const sortOrder = categories.reduce((max, c) => Math.max(max, c.sortOrder), 0) + 1;
+    if (await categoryRequest("/api/event-categories", "POST", { name, color: newCategory.color, sortOrder })) {
+      setNewCategory({ name: "", color: EVENT_CATEGORY_DEFAULT_COLORS[(categories.length + 1) % EVENT_CATEGORY_DEFAULT_COLORS.length] });
+    }
+  }
 
   function setField(key: string, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -7349,6 +7410,8 @@ function EventManagerPreview({
       seoTitle: event.seoTitle ?? "",
       seoDescription: event.seoDescription ?? "",
       featured: event.featured ? "true" : "false",
+      instructor: event.instructor ?? "",
+      categoryId: event.categoryId ?? "",
     });
     const rule = event.recurrence;
     setRepeat(rule
@@ -7421,6 +7484,8 @@ function EventManagerPreview({
       seoTitle: form.seoTitle.trim(),
       seoDescription: form.seoDescription.trim(),
       featured: form.featured === "true",
+      instructor: form.instructor.trim(),
+      categoryId: form.categoryId,
       recurrence: repeat.enabled
         ? { freq: "weekly", interval: repeat.interval, weekdays: repeat.weekdays, until: repeat.until || null }
         : null,
@@ -7616,6 +7681,7 @@ function EventManagerPreview({
                         </span>
                         {occ.cancelled ? <span className="builder-event-manager-date-badge">Cancelled</span> : null}
                         {occ.changed && !occ.cancelled ? <span className="builder-event-manager-date-badge">Changed</span> : null}
+                        {occ.instructor ? <span className="builder-event-manager-date-note">with {occ.instructor}</span> : null}
                         {occ.note ? <span className="builder-event-manager-date-note">{occ.note}</span> : null}
                         <span className="builder-event-manager-date-actions">
                           {occ.cancelled ? (
@@ -7663,6 +7729,15 @@ function EventManagerPreview({
                               className="builder-event-manager-input"
                               value={entry?.endTime || (occ.endsAt ? isoToZonedInput(occ.endsAt, formZone).slice(11) : "")}
                               onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { endTime: e.target.value }))}
+                            />
+                          </label>
+                          <label className="builder-event-manager-label">
+                            Instructor this date
+                            <input
+                              className="builder-event-manager-input"
+                              value={entry?.instructor || ""}
+                              placeholder={form.instructor || "Substitute"}
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { instructor: e.target.value }))}
                             />
                           </label>
                           <label className="builder-event-manager-label">
@@ -7726,6 +7801,38 @@ function EventManagerPreview({
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-instructor">Instructor</label>
+          <input
+            id="event-instructor"
+            className="builder-event-manager-input"
+            value={form.instructor}
+            onChange={(e) => setField("instructor", e.target.value)}
+            placeholder="e.g. Wayne L"
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-category">Venue / Category</label>
+          <div className="builder-event-manager-category-pick">
+            <span
+              className="builder-event-manager-swatch"
+              aria-hidden="true"
+              style={{ background: categoryById.get(form.categoryId)?.color || "transparent" }}
+            />
+            <select
+              id="event-category"
+              className="builder-event-manager-input"
+              value={categoryById.has(form.categoryId) ? form.categoryId : ""}
+              onChange={(e) => setField("categoryId", e.target.value)}
+            >
+              <option value="">{categories.length ? "No category" : "No venues yet — add them with Venues"}</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -7946,6 +8053,82 @@ function EventManagerPreview({
       {loadError ? <div className="builder-event-manager-error">{loadError}</div> : null}
       {errorMsg && !formOpen ? <div className="builder-event-manager-error">{errorMsg}</div> : null}
 
+      {categoriesOpen ? (
+        <div className="builder-event-manager-categories">
+          <h3 className="builder-event-manager-form-title">Venues &amp; categories</h3>
+          <p className="builder-event-manager-hint">
+            Each event can belong to one. The public calendar colours events by it and shows the names as a key.
+          </p>
+          {categories.length ? (
+            <ul className="builder-event-manager-category-list">
+              {categories.map((c) => (
+                // Keyed on what was saved, so a row whose save failed or changed
+                // re-mounts showing the stored values rather than the typed ones.
+                <li key={`${c.id}:${c.name}:${c.color}`} className="builder-event-manager-category">
+                  <input
+                    type="color"
+                    aria-label={`Colour for ${c.name}`}
+                    className="builder-event-manager-color"
+                    defaultValue={c.color || "#888888"}
+                    disabled={categoryBusy}
+                    onBlur={(e) => { if (e.target.value !== c.color) categoryRequest(`/api/event-categories/${encodeURIComponent(c.id)}`, "PUT", { color: e.target.value }); }}
+                  />
+                  <input
+                    aria-label="Name"
+                    className="builder-event-manager-input"
+                    defaultValue={c.name}
+                    disabled={categoryBusy}
+                    onBlur={(e) => {
+                      const name = e.target.value.trim();
+                      if (name && name !== c.name) categoryRequest(`/api/event-categories/${encodeURIComponent(c.id)}`, "PUT", { name });
+                      else e.target.value = c.name;
+                    }}
+                  />
+                  <span className="builder-event-manager-category-count">
+                    {(() => {
+                      const n = events.filter((ev) => ev.categoryId === c.id).length;
+                      return `${n} event${n === 1 ? "" : "s"}`;
+                    })()}
+                  </span>
+                  <AdminTableIconButton
+                    icon="delete"
+                    label={`Delete ${c.name}`}
+                    danger
+                    onClick={() => {
+                      const n = events.filter((ev) => ev.categoryId === c.id).length;
+                      const ok = window.confirm(n
+                        ? `Delete "${c.name}"? Its ${n} event${n === 1 ? "" : "s"} will stay, with no venue.`
+                        : `Delete "${c.name}"?`);
+                      if (ok) categoryRequest(`/api/event-categories/${encodeURIComponent(c.id)}`, "DELETE");
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="builder-event-manager-hint">No venues or categories yet. Add the first one below.</p>
+          )}
+          <div className="builder-event-manager-category builder-event-manager-category-new">
+            <input
+              type="color"
+              aria-label="Colour for the new venue"
+              className="builder-event-manager-color"
+              value={newCategory.color}
+              onChange={(e) => setNewCategory((v) => ({ ...v, color: e.target.value }))}
+            />
+            <input
+              aria-label="New venue or category name"
+              className="builder-event-manager-input"
+              placeholder="e.g. Delray Swim & Tennis Club"
+              value={newCategory.name}
+              onChange={(e) => setNewCategory((v) => ({ ...v, name: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCategory(); } }}
+            />
+            <button type="button" className="btn tiny-btn" disabled={categoryBusy} onClick={addCategory}>Add</button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="builder-admin-data-table-wrap">
         <table className="builder-admin-data-table">
           <thead>
@@ -7961,7 +8144,17 @@ function EventManagerPreview({
               {showDate ? <th /> : null}
               {showLocation ? <th /> : null}
               <th className="builder-admin-data-table-actions-col actions-col">
-                <button type="button" className="btn tiny-btn" onClick={startCreate}>Add Event</button>
+                <div className="table-actions-row">
+                  <button
+                    type="button"
+                    className="btn btn-ghost tiny-btn"
+                    aria-expanded={categoriesOpen}
+                    onClick={() => setCategoriesOpen((v) => !v)}
+                  >
+                    Venues
+                  </button>
+                  <button type="button" className="btn tiny-btn" onClick={startCreate}>Add Event</button>
+                </div>
               </th>
             </tr>
             <tr className="builder-admin-data-table-header-row">
@@ -7990,7 +8183,17 @@ function EventManagerPreview({
               return (
                 <tr key={event.id}>
                   <td className="builder-admin-data-table-cell">
-                    <span className="builder-event-manager-title">{event.title || "Untitled event"}</span>
+                    <span className="builder-event-manager-title">
+                      {categoryById.get(event.categoryId || "") ? (
+                        <span
+                          className="builder-event-manager-swatch"
+                          title={categoryById.get(event.categoryId || "")!.name}
+                          style={{ background: categoryById.get(event.categoryId || "")!.color || "transparent" }}
+                        />
+                      ) : null}
+                      {event.title || "Untitled event"}
+                    </span>
+                    {event.instructor ? <span className="builder-event-manager-when-sub">{event.instructor}</span> : null}
                     {event.featured ? <span className="builder-event-manager-featured">Featured</span> : null}
                   </td>
                   {showStatus ? (

@@ -36,7 +36,7 @@ function requestScope(req) {
  */
 const TEXT_FIELDS = [
   'title', 'slug', 'status', 'description', 'excerpt',
-  'imageUrl', 'imageAlt', 'url', 'timezone',
+  'imageUrl', 'imageAlt', 'url', 'timezone', 'instructor', 'categoryId',
   'locationName', 'locationAddress', 'locationUrl',
   'organizerName', 'organizerContact',
   'seoTitle', 'seoDescription',
