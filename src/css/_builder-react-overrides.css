@@ -7770,6 +7770,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-secondary);
 }
 
+/* The date column does not wrap (a date should stay on one line), but a
+ * repeat rule is a sentence — "Weekly on Mon, Tue, Wed, Thu, Fri, Sat until
+ * Dec 19, 2026" was clipped mid-word. */
+.builder-react-root .builder-admin-data-table-date .builder-event-manager-when-rule {
+  white-space: normal;
+}
+
 /* ── Event Manager: venues & categories (task 86bbzt25g) ──────────────── */
 .builder-react-root .builder-event-manager-categories {
   margin: var(--space-4) 0;
@@ -7798,7 +7805,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 .builder-react-root .builder-event-manager-category-count {
-  flex: 0 0 auto;
+  flex: 0 0 5.5rem;
+  text-align: right;
   font-size: var(--text-sm);
   color: var(--ink-secondary);
   white-space: nowrap;

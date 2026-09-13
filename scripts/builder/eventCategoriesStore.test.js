@@ -110,3 +110,10 @@ test('a single date may name a substitute instructor', () => {
   const { parseOverrides } = require('../../lib/eventRecurrence');
   assert.deepEqual(parseOverrides([{ date: '2026-09-15', instructor: ' Danny Z ' }]), [{ date: '2026-09-15', instructor: 'Danny Z' }]);
 });
+
+test('the list route strips a visitor copy and leaves an admin copy whole', () => {
+  const { categoriesForCaller } = require('../../routes/eventCategories');
+  const row = { id: 'ecat_1', projectId: 'proj_a', ownerUserId: 'user_1', name: 'N', color: '#123456', sortOrder: 0, createdAt: 'x', updatedAt: 'y' };
+  assert.equal(categoriesForCaller([row], null)[0].ownerUserId, undefined, 'a visitor must not see who created a venue');
+  assert.equal(categoriesForCaller([row], { id: 'user_1' })[0].projectId, 'proj_a');
+});

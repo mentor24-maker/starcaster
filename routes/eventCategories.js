@@ -48,10 +48,14 @@ function readCategoryPatch(body, { requireName }) {
   return { patch };
 }
 
+/** A signed-in admin sees the whole record; a visitor sees what the legend paints. */
+function categoriesForCaller(list, authUser) {
+  return authUser ? list : list.map(toPublic);
+}
+
 async function handle(req, res, pathname, method) {
   if (pathname === '/api/event-categories' && method === 'GET') {
-    const list = await listEventCategories(requestScope(req));
-    const categories = req.authUser ? list : list.map(toPublic);
+    const categories = categoriesForCaller(await listEventCategories(requestScope(req)), req.authUser);
     return sendOk(res, 200, categories, { categories }), true;
   }
 
@@ -89,4 +93,4 @@ async function handle(req, res, pathname, method) {
 
 const manifest = { id: 'eventCategories', label: 'Event categories', prefixes: ['/api/event-categories'] };
 
-module.exports = { handle, manifest, readCategoryPatch };
+module.exports = { handle, manifest, readCategoryPatch, categoriesForCaller };

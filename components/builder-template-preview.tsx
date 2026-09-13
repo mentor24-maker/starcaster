@@ -8139,22 +8139,24 @@ function EventManagerPreview({
               * and reads as a fifth column heading rather than a control.
               */}
             <tr className="builder-admin-data-table-filter-row table-filter-row">
-              <th />
+              {/* Venues sits at the far left of the filter row: the actions
+                * column is sized for one button, and a second one there was
+                * cut off at 1280px (task 86bbzt25g). */}
+              <th>
+                <button
+                  type="button"
+                  className="btn btn-ghost tiny-btn"
+                  aria-expanded={categoriesOpen}
+                  onClick={() => setCategoriesOpen((v) => !v)}
+                >
+                  Venues
+                </button>
+              </th>
               {showStatus ? <th /> : null}
               {showDate ? <th /> : null}
               {showLocation ? <th /> : null}
               <th className="builder-admin-data-table-actions-col actions-col">
-                <div className="table-actions-row">
-                  <button
-                    type="button"
-                    className="btn btn-ghost tiny-btn"
-                    aria-expanded={categoriesOpen}
-                    onClick={() => setCategoriesOpen((v) => !v)}
-                  >
-                    Venues
-                  </button>
-                  <button type="button" className="btn tiny-btn" onClick={startCreate}>Add Event</button>
-                </div>
+                <button type="button" className="btn tiny-btn" onClick={startCreate}>Add Event</button>
               </th>
             </tr>
             <tr className="builder-admin-data-table-header-row">
