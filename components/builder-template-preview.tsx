@@ -153,6 +153,7 @@ import {
 import { BuilderCodeEmbed } from "@/components/builder/builder-code-embed";
 import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import { BuilderImagePickerField } from "@/components/builder/builder-image-picker-field";
+import { BuilderEventHarvest } from "@/components/builder/builder-event-harvest";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import {
   formatEventWhen,
@@ -7591,6 +7592,10 @@ function EventManagerPreview({
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [newCategory, setNewCategory] = useState({ name: "", color: EVENT_CATEGORY_DEFAULT_COLORS[0] });
   const [categoryBusy, setCategoryBusy] = useState(false);
+  // Harvest PDF is a platform-login tool (task 86bbztj0e): the probe answers
+  // only for a platform session, so a club admin never sees the button.
+  const [harvestAvailable, setHarvestAvailable] = useState(false);
+  const [harvestOpen, setHarvestOpen] = useState(false);
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   // Dates and times in the form are read in the EVENT's zone, so a repeat
   // stays at 8:30am local across a clock change and an admin travelling
@@ -7622,7 +7627,14 @@ function EventManagerPreview({
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Failed to load venues."));
   }
 
-  useEffect(() => { loadEvents(); loadCategories(); }, []);
+  useEffect(() => {
+    loadEvents();
+    loadCategories();
+    fetch("/api/event-harvest/available", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setHarvestAvailable(Boolean((d?.data ?? d)?.available)))
+      .catch(() => setHarvestAvailable(false));
+  }, []);
 
   /**
    * One request per change, then the list read back — so what the admin sees
@@ -8352,6 +8364,17 @@ function EventManagerPreview({
       {loadError ? <div className="builder-event-manager-error">{loadError}</div> : null}
       {errorMsg && !formOpen ? <div className="builder-event-manager-error">{errorMsg}</div> : null}
 
+      {harvestOpen && harvestAvailable ? (
+        <BuilderEventHarvest
+          accent={accent}
+          categories={categories}
+          defaultTimeZone={eventTimeZone(events.find((e) => isValidTimeZone(e.timezone)) || {})}
+          headers={() => getCrmProjectHeaders()}
+          onClose={() => setHarvestOpen(false)}
+          onCreated={() => { loadEvents(); loadCategories(); }}
+        />
+      ) : null}
+
       {categoriesOpen ? (
         <div className="builder-event-manager-categories">
           <h3 className="builder-event-manager-form-title">Venues &amp; categories</h3>
@@ -8450,6 +8473,16 @@ function EventManagerPreview({
                 >
                   Venues
                 </button>
+                {harvestAvailable ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost tiny-btn"
+                    aria-expanded={harvestOpen}
+                    onClick={() => setHarvestOpen((v) => !v)}
+                  >
+                    Harvest PDF
+                  </button>
+                ) : null}
               </th>
               {showStatus ? <th /> : null}
               {showDate ? <th /> : null}
