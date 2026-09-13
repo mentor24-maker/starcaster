@@ -878,6 +878,27 @@ async function postToBus(channel, content, { simulate } = {}) {
  * because a fallback reported as delivered when it was not would silence the
  * alarm's suppression window on the strength of a comment nobody received.
  */
+/**
+ * Post to the party line, and when it refuses, save the message to the
+ * "Undelivered alarms" ticket instead (task 86bbzwxrw). Returns
+ * { ok, via: 'chat' | 'ticket' | '', why }.
+ *
+ * The relay's daily digest and its latch reminder posted with `postToBus`
+ * alone, so while the party line refused every post (from 2026-09-07) each
+ * pass ended "could not fully verify" and exited 1 — the relay never beat
+ * again and read QUIET for five days while doing all its real work. A message
+ * verifiably saved on the fallback ticket HAS been delivered somewhere a person
+ * reads, so it counts; only a failure of both is a failure.
+ */
+async function postOrSaveToBus(channel, text) {
+  const bus = await postToBus(channel, text);
+  if (bus && bus.ok) return { ok: true, via: 'chat', why: '' };
+  const why = String(bus?.why || 'the party line refused it');
+  const saved = await saveUndeliveredAlarm({ text, channel, why });
+  if (saved.ok) return { ok: true, via: 'ticket', why, url: saved.url };
+  return { ok: false, via: '', why: `${why}; the "${busFallback.FALLBACK_TASK_NAME}" ticket refused it too (${saved.why})` };
+}
+
 async function saveUndeliveredAlarm({ text, channel, why }) {
   // A RESERVE STOP IS NOT A FAILED SAVE (task 86bbwab1n, review round 2).
   // Every `call()` below can come back yielded — `res.ok === false` with the
@@ -5467,7 +5488,7 @@ if (cmd === 'whoami') {
       const line = `[CC-starcaster bus-relay] AUTO-MERGE IS STILL LATCHED OFF — ${nag.why}. ${selfDisable.why}${latchItemLines(selfDisable)}\n\nNothing will auto-merge until a human says "resume auto-merging". Your own merge commands still work.`;
       if (dryRun) console.error(`  DRY RUN — would post to the bus: ${line}`);
       else {
-        const posted = await postToBus(channel, line);
+        const posted = await postOrSaveToBus(channel, line);
         // Only a delivered nag resets the clock. Stamping it on a failed post
         // would buy silence for a day on the strength of a message nobody got.
         if (posted && posted.ok) ledger = ledgerAfterLatchNag(ledger, now);
@@ -5679,7 +5700,7 @@ if (cmd === 'whoami') {
         sinceLabel: ledger.lastDigestAt > 0 ? `the last digest (${clockAt(since)})` : 'the last 24 hours',
         clockLabel: clockAt(now),
       });
-      const bus = await postToBus(channel, body);
+      const bus = await postOrSaveToBus(channel, body);
       if (bus.ok) ledger = ledgerAfterDigest(ledger, now);
       else reportBusFailure({ cosmetic: false, unchecked, busSkipped, line: `the daily auto-merge digest could not be posted (${bus.why}) — it will be retried next pass` });
     }
