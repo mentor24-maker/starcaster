@@ -17,8 +17,12 @@ const path = require('path');
  *   - a status nobody validated makes "published" a typo away from invisible.
  */
 
-const SQL_PATH = path.join(__dirname, '..', '..', 'docs', 'SQL', 'events_setup.sql');
-const { parseSchemaFile, createFakeDb } = require('./sqlSchemaFake.js');
+const fs = require('fs');
+// Both files, in the order production received them: the repeat columns are
+// an ALTER on the table the first one creates.
+const SQL_PATHS = ['events_setup.sql', 'events_programs_setup.sql']
+  .map((name) => path.join(__dirname, '..', '..', 'docs', 'SQL', name));
+const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
 const storePath = require.resolve('../../lib/eventsStore.js');
@@ -27,7 +31,7 @@ const SCOPE_A = { projectId: 'proj_a', userId: 'user_1' };
 const SCOPE_B = { projectId: 'proj_b', userId: 'user_2' };
 
 function withStore() {
-  const db = createFakeDb(parseSchemaFile(SQL_PATH));
+  const db = createFakeDb(parseSchemaText(SQL_PATHS.map((p) => fs.readFileSync(p, 'utf8')).join('\n;\n')));
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({ events: 'events' }),
@@ -230,4 +234,44 @@ test('a delete removes exactly one event', async (t) => {
   assert.equal(deleted.title, 'Doomed');
   assert.deepEqual((await store.listEvents({}, SCOPE_A)).map((e) => e.title), ['Survivor']);
   assert.equal(await store.getEvent(a.id, SCOPE_A), null);
+});
+
+test('a weekly repeat and its single-date changes are saved and read back', async (t) => {
+  const { store, restore } = withStore();
+  t.after(restore);
+
+  const created = await store.createEvent({
+    title: 'Drills & Games I',
+    status: 'published',
+    startsAt: '2026-08-31T12:30:00.000Z',
+    endsAt: '2026-08-31T14:00:00.000Z',
+    timezone: 'America/New_York',
+    recurrence: { freq: 'weekly', interval: 1, weekdays: [1, 2, 3, 4, 5, 6], until: '2026-12-19' },
+    recurrenceOverrides: [{ date: '2026-09-07', cancelled: true }],
+  }, SCOPE_A);
+  assert.deepEqual(created.recurrence, { freq: 'weekly', interval: 1, weekdays: [1, 2, 3, 4, 5, 6], until: '2026-12-19' });
+
+  const updated = await store.updateEvent(created.id, {
+    recurrenceOverrides: [
+      { date: '2026-09-07', cancelled: true },
+      { date: '2026-09-09', startTime: '09:00', endTime: '10:00', note: 'Court 4' },
+    ],
+  }, SCOPE_A);
+  assert.equal(updated.recurrenceOverrides.length, 2);
+
+  // A PATCH that does not mention the rule must leave it alone.
+  const renamed = await store.updateEvent(created.id, { title: 'Drills & Games 1' }, SCOPE_A);
+  assert.deepEqual(renamed.recurrence.weekdays, [1, 2, 3, 4, 5, 6]);
+  assert.equal(renamed.recurrenceOverrides[1].note, 'Court 4');
+
+  const cleared = await store.updateEvent(created.id, { recurrence: null }, SCOPE_A);
+  assert.equal(cleared.recurrence, null, 'turning Repeat off must actually store a one-off event');
+});
+
+test('an existing event with no repeat columns reads back as a one-off', async (t) => {
+  const { store, restore } = withStore();
+  t.after(restore);
+  const created = await store.createEvent({ title: 'Open Day' }, SCOPE_A);
+  assert.equal(created.recurrence, null);
+  assert.deepEqual(created.recurrenceOverrides, []);
 });

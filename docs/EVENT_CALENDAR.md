@@ -48,13 +48,8 @@ start, end. The rest exist because a calendar without them misreports:
 
 ## What is deliberately not here
 
-- **Recurrence** ("every Tuesday"). The single most-asked-for calendar feature
-  and the hardest part of one — it changes what a row *is*, from one event to
-  a rule that generates them. The table has no recurrence column, and adding
-  one later does not require rewriting what is here.
-- **Categories.** The blog has them, with colours, for filtering. Events will
-  want the same thing, but the public calendar is what makes that visible, so
-  it belongs with the module that filters by it.
+- **Recurrence** was here until 2026-09-12 — see "Repeating events" below.
+- **Categories** arrived 2026-09-12 as venues — see "Instructors and venues" below.
 - **Ticketing, RSVP, capacity, attachments.** All real; all their own feature.
 
 ## The public calendar (2/3)
@@ -86,6 +81,123 @@ Monday start. An off-by-one in the lead puts every date under the wrong
 weekday: a calendar that is confidently, silently wrong, which is worse than
 one that fails to draw. `check:render` covers the half a unit test cannot see
 — that the grid reaches the page as seven columns.
+
+## Repeating events (task 86bbzt259, 2026-09-12)
+
+Built for Delray Beach Tennis, whose printed *Weekly Program Guide* is ~35
+weekly programs — "Drills & Games I · Wayne L · Mon–Sat 8:30–10:00am".
+
+**A repeating event is ONE row carrying a rule, not a row per date.** Two new
+columns (`docs/SQL/events_programs_setup.sql`):
+
+| Column | Shape |
+|---|---|
+| `recurrence` | `null` for a one-off, or `{ freq: "weekly", interval: 1–12, weekdays: [0–6], until: "YYYY-MM-DD" \| null }` |
+| `recurrence_overrides` | `[{ date, cancelled?, startTime?, endTime?, note? }]` — single dates that differ |
+
+A row per date would be ~1,800 rows a year for one club, each to be edited when
+a coach changes; the rule is edited once. The dates are worked out when shown,
+by `expandOccurrences` in `lib/builder-client/event-recurrence.ts`, which every
+surface uses — so the admin list and the public calendar cannot disagree about
+whether a program is on the 14th.
+
+**The time is the EVENT's wall clock, not a fixed number of hours.** A weekly
+8:30am program is 8:30am on both sides of the November clock change. Adding
+seven days of milliseconds to the first start would put it at 7:30am from
+November 1 — a calendar confidently wrong for half the year. Each date's time
+is computed in the event's `timezone` (`zonedTimeToUtc`), and a repeating event
+therefore **requires** a real IANA zone; the API refuses one without. The unit
+test for this is run with the machine's own clock set to Tokyo, and it was
+broken on purpose (a fixed 7-day step) to watch it fail.
+
+**The form now reads times in the event's zone too.** It used to read the
+admin's browser zone, which was right only while the admin happened to be in
+the club's zone. For an admin in the same zone as the event nothing changes.
+
+**Refused, never dropped.** `lib/eventRecurrence.js` validates a request body
+and answers a 400 with a sentence ("Pick at least one day of the week…"). A rule
+quietly discarded would save a one-off event and say *Saved*. Rows READ back go
+through the lenient twin, which drops only the unreadable part, so a hand-edited
+row cannot take a calendar down.
+
+**Single-date changes.** The *Upcoming dates* list (next 12 weeks) offers
+*Cancel date*, *Change* (start, end, a note) and *Restore* / *Undo change*. An
+entry that ends up changing nothing is removed rather than stored. Turning
+Repeat off drops the changes with it. A date whose weekday is later unticked
+simply stops being produced; its stored change is inert.
+
+**Which dates a rule produces:** each ticked weekday on or after the start
+date, in weeks counted from the start date's week, up to and including `until`.
+The start date itself counts only if its weekday is ticked.
+
+**Not built:** daily and monthly rules (Dane chose weekly-only, 2026-09-12;
+nothing on the program guide needs them). Public display is "The public calendar with repeats"
+below; instructors and venues are the section after this one.
+
+## Instructors and venues (task 86bbzt25g, 2026-09-12)
+
+Delray's program guide colours every program by where it runs — Delray Beach
+Tennis Center navy, Delray Swim & Tennis Club green, Pickleball orange — and
+names the coach. So an event now carries:
+
+- **`instructor`** — free text. A single date may name a substitute
+  (`recurrence_overrides[].instructor`), because the guide changes the coach
+  week to week far more often than the time.
+- **`category_id`** — one row of `event_categories` (name, `#rrggbb` colour,
+  sort order), managed from the **Venues** button on the Event Manager.
+
+**Not a foreign key, on purpose.** Deleting a venue leaves its events standing;
+every reader treats an id it cannot find as "no category", and the delete
+confirmation says how many events will lose theirs.
+
+**A colour is `#rrggbb` or nothing.** The value lands in a style attribute on a
+client's public page; the route answers a 400 for anything else and the store
+blanks it if one gets past.
+
+**Public read, narrowly** — a second exemption in
+`lib/projectAdminApiAuth.js`: `GET /api/event-categories` only (the legend is
+painted on the page anyway), stripped by `categoriesForCaller` to id, name,
+colour and order for a caller with no session. Every write and the by-id path
+still need one. Both directions are asserted and were broken on purpose.
+
+## The public calendar with repeats (task 86bbzt25j, 2026-09-12)
+
+**One schedule, every view.** `lib/builder-client/event-schedule.ts` turns
+events into dated items (`scheduleBetween`) and groups them by the dates they
+touch (`groupByDate`). The month grid, the list, the cards, the new weekly
+schedule and the event page all read it, so a repeating program is on the same
+dates everywhere. Unit-tested, including in a Tokyo-clock run.
+
+**The calendar is drawn in the club's zone, not the visitor's**
+(`calendarTimeZone`: the first event naming a real zone). A 7pm Tuesday program
+stays on Tuesday for a visitor in another zone.
+
+**Weekly schedule** (`layout: "week"`) is the printed *Weekly Program Guide* as
+a page: every day of the week down the side (empty days say *Nothing
+scheduled*), each program with instructor and time, a venue-coloured edge,
+previous/next week and *This week*. Week Starts applies to it as well as the
+month. An empty week names the week — and the venue, when filtered.
+
+**Venue key = filter.** Shown when more than one venue is in use (Venue Key
+setting); clicking one narrows every layout to it.
+
+**Cancelled dates are shown, struck through and labelled — never hidden.** A
+member who saw "Elite, Tuesday" last week needs to see that THIS Tuesday is off.
+A single date's note ("Courts resurfacing") and substitute instructor show too.
+
+**Only a venue colours an edge** (`--evt-venue`, set only when an event has a
+category). Inheriting the module accent made a venue-less dinner read as a
+Tennis Center program.
+
+**Links carry the date.** A repeating program links to
+`?event=<slug>&date=YYYY-MM-DD` (`eventPageHref`); the event page then shows
+that session's time and instructor, a cancelled banner naming the date, a line
+when the rule does not run that day, the rule in words, and the next six dates.
+
+**New settings:** Weekly Schedule layout, Instructor (default on), Venue Key
+(default on). `check:render` contract
+`event-calendar-weekly-schedule-draws-a-whole-week` — broken on purpose twice
+(days in a row; Week Starts ignored) and watched to fail.
 
 ## The public read exemption — a security decision, made here
 
@@ -160,8 +272,6 @@ be controls an operator fills in that render nowhere at all (Standard 13).
 - **"Add to calendar"** (an `.ics` download, and Google/Outlook links). The
   single most-expected control on an event page, and deliberately left out of
   this slice to keep it shippable. Everything it needs is already on the row.
-- **Recurrence** — see above; it changes what a row IS.
-- **Categories** with colours, for filtering the public calendar.
 - **A month grid that lists a day's events on tap** at phone width. Today the
   grid degrades to dots per day below 700px, which says *that* something is on
   but not *what*.

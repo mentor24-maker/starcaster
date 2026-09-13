@@ -155,15 +155,38 @@ import { BuilderBodyPortal } from "@/components/builder/builder-body-portal";
 import { BuilderImagePickerField } from "@/components/builder/builder-image-picker-field";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import {
-  eventOccursOn,
   formatEventWhen,
   isSameDay,
-  isoToLocalInput,
-  isUpcomingEvent,
-  localInputToIso,
   monthGrid,
   normalizeEventStatus,
 } from "@/lib/event-format";
+import {
+  WEEKDAY_SHORT,
+  describeRecurrence,
+  eventTimeZone,
+  expandOccurrences,
+  formatOccurrenceDate,
+  formatTimeRange,
+  isValidTimeZone,
+  isoToZonedInput,
+  zonedInputToIso,
+  addDays,
+  weekdayOf,
+  type RecurrenceOverride,
+  type RecurrenceRule,
+} from "@/lib/event-recurrence";
+import {
+  calendarTimeZone,
+  datesRange,
+  eventPageHref,
+  formatWeekLabel,
+  groupByDate,
+  occurrenceOn,
+  scheduleBetween,
+  todayIn,
+  weekDates,
+  type ScheduleItem,
+} from "@/lib/event-schedule";
 import { BuilderImagePreview } from "@/components/builder/builder-image-preview";
 import {
   BuilderFloatingImageRuntime,
@@ -5810,7 +5833,13 @@ type DetailEvent = {
   organizerContact: string;
   seoTitle: string;
   seoDescription: string;
+  instructor?: string;
+  recurrence?: RecurrenceRule | null;
+  recurrenceOverrides?: RecurrenceOverride[];
 };
+
+/** How many coming dates a repeating event's page lists. */
+const EVENT_DETAIL_NEXT_DATES = 6;
 
 /**
  * A contact as something to act on: an email becomes mailto:, a phone number
@@ -5850,6 +5879,8 @@ function EventDetailPreview({
     || "We could not find that event. It may have been removed.";
 
   const [slug, setSlug] = useState("");
+  // One date of a repeating event (?date=YYYY-MM-DD), as the calendar links it.
+  const [dateParam, setDateParam] = useState("");
   /* See BlogPostViewPreview: "" is also the value before the URL is read. */
   const [urlRead, setUrlRead] = useState(false);
   const [event, setEvent] = useState<DetailEvent | null>(null);
@@ -5860,7 +5891,10 @@ function EventDetailPreview({
   // so popstate is listened for rather than read once at mount.
   useEffect(() => {
     function syncSlugFromUrl() {
-      setSlug(new URLSearchParams(window.location.search).get("event") ?? "");
+      const params = new URLSearchParams(window.location.search);
+      setSlug(params.get("event") ?? "");
+      const date = params.get("date") ?? "";
+      setDateParam(/^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "");
       setUrlRead(true);
     }
     syncSlugFromUrl();
@@ -5989,7 +6023,28 @@ function EventDetailPreview({
     );
   }
 
-  const cancelled = normalizeEventStatus(event.status) === "cancelled";
+  /*
+   * A repeating event's page is about ONE date when the address names one —
+   * that session's time, instructor and whether it is on — and otherwise
+   * about the next date still to come. The rule and the coming dates are
+   * listed underneath either way.
+   */
+  const repeating = Boolean(event.recurrence);
+  const zoneForEvent = eventTimeZone(event);
+  const upcoming = repeating
+    ? scheduleBetween([{ ...event, title: event.title }], Date.now(), CALENDAR_HORIZON_MS)
+      .filter((i) => Date.parse(String(i.occurrence.endsAt || i.occurrence.startsAt)) >= Date.now())
+      .slice(0, EVENT_DETAIL_NEXT_DATES + 1)
+    : [];
+  const requested = repeating && dateParam ? occurrenceOn(event, dateParam) : null;
+  const notOnThatDate = repeating && Boolean(dateParam) && !requested;
+  const focus = requested || (repeating ? upcoming[0]?.occurrence ?? null : null);
+  const sessionCancelled = Boolean(focus?.cancelled);
+  const instructorName = (focus?.instructor || event.instructor || "").trim();
+  const nextDates = upcoming.filter((i) => i.occurrence.date !== focus?.date).slice(0, EVENT_DETAIL_NEXT_DATES);
+  const pageBase = typeof window !== "undefined" ? window.location.pathname : "";
+
+  const cancelled = normalizeEventStatus(event.status) === "cancelled" || sessionCancelled;
   const imageUrl = showImage ? resolvePublicBuilderAssetUrl(event.imageUrl) : "";
   const contactHref = organizerContactHref(event.organizerContact || "");
   const hasLocation = showLocation && Boolean(event.locationName || event.locationAddress);
@@ -6006,18 +6061,41 @@ function EventDetailPreview({
         */}
       {cancelled ? (
         <p className="builder-event-detail-cancelled" role="status">
-          <strong>This event has been cancelled.</strong>
+          <strong>{sessionCancelled && focus
+            ? `The ${formatOccurrenceDate(focus.date, undefined, true)} session has been cancelled.`
+            : "This event has been cancelled."}</strong>
+          {focus?.note ? <span> {focus.note}</span> : null}
         </p>
       ) : null}
 
       <h1 className="builder-event-detail-title">{event.title || "Untitled event"}</h1>
 
+      {notOnThatDate ? (
+        <p className="builder-event-detail-note" role="status">
+          {event.title || "This event"} does not run on {formatOccurrenceDate(dateParam, undefined, true)}.
+        </p>
+      ) : null}
+
       <p className="builder-event-detail-when">
-        {formatEventWhen(event)}
+        {focus
+          ? `${formatOccurrenceDate(focus.date, undefined, true)}, ${formatTimeRange(focus.startsAt, focus.endsAt, zoneForEvent, focus.allDay)}`
+          : formatEventWhen(event)}
         {event.timezone ? (
           <span className="builder-event-detail-timezone"> ({event.timezone.replace(/_/g, " ")})</span>
         ) : null}
       </p>
+
+      {repeating ? (
+        <p className="builder-event-detail-repeat">{describeRecurrence(event.recurrence)}</p>
+      ) : null}
+
+      {instructorName ? (
+        <p className="builder-event-detail-instructor">With {instructorName}</p>
+      ) : null}
+
+      {focus?.note && !sessionCancelled ? (
+        <p className="builder-event-detail-note">{focus.note}</p>
+      ) : null}
 
       {hasLocation ? (
         <p className="builder-event-detail-where">
@@ -6066,6 +6144,24 @@ function EventDetailPreview({
         </p>
       ) : null}
 
+      {repeating && nextDates.length ? (
+        <div className="builder-event-detail-dates">
+          <h2 className="builder-event-detail-dates-title">Coming dates</h2>
+          <ul>
+            {nextDates.map((item) => (
+              <li key={item.occurrence.key} className={item.occurrence.cancelled ? "is-cancelled" : undefined}>
+                <a href={eventPageHref(pageBase, event.slug, item)}>
+                  {formatOccurrenceDate(item.occurrence.date)}
+                </a>
+                <span> {formatTimeRange(item.occurrence.startsAt, item.occurrence.endsAt, zoneForEvent, item.occurrence.allDay)}</span>
+                {item.occurrence.cancelled ? <span className="builder-event-detail-date-flag"> Cancelled</span> : null}
+                {item.occurrence.instructor ? <span> · with {item.occurrence.instructor}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {showOrganizer && (event.organizerName || event.organizerContact) ? (
         <p className="builder-event-detail-organizer">
           {event.organizerName ? <span>Organised by {event.organizerName}</span> : null}
@@ -6103,10 +6199,24 @@ type CalendarEvent = {
   startsAt: string | null;
   endsAt: string | null;
   allDay: boolean;
+  timezone?: string;
   locationName: string;
+  instructor?: string;
+  categoryId?: string;
+  recurrence?: RecurrenceRule | null;
+  recurrenceOverrides?: RecurrenceOverride[];
 };
 
+type CalendarCategory = { id: string; name: string; color: string; sortOrder: number };
+
 const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/** Far enough ahead for any list; a repeating rule stops itself at 800 days. */
+const CALENDAR_HORIZON_MS = Date.UTC(2100, 0, 1);
+
+function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 function EventCalendarPreview({
   settings,
@@ -6128,18 +6238,27 @@ function EventCalendarPreview({
   const showImages = (settings.showImages ?? "true") !== "false";
   const showLocation = (settings.showLocation ?? "true") !== "false";
   const showExcerpt = (settings.showExcerpt ?? "true") !== "false";
+  const showInstructor = (settings.showInstructor ?? "true") !== "false";
+  const showCategoryKey = (settings.showCategoryKey ?? "true") !== "false";
   const emptyMessage = (settings.emptyMessage || "").trim()
     || "No events scheduled just yet — check back soon.";
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [categories, setCategories] = useState<CalendarCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  // The venue a visitor has narrowed the calendar to; "" is every venue.
+  const [onlyCategory, setOnlyCategory] = useState("");
   // The month on view. Held in state so Prev/Next can move it; seeded to the
   // month we are actually in.
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
+  // Weeks away from the current one, for the weekly schedule. An offset
+  // rather than a date, so "this week" is worked out in the calendar's zone
+  // once the events (and so the zone) have loaded.
+  const [weekOffset, setWeekOffset] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -6156,8 +6275,19 @@ function EventCalendarPreview({
       })
       .catch(() => { if (live) setFailed(true); })
       .finally(() => { if (live) setLoading(false); });
+    // Venue names and colours. A failure here costs the colour key only — the
+    // calendar itself still draws, uncoloured, which is the honest fallback.
+    fetch("/api/event-categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const list = d?.categories ?? d?.data;
+        if (live && Array.isArray(list)) setCategories(list as CalendarCategory[]);
+      })
+      .catch(() => {});
     return () => { live = false; };
   }, []);
+
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
   /** A published event only. The API filters too; this is the belt to its braces. */
   const published = useMemo(
@@ -6165,23 +6295,37 @@ function EventCalendarPreview({
     [events]
   );
 
-  const listed = useMemo(() => {
-    const now = new Date();
-    const chosen = showPast ? published : published.filter((e) => isUpcomingEvent(e, now));
-    return [...chosen]
-      .sort((a, b) => {
-        // Unscheduled events have nowhere to sit on a timeline, so they go
-        // last rather than to 1970 — which is where a plain Date.parse of an
-        // empty string would put them.
-        if (!a.startsAt && !b.startsAt) return a.title.localeCompare(b.title);
-        if (!a.startsAt) return 1;
-        if (!b.startsAt) return -1;
-        return Date.parse(a.startsAt) - Date.parse(b.startsAt);
-      })
-      .slice(0, limit);
-  }, [published, showPast, limit]);
+  /** Only venues some published event actually uses belong in the key. */
+  const usedCategories = useMemo(
+    () => categories.filter((c) => published.some((e) => e.categoryId === c.id)),
+    [categories, published]
+  );
 
-  function hrefFor(event: CalendarEvent): string | undefined {
+  const shown = useMemo(
+    () => (onlyCategory ? published.filter((e) => e.categoryId === onlyCategory) : published),
+    [published, onlyCategory]
+  );
+
+  const zone = useMemo(() => calendarTimeZone(published), [published]);
+
+  const listed = useMemo(() => {
+    const now = Date.now();
+    const items = scheduleBetween(shown, showPast ? 0 : now, CALENDAR_HORIZON_MS);
+    const kept = showPast ? items : items.filter((item) => {
+      const end = Date.parse(String(item.occurrence.endsAt || ""));
+      const finish = Number.isFinite(end)
+        ? end
+        : Date.parse(item.occurrence.startsAt) + (item.occurrence.allDay ? 86400000 - 1 : 0);
+      return finish >= now;
+    });
+    return kept.slice(0, limit);
+  }, [shown, showPast, limit]);
+
+  // Unscheduled events have nowhere to sit on a timeline; the list shows them
+  // after every dated one, as it always has.
+  const unscheduled = useMemo(() => shown.filter((e) => !e.startsAt), [shown]);
+
+  function hrefFor(event: CalendarEvent, item?: ScheduleItem<CalendarEvent> | null): string | undefined {
     /*
      * The site's own event page wins, and the event's external link is the
      * FALLBACK — not the other way round.
@@ -6194,22 +6338,67 @@ function EventCalendarPreview({
      * belongs to.
      *
      * With no event page configured the external link is still better than a
-     * dead title, so it stays as the fallback.
+     * dead title, so it stays as the fallback. A repeating program's link
+     * carries its date, so the page can say whether THAT session is on.
      */
-    if (eventPageUrl && event.slug) {
-      const sep = eventPageUrl.includes("?") ? "&" : "?";
-      return `${eventPageUrl}${sep}event=${encodeURIComponent(event.slug)}`;
-    }
-    return event.url || undefined;
+    return eventPageHref(eventPageUrl, event.slug, item) || event.url || undefined;
   }
+
+  /** The venue colour an event is painted with, as the chip's accent. */
+  function colorStyle(event: CalendarEvent): React.CSSProperties | undefined {
+    const color = categoryById.get(event.categoryId || "")?.color;
+    // --evt-venue is set ONLY for an event with a venue, so an event without
+    // one gets no coloured edge — inheriting the module accent made a venue-less
+    // dinner look like a Tennis Center program. Chips also take it as their accent.
+    return color ? { ["--evt-accent" as string]: color, ["--evt-venue" as string]: color } : undefined;
+  }
+
+  function instructorFor(item: ScheduleItem<CalendarEvent>): string {
+    if (!showInstructor) return "";
+    return item.occurrence.instructor || item.event.instructor || "";
+  }
+
+  const frameStyle = { ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) };
 
   const Title = heading
     ? <h2 className="builder-event-calendar-heading">{heading}</h2>
     : null;
 
+  /*
+   * The venue key doubles as a filter: a club with three sites is asked
+   * "what is on at MY courts?" more than anything else. Drawn only when more
+   * than one venue is in use — a key with a single entry explains nothing.
+   */
+  const CategoryKey = showCategoryKey && usedCategories.length > 1 ? (
+    <div className="builder-event-calendar-key" role="group" aria-label="Show events at">
+      <button
+        type="button"
+        className={`builder-event-calendar-key-item${onlyCategory ? "" : " is-active"}`}
+        aria-pressed={!onlyCategory}
+        onClick={() => setOnlyCategory("")}
+      >
+        All
+      </button>
+      {usedCategories.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          className={`builder-event-calendar-key-item${onlyCategory === c.id ? " is-active" : ""}`}
+          aria-pressed={onlyCategory === c.id}
+          onClick={() => setOnlyCategory((cur) => (cur === c.id ? "" : c.id))}
+        >
+          <span className="builder-event-calendar-swatch" style={{ background: c.color || "transparent" }} aria-hidden="true" />
+          {c.name}
+        </button>
+      ))}
+    </div>
+  ) : null;
+
+  const filterName = onlyCategory ? categoryById.get(onlyCategory)?.name || "" : "";
+
   if (loading) {
     return (
-      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar" style={frameStyle}>
         {Title}
         <p className="builder-event-calendar-empty">Loading events…</p>
       </div>
@@ -6221,9 +6410,97 @@ function EventCalendarPreview({
   // something false about the club.
   if (failed) {
     return (
-      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar" style={frameStyle}>
         {Title}
         <p className="builder-event-calendar-empty">Events are unavailable just now. Please try again shortly.</p>
+      </div>
+    );
+  }
+
+  /* ── Weekly schedule ────────────────────────────────────────────────────
+   * The club's printed Weekly Program Guide as a page: each day down the
+   * side, its programs with time and instructor, coloured by venue. */
+  if (layout === "week") {
+    const today = todayIn(zone);
+    const dates = weekDates(addDays(today, weekOffset * 7), weekStartsOn);
+    const [from, to] = datesRange(dates, zone);
+    const byDate = groupByDate(scheduleBetween(shown, from, to), dates);
+    const weekLabel = formatWeekLabel(dates);
+    const anything = dates.some((d) => (byDate.get(d) || []).length > 0);
+
+    return (
+      <div className="builder-event-calendar builder-event-calendar--week" style={frameStyle}>
+        {Title}
+        <div className="builder-event-calendar-nav">
+          <button type="button" className="builder-event-calendar-nav-btn" aria-label="Previous week" onClick={() => setWeekOffset((w) => w - 1)}>‹</button>
+          <span className="builder-event-calendar-month" aria-live="polite">Week of {weekLabel}</span>
+          <button type="button" className="builder-event-calendar-nav-btn" aria-label="Next week" onClick={() => setWeekOffset((w) => w + 1)}>›</button>
+          {weekOffset !== 0 ? (
+            <button type="button" className="builder-event-calendar-today" onClick={() => setWeekOffset(0)}>This week</button>
+          ) : null}
+        </div>
+        {CategoryKey}
+        {!anything ? (
+          // Says WHICH week and, when filtered, WHICH venue — an unexplained
+          // empty schedule reads as a broken one (landmine 17).
+          <p className="builder-event-calendar-empty">
+            {filterName
+              ? `Nothing at ${filterName} the week of ${weekLabel}.`
+              : published.length
+                ? `No programs scheduled the week of ${weekLabel}.`
+                : emptyMessage}
+          </p>
+        ) : null}
+        <div className="builder-event-calendar-week" role="list" aria-label={`Week of ${weekLabel}`}>
+          {dates.map((date) => {
+            const items = byDate.get(date) || [];
+            const isToday = date === today;
+            return (
+              <section
+                key={date}
+                role="listitem"
+                className={`builder-event-calendar-weekday-row${isToday ? " is-today" : ""}${items.length ? "" : " is-empty"}`}
+                aria-label={formatOccurrenceDate(date, undefined, true)}
+              >
+                <div className="builder-event-calendar-weekday-label">
+                  <span className="builder-event-calendar-weekday-name">{WEEKDAY_LABELS[weekdayOf(date)]}</span>
+                  <span className="builder-event-calendar-weekday-date">{Number(date.slice(5, 7))}/{Number(date.slice(8, 10))}</span>
+                </div>
+                {items.length ? (
+                  <ul className="builder-event-calendar-programs">
+                    {items.map((item) => {
+                      const href = hrefFor(item.event, item);
+                      const label = item.event.title || "Untitled event";
+                      const who = instructorFor(item);
+                      const cancelled = item.occurrence.cancelled;
+                      return (
+                        <li
+                          key={item.occurrence.key}
+                          className={`builder-event-calendar-program${cancelled ? " is-cancelled" : ""}`}
+                          style={colorStyle(item.event)}
+                        >
+                          <span className="builder-event-calendar-program-title">
+                            {href ? <a href={href}>{label}</a> : label}
+                            {cancelled ? <span className="builder-event-calendar-badge">Cancelled</span> : null}
+                          </span>
+                          <span className="builder-event-calendar-program-who">{who}</span>
+                          <span className="builder-event-calendar-program-time">
+                            {formatTimeRange(item.occurrence.startsAt, item.occurrence.endsAt, item.timeZone, item.occurrence.allDay)}
+                          </span>
+                          {item.occurrence.note ? (
+                            <span className="builder-event-calendar-program-note">{item.occurrence.note}</span>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="builder-event-calendar-program-none">Nothing scheduled</p>
+                )}
+              </section>
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -6239,15 +6516,22 @@ function EventCalendarPreview({
       const d = new Date(c.year, c.month + by, 1);
       return { year: d.getFullYear(), month: d.getMonth() };
     });
+    const cellDates = weeks.flat().map((cell) => localDateKey(cell.date));
+    // A day either side of the grid, so an evening program in a zone behind
+    // the viewer's still lands on the grid's first and last cells.
+    const [from] = datesRange([addDays(cellDates[0], -1)], zone);
+    const [, to] = datesRange([addDays(cellDates[cellDates.length - 1], 1)], zone);
+    const byDate = groupByDate(scheduleBetween(shown, from, to), cellDates);
 
     return (
-      <div className="builder-event-calendar builder-event-calendar--month" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar builder-event-calendar--month" style={frameStyle}>
         {Title}
         <div className="builder-event-calendar-nav">
           <button type="button" className="builder-event-calendar-nav-btn" aria-label="Previous month" onClick={() => step(-1)}>‹</button>
           <span className="builder-event-calendar-month" aria-live="polite">{monthName}</span>
           <button type="button" className="builder-event-calendar-nav-btn" aria-label="Next month" onClick={() => step(1)}>›</button>
         </div>
+        {CategoryKey}
         <div className="builder-event-calendar-grid" role="grid" aria-label={monthName}>
           {dayNames.map((name) => (
             // The short form is decoration; the full name is what a screen
@@ -6259,7 +6543,7 @@ function EventCalendarPreview({
             </div>
           ))}
           {weeks.flat().map((cell) => {
-            const onThisDay = published.filter((e) => eventOccursOn(e, cell.date));
+            const onThisDay = byDate.get(localDateKey(cell.date)) || [];
             const isToday = isSameDay(cell.date, today);
             return (
               <div
@@ -6273,40 +6557,55 @@ function EventCalendarPreview({
                 ].filter(Boolean).join(" ")}
               >
                 <span className="builder-event-calendar-daynum">{cell.date.getDate()}</span>
-                {onThisDay.map((event) => {
-                  const href = hrefFor(event);
-                  const label = event.title || "Untitled event";
+                {onThisDay.map((item) => {
+                  const href = hrefFor(item.event, item);
+                  const label = item.event.title || "Untitled event";
+                  const cancelled = item.occurrence.cancelled;
                   const body = (
                     <>
                       <span className="builder-event-calendar-chip-title">{label}</span>
-                      {!event.allDay && event.startsAt ? (
+                      {!item.occurrence.allDay ? (
                         <span className="builder-event-calendar-chip-time">
-                          {new Date(event.startsAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                          {cancelled ? "Cancelled" : formatTimeRange(item.occurrence.startsAt, null, item.timeZone)}
                         </span>
                       ) : null}
                     </>
                   );
+                  const className = `builder-event-calendar-chip${cancelled ? " is-cancelled" : ""}`;
+                  const title = cancelled ? `${label} (cancelled)` : label;
                   return href ? (
-                    <a key={event.id} className="builder-event-calendar-chip" href={href} title={label}>{body}</a>
+                    <a key={item.occurrence.key} className={className} href={href} title={title} style={colorStyle(item.event)}>{body}</a>
                   ) : (
-                    <span key={event.id} className="builder-event-calendar-chip" title={label}>{body}</span>
+                    <span key={item.occurrence.key} className={className} title={title} style={colorStyle(item.event)}>{body}</span>
                   );
                 })}
               </div>
             );
           })}
         </div>
-        {published.length === 0 ? <p className="builder-event-calendar-empty">{emptyMessage}</p> : null}
+        {shown.length === 0 ? (
+          <p className="builder-event-calendar-empty">
+            {filterName ? `Nothing scheduled at ${filterName}.` : emptyMessage}
+          </p>
+        ) : null}
       </div>
     );
   }
 
   /* ── List and cards ─────────────────────────────────────────────────── */
-  if (!listed.length) {
+  const rows: Array<{ key: string; event: CalendarEvent; item: ScheduleItem<CalendarEvent> | null }> = [
+    ...listed.map((item) => ({ key: item.occurrence.key, event: item.event, item })),
+    ...unscheduled.slice(0, Math.max(0, limit - listed.length)).map((event) => ({ key: event.id, event, item: null })),
+  ];
+
+  if (!rows.length) {
     return (
-      <div className="builder-event-calendar" style={{ ["--evt-accent" as string]: accent, ...getAdminDataTableThemeStyle(themePalette, theme) }}>
+      <div className="builder-event-calendar" style={frameStyle}>
         {Title}
-        <p className="builder-event-calendar-empty">{emptyMessage}</p>
+        {CategoryKey}
+        <p className="builder-event-calendar-empty">
+          {filterName ? `Nothing coming up at ${filterName}.` : emptyMessage}
+        </p>
       </div>
     );
   }
@@ -6316,24 +6615,30 @@ function EventCalendarPreview({
   return (
     <div
       className={`builder-event-calendar builder-event-calendar--${isCards ? "cards" : "list"}`}
-      style={{
-        ["--evt-accent" as string]: accent,
-        ["--evt-columns" as string]: String(columns),
-        ...getAdminDataTableThemeStyle(themePalette, theme),
-      }}
+      style={{ ...frameStyle, ["--evt-columns" as string]: String(columns) }}
     >
       {Title}
+      {CategoryKey}
       <ul className="builder-event-calendar-items">
-        {listed.map((event) => {
-          const href = hrefFor(event);
+        {rows.map(({ key, event, item }) => {
+          const href = hrefFor(event, item);
           const label = event.title || "Untitled event";
-          const start = event.startsAt ? new Date(event.startsAt) : null;
           const image = showImages && isCards ? resolvePublicBuilderAssetUrl(event.imageUrl) : "";
+          const cancelled = Boolean(item?.occurrence.cancelled);
+          // A one-off keeps the sentence it always had; a date of a series says
+          // which date and its own time, since that is what differs.
+          const when = !item
+            ? formatEventWhen(event)
+            : item.occurrence.recurring
+              ? `${formatOccurrenceDate(item.occurrence.date, undefined, true)} · ${formatTimeRange(item.occurrence.startsAt, item.occurrence.endsAt, item.timeZone, item.occurrence.allDay)}`
+              : formatEventWhen({ ...event, startsAt: item.occurrence.startsAt, endsAt: item.occurrence.endsAt });
+          const who = item ? instructorFor(item) : (showInstructor ? event.instructor || "" : "");
+          const chipDate = item ? item.occurrence.date : "";
           const titleNode = href
             ? <a className="builder-event-calendar-item-title" href={href}>{label}</a>
             : <span className="builder-event-calendar-item-title">{label}</span>;
           return (
-            <li key={event.id} className="builder-event-calendar-item">
+            <li key={key} className={`builder-event-calendar-item${cancelled ? " is-cancelled" : ""}`} style={colorStyle(event)}>
               {image ? (
                 <img
                   className="builder-event-calendar-item-image"
@@ -6343,19 +6648,24 @@ function EventCalendarPreview({
                 />
               ) : null}
               <div className="builder-event-calendar-item-body">
-                {start && !isCards ? (
+                {chipDate && !isCards ? (
                   <span className="builder-event-calendar-datechip" aria-hidden="true">
                     <span className="builder-event-calendar-datechip-month">
-                      {start.toLocaleDateString(undefined, { month: "short" }).toUpperCase()}
+                      {new Date(`${chipDate}T12:00:00Z`).toLocaleDateString(undefined, { month: "short", timeZone: "UTC" }).toUpperCase()}
                     </span>
-                    <span className="builder-event-calendar-datechip-day">{start.getDate()}</span>
+                    <span className="builder-event-calendar-datechip-day">{Number(chipDate.slice(8, 10))}</span>
                   </span>
                 ) : null}
                 <div className="builder-event-calendar-item-text">
                   {titleNode}
-                  <p className="builder-event-calendar-item-when">{formatEventWhen(event)}</p>
+                  {cancelled ? <span className="builder-event-calendar-badge">Cancelled</span> : null}
+                  <p className="builder-event-calendar-item-when">{when}</p>
+                  {who ? <p className="builder-event-calendar-item-where">with {who}</p> : null}
                   {showLocation && event.locationName ? (
                     <p className="builder-event-calendar-item-where">{event.locationName}</p>
+                  ) : null}
+                  {item?.occurrence.note ? (
+                    <p className="builder-event-calendar-item-where">{item.occurrence.note}</p>
                   ) : null}
                   {showExcerpt && event.excerpt ? (
                     <p className="builder-event-calendar-item-excerpt">{event.excerpt}</p>
@@ -7159,9 +7469,59 @@ type EventRecord = {
   organizerContact: string;
   seoTitle: string;
   seoDescription: string;
+  recurrence?: RecurrenceRule | null;
+  recurrenceOverrides?: RecurrenceOverride[];
+  instructor?: string;
+  categoryId?: string;
 };
 
+/** A venue or program type the calendar colours events by (task 86bbzt25g). */
+type EventCategoryRecord = { id: string; name: string; color: string; sortOrder: number };
+
+/** Offered for a new venue, in the order Delray's program guide uses them. */
+const EVENT_CATEGORY_DEFAULT_COLORS = ["#0b2d6b", "#72b62f", "#f7a600", "#b91c5c", "#0e7490", "#6b21a8"];
+
 type EventFormValues = Record<string, string>;
+
+/** The Repeat section of the form, kept apart from the flat string fields. */
+type EventRepeatForm = { enabled: boolean; interval: number; weekdays: number[]; until: string };
+
+const EMPTY_EVENT_REPEAT: EventRepeatForm = { enabled: false, interval: 1, weekdays: [], until: "" };
+
+/** Monday first, the way a club's weekly program guide reads. */
+const EVENT_REPEAT_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+/** How far ahead the Upcoming Dates list looks. */
+const EVENT_REPEAT_PREVIEW_WEEKS = 12;
+const EVENT_REPEAT_PREVIEW_MAX = 60;
+
+/** Offered in the Time Zone box; any real zone name may still be typed. */
+const EVENT_TIME_ZONE_SUGGESTIONS = [
+  "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+  "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu",
+];
+
+/**
+ * Change one date of a series. An entry left changing nothing is removed, so
+ * "Restore" and clearing both times leave no trace behind.
+ */
+function applyEventOverride(
+  list: RecurrenceOverride[],
+  date: string,
+  patch: Partial<RecurrenceOverride> | null,
+): RecurrenceOverride[] {
+  const rest = list.filter((o) => o.date !== date);
+  if (!patch) return rest;
+  const merged: RecurrenceOverride = { ...(list.find((o) => o.date === date) || { date }), ...patch, date };
+  const clean: RecurrenceOverride = { date };
+  if (merged.cancelled) clean.cancelled = true;
+  if (merged.startTime) clean.startTime = merged.startTime;
+  if (merged.endTime) clean.endTime = merged.endTime;
+  if (merged.instructor && merged.instructor.trim()) clean.instructor = merged.instructor;
+  if (merged.note && merged.note.trim()) clean.note = merged.note;
+  if (Object.keys(clean).length === 1) return rest;
+  return [...rest, clean].sort((a, b) => a.date.localeCompare(b.date));
+}
 
 const EVENT_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "draft", label: "Draft" },
@@ -7181,6 +7541,7 @@ const EMPTY_EVENT_FORM: EventFormValues = {
   organizerName: "", organizerContact: "",
   seoTitle: "", seoDescription: "",
   featured: "false",
+  instructor: "", categoryId: "",
 };
 
 /** The viewer's own zone, offered as the default for a new event. */
@@ -7223,6 +7584,18 @@ function EventManagerPreview({
   const [errorMsg, setErrorMsg] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<EventRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [repeat, setRepeat] = useState<EventRepeatForm>(EMPTY_EVENT_REPEAT);
+  const [overrides, setOverrides] = useState<RecurrenceOverride[]>([]);
+  const [changingDate, setChangingDate] = useState<string | null>(null);
+  const [categories, setCategories] = useState<EventCategoryRecord[]>([]);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [newCategory, setNewCategory] = useState({ name: "", color: EVENT_CATEGORY_DEFAULT_COLORS[0] });
+  const [categoryBusy, setCategoryBusy] = useState(false);
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  // Dates and times in the form are read in the EVENT's zone, so a repeat
+  // stays at 8:30am local across a clock change and an admin travelling
+  // elsewhere still types the club's own times.
+  const formZone = eventTimeZone({ timezone: form.timezone });
 
   function loadEvents() {
     setLoading(true);
@@ -7238,7 +7611,53 @@ function EventManagerPreview({
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadEvents(); }, []);
+  function loadCategories() {
+    fetch("/api/event-categories", { credentials: "include", headers: getCrmProjectHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(readApiErrorMessage(d, `Failed to load venues (${r.status})`));
+        const list = (d?.categories ?? d?.data ?? []) as EventCategoryRecord[];
+        setCategories(Array.isArray(list) ? list : []);
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Failed to load venues."));
+  }
+
+  useEffect(() => { loadEvents(); loadCategories(); }, []);
+
+  /**
+   * One request per change, then the list read back — so what the admin sees
+   * is what saved, never what they typed.
+   */
+  async function categoryRequest(url: string, method: string, body?: unknown) {
+    setCategoryBusy(true);
+    setErrorMsg("");
+    try {
+      const res = await fetch(url, {
+        method,
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...getCrmProjectHeaders() },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(readApiErrorMessage(data, "Could not save the venue."));
+      return true;
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Could not save the venue.");
+      return false;
+    } finally {
+      loadCategories();
+      setCategoryBusy(false);
+    }
+  }
+
+  async function addCategory() {
+    const name = newCategory.name.trim();
+    if (!name) { setErrorMsg("Give the venue or category a name."); return; }
+    const sortOrder = categories.reduce((max, c) => Math.max(max, c.sortOrder), 0) + 1;
+    if (await categoryRequest("/api/event-categories", "POST", { name, color: newCategory.color, sortOrder })) {
+      setNewCategory({ name: "", color: EVENT_CATEGORY_DEFAULT_COLORS[(categories.length + 1) % EVENT_CATEGORY_DEFAULT_COLORS.length] });
+    }
+  }
 
   function setField(key: string, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -7248,12 +7667,18 @@ function EventManagerPreview({
     setFormOpen(false);
     setEditId(null);
     setForm(EMPTY_EVENT_FORM);
+    setRepeat(EMPTY_EVENT_REPEAT);
+    setOverrides([]);
+    setChangingDate(null);
     setErrorMsg("");
   }
 
   function startCreate() {
     setEditId(null);
     setForm({ ...EMPTY_EVENT_FORM, timezone: localTimeZoneName() });
+    setRepeat(EMPTY_EVENT_REPEAT);
+    setOverrides([]);
+    setChangingDate(null);
     setErrorMsg("");
     setStatusMsg("");
     setFormOpen(true);
@@ -7261,13 +7686,14 @@ function EventManagerPreview({
 
   function startEdit(event: EventRecord) {
     const allDay = Boolean(event.allDay);
+    const zone = eventTimeZone(event);
     setEditId(event.id);
     setForm({
       title: event.title ?? "",
       slug: event.slug ?? "",
       status: event.status || "draft",
-      startsAt: isoToLocalInput(event.startsAt, allDay),
-      endsAt: isoToLocalInput(event.endsAt, allDay),
+      startsAt: isoToZonedInput(event.startsAt, zone, allDay),
+      endsAt: isoToZonedInput(event.endsAt, zone, allDay),
       allDay: allDay ? "true" : "false",
       timezone: event.timezone ?? "",
       locationName: event.locationName ?? "",
@@ -7283,7 +7709,15 @@ function EventManagerPreview({
       seoTitle: event.seoTitle ?? "",
       seoDescription: event.seoDescription ?? "",
       featured: event.featured ? "true" : "false",
+      instructor: event.instructor ?? "",
+      categoryId: event.categoryId ?? "",
     });
+    const rule = event.recurrence;
+    setRepeat(rule
+      ? { enabled: true, interval: rule.interval || 1, weekdays: [...rule.weekdays], until: rule.until || "" }
+      : EMPTY_EVENT_REPEAT);
+    setOverrides(Array.isArray(event.recurrenceOverrides) ? event.recurrenceOverrides : []);
+    setChangingDate(null);
     setErrorMsg("");
     setStatusMsg("");
     setFormOpen(true);
@@ -7297,21 +7731,33 @@ function EventManagerPreview({
     setForm((prev) => ({
       ...prev,
       allDay: next ? "true" : "false",
-      startsAt: prev.startsAt ? isoToLocalInput(localInputToIso(prev.startsAt), next) : "",
-      endsAt: prev.endsAt ? isoToLocalInput(localInputToIso(prev.endsAt), next) : "",
+      startsAt: prev.startsAt ? isoToZonedInput(zonedInputToIso(prev.startsAt, formZone), formZone, next) : "",
+      endsAt: prev.endsAt ? isoToZonedInput(zonedInputToIso(prev.endsAt, formZone), formZone, next) : "",
     }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) { setErrorMsg("Event name is required."); return; }
-    const startsAt = localInputToIso(form.startsAt);
-    const endsAt = localInputToIso(form.endsAt);
+    const startsAt = zonedInputToIso(form.startsAt, formZone);
+    const endsAt = zonedInputToIso(form.endsAt, formZone);
     // An end before its start is the one date mistake worth refusing: it makes
     // every calendar view render the event backwards or not at all.
     if (startsAt && endsAt && Date.parse(endsAt) < Date.parse(startsAt)) {
       setErrorMsg("The end of an event cannot come before its start.");
       return;
+    }
+    if (repeat.enabled) {
+      if (!startsAt) { setErrorMsg("A repeating event needs a start date — the first day it happens."); return; }
+      if (!repeat.weekdays.length) { setErrorMsg("Pick at least one day of the week for the event to repeat on."); return; }
+      if (!isValidTimeZone(form.timezone)) {
+        setErrorMsg("A repeating event needs a real time zone, such as America/New_York, so its time stays put when the clocks change.");
+        return;
+      }
+      if (repeat.until && repeat.until < form.startsAt.slice(0, 10)) {
+        setErrorMsg("The repeat end date is before the event starts.");
+        return;
+      }
     }
     setSaving(true);
     setErrorMsg("");
@@ -7337,6 +7783,14 @@ function EventManagerPreview({
       seoTitle: form.seoTitle.trim(),
       seoDescription: form.seoDescription.trim(),
       featured: form.featured === "true",
+      instructor: form.instructor.trim(),
+      categoryId: form.categoryId,
+      recurrence: repeat.enabled
+        ? { freq: "weekly", interval: repeat.interval, weekdays: repeat.weekdays, until: repeat.until || null }
+        : null,
+      // Turning Repeat off drops the single-date changes with it: they belong
+      // to dates that no longer exist.
+      recurrenceOverrides: repeat.enabled ? overrides : [],
     };
     try {
       const res = await fetch(
@@ -7388,6 +7842,225 @@ function EventManagerPreview({
   const isAllDay = form.allDay === "true";
   const dateInputType = isAllDay ? "date" : "datetime-local";
 
+  function toggleRepeat(enabled: boolean) {
+    setRepeat((prev) => {
+      if (!enabled) return { ...prev, enabled: false };
+      // Starting from the start date's own weekday is what "repeat weekly"
+      // means to anyone who has used a calendar app.
+      const firstDay = /^\d{4}-\d{2}-\d{2}/.test(form.startsAt)
+        ? new Date(`${form.startsAt.slice(0, 10)}T12:00:00Z`).getUTCDay()
+        : null;
+      const weekdays = prev.weekdays.length ? prev.weekdays : (firstDay === null ? [] : [firstDay]);
+      return { ...prev, enabled: true, weekdays };
+    });
+  }
+
+  function toggleRepeatDay(day: number) {
+    setRepeat((prev) => ({
+      ...prev,
+      weekdays: prev.weekdays.includes(day)
+        ? prev.weekdays.filter((d) => d !== day)
+        : [...prev.weekdays, day].sort((a, b) => a - b),
+    }));
+  }
+
+  const repeatPreview = (() => {
+    if (!formOpen || !repeat.enabled) return null;
+    const startIso = zonedInputToIso(form.startsAt, formZone);
+    if (!startIso) return { dates: [], reason: "Set a start date to see the dates this event repeats on." };
+    if (!repeat.weekdays.length) return { dates: [], reason: "Pick at least one day to see the dates this event repeats on." };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const from = Math.max(today.getTime(), Date.parse(startIso) - 1);
+    const dates = expandOccurrences({
+      id: "preview",
+      startsAt: startIso,
+      endsAt: zonedInputToIso(form.endsAt, formZone),
+      allDay: isAllDay,
+      timezone: formZone,
+      recurrence: { freq: "weekly", interval: repeat.interval, weekdays: repeat.weekdays, until: repeat.until || null },
+      recurrenceOverrides: overrides,
+    }, from, from + EVENT_REPEAT_PREVIEW_WEEKS * 7 * 86400000).slice(0, EVENT_REPEAT_PREVIEW_MAX);
+    // An empty list says why, or it reads as the feature being broken.
+    const reason = dates.length
+      ? ""
+      : `No dates in the next ${EVENT_REPEAT_PREVIEW_WEEKS} weeks${repeat.until ? ` — the repeat ends ${formatOccurrenceDate(repeat.until, undefined, true)}` : ""}.`;
+    return { dates, reason };
+  })();
+
+  const repeatSection = (
+    <fieldset className="builder-event-manager-repeat">
+      <legend className="builder-event-manager-label">Repeat</legend>
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <select
+            id="event-repeat"
+            aria-label="Repeat"
+            className="builder-event-manager-input"
+            value={repeat.enabled ? "weekly" : "none"}
+            onChange={(e) => toggleRepeat(e.target.value === "weekly")}
+          >
+            <option value="none">Does not repeat</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </div>
+        {repeat.enabled ? (
+          <div className="builder-event-manager-field">
+            <select
+              id="event-repeat-interval"
+              aria-label="How often"
+              className="builder-event-manager-input"
+              value={String(repeat.interval)}
+              onChange={(e) => setRepeat((prev) => ({ ...prev, interval: Number(e.target.value) || 1 }))}
+            >
+              <option value="1">Every week</option>
+              <option value="2">Every 2 weeks</option>
+              <option value="3">Every 3 weeks</option>
+              <option value="4">Every 4 weeks</option>
+            </select>
+          </div>
+        ) : null}
+        {repeat.enabled ? (
+          <div className="builder-event-manager-field">
+            <label className="builder-event-manager-label" htmlFor="event-repeat-until">Until (optional)</label>
+            <input
+              id="event-repeat-until"
+              className="builder-event-manager-input"
+              type="date"
+              value={repeat.until}
+              onChange={(e) => setRepeat((prev) => ({ ...prev, until: e.target.value }))}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      {repeat.enabled ? (
+        <>
+          <div className="builder-event-manager-repeat-days" role="group" aria-label="Repeat on">
+            {EVENT_REPEAT_DAY_ORDER.map((day) => {
+              const on = repeat.weekdays.includes(day);
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  className={`builder-event-manager-repeat-day${on ? " is-on" : ""}`}
+                  aria-pressed={on}
+                  onClick={() => toggleRepeatDay(day)}
+                  style={on ? { background: accent, borderColor: accent } : undefined}
+                >
+                  {WEEKDAY_SHORT[day]}
+                </button>
+              );
+            })}
+          </div>
+          <p className="builder-event-manager-hint">
+            {describeRecurrence({ freq: "weekly", interval: repeat.interval, weekdays: repeat.weekdays, until: repeat.until || null }) || "Pick the days it happens on."}
+            {" · "}Times are {formZone.replace(/_/g, " ")} time.
+          </p>
+
+          <div className="builder-event-manager-dates">
+            <div className="builder-event-manager-label">Upcoming dates</div>
+            {repeatPreview && repeatPreview.reason ? (
+              <p className="builder-event-manager-hint">{repeatPreview.reason}</p>
+            ) : null}
+            {repeatPreview && repeatPreview.dates.length ? (
+              <ul className="builder-event-manager-date-list">
+                {repeatPreview.dates.map((occ) => {
+                  const entry = overrides.find((o) => o.date === occ.date);
+                  const editing = changingDate === occ.date;
+                  return (
+                    <li
+                      key={occ.date}
+                      className={`builder-event-manager-date${occ.cancelled ? " is-cancelled" : ""}${occ.changed && !occ.cancelled ? " is-changed" : ""}`}
+                    >
+                      <div className="builder-event-manager-date-line">
+                        <span className="builder-event-manager-date-day">{formatOccurrenceDate(occ.date)}</span>
+                        <span className="builder-event-manager-date-time">
+                          {formatTimeRange(occ.startsAt, occ.endsAt, formZone, occ.allDay)}
+                        </span>
+                        {occ.cancelled ? <span className="builder-event-manager-date-badge">Cancelled</span> : null}
+                        {occ.changed && !occ.cancelled ? <span className="builder-event-manager-date-badge">Changed</span> : null}
+                        {occ.instructor ? <span className="builder-event-manager-date-note">with {occ.instructor}</span> : null}
+                        {occ.note ? <span className="builder-event-manager-date-note">{occ.note}</span> : null}
+                        <span className="builder-event-manager-date-actions">
+                          {occ.cancelled ? (
+                            <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setOverrides((l) => applyEventOverride(l, occ.date, { cancelled: false }))}>
+                              Restore
+                            </button>
+                          ) : (
+                            <>
+                              {!isAllDay ? (
+                                <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setChangingDate(editing ? null : occ.date)}>
+                                  {editing ? "Done" : "Change"}
+                                </button>
+                              ) : null}
+                              <button type="button" className="btn btn-ghost tiny-btn" onClick={() => setOverrides((l) => applyEventOverride(l, occ.date, { cancelled: true }))}>
+                                Cancel date
+                              </button>
+                            </>
+                          )}
+                          {entry && !occ.cancelled ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost tiny-btn"
+                              onClick={() => { setOverrides((l) => applyEventOverride(l, occ.date, null)); setChangingDate(null); }}
+                            >
+                              Undo change
+                            </button>
+                          ) : null}
+                        </span>
+                      </div>
+                      {editing && !occ.cancelled ? (
+                        <div className="builder-event-manager-date-edit">
+                          <label className="builder-event-manager-label">
+                            Starts
+                            <input
+                              type="time"
+                              className="builder-event-manager-input"
+                              value={entry?.startTime || isoToZonedInput(occ.startsAt, formZone).slice(11)}
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { startTime: e.target.value }))}
+                            />
+                          </label>
+                          <label className="builder-event-manager-label">
+                            Ends
+                            <input
+                              type="time"
+                              className="builder-event-manager-input"
+                              value={entry?.endTime || (occ.endsAt ? isoToZonedInput(occ.endsAt, formZone).slice(11) : "")}
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { endTime: e.target.value }))}
+                            />
+                          </label>
+                          <label className="builder-event-manager-label">
+                            Instructor this date
+                            <input
+                              className="builder-event-manager-input"
+                              value={entry?.instructor || ""}
+                              placeholder={form.instructor || "Substitute"}
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { instructor: e.target.value }))}
+                            />
+                          </label>
+                          <label className="builder-event-manager-label">
+                            Note for this date
+                            <input
+                              className="builder-event-manager-input"
+                              value={entry?.note || ""}
+                              placeholder="e.g. Moved to Court 4"
+                              onChange={(e) => setOverrides((l) => applyEventOverride(l, occ.date, { note: e.target.value }))}
+                            />
+                          </label>
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+    </fieldset>
+  );
+
   const eventForm = formOpen ? (
     <form className="builder-event-manager-form" onSubmit={handleSubmit}>
       <h3 className="builder-event-manager-form-title">{editId ? "Edit Event" : "New Event"}</h3>
@@ -7427,6 +8100,38 @@ function EventManagerPreview({
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      <div className="builder-event-manager-field-row">
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-instructor">Instructor</label>
+          <input
+            id="event-instructor"
+            className="builder-event-manager-input"
+            value={form.instructor}
+            onChange={(e) => setField("instructor", e.target.value)}
+            placeholder="e.g. Wayne L"
+          />
+        </div>
+        <div className="builder-event-manager-field">
+          <label className="builder-event-manager-label" htmlFor="event-category">Venue / Category</label>
+          <div className="builder-event-manager-category-pick">
+            <span
+              className="builder-event-manager-swatch"
+              aria-hidden="true"
+              style={{ background: categoryById.get(form.categoryId)?.color || "transparent" }}
+            />
+            <select
+              id="event-category"
+              className="builder-event-manager-input"
+              value={categoryById.has(form.categoryId) ? form.categoryId : ""}
+              onChange={(e) => setField("categoryId", e.target.value)}
+            >
+              <option value="">{categories.length ? "No category" : "No venues yet — add them with Venues"}</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -7477,10 +8182,16 @@ function EventManagerPreview({
             className="builder-event-manager-input"
             value={form.timezone}
             onChange={(e) => setField("timezone", e.target.value)}
-            placeholder="America/Denver"
+            placeholder="America/New_York"
+            list="event-timezone-suggestions"
           />
+          <datalist id="event-timezone-suggestions">
+            {EVENT_TIME_ZONE_SUGGESTIONS.map((zone) => <option key={zone} value={zone} />)}
+          </datalist>
         </div>
       </div>
+
+      {repeatSection}
 
       <div className="builder-event-manager-field-row">
         <div className="builder-event-manager-field">
@@ -7641,6 +8352,82 @@ function EventManagerPreview({
       {loadError ? <div className="builder-event-manager-error">{loadError}</div> : null}
       {errorMsg && !formOpen ? <div className="builder-event-manager-error">{errorMsg}</div> : null}
 
+      {categoriesOpen ? (
+        <div className="builder-event-manager-categories">
+          <h3 className="builder-event-manager-form-title">Venues &amp; categories</h3>
+          <p className="builder-event-manager-hint">
+            Each event can belong to one. The public calendar colours events by it and shows the names as a key.
+          </p>
+          {categories.length ? (
+            <ul className="builder-event-manager-category-list">
+              {categories.map((c) => (
+                // Keyed on what was saved, so a row whose save failed or changed
+                // re-mounts showing the stored values rather than the typed ones.
+                <li key={`${c.id}:${c.name}:${c.color}`} className="builder-event-manager-category">
+                  <input
+                    type="color"
+                    aria-label={`Colour for ${c.name}`}
+                    className="builder-event-manager-color"
+                    defaultValue={c.color || "#888888"}
+                    disabled={categoryBusy}
+                    onBlur={(e) => { if (e.target.value !== c.color) categoryRequest(`/api/event-categories/${encodeURIComponent(c.id)}`, "PUT", { color: e.target.value }); }}
+                  />
+                  <input
+                    aria-label="Name"
+                    className="builder-event-manager-input"
+                    defaultValue={c.name}
+                    disabled={categoryBusy}
+                    onBlur={(e) => {
+                      const name = e.target.value.trim();
+                      if (name && name !== c.name) categoryRequest(`/api/event-categories/${encodeURIComponent(c.id)}`, "PUT", { name });
+                      else e.target.value = c.name;
+                    }}
+                  />
+                  <span className="builder-event-manager-category-count">
+                    {(() => {
+                      const n = events.filter((ev) => ev.categoryId === c.id).length;
+                      return `${n} event${n === 1 ? "" : "s"}`;
+                    })()}
+                  </span>
+                  <AdminTableIconButton
+                    icon="delete"
+                    label={`Delete ${c.name}`}
+                    danger
+                    onClick={() => {
+                      const n = events.filter((ev) => ev.categoryId === c.id).length;
+                      const ok = window.confirm(n
+                        ? `Delete "${c.name}"? Its ${n} event${n === 1 ? "" : "s"} will stay, with no venue.`
+                        : `Delete "${c.name}"?`);
+                      if (ok) categoryRequest(`/api/event-categories/${encodeURIComponent(c.id)}`, "DELETE");
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="builder-event-manager-hint">No venues or categories yet. Add the first one below.</p>
+          )}
+          <div className="builder-event-manager-category builder-event-manager-category-new">
+            <input
+              type="color"
+              aria-label="Colour for the new venue"
+              className="builder-event-manager-color"
+              value={newCategory.color}
+              onChange={(e) => setNewCategory((v) => ({ ...v, color: e.target.value }))}
+            />
+            <input
+              aria-label="New venue or category name"
+              className="builder-event-manager-input"
+              placeholder="e.g. Delray Swim & Tennis Club"
+              value={newCategory.name}
+              onChange={(e) => setNewCategory((v) => ({ ...v, name: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCategory(); } }}
+            />
+            <button type="button" className="btn tiny-btn" disabled={categoryBusy} onClick={addCategory}>Add</button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="builder-admin-data-table-wrap">
         <table className="builder-admin-data-table">
           <thead>
@@ -7651,7 +8438,19 @@ function EventManagerPreview({
               * and reads as a fifth column heading rather than a control.
               */}
             <tr className="builder-admin-data-table-filter-row table-filter-row">
-              <th />
+              {/* Venues sits at the far left of the filter row: the actions
+                * column is sized for one button, and a second one there was
+                * cut off at 1280px (task 86bbzt25g). */}
+              <th>
+                <button
+                  type="button"
+                  className="btn btn-ghost tiny-btn"
+                  aria-expanded={categoriesOpen}
+                  onClick={() => setCategoriesOpen((v) => !v)}
+                >
+                  Venues
+                </button>
+              </th>
               {showStatus ? <th /> : null}
               {showDate ? <th /> : null}
               {showLocation ? <th /> : null}
@@ -7685,7 +8484,17 @@ function EventManagerPreview({
               return (
                 <tr key={event.id}>
                   <td className="builder-admin-data-table-cell">
-                    <span className="builder-event-manager-title">{event.title || "Untitled event"}</span>
+                    <span className="builder-event-manager-title">
+                      {categoryById.get(event.categoryId || "") ? (
+                        <span
+                          className="builder-event-manager-swatch"
+                          title={categoryById.get(event.categoryId || "")!.name}
+                          style={{ background: categoryById.get(event.categoryId || "")!.color || "transparent" }}
+                        />
+                      ) : null}
+                      {event.title || "Untitled event"}
+                    </span>
+                    {event.instructor ? <span className="builder-event-manager-when-sub">{event.instructor}</span> : null}
                     {event.featured ? <span className="builder-event-manager-featured">Featured</span> : null}
                   </td>
                   {showStatus ? (
@@ -7695,7 +8504,14 @@ function EventManagerPreview({
                   ) : null}
                   {showDate ? (
                     <td className="builder-admin-data-table-cell builder-admin-data-table-date">
-                      {formatEventWhen(event)}
+                      {event.recurrence ? (
+                        <>
+                          <span className="builder-event-manager-when-rule">{describeRecurrence(event.recurrence)}</span>
+                          <span className="builder-event-manager-when-sub">
+                            {formatTimeRange(event.startsAt, event.endsAt, eventTimeZone(event), event.allDay)}
+                          </span>
+                        </>
+                      ) : formatEventWhen(event)}
                     </td>
                   ) : null}
                   {showLocation ? (

@@ -3965,6 +3965,8 @@ export function createEmptyModule(
                             showImages: "true",
                             showLocation: "true",
                             showExcerpt: "true",
+                            showInstructor: "true",
+                            showCategoryKey: "true",
                             emptyMessage: "No events scheduled just yet — check back soon.",
                             accentColor: "#0f4f8f"
                           }
