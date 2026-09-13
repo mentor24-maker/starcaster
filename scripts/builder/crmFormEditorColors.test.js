@@ -16,7 +16,8 @@ const path = require('node:path');
 const SRC = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'crm.js'), 'utf8');
 
 function lift(name) {
-  const start = SRC.indexOf(`  function ${name}(`);
+  const plain = SRC.indexOf(`  function ${name}(`);
+  const start = plain > -1 ? plain : SRC.indexOf(`  async function ${name}(`);
   assert.ok(start > -1, `${name} is gone from crm.js — re-point this test`);
   const end = SRC.indexOf('\n  }\n', start);
   return SRC.slice(start, end + 4);
@@ -69,4 +70,21 @@ test('every colour control mounts the standard field, and the old row is only th
   assert.match(render, /bridge\.mount\(host, \{/);
   assert.match(render, /onClear: \(\) => commit\('none'\)/);
   assert.match(lift('syncFormColorPickerUI'), /renderStandardColorField\(inputId\);/);
+});
+
+test('a reload on the editor address starts the editor instead of showing a dead page (86bbzxjx4)', () => {
+  // Dane hard-refreshed on #page=crmFormEditorPage: no form, no theme, no
+  // pickers — every colour control dead and the theme swatches blank. Every
+  // earlier test opened the editor through Edit or New Form.
+  const start = SRC.indexOf('onPageActivated(targetPageId) {');
+  assert.ok(start > -1, 'onPageActivated moved — re-point this test');
+  const hook = SRC.slice(start, SRC.indexOf('\n    },', start));
+  assert.match(hook, /if \(targetPageId === 'crmFormEditorPage'\) \{\s*if \(!formEditorReady\) return openFormEditorFromAddress\(\);/);
+  assert.match(hook, /if \(targetPageId === 'crmPage'\) \{\s*formEditorReady = false;/, 'leaving to the CRM page must make the next editor visit start fresh');
+  const fromAddress = lift('openFormEditorFromAddress');
+  assert.match(fromAddress, /App\.readHashParam\('crmForm'\)/);
+  assert.match(fromAddress, /await openFormEditor\(form\);/);
+  assert.match(fromAddress, /await openFormEditor\(null\);/);
+  assert.match(lift('openFormEditor'), /formEditorReady = true;\s*\n\s*setActivePage\('crmFormEditorPage'\);/,
+    'the flag must be set BEFORE setActivePage, or its own activation re-enters openFormEditorFromAddress');
 });
