@@ -2086,20 +2086,41 @@ test('a unique violation on a DIFFERENT index is not called a duplicate hash', (
   assert.equal(isDuplicateHashError(other), false,
     'a primary-key collision was reported as a duplicate content hash');
 
-  // The one it IS still matches, by name, under both shapes PostgREST can send
-  // it: the constraint named in the message, and named only in the payload.
+  // The one it IS still matches, by name, in the one place the name arrives:
+  // the message.
   const inMessage = {
     status: 409,
     error: `duplicate key value violates unique constraint "${CONTENT_HASH_INDEX}"`,
   };
   assert.equal(isDuplicateHashError(inMessage), true);
 
-  const inPayload = {
+  // ...and it matches on the WHOLE payload PostgREST actually sends, not just
+  // on a hand-shortened version of it. Every field below was measured
+  // 2026-09-13 by driving a real duplicate through createSource against local
+  // Postgres and dumping what sbQuery returned: four keys, no `constraint`,
+  // and `details` carrying the key COLUMNS rather than the index name.
+  //
+  // This case replaces one that asserted `raw: { constraint: CONTENT_HASH_INDEX }`
+  // returned true. That shape does not exist — so the assertion passed through
+  // a branch of isDuplicateHashError nothing could reach, and its comment
+  // stated the fiction as fact, which would have made the next reader restore
+  // dead code to keep this test green (review round 2).
+  const fromPostgrest = {
     status: 409,
-    error: 'duplicate key value violates a unique constraint',
-    raw: { code: '23505', constraint: CONTENT_HASH_INDEX },
+    error: `duplicate key value violates unique constraint "${CONTENT_HASH_INDEX}"`,
+    raw: {
+      code: '23505',
+      details: 'Key (project_id, content_hash)=(proj_a, abc123) already exists.',
+      hint: null,
+      message: `duplicate key value violates unique constraint "${CONTENT_HASH_INDEX}"`,
+    },
   };
-  assert.equal(isDuplicateHashError(inPayload), true);
+  assert.equal(isDuplicateHashError(fromPostgrest), true,
+    'the real PostgREST duplicate-hash payload was not recognised');
+  assert.ok(!('constraint' in fromPostgrest.raw),
+    'this fixture must stay the shape that was measured — PostgREST sends no constraint key');
+  assert.equal(String(fromPostgrest.raw.details).includes(CONTENT_HASH_INDEX), false,
+    'details carries the key columns, never the index name — measured 2026-09-13');
 
   // And the index this matcher names must be the one the SQL actually creates,
   // or every assertion above is pinned to a string the database never sends.

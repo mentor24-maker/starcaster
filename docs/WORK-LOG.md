@@ -51,6 +51,27 @@ purpose and watched to fail. Nothing a person can see changes; the value stored
 is the same either way on the Macs here. What changes is that the sentence in
 the code is now true, which is the only reason anyone would trust it later.
 
+The review pass sent it back a second time, and again it was right to — same
+family of problem, one step further in. One of the checks above works out
+whether a rejected save was rejected because the file is already in the catalog,
+as opposed to some other clash. It looked for the answer in two places. Only
+one of those places exists: the database was asked, for real, what it actually
+sends back when it turns a duplicate away, and the answer has four pieces of
+information in it, none of which is the second place the code was looking. So
+that second half of the check could never run, and the test written for it
+described a reply the database has never sent, with a comment stating that as
+fact. That is a trap rather than a harmless spare part — the next person to
+delete the unreachable code, which is the right thing to do, would have watched
+that test go red and put the dead code back, because the comment told them the
+database works that way.
+
+The unreachable half is gone, and the test now uses the reply that was actually
+measured, written down field by field with the date it was taken. The check
+behaves exactly as it did before — the real duplicate is still recognised, still
+with the right message — and that was confirmed by driving a genuine duplicate
+through the real database rather than reasoned about. Three ways of breaking the
+new test on purpose were tried, and each one turned it red.
+
 ## 2026-09-08 — Alarms stopped being thrown away when the chat room refuses them (#666)
 
 The system has one way of telling anyone that something has broken: it posts a
