@@ -7791,7 +7791,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-event-manager-date-edit {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 8rem)) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 8rem)) repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
   margin-top: var(--space-2);
 }
@@ -7809,6 +7809,81 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-event-manager-when-sub {
   color: var(--ink-secondary);
+}
+
+/* The date column does not wrap (a date should stay on one line), but a
+ * repeat rule is a sentence — "Weekly on Mon, Tue, Wed, Thu, Fri, Sat until
+ * Dec 19, 2026" was clipped mid-word. */
+.builder-react-root .builder-admin-data-table-date .builder-event-manager-when-rule {
+  white-space: normal;
+}
+
+/* ── Event Manager: venues & categories (task 86bbzt25g) ──────────────── */
+.builder-react-root .builder-event-manager-categories {
+  margin: var(--space-4) 0;
+  padding: var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-event-manager-category-list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+}
+
+.builder-react-root .builder-event-manager-category {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.builder-react-root .builder-event-manager-category .builder-event-manager-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.builder-react-root .builder-event-manager-category-count {
+  flex: 0 0 5.5rem;
+  text-align: right;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+/* A colour input is a native control whose default size differs by engine;
+ * pinned so every row's swatch lines up. */
+.builder-react-root .builder-event-manager-color {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--bg-input);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-event-manager-swatch {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-right: var(--space-2);
+  border-radius: 999px;
+  vertical-align: baseline;
+}
+
+.builder-react-root .builder-event-manager-category-pick {
+  display: flex;
+  align-items: center;
+}
+
+.builder-react-root .builder-event-manager-category-pick .builder-event-manager-swatch {
+  width: 1rem;
+  height: 1rem;
 }
 
 @media (max-width: 700px) {
@@ -8140,6 +8215,250 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   .builder-react-root .builder-event-calendar-chip-title,
   .builder-react-root .builder-event-calendar-chip-time {
     display: none;
+  }
+}
+
+/* ── Event Calendar: repeats, venues, weekly schedule (task 86bbzt25j) ────
+ * The weekly schedule is the club's printed Weekly Program Guide as a page:
+ * a day label down the side and that day's programs beside it, each with a
+ * venue-coloured edge. Base rules here; the phone query below only rearranges
+ * them (R1). Every colour is a token or the venue colour passed in as
+ * --evt-accent, so a tenant theme still governs the frame. */
+
+.builder-react-root .builder-event-calendar-today {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-btn);
+  background: var(--bg-surface);
+  color: var(--evt-accent, var(--accent));
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-event-calendar-key {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+
+.builder-react-root .builder-event-calendar-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-event-calendar-key-item.is-active {
+  border-color: var(--bx-heading, var(--ink-primary));
+  font-weight: 700;
+}
+
+.builder-react-root .builder-event-calendar-swatch {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999px;
+}
+
+.builder-react-root .builder-event-calendar-badge {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--status-warn-bg);
+  color: var(--status-warn-ink);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.builder-react-root .builder-event-calendar-chip.is-cancelled .builder-event-calendar-chip-title,
+.builder-react-root .builder-event-calendar-item.is-cancelled .builder-event-calendar-item-title,
+.builder-react-root .builder-event-calendar-program.is-cancelled .builder-event-calendar-program-title > a,
+.builder-react-root .builder-event-calendar-program.is-cancelled .builder-event-calendar-program-time {
+  text-decoration: line-through;
+}
+
+.builder-react-root .builder-event-calendar-item {
+  border-left: 4px solid var(--evt-venue, transparent);
+}
+
+.builder-react-root .builder-event-calendar-week {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-container);
+  overflow: hidden;
+}
+
+.builder-react-root .builder-event-calendar-weekday-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr);
+  border-top: 1px solid var(--border-light);
+}
+
+.builder-react-root .builder-event-calendar-weekday-row:first-child {
+  border-top: 0;
+}
+
+.builder-react-root .builder-event-calendar-weekday-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4) var(--space-3);
+  border-right: 1px solid var(--border-light);
+  color: var(--bx-heading, var(--ink-primary));
+  text-align: center;
+}
+
+.builder-react-root .builder-event-calendar-weekday-row.is-today .builder-event-calendar-weekday-label {
+  background: color-mix(in srgb, var(--evt-accent, var(--accent)) 10%, transparent);
+}
+
+.builder-react-root .builder-event-calendar-weekday-name {
+  font-size: var(--text-lg);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.builder-react-root .builder-event-calendar-weekday-date {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.builder-react-root .builder-event-calendar-programs {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2) 0;
+}
+
+/* Title | instructor | time — the flyer's three columns. The track widths are
+ * shared by every row of every day because each row uses the same template,
+ * so the times line up down the whole week. */
+.builder-react-root .builder-event-calendar-program {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(9.5rem, auto);
+  align-items: baseline;
+  gap: 0 var(--space-4);
+  padding: var(--space-1) var(--space-4);
+  border-left: 4px solid var(--evt-venue, transparent);
+}
+
+.builder-react-root .builder-event-calendar-program-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.builder-react-root .builder-event-calendar-program-title > a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.builder-react-root .builder-event-calendar-program-title > a:hover {
+  text-decoration: underline;
+}
+
+.builder-react-root .builder-event-calendar-program-who {
+  color: var(--ink-secondary);
+  overflow-wrap: anywhere;
+}
+
+.builder-react-root .builder-event-calendar-program-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.builder-react-root .builder-event-calendar-program-note {
+  grid-column: 1 / -1;
+  font-size: var(--text-sm);
+  font-style: italic;
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-event-calendar-program-none {
+  margin: 0;
+  padding: var(--space-4);
+  align-self: center;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.builder-react-root .builder-event-calendar--week .builder-event-calendar-empty {
+  margin-bottom: var(--space-4);
+}
+
+.builder-react-root .builder-event-detail-repeat,
+.builder-react-root .builder-event-detail-instructor {
+  margin: 0 0 var(--space-2);
+  color: var(--ink-secondary);
+}
+
+.builder-react-root .builder-event-detail-dates {
+  margin-top: var(--space-5);
+}
+
+.builder-react-root .builder-event-detail-dates-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.builder-react-root .builder-event-detail-dates ul {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.builder-react-root .builder-event-detail-dates li.is-cancelled > a {
+  text-decoration: line-through;
+}
+
+.builder-react-root .builder-event-detail-date-flag {
+  color: var(--status-warn-ink);
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  /* The day label moves above its programs, and each program puts its time
+   * under its name: three columns do not fit a phone. */
+  .builder-react-root .builder-event-calendar-weekday-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .builder-react-root .builder-event-calendar-weekday-label {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-right: 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .builder-react-root .builder-event-calendar-program {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .builder-react-root .builder-event-calendar-program-who {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .builder-react-root .builder-event-calendar-program-time {
+    grid-row: 1;
+    grid-column: 2;
   }
 }
 
@@ -9172,4 +9491,44 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   cursor: pointer;
   font-size: var(--text-base);
   color: var(--ink-primary);
+}
+
+/*
+ * L8 / W9 — the project-data picker is a COMPOSITE control (a select plus an
+ * optional "Custom…" input), and nothing ever capped it.
+ *
+ * Every other control in a lattice column is bounded by
+ * `--builder-field-long-max`, but that rule matches only DIRECT children of
+ * `.builder-module-field-control`, and the picker's two parts sit inside a
+ * `<span class="builder-project-data-picker">` wrapper. So the picker escaped
+ * the ceiling: measured at 1440 on the admin-nav-link panel it came to 846px
+ * (select 560 + gap + input 280). The column's shared control track is sized
+ * by `max-content`, so THE PICKER SIZED THE TRACK — and every other control
+ * in that column, correctly stopping at the 560px ceiling, ended 286px short
+ * of the row that set it. One row reaching the edge and six stopping short is
+ * exactly the notch L8 names ("a control that stops short leaves a notch").
+ *
+ * Bounding the BLOCK rather than widening the controls, which is what W9 and
+ * L8 both ask for where they disagree. A panel whose track was already under
+ * the ceiling is untouched — `max-width` can only ever lower a used width —
+ * which is why admin-login, whose two columns already held the track to 560,
+ * renders byte-identically before and after.
+ *
+ * Scoped to this ticket's six panels ON PURPOSE. The identical defect is live
+ * on ten other panels (blog-tag-cloud, blog-category-filter, blog-post-tags,
+ * blog-post-manager, blog-search, blog-search-results, site-search,
+ * event-manager, event-calendar, event-detail — each an 846px track at 1440),
+ * and those belong to panel sweeps 10/15 and 12–14/15, which are still queued.
+ * One panel family per PR is the whole point of the sweep; widening this
+ * selector is the one-line fix each of those tickets can reach for.
+ *
+ * Panel sweep 15/15, ticket 86bbjt1bg.
+ */
+.builder-react-root .is-lattice.builder-module-editor--admin-login .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--admin-modules .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--admin-nav-link .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--admin-site-settings .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--admin-support-form .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--admin-team-users .builder-module-field-control > .builder-project-data-picker {
+  max-width: var(--builder-field-long-max, 560px);
 }

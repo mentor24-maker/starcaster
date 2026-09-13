@@ -521,6 +521,37 @@ export const RENDER_CONTRACTS = [
   },
 
   {
+    id: 'event-calendar-weekly-schedule-draws-a-whole-week',
+    why:
+      "The weekly schedule is Delray's printed Weekly Program Guide as a page (task 86bbzt25j): every " +
+      'day of the week down the side, whether or not anything is on it. The date arithmetic is ' +
+      'unit-tested in lib/builder-client/event-schedule.ts; what a test cannot see is that seven day ' +
+      'rows reach the page stacked in a column. With no database here the week is empty, which is the ' +
+      'state a club meets before its programs are entered — a missing day, or days laid out side by ' +
+      'side, would be a schedule that reads wrong to every visitor.',
+    module: { type: 'event-calendar', settings: { layout: 'week', weekStartsOn: '1', calendarTitle: 'Weekly program guide' } },
+    selector: '.builder-event-calendar-week',
+    read: ['display', 'flexDirection', 'height'],
+    expect(sample) {
+      if (sample.styles.display !== 'flex' || sample.styles.flexDirection !== 'column') {
+        return `the week renders as ${sample.styles.display} ${sample.styles.flexDirection}, not a column of days — its layout CSS is not reaching the page.`;
+      }
+      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      const missing = days.filter((d) => !sample.text.includes(d));
+      if (missing.length) {
+        return `the week is missing ${missing.join(', ')} — a program guide must draw every day, even an empty one.`;
+      }
+      if (!/^\s*Monday/.test(sample.text)) {
+        return `the week begins "${sample.text.slice(0, 20)}", not Monday — the Week Starts setting is not reaching the weekly layout.`;
+      }
+      if (sample.box.height < 7 * 40) {
+        return `the week is ${sample.box.height}px tall — seven day rows are collapsing on top of each other.`;
+      }
+      return null;
+    },
+  },
+
+  {
     id: 'event-calendar-empty-state-is-designed',
     why:
       'On this page there is no session and no database, so the calendar renders the state a tenant ' +

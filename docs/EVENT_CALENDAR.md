@@ -49,9 +49,7 @@ start, end. The rest exist because a calendar without them misreports:
 ## What is deliberately not here
 
 - **Recurrence** was here until 2026-09-12 — see "Repeating events" below.
-- **Categories.** The blog has them, with colours, for filtering. Events will
-  want the same thing, but the public calendar is what makes that visible, so
-  it belongs with the module that filters by it.
+- **Categories** arrived 2026-09-12 as venues — see "Instructors and venues" below.
 - **Ticketing, RSVP, capacity, attachments.** All real; all their own feature.
 
 ## The public calendar (2/3)
@@ -133,8 +131,73 @@ date, in weeks counted from the start date's week, up to and including `until`.
 The start date itself counts only if its weekday is ticked.
 
 **Not built:** daily and monthly rules (Dane chose weekly-only, 2026-09-12;
-nothing on the program guide needs them). Public-site display of repeats is
-ticket 86bbzt25j; instructor and colour-coded venues are 86bbzt25g.
+nothing on the program guide needs them). Public display is "The public calendar with repeats"
+below; instructors and venues are the section after this one.
+
+## Instructors and venues (task 86bbzt25g, 2026-09-12)
+
+Delray's program guide colours every program by where it runs — Delray Beach
+Tennis Center navy, Delray Swim & Tennis Club green, Pickleball orange — and
+names the coach. So an event now carries:
+
+- **`instructor`** — free text. A single date may name a substitute
+  (`recurrence_overrides[].instructor`), because the guide changes the coach
+  week to week far more often than the time.
+- **`category_id`** — one row of `event_categories` (name, `#rrggbb` colour,
+  sort order), managed from the **Venues** button on the Event Manager.
+
+**Not a foreign key, on purpose.** Deleting a venue leaves its events standing;
+every reader treats an id it cannot find as "no category", and the delete
+confirmation says how many events will lose theirs.
+
+**A colour is `#rrggbb` or nothing.** The value lands in a style attribute on a
+client's public page; the route answers a 400 for anything else and the store
+blanks it if one gets past.
+
+**Public read, narrowly** — a second exemption in
+`lib/projectAdminApiAuth.js`: `GET /api/event-categories` only (the legend is
+painted on the page anyway), stripped by `categoriesForCaller` to id, name,
+colour and order for a caller with no session. Every write and the by-id path
+still need one. Both directions are asserted and were broken on purpose.
+
+## The public calendar with repeats (task 86bbzt25j, 2026-09-12)
+
+**One schedule, every view.** `lib/builder-client/event-schedule.ts` turns
+events into dated items (`scheduleBetween`) and groups them by the dates they
+touch (`groupByDate`). The month grid, the list, the cards, the new weekly
+schedule and the event page all read it, so a repeating program is on the same
+dates everywhere. Unit-tested, including in a Tokyo-clock run.
+
+**The calendar is drawn in the club's zone, not the visitor's**
+(`calendarTimeZone`: the first event naming a real zone). A 7pm Tuesday program
+stays on Tuesday for a visitor in another zone.
+
+**Weekly schedule** (`layout: "week"`) is the printed *Weekly Program Guide* as
+a page: every day of the week down the side (empty days say *Nothing
+scheduled*), each program with instructor and time, a venue-coloured edge,
+previous/next week and *This week*. Week Starts applies to it as well as the
+month. An empty week names the week — and the venue, when filtered.
+
+**Venue key = filter.** Shown when more than one venue is in use (Venue Key
+setting); clicking one narrows every layout to it.
+
+**Cancelled dates are shown, struck through and labelled — never hidden.** A
+member who saw "Elite, Tuesday" last week needs to see that THIS Tuesday is off.
+A single date's note ("Courts resurfacing") and substitute instructor show too.
+
+**Only a venue colours an edge** (`--evt-venue`, set only when an event has a
+category). Inheriting the module accent made a venue-less dinner read as a
+Tennis Center program.
+
+**Links carry the date.** A repeating program links to
+`?event=<slug>&date=YYYY-MM-DD` (`eventPageHref`); the event page then shows
+that session's time and instructor, a cancelled banner naming the date, a line
+when the rule does not run that day, the rule in words, and the next six dates.
+
+**New settings:** Weekly Schedule layout, Instructor (default on), Venue Key
+(default on). `check:render` contract
+`event-calendar-weekly-schedule-draws-a-whole-week` — broken on purpose twice
+(days in a row; Week Starts ignored) and watched to fail.
 
 ## The public read exemption — a security decision, made here
 
@@ -209,7 +272,6 @@ be controls an operator fills in that render nowhere at all (Standard 13).
 - **"Add to calendar"** (an `.ics` download, and Google/Outlook links). The
   single most-expected control on an event page, and deliberately left out of
   this slice to keep it shippable. Everything it needs is already on the row.
-- **Categories** with colours, for filtering the public calendar.
 - **A month grid that lists a day's events on tap** at phone width. Today the
   grid degrades to dots per day below 700px, which says *that* something is on
   but not *what*.
