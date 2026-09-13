@@ -29,7 +29,10 @@ altogether. It is built in a shape the checker had never been taught, so every
 sweep for months had looked at this panel, found nothing to measure there, and
 reported a clean pass. Not a pass: an absence, and from the summary line the two
 look identical. The checker has been taught the shape, the grid now announces
-itself, and the count of measured item-editors went from 12 to 15.
+itself, and the count of measured item-editors went from 4 to 5. (The run's own
+summary line says that went 12 to 15, and the summary line is wrong: it counts
+everything three times, once per screen width it measures at. The real numbers
+are a third of what it prints.)
 
 It also now says what its own green is worth here. In this kind of grid the
 titles and the rows physically cannot disagree — they are one grid — so four of
@@ -53,6 +56,46 @@ stops and names the bad value in plain words. Two smaller things went with
 them: a note whose explanatory comment described the opposite of what the code
 did, and a track count that could have been fooled by a perfectly legal bit of
 CSS into reporting a fault that was not there.
+
+Review sent it back a second time, and again it was right. This one is the most
+useful thing in the whole ticket, so it is worth explaining properly.
+
+The checker had a rule that read, in effect, "every row of this grid must have
+three cells in it". That is the rule that catches the panel going scrambled —
+one trail item quietly rendering two boxes instead of three, which shunts every
+box after it one place to the left, so an item's Label ends up sitting under the
+"Action" title. The rule was written down, it was described in the rules
+document, and it could not fail. It was cutting the boxes into groups of three
+by counting — take three, take three, take three — so of course every group had
+three in it. The only thing that could ever have set it off was a total that did
+not divide by three.
+
+The review suggested grouping the boxes by which row of the grid they physically
+landed in. That sounded right and it does not work, and rather than argue about
+it the panel was deliberately broken in exactly the way described — one item
+rendering two boxes, another rendering four — and then measured in a real
+browser. Every way of grouping by position gives three, three, three, three,
+while the panel is visibly wrong on screen. The reason is that the browser
+simply pours the boxes into three columns in order; a missing box does not leave
+a gap, it pulls everything else along. So there is nothing in the finished
+layout that records which boxes were meant to belong together.
+
+The fix is to have the panel say so. Each box now carries a small invisible mark
+naming the trail item it belongs to, and the checker groups by that. Break the
+panel the same way now and it fails at all three screen widths and names the
+culprit — "item 1 renders 2, item 2 renders 4". The old version was run against
+the same broken panel to confirm it passes green, which it does. A grid that
+forgets to carry those marks is reported as unreadable rather than waved
+through.
+
+Two smaller repairs went with it. A test meant to catch a fixed width being
+typed into a field was also matching "maximum width", which is a legitimate and
+common thing to write — so an unrelated change elsewhere in the panel could have
+failed it with a confident complaint about a field that was perfectly fine. And
+if one of these grids is ever hidden on screen, the checker used to announce a
+fault that did not exist; it now reports that it could not take a reading, which
+is the honest answer. Both were broken on purpose and watched, in both
+directions.
 
 One thing found along the way is deliberately NOT fixed here: eleven panels
 leave a wide empty strip down their right-hand side, always the same 286 pixels.

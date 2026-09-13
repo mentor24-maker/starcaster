@@ -1095,6 +1095,30 @@ function measureColumnGrids(page) {
       // children from the header — which silently shifts every cell after it
       // — and a track list that has drifted from the declared count. Those
       // are asserted in `assertColumnGrids`, and both are real.
+      //
+      // THE FIRST OF THOSE ONLY BECAME REAL ON 2026-09-13 (review round 2,
+      // task 86bbjt1b6), and how it failed before is worth keeping. The rows
+      // were cut out of the cell list with a fixed stride — `i += declared`
+      // — so every chunk held exactly `declared` cells by arithmetic, and the
+      // assertion under it could only ever fire when the TOTAL was not a
+      // multiple of `declared`. The thing it was documented as catching was
+      // the one thing it could not see.
+      //
+      // Chunking by the grid row instead does not fix it, which was measured
+      // in the browser before this was written rather than reasoned about.
+      // Auto-placed cells fill `declared` tracks per row whatever the markup
+      // did, so a grid row ALWAYS holds exactly `declared` cells: on a panel
+      // deliberately broken into a 2-cell item and a 4-cell item, grouping by
+      // resolved grid row, by wrap in x, and by y all returned 3/3/3/3.
+      // (`gridRowStart` computes to `auto` here in any case — Chromium does
+      // not resolve auto-placement into computed style.) A missing cell does
+      // not SHORTEN a row; it shifts every later cell up one slot, which is
+      // the visible defect and is invisible to every geometric reading.
+      //
+      // So the row has to be DECLARED. `data-lattice-row` carries the item
+      // index (or `header`) on each cell, and the cells are grouped by it —
+      // the check then holds what the markup says is one row to `declared`
+      // cells, and names the item that is wrong.
       const isTable = m.tagName === 'TABLE';
       const navItems = m.querySelector('.builder-nav-items');
       const navHeader = m.querySelector('.builder-nav-items-header');
@@ -1123,12 +1147,16 @@ function measureColumnGrids(page) {
       const rows = items ? rowsOf(items) : [];
       /*
        * A flat grid has no row ELEMENT to measure, so a line is read from the
-       * cells that make it up. Its box is the manager's own content box
-       * rather than the span of its cells: every line of a flat grid occupies
-       * the same tracks, and taking min-left..max-right of the cells would
-       * make the header band — three short titles — read as a narrower "row"
-       * than the inputs under it and fail the equal-widths assertion for
-       * doing exactly what it should.
+       * cells the markup DECLARES to be one row, via `data-lattice-row`. Its
+       * box is the manager's own content box rather than the span of its
+       * cells: every line of a flat grid occupies the same tracks, and taking
+       * min-left..max-right of the cells would make the header band — three
+       * short titles — read as a narrower "row" than the inputs under it and
+       * fail the equal-widths assertion for doing exactly what it should.
+       *
+       * Returns `null` when the cells carry no `data-lattice-row` at all:
+       * that is a reading this check CANNOT take, not a pass. See the long
+       * comment above for why no geometric grouping can substitute.
        */
       const flatLines = () => {
         const mb = rect(m);
@@ -1141,19 +1169,30 @@ function measureColumnGrids(page) {
             // item grid puts under its primary row), not one of the n columns.
             return !(s.gridColumnStart === '1' && s.gridColumnEnd === '-1');
           });
-        const lines = [];
-        for (let i = 0; i < cells.length; i += declared) {
-          const slice = cells.slice(i, i + declared);
-          lines.push({
-            left: Math.round(mb.left),
-            width: Math.round(mb.width),
-            cells: slice.map((c) => ({
-              x: Math.round(rect(c).left - mb.left),
-              w: Math.round(rect(c).width)
-            }))
-          });
+        if (!cells.length) return [];
+        // EVERY cell must declare its row, not merely one of them. A partial
+        // stamping would silently drop the undeclared cells out of the
+        // measurement, which is the "measured less, went green" failure this
+        // whole file exists against.
+        const undeclared = cells.filter((c) => c.getAttribute('data-lattice-row') === null);
+        if (undeclared.length) return { undeclared: undeclared.length, total: cells.length };
+        // Grouped by the declared key, in first-appearance order, so the
+        // header (`data-lattice-row="header"`, stamped first) stays line 0.
+        const groups = new Map();
+        for (const c of cells) {
+          const key = c.getAttribute('data-lattice-row');
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(c);
         }
-        return lines;
+        return [...groups.entries()].map(([key, group]) => ({
+          key,
+          left: Math.round(mb.left),
+          width: Math.round(mb.width),
+          cells: group.map((c) => ({
+            x: Math.round(rect(c).left - mb.left),
+            w: Math.round(rect(c).width)
+          }))
+        }));
       };
       const read = (row) => {
         const rr = rect(row);
@@ -1176,7 +1215,47 @@ function measureColumnGrids(page) {
         };
       };
       if (isFlat) {
+        /*
+         * A MANAGER WITH NO LAYOUT BOX CANNOT BE READ, AND MUST NOT BE
+         * FAILED (review round 2, task 86bbjt1b6).
+         *
+         * `grid-template-columns` resolves to used pixel values only for an
+         * element that generates a box. Inside a `display: none` ancestor it
+         * computes back to the SPECIFIED value — for the crumbs grid,
+         * `minmax(96px, 1fr) minmax(96px, 1.4fr) max-content` — which the
+         * whitespace parser below counts as five tracks against a declared
+         * three, and reports as "the markup and grid-template-columns have
+         * drifted apart" with exit 1. That is a confident verdict about a
+         * drift that has not happened, from a reading that was never taken.
+         *
+         * MEASURED, not assumed, and NOT reachable through today's three
+         * declarers: a collapsed module card unmounts its editor rather than
+         * hiding it, so there is no live path to a hidden declared manager.
+         * Hiding the crumbs grid's ancestor by hand in the browser reproduces
+         * the five-track miscount exactly, and this guard turns it into a
+         * CANNOT TELL. It is a guard against a future hidden surface, not a
+         * live bug — said out loud so a green run over it is never counted as
+         * evidence of anything.
+         */
+        if (!m.getClientRects().length) {
+          return { index, name, declared, shape: 'boxless', header: null, rows: [] };
+        }
         const lines = flatLines();
+        // The cells do not say which row they belong to, so no per-row
+        // reading exists to take. Reported as its own shape rather than
+        // measured around.
+        if (lines && !Array.isArray(lines)) {
+          return {
+            index,
+            name,
+            declared,
+            shape: 'unstamped',
+            undeclared: lines.undeclared,
+            cellTotal: lines.total,
+            header: null,
+            rows: []
+          };
+        }
         return {
           index,
           name,
@@ -1245,6 +1324,30 @@ function assertColumnGrids(managers, width) {
       continue;
     }
 
+    // No box, so no reading — collected as a blind spot by the caller and
+    // reported as CANNOT TELL. Deliberately NOT a failure: the honest answer
+    // to "did this manager's tracks drift?" is that nobody could look.
+    if (m.shape === 'boxless') continue;
+
+    /*
+     * A flat grid whose cells do not say which row they belong to. There is
+     * no per-row reading to take on this shape, and the assertion that used
+     * to stand here was satisfied by arithmetic rather than by measurement
+     * (review round 2, task 86bbjt1b6) — so this is a failure naming the
+     * fix, not a quiet pass over a manager the check cannot read.
+     */
+    if (m.shape === 'unstamped') {
+      failures.push(
+        `${where}: is a flat grid whose cells carry no data-lattice-row — ` +
+        `${m.undeclared} of ${m.cellTotal} cell(s) are unstamped, so there is no way to tell ` +
+        'which cells were meant to be one row. Stamp every cell with the item index it ' +
+        'belongs to (data-lattice-row={index}, and "header" on the title band). Grouping ' +
+        'by geometry cannot substitute: auto-placed cells fill the tracks whatever the ' +
+        'markup did, so a broken row still reads as the declared number of cells.'
+      );
+      continue;
+    }
+
     if (!m.rows.length) {
       failures.push(
         `${where}: declares data-lattice-columns but rendered no rows — nothing was measured. ` +
@@ -1288,12 +1391,25 @@ function assertColumnGrids(managers, width) {
       continue;
     }
 
+    /*
+     * The row that renders the wrong number of cells, NAMED. On a flat grid
+     * this is the assertion the whole `data-lattice-row` stamp exists for:
+     * an item rendering two cells where the header renders three does not
+     * shorten a grid row, it shifts every later cell up one slot, so the
+     * panel is visibly scrambled while every measurable row still holds
+     * three. Which row is wrong is the only useful thing to say about it,
+     * and the old message could not say it — it was reporting a count that
+     * arithmetic had already guaranteed.
+     */
     const wrong = [m.header, ...m.rows].filter((r) => r.cells.length !== m.declared);
     if (wrong.length) {
+      const named = wrong
+        .map((r) => `${r.key === undefined ? 'row' : r.key === 'header' ? 'the header' : `item ${Number(r.key) + 1}`} renders ${r.cells.length}`)
+        .join(', ');
       failures.push(
         `${where}: declares ${m.declared} column(s) but ${wrong.length} row(s) render ` +
-        `${[...new Set(wrong.map((r) => r.cells.length))].join('/')} cell(s) — ` +
-        'a row with an extra child is a row whose columns no longer match the others'
+        `${[...new Set(wrong.map((r) => r.cells.length))].join('/')} cell(s) (${named}) — ` +
+        'a row with a missing or extra child shifts every cell after it into the wrong column'
       );
       continue;
     }
@@ -1413,6 +1529,12 @@ let columnGridsSeen = 0;
  */
 const flatGrids = new Map();   // manager class -> { tracks, rows, widths }
 /*
+ * Declared managers that generated no layout box at the width they were
+ * measured at, so no reading could be taken. A blind spot, never a failure —
+ * see the guard in `measureColumnGrids`.
+ */
+const boxlessManagers = new Map();   // manager name -> the widths it was blind at
+/*
  * Declared managers that rendered a SINGLE label/field pair.
  *
  * Counted and reported, never failed. A one-row manager can be entirely
@@ -1506,6 +1628,10 @@ for (const width of WIDTHS) {
       if (!flatGrids.has(g.name)) flatGrids.set(g.name, { tracks: g.tracks, rows: g.rows.length, widths: [] });
       flatGrids.get(g.name).widths.push(width);
     }
+    for (const g of columnGrids.filter((g) => g.shape === 'boxless')) {
+      if (!boxlessManagers.has(g.name)) boxlessManagers.set(g.name, []);
+      boxlessManagers.get(g.name).push(width);
+    }
     allFailures.push(...assertColumnGrids(columnGrids, width));
   } finally {
     await browser.close();
@@ -1518,6 +1644,22 @@ for (const width of WIDTHS) {
 // modules to 3, and the check reported a confident pass over what was left.
 // Counting the cards is what makes that loud instead of invisible.
 const blind = [];
+
+/*
+ * A declared manager that had no layout box is a reading NOT TAKEN, and it
+ * has to move the exit code (to 2) rather than sit in the pass. Before the
+ * guard that produces this, the same manager failed with a confident
+ * five-tracks-against-three drift report — a verdict from a measurement that
+ * never happened, which is worse than either a pass or a failure.
+ */
+for (const [name, widths] of boxlessManagers) {
+  blind.push(
+    `${name} declares data-lattice-columns but generated NO LAYOUT BOX at ` +
+    `${widths.join('/')}px — it or an ancestor is display:none.\n` +
+    'Nothing about it was measured: grid-template-columns falls back to the specified\n' +
+    'value for a boxless element, so counting its tracks would report a drift that has\n' +
+    'not happened. Open the surface this manager sits on before believing this run.');
+}
 
 if (cardsSeen > 0 && cardsSeen < EXPECTED_MODULES) {
   // A 2, not a 1: the fixture is the INSTRUMENT. Nothing here says the panels
@@ -1687,7 +1829,11 @@ function flatGridNote() {
     + '  comparative assertions (row widths, per-column offsets, per-column widths, title\n'
     + '  containment) are therefore satisfied before any CSS is written and could not fail\n'
     + '  on them. What WAS asserted here, and can fail: the resolved track count against the\n'
-    + '  declared one, and every line rendering the declared number of cells.\n'
+    + '  declared one, and every DECLARED row — the cells sharing a data-lattice-row — \n'
+    + '  rendering the declared number of cells. That second one reads the stamp and not\n'
+    + '  the geometry on purpose: auto-placed cells fill the tracks whatever the markup\n'
+    + '  did, so a scrambled panel still measures the declared number of cells per grid\n'
+    + '  row (measured 2026-09-13, review round 2, task 86bbjt1b6).\n'
     + rows;
 }
 
