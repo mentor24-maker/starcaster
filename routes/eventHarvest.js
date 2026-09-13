@@ -5,11 +5,20 @@
  * (task 86bbztj0e). It proposes; it never writes. The Event Manager's review
  * table creates what Dane keeps through /api/events and /api/event-categories.
  *
- * Platform login only: `/api/event-harvest` is in
- * PROJECT_ADMIN_SESSION_DENY_PREFIXES, so a tenant admin session is never
- * turned into auth here, and the handler refuses anything without a platform
- * user as well — two locks, because the first one being edited away would
- * otherwise open a spend path silently.
+ * Alphire staff only (Dane, 2026-09-12). Every upload bills Alphire's model
+ * account, so a club's own admins are refused. But the Event Manager only
+ * WORKS on the club's admin page, behind a club admin login — a platform
+ * session never reaches a rendered Event Manager (Builder shows its settings;
+ * Builder Preview strips admin modules). So "staff" is decided per request:
+ *
+ *   - a platform session is staff;
+ *   - a club admin session is staff only when its email also has a StarCaster
+ *     platform account. Delray's staff have none.
+ *
+ * Known limit: club admin emails are not verified, so a club admin who can add
+ * admins could add one under a staff address. That buys AI spend only — the
+ * route reads nothing a club admin cannot already read — and the rate limit
+ * caps it. A lookup that fails refuses; it never grants.
  */
 
 const { sendOk, sendErr, parseJsonBody } = require('./http');
@@ -20,6 +29,20 @@ const {
   HarvestError, isAvailable, extractSchedule, mergeSessions, matchExisting, matchVenues,
 } = require('../lib/eventHarvest');
 const { logActivity } = require('../lib/activityLog');
+const { findUserByEmail } = require('../lib/authStore');
+
+/** Is this signed-in user Alphire staff? `find` is injectable for tests. */
+async function isAlphireStaff(authUser, find = findUserByEmail) {
+  if (!authUser) return false;
+  if (!authUser.isProjectAdmin) return true;
+  const email = String(authUser.email || '').trim();
+  if (!email) return false;
+  try {
+    return Boolean(await find(email));
+  } catch {
+    return false;
+  }
+}
 
 function requestScope(req) {
   return {
@@ -32,11 +55,18 @@ async function handle(req, res, pathname, method) {
   if (!pathname.startsWith('/api/event-harvest')) return false;
 
   if (!req.authUser) {
-    return sendErr(res, 401, 'Sign in to StarCaster to read schedules.', { code: 'NOT_AUTHENTICATED' }), true;
+    return sendErr(res, 401, 'Sign in to read schedules.', { code: 'NOT_AUTHENTICATED' }), true;
+  }
+  const staff = await isAlphireStaff(req.authUser);
+
+  // Answered for everyone signed in, so the Event Manager can hide its button
+  // without treating a refusal as an error.
+  if (pathname === '/api/event-harvest/available' && method === 'GET') {
+    return sendOk(res, 200, { available: staff && isAvailable() }), true;
   }
 
-  if (pathname === '/api/event-harvest/available' && method === 'GET') {
-    return sendOk(res, 200, { available: isAvailable() }), true;
+  if (!staff) {
+    return sendErr(res, 403, 'Reading schedules with AI is available to Alphire staff only.', { code: 'STAFF_ONLY' }), true;
   }
 
   if (pathname === '/api/event-harvest/extract' && method === 'POST') {
@@ -74,4 +104,4 @@ async function handle(req, res, pathname, method) {
 
 const manifest = { id: 'eventHarvest', label: 'Schedule harvest', prefixes: ['/api/event-harvest'] };
 
-module.exports = { handle, manifest };
+module.exports = { handle, manifest, isAlphireStaff };

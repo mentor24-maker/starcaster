@@ -122,3 +122,16 @@ test('the model call: a refusal, a truncation and junk each say so', async (t) =
   setClientFactory(() => ({ beta: { messages: { stream: () => { const e = new Error('rate'); e.status = 429; throw e; } } } }));
   await assert.rejects(extractSchedule(PNG), (e) => e.code === 'UPSTREAM_BUSY');
 });
+
+test('only Alphire staff may read schedules: platform users, and club admins who also hold a platform account', async () => {
+  const { isAlphireStaff } = require('../../routes/eventHarvest');
+  const staffEmails = new Set(['dane@alphire.test']);
+  const find = async (email) => (staffEmails.has(email) ? { id: 'u1', email } : null);
+  assert.equal(await isAlphireStaff(null, find), false);
+  assert.equal(await isAlphireStaff({ id: 'u1', email: 'dane@alphire.test' }, find), true, 'a platform session is staff');
+  assert.equal(await isAlphireStaff({ id: 'padm_1', email: 'dane@alphire.test', isProjectAdmin: true }, find), true);
+  assert.equal(await isAlphireStaff({ id: 'padm_2', email: 'coach@delraytennis.test', isProjectAdmin: true }, find), false, "a club's own admin is refused");
+  assert.equal(await isAlphireStaff({ id: 'padm_3', email: '', isProjectAdmin: true }, find), false);
+  const broken = async () => { throw new Error('database down'); };
+  assert.equal(await isAlphireStaff({ id: 'padm_1', email: 'dane@alphire.test', isProjectAdmin: true }, broken), false, 'a failed lookup refuses, never grants');
+});
