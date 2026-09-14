@@ -251,9 +251,23 @@ function measure(page, nonStretch) {
        * one name is measured as a single group against the PANEL — the same
        * "boxes plus an origin" shape, and the same reason for it.
        */
+      /*
+       * ONE TEST FOR "IS THIS BOX NAMED", NOT TWO (round 3 of the same ticket).
+       *
+       * The map below skipped a falsy name while the `units` list below
+       * excluded a manager with `hasAttribute` — so a box carrying
+       * `data-lattice-group=""` was in neither list: not measured as a group of
+       * its own, not merged into a named one, and not reported as a manager
+       * that declared pairs and rendered nothing. It would simply vanish from a
+       * 690-panel sweep with the sweep still saying OK. Nothing writes an empty
+       * value today; the point is that the two conditions have to BE one
+       * condition, or they drift apart again the next time either is edited.
+       */
+      const latticeGroupName = (el) => el.getAttribute('data-lattice-group') || '';
+
       const named = new Map();
       for (const el of managers) {
-        const name = el.getAttribute('data-lattice-group');
+        const name = latticeGroupName(el);
         if (!name) continue;
         if (!named.has(name)) named.set(name, []);
         named.get(name).push(el);
@@ -292,7 +306,7 @@ function measure(page, nonStretch) {
         ...groups.map((el) => ({ els: [el], origin: el })),
         ...loose.map((el) => ({ els: [el], origin: el })),
         ...managers
-          .filter((el) => !el.hasAttribute('data-lattice-group'))
+          .filter((el) => !latticeGroupName(el))
           .map((el) => ({ els: [el], origin: el })),
         ...[...named].map(([name, els]) => ({ els, origin: panel, merged: true, mergedName: name })),
         ...(shared.length > 1 ? [{ els: shared, origin: panel, shared: true }] : []),

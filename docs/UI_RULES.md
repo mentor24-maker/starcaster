@@ -273,13 +273,47 @@ as a rule first, then gets a checker where one is possible.
   bucket, so a left-vs-right asymmetry is invisible to it by construction.
   `column-gap: 0; row-gap: 12px` on the override — what
   `.builder-cards-panel-fields` has carried from the start — measures at 1440
-  as a gutter of exactly **40px** with tracks 196.438 / 196.453. The two
-  rendered control widths come to **196 and 183** even then, because a nested
-  box's padding is absorbed out of the first and last track; closing 19px to
-  13px is the honest claim, and the 40px the rule asks for is exact. The
-  automated guard is a source assertion in
+  as a gutter of exactly **40px** with tracks 198.938 / 198.953. The two
+  rendered control widths come to **198.94 and 185.95** even then, because a
+  nested box's padding is absorbed out of the first and last track; closing
+  19px to 13px is the honest claim, and the 40px the rule asks for is exact.
+  The automated guard is a source assertion in
   `builder-reminder-module-settings.test.tsx`, not a browser check, because no
   browser check here can fail on it.
+
+  **Take the shorthand off EVERY box in the chain, not just the top one**
+  (2026-09-14, round 3 of the same ticket). The paragraph above was done one
+  level too high: the three boxes that round newly made subgrids — the criteria
+  panel, the criteria list and the criterion card — kept `gap`'s column half
+  from the base sheet at 10px / 12px / 10px. A subgrid whose own `column-gap`
+  is wider than its parent's takes the extra out of its own tracks, so each box
+  shrank the one inside it, and the sheet's written claim that a criterion
+  control "takes the ordinary field track, the same one every other control in
+  the module takes" was false: measured at 1440, the module's field track began
+  at x=250.25 and every criterion control began at x=255.25. With all three
+  zeroed both begin at **x=245.25**, and the whole lattice gains 2.5px per
+  control track — which is where 196.438 above became 198.938. The record
+  list's gutter is unmoved at exactly **40.00px**, checked at 1440, 1600 and
+  1920. The criterion control still ends **15px** short of the module's
+  (429.19 against 444.19) and that residue does not come off: it is the
+  criterion card's `padding: 12px 14px` plus its 1px border, absorbed out of
+  the last track — the same 15px of real box that makes the nested indent.
+
+  **A guard that quotes the declaration it guards is a guard that reads its own
+  documentation** (same round, and the reason for the send-back). The source
+  assertion above matched `/column-gap:\s*0/` against a rule body that still
+  contained its own explanatory comment — and that comment says `column-gap: 0`
+  twice, while explaining why the declaration is there. Deleting the
+  declaration left the test green. A comment is the one thing in a stylesheet
+  guaranteed to restate the declaration beside it, so a rule body is stripped
+  of comments before any assertion sees it. Two further rules fell out of
+  fixing it: break each line **separately** (round 2 deleted both at once and
+  read the failure of the half that worked as proof of the half that did not),
+  and give each declaration its own named test so the failure says which line
+  went. A selector that names two rules is the same hazard one step over — the
+  criteria list shared its `grid-column` rule with the header, so "the body of
+  the rule with this selector" found the placement rule and reported a missing
+  declaration that sat four lines below. One selector, one rule.
 
   **A collapsed card is an unmeasured card**, and that was the older half of
   this. The record cards start collapsed (`isRecordCollapsed` returns true

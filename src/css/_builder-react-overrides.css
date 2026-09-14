@@ -9889,11 +9889,16 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
    * separation between one bordered record card and the next.
    *
    * Measured at 1440 with this in place: gutter exactly 40px, control tracks
-   * 196.438px / 196.453px. The two RENDERED control widths come to 196 and
-   * 183 rather than dead equal, because a nested box's padding is absorbed
+   * 198.938px / 198.953px. The two RENDERED control widths come to 198.94 and
+   * 185.95 rather than dead equal, because a nested box's padding is absorbed
    * out of the first and last track — that residue is documented with the
    * card's own spacing rule below. Closing 19px to 13px is the honest claim;
    * the 40px the ticket asks for is exact.
+   *
+   * (Those track numbers were 196.438 / 196.453 until round 3 took the same
+   * shorthand off the three boxes BELOW this one — see the criteria rules. A
+   * measurement in a comment is a claim like any other, so it is restated
+   * rather than left to read as still-true.)
    */
   column-gap: 0;
   row-gap: 12px;
@@ -10030,10 +10035,41 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * out of its first and last tracks; it is 15px of real box, not a number
  * somebody chose.
  */
+/*
+ * ...AND THE SHORTHAND COMES OFF EVERY BOX IN THE CHAIN, not just the top one
+ * (round 3 of this ticket).
+ *
+ * Round 2 took `gap`'s column half off the record LIST and stopped there. The
+ * three boxes this rule and the two below it newly made subgrids kept theirs
+ * from the base sheet — panel 10px, list 12px, criterion card 10px — which is
+ * the identical defect one level down, and it quietly falsified the comment on
+ * the criterion-control rule further down claiming a criterion "takes the
+ * ordinary field track, the same one every other control in the module takes".
+ * It did not: measured at 1440 in the running app, the module's field track
+ * started at x=250.25 and every criterion control started at x=255.25.
+ *
+ * A subgrid whose own column-gap is wider than its parent's takes the extra
+ * out of its own tracks, so each box in the chain shrank the one inside it.
+ * With all three zeroed, measured the same way: module field control and
+ * criterion control both start at x=245.25 — one line, which is what the
+ * comment below already promised. The whole lattice also gained 2.5px per
+ * control track (196.438 -> 198.938), which is the room the panel's 10px had
+ * been eating; the record list's gutter is unmoved at exactly 40.00px, checked
+ * at 1440, 1600 and 1920.
+ *
+ * The criterion control still ENDS 15px short of the module's (429.19 against
+ * 444.19). That residue is not a gap and does not come off: it is the criterion
+ * card's own `padding: 12px 14px` plus its 1px border, absorbed out of the
+ * last track, and it is the same 15px of real box the nested-lattice comment
+ * above names as the indent. Row gaps are restated beside each `column-gap: 0`
+ * because that is the spacing the shorthand was actually there for.
+ */
 .builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .admin-game-reminder-criteria-panel {
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
   min-width: 0;
+  column-gap: 0;
+  row-gap: 10px;
 }
 
 /*
@@ -10048,20 +10084,29 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * on the Trigger block), so the criterion boxes wrap their own content and the
  * "Add Criterion" button lands on the same right edge they do.
  */
-.builder-react-root .admin-game-reminder-criteria-panel > .admin-game-reminder-criteria-header,
-.builder-react-root .admin-game-reminder-criteria-panel > .admin-game-reminder-criteria-list {
+.builder-react-root .admin-game-reminder-criteria-panel > .admin-game-reminder-criteria-header {
   grid-column: 1 / 3;
 }
 
+/* The list carries its own `grid-column` rather than sharing the header's rule
+   above. It said the same thing either way, but it meant this selector named
+   two rules, and a test asking for "the body of the rule with this selector"
+   read the first one it found — the placement — and reported a missing
+   `column-gap` that was declared four lines below. One selector, one rule. */
 .builder-react-root .admin-game-reminder-criteria-panel > .admin-game-reminder-criteria-list {
+  grid-column: 1 / 3;
   grid-template-columns: subgrid;
   min-width: 0;
+  column-gap: 0;
+  row-gap: 12px;
 }
 
 .builder-react-root .admin-game-reminder-criteria-list > .admin-game-reminder-criterion-card {
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
   min-width: 0;
+  column-gap: 0;
+  row-gap: 10px;
 }
 
 .builder-react-root .admin-game-reminder-criterion-card > .admin-game-reminder-criterion-card-header {

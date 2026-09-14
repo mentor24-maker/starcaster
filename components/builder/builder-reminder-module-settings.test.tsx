@@ -78,12 +78,34 @@ const overridesCss = readFileSync(
   "utf8"
 );
 
+/**
+ * THE SHEET WITH ITS PROSE TAKEN OUT, and every assertion below reads this one
+ * rather than the raw file.
+ *
+ * Round 2 of this ticket shipped a guard that could not fail. The rule these
+ * declarations live in carries a long comment explaining WHY it sets
+ * `column-gap: 0`, and that comment says the string `column-gap: 0` twice — so
+ * `expect(body).toMatch(/column-gap:\s*0/)` was satisfied by the explanation
+ * of the declaration rather than by the declaration. Deleting the line left
+ * the test green and the 52px gutter came straight back. A comment is the one
+ * thing in a stylesheet guaranteed to restate the declaration next to it, so
+ * matching a rule body that still contains its comments is a test that reports
+ * on its own documentation.
+ *
+ * Stripping here rather than in each assertion also fixes a second, quieter
+ * hazard: `ruleBody` ends the body at the first `}`, and a `}` inside a
+ * comment would have truncated it — silently shrinking what any future
+ * assertion is allowed to see.
+ */
+const overridesDeclarations = overridesCss.replace(/\/\*[\s\S]*?\*\//g, "");
+
 /** The body of the one rule with this exact selector, so an assertion about it
-    cannot be satisfied by some other rule elsewhere in the sheet. */
+    cannot be satisfied by some other rule elsewhere in the sheet. Comments are
+    already gone, so what comes back is declarations and nothing else. */
 function ruleBody(selector: string) {
-  const at = overridesCss.indexOf(selector + " {");
+  const at = overridesDeclarations.indexOf(selector + " {");
   if (at < 0) return null;
-  return overridesCss.slice(at, overridesCss.indexOf("}", at));
+  return overridesDeclarations.slice(at, overridesDeclarations.indexOf("}", at));
 }
 
 /**
@@ -142,8 +164,62 @@ describe("Reminder settings panel", () => {
     const body = ruleBody(".builder-react-root .builder-reminder-module-records");
     expect(body).not.toBeNull();
     expect(body).toMatch(/column-gap:\s*0/);
-    // and the vertical separation the shorthand was really for survives
+  });
+
+  /**
+   * The other half of the same shorthand, as its OWN test rather than a second
+   * expectation in the one above. Round 2's break test deleted both lines at
+   * once and read the resulting failure as proof of both; only the row-gap half
+   * could actually fail, so the failure came from the line that worked. Two
+   * tests means the failure names which line went, and a break of either one on
+   * its own is answerable.
+   */
+  it("keeps the 12px row gap the shorthand was really there for", () => {
+    const body = ruleBody(".builder-react-root .builder-reminder-module-records");
+    expect(body).not.toBeNull();
     expect(body).toMatch(/row-gap:\s*12px/);
+  });
+
+  /**
+   * THE SAME SHORTHAND, ONE LEVEL DOWN — three boxes, three tests.
+   *
+   * Round 2 took `gap`'s column half off the record list and stopped. The
+   * three boxes it newly made subgrids kept theirs from the base sheet (panel
+   * 10px, list 12px, criterion card 10px), and a subgrid whose column-gap is
+   * wider than its parent's takes the extra out of its own tracks — so each
+   * box shrank the one inside it, and the criterion control started at x=255.25
+   * where the module's field track started at x=250.25. The sheet said in
+   * writing that a criterion "takes the ordinary field track, the same one
+   * every other control in the module takes"; it did not.
+   *
+   * With all three zeroed, both start at x=245.25. One test per box rather
+   * than one test with three expectations, so deleting any single declaration
+   * fails by the name of the box it was deleted from — the lesson this
+   * ticket's own round-2 send-back was about.
+   */
+  it("puts no column gap on the criteria panel", () => {
+    const body = ruleBody(
+      ".builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields"
+      + " > .admin-game-reminder-criteria-panel"
+    );
+    expect(body).not.toBeNull();
+    expect(body).toMatch(/column-gap:\s*0/);
+  });
+
+  it("puts no column gap on the criteria list", () => {
+    const body = ruleBody(
+      ".builder-react-root .admin-game-reminder-criteria-panel > .admin-game-reminder-criteria-list"
+    );
+    expect(body).not.toBeNull();
+    expect(body).toMatch(/column-gap:\s*0/);
+  });
+
+  it("puts no column gap on the criterion card", () => {
+    const body = ruleBody(
+      ".builder-react-root .admin-game-reminder-criteria-list > .admin-game-reminder-criterion-card"
+    );
+    expect(body).not.toBeNull();
+    expect(body).toMatch(/column-gap:\s*0/);
   });
 
   /** One rule, not two. The sheet carried this selector twice at identical
@@ -153,7 +229,7 @@ describe("Reminder settings panel", () => {
     const selector =
       ".builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields"
       + " > .admin-game-reminder-criteria-panel";
-    const hits = overridesCss.split(selector + " {").length - 1;
+    const hits = overridesDeclarations.split(selector + " {").length - 1;
     expect(hits).toBe(1);
   });
 
