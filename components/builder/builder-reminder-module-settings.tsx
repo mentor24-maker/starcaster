@@ -9,7 +9,7 @@ import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import { AdminGameAudienceField } from "@/components/admin-game-audience-field";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import { BuilderNumberSelectControl } from "@/components/builder/builder-inline-number-select";
-import { BuilderModuleField, BuilderModuleFieldStrip } from "@/components/builder/builder-module-field";
+import { BuilderModuleField } from "@/components/builder/builder-module-field";
 import { BuilderCellPanelHeader } from "@/components/builder/builder-cell-panel-header";
 import { ReminderCriteriaEditor, type ReminderPollOption } from "@/components/reminder-criteria-editor";
 import {
@@ -52,9 +52,14 @@ type BuilderReminderRecordEditorProps = {
   themeColors?: BuilderThemePalette;
 };
 
-const OFFSET_INPUT_STYLE = { width: "9ch" } as const;
-
-function BuilderReminderRecordEditor({
+/**
+ * Exported for `builder-reminder-module-settings.test.tsx` only. A record card
+ * is collapsed until it is clicked, so static markup of the module component
+ * contains no editor at all — which is the same reason `check_panels` measured
+ * this panel as a single field for as long as it existed. There is no DOM test
+ * library in this repo to click with, so the test renders the editor directly.
+ */
+export function BuilderReminderRecordEditor({
   record,
   pollOptions,
   onChange,
@@ -86,149 +91,171 @@ function BuilderReminderRecordEditor({
   }
 
   return (
-    <div className="builder-reminder-record-settings admin-game-reminder-editor">
+    /*
+     * ONE LATTICE FOR THE WHOLE RECORD CARD (L6a, panel sweep 11/15).
+     *
+     * This was eight separate `BuilderModuleFieldStrip` flex rows plus two
+     * legacy `BuilderSettingRow`s, each measuring its own label against its own
+     * content. Measured at 1440 before the change: SEVEN label widths (81, 84,
+     * 88, 95, 98, 103, 125, 130) and FIVE different x-positions for the first
+     * field in the column (181, 184, 198, 203, 225). That is the exact shape
+     * W0 was written against, in a panel nobody could see it in — the record
+     * cards are collapsed by default and `check_panels` never opened one, so
+     * the whole editor was measured as a single field (the module's Label)
+     * from the day the check was written until this ticket.
+     *
+     * L6a's worked example is Feature Cards and its mechanism is W0's: the
+     * CONTAINER is the grid, every wrapper below it is `display: contents`, and
+     * two `max-content` tracks measure the longest label and the longest
+     * control across the whole card at once. Carousel reused
+     * `.builder-cards-panel-fields` rather than inventing a second pattern and
+     * this does the same, so there is one place to fix if the shape moves.
+     *
+     * The `data-lattice-pairs="2"` declaration that makes any of it checkable
+     * is on the LIST, not here — see `BuilderReminderModuleSettings` below.
+     */
+    <div className="builder-reminder-record-settings builder-cards-panel-fields admin-game-reminder-editor">
       {/* Content */}
-      <BuilderModuleFieldStrip>
-        <BuilderModuleField label="Name" width="text-md">
-          <input
-            type="text"
-            value={record.name}
-            onChange={(event) => updateRecord({ name: event.target.value })}
-            placeholder="Signup Nudge"
-          />
-        </BuilderModuleField>
-      </BuilderModuleFieldStrip>
-      <BuilderModuleFieldStrip>
-        <BuilderModuleField label="Message" width="full">
-          <BuilderRichTextEditor
-            enableEmojiPicker
-            value={record.messageHtml}
-            onChange={(messageHtml) => updateRecord({ messageHtml })}
-            {...richTextGallery}
-          />
-        </BuilderModuleField>
-      </BuilderModuleFieldStrip>
+      <BuilderModuleField label="Name" width="text-md" className="builder-card-field--a">
+        <input
+          type="text"
+          value={record.name}
+          onChange={(event) => updateRecord({ name: event.target.value })}
+          placeholder="Signup Nudge"
+        />
+      </BuilderModuleField>
+      <BuilderModuleField label="Message" width="full" className="builder-card-field--wide">
+        <BuilderRichTextEditor
+          enableEmojiPicker
+          value={record.messageHtml}
+          onChange={(messageHtml) => updateRecord({ messageHtml })}
+          {...richTextGallery}
+        />
+      </BuilderModuleField>
 
-      {/* Layout */}
-      <BuilderModuleFieldStrip>
-        <BuilderModuleField label="X Offset" width="num">
-          <input
-            type="number"
-            style={OFFSET_INPUT_STYLE}
-            value={record.offsetX}
-            onChange={(event) =>
-              updateRecord({ offsetX: normalizeSignedOffsetValue(event.target.value, "0") })
-            }
+      {/* Layout. The three offsets used to carry `style={{ width: "9ch" }}`,
+          which is the one thing W0 forbids by name — and it was invisible to
+          every gate, because `check_panels` measures a field's SLOT and the
+          slot was whatever the flex row gave it. They take the shared track
+          now, like every other control in the card. */}
+      <BuilderModuleField label="X Offset" width="num" className="builder-card-field--a">
+        <input
+          type="number"
+          value={record.offsetX}
+          onChange={(event) =>
+            updateRecord({ offsetX: normalizeSignedOffsetValue(event.target.value, "0") })
+          }
+        />
+      </BuilderModuleField>
+      <BuilderModuleField label="Y Offset" width="num" className="builder-card-field--b">
+        <input
+          type="number"
+          value={record.offsetY}
+          onChange={(event) =>
+            updateRecord({ offsetY: normalizeSignedOffsetValue(event.target.value, "0") })
+          }
+        />
+      </BuilderModuleField>
+      <BuilderModuleField label="Z-Index" width="num" className="builder-card-field--a">
+        <input
+          max={999999}
+          min={-999}
+          step={1}
+          type="number"
+          value={record.zIndex}
+          onChange={(event) => updateRecord({ zIndex: event.target.value })}
+        />
+      </BuilderModuleField>
+      {isSpeechBubble ? (
+        <BuilderModuleField label="Width" width="num" className="builder-card-field--b">
+          <BuilderNumberSelectControl
+            fallback="520"
+            max={900}
+            min={200}
+            step={10}
+            value={record.containerWidth}
+            onChange={(containerWidth) => updateRecord({ containerWidth })}
           />
         </BuilderModuleField>
-        <BuilderModuleField label="Y Offset" width="num">
-          <input
-            type="number"
-            style={OFFSET_INPUT_STYLE}
-            value={record.offsetY}
-            onChange={(event) =>
-              updateRecord({ offsetY: normalizeSignedOffsetValue(event.target.value, "0") })
-            }
-          />
-        </BuilderModuleField>
-        <BuilderModuleField label="Z-Index" width="num">
-          <input
-            max={999999}
-            min={-999}
-            step={1}
-            style={OFFSET_INPUT_STYLE}
-            type="number"
-            value={record.zIndex}
-            onChange={(event) => updateRecord({ zIndex: event.target.value })}
-          />
-        </BuilderModuleField>
-        {isSpeechBubble ? (
-          <BuilderModuleField label="Width" width="num">
-            <BuilderNumberSelectControl
-              fallback="520"
-              max={900}
-              min={200}
-              step={10}
-              value={record.containerWidth}
-              onChange={(containerWidth) => updateRecord({ containerWidth })}
-            />
-          </BuilderModuleField>
-        ) : null}
-      </BuilderModuleFieldStrip>
+      ) : null}
       <span className="builder-module-offset-hint">
         Positive X moves right; positive Y moves up. Higher Z-Index stacks in front (above polls and floating
         images).
       </span>
 
       {/* Style */}
-      <BuilderModuleFieldStrip>
-        <BuilderModuleField label="Appearance" width="select-md">
+      <BuilderModuleField label="Appearance" width="select-md" className="builder-card-field--a">
+        <select
+          value={record.appearance}
+          onChange={(event) =>
+            updateRecord({ appearance: event.target.value as GameReminderAppearance })
+          }
+        >
+          {GAME_REMINDER_APPEARANCES.map((appearance) => (
+            <option key={appearance} value={appearance}>
+              {reminderAppearanceLabel(appearance)}
+            </option>
+          ))}
+        </select>
+      </BuilderModuleField>
+      {/* F13/C7: the player display has always honoured strip placement
+          (resolveReminderStripPlacement) but nothing wrote it, so Builder
+          strips were stuck at the top. Strip-only — a speech bubble is
+          positioned by its offsets instead. */}
+      {record.appearance === "strip" ? (
+        <BuilderModuleField label="Placement" width="select-md" className="builder-card-field--b">
           <select
-            value={record.appearance}
-            onChange={(event) =>
-              updateRecord({ appearance: event.target.value as GameReminderAppearance })
-            }
+            value={record.stripPlacement === "bottom" ? "bottom" : "top"}
+            onChange={(event) => updateRecord({ stripPlacement: event.target.value })}
           >
-            {GAME_REMINDER_APPEARANCES.map((appearance) => (
-              <option key={appearance} value={appearance}>
-                {reminderAppearanceLabel(appearance)}
-              </option>
-            ))}
+            <option value="top">Top of screen</option>
+            <option value="bottom">Bottom of screen</option>
           </select>
         </BuilderModuleField>
-        {/* F13/C7: the player display has always honoured strip placement
-            (resolveReminderStripPlacement) but nothing wrote it, so Builder
-            strips were stuck at the top. Strip-only — a speech bubble is
-            positioned by its offsets instead. */}
-        {record.appearance === "strip" ? (
-          <BuilderModuleField label="Placement" width="select-md">
-            <select
-              value={record.stripPlacement === "bottom" ? "bottom" : "top"}
-              onChange={(event) => updateRecord({ stripPlacement: event.target.value })}
-            >
-              <option value="top">Top of screen</option>
-              <option value="bottom">Bottom of screen</option>
-            </select>
+      ) : null}
+      {isSpeechBubble ? (
+        <>
+          <BuilderModuleField label="Background" width="color" className="builder-card-field--a">
+            <BuilderThemeColorField
+              dialogLabel="Background color"
+              fallback="#ffffff"
+              themeColors={themeColors}
+              value={normalizeBuilderHexColor(record.backgroundColor)}
+              onChange={(backgroundColor) =>
+                updateRecord({ backgroundColor: normalizeBuilderHexColor(backgroundColor) })
+              }
+            />
           </BuilderModuleField>
-        ) : null}
-        {isSpeechBubble ? (
-          <>
-            <BuilderModuleField label="Background" width="color">
-              <BuilderThemeColorField
-                dialogLabel="Background color"
-                fallback="#ffffff"
-                themeColors={themeColors}
-                value={normalizeBuilderHexColor(record.backgroundColor)}
-                onChange={(backgroundColor) =>
-                  updateRecord({ backgroundColor: normalizeBuilderHexColor(backgroundColor) })
-                }
-              />
-            </BuilderModuleField>
-            <BuilderModuleField label="Border Color" width="color">
-              <BuilderThemeColorField
-                dialogLabel="Border color"
-                fallback="#9ed4ee"
-                themeColors={themeColors}
-                value={normalizeBuilderHexColor(record.borderColor)}
-                onChange={(borderColor) =>
-                  updateRecord({ borderColor: normalizeBuilderHexColor(borderColor) })
-                }
-              />
-            </BuilderModuleField>
-            <BuilderModuleField label="Border" width="num">
-              <BuilderNumberSelectControl
-                fallback="2"
-                max={24}
-                min={0}
-                value={record.borderThickness}
-                onChange={(borderThickness) => updateRecord({ borderThickness })}
-              />
-            </BuilderModuleField>
-          </>
-        ) : null}
-      </BuilderModuleFieldStrip>
+          <BuilderModuleField label="Border Color" width="color" className="builder-card-field--b">
+            <BuilderThemeColorField
+              dialogLabel="Border color"
+              fallback="#9ed4ee"
+              themeColors={themeColors}
+              value={normalizeBuilderHexColor(record.borderColor)}
+              onChange={(borderColor) =>
+                updateRecord({ borderColor: normalizeBuilderHexColor(borderColor) })
+              }
+            />
+          </BuilderModuleField>
+          <BuilderModuleField label="Border" width="num" className="builder-card-field--a">
+            <BuilderNumberSelectControl
+              fallback="2"
+              max={24}
+              min={0}
+              value={record.borderThickness}
+              onChange={(borderThickness) => updateRecord({ borderThickness })}
+            />
+          </BuilderModuleField>
+        </>
+      ) : null}
 
-      {/* Behavior — bespoke editors keep their own chrome */}
+      {/* Behavior. These two are `BuilderSettingRow`s from editors shared with
+          the legacy admin screens, so they carry a different pair shape — they
+          are flattened onto the same two tracks rather than left to size
+          themselves, which is what the Trigger block needed in sweep 8/15 for
+          the same reason: `.builder-setting-row-full`'s base rule sizes its
+          tracks PROPORTIONALLY against the whole block (minmax(0,1fr)
+          minmax(0,2fr)) instead of against their own content. */}
       <AdminGameAudienceField
         value={record.gameAudience}
         onChange={(gameAudience) => updateRecord({ gameAudience })}
@@ -240,21 +267,25 @@ function BuilderReminderRecordEditor({
         onCriteriaChange={(nextCriteria) => updateCriteriaConfig(record.criteriaLogic, nextCriteria)}
         onCriteriaLogicChange={(logic) => updateCriteriaConfig(logic, criteria)}
       />
-      <BuilderModuleFieldStrip>
-        <BuilderModuleField label="Active" width="auto">
-          <label className="admin-game-reminder-active-toggle">
-            <input
-              checked={record.isActive}
-              onChange={(event) => updateRecord({ isActive: event.target.checked })}
-              type="checkbox"
-            />
-            <span>Show when criteria match</span>
-          </label>
-        </BuilderModuleField>
-      </BuilderModuleFieldStrip>
+      {/* `check`, not `auto`: the control is a checkbox, so W0's stated
+          exception applies — it keeps its natural size at the START of the
+          slot rather than being stretched across it. The slot is `--wide`
+          because the words beside the box ("Show when criteria match") do not
+          fit a half-row track, and a wrapped toggle label is L2. */}
+      <BuilderModuleField label="Active" width="check" className="builder-card-field--wide">
+        <label className="admin-game-reminder-active-toggle">
+          <input
+            checked={record.isActive}
+            onChange={(event) => updateRecord({ isActive: event.target.checked })}
+            type="checkbox"
+          />
+          <span>Show when criteria match</span>
+        </label>
+      </BuilderModuleField>
     </div>
   );
 }
+
 
 export function BuilderReminderModuleSettings({
   module,
@@ -377,7 +408,24 @@ export function BuilderReminderModuleSettings({
         automatically by question number (poll order or polls-taken count).
       </p>
 
-      <div className="builder-reminder-module-records">
+      {/*
+        THE DECLARATION IS ON THE LIST, AND THAT IS THE WHOLE POINT OF IT.
+
+        `check_panels` measures each `[data-lattice-pairs]` element as one group
+        and holds the pair-columns inside it to W0. Declared on each record card
+        instead, every card would be its own group — and a group always agrees
+        with itself, so the two cards could drift apart by any amount and the
+        check would report a clean pass on both. That is exactly the blind spot
+        the shared-lattice unit was added for (#432) one level down, and it is
+        not theoretical here: before the tracks were shared, a speech-bubble
+        record and a strip record measured right-hand label tracks of 130px and
+        115px, eight pixels apart.
+
+        On the list, every field in every card is bucketed by its label's x, and
+        a card that stops lining up with its neighbour shows up as a third and
+        fourth bucket against a declaration of two.
+      */}
+      <div className="builder-reminder-module-records" data-lattice-pairs="2">
         {displayRecords.map((record) => {
           const panelTitle = formatReminderRecordPanelTitle(record, pollOrderById);
           const isCollapsed = isRecordCollapsed(record.id);

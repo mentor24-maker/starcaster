@@ -9664,6 +9664,208 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   max-width: var(--builder-field-long-max, 560px);
 }
 
+/* --------------------------------------------------------------------------
+ * PANEL SWEEP 12/15 — the blog reading panels (ticket 86bbjt1bc)
+ *
+ * Three of the seven panels carried a hand-rolled item manager built from
+ * `.builder-slider-item-card` and `label.field` — the shape W0 says to RETIRE
+ * rather than style. Those conversions reuse `.builder-cards-panel-fields`,
+ * which Feature Cards, Carousel and the Tag Cloud already share, but they
+ * declare `data-lattice-pairs="1"` rather than `"2"` and so they DO need CSS
+ * of their own: the `--stacked` block below, and the picker rule under it.
+ * (An earlier version of this header said they "needed no CSS at all" and
+ * named `"2"` — wrong on both counts, and dangerous rather than merely untidy:
+ * a later sweep reading it as the inventory would have copied the 2x2 shape
+ * back over this work. Review round 2, 2026-09-13.) What is below is the rest.
+ * ------------------------------------------------------------------------ */
+
+/*
+ * The Blog Post panel's tab bar. It was eleven inline hex values per button,
+ * chosen when a settings panel had a white background; the editor's ground is
+ * blue now, and an unselected tab rendered a mid grey-blue on it — "Meta",
+ * "Categories & Tags", "SEO" and "Display" were all but invisible in the
+ * before screenshot, which is R9 (never a low-contrast pairing) as much as it
+ * is L8.
+ *
+ * It sits ABOVE the lattice column rather than inside it: a button dropped
+ * into that two-track grid takes a label cell and puts every pair below it out
+ * of phase. It starts on the block's left edge, which is L8 rule 5 — chrome
+ * sits on the same edges as the rows.
+ */
+.builder-react-root .builder-settings-section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1, 4px);
+  margin: 0 0 var(--space-4, 12px);
+}
+
+.builder-react-root .builder-settings-section-tab {
+  font-size: var(--text-sm, 0.8rem);
+  padding: 3px 9px;
+  border-radius: 4px;
+  border: 1px solid var(--builder-editor-hairline, rgba(11, 42, 74, 0.12));
+  background: transparent;
+  color: var(--builder-editor-heading, #0b2a4a);
+  cursor: pointer;
+  /* L2: a tab is a label. It never wraps. */
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-settings-section-tab.is-active {
+  border-color: var(--builder-editor-heading, #0b2a4a);
+  background: var(--surface, #ffffff);
+  font-weight: 600;
+}
+
+/*
+ * Field prose — "Comma-separated tags", the SEO character count, the note
+ * under Post Tags' Tags field. Same story as the tabs: an inline 11px pale
+ * grey, chosen for a white panel and close to invisible against this one
+ * (R9). They span both tracks through `.builder-schema-bare`, which the
+ * lattice already handles; this is colour and size only.
+ */
+.builder-react-root .builder-panel-field-note {
+  font-size: var(--text-sm, 0.8rem);
+  line-height: 1.4;
+  margin: 2px 0 var(--space-3, 8px);
+  color: var(--builder-editor-heading, #0b2a4a);
+}
+
+.builder-react-root .builder-panel-field-note.is-over {
+  color: var(--danger, #c0392b);
+  font-weight: 600;
+}
+
+/* The SEO counter's other half. Before this sweep the count was an inline
+   green under 160 and an inline red over it; the class pair replaced both, and
+   only `.is-over` got a rule — so "you are within budget" rendered in the
+   ordinary heading colour and the counter lost the signal it existed for
+   (review round 1, 2026-09-13). */
+.builder-react-root .builder-panel-field-note.is-within {
+  color: var(--success, #1f7a4b);
+  font-weight: 600;
+}
+
+/* The TOC manager's two add buttons, which were an inline flex row. */
+.builder-react-root .builder-blog-toc-add-actions {
+  display: flex;
+  gap: var(--space-3, 8px);
+  margin-top: var(--space-1, 4px);
+}
+
+/*
+ * ONE PAIR PER ROW — `.builder-cards-panel-fields--stacked`.
+ *
+ * The 2x2 shape is right where Feature Cards, Carousel and Program List use
+ * it: each of those managers IS one half of a 50/50 editor, so it has the
+ * room for two label tracks, two field tracks and the 40px between them. The
+ * three managers converted in this sweep do not — they live inside an AXIS
+ * COLUMN of a three-axis panel, and W0 keeps an axis column compact and gives
+ * the slack to the gaps, so the column does not grow with the screen.
+ *
+ * Measured: at BOTH 1440 and 1920 the two tracks split what is left of a
+ * 429px column, giving 94px text fields in Related Posts, 144px in Author Bio
+ * and **52px** in the TOC — where the field holds "junior-high-performance-
+ * academy" and a select reading "H3 (sub)". That is the operator's own
+ * complaint about this exact family of panels, verbatim: "You always either
+ * shorten fields to the minimum length or just assign a random width."
+ *
+ * So these declare `data-lattice-pairs="1"` and take two tracks instead of
+ * five. It is the same grid, the same flattening, the same head row, the same
+ * picker treatment and the same bounded block — only the track count and the
+ * `--b` placement change, which is exactly what the 1200px media query below
+ * already does for a narrow viewport. L6a permits both shapes by name; two
+ * pairs sharing a row is a relaxation the operator asked for on a wide block,
+ * never a requirement.
+ */
+.builder-react-root .builder-cards-panel-fields--stacked {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--b > .builder-module-field-label {
+  grid-column: 1;
+}
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--b > .builder-module-field-control {
+  grid-column: 2;
+}
+
+/*
+ * A PICKER IN A ONE-PAIR-PER-ROW MANAGER PUTS ITS BUTTON ON ITS OWN ROW.
+ *
+ * `--wide` asks for the row: label in the label track, control running to the
+ * END of the grid (`grid-column: 2 / -1`). On the five-track grid that is four
+ * tracks of control, so a picker's input still had ~630px after its button
+ * took 176. On THIS grid `2 / -1` **is** column 2 — the same single track every
+ * ordinary field gets — so `--wide` has nothing left to give horizontally and
+ * the button ate the slot from the inside.
+ *
+ * Measured at 1440 before this rule (review round 2, 2026-09-13, reproduced
+ * here): the Related Posts Image row's slot was a correct 312px reaching the
+ * block's right edge at 429, and the input inside it was **96px** — showing
+ * `/images/l` where the before-shot showed the whole
+ * `/images/Gemini_Generated_starcaster_banner.png`. Title, URL, Date and
+ * Categories were 312px each, so the panel had one field a third the width of
+ * its neighbours while every gate went green: `check_panels` drops a `full`
+ * field from the width comparisons by design, and the slot it would have
+ * measured was right.
+ *
+ * The room the input needs is a ROW, not a column, and that is the shape the
+ * panel had before this sweep — the button full width underneath. So the
+ * control becomes a column here: the input takes the whole 312px track, the
+ * button sits under it on the same two edges (L8), and the block still has one
+ * left edge and one right edge. The 40px that separates the input from its
+ * button on a wide row is horizontal room between two controls; stacked, they
+ * are two rows of one block and take the manager's own row-gap.
+ */
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--picker > .builder-module-field-control {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2, 6px);
+}
+/*
+ * The button takes the row it is now on, both edges.
+ *
+ * `margin-left: auto` is what pushes it to the block's right edge on a wide
+ * row; in a column that is the cross axis, and an auto cross margin turns
+ * `stretch` off. `width: fit-content` (line ~2685) is the other half and the
+ * one that is easy to miss — `align-items: stretch` only stretches an item
+ * whose cross size is `auto`, so a button declaring `fit-content` sat at its
+ * 176px minimum under a 312px input, leaving exactly the notch L8 is about.
+ * Both are undone here rather than left to resolve by accident.
+ */
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--picker > .builder-module-field-control > .builder-image-picker-field-button {
+  margin-left: 0;
+  width: auto;
+}
+
+/*
+ * THE PICKER SIZES THE TRACK — the defect panel sweep 15/15 bounded for its
+ * own six panels, and whose note names blog-post-tags as one of the ten
+ * panels carrying it live, with "widening this selector is the one-line fix
+ * each of those tickets can reach for". This ticket owns two of them.
+ *
+ * `.builder-project-data-picker` in Custom mode is a select and a text input
+ * side by side, ~846px at 1440 (560 + gap + 280). The column's shared control
+ * track is `max-content`, so that one row SET the track: measured here before
+ * this change, blog-post-tags held a 846px control track while every control
+ * in it that respects the 560px ceiling stopped 286px short of the row that
+ * set it — six rows notched by one (L8: "a control that stops short leaves a
+ * notch").
+ *
+ * Bounding the BLOCK rather than widening the controls is what W9 and L8 both
+ * ask for where they disagree. `max-width` can only ever lower a used width,
+ * so a panel whose track was already under the ceiling is untouched.
+ *
+ * blog-post-list carries the same picker and was NOT showing it, because its
+ * fixture value resolved to a real page and the custom input never rendered —
+ * a latent bump, not an absent one. `scripts/ui/seed_fixture.mjs` now gives it
+ * a custom value so the check can see it, which is the only reason this line
+ * is here rather than being asserted from reading the code.
+ */
+.builder-react-root .is-lattice.builder-module-editor--blog-post-tags .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--blog-post-list .builder-module-field-control > .builder-project-data-picker {
+  max-width: var(--builder-field-long-max, 560px);
+}
+
 /* ==================================================================== */
 /* FLAT ADMIN BUTTONS — one colour, no gradient, grey when disabled      */
 /* (operator, 2026-08-30, task 86bbq5jvz)                               */
@@ -9800,4 +10002,349 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   background: var(--btn-danger-flat-disabled) !important;
   color: var(--btn-flat-ink) !important;
   opacity: 1 !important;
+}
+
+/* ==========================================================================
+ * THE REMINDER RECORD CARD IS ONE LATTICE (W0 / L6a / L8 / W9).
+ * Panel sweep 11/15, ticket 86bbjt1b9.
+ *
+ * The editor for one reminder was eight flex strips and two legacy
+ * `BuilderSettingRow`s stacked on each other, each sizing its own label
+ * against its own content. Measured at 1440 before this change: SEVEN label
+ * widths (81, 84, 88, 95, 98, 103, 125, 130px) and FIVE x-positions for the
+ * first field in the column (181, 184, 198, 203, 225px), with right edges at
+ * 393, 475, 485, 519, 573, 602, 763, 804, 976, 1037 and 1346. Not one pair of
+ * rows agreed about anything.
+ *
+ * Nothing caught it, and that is the interesting half: the record cards are
+ * COLLAPSED until clicked, `check_panels.openPanels` did not click them, and
+ * so the whole editor was measured as a single field — the module's Label —
+ * from the day the check was written. Panel sweep 2/15 seeded two real
+ * records here and said in the fixture itself that seeding did not make them
+ * measurable. Opening them is this ticket's change to `check_panels.mjs`;
+ * `data-lattice-pairs="2"` on the card is what gives the check a group to
+ * measure once they are open.
+ *
+ * The card reuses `.builder-cards-panel-fields` — Feature Cards' grid, which
+ * L6a names as the worked example and Carousel already reused rather than
+ * inventing a second pattern. Everything below is the DIFFERENCE between a
+ * reminder card and a feature card, and there are only three:
+ * ========================================================================== */
+
+/*
+ * 1. THE BLOCK IS BOUNDED BY THE CARD, NOT BY A max-width OF ITS OWN.
+ *
+ * `.builder-cards-panel-fields` caps itself at `--builder-field-long-max +
+ * 7rem` because it is one half of a fixed 50/50 editor and its own column is
+ * narrower than that. A reminder card is the full width of the module panel
+ * (1254px at 1440), so inheriting that cap would leave ~560px of empty card
+ * to the right of the form — the "wide empty strip" reading that ticket
+ * 86bbzux9m is open about. The card carries the bound instead, so the form,
+ * the card's border, and the card header's clone/delete buttons all land on
+ * ONE right edge (L8 point 5: chrome sits on the same edges).
+ *
+ * The number: the widest thing in the card is a `--wide` control spanning
+ * `2 / -1`, and W9 caps any control at `--builder-field-long-max`. Bound the
+ * BLOCK so that span lands just inside the ceiling rather than just outside
+ * it, and no row ever stops short of the edge (L8 point 2). 10rem is the
+ * label track ("Border Color" plus its 40px of room) plus the card's own
+ * border — measured against the rendered card, not guessed.
+ */
+/*
+ * ...and THE LIST owns the tracks, so every card lines up with every other.
+ *
+ * This is the second half of the same rule and it needed measuring to find.
+ * With the grid on each card, card 1 and card 2 were two separate grids: a
+ * speech-bubble record carries "Border Color" and a strip record carries
+ * "Placement", so `max-content` gave them right-hand label tracks of 130px and
+ * 115px starting 8px apart — two bordered boxes stacked on each other,
+ * disagreeing. L6a says the whole LIST is one grid for exactly this reason
+ * ("which is what makes card 2's fields start where card 1's do").
+ *
+ * Feature Cards gets there by having no per-card box at all; a reminder record
+ * is a collapsible bordered panel with its own header, so the box has to
+ * survive. `subgrid` is how a box joins a grid it is not a direct child of —
+ * the same mechanism `feature-cards` and `program-list` use to share the
+ * editor's `lattice-start` tracks. The chain is unbroken here (list → card →
+ * settings are direct children all the way down), which is precisely what
+ * `builder-module-chrome-slot.tsx` records as NOT being true of the schema
+ * panels, so this is the cheap case.
+ */
+.builder-react-root .builder-reminder-module-records {
+  grid-template-columns:
+    max-content minmax(0, 1fr)
+    var(--builder-field-room, 40px)
+    max-content minmax(0, 1fr);
+  /*
+   * ...and THE GUTTER IS THE TRACK, not the track plus a gap.
+   *
+   * The base sheet gives this list `gap: 12px` (_builder-react.css), which is
+   * the shorthand — it sets column-gap as well as row-gap. So the space
+   * between the two columns rendered as 52px (the declared 40px room track
+   * PLUS the inherited 12px), against an acceptance criterion that asks for
+   * "a real 40px gap between columns". Worse, the 12px is spent on all four
+   * gutters and the subgrid chain below sets `column-gap: 0`, so the cards
+   * absorbed the list's gutters unevenly: two control tracks the CSS resolves
+   * as equal (181.438px and 181.453px at 1440) rendered 193px and 174px —
+   * nineteen pixels apart, which is Dane's founding complaint for this whole
+   * sweep arriving one level up ("the column width varies arbitrarily").
+   *
+   * `.builder-cards-panel-fields` — the panel these rules were settled on —
+   * has carried `column-gap: 0` from the start for exactly this reason: the
+   * 40px of room between a label and its field is padding the `.is-lattice`
+   * rules add to the label, and the 40px between the two COLUMNS is the
+   * `--builder-field-room` track above. Neither is a grid gap, so a grid gap
+   * can only ever be added on top of them.
+   *
+   * Row-gap keeps the 12px the shorthand was really there for: the vertical
+   * separation between one bordered record card and the next.
+   *
+   * Measured at 1440 with this in place: gutter exactly 40px, control tracks
+   * 198.938px / 198.953px. The two RENDERED control widths come to 198.94 and
+   * 185.95 rather than dead equal, because a nested box's padding is absorbed
+   * out of the first and last track — that residue is documented with the
+   * card's own spacing rule below. Closing 19px to 13px is the honest claim;
+   * the 40px the ticket asks for is exact.
+   *
+   * (Those track numbers were 196.438 / 196.453 until round 3 took the same
+   * shorthand off the three boxes BELOW this one — see the criteria rules. A
+   * measurement in a comment is a claim like any other, so it is restated
+   * rather than left to read as still-true.)
+   */
+  column-gap: 0;
+  row-gap: 12px;
+  max-width: calc(var(--builder-field-long-max, 560px) + 10rem);
+}
+
+.builder-react-root .builder-reminder-record-card {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+}
+
+/*
+ * Narrow panel: one pair per row, mirroring `.builder-cards-panel-fields`'s own
+ * media query. That rule targets the settings div, which now reads its tracks
+ * from the list instead of declaring them, so without this the card would keep
+ * five tracks while `--b` fields had already been moved back to the first pair.
+ */
+@media (max-width: 1200px) {
+  .builder-react-root .builder-reminder-module-records {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+}
+
+/* The card's chrome spans the lattice: the title on the left edge, the
+   clone/delete buttons on the right one (L8 point 5). */
+.builder-react-root .builder-reminder-record-card > .builder-panel-toggle-row,
+.builder-react-root .builder-reminder-record-card > .builder-cell-panel-header {
+  grid-column: 1 / -1;
+}
+
+/*
+ * 2. THE CARD'S OWN SPACING, which `.builder-cards-panel-fields` does not
+ * carry because a feature card is separated by its head row's rule instead.
+ * A reminder record already has a bordered box and a header of its own.
+ */
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  padding: 10px 12px 14px;
+  row-gap: var(--space-2, 6px);
+  max-width: none;
+}
+
+/*
+ * 3. THE TWO LEGACY PAIR SHAPES INSIDE IT.
+ *
+ * `AdminGameAudienceField` and the criteria editor's Match Logic row are
+ * `BuilderSettingRow fullWidth`, shared with the legacy admin screens, whose
+ * base rule sizes its tracks PROPORTIONALLY against the whole block
+ * (`minmax(0,1fr) minmax(0,2fr)`) rather than against their own content —
+ * the same thing the Trigger block needed unpicking in sweep 8/15, and for
+ * the same reason. Flattened onto the card's tracks they measure with every
+ * other label instead of beside them.
+ *
+ * `.builder-setting-label` carries its own left padding where
+ * `.builder-module-field-label` does not; zeroed here so the two shapes put
+ * their TEXT on one vertical line, which is what `labelTextX` measures and
+ * what the 2026-08-11 heading incident was.
+ */
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row,
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row-full {
+  display: contents;
+}
+
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row > .builder-setting-label,
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row-full > .builder-setting-label {
+  grid-column: 1;
+  padding-left: 0;
+  padding-right: var(--builder-field-room, 40px);
+  border-top: 0;
+}
+
+/*
+ * Audience and Match Logic are ordinary selects, so they take the ordinary
+ * field track — NOT the `2 / -1` span the genuinely wide rows take. Spanning
+ * them was the first cut and `check:panels` refused it in the right words:
+ * "stretchable fields are 2 different widths (184/538px)". W0's same-width
+ * rule holds across a pair-column, and a control that spans because its
+ * wrapper class said so, rather than because its content needs the room, is
+ * the per-field width in a different coat.
+ */
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row > .builder-setting-value,
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row-full > .builder-setting-value {
+  grid-column: 2;
+  min-width: 0;
+}
+
+/*
+ * The Active toggle is a checkbox plus the words beside it, and W0's exception
+ * gives a checkbox `width: auto` at the start of its slot. In a `--wide` slot
+ * that resolved to a shrink-to-fit box and broke "Show when criteria match"
+ * over three lines (L2: a label never wraps, shorten the words instead). It is
+ * one control, so it takes one line.
+ */
+.builder-react-root .builder-reminder-record-settings .admin-game-reminder-active-toggle {
+  white-space: nowrap;
+}
+
+/* The offset hint is a sentence, not a row of the lattice: it spans, and it
+   sits under the controls it explains rather than in the label track. */
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-module-offset-hint {
+  grid-column: 2 / -1;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--muted, #445465);
+}
+
+/*
+ * The criteria block is a NESTED lattice, and it says so.
+ *
+ * Its rows live inside `.admin-game-reminder-criterion-card`, a bordered box
+ * with its own padding, so their labels legitimately start further in than the
+ * card's own — they are not a third column of the card's lattice and holding
+ * them to it would fail a panel that is correct (the Tag Cloud lesson, L6a).
+ * `data-lattice-pairs="1"` on the criteria panel is what tells `check_panels`
+ * both halves of that: exclude these rows from the card's group, AND measure
+ * them as a group of their own, so the block is checked rather than skipped.
+ */
+/*
+ * One label track for every criterion, in every card, measured from content.
+ *
+ * It was a hard-coded `7.5rem` on `.admin-game-reminder-editor
+ * .builder-setting-row-full` — the per-block width W0 calls lining up by luck.
+ * It happened to be wide enough for "Registered" and would crop or gape the
+ * day a criterion type was renamed, and because each card was its own grid the
+ * blocks did not agree with each other either: measured at 1440 with the
+ * per-card grid, a speech-bubble record's criteria track came to 124px and a
+ * strip record's to 118px, six pixels apart in two boxes stacked on each other.
+ *
+ * So the subgrid chain runs all the way down — list → card → settings →
+ * criteria panel → criteria list → criterion card — and every criterion label
+ * in the module sits in the SAME track. The indent that marks the criteria as
+ * a nested block is the criterion card's own padding, which a subgrid absorbs
+ * out of its first and last tracks; it is 15px of real box, not a number
+ * somebody chose.
+ */
+/*
+ * ...AND THE SHORTHAND COMES OFF EVERY BOX IN THE CHAIN, not just the top one
+ * (round 3 of this ticket).
+ *
+ * Round 2 took `gap`'s column half off the record LIST and stopped there. The
+ * three boxes this rule and the two below it newly made subgrids kept theirs
+ * from the base sheet — panel 10px, list 12px, criterion card 10px — which is
+ * the identical defect one level down, and it quietly falsified the comment on
+ * the criterion-control rule further down claiming a criterion "takes the
+ * ordinary field track, the same one every other control in the module takes".
+ * It did not: measured at 1440 in the running app, the module's field track
+ * started at x=250.25 and every criterion control started at x=255.25.
+ *
+ * A subgrid whose own column-gap is wider than its parent's takes the extra
+ * out of its own tracks, so each box in the chain shrank the one inside it.
+ * With all three zeroed, measured the same way: module field control and
+ * criterion control both start at x=245.25 — one line, which is what the
+ * comment below already promised. The whole lattice also gained 2.5px per
+ * control track (196.438 -> 198.938), which is the room the panel's 10px had
+ * been eating; the record list's gutter is unmoved at exactly 40.00px, checked
+ * at 1440, 1600 and 1920.
+ *
+ * The criterion control still ENDS 15px short of the module's (429.19 against
+ * 444.19). That residue is not a gap and does not come off: it is the criterion
+ * card's own `padding: 12px 14px` plus its 1px border, absorbed out of the
+ * last track, and it is the same 15px of real box the nested-lattice comment
+ * above names as the indent. Row gaps are restated beside each `column-gap: 0`
+ * because that is the spacing the shorthand was actually there for.
+ */
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .admin-game-reminder-criteria-panel {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  min-width: 0;
+  column-gap: 0;
+  row-gap: 10px;
+}
+
+/*
+ * ...and the criteria themselves occupy the FIRST pair-column only.
+ *
+ * A criterion is one label and one short control — a type, a comparison, a
+ * count. Spanning its box across both pair-columns while the controls stayed
+ * in the left one left each criterion card two-thirds empty on the right,
+ * which is the notch L8 is about and the "loose rows" reading the operator
+ * opened this sweep with. Bounding the BLOCK rather than widening the control
+ * is what W9 and L8 ask for when they disagree (the same call sweep 8/15 made
+ * on the Trigger block), so the criterion boxes wrap their own content and the
+ * "Add Criterion" button lands on the same right edge they do.
+ */
+.builder-react-root .admin-game-reminder-criteria-panel > .admin-game-reminder-criteria-header {
+  grid-column: 1 / 3;
+}
+
+/* The list carries its own `grid-column` rather than sharing the header's rule
+   above. It said the same thing either way, but it meant this selector named
+   two rules, and a test asking for "the body of the rule with this selector"
+   read the first one it found — the placement — and reported a missing
+   `column-gap` that was declared four lines below. One selector, one rule. */
+.builder-react-root .admin-game-reminder-criteria-panel > .admin-game-reminder-criteria-list {
+  grid-column: 1 / 3;
+  grid-template-columns: subgrid;
+  min-width: 0;
+  column-gap: 0;
+  row-gap: 12px;
+}
+
+.builder-react-root .admin-game-reminder-criteria-list > .admin-game-reminder-criterion-card {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  min-width: 0;
+  column-gap: 0;
+  row-gap: 10px;
+}
+
+.builder-react-root .admin-game-reminder-criterion-card > .admin-game-reminder-criterion-card-header {
+  grid-column: 1 / -1;
+}
+
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row,
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row-full {
+  display: contents;
+}
+
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row > .builder-setting-label,
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row-full > .builder-setting-label {
+  grid-column: 1;
+  padding-left: 0;
+  padding-right: var(--builder-field-room, 40px);
+}
+
+/*
+ * A criterion's control takes the ordinary field track, the same one every
+ * other control in the module takes. It used to be a `minmax(0, 2fr)` share of
+ * the whole block — 1,090px of select at 1440 for a two-word value — which is
+ * W1's "never stretch a field to the widest possible width" and was only ever
+ * bounded by the W9 ceiling catching it on the way past.
+ */
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row > .builder-setting-value,
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row-full > .builder-setting-value {
+  grid-column: 2;
+  min-width: 0;
 }
