@@ -175,3 +175,39 @@ describe("describeBlockLineage", () => {
     ).toBe('Copy of "Menu" · used on 2 pages');
   });
 });
+
+describe("a following copy the last push did not reach", () => {
+  /**
+   * The tooltip has to stop claiming the copy matches during exactly the
+   * window where it does not — the half-failed fan-out of task 86bbwe530.
+   * The STATE is right and stays right: it is following, it takes the next
+   * push, and there is nothing for the operator to do.
+   */
+  it("stays Following, and the hint says it will match after the next push", () => {
+    const lineage = describeBlockLineage({
+      isFollowing: true,
+      awaitingPush: true,
+      masterName: "2 - Menu Banner",
+      usage: usage({ pages: 35, following: 35 }),
+    });
+    expect(lineage.state).toBe("following");
+    expect(lineage.label).toBe("Following");
+    expect(lineage.hint).not.toContain("Matches the original");
+    expect(lineage.hint).toContain("the last push did not reach this copy");
+    expect(lineage.hint).toContain("2 - Menu Banner");
+  });
+
+  it("says it without a name when the master could not be resolved", () => {
+    const lineage = describeBlockLineage({ isFollowing: true, awaitingPush: true });
+    expect(lineage.label).toBe("Following");
+    expect(lineage.hint).toContain("the last push did not reach this copy");
+  });
+
+  it("a hand edit still outranks it — Changed, not Following", () => {
+    // Both flags true cannot happen from the editor, but the answer must not
+    // depend on that: a copy that was edited here is Changed whatever else is
+    // true of it.
+    const lineage = describeBlockLineage({ isFollowing: true, hasDrifted: true, awaitingPush: true });
+    expect(lineage.state).toBe("changed");
+  });
+});

@@ -259,3 +259,56 @@ test('the key is stable across widths, so three readings are one finding', async
 
   assert.strictEqual(new Set(keys).size, 1, 'one block measured three times is one key');
 });
+
+/**
+ * ROUND 3 OF THE SAME LESSON, on a different attribute (ticket 86bbjt1b9).
+ *
+ * `check_panels` asked "is this box named?" twice, in two different dialects:
+ * the `named` map skipped a FALSY `data-lattice-group`, and the `units` list
+ * excluded a manager with `hasAttribute`. Those agree on every value except
+ * one — the empty string — and a box carrying `data-lattice-group=""` landed
+ * in neither list: not measured as a group of its own, not merged into a named
+ * one, and not reported as a manager that declared pairs and rendered nothing.
+ * It would vanish from a 690-panel sweep with the sweep still printing OK.
+ *
+ * Nothing writes an empty value today, so this is a latent hole rather than a
+ * live bug. What makes it worth a test is the shape, not the severity: two
+ * conditions answering one question drift apart the next time either is
+ * edited, and this whole ticket is about guards that cannot fail.
+ *
+ * So the invariant is structural rather than behavioural — the attribute is
+ * read in exactly ONE place, and every caller goes through that one reader.
+ * The grouping itself runs inside `page.evaluate()`, in the browser, with no
+ * access to anything outside its own closure, so it cannot be imported and
+ * exercised the way `lattice-room.mjs` above can. A source assertion is what
+ * this file's shape allows; saying so is part of the assertion.
+ */
+test('check_panels reads data-lattice-group through exactly one reader', () => {
+  const fs = require('node:fs');
+  const source = fs.readFileSync(path.join(UI, 'check_panels.mjs'), 'utf8');
+
+  // Comments legitimately name the attribute while explaining it — including
+  // the one directly above the reader. Matching them would make this test
+  // report on its own documentation, which is the exact defect round 2 of this
+  // ticket shipped one file over.
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  const reads = code.split('data-lattice-group').length - 1;
+  assert.strictEqual(reads, 1,
+    `data-lattice-group is read ${reads} time(s) in check_panels.mjs. Two reads is two ` +
+    'conditions, and the pair that existed before disagreed on the empty string: a box ' +
+    'carrying data-lattice-group="" was measured by nothing at all. Route the new caller ' +
+    'through latticeGroupName().');
+
+  assert.match(code, /const latticeGroupName = \(el\) => el\.getAttribute\('data-lattice-group'\) \|\| ''/,
+    'the one reader must normalise a missing name and an empty one to the same falsy value');
+
+  // ...and both callers actually use it, so the single read is not a single
+  // read that nothing calls.
+  assert.ok(code.includes('const name = latticeGroupName(el)'),
+    'the named-group map must ask through the reader');
+  assert.ok(code.includes(".filter((el) => !latticeGroupName(el))"),
+    'the units list must exclude named managers through the same reader');
+});

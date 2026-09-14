@@ -1,7 +1,9 @@
 "use client";
 
+import { Fragment } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
+import { BuilderModuleField } from "./builder-module-field";
 import {
   BuilderSchemaModuleSettings,
   type BuilderSettingsSchema
@@ -201,45 +203,117 @@ export function BuilderBlogRelatedPostsModuleSettings({ module, onUpdateModule }
               bare: true,
               rendersVia: "BlogRelatedPostsPreview",
               visibleWhen: (settings) => settings.matchBy === "manual",
+              /*
+               * L6a item manager on its own lattice. It was
+               * `.builder-slider-item-card` holding `label.field` boxes — the
+               * shape W0 says to RETIRE rather than style, because it stacks a
+               * label above a full-width box and so runs a SECOND label
+               * geometry inside a panel whose other columns are on the lattice.
+               * Measured at 1440 before this change: the panel's own fields sat
+               * at label-width 125 / control-x 125, and every field in this
+               * manager at 0 / 0 with a 429px box. It reuses
+               * `.builder-cards-panel-fields` with `data-lattice-pairs="1"` —
+               * the same grid and the same CSS Feature Cards, Carousel and the
+               * Tag Cloud already use — rather than adding a fourth pattern.
+               * The `--stacked` variant, one pair per row: this manager lives
+               * inside a narrow AXIS COLUMN rather than in half a 50/50
+               * editor, and the 2x2 shape left its text fields 94px wide at
+               * both 1440 and 1920 (see the CSS note).
+               *
+               * The declaration is what makes it CHECKABLE: `check_panels`
+               * selects item managers on `[data-lattice-pairs]` and
+               * `[data-lattice-columns]`, and this manager declared neither, so
+               * every panel sweep since the check was written found nothing to
+               * measure here and reported OK.
+               */
               render: () => (
                 <>
-                  <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>
-                    Posts
-                  </div>
-                  <div className="builder-slider-items">
+                  <div className="builder-schema-group-title">Posts</div>
+                  <div className="builder-cards-panel-fields builder-cards-panel-fields--stacked" data-lattice-pairs="1">
                     {posts.map((post, index) => (
-                      <div key={post.id} className="builder-slider-item-card">
-                        <div className="builder-slider-item-header">
-                          <strong>{post.title || `Post ${index + 1}`}</strong>
-                          <div className="builder-section-actions">
-                            <button type="button" className="builder-icon-button" onClick={() => movePost(post.id, -1)} title="Move up">↑</button>
-                            <button type="button" className="builder-icon-button" onClick={() => movePost(post.id, 1)} title="Move down">↓</button>
-                            <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removePost(post.id)} title="Remove">✕</button>
+                      <Fragment key={post.id}>
+                        <div className="builder-card-editor-head">
+                          <span className="builder-card-editor-name">{post.title || `Post ${index + 1}`}</span>
+                          <div className="builder-item-grid-actions">
+                            <button
+                              type="button"
+                              className="builder-icon-button"
+                              onClick={() => movePost(post.id, -1)}
+                              aria-label={`Move post ${index + 1} up`}
+                              title="Move up"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              className="builder-icon-button"
+                              onClick={() => movePost(post.id, 1)}
+                              aria-label={`Move post ${index + 1} down`}
+                              title="Move down"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              className="builder-icon-button builder-icon-button-danger"
+                              onClick={() => removePost(post.id)}
+                              aria-label={`Delete post ${index + 1}`}
+                              title="Remove"
+                            >
+                              ✕
+                            </button>
                           </div>
                         </div>
-                        <div className="builder-slider-item-grid">
-                          <label className="field">
-                            <span>Title</span>
-                            <input type="text" value={post.title} onChange={(e) => updatePost(post.id, "title", e.target.value)} placeholder="Post title" />
-                          </label>
-                          <label className="field">
-                            <span>URL</span>
-                            <input type="text" value={post.url} onChange={(e) => updatePost(post.id, "url", e.target.value)} placeholder="/blog/post-slug" />
-                          </label>
-                          <label className="field">
-                            <span>Date</span>
-                            <input type="text" value={post.date} onChange={(e) => updatePost(post.id, "date", e.target.value)} placeholder="Jun 20, 2026" />
-                          </label>
-                          <label className="field">
-                            <span>Categories</span>
-                            <input type="text" value={post.categories} onChange={(e) => updatePost(post.id, "categories", e.target.value)} placeholder="Tech, Design" />
-                          </label>
-                          <label className="field builder-slider-item-grid-full">
-                            <span>Image</span>
-                            <BuilderImagePickerField value={post.imageUrl} onChange={(url) => updatePost(post.id, "imageUrl", url)} />
-                          </label>
-                        </div>
-                      </div>
+
+                        <BuilderModuleField label="Title" width="text-md" className="builder-card-field--a">
+                          <input
+                            type="text"
+                            value={post.title}
+                            onChange={(e) => updatePost(post.id, "title", e.target.value)}
+                            placeholder="Post title"
+                            aria-label={`Post ${index + 1} title`}
+                          />
+                        </BuilderModuleField>
+                        <BuilderModuleField label="URL" width="text-md" className="builder-card-field--b">
+                          <input
+                            type="text"
+                            value={post.url}
+                            onChange={(e) => updatePost(post.id, "url", e.target.value)}
+                            placeholder="/blog/post-slug"
+                            aria-label={`Post ${index + 1} URL`}
+                          />
+                        </BuilderModuleField>
+                        <BuilderModuleField label="Date" width="text-md" className="builder-card-field--a">
+                          <input
+                            type="text"
+                            value={post.date}
+                            onChange={(e) => updatePost(post.id, "date", e.target.value)}
+                            placeholder="Jun 20, 2026"
+                            aria-label={`Post ${index + 1} date`}
+                          />
+                        </BuilderModuleField>
+                        <BuilderModuleField label="Categories" width="text-md" className="builder-card-field--b">
+                          <input
+                            type="text"
+                            value={post.categories}
+                            onChange={(e) => updatePost(post.id, "categories", e.target.value)}
+                            placeholder="Tech, Design"
+                            aria-label={`Post ${index + 1} categories`}
+                          />
+                        </BuilderModuleField>
+
+                        {/* Too wide for half a row, so it spans to the block's
+                            right edge (L8). `--picker` is what pushes the
+                            Choose Image button onto that edge instead of
+                            leaving it wherever the input ran out. */}
+                        <BuilderModuleField
+                          label="Image"
+                          width="full"
+                          className="builder-card-field--wide builder-card-field--picker"
+                        >
+                          <BuilderImagePickerField value={post.imageUrl} onChange={(url) => updatePost(post.id, "imageUrl", url)} />
+                        </BuilderModuleField>
+                      </Fragment>
                     ))}
                   </div>
                   <button type="button" className="secondary-button" onClick={addPost}>

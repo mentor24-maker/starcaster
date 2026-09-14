@@ -55,6 +55,15 @@ export type BlockLineageInput = {
   /** True when this following copy's content no longer matches the master. */
   hasDrifted?: boolean;
   /**
+   * True when this following copy differs from the master but its own lineage
+   * stamp accounts for the difference — i.e. a push did not reach it.
+   *
+   * It is still Following and still takes updates; the only thing that changes
+   * is the tooltip, which must not say "matches the original" during exactly
+   * the window where it does not (`relinkReading`, ./section-drift).
+   */
+  awaitingPush?: boolean;
+  /**
    * True when the block still carries a `savedSectionId`, whether or not it
    * still follows it. Separate from `isFollowing` on purpose: "where did this
    * come from" and "does it still take updates" are two different questions
@@ -87,6 +96,7 @@ export function describeBlockLineage({
   isMaster = false,
   isFollowing = false,
   hasDrifted = false,
+  awaitingPush = false,
   hasMasterSource = false,
   masterName,
   usage,
@@ -156,6 +166,23 @@ export function describeBlockLineage({
       hint:
         "This copy was edited here and no longer matches the original — the next push skips it " +
         "unless you overwrite it on purpose.",
+      line,
+    };
+  }
+
+  // Same state, honest sentence. A copy the last push did not reach IS
+  // following — it takes the next one — but it does not match the original
+  // right now, and the tooltip used to say it did. That window is real: from
+  // the moment every push stamps every copy, a half-failed fan-out leaves
+  // exactly this (task 86bbwe530). No new chip, because nothing is wrong and
+  // nothing is for the operator to do.
+  if (awaitingPush) {
+    return {
+      state: "following",
+      label: "Following",
+      hint: name
+        ? `Takes updates from the original "${name}" — the last push did not reach this copy, so it will match after the next one.`
+        : "Takes updates from the original — the last push did not reach this copy, so it will match after the next one.",
       line,
     };
   }
