@@ -1,3 +1,33 @@
+## 2026-09-14 — A shared-section save that half fails no longer talks you into wiping your own edit (#693)
+
+A shared section is a block you build once — a menu banner, a footer — and drop
+onto many pages. Saving the original pushes the change out to every copy. If one
+page fails to take that push, you used to be told "1 page could not be updated.
+Reload and save again to finish", and nothing more.
+
+What it did not tell you is that the page it failed on was also carrying an edit
+you had made by hand, right there on that page, which the push had deliberately
+left alone. And doing what the message told you to do made it worse: by the time
+you retry, the original has already been saved, so the app compares each copy
+against the new content. The copy on the failed page still held the old content
+— only because nothing was ever written to it — and that looks exactly like
+somebody having edited it. So the page got skipped, and you were offered
+"1 page has local changes and was skipped. Overwrite anyway?" Saying yes
+flattened the hand edit the first push had gone out of its way to protect.
+
+Two fixes. The page that failed is now named in the message, along with whatever
+hand edits are still sitting on it. And each copy now quietly remembers what the
+last push put into it, so a copy that was simply never written is recognised for
+what it is instead of being mistaken for an edit — on the retry it catches up,
+your edit survives, and the overwrite offer never appears for it.
+
+Worth recording how nearly this shipped doing nothing. The first version of that
+memory compared a fingerprint taken before saving with one taken after loading,
+and the database hands things back with their fields in a different order, so
+the two never matched. It failed silently and in the safe direction, which is
+the hardest kind to notice: every test passed, and the whole feature was inert.
+It took running the real thing against a real database to see it.
+
 ## 2026-09-12 — Pulse's two jobs now report in, so an outage is noticed instead of stumbled upon (#673)
 
 Pulse runs two jobs on the Mac Mini: one every fifteen minutes, one once a day.
