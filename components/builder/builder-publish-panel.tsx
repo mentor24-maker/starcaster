@@ -177,8 +177,17 @@ export function BuilderPublishPanel({ refreshKey = 0, onPublished }: BuilderPubl
           </button>
         </div>
         <div className="builder-pages-crud-heading-actions">
+          {/*
+            Blue, not green. `admin-blog-add-button` is the GREEN face — "save
+            this draft" — and every button in the Builder header wore it, so
+            Publish was the same colour as Save Page and read as one more
+            routine save. That is a large part of why the Publish step kept
+            getting missed (operator, 2026-08-30, task 86bbq5jvz). Dropping the
+            class leaves the base `.submit-button` blue: the primary action of
+            the screen. Neither of these two saves a draft.
+          */}
           <button
-            className="submit-button admin-blog-add-button builder-panel-heading-button"
+            className="submit-button builder-panel-heading-button"
             disabled={isLoading || isPublishing}
             onClick={() => void loadStatus()}
             type="button"
@@ -186,7 +195,7 @@ export function BuilderPublishPanel({ refreshKey = 0, onPublished }: BuilderPubl
             {isLoading ? "Checking..." : "Check"}
           </button>
           <button
-            className="submit-button admin-blog-add-button builder-panel-heading-button"
+            className="submit-button builder-panel-heading-button"
             disabled={!hasPending || isPublishing || isLoading}
             onClick={() => void publish()}
             title={hasPending ? `Publish ${pending} page(s)` : "Nothing to publish"}

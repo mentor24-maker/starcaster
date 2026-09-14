@@ -371,7 +371,7 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
               nothing is ever a one-way door.
             </p>
             <button
-              className="submit-button admin-blog-add-button builder-panel-heading-button"
+              className="submit-button builder-panel-heading-button"
               disabled={isLoading}
               onClick={() => void loadRevisions()}
               type="button"
