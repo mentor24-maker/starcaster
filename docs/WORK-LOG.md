@@ -1,3 +1,34 @@
+## 2026-09-14 — Saving a Builder page no longer reverts a row's settings (#698)
+
+If you set a row on a Builder page to full width and pressed Save Page, the
+row quietly went back to being boxed in at the normal page width. Nothing said
+so. You could set it to full width again, and the next save would undo it
+again. There was no way to keep it.
+
+The cause is one line, and it turned out to be much bigger than the full-width
+setting. The older Builder tags every row it saves with two fields that used to
+belong only to pages imported from the old Normie system. The server sees those
+tags and thinks "this is an old imported page, run it through the importer" —
+so every ordinary save was being treated as an import. The importer rebuilds
+each row from a short list of the fields it knows about, and throws away
+anything not on that list. Full width was not on the list. Neither, it turned
+out, were 34 other things: the row's padding and margins, its column widths,
+its minimum height, its borders, how far it was nudged left or right, the
+padding and margins inside each column, and the switches for hiding a row on
+phones or on desktop. All of them silently reset to their defaults every time
+anybody saved the page.
+
+Rather than guess at which fields to rescue, we measured: ran a real row
+through the save and compared what went in against what came out, field by
+field. Then fixed it the other way round — the importer now keeps whatever the
+row already had and only translates the genuinely old-format parts. That means
+a new row setting added next year is protected automatically, instead of
+waiting for someone to remember to add it to a list. Pages genuinely imported
+from Normie still import exactly as before; there is a test holding that down.
+
+Checked against a real page in the database, saved twice with no edits in
+between, and confirmed the settings survived both times.
+
 ## 2026-09-13 — Four settings panels in the Builder now line up as one block (#686)
 
 Open a module's gear icon in the Builder and you get a form. On most panels
