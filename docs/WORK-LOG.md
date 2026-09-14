@@ -26,8 +26,32 @@ a new row setting added next year is protected automatically, instead of
 waiting for someone to remember to add it to a list. Pages genuinely imported
 from Normie still import exactly as before; there is a test holding that down.
 
+A review found that measurement had not gone deep enough, and it is worth
+saying how. It compared the row's own settings — which is where full width
+lives — but a row's background is a bundle of settings tucked inside it, and
+nothing looked in there. Six more were reverting on every save: the angle of a
+gradient, how see-through the background is, which picture was chosen, whether
+the background drifts as you scroll and how fast, and how an overlay tint
+blends. So the second pass measured the whole row recursively, right down into
+every nested setting, and reported its own blind spots as it went: 221 row
+settings and 9 module settings, every one of them actually exercised, none
+skipped. Nothing is lost now.
+
+One of the six is worth calling out, because it is the kind of thing that makes
+people distrust an editor. If you picked a colour for a row and then set the
+background to "none", the colour was thrown away on the next save — so
+switching the background back on later gave you white, not the colour you
+chose. The Builder keeps that colour on purpose; the save was discarding it.
+
+The review also caught the first fix going slightly too far the other way: in
+rescuing everything, it could overwrite the per-column padding the importer had
+just correctly worked out. That is now handled by the one function that has
+always known how to do it properly.
+
 Checked against a real page in the database, saved twice with no edits in
-between, and confirmed the settings survived both times.
+between, and confirmed every setting survived both times — then deliberately
+removed each fix and watched the settings revert again, which is how we know
+the tests would catch this coming back.
 
 ## 2026-09-14 — Three blog settings panels lined up, and the one nobody had ever checked (#692)
 
