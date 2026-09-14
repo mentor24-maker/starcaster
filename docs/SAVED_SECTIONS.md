@@ -241,6 +241,22 @@ already reached for it there.
 - Targets pages holding a section where `canonical === true` **and**
   `savedSectionId` matches. An unlinked copy is skipped — that is the whole
   point of unlocking one.
+- **A copy carries its own lineage, and it outranks the comparison above.**
+  Each copy a push writes is stamped with `canonicalSourceHash`, a hash of the
+  content that push put into it (`lib/builder-client/section-drift.ts`, and its
+  hand-ported twin in `lib/builder/document.js`). A copy whose content still
+  hashes to its own stamp was not hand-edited, whatever the master says now.
+  **The stamp can only ever CLEAR drift, never assert it** — the content
+  comparison runs first, and only a copy that already differs from its master
+  may be rescued by its stamp. That ordering is what makes a missing, stale or
+  unreproducible stamp cost nothing: every copy on every live page is unstamped
+  until a push writes it, and behaves exactly as it always did until then.
+  Without this, a half-failed push poisoned its own retry: the master had been
+  saved, so the "before" on the second attempt WAS the new content, and the
+  clean copy that simply never got written read as a hand edit — the page was
+  skipped, the "Overwrite anyway?" banner offered it, and taking that offer
+  flattened the hand edit the first push had deliberately spared (2026-09-14,
+  task 86bbwe530).
 - **Since Sync 5/7, a matching instance is also skipped if it has drifted** —
   its content no longer matches `options.previousSection`, the original **as
   it stood right before this save** (never the new content about to be
@@ -253,8 +269,8 @@ already reached for it there.
   own id>, savedSectionId, canonical: true }`. The instance keeps nothing but
   its id.
 - Runs in batches of 8, stamps one `runId` on every revision it writes, and
-  returns `{ ok, total, updated, failed, skipped, overwritten, updatedPages,
-  runId }`. `skipped` names the pages left untouched for drift and
+  returns `{ ok, total, updated, failed, failedPages, skipped, overwritten,
+  updatedPages, runId }`. `skipped` names the pages left untouched for drift and
   `updatedPages` the pages actually written, `{ pageId, name }` each —
   `updatedPages` is what "Save & Publish" hands to the publish route (§2a), and
   it is a **list**, not a count, precisely so the publish can name its pages.
@@ -297,6 +313,15 @@ interchangeable:
 |---|---|---|
 | `skipped` | the push wrote **nothing** on this page — every copy on it had drifted | never |
 | `writtenWithPreservedEdits` | the page **was** written, and *n* hand-edited copies on it were left as they were | always — it is a subset |
+| `failedPages` | the push **tried** to write this page and the database refused; `preservedCopies` is how many hand edits are still sitting on it | never |
+
+`failedPages` is the third of those and the newest (2026-09-14, task
+86bbwe530). A page whose PATCH fails belongs to neither of the other two — it
+was not skipped, because the push tried; and it was not written, so it cannot
+be a subset of `updatedPages`. Before it existed, `failed` was a bare counter,
+so a page holding one clean copy and one hand-edited copy whose write failed
+was reported as "1 page could not be updated. Reload and save again to finish."
+and the surviving hand edit on it was mentioned nowhere at all.
 
 Widening `skipped` to cover both was tried and sent back on 2026-09-08: three
 surfaces read it as "pages this push did not write", so the toast counted one

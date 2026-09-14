@@ -372,6 +372,20 @@ export type PropagationTally = {
   total?: number;
   updated?: number;
   failed?: number;
+  /**
+   * The pages a PATCH did not land on, named — and what each one still holds.
+   *
+   * `failed` alone is a counter, and a counter cannot say that the page it
+   * counted also carries a hand edit this push deliberately left alone. That
+   * page belongs to neither {@link skipped} (it was not skipped — the push
+   * tried) nor {@link writtenWithPreservedEdits} (it was not written), so
+   * before task 86bbwe530 the preserved edit on it had nowhere to be reported
+   * and the operator was told only to "reload and save again".
+   *
+   * `preservedCopies` counts COPIES for the same reason the bucket above
+   * does — one page can hold several copies of one master.
+   */
+  failedPages?: ReadonlyArray<{ pageId?: string; name?: string; preservedCopies?: number }>;
   runId?: string;
   /**
    * PAGES THIS PUSH DID NOT WRITE — every following copy on them had drifted.
@@ -481,8 +495,23 @@ export function describePropagationOutcome(
       : ` ${preservedCopies} hand-edited copies on ${ofUpdated} were left as they are.`)
     : '';
 
+  // The same fact as `preservedClause`, about the pages the push could NOT
+  // write. Named as its own set — "the pages that could not be updated" — for
+  // the reason spelled out above: a demonstrative attaches to the nearest set
+  // the sentence mentioned, and on a partly-failed fan-out there are three of
+  // them in one breath.
+  const failedPages = Array.isArray(propagation?.failedPages) ? propagation!.failedPages! : [];
+  const failedWithEdits = failedPages.filter((row) => (Number(row?.preservedCopies ?? 0) || 0) > 0);
+  const failedPreservedCopies = failedWithEdits.reduce((sum, row) => sum + (Number(row?.preservedCopies ?? 0) || 0), 0);
+  const ofFailed = `${failedWithEdits.length} of the pages that could not be updated`;
+  const failedPreservedClause = failedWithEdits.length > 0
+    ? (failedPreservedCopies === 1
+      ? ` A hand-edited copy on ${ofFailed} is still there — nothing was written to it.`
+      : ` ${failedPreservedCopies} hand-edited copies on ${ofFailed} are still there — nothing was written to them.`)
+    : '';
+
   if (failed > 0) {
-    return `Saved "${label}" and updated ${updated} ${updated === 1 ? 'page' : 'pages'}, but ${failed} ${failed === 1 ? 'page' : 'pages'} could not be updated. Reload and save again to finish.${skippedClause}${preservedClause}`;
+    return `Saved "${label}" and updated ${updated} ${updated === 1 ? 'page' : 'pages'}, but ${failed} ${failed === 1 ? 'page' : 'pages'} could not be updated. Reload and save again to finish.${failedPreservedClause}${skippedClause}${preservedClause}`;
   }
   if (updated > 0) {
     return `Saved "${label}" and updated ${updated} ${updated === 1 ? 'page' : 'pages'}.${skippedClause}${preservedClause}`;
