@@ -1,3 +1,48 @@
+## 2026-09-14 — Three blog settings panels lined up, and the one nobody had ever checked (#692)
+
+A settings panel should read as one neat rectangle: every label starting on the
+same line down the left, every box finishing on the same line down the right.
+Three blog panels were on the list to be brought onto that layout. I measured
+all three in a real browser first, at three screen widths, before changing a
+line — and the ticket was wrong about which ones needed it.
+
+The Category Manager was already correct, so it was left alone and that was
+said plainly rather than given a tidy-looking edit. The Post Manager had one
+real gap: its two "page URL" rows are a dropdown with a text box beside it, and
+the rule that stops any single control getting too wide had never reached that
+pairing, so those two rows ran 286 pixels further right than every row beneath
+them. One column, two right edges. They all finish on the same line now.
+
+The Card Manager is the interesting one, and its problem was not in the file
+the ticket named. That panel's entire contents is the Card Template designer,
+which lives about four hundred lines away in another file. Its controls were
+placed by "put the next one wherever the last one ended", so a group of seven
+settings sat at seven different left edges across three wrapped lines, every
+box a different width. That is precisely the thing Dane pointed at when he
+opened this whole sweep a month ago, still sitting there untouched.
+
+The reason it survived a month is the part worth remembering. The automatic
+layout checker recognises three kinds of form row, and this designer is built
+from a fourth kind it had never been taught. So a run announcing "684 panels,
+all correct" had never once looked at it. It was not passing; it was absent.
+The checker knows that fourth shape now, the panel is measured along with the
+rest, and four separate things were broken on purpose and watched to fail
+before any of the green was believed.
+
+Review sent this back once, and the send-back found something worth having.
+The new guard that stops a fixed width creeping back onto one of these boxes
+only recognised one way of writing it. The other spelling — the commoner one,
+as it happens — walked straight past it. A guard that only catches the spelling
+you already removed is not a guard, so it was widened and then broken on
+purpose in five different spellings, each one watched to fail. Three smaller
+things went the same way: two checks that would have gone quiet instead of
+failing if the code around them were renamed, and a skip in the measuring tool
+that nothing had ever exercised for the case it was added for.
+
+One hole is left open deliberately and is written down rather than quietly
+carried: the checker still cannot see the Post Manager's kind of defect at all,
+and nine other panels have it live today. Closing it would flag all nine at
+once, which belongs to the sweeps that own those panels, not to this one.
 ## 2026-09-14 — Saving a Builder page no longer quietly unlinks the shared blocks on it (#695)
 
 A shared block is one you build once and reuse on many pages: change the

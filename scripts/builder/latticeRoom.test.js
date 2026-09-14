@@ -41,12 +41,23 @@ function group({ declaredManager = true, fields = [], panelName = 'confetti', in
  * One measured label/field pair. `labelW` is the track, `labelTextW` the words,
  * `labelBoxX` the column the pair sits in — which is what the harness buckets on.
  */
-function field(name, labelW, labelTextW, labelBoxX = 0) {
+function field(name, labelW, labelTextW, labelBoxX = 0, extra = {}) {
   return {
     name, kind: '', full: false, labelW, labelTextW,
     labelTextX: labelBoxX, labelBoxX,
-    fieldX: labelBoxX + labelW, fieldW: labelW, stretchable: true
+    fieldX: labelBoxX + labelW, fieldW: labelW, stretchable: true,
+    ...extra
   };
+}
+
+/**
+ * A STACKED pair — the control sits BELOW its label on the same left edge, so
+ * there is no horizontal gap between the two and `labelW` is the whole column
+ * rather than a label track. `check_panels` sets this flag from the measured
+ * geometry (`check_panels.mjs`, `stacked:`); here it is handed in directly.
+ */
+function stackedField(name, columnW, labelTextW, labelBoxX = 0) {
+  return field(name, columnW, labelTextW, labelBoxX, { stacked: true });
 }
 
 test('the break that reverting PR #449 reintroduces now FAILS', async () => {
@@ -258,6 +269,53 @@ test('the key is stable across widths, so three readings are one finding', async
   const keys = [1440, 1600, 1920].flatMap(() => findUncomparableManagers([panel]).map((f) => f.key));
 
   assert.strictEqual(new Set(keys).size, 1, 'one block measured three times is one key');
+});
+
+
+/**
+ * THE STACKED SKIP, tested for the case it was ADDED for (round 1 of 86bbjt1be).
+ *
+ * `assertManagerRoom` filters out stacked pairs before subtracting. Every
+ * fixture above leaves `stacked` undefined, so between them they already fail
+ * if that filter is deleted or inverted — but nothing exercised a `stacked:
+ * true` field, which is the only shape the filter exists for. A skip nobody
+ * tests is a skip that can quietly widen into "measure nothing".
+ *
+ * The numbers are the Blog Card designer's own: a two-track group whose column
+ * resolves to 226px at 1920 carrying the label "Image Width" at 80px. That
+ * subtracts to 146px of "room" — over the 140px ceiling — and it is not room
+ * at all. It is the column.
+ */
+test('a STACKED pair is skipped, because its label box IS the column', async () => {
+  const { assertManagerRoom } = await import(path.join(UI, 'lattice-room.mjs'));
+
+  const failures = assertManagerRoom(
+    group({ panelName: 'blog-card-manager', index: 14, fields: [stackedField('Image Width', 226, 80)] }),
+    1920
+  );
+
+  assert.deepStrictEqual(failures, [], 'a stacked column has no label track to have spare room in');
+});
+
+test('the skip covers the stacked pair only, not the beside pair sharing its column', async () => {
+  const { assertManagerRoom } = await import(path.join(UI, 'lattice-room.mjs'));
+
+  // The failure mode on the other side of the skip: widening it to drop the
+  // whole bucket the moment one stacked pair appears in it. The chrome fields
+  // above a designer are beside-pairs and stay measured.
+  const failures = assertManagerRoom(
+    group({
+      panelName: 'blog-card-manager',
+      index: 14,
+      fields: [stackedField('Image Width', 226, 80), field('Trigger', 418, 56)]
+    }),
+    1440
+  );
+
+  assert.strictEqual(failures.length, 1, 'the beside pair is still held to the ceiling');
+  assert.match(failures[0], /"Trigger"/, 'and it is the beside pair that is named');
+  assert.doesNotMatch(failures[0], /Image Width/, 'never the stacked one');
+  assert.match(failures[0], /362px wider/, 'measured from the beside pair alone');
 });
 
 /**
