@@ -668,6 +668,7 @@ const BUS_RELAY_MARKER = '[bus-relay]';
  *  a fallback, not a second channel. */
 function deliveryVerdict({
   chatOk, handsBack, receiptAttempted, receiptPosted, receiptOk, receiptStatus,
+  alarmTicketAttempted, alarmTicketOk, alarmTicketWhy,
 } = {}) {
   if (chatOk) return { ok: true, via: 'chat' };
 
@@ -690,7 +691,25 @@ function deliveryVerdict({
   // Before this feature those two cases retried every pass until the bus took
   // them. Turning a self-healing retry into silent permanent loss is the exact
   // shape of bug this ticket exists to remove, so: no handback, no delivery.
+  //
+  // THE UNDELIVERED ALARMS TICKET IS NOT THAT RECEIPT (2026-09-14, task
+  // 86bc0mxv0). Everything above is about a note on the SAME ticket, which
+  // nothing reads. The standing "Undelivered alarms" ticket is a different
+  // place, one Dane reads, and the message is kept there whole — so nothing is
+  // lost when chat recovers, which was the whole objection. It is the rule
+  // #678 and #689 already set for the relay's own alarms. Without it, every
+  // comment he left on a Ready to launch ticket failed every relay pass while
+  // chat was refused: 18 of 40 passes exited 1 on 2026-09-14, the relay read
+  // QUIET for 5h40m, and each pass said merge commands were not read.
+  if (!handsBack && alarmTicketOk) return { ok: true, via: 'alarm-ticket' };
   if (!handsBack) {
+    if (alarmTicketAttempted) {
+      return {
+        ok: false,
+        via: 'none',
+        why: `the "Undelivered alarms" ticket refused it too (${alarmTicketWhy || 'reason unknown'})`,
+      };
+    }
     return {
       ok: false,
       via: 'none',
@@ -716,6 +735,7 @@ function deliveryVerdict({
 function relayMarkerText({ via, channel, at } = {}) {
   if (via === 'chat') return `${BUS_RELAY_MARKER} sent to channel ${channel} at ${at}`;
   if (via === 'ticket') return `${BUS_RELAY_MARKER} chat unavailable, receipted on the ticket at ${at}`;
+  if (via === 'alarm-ticket') return `${BUS_RELAY_MARKER} chat unavailable, saved on the "Undelivered alarms" ticket at ${at}`;
   return null;
 }
 
@@ -845,6 +865,9 @@ function simulationLine({ verdict, target } = {}) {
   const v = verdict || {};
   if (v.ok && v.via === 'ticket') {
     return `  SIMULATION — party line down: delivered by receipt on the ticket; hand-back to "${target}" WOULD fire`;
+  }
+  if (v.ok && v.via === 'alarm-ticket') {
+    return '  SIMULATION — party line down: delivered by saving it on the "Undelivered alarms" ticket; no hand-back (this watch hands nothing back)';
   }
   if (v.ok && v.via === 'chat') {
     // Unreachable while simulating (chat always fails), but a verdict of
