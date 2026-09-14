@@ -435,6 +435,16 @@ const buildTuned = (ids) => ({
     },
   },
 
+  // `latestPosts: false` is the gate on the tag and category checklists; left
+  // at its default the panel is two strips shorter and they are not measured.
+  'blog-latest-posts': {
+    name: 'Latest Blog Posts',
+    settings: {
+      title: LONG, latestPosts: 'false', filterTags: JSON.stringify(['junior tennis']),
+      filterCategories: JSON.stringify([]), count: '4', columns: '4', cardGap: '24',
+    },
+  },
+
   // `matchBy: manual` is the gate on the whole manual-post list; left at its
   // default the list does not render and the panel is three strips shorter.
   'blog-related-posts': {

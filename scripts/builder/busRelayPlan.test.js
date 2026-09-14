@@ -1194,3 +1194,46 @@ test('the relay decides the hand-back from the ticket, and reports a reading it 
     assert.match(RELAY_SRC, /handbackDestination\(watch, t\.status\?\.status, authorized, handbackPr, answered\.answer\?\.comment_text\)/);
   });
 }
+
+// ── A notify-only watch falls back to the Undelivered alarms ticket (task 86bc0mxv0) ──
+//
+// 2026-09-14: Dane's "merge" on two Ready to launch tickets could not reach the
+// refused party line, and this watch had no fallback — so every relay pass
+// logged "could not deliver anywhere", failed, and retried the same comments.
+// 18 of 40 passes exited 1; the relay read QUIET for 5h40m. The receipt tests
+// above still hold (a note on the SAME ticket delivers nothing); the standing
+// Undelivered alarms ticket is a different, read place, and keeps the message.
+test('notify-only watch: saved on the Undelivered alarms ticket IS delivery', () => {
+  const v = deliveryVerdict({ chatOk: false, handsBack: false, alarmTicketAttempted: true, alarmTicketOk: true });
+  assert.equal(v.ok, true);
+  assert.equal(v.via, 'alarm-ticket');
+  assert.match(relayMarkerText({ ...v, channel: 'c', at: AT }), /^\[bus-relay\] chat unavailable, saved on the "Undelivered alarms" ticket at /,
+    'the marker must keep the [bus-relay] prefix, or the "already relayed" check retries it forever');
+});
+
+test('notify-only watch: a double refusal is still NOT delivered, says why, and writes no marker', () => {
+  const v = deliveryVerdict({ chatOk: false, handsBack: false, alarmTicketAttempted: true, alarmTicketOk: false, alarmTicketWhy: 'HTTP 429' });
+  assert.equal(v.ok, false);
+  assert.match(v.why, /"Undelivered alarms" ticket refused it too \(HTTP 429\)/);
+  assert.equal(relayMarkerText({ ...v, channel: 'c', at: AT }), null);
+});
+
+test('the alarm ticket never stands in for a hand-back watch — that one still needs its own receipt', () => {
+  const v = deliveryVerdict({ chatOk: false, handsBack: true, alarmTicketAttempted: true, alarmTicketOk: true, receiptAttempted: true, receiptPosted: false, receiptStatus: 500 });
+  assert.equal(v.ok, false, 'a ticket that is about to be handed back must carry its own receipt');
+});
+
+test('the relay attempts the alarm ticket on a notify-only watch and reports it as a skipped post, not a failure', () => {
+  const start = RELAY_SRC.indexOf('async function deliverToBus(');
+  const body = RELAY_SRC.slice(start, RELAY_SRC.indexOf('\n}\n', start));
+  const noHandback = body.slice(body.indexOf('if (!handsBack) {'), body.indexOf('if (receipted && receipted.has('));
+  assert.match(noHandback, /await saveUndeliveredAlarm\(\{ text: content, channel, why: chat\.why \}\)/);
+  assert.match(noHandback, /alarmTicketOk: Boolean\(saved\.ok\)/);
+  assert.match(RELAY_SRC, /if \(delivery\.via === 'alarm-ticket'\) \{\s*reportBusFailure\(\{ delivered: true,/);
+});
+
+test('a rehearsal names the alarm-ticket delivery', () => {
+  const line = simulationLine({ verdict: { ok: true, via: 'alarm-ticket' }, target: null });
+  assert.match(line, /Undelivered alarms/);
+  assert.doesNotMatch(line, /INVALID|NOT delivered/);
+});
